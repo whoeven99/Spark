@@ -1,0 +1,184 @@
+/* Claude 风格思考过程组件样式 */
+
+@keyframes spark-thinking-shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+@keyframes spark-thinking-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+}
+
+@keyframes spark-thinking-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel {
+  border-radius: 10px;
+  border: 1px solid rgba(99, 110, 124, 0.16);
+  background: rgba(99, 110, 124, 0.04);
+  overflow: hidden;
+  animation: spark-thinking-fade-in 200ms ease both;
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 2px 0;
+  animation: spark-thinking-fade-in 200ms ease both;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5c6370;
+  user-select: none;
+  transition: background 140ms ease;
+}
+
+.header:hover {
+  background: rgba(99, 110, 124, 0.06);
+}
+
+.headerStatic {
+  cursor: default;
+}
+
+.headerStatic:hover {
+  background: transparent;
+}
+
+/* 思考中的脉冲圆点 */
+.pulseDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #2c6ecb;
+  animation: spark-thinking-pulse 1.1s ease-in-out infinite;
+}
+
+.checkDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #9aa3ad;
+}
+
+/* 思考中的渐变流光文字 */
+.shimmerLabel {
+  flex: 1;
+  background: linear-gradient(
+    90deg,
+    #9aa3ad 0%,
+    #9aa3ad 35%,
+    #2c6ecb 50%,
+    #9aa3ad 65%,
+    #9aa3ad 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: spark-thinking-shimmer 2.4s linear infinite;
+}
+
+.staticLabel {
+  flex: 1;
+  color: #5c6370;
+}
+
+.timer {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8a929c;
+  font-variant-numeric: tabular-nums;
+}
+
+.chevron {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: #9aa3ad;
+  transition: transform 180ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+/* 思考正文 */
+.bodyWrap {
+  position: relative;
+  border-top: 1px solid rgba(99, 110, 124, 0.12);
+}
+
+.body {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.body::-webkit-scrollbar-thumb {
+  background: rgba(99, 110, 124, 0.25);
+  border-radius: 999px;
+}
+
+/* 顶部渐隐遮罩（流式时） */
+.fadeMask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 6px;
+  height: 18px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(99, 110, 124, 0.04),
+    rgba(99, 110, 124, 0)
+  );
+}

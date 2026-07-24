@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import {
   buildImageGenerateBillingItem,
   buildImagePromptBillingItem,
@@ -124,18 +123,18 @@ async function runImageGenerationTask(params: {
 
   await appendLog({ taskId: params.taskId, startedAt, message: "图片已生成，正在保存..." });
 
+  billingItems.push(buildImageGenerateBillingItem(result.provider));
+  const actualCredits = await recordVisualToolTokenUsage({
+    shop: params.shop,
+    items: billingItems,
+  });
+
   await completeTask({
     taskId: params.taskId,
     result: { blobPath: result.blobPath, provider: result.provider },
+    actualCredits: actualCredits ?? undefined,
     startedAt,
     finalMessage: "任务完成",
-  });
-
-  billingItems.push(buildImageGenerateBillingItem(result.provider));
-  await recordVisualToolTokenUsage({
-    shop: params.shop,
-    appName: getAppEntry(),
-    items: billingItems,
   });
 
   console.info(

@@ -15,17 +15,15 @@ export type SubscriptionPeriodSnapshot = {
 };
 
 /**
- * 续费：归档上一周期 → 写 Log → 刷新订阅池、清零 `usedTokens`；
- * 按本周期 `usedTokens` 结算一次，`purchasedTokens` / `trialTokens` 写入真实剩余（周期内不改各池）。
+ * 续费：归档上一周期 → 写 Log → 刷新订阅池、清零 `usedTokens`。
  */
 export async function archivePeriodAndRenew(params: {
   shop: string;
-  appName: string;
   subscription: AppSubscription;
   account: Account;
   next: SubscriptionPeriodSnapshot;
 }): Promise<void> {
-  const { shop, appName, subscription, account, next } = params;
+  const { shop, subscription, account, next } = params;
 
   const periodStart = subscription.currentPeriodStart;
   const periodEnd = subscription.currentPeriodEnd;
@@ -41,7 +39,6 @@ export async function archivePeriodAndRenew(params: {
       },
       create: {
         shop,
-        appName,
         appSubscriptionId: subscription.id,
         planKey: subscription.planKey,
         periodStart,
@@ -57,7 +54,6 @@ export async function archivePeriodAndRenew(params: {
 
   await appendBillingLog({
     shop,
-    appName,
     eventType: BILLING_LOG_EVENT.SUBSCRIPTION_RENEWED,
     planKey: subscription.planKey,
     referenceId: subscription.shopifySubscriptionId,
@@ -88,7 +84,7 @@ export async function archivePeriodAndRenew(params: {
       };
 
   await prisma.account.update({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
     data: {
       usedTokens: 0,
       subscriptionTokens: next.tokensPerPeriod,

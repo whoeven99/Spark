@@ -17,7 +17,6 @@ datasource db {
 
 model Session {
   id            String    @id
-  appName       String    @default("chat")
   shop          String
   state         String
   isOnline      Boolean   @default(false)
@@ -39,7 +38,7 @@ model Session {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  @@index([appName, shop])
+  @@index([shop])
 }
 
 model Suggestion {
@@ -63,12 +62,10 @@ model AdPlatformCredential {
   @@unique([shop, platform])
 }
 
-/// 店铺在各 App 入口下的账户（token 分池 + 用量）。
+/// 店铺账户（token 分池 + 用量）。
 model Account {
   id                 String   @id @default(cuid())
   shop               String
-  /// 与 `AppEntry` 一致，如 chat、product-improve
-  appName            String
   /// 当前订阅周期套餐 token（周期内不随用量减少；续费刷新）
   subscriptionTokens Int      @default(0)
   /// 按量购买 token（续费结算后写入真实剩余；周期内不随用量减少）
@@ -77,6 +74,10 @@ model Account {
   trialTokens        Int      @default(0)
   /// 本周期累计已用 token（续费清零；续费时用于结算按量包剩余）
   usedTokens         Int      @default(0)
+  /// Shopify 试用期当日已用 token（每日 UTC 0 点重置）
+  trialDailyUsed     Int      @default(0)
+  /// 上次重置 trialDailyUsed 的日期（UTC 0 点）
+  trialDailyResetAt  DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -85,14 +86,12 @@ model Account {
   billingLogs       BillingLog[]
   toolTokenUsageLogs ToolTokenUsageLog[]
 
-  @@unique([shop, appName])
-  @@index([shop])
+  @@unique([shop])
 }
 
 /// 套餐目录（订阅 / 按量包 / 内置试用定义）。
 model PlanCatalog {
   planKey          String   @id
-  appName          String
   /// SUBSCRIPTION | ONE_TIME_PACK | INTERNAL_TRIAL
   kind             String
   /// MONTHLY | ANNUAL；一次性包为 null
@@ -108,14 +107,13 @@ model PlanCatalog {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@index([appName, enabled, sortOrder])
+  @@index([enabled, sortOrder])
 }
 
-/// 当前生效的 Shopify 订阅（每 shop + appName 一条）。
+/// 当前生效的 Shopify 订阅（每 shop 一条）。
 model AppSubscription {
   id                     String   @id @default(cuid())
   shop                   String
-  appName                String
   planKey                String
   shopifySubscriptionId  String   @unique
   billingInterval        String
@@ -131,10 +129,10 @@ model AppSubscription {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  account      Account?             @relation(fields: [shop, appName], references: [shop, appName])
+  account      Account?             @relation(fields: [shop], references: [shop])
   periodUsages AccountPeriodUsage[]
 
-  @@unique([shop, appName])
+  @@unique([shop])
   @@index([status])
 }
 
@@ -142,7 +140,6 @@ model AppSubscription {
 model AccountPeriodUsage {
   id                          String   @id @default(cuid())
   shop                        String
-  appName                     String
   appSubscriptionId           String
   planKey                     String
   periodStart                 DateTime
@@ -153,19 +150,17 @@ model AccountPeriodUsage {
   trialTokensRemaining        Int      @default(0)
   archivedAt                  DateTime @default(now())
 
-  account        Account         @relation(fields: [shop, appName], references: [shop, appName])
+  account        Account         @relation(fields: [shop], references: [shop])
   appSubscription AppSubscription @relation(fields: [appSubscriptionId], references: [id])
 
   @@unique([appSubscriptionId, periodStart, periodEnd])
-  @@index([shop, appName, periodEnd])
+  @@index([shop, periodEnd])
 }
 
 /// App 通用事件流水：安装、卸载、scope 变更等（与 BillingLog 计费语义分离）。
 model CommonEventLog {
   id          String   @id @default(cuid())
   shop        String
-  /// 与 `AppEntry` 一致
-  appName     String
   /// APP_INSTALLED | APP_UNINSTALLED | SCOPES_UPDATE
   eventType   String
   /// Shopify webhook topic，如 app/uninstalled
@@ -176,7 +171,7 @@ model CommonEventLog {
   metadata    Json?
   createdAt   DateTime @default(now())
 
-  @@index([shop, appName, createdAt])
+  @@index([shop, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
 }
@@ -186,8 +181,6 @@ model CommonEventLog {
 model AppVisitSource {
   id        String   @id @default(cuid())
   shop      String
-  /// 与 `AppEntry` 一致
-  appName   String
   /// 落地 path，如 /app/product-improve
   path      String
   /// 原始 utm 字符串，如 email（保留原值，不在写入时解析）
@@ -199,7 +192,7 @@ model AppVisitSource {
   createdAt DateTime @default(now())
 
   @@index([shop, createdAt])
-  @@index([appName, utm, createdAt])
+  @@index([utm, createdAt])
   @@index([utm, path])
 }
 
@@ -207,7 +200,6 @@ model AppVisitSource {
 model BillingLog {
   id          String   @id @default(cuid())
   shop        String
-  appName     String
   /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED
   eventType   String
   planKey     String?
@@ -217,9 +209,9 @@ model BillingLog {
   metadata    Json?
   createdAt   DateTime @default(now())
 
-  account Account @relation(fields: [shop, appName], references: [shop, appName])
+  account Account @relation(fields: [shop], references: [shop])
 
-  @@index([shop, appName, createdAt])
+  @@index([shop, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
 }
@@ -228,7 +220,6 @@ model BillingLog {
 model ToolTokenUsageLog {
   id          String   @id @default(cuid())
   shop        String
-  appName     String
   feature     String
   modelKey    String
   rawTokens   Int
@@ -237,32 +228,48 @@ model ToolTokenUsageLog {
   outputTokens Int     @default(0)
   createdAt   DateTime @default(now())
 
-  account Account @relation(fields: [shop, appName], references: [shop, appName])
+  account Account @relation(fields: [shop], references: [shop])
 
-  @@index([shop, appName, createdAt])
-  @@index([shop, appName, feature, createdAt])
+  @@index([shop, createdAt])
+  @@index([shop, feature, createdAt])
   @@index([feature, createdAt])
+}
+
+/// AI 任务「单位(per-item)成本」EWMA 估算，按 (taskType, bucket) 分桶，随真实运行自校准。
+model AITaskEstimation {
+  id           String   @id @default(cuid())
+  /// image_generation | picture_translate | product_improve | translation
+  taskType     String
+  /// 规模特征分桶：如 product_improve 按文本长度、picture_translate 按 modelType、translation 按目标语言。老数据/无特征落 "default"。
+  bucket       String   @default("default")
+  /// EWMA 预估积分（per-item，收敛后替换硬编码默认值）
+  ewmaCredits  Float?
+  /// EWMA 预估耗时（秒，per-item）
+  ewmaSeconds  Float?
+  /// 已参与统计的样本数（前5条用简单均值 bootstrap）
+  sampleCount  Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([taskType, bucket])
 }
 
 /// AI 任务批次：一次提交对应一个批次（含单任务）。
 model AITaskBatch {
   id        String   @id @default(uuid())
   shop      String
-  appName   String
   /// image_generation | picture_translate
   taskType  String
   config    Json
   tasks     AITask[]
   createdAt DateTime @default(now())
 
-  @@index([shop, appName, createdAt])
+  @@index([shop, createdAt])
 }
 
 /// AI 任务：每个商品/图片对应一条，归属于某批次。
 model AITask {
   id               String      @id @default(uuid())
   shop             String
-  appName          String
   /// image_generation | picture_translate
   taskType         String
   batchId          String
@@ -280,7 +287,7 @@ model AITask {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  @@index([shop, appName, taskType, createdAt])
+  @@index([shop, taskType, createdAt])
   @@index([batchId])
 }
 
@@ -381,6 +388,8 @@ model ShopRefund {
   shopifyRefundId String
   shopifyOrderId  String
   refundAmount    Float    @default(0)
+  shippingRefundAmount Float @default(0)
+  shippingRefundTax    Float @default(0)
   refundNote      String?
   reason          String?
   processedAt     DateTime
@@ -395,7 +404,7 @@ model ShopRefund {
   @@index([shop, processedAt])
 }
 
-/// 閫€娆捐椤圭洰锛岀敤浜?SKU 褰掑洜銆侀€€娆鹃噾棰?Top SKU 鍜屽敭鍚庡缓璁€?
+/// 退款行项目，用于 SKU 归因、退款金额 Top SKU 和售后建议。
 model ShopRefundLineItem {
   id              String @id @default(cuid())
   shop            String
@@ -521,11 +530,54 @@ model ShopSyncCheckpoint {
   @@unique([shop, resource])
 }
 
+/// 工作台上传文件（原始文件 + 解析文本均存 Azure Blob，元数据存本表）。
+model WorkspaceFile {
+  id               String   @id @default(cuid())
+  shop             String
+  name             String
+  mimeType         String   @default("")
+  originalSize     Int
+  charCount        Int
+  /// 解析后文本的 Blob 路径
+  blobPath         String
+  /// 原始文件的 Blob 路径（用于下载）
+  originalBlobPath String   @default("")
+  createdAt        DateTime @default(now())
+
+  @@index([shop, createdAt])
+}
+
+/// AI 对话会话（每条对应一个聊天线程）。
+model Conversation {
+  id        String    @id @default(cuid())
+  shop      String
+  title     String    @default("新对话")
+  preview   String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@index([shop, updatedAt(sort: Desc)])
+}
+
+/// 对话消息（追加写入，不可变）。
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  /// "user" | "assistant"
+  role           String
+  content        String
+  /// JSON: translationTaskForm, attachments, productImproveCard, etc.
+  payloads       String?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
 /// 业务能力 × 模型/提供商的 token 计费系数（运维在 Turso 维护，种子见 `prisma/token-billing-rule-seed.sql`）。
 model TokenBillingRule {
   ruleKey       String   @id
-  /// 与 `AppEntry` 一致；`*` 表示所有 App 的兜底规则
-  appName       String
   /// product_copy | image_prompt | image_generate | picture_translate
   feature       String
   /// 模型标识（如 deepseek-chat、volc-translate）；`_default` 为该 feature 下未匹配模型时的兜底
@@ -539,6 +591,196 @@ model TokenBillingRule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([appName, feature, modelKey])
-  @@index([appName, feature, enabled])
+  @@unique([feature, modelKey])
+  @@index([feature, enabled])
+}
+
+/// 每日经营诊断快照（每店每天一份，docs/DAILY_OPERATIONS_WORKFLOWS.md §11）。
+model OperationDiagnosisSnapshot {
+  id           String   @id @default(cuid())
+  shop         String
+  /// 快照日期（UTC，格式 YYYY-MM-DD）
+  snapshotDate String
+  /// 是否有可诊断数据（店铺尚未回填订单时为 false）
+  hasData      Boolean  @default(true)
+  /// 汇总指标 JSON：订单数/GMV/AOV/退款率/履约率/超时单数等
+  metrics      Json
+  generatedAt  DateTime @default(now())
+
+  items OperationDiagnosisItem[]
+  tasks OperationTask[]
+
+  @@unique([shop, snapshotDate])
+  @@index([shop, generatedAt])
+}
+
+/// 单个诊断项（销售趋势/履约健康/物流异常/退款售后/库存健康）。
+model OperationDiagnosisItem {
+  id         String @id @default(cuid())
+  shop       String
+  snapshotId String
+  /// sales_trend | fulfillment_health | logistics_anomaly | refund_health | inventory_health
+  key        String
+  name       String
+  /// healthy | watch | risk
+  status     String
+  /// 指标明细 JSON
+  metrics    Json
+  /// 证据（字符串数组）
+  evidence   Json
+  /// 推理链（字符串数组）
+  reasoning  Json
+  /// 使用的计算公式（字符串数组）
+  formulas   Json
+
+  snapshot OperationDiagnosisSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([shop, key])
+  @@index([snapshotId])
+}
+
+/// 经营待办任务（由诊断规则生成，按紧急/重要四象限组织）。
+model OperationTask {
+  id               String    @id @default(cuid())
+  shop             String
+  snapshotId       String?
+  /// 来源规则键：fulfillment_overdue | logistics_stale | refund_spike | inventory_risk | routine_shipping | sales_decline
+  sourceKey        String
+  /// 去重键（sourceKey + 关联对象），同一问题在 open/in_progress 状态下只保留一条
+  dedupeKey        String
+  title            String
+  /// q1（紧急重要）| q2（紧急不重要）| q3（不紧急重要）| q4（不紧急不重要）
+  quadrant         String
+  /// P0 | P1 | P2
+  priority         String
+  /// open | in_progress | done | ignored | auto_closed
+  status           String    @default("open")
+  /// 触发原因（含证据数字）
+  triggerReason    String
+  /// 关联对象 JSON：订单号 / SKU 列表等
+  relatedObjects   Json
+  /// 建议动作（字符串数组）
+  suggestedActions Json
+  ownerRole        String?
+  /// today | 48h | this_week | backlog
+  dueWindow        String
+  dueAt            DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  snapshot OperationDiagnosisSnapshot? @relation(fields: [snapshotId], references: [id])
+
+  @@index([shop, status, quadrant])
+  @@index([shop, dedupeKey, status])
+  @@index([shop, createdAt])
+}
+
+/// 店铺成本口径配置（ROI 核算用，docs/DAILY_OPERATIONS_WORKFLOWS.md §8.8 成本完整度）。
+model ShopCostConfig {
+  id   String @id @default(cuid())
+  shop String @unique
+  /// 默认毛利率（%），无逐 SKU 成本时的兜底口径
+  defaultGrossMarginPercent Float    @default(60)
+  /// 支付手续费率（%）
+  paymentFeePercent         Float    @default(2.9)
+  /// 单笔支付固定手续费
+  paymentFeeFixed           Float    @default(0.3)
+  /// 月度固定投入（内容/工具/人力），用于后续投入成本分摊
+  monthlyFixedCost          Float    @default(0)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+/// SKU 单位成本（同步自 Shopify inventoryItem.unitCost，逐 SKU COGS）。
+model ShopSkuCost {
+  id              String   @id @default(cuid())
+  shop            String
+  inventoryItemId String
+  variantId       String?
+  sku             String?
+  unitCost        Float
+  currency        String?
+  syncedAt        DateTime @default(now())
+
+  @@unique([shop, inventoryItemId])
+  @@index([shop, sku])
+}
+
+/// 人工客服会话（一店一会话；商家 ↔ 运营）。卸载后靠 shopEmail/contactEmail 兜底联系。
+model SupportConversation {
+  id            String   @id @default(cuid())
+  shop          String
+  /// 会话来源：spark（Spark 自身商家）| translate-v4（tsf 翻译v4）
+  source        String   @default("spark")
+  /// 商家在聊天框主动留下的联系邮箱（可覆盖账户邮箱）
+  contactEmail  String?
+  /// Session.email 快照（开聊即写，卸载 session 被清后仍可联系）
+  shopEmail     String?
+  /// open | closed
+  status        String   @default("open")
+  /// 最近一条消息预览
+  lastMessage   String   @default("")
+  lastMessageAt DateTime @default(now())
+  /// 商家发出、运营尚未查看的条数
+  unreadForOps  Int      @default(0)
+  /// 运营发出、商家尚未查看的条数
+  unreadForShop Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  messages      SupportMessage[]
+
+  @@unique([shop, source])
+  @@index([status, lastMessageAt])
+}
+
+/// 客服消息（追加写，不可变）。
+model SupportMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  /// "shop" | "ops"（预留 "ai"）
+  sender         String
+  /// 运营发送者标识（哪个客服回的）
+  senderName     String?
+  content        String
+  /// 预留：附件/图片等 JSON
+  payloads       String?
+  createdAt      DateTime            @default(now())
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// 客户价值快照（最新状态，每日巡检懒刷新；§8.5.1 客户动态计价）。
+model ShopCustomerValue {
+  id                    String    @id @default(cuid())
+  shop                  String
+  shopifyCustomerId     String
+  /// new | active | vip | at_risk | churned
+  segment               String
+  /// 风险标签数组：refund_risk | discount_sensitive
+  tags                  Json
+  ordersCount           Int       @default(0)
+  totalSpent            Float     @default(0)
+  /// 历史贡献利润（毛利率近似口径）
+  realizedGrossProfit   Float     @default(0)
+  /// 规则近似的未来贡献利润
+  predictedFutureProfit Float     @default(0)
+  dynamicLtv            Float     @default(0)
+  /// 0-100 综合管理分（§8.5.10）
+  customerValueScore    Float     @default(0)
+  refundAmount          Float     @default(0)
+  /// 客户退款率（退款额/消费额，%）
+  refundRate            Float     @default(0)
+  /// 折扣订单占比（%）
+  discountOrderShare    Float     @default(0)
+  daysSinceLastOrder    Int?
+  firstOrderAt          DateTime?
+  lastOrderAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([shop, shopifyCustomerId])
+  @@index([shop, segment])
+  @@index([shop, customerValueScore])
 }

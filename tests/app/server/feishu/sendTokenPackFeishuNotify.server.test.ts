@@ -18,25 +18,24 @@ vi.mock(
 );
 
 describe("buildTokenPackMessage", () => {
-  it("includes shop, planKey, and tokens", () => {
+  it("includes shop, plan, price, and time", () => {
     const message = buildTokenPackMessage(
       {
         shop: "demo.myshopify.com",
-        appName: "product-improve",
         planKey: "token-pack-10k",
       },
       {
         displayName: "10K Tokens",
         priceAmount: "9.99",
         currencyCode: "USD",
-        tokens: 10000,
       },
     );
 
     expect(message).toContain("按量购包成功");
     expect(message).toContain("店铺: demo.myshopify.com");
-    expect(message).toContain("token-pack-10k");
-    expect(message).toContain("Token: 10000");
+    expect(message).toContain("套餐: 10K Tokens");
+    expect(message).not.toContain("App:");
+    expect(message).not.toContain("Token:");
     expect(message).toContain("价格: 【9.99 USD】");
     expect(message).toMatch(/时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
   });
@@ -47,7 +46,6 @@ describe("sendTokenPackFeishuNotify", () => {
 
   beforeEach(() => {
     process.env.FEISHU_ENABLED = "true";
-    process.env.APP_ENTRY = "product-improve";
   });
 
   afterEach(() => {
@@ -61,7 +59,6 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "product-improve",
       planKey: "token-pack-10k",
     });
 
@@ -77,7 +74,6 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "product-improve",
       planKey: "token-pack-10k",
     });
 
@@ -100,17 +96,17 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "product-improve",
       planKey: "token-pack-10k",
     });
 
     expect(result).toEqual({ ok: true, channel: "ops_subscription" });
   });
 
-  it("skips when billing is not enabled for app", async () => {
+  it("skips when billing is disabled", async () => {
+    process.env.BILLING_ENABLED = "false";
+
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "spark-zz",
       planKey: "token-pack-10k",
     });
 

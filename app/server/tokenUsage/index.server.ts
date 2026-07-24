@@ -26,7 +26,7 @@ export {
 } from "./applyTokenBilling.server";
 export {
   invalidateTokenBillingRuleCache,
-  listTokenBillingRulesForApp,
+  listTokenBillingRules,
   resolveTokenBillingRule,
   type TokenBillingRuleRecord,
 } from "./tokenBillingCatalog.server";

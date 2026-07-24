@@ -416,20 +416,29 @@ function RevenueTrend() {
       </div>
 
       {/* Period summary */}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        {[
-          { label: `区间总收入`, value: USD_SHORT(totalRevenue), color: "#1677ff" },
-          { label: "计费次数", value: totalCharges, color: "#595959" },
-          { label: `峰值 (${peak.period})`, value: USD(peak.totalRevenue), color: "#fa8c16" },
-        ].map((c, i) => (
-          <Col key={i}>
-            <Statistic
-              title={<span style={{ fontSize: 12 }}>{c.label}</span>}
-              value={c.value}
-              valueStyle={{ color: c.color, fontSize: 18 }}
-            />
-          </Col>
-        ))}
+      <Row gutter={24} align="middle" style={{ marginBottom: 16 }}>
+        <Col>
+          <div>
+            <div style={{ fontSize: 12, color: "#8c8c8c", marginBottom: 2 }}>区间总收入</div>
+            <span style={{ fontSize: 36, fontWeight: 700, color: "#1677ff", lineHeight: 1, letterSpacing: -1 }}>
+              {USD(totalRevenue)}
+            </span>
+          </div>
+        </Col>
+        <Col style={{ borderLeft: "1px solid #f0f0f0", paddingLeft: 24 }}>
+          <Statistic
+            title={<span style={{ fontSize: 12 }}>计费次数</span>}
+            value={totalCharges}
+            valueStyle={{ color: "#595959", fontSize: 18 }}
+          />
+        </Col>
+        <Col>
+          <Statistic
+            title={<span style={{ fontSize: 12 }}>峰值 ({peak.period})</span>}
+            value={USD(peak.totalRevenue)}
+            valueStyle={{ color: "#fa8c16", fontSize: 18 }}
+          />
+        </Col>
         <Col flex="auto" style={{ textAlign: "right" }}>
           <Typography.Text type="secondary" style={{ fontSize: 11 }}>
             {startDate} ~ {endDate}

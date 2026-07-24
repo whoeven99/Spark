@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark Workspace Demo</title>
+    <style>
+      :root {
+        --bg: #f6f6f7;
+        --sidebar: #f1f2f3;
+        --surface: #ffffff;
+        --surface-subtle: #fafbfb;
+        --border: #e1e3e5;
+        --border-strong: #c9cdd2;
+        --text: #1f2124;
+        --text-subtle: #5c6066;
+        --text-muted: #7a7f87;
+        --blue: #2c6ecb;
+        --blue-surface: #eef4ff;
+        --green: #008060;
+        --green-surface: #e9f7ef;
+        --orange: #c05717;
+        --orange-surface: #fff1e8;
+        --red: #d82c0d;
+        --red-surface: #fff0ee;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        background: var(--sidebar);
+        border-right: 1px solid var(--border);
+        padding: 18px 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .brand-badge {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: #111827;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+      }
+
+      .brand-title {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .brand-meta,
+      .muted {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .new-task,
+      .ghost-btn,
+      .primary-btn,
+      .chip,
+      .tab {
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      .new-task,
+      .ghost-btn,
+      .tab {
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .new-task {
+        width: 100%;
+        padding: 10px 12px;
+        text-align: left;
+        font-weight: 600;
+      }
+
+      .nav {
+        display: grid;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .nav button {
+        border: none;
+        background: transparent;
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: var(--text);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .nav button.active {
+        background: #dfe3e8;
+        font-weight: 700;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .history {
+        display: grid;
+        gap: 8px;
+        max-height: calc(100vh - 360px);
+        overflow: auto;
+      }
+
+      .history button {
+        border: 1px solid transparent;
+        background: transparent;
+        border-radius: 10px;
+        padding: 10px 12px;
+        text-align: left;
+        cursor: pointer;
+        display: grid;
+        gap: 4px;
+      }
+
+      .history button.active {
+        background: var(--surface);
+        border-color: var(--border-strong);
+      }
+
+      .history-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .history-preview {
+        font-size: 12px;
+        color: var(--text-subtle);
+        line-height: 1.5;
+      }
+
+      .sidebar-footer {
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .status-pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .online {
+        background: var(--green-surface);
+        color: var(--green);
+      }
+
+      .main {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        line-height: 1.1;
+      }
+
+      .subtitle {
+        margin-top: 8px;
+        font-size: 14px;
+        color: var(--text-subtle);
+        line-height: 1.6;
+      }
+
+      .surface {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 20px;
+      }
+
+      .grid-6,
+      .grid-3,
+      .grid-2 {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid-6 {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metric-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+
+      .metric-value {
+        font-size: 28px;
+        font-weight: 700;
+        margin-top: 10px;
+      }
+
+      .metric-delta {
+        margin-top: 8px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .positive {
+        color: var(--green);
+      }
+
+      .negative,
+      .critical {
+        color: var(--red);
+      }
+
+      .warning {
+        color: var(--orange);
+      }
+
+      .alert-list,
+      .list,
+      .task-list,
+      .messages {
+        display: grid;
+        gap: 12px;
+      }
+
+      .alert-item,
+      .summary-item,
+      .task-card,
+      .skill-card,
+      .automation-card,
+      .side-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface-subtle);
+        padding: 14px;
+      }
+
+      .alert-item.warning-bg {
+        background: #fff7e0;
+        border-color: #f0deb0;
+      }
+
+      .alert-item.info-bg {
+        background: var(--blue-surface);
+        border-color: #cfe0fb;
+      }
+
+      .alert-item.critical-bg {
+        background: var(--red-surface);
+        border-color: #f5c7c0;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .chart-row {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr);
+        gap: 14px;
+        align-items: center;
+      }
+
+      .bars {
+        display: grid;
+        gap: 8px;
+      }
+
+      .track {
+        height: 10px;
+        border-radius: 999px;
+        background: #f1f2f3;
+        overflow: hidden;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .fill.today {
+        background: #111827;
+      }
+
+      .fill.yesterday {
+        background: #94a3b8;
+      }
+
+      .fill.avg {
+        background: #d1d5db;
+      }
+
+      .panel {
+        display: none;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .panel.active {
+        display: flex;
+      }
+
+      .chat-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 16px;
+      }
+
+      .messages {
+        min-height: 420px;
+      }
+
+      .message {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .message.user {
+        align-items: flex-end;
+      }
+
+      .bubble {
+        max-width: 78%;
+        border-radius: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        background: #f3f4f6;
+        line-height: 1.6;
+        font-size: 14px;
+      }
+
+      .message.user .bubble {
+        background: var(--blue-surface);
+        border-color: #cfe0fb;
+      }
+
+      .composer {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid #ebedf0;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid var(--border-strong);
+        padding: 14px;
+        color: var(--text);
+      }
+
+      .primary-btn {
+        border: none;
+        background: #111827;
+        color: #fff;
+        padding: 10px 14px;
+        font-weight: 700;
+      }
+
+      .ghost-btn {
+        padding: 10px 14px;
+        font-weight: 600;
+      }
+
+      .chip {
+        border: 1px solid var(--border-strong);
+        padding: 8px 12px;
+        background: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .chip.active {
+        background: var(--blue-surface);
+        color: var(--blue);
+      }
+
+      .tab.active {
+        background: var(--surface);
+        font-weight: 700;
+      }
+
+      .tab {
+        padding: 8px 12px;
+      }
+
+      .badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .badge-neutral {
+        background: #f3f4f6;
+        color: var(--text-subtle);
+      }
+
+      .badge-blue {
+        background: var(--blue-surface);
+        color: var(--blue);
+      }
+
+      .badge-green {
+        background: var(--green-surface);
+        color: var(--green);
+      }
+
+      .badge-orange {
+        background: var(--orange-surface);
+        color: var(--orange);
+      }
+
+      .badge-red {
+        background: var(--red-surface);
+        color: var(--red);
+      }
+
+      .skill-card,
+      .automation-card,
+      .task-card {
+        display: grid;
+        gap: 10px;
+      }
+
+      .progress {
+        height: 8px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #e5e7eb;
+      }
+
+      .progress > span {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .task-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .link-btn {
+        border: none;
+        background: transparent;
+        color: var(--blue);
+        font-weight: 700;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      @media (max-width: 1200px) {
+        .grid-6 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .grid-3 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 980px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .chat-layout,
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div>
+          <div class="brand">
+            <div class="brand-badge">S</div>
+            <div>
+              <div class="brand-title">Spark</div>
+              <div class="brand-meta">Shopify AI Workspace</div>
+            </div>
+          </div>
+
+          <button class="new-task" data-open-panel="chat">+ 新建任务</button>
+
+          <div class="nav">
+            <button class="active" data-panel="dashboard"><span>经营看板</span><span class="muted">看板</span></button>
+            <button data-panel="chat"><span>对话</span><span class="muted">对话</span></button>
+            <button data-panel="skills"><span>技能</span><span class="muted">技能</span></button>
+            <button data-panel="automation"><span>自动化</span><span class="muted">自动化</span></button>
+            <button data-panel="tasks"><span>任务列表</span><span class="muted">任务</span></button>
+          </div>
+
+          <div style="margin-top:18px">
+            <div class="section-head">
+              <span class="muted" style="font-weight:700">对话记录</span>
+              <span class="muted">4 / 50</span>
+            </div>
+            <div class="history">
+              <button class="active" data-conversation="1" data-open-panel="chat">
+                <span class="history-title">夏季新品文案优化</span>
+                <span class="history-preview">批量补齐 168 个新品的商品描述</span>
+                <span class="muted">刚刚</span>
+              </button>
+              <button data-conversation="2" data-open-panel="chat">
+                <span class="history-title">退款异常复盘</span>
+                <span class="history-preview">分析同一 SKU 的退款高峰</span>
+                <span class="muted">18 分钟前</span>
+              </button>
+              <button data-conversation="3" data-open-panel="chat">
+                <span class="history-title">日语翻译批次</span>
+                <span class="history-preview">继续处理日语与英语翻译任务</span>
+                <span class="muted">1 小时前</span>
+              </button>
+              <button data-conversation="4" data-open-panel="chat">
+                <span class="history-title">经营日报生成</span>
+                <span class="history-preview">检查日报摘要是否可直接发送</span>
+                <span class="muted">昨天</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div>
+            <div class="brand-title">Cedric hu</div>
+            <div class="brand-meta">Spark Workspace</div>
+          </div>
+          <span class="status-pill online">在线</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="page-header">
+          <div>
+            <div class="eyebrow">Spark Workspace</div>
+            <h1 id="page-title">经营看板</h1>
+            <p class="subtitle" id="page-subtitle">默认首页展示店铺经营概况、核心指标、自动化结果和经营建议。</p>
+          </div>
+          <button class="ghost-btn">语言</button>
+        </div>
+
+        <section class="panel active" id="panel-dashboard">
+          <div class="grid-6">
+            <article class="surface"><div class="metric-label">销售额</div><div class="metric-value">$12,540</div><div class="metric-delta positive">+8.4%</div></article>
+            <article class="surface"><div class="metric-label">订单数</div><div class="metric-value">186</div><div class="metric-delta positive">+5.1%</div></article>
+            <article class="surface"><div class="metric-label">转化率</div><div class="metric-value">2.84%</div><div class="metric-delta negative">-0.3%</div></article>
+            <article class="surface"><div class="metric-label">客单价</div><div class="metric-value">$67.4</div><div class="metric-delta positive">+3.8%</div></article>
+            <article class="surface"><div class="metric-label">退款率</div><div class="metric-value">1.2%</div><div class="metric-delta positive">-0.4%</div></article>
+            <article class="surface"><div class="metric-label">库存风险 SKU</div><div class="metric-value">7</div><div class="metric-delta negative">+2</div></article>
+          </div>
+
+          <div class="grid-2">
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <h2>经营提醒</h2>
+                  <p class="subtitle" style="margin-top:6px">优先处理影响销售、库存和退款的核心问题。</p>
+                </div>
+                <button class="ghost-btn">查看全部</button>
+              </div>
+              <div class="alert-list">
+                <div class="alert-item warning-bg"><h3>库存预警</h3><p class="subtitle" style="margin-top:6px">7 个高销量 SKU 库存低于安全阈值</p></div>
+                <div class="alert-item info-bg"><h3>转化波动</h3><p class="subtitle" style="margin-top:6px">新品页访问量增加，但转化率低于 7 天均值</p></div>
+                <div class="alert-item critical-bg"><h3>退款异常</h3><p class="subtitle" style="margin-top:6px">美国站某尺码退款订单占比偏高</p></div>
+              </div>
+            </section>
+
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <h2>关键趋势</h2>
+                  <p class="subtitle" style="margin-top:6px">今天、昨天和 7 天均值的简化对比。</p>
+                </div>
+                <div class="muted">Today / Yesterday / Avg</div>
+              </div>
+              <div class="list">
+                <div class="chart-row"><div>销售额</div><div class="bars"><div class="track"><span class="fill today" style="width:88%"></span></div><div class="track"><span class="fill yesterday" style="width:74%"></span></div><div class="track"><span class="fill avg" style="width:66%"></span></div></div></div>
+                <div class="chart-row"><div>订单</div><div class="bars"><div class="track"><span class="fill today" style="width:72%"></span></div><div class="track"><span class="fill yesterday" style="width:68%"></span></div><div class="track"><span class="fill avg" style="width:61%"></span></div></div></div>
+                <div class="chart-row"><div>转化</div><div class="bars"><div class="track"><span class="fill today" style="width:49%"></span></div><div class="track"><span class="fill yesterday" style="width:54%"></span></div><div class="track"><span class="fill avg" style="width:57%"></span></div></div></div>
+              </div>
+            </section>
+          </div>
+
+          <div class="grid-2">
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <h2>AI 自动化执行摘要</h2>
+                  <p class="subtitle" style="margin-top:6px">今天自动化和单次任务带来的实际产出。</p>
+                </div>
+                <span class="muted">5 个任务</span>
+              </div>
+              <div class="list">
+                <div class="summary-item"><h3>商品描述生成</h3><p class="subtitle" style="margin-top:6px">已完成 24 个商品，预计提升搜索匹配度 3%-5%</p></div>
+                <div class="summary-item"><h3>日语翻译</h3><p class="subtitle" style="margin-top:6px">已翻译 42 个商品，准备进入人工审核</p></div>
+                <div class="summary-item"><h3>库存预警</h3><p class="subtitle" style="margin-top:6px">今日已发送 150 条预警通知，覆盖 9 个高销量系列</p></div>
+              </div>
+            </section>
+
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <h2>经营建议</h2>
+                  <p class="subtitle" style="margin-top:6px">基于当前店铺数据和任务结果生成的建议。</p>
+                </div>
+                <button class="ghost-btn">生成完整报告</button>
+              </div>
+              <div class="list">
+                <div class="row"><span>SKU-204 库存仅剩 3 件，建议今天内补货，避免周末断货。</span></div>
+                <div class="row"><span>新品系列访问量上涨但转化率偏低，优先补齐商品描述和场景图。</span></div>
+                <div class="row"><span>美国站移动端退款率连续 3 天上升，建议排查尺码描述与物流时效。</span></div>
+                <div class="row"><span>表现最好的 12 个商品关键词已收敛，可批量同步到同类商品标题。</span></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-chat">
+          <div class="chat-layout">
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <h2 id="chat-title">夏季新品文案优化</h2>
+                  <p class="subtitle" id="chat-preview" style="margin-top:6px">批量补齐 168 个新品的商品描述</p>
+                </div>
+                <span class="muted" id="chat-updated">刚刚</span>
+              </div>
+
+              <div class="messages" id="messages"></div>
+
+              <div class="composer">
+                <textarea id="chat-input">请基于品牌语气和 SEO 规则，补齐这批新品的英文商品描述。</textarea>
+                <div class="row" style="margin-top:12px">
+                  <span class="subtitle" style="margin:0">每个会话可以继续沉淀为任务或自动化。</span>
+                  <div class="row">
+                    <button class="ghost-btn">生成任务建议</button>
+                    <button class="primary-btn" id="send-btn">发送</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section style="display:grid;gap:16px">
+              <div class="side-card">
+                <h3>当前上下文</h3>
+                <div class="list" style="margin-top:12px">
+                  <div><div class="muted">对象范围</div><div class="subtitle" style="margin:4px 0 0">168 个夏季新品</div></div>
+                  <div><div class="muted">参考资料</div><div class="subtitle" style="margin:4px 0 0">2 份品牌与 SEO 文档</div></div>
+                  <div><div class="muted">数据源</div><div class="subtitle" style="margin:4px 0 0">summer-launch-products.csv</div></div>
+                  <div><div class="muted">约束</div><div class="subtitle" style="margin:4px 0 0">保留 HTML / 英文 / SEO 专业语气</div></div>
+                </div>
+              </div>
+              <div class="side-card">
+                <h3>推荐下一步</h3>
+                <div class="list" style="margin-top:12px">
+                  <div>先生成任务确认卡片，再统一审核成本和影响范围。</div>
+                  <div>把这次规则保存为自动化，后续可定时执行。</div>
+                  <div>完成后将结果同步到任务列表和 Dashboard。</div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-skills">
+          <section class="surface">
+            <div class="section-head">
+              <div>
+                <h2>常用工具</h2>
+                <p class="subtitle" style="margin-top:6px">将已有 tools 作为可直接进入的应用入口。</p>
+              </div>
+              <button class="ghost-btn">管理排序</button>
+            </div>
+
+            <div class="grid-3">
+              <article class="skill-card"><div class="muted">内容</div><h3>商品文案优化</h3><div>批量生成和优化商品标题、卖点与描述。</div><div class="row"><span class="badge badge-neutral">最近使用</span><button class="link-btn">进入</button></div></article>
+              <article class="skill-card"><div class="muted">翻译</div><h3>多语言翻译</h3><div>支持商品内容、页面文案与术语统一翻译。</div><div class="row"><span class="badge badge-neutral">可用</span><button class="link-btn">进入</button></div></article>
+              <article class="skill-card"><div class="muted">分析</div><h3>店铺诊断</h3><div>汇总经营指标并给出异常原因和建议。</div><div class="row"><span class="badge badge-blue">推荐</span><button class="link-btn">进入</button></div></article>
+              <article class="skill-card"><div class="muted">视觉</div><h3>图片工具</h3><div>处理商品图翻译、文生图和素材优化。</div><div class="row"><span class="badge badge-neutral">可用</span><button class="link-btn">进入</button></div></article>
+              <article class="skill-card"><div class="muted">营销</div><h3>广告素材建议</h3><div>结合商品和活动目标生成广告文案建议。</div><div class="row"><span class="badge badge-orange">内测</span><button class="link-btn">进入</button></div></article>
+              <article class="skill-card"><div class="muted">运营</div><h3>邮件运营助手</h3><div>根据商品和分群生成邮件主题与正文。</div><div class="row"><span class="badge badge-neutral">可用</span><button class="link-btn">进入</button></div></article>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel" id="panel-automation">
+          <section class="surface">
+            <div class="section-head">
+              <div>
+                <h2>自动化任务</h2>
+                <p class="subtitle" style="margin-top:6px">配置和管理可持续运行的任务流。</p>
+              </div>
+              <div class="row">
+                <button class="ghost-btn">手动新建</button>
+                <button class="primary-btn">在对话中创建</button>
+              </div>
+            </div>
+
+            <div class="row" style="justify-content:flex-start;margin-bottom:16px">
+              <button class="tab active" data-auto="configured">已配置</button>
+              <button class="tab" data-auto="history">执行历史</button>
+              <button class="tab" data-auto="templates">任务模板</button>
+            </div>
+
+            <div class="task-list" id="automation-content"></div>
+          </section>
+        </section>
+
+        <section class="panel" id="panel-tasks">
+          <section class="surface">
+            <div class="section-head">
+              <div>
+                <h2>统一任务列表</h2>
+                <p class="subtitle" style="margin-top:6px">自动化任务与单次任务共用总表，再按类型和状态进行筛选。</p>
+              </div>
+              <div class="row">
+                <button class="chip active" data-task-filter="all">全部</button>
+                <button class="chip" data-task-filter="automation">自动化</button>
+                <button class="chip" data-task-filter="one_off">单次任务</button>
+              </div>
+            </div>
+            <div class="task-list" id="task-list"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const pageTitles = {
+        dashboard: ["经营看板", "默认首页展示店铺经营概况、核心指标、自动化结果和经营建议。"],
+        chat: ["对话工作区", "对话页承接单次任务与上下文协作，每个会话都可以继续展开。"],
+        skills: ["常用工具", "技能页作为已有 tools 的聚合入口，每个工具进入独立工作流。"],
+        automation: ["自动化", "自动化页聚焦配置、执行历史与模板，不与其他页混排。"],
+        tasks: ["任务列表", "任务列表统一承载自动化任务和单次任务，再按类型和状态过滤。"],
+      };
+
+      const conversationData = {
+        1: {
+          title: "夏季新品文案优化",
+          preview: "批量补齐 168 个新品的商品描述",
+          updatedAt: "刚刚",
+          draft: "请基于品牌语气和 SEO 规则，补齐这批新品的英文商品描述。",
+          messages: [
+            ["assistant", "我已经拿到夏季新品列表。你可以继续补充风格和品牌规则。", "09:12"],
+            ["user", "请优先做 SEO 友好的英文商品描述，并保留原有 HTML 结构。", "09:13"],
+            ["assistant", "收到，我会先生成一份任务建议，方便你确认范围和消耗。", "09:14"],
+          ],
+        },
+        2: {
+          title: "退款异常复盘",
+          preview: "分析同一 SKU 的退款高峰",
+          updatedAt: "18 分钟前",
+          draft: "把这次退款异常提炼成可以重复运行的自动化规则。",
+          messages: [
+            ["assistant", "当前退款主要集中在美国站同一 SKU，建议先看最近 7 天移动端订单。", "08:42"],
+            ["user", "好，再帮我归纳可以沉淀成自动化监控的规则。", "08:44"],
+          ],
+        },
+        3: {
+          title: "日语翻译批次",
+          preview: "继续处理日语与英语翻译任务",
+          updatedAt: "1 小时前",
+          draft: "继续这批商品的日语翻译，并保留品牌术语。",
+          messages: [["assistant", "这批翻译还缺品牌术语表和禁用词说明。", "07:21"]],
+        },
+        4: {
+          title: "经营日报生成",
+          preview: "检查日报摘要是否可直接发送",
+          updatedAt: "昨天",
+          draft: "把日报里最重要的经营变化压缩成 3 条结论。",
+          messages: [["assistant", "日报草稿已经生成，建议优先突出转化率和退款率波动。", "昨天 18:04"]],
+        },
+      };
+
+      const automationData = {
+        configured: [
+          ["每日经营简报", "每天 09:00", "今天 09:00", "已生成日报并推送到工作台", "green"],
+          ["订单异常巡检", "每 2 小时", "10 分钟前", "发现 6 条高风险订单待复核", "orange"],
+          ["库存风险提醒", "每天 12:00", "今天 12:00", "已通知 7 个低库存 SKU", "green"],
+        ],
+        history: [
+          ["经营简报", "今天 09:00 执行成功，覆盖销售额、订单和退款摘要"],
+          ["订单异常巡检", "今天 08:00 执行完成，标记 3 条异常退款订单"],
+          ["库存风险提醒", "昨天 12:00 执行完成，推送 9 条补货建议"],
+        ],
+        templates: [
+          ["新品发布监控", "围绕新品流量、转化和评价生成每日摘要"],
+          ["退款异常告警", "按站点和 SKU 追踪退款率波动并推送提醒"],
+          ["SEO 标题优化批次", "定时扫描表现弱的商品并生成标题优化建议"],
+        ],
+      };
+
+      const tasks = [
+        ["TASK-241198", "每日订单异常巡检", "automation", "executing", 64, "订单监控", "2 分钟前", "正在扫描退款、超时履约和异常金额订单。", "查看运行日志"],
+        ["TASK-241190", "多语言商品翻译", "one_off", "executing", 51, "翻译工具", "11 分钟前", "英语与日语翻译已过半，正在写回结果。", "查看进度"],
+        ["TASK-241177", "新品描述补齐", "one_off", "review_required", 100, "AI 对话", "今天 09:03", "已补齐 24 个新品描述，待人工审核。", "进入审核"],
+        ["TASK-241160", "每日经营简报", "automation", "completed", 100, "经营看板", "今天 09:00", "已生成日报并同步到 Dashboard。", "查看简报"],
+        ["TASK-241155", "异常订单重跑", "automation", "failed", 100, "订单监控", "昨天 19:04", "重跑失败，原因是订单数据源响应超时。", "重新执行"],
+      ];
+
+      function setPanel(panel) {
+        document.querySelectorAll(".nav button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.panel === panel);
+        });
+        document.querySelectorAll(".panel").forEach((panelEl) => {
+          panelEl.classList.toggle("active", panelEl.id === `panel-${panel}`);
+        });
+        document.getElementById("page-title").textContent = pageTitles[panel][0];
+        document.getElementById("page-subtitle").textContent = pageTitles[panel][1];
+      }
+
+      function renderConversation(id) {
+        const conversation = conversationData[id];
+        document.querySelectorAll(".history button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.conversation === String(id));
+        });
+        document.getElementById("chat-title").textContent = conversation.title;
+        document.getElementById("chat-preview").textContent = conversation.preview;
+        document.getElementById("chat-updated").textContent = conversation.updatedAt;
+        document.getElementById("chat-input").value = conversation.draft;
+        document.getElementById("messages").innerHTML = conversation.messages
+          .map(
+            ([role, text, time]) => `
+              <div class="message ${role === "user" ? "user" : ""}">
+                <div class="muted">${role === "assistant" ? "Spark AI" : "你"} · ${time}</div>
+                <div class="bubble">${text}</div>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      function renderAutomation(view) {
+        document.querySelectorAll("[data-auto]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.auto === view);
+        });
+        const html = automationData[view]
+          .map((item) => {
+            if (view === "configured") {
+              return `
+                <article class="automation-card">
+                  <div class="row">
+                    <div>
+                      <h3>${item[0]}</h3>
+                      <div class="subtitle" style="margin-top:6px">${item[1]}</div>
+                    </div>
+                    <span class="badge ${item[4] === "green" ? "badge-green" : "badge-orange"}">${item[4] === "green" ? "正常" : "关注中"}</span>
+                  </div>
+                  <div class="muted">最近执行：${item[2]}</div>
+                  <div>${item[3]}</div>
+                </article>
+              `;
+            }
+            return `
+              <article class="automation-card">
+                <h3>${item[0]}</h3>
+                <div>${item[1]}</div>
+              </article>
+            `;
+          })
+          .join("");
+        document.getElementById("automation-content").innerHTML = html;
+      }
+
+      function statusBadge(status) {
+        if (status === "completed") return ["badge-green", "已完成"];
+        if (status === "failed") return ["badge-red", "失败"];
+        return ["badge-orange", status === "review_required" ? "待审核" : "执行中"];
+      }
+
+      function progressColor(status) {
+        if (status === "completed") return "var(--green)";
+        if (status === "failed") return "var(--red)";
+        return "var(--orange)";
+      }
+
+      function renderTasks(filter) {
+        document.querySelectorAll("[data-task-filter]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.taskFilter === filter);
+        });
+        const list = tasks
+          .filter((task) => filter === "all" || task[2] === filter)
+          .map((task) => {
+            const [badgeClass, badgeText] = statusBadge(task[3]);
+            return `
+              <article class="task-card">
+                <div class="row">
+                  <div>
+                    <div class="muted">${task[0]}</div>
+                    <h3>${task[1]}</h3>
+                  </div>
+                  <div class="row">
+                    <span class="badge ${task[2] === "automation" ? "badge-blue" : "badge-neutral"}">${task[2] === "automation" ? "自动化" : "单次"}</span>
+                    <span class="badge ${badgeClass}">${badgeText}</span>
+                  </div>
+                </div>
+                <div>${task[7]}</div>
+                <div class="progress"><span style="width:${task[4]}%;background:${progressColor(task[3])}"></span></div>
+                <div class="task-footer">
+                  <span class="muted">${task[5]} · ${task[6]}</span>
+                  <button class="link-btn">${task[8]}</button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+        document.getElementById("task-list").innerHTML = list;
+      }
+
+      document.querySelectorAll("[data-panel]").forEach((button) => {
+        button.addEventListener("click", () => setPanel(button.dataset.panel));
+      });
+
+      document.querySelectorAll("[data-open-panel]").forEach((button) => {
+        button.addEventListener("click", () => setPanel(button.dataset.openPanel));
+      });
+
+      document.querySelectorAll("[data-conversation]").forEach((button) => {
+        button.addEventListener("click", () => {
+          renderConversation(button.dataset.conversation);
+          setPanel("chat");
+        });
+      });
+
+      document.querySelectorAll("[data-auto]").forEach((button) => {
+        button.addEventListener("click", () => renderAutomation(button.dataset.auto));
+      });
+
+      document.querySelectorAll("[data-task-filter]").forEach((button) => {
+        button.addEventListener("click", () => renderTasks(button.dataset.taskFilter));
+      });
+
+      document.getElementById("send-btn").addEventListener("click", () => {
+        const input = document.getElementById("chat-input");
+        if (!input.value.trim()) return;
+        const messages = document.getElementById("messages");
+        messages.insertAdjacentHTML(
+          "beforeend",
+          `
+            <div class="message user">
+              <div class="muted">你 · 刚刚</div>
+              <div class="bubble">${input.value}</div>
+            </div>
+            <div class="message">
+              <div class="muted">Spark AI · 刚刚</div>
+              <div class="bubble">我已经收到你的最新要求。接下来会根据当前上下文整理为任务建议或下一步操作。</div>
+            </div>
+          `,
+        );
+        input.value = "";
+      });
+
+      renderConversation(1);
+      renderAutomation("configured");
+      renderTasks("all");
+    </script>
+  </body>
+</html>

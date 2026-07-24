@@ -1,4 +1,4 @@
-import { isBillingEnabledForApp } from "../../billing/constants.server";
+import { isBillingEnabled } from "../../billing/constants.server";
 import { getPlanByKey } from "../../billing/plans/planCatalog.server";
 import {
   formatOpsNotifyPrice,
@@ -11,12 +11,10 @@ const LOG = "[Feishu][SubscriptionOps]";
 
 export type SendSubscriptionFeishuNotifyParams = {
   shop: string;
-  appName: string;
   planKey: string;
-  billingInterval: string;
 };
 
-function buildSubscriptionMessage(
+export function buildSubscriptionMessage(
   params: SendSubscriptionFeishuNotifyParams,
   plan: {
     displayName: string;
@@ -28,10 +26,8 @@ function buildSubscriptionMessage(
     "🎉 用户订阅成功",
     "",
     `店铺: ${params.shop}`,
-    `App: ${params.appName}`,
-    `套餐: ${plan.displayName} (${params.planKey})`,
+    `套餐: ${plan.displayName}`,
     `价格: ${formatOpsNotifyPrice(plan.priceAmount, plan.currencyCode)}`,
-    `周期: ${params.billingInterval}`,
     `时间: ${formatOpsNotifyTime()}`,
   ].join("\n");
 }
@@ -39,9 +35,9 @@ function buildSubscriptionMessage(
 export async function sendSubscriptionFeishuNotify(
   params: SendSubscriptionFeishuNotifyParams,
 ): Promise<SendFeishuResult> {
-  if (!isBillingEnabledForApp(params.appName)) {
+  if (!isBillingEnabled()) {
     console.info(
-      `${LOG} skipped shop=${params.shop} appName=${params.appName} reason=billing_not_enabled`,
+      `${LOG} skipped shop=${params.shop} planKey=${params.planKey} reason=billing_not_enabled`,
     );
     return {
       ok: false,
@@ -52,7 +48,7 @@ export async function sendSubscriptionFeishuNotify(
   }
 
   console.info(
-    `${LOG} before-send shop=${params.shop} appName=${params.appName} planKey=${params.planKey}`,
+    `${LOG} before-send shop=${params.shop} planKey=${params.planKey}`,
   );
 
   try {

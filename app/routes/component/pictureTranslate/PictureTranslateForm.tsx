@@ -11,9 +11,14 @@ import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 type PictureTranslateFormProps = {
   variant: "page" | "card";
   embedded?: boolean;
+  onSubmit?: () => void;
 };
 
-export function PictureTranslateForm({ variant, embedded = false }: PictureTranslateFormProps) {
+export function PictureTranslateForm({
+  variant,
+  embedded = false,
+  onSubmit,
+}: PictureTranslateFormProps) {
   const { t } = useTranslation();
   const {
     imageUrl,
@@ -549,7 +554,11 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
             type="button"
             variant="primary"
             onClick={() => {
-              void submitTranslate();
+              if (onSubmit) {
+                onSubmit();
+              } else {
+                void submitTranslate();
+              }
             }}
             {...(isSubmitting ? { disabled: true } : {})}
           >

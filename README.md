@@ -68,7 +68,7 @@ npm run build  # 推送前必须通过
 | `/app/_index` | 首页（聊天） |
 | `/app/additional` | 诊断报告 |
 | `/app/translation` | 翻译页 |
-| `/app/generate-description` | 生成描述页 |
+| `/app/product-improve` | 商品文案优化 |
 | `/app/billing` | 订阅与计费页 |
 | `/app/image-studio` | 图片工具 |
 | `POST /chat-stream` | 聊天 SSE 流 |
@@ -94,7 +94,7 @@ npm run build  # 推送前必须通过
 
 ## 计费系统
 
-- **启用应用**：`BILLING_ENABLED_APPS` 仅含 `generate-description`
+- **启用开关**：默认启用；设 `BILLING_ENABLED=false` 可关闭
 - **网关**：`BILLING_GATEWAY=noop` 时本地生效（开发）
 - **Token 池**：订阅赠送 + 购包 - 使用
 - **校验**：生成描述 API 调用前通过 `hasTokenQuota()` 校验
@@ -107,7 +107,7 @@ npm run build  # 推送前必须通过
 
 **翻译不工作** → 检查 `COSMOS_*`、`REDIS_*`、`BLOB_*` 环境变量 + `translationPipelineCore` 逻辑
 
-**计费不工作** → 检查 `BILLING_GATEWAY` + `BILLING_ENABLED_APPS` + `hasTokenQuota()`
+**计费不工作** → 检查 `BILLING_GATEWAY` + `BILLING_ENABLED` + `hasTokenQuota()`
 
 ## 相关文档
 

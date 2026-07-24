@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildCopyAllText } from "../lib/productImproveCopyText";
+import { trackFeature } from "../lib/featureTrack";
 import type { GenerateDescriptionApiResponse } from "../lib/productImproveTypes";
 import {
   SHOP_LOCALES_FALLBACK,
@@ -176,6 +177,11 @@ export function useProductImprove(params: UseProductImproveParams) {
       setDescription(null);
       setPinnedProductId(pid);
 
+      trackFeature("product-improve", "generate_description", {
+        productId: pid,
+        targetLanguage: lang,
+      });
+
       try {
         const response = await fetch(`/api/product-improve${locationSearch}`, {
           method: "POST",
@@ -267,7 +273,10 @@ export function useProductImprove(params: UseProductImproveParams) {
           toastShow(t("generate.copyAllEmpty"));
           return;
         }
-        text = buildCopyAllText(title, desc);
+        text = buildCopyAllText(title, desc, {
+          title: t("generate.productTitleLabel"),
+          description: t("generate.productDescriptionLabel"),
+        });
       }
 
       setCopyTarget(kind);

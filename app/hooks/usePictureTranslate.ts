@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import {
   filterPictureTranslateSourceLanguages,
   filterPictureTranslateTargetLanguages,
+  selectModelTypeForLanguagePair,
   type PictureTranslateProvider,
 } from "../config/pictureTranslateLanguages";
+import type { PictureTranslateFormPayload } from "../lib/pictureTranslateFormPayload";
 import type {
   PictureTranslateImageSource,
   PictureTranslateLanguageOption,
@@ -12,6 +14,7 @@ import type {
 import type { ProductSearchItem } from "../lib/productSearchTypes";
 import { useProductSearch } from "./useProductSearch";
 import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
+import { trackFeature } from "../lib/featureTrack";
 
 const LOG_PREFIX = "[usePictureTranslate]";
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
@@ -21,7 +24,13 @@ export type UsePictureTranslateParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
   mode: "page" | "card";
-  onTaskCreated?: (taskId: string, batchId: string, taskType: AITaskType) => void;
+  initialFormPayload?: PictureTranslateFormPayload;
+  onTaskCreated?: (
+    taskId: string,
+    batchId: string,
+    taskType: AITaskType,
+    optimisticConfig?: Record<string, unknown>,
+  ) => void;
 };
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -49,14 +58,15 @@ function safeUrlHost(url: string): string {
 }
 
 export function usePictureTranslate(params: UsePictureTranslateParams) {
-  const { locationSearch, toastShow, onTaskCreated } = params;
+  const { locationSearch, toastShow, onTaskCreated, initialFormPayload } = params;
   const { t } = useTranslation();
 
-  const [imageUrl, setImageUrl] = useState("");
+  const prefilledImageUrl = initialFormPayload?.imageUrl?.trim() ?? "";
+  const [imageUrl, setImageUrl] = useState(prefilledImageUrl);
   const [imageBase64, setImageBase64] = useState<string | undefined>(undefined);
   const [imageFileName, setImageFileName] = useState("");
   const [selectedSource, setSelectedSource] =
-    useState<PictureTranslateImageSource>("upload");
+    useState<PictureTranslateImageSource>(prefilledImageUrl ? "url" : "upload");
   const [productKeyword, setProductKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
@@ -64,8 +74,12 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     url: string;
     altText: string | null;
   } | null>(null);
-  const [sourceLanguage, setSourceLanguage] = useState("auto");
-  const [targetLanguage, setTargetLanguage] = useState("zh");
+  const [sourceLanguage, setSourceLanguage] = useState(
+    initialFormPayload?.sourceLanguage?.trim() || "auto",
+  );
+  const [targetLanguage, setTargetLanguage] = useState(
+    initialFormPayload?.targetLanguage?.trim() || "zh",
+  );
   const [formErrorText, setFormErrorText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -186,24 +200,50 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     [t, toastShow],
   );
 
-  const submitTranslate = useCallback(async () => {
-    if (isSubmitting) return;
-
+  const prepareSubmit = useCallback(() => {
     const trimmedUrl = imageUrl.trim();
     const isUploadSource = selectedSource === "upload";
     const isUrlSource = selectedSource === "url";
     const isProductSource = selectedSource === "product";
-    const hasValidImage =
-      (isUploadSource && Boolean(imageBase64)) ||
-      ((isUrlSource || isProductSource) && Boolean(trimmedUrl));
 
+    if (isUploadSource) {
+      const message = t("imageStudio.uploadNotSupportedYet");
+      setFormErrorText(message);
+      toastShow(message);
+      return null;
+    }
+
+    const hasValidImage = ((isUrlSource || isProductSource) && Boolean(trimmedUrl));
     if (!hasValidImage) {
       const message = t("pictureTranslate.validationImageRequired");
       setFormErrorText(message);
       toastShow(message);
       console.info("[PictureTranslateSubmit] validation failed reason=image_required");
-      return;
+      return null;
     }
+
+    return {
+      imageUrl: trimmedUrl,
+      sourceCode: sourceLanguage,
+      targetCode: targetLanguage,
+      sourceType: selectedSource,
+      productTitle: selectedProduct?.title ?? "",
+    };
+  }, [
+    imageUrl,
+    selectedProduct?.title,
+    selectedSource,
+    sourceLanguage,
+    t,
+    targetLanguage,
+    toastShow,
+  ]);
+
+  const submitTranslate = useCallback(async () => {
+    if (isSubmitting) return;
+    const prepared = prepareSubmit();
+    if (!prepared) return;
+    const trimmedUrl = prepared.imageUrl;
 
     const payloadSummary = {
       hasImageUrl: Boolean(trimmedUrl),
@@ -219,12 +259,19 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     setFormErrorText("");
 
     try {
+      const modelType = selectModelTypeForLanguagePair(sourceLanguage, targetLanguage);
       const body: Record<string, unknown> = {
         imageUrl: trimmedUrl || undefined,
         sourceCode: sourceLanguage,
         targetCode: targetLanguage,
-        modelType: 1,
+        modelType,
       };
+
+      trackFeature("image-studio", "picture_translate", {
+        sourceCode: sourceLanguage,
+        targetCode: targetLanguage,
+        modelType,
+      });
 
       const response = await fetch(`/api/picture-translate${locationSearch}`, {
         method: "POST",
@@ -245,7 +292,14 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
         `${LOG_PREFIX} task created taskId=${raw.taskId} batchId=${raw.batchId}`,
       );
       toastShow(t("pictureTranslate.submitSuccess"));
-      onTaskCreated?.(raw.taskId, raw.batchId, "picture_translate");
+      onTaskCreated?.(raw.taskId, raw.batchId, "picture_translate", {
+        imageUrl: trimmedUrl || undefined,
+        sourceCode: prepared.sourceCode,
+        targetCode: prepared.targetCode,
+        modelType: 1,
+        sourceType: prepared.sourceType,
+        productTitle: prepared.productTitle,
+      });
     } catch {
       const message = t("pictureTranslate.submitFailed");
       setFormErrorText(message);
@@ -254,15 +308,13 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
       setIsSubmitting(false);
     }
   }, [
-    imageBase64,
-    imageUrl,
     isSubmitting,
     locationSearch,
     onTaskCreated,
+    imageBase64,
     selectedSource,
-    sourceLanguage,
+    prepareSubmit,
     t,
-    targetLanguage,
     toastShow,
   ]);
 
@@ -293,6 +345,7 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     productSearchError,
     formErrorText: displayFormError,
     isSubmitting,
+    prepareSubmit,
     executeSearch,
     handleProductSelect,
     handleProductImageSelect,

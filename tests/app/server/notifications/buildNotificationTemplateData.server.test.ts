@@ -30,7 +30,7 @@ describe("buildNotificationTemplateData", () => {
     expect(data.creditUnit).toBe("");
   });
 
-  it("maps product-improve appKey to Shopify admin app path", () => {
+  it("uses single-app home path for TemplateData path", () => {
     const data = buildNotificationTemplateData(
       { ...appConfig, appKey: "product-improve" },
       {
@@ -39,7 +39,7 @@ describe("buildNotificationTemplateData", () => {
       },
     );
 
-    expect(data.path).toBe("app/ciwi-ai-product-improve");
+    expect(data.path).toBe("app");
   });
 
   it("maps credit account change fields with locale zh-CN", () => {

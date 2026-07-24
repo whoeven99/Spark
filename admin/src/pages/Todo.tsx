@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Typography,
   Button,
@@ -7,23 +7,14 @@ import {
   Input,
   InputNumber,
   Select,
-  Tag,
-  Card,
   Spin,
   Alert,
   Popconfirm,
-  Empty,
   Tooltip,
-  Badge,
+  Dropdown,
 } from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CheckCircleOutlined,
-  HourglassOutlined,
-  PlayCircleOutlined,
-} from "@ant-design/icons";
+import type { MenuProps } from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   fetchTodos,
   createTodo,
@@ -35,58 +26,37 @@ import {
   type TodoAssignee,
 } from "../api";
 
-const MEMBERS: TodoAssignee[] = ["yewen", "allen", "zhuangze"];
+/* ------------------------------------------------------------------ *
+ * Design tokens (ported from the prototype)
+ * ------------------------------------------------------------------ */
 
-const ASSIGNEE_COLORS: Record<TodoAssignee, string> = {
-  yewen: "blue",
-  allen: "green",
-  zhuangze: "purple",
-};
-
-const ASSIGNEE_HEX: Record<TodoAssignee, string> = {
-  yewen: "#1677ff",
-  allen: "#52c41a",
-  zhuangze: "#722ed1",
-};
-
-const PRIORITY_CONFIG: Record<TodoPriority, { color: string; bg: string; border: string; label: string }> = {
-  high:   { color: "#fff",     bg: "#f5222d", border: "#f5222d", label: "高" },
-  medium: { color: "#fff",     bg: "#fa8c16", border: "#fa8c16", label: "中" },
-  low:    { color: "#8c8c8c",  bg: "#f5f5f5", border: "#d9d9d9", label: "低" },
-};
-
-function renderPriorityTag(priority: TodoPriority): React.ReactNode {
-  const cfg = PRIORITY_CONFIG[priority];
-  return (
-    <Tag
-      style={{
-        margin: 0,
-        color: cfg.color,
-        background: cfg.bg,
-        borderColor: cfg.border,
-      }}
-    >
-      {cfg.label}
-    </Tag>
-  );
-}
-
-const STATUS_ROWS: {
-  key: TodoStatus;
-  label: string;
-  icon: React.ReactNode;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-}[] = [
-  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#ea580c", bgColor: "#fff7ed", borderColor: "#fdba74" },
-  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#334155", bgColor: "#f1f5f9", borderColor: "#94a3b8" },
-  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#059669", bgColor: "#ecfdf5", borderColor: "#6ee7b7" },
+const MEMBERS: { key: TodoAssignee; label: string; hue: string; soft: string }[] = [
+  { key: "yewen",    label: "Yewen",    hue: "#3b7fc4", soft: "#eaf2fb" },
+  { key: "allen",    label: "Allen",    hue: "#2f9e6b", soft: "#e8f6ef" },
+  { key: "zhuangze", label: "Zhuangze", hue: "#8b5cd6", soft: "#f2ebfb" },
 ];
+const UNASSIGNED = { key: null as null, label: "未分配", hue: "#9ca3af", soft: "#f1f0ee" };
+const COLS = [...MEMBERS, UNASSIGNED];
+
+const STATUS: Record<TodoStatus, { label: string; hue: string; soft: string; icon: string }> = {
+  doing: { label: "进行中", hue: "#d97706", soft: "#fdf3e3", icon: "▶" },
+  todo:  { label: "待办",   hue: "#52606e", soft: "#eef1f4", icon: "◷" },
+  done:  { label: "已完成", hue: "#0f9d6e", soft: "#e7f6ef", icon: "✓" },
+};
+const STATUS_ORDER: TodoStatus[] = ["doing", "todo", "done"];
+
+const PRI: Record<TodoPriority, { label: string; color: string; soft: string }> = {
+  high:   { label: "高", color: "#dc2626", soft: "#fdeceb" },
+  medium: { label: "中", color: "#d97706", soft: "#fdf3e3" },
+  low:    { label: "低", color: "#6b7280", soft: "#f1f0ee" },
+};
 
 const ME_KEY = "spark_admin_me";
-function getMe() { return localStorage.getItem(ME_KEY) ?? MEMBERS[0]; }
-function setMe(v: string) { localStorage.setItem(ME_KEY, v); }
+const getMe = () => localStorage.getItem(ME_KEY) ?? MEMBERS[0].key;
+const setMe = (v: string) => localStorage.setItem(ME_KEY, v);
+
+const FONT = "Manrope, system-ui, sans-serif";        // add a <link> in index.html, or drop this line
+const MONO = "'Geist Mono', ui-monospace, monospace";
 
 type FormValues = {
   title: string;
@@ -97,6 +67,8 @@ type FormValues = {
   createdBy: string;
 };
 
+/* ------------------------------------------------------------------ */
+
 export default function Todo() {
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +77,11 @@ export default function Todo() {
   const [editing, setEditing] = useState<TodoRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [me, setMeState] = useState<string>(getMe());
+
+  // drag-and-drop UI state
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCell, setOverCell] = useState<string | null>(null);
+
   const [form] = Form.useForm<FormValues>();
 
   const load = useCallback(() => {
@@ -114,8 +91,9 @@ export default function Todo() {
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
-
   useEffect(() => { load(); }, [load]);
+
+  /* ---- create / edit modal (kept from the original) ---- */
 
   function openCreate() {
     setEditing(null);
@@ -123,7 +101,6 @@ export default function Todo() {
     form.setFieldsValue({ priority: "medium", status: "todo", createdBy: me });
     setModalOpen(true);
   }
-
   function openEdit(todo: TodoRow) {
     setEditing(todo);
     form.setFieldsValue({
@@ -136,7 +113,6 @@ export default function Todo() {
     });
     setModalOpen(true);
   }
-
   async function handleSubmit(values: FormValues) {
     setSaving(true);
     try {
@@ -147,7 +123,7 @@ export default function Todo() {
           assignee: values.assignee ?? null,
           status: values.status,
           priority: values.priority,
-            etaDays: editing.etaDays ?? null,
+          etaDays: editing.etaDays ?? null,
         });
       } else {
         if (!values.createdBy) {
@@ -175,145 +151,181 @@ export default function Todo() {
   }
 
   async function handleDelete(id: string) {
-    try { await deleteTodo(id); load(); }
-    catch (e) { setError(String(e)); }
+    setTodos((ts) => ts.filter((t) => t.id !== id)); // optimistic
+    try { await deleteTodo(id); }
+    catch (e) { setError(String(e)); load(); }
   }
 
-  async function moveStatus(todo: TodoRow, status: TodoStatus) {
+  /* ---- THE KEY BIT: one drop sets status + assignee in a single call ---- */
+
+  async function moveTo(todo: TodoRow, status: TodoStatus, assignee: TodoAssignee | null) {
+    if (todo.status === status && (todo.assignee ?? null) === assignee) return;
+    // optimistic update — no full reload, no flicker
+    setTodos((ts) => ts.map((t) => (t.id === todo.id ? { ...t, status, assignee } : t)));
     try {
       await updateTodo(todo.id, {
         title: todo.title,
         description: todo.description,
-        assignee: todo.assignee,
+        assignee,
         status,
         priority: todo.priority,
         etaDays: todo.etaDays ?? null,
       });
-      load();
-    } catch (e) { setError(String(e)); }
-  }
-
-  async function updateEtaDays(todo: TodoRow, etaDays: number | null) {
-    try {
-      await updateTodo(todo.id, {
-        title: todo.title,
-        description: todo.description,
-        assignee: todo.assignee,
-        status: todo.status,
-        priority: todo.priority,
-        etaDays,
-      });
-      load();
     } catch (e) {
       setError(String(e));
+      load(); // roll back to server truth on failure
+    }
+  }
+
+  async function patchTodo(
+    todo: TodoRow,
+    patch: Partial<Pick<TodoRow, "priority" | "assignee" | "etaDays">>,
+  ) {
+    const next = { ...todo, ...patch };
+    setTodos((ts) => ts.map((t) => (t.id === todo.id ? next : t)));
+    try {
+      await updateTodo(todo.id, {
+        title: next.title,
+        description: next.description,
+        assignee: next.assignee ?? null,
+        status: next.status,
+        priority: next.priority,
+        etaDays: next.etaDays ?? null,
+      });
+    } catch (e) {
+      setError(String(e));
+      load();
     }
   }
 
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
 
-  const getTodosFor = (assignee: TodoAssignee | null, status: TodoStatus) =>
-    todos.filter((t) => (assignee ? t.assignee === assignee : t.assignee === null) && t.status === status);
+  const cellId = (status: TodoStatus, col: TodoAssignee | null) => status + "::" + String(col);
+  const itemsFor = (status: TodoStatus, col: TodoAssignee | null) =>
+    todos.filter((t) => t.status === status && (t.assignee ?? null) === col);
 
-  const COLS: { key: TodoAssignee | null; label: string; color: string; hex: string }[] = [
-    ...MEMBERS.map((m) => ({ key: m as TodoAssignee | null, label: m.charAt(0).toUpperCase() + m.slice(1), color: ASSIGNEE_COLORS[m], hex: ASSIGNEE_HEX[m] })),
-    { key: null, label: "未分配", color: "default", hex: "#bfbfbf" },
-  ];
+  const colTmpl = `150px repeat(${COLS.length}, minmax(0, 1fr))`;
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Team Todo</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建</Button>
+    <div style={{ fontFamily: FONT, color: "#1c1b1a" }}>
+      <style>{`
+        .td-board { display: grid; grid-template-columns: ${colTmpl}; column-gap: 0; align-items: stretch; }
+        .td-board-cell { min-width: 0; padding: 0 6px; }
+        .td-card { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+        .td-card .td-title { word-break: break-word; overflow-wrap: anywhere; min-width: 0; }
+        .td-card .td-desc { word-break: break-word; overflow-wrap: anywhere; }
+        .td-card .td-actions { opacity: 0; transition: opacity .14s ease; }
+        .td-card:hover .td-actions { opacity: 1; }
+        .td-iconbtn:hover { background: #f0eeec !important; }
+      `}</style>
+
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, marginBottom: 18 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "#5b53d6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 11, height: 11, border: "2.5px solid #fff", borderRadius: 3 }} />
+            </div>
+            <Typography.Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: "-.02em" }}>Team Todo</Typography.Title>
+          </div>
+          <p style={{ margin: "6px 0 0 38px", fontSize: 13, color: "#78716c" }}>
+            拖动卡片即可流转 — 横向换人，纵向改状态。
+          </p>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ borderRadius: 10, fontWeight: 700 }}>
+          新建任务
+        </Button>
       </div>
 
+      {/* board */}
       <Spin spinning={loading}>
-        {STATUS_ROWS.map((statusRow) => {
-          const totalInRow = COLS.reduce((sum, col) => sum + getTodosFor(col.key, statusRow.key).length, 0);
-          return (
-            <div key={statusRow.key} style={{ marginBottom: 20 }}>
-              {/* Status section header */}
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 16px",
-                background: statusRow.bgColor,
-                border: `1px solid ${statusRow.borderColor}`,
-                borderLeft: `5px solid ${statusRow.color}`,
-                boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.03)",
-                borderRadius: "6px 6px 0 0",
-              }}>
-                <span style={{ fontSize: 18, color: statusRow.color, display: "flex", alignItems: "center" }}>
-                  {statusRow.icon}
-                </span>
-                <Typography.Text strong style={{ fontSize: 15, color: statusRow.color, letterSpacing: 0.5 }}>
-                  {statusRow.label}
-                </Typography.Text>
-                <Badge
-                  count={totalInRow}
-                  style={{ background: statusRow.color }}
-                  showZero
-                />
-              </div>
+        <div style={{ background: "#fbfaf9", border: "1px solid #ece8e3", borderRadius: 18, padding: "14px 14px 18px", overflowX: "auto" }}>
+          <div className="td-board" style={{ minWidth: 920 }}>
 
-              {/* Columns grid */}
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${COLS.length}, 1fr)`,
-                border: `1px solid ${statusRow.borderColor}`,
-                borderTop: "none",
-                borderRadius: "0 0 6px 6px",
-                overflow: "hidden",
-              }}>
-                {COLS.map((col, colIdx) => {
-                  const items = getTodosFor(col.key, statusRow.key);
+            {/* member column headers — same grid as status rows */}
+            <div />
+            {COLS.map((c) => (
+              <div key={`hdr-${String(c.key)}`} className="td-board-cell" style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 12px", background: "#fff", border: "1px solid #ece8e3", borderRadius: 11 }}>
+                  <Avatar memKey={c.key} size={24} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: c.key ? "#3c3935" : "#9ca3af" }}>{c.label}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: "#b3ada4" }}>
+                    ·{todos.filter((t) => (t.assignee ?? null) === c.key).length}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* status rows — share column tracks with headers */}
+            {STATUS_ORDER.flatMap((stKey) => {
+              const st = STATUS[stKey];
+              const rowTotal = todos.filter((t) => t.status === stKey).length;
+              return [
+                <div key={`${stKey}-rail`} style={{ paddingTop: 12, paddingRight: 6, marginBottom: 14 }}>
+                  <div style={{ background: st.soft, borderRadius: 13, padding: 14, border: `1px solid ${st.hue}22` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: st.hue, fontSize: 13 }}>{st.icon}</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: st.hue, letterSpacing: "-.01em" }}>{st.label}</span>
+                    </div>
+                    <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: st.hue, marginTop: 8, lineHeight: 1 }}>{rowTotal}</div>
+                    <div style={{ fontSize: 11, color: st.hue, opacity: 0.7, marginTop: 3, fontWeight: 600 }}>项任务</div>
+                  </div>
+                </div>,
+                ...COLS.map((col) => {
+                  const id = cellId(stKey, col.key);
+                  const over = overCell === id;
+                  const items = itemsFor(stKey, col.key);
                   return (
                     <div
-                      key={String(col.key)}
-                      style={{
-                        padding: "12px 10px",
-                        borderRight: colIdx < COLS.length - 1 ? `1px solid ${statusRow.borderColor}` : "none",
-                        background: "#fff",
-                        minHeight: 80,
+                      key={`${stKey}-${String(col.key)}`}
+                      className="td-board-cell"
+                      style={{ marginBottom: 14, borderRight: col.key === null ? "none" : "1px dashed #ebe6e0" }}
+                      onDragOver={(e) => { e.preventDefault(); if (overCell !== id) setOverCell(id); }}
+                      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCell((c) => (c === id ? null : c)); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const t = todos.find((x) => x.id === dragId);
+                        if (t) moveTo(t, stKey, col.key);
+                        setDragId(null); setOverCell(null);
                       }}
                     >
-                      {/* Column header — only on first status row */}
-                      {statusRow.key === "doing" && (
-                        <div style={{ textAlign: "center", marginBottom: 10 }}>
-                          <Tag
-                            color={col.color}
-                            style={{ fontSize: 12, padding: "3px 14px", fontWeight: 600, letterSpacing: 0.5 }}
-                          >
-                            {col.label}
-                          </Tag>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{
+                        padding: 10, display: "flex", flexDirection: "column", gap: 9, minHeight: 96,
+                        background: over ? col.soft : "transparent",
+                        boxShadow: over ? `inset 0 0 0 2px ${col.hue}` : "none",
+                        borderRadius: over ? 12 : 0, transition: "background .12s ease, box-shadow .12s ease",
+                      }}>
                         {items.length === 0 ? (
-                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} style={{ margin: "8px 0" }} />
+                          <div style={{ flex: 1, minHeight: 72, borderRadius: 11, border: `1.5px dashed ${over ? col.hue : "#e7e2db"}`, display: "flex", alignItems: "center", justifyContent: "center", color: over ? col.hue : "#cfc9c1", fontSize: 11.5, fontWeight: 600 }}>
+                            {over ? "放到这里" : "—"}
+                          </div>
                         ) : (
                           items.map((todo) => (
-                            <TodoCard
+                            <TaskCard
                               key={todo.id}
                               todo={todo}
-                              statusRow={statusRow}
+                              dragging={dragId === todo.id}
+                              onDragStart={() => setDragId(todo.id)}
+                              onDragEnd={() => { setDragId(null); setOverCell(null); }}
                               onEdit={() => openEdit(todo)}
                               onDelete={() => handleDelete(todo.id)}
-                              onMove={moveStatus}
-                              onEtaDaysChange={updateEtaDays}
+                              onPriorityChange={(p) => patchTodo(todo, { priority: p })}
+                              onAssigneeChange={(a) => patchTodo(todo, { assignee: a })}
+                              onEtaDaysChange={(d) => patchTodo(todo, { etaDays: d })}
                             />
                           ))
                         )}
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            </div>
-          );
-        })}
+                }),
+              ];
+            })}
+          </div>
+        </div>
       </Spin>
 
+      {/* create / edit modal — unchanged from your original */}
       <Modal
         title={editing ? "编辑 Todo" : "新建 Todo"}
         open={modalOpen}
@@ -322,30 +334,28 @@ export default function Todo() {
         okText={editing ? "保存" : "创建"}
         confirmLoading={saving}
         destroyOnClose
+        width={560}
+        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 8 }}>
           <Form.Item name="title" label="标题" rules={[{ required: true, message: "请填写标题" }]}>
             <Input placeholder="Todo 标题" />
           </Form.Item>
           <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="可选描述" />
+            <Input.TextArea autoSize={{ minRows: 4, maxRows: 25 }} placeholder="可选描述" />
           </Form.Item>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item name="assignee" label="负责人">
               <Select allowClear placeholder="未分配">
                 {MEMBERS.map((m) => (
-                  <Select.Option key={m} value={m}>
-                    <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0 }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Tag>
-                  </Select.Option>
+                  <Select.Option key={m.key} value={m.key}>{m.label}</Select.Option>
                 ))}
               </Select>
             </Form.Item>
             <Form.Item name="priority" label="优先级" rules={[{ required: true }]}>
               <Select>
                 {(["high", "medium", "low"] as TodoPriority[]).map((p) => (
-                  <Select.Option key={p} value={p}>
-                    {renderPriorityTag(p)}
-                  </Select.Option>
+                  <Select.Option key={p} value={p}>{PRI[p].label}</Select.Option>
                 ))}
               </Select>
             </Form.Item>
@@ -353,8 +363,8 @@ export default function Todo() {
           {editing && (
             <Form.Item name="status" label="状态" rules={[{ required: true }]}>
               <Select>
-                {STATUS_ROWS.map((s) => (
-                  <Select.Option key={s.key} value={s.key}>{s.label}</Select.Option>
+                {STATUS_ORDER.map((s) => (
+                  <Select.Option key={s} value={s}>{STATUS[s].label}</Select.Option>
                 ))}
               </Select>
             </Form.Item>
@@ -363,9 +373,7 @@ export default function Todo() {
             <Form.Item name="createdBy" label="创建人" rules={[{ required: true, message: "请选择创建人" }]}>
               <Select placeholder="选择你是谁">
                 {MEMBERS.map((m) => (
-                  <Select.Option key={m} value={m}>
-                    <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0 }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Tag>
-                  </Select.Option>
+                  <Select.Option key={m.key} value={m.key}>{m.label}</Select.Option>
                 ))}
               </Select>
             </Form.Item>
@@ -376,177 +384,199 @@ export default function Todo() {
   );
 }
 
-function TodoCard({
-  todo,
-  statusRow,
-  onEdit,
-  onDelete,
-  onMove,
-  onEtaDaysChange,
+/* ------------------------------------------------------------------ */
+
+function Avatar({ memKey, size = 22 }: { memKey: TodoAssignee | null; size?: number }) {
+  const m = COLS.find((c) => c.key === memKey) || UNASSIGNED;
+  return (
+    <div
+      title={m.label}
+      style={{
+        width: size, height: size, borderRadius: "50%", flexShrink: 0,
+        background: memKey ? m.hue : "transparent",
+        border: memKey ? "none" : "1.5px dashed #c7c2bb",
+        color: "#fff", fontSize: size * 0.42, fontWeight: 700,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      {memKey ? m.label[0] : <span style={{ color: "#a8a29a", fontSize: size * 0.5 }}>?</span>}
+    </div>
+  );
+}
+
+function TaskCard({
+  todo, dragging, onDragStart, onDragEnd, onEdit, onDelete,
+  onPriorityChange, onAssigneeChange, onEtaDaysChange,
 }: {
   todo: TodoRow;
-  statusRow: typeof STATUS_ROWS[number];
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onMove: (todo: TodoRow, status: TodoStatus) => void;
-  onEtaDaysChange: (todo: TodoRow, etaDays: number | null) => Promise<void> | void;
+  onPriorityChange: (p: TodoPriority) => void;
+  onAssigneeChange: (a: TodoAssignee | null) => void;
+  onEtaDaysChange: (d: number | null) => void;
 }) {
-  const pri = PRIORITY_CONFIG[todo.priority];
-  const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays ?? null);
-  const [savingEta, setSavingEta] = useState(false);
-  const doingRow = STATUS_ROWS.find((s) => s.key === "doing") ?? STATUS_ROWS[0];
-  const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
-  const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
-  const statusOptions: { value: TodoStatus; label: React.ReactNode; disabled?: boolean }[] =
-    todo.status === "doing"
-      ? [doingRow, ...statusOptionRows].map((s) => ({
-          value: s.key,
-          label: (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: s.color,
-                  opacity: 0.85,
-                }}
-              />
-              <span>{s.label}</span>
-            </span>
-          ),
-          disabled: s.key === "doing",
-        }))
-      : statusOptionRows.map((s) => ({
-          value: s.key,
-          label: (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: s.color,
-                  opacity: 0.85,
-                }}
-              />
-              <span>{s.label}</span>
-            </span>
-          ),
-        }));
+  const pri = PRI[todo.priority];
+  const rest = "0 1px 2px rgba(28,27,26,.05)";
+  const wasDragged = useRef(false);
+  const [etaOpen, setEtaOpen] = useState(false);
+  const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays);
 
-  const normalizeEta = (value: number | null): number | null =>
-    value == null || Number.isNaN(value) ? null : Math.max(0, Math.floor(value));
+  const priorityMenu: MenuProps = {
+    items: (["high", "medium", "low"] as TodoPriority[]).map((p) => ({
+      key: p,
+      label: (
+        <span style={{ color: PRI[p].color, fontWeight: 700 }}>{PRI[p].label}</span>
+      ),
+    })),
+    selectedKeys: [todo.priority],
+    onClick: ({ key, domEvent }) => {
+      domEvent.stopPropagation();
+      onPriorityChange(key as TodoPriority);
+    },
+  };
 
-  async function persistEtaDays(rawValue: number | null) {
-    const next = normalizeEta(rawValue);
-    const current = normalizeEta(todo.etaDays ?? null);
-    if (next === current) return;
-    setSavingEta(true);
-    try {
-      await onEtaDaysChange(todo, next);
-    } finally {
-      setSavingEta(false);
-    }
+  const assigneeMenu: MenuProps = {
+    items: [
+      ...MEMBERS.map((m) => ({ key: m.key, label: m.label })),
+      { key: "__none__", label: "未分配" },
+    ],
+    selectedKeys: [todo.assignee ?? "__none__"],
+    onClick: ({ key, domEvent }) => {
+      domEvent.stopPropagation();
+      onAssigneeChange(key === "__none__" ? null : (key as TodoAssignee));
+    },
+  };
+
+  function commitEta() {
+    onEtaDaysChange(etaDraft);
+    setEtaOpen(false);
   }
 
   return (
-    <Card
-      size="small"
-      style={{ borderTop: `2px solid ${statusRow.color}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-      styles={{ body: { padding: "10px 12px" } }}
+    <div
+      className="td-card"
+      draggable
+      onDragStart={(e) => {
+        wasDragged.current = false;
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDrag={() => { wasDragged.current = true; }}
+      onDragEnd={() => { onDragEnd(); }}
+      onClick={() => { if (!wasDragged.current) onEdit(); }}
+      onMouseEnter={(e) => { if (!dragging) e.currentTarget.style.boxShadow = "0 6px 18px rgba(28,27,26,.1)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = rest; }}
+      style={{
+        position: "relative", background: "#fff", borderRadius: 13, padding: "13px 14px 12px",
+        border: "1px solid #ece8e3", cursor: "pointer",
+        boxShadow: dragging ? "0 14px 32px rgba(28,27,26,.16)" : rest,
+        opacity: dragging ? 0.4 : 1, transform: dragging ? "scale(.98)" : "none",
+        transition: "box-shadow .15s ease, transform .12s ease, opacity .12s ease",
+      }}
     >
-      {/* Title + actions */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <Typography.Text strong style={{ fontSize: 13, flex: 1, lineHeight: 1.5 }}>
+      <div style={{ position: "absolute", left: 0, top: 12, bottom: 12, width: 3, borderRadius: 3, background: pri.color }} />
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, lineHeight: 1.42, color: "#26231f", letterSpacing: "-.01em" }} className="td-title">
           {todo.title}
-        </Typography.Text>
-        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+        </div>
+        <div className="td-actions" style={{ display: "flex", gap: 2, flexShrink: 0, marginTop: -2 }}>
           <Tooltip title="编辑">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} style={{ padding: "0 4px", color: "#8c8c8c" }} />
+            <Button
+              className="td-iconbtn"
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              style={{ color: "#a8a29a" }}
+            />
           </Tooltip>
           <Popconfirm title="确认删除？" onConfirm={onDelete} okText="删除" cancelText="取消">
             <Tooltip title="删除">
-              <Button type="text" size="small" danger icon={<DeleteOutlined />} style={{ padding: "0 4px" }} />
+              <Button
+                className="td-iconbtn"
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => e.stopPropagation()}
+              />
             </Tooltip>
           </Popconfirm>
         </div>
       </div>
 
       {todo.description && (
-        <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4, lineHeight: 1.4 }}>
+        <div className="td-desc" style={{ fontSize: 12, color: "#8a847c", lineHeight: 1.5, marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as React.CSSProperties}>
           {todo.description}
-        </Typography.Text>
+        </div>
       )}
 
-      {/* Priority + status + date */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "nowrap" }}>
-        <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
-        <div
-          style={{
-            minWidth: 102,
-            height: 24,
-            border: `1px solid ${currentStatusRow.borderColor}`,
-            background: currentStatusRow.bgColor,
-            borderRadius: 6,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 4px",
-          }}
-        >
-          <Select<TodoStatus>
-            size="small"
-            variant="borderless"
-            value={todo.status}
-            onChange={(value) => {
-              if (value !== todo.status) {
-                onMove(todo, value);
-              }
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 11, paddingTop: 10, borderTop: "1px solid #f3f0ec" }}>
+        <Dropdown menu={priorityMenu} trigger={["click"]}>
+          <span
+            style={{ fontSize: 11, fontWeight: 700, color: pri.color, background: pri.soft, borderRadius: 6, padding: "2px 7px", cursor: "pointer" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {pri.label}
+          </span>
+        </Dropdown>
+
+        {todo.status !== "done" && (
+          <Dropdown
+            open={etaOpen}
+            onOpenChange={(open) => {
+              setEtaOpen(open);
+              if (open) setEtaDraft(todo.etaDays);
             }}
-            style={{ width: "100%", fontSize: 12, color: "#334155" }}
-            popupMatchSelectWidth={false}
-            options={statusOptions}
-          />
-        </div>
-        <div
-          style={{
-            height: 22,
-            padding: "0 4px",
-            border: "1px solid #cbd5e1",
-            borderRadius: 6,
-            background: "#f8fafc",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            flexShrink: 0,
-          }}
-        >
-          <InputNumber
-            size="small"
-            value={etaDraft}
-            onChange={(value) =>
-              setEtaDraft(typeof value === "number" ? Math.max(0, Math.floor(value)) : null)
-            }
-            onBlur={() => {
-              void persistEtaDays(etaDraft);
-            }}
-            onPressEnter={() => {
-              void persistEtaDays(etaDraft);
-            }}
-            placeholder="x"
-            min={0}
-            precision={0}
-            controls={false}
-            style={{ width: 38 }}
-            variant="borderless"
-            disabled={savingEta}
-          />
-          <Typography.Text style={{ fontSize: 11, color: "#64748b" }}>days</Typography.Text>
-        </div>
-        <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
+            trigger={["click"]}
+            dropdownRender={() => (
+              <div
+                style={{ padding: 10, background: "#fff", borderRadius: 10, boxShadow: "0 6px 20px rgba(28,27,26,.12)", border: "1px solid #ece8e3" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontSize: 11, color: "#78716c", marginBottom: 6, fontWeight: 600 }}>预估天数</div>
+                <InputNumber
+                  min={0}
+                  max={365}
+                  value={etaDraft}
+                  placeholder="—"
+                  style={{ width: 120 }}
+                  onChange={(v) => setEtaDraft(v == null ? null : v)}
+                  onPressEnter={commitEta}
+                />
+                <div style={{ marginTop: 8, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <Button size="small" onClick={() => setEtaOpen(false)}>取消</Button>
+                  <Button size="small" type="primary" onClick={commitEta}>确定</Button>
+                </div>
+              </div>
+            )}
+          >
+            <span
+              style={{ fontFamily: MONO, fontSize: 11, color: "#8a847c", background: "#f5f3f0", borderRadius: 6, padding: "2px 7px", cursor: "pointer" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              ⏱{" "}
+              <span style={{ textDecoration: "underline dotted", textUnderlineOffset: 2 }}>
+                {todo.etaDays ?? "—"}
+              </span>
+              d
+            </span>
+          </Dropdown>
+        )}
+
+        <Dropdown menu={assigneeMenu} trigger={["click"]}>
+          <span style={{ cursor: "pointer", display: "inline-flex" }} onClick={(e) => e.stopPropagation()}>
+            <Avatar memKey={todo.assignee} size={22} />
+          </span>
+        </Dropdown>
+
+        <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 10.5, color: "#b3ada4" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
-        </Typography.Text>
+        </span>
       </div>
-    </Card>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
-import { extractPictureTranslateAttachmentsFromMessages } from "../../../../../../app/server/ai/skills/pictureTranslate/extract";
-import { PICTURE_TRANSLATE_TOOL_NAME } from "../../../../../../app/server/ai/skills/pictureTranslate/constants";
+import { extractPictureTranslateAttachmentsFromMessages } from "../../../../../../app/server/ai/skills/pictureTranslate/pictureTranslate.extract";
+import { PICTURE_TRANSLATE_TOOL_NAME } from "../../../../../../app/server/ai/skills/pictureTranslate/pictureTranslate.constants";
 
 describe("extractPictureTranslateAttachmentsFromMessages", () => {
   it("extracts translated image from successful picture_translate tool result", () => {

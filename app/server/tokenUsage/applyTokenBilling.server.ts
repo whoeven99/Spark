@@ -24,14 +24,12 @@ export function applyTokenBillingMultiplier(
  * 将原始用量转为「计入套餐」的 token：定额场景用 baseTokenCost，LLM 场景用 API 返回的 token × multiplier。
  */
 export async function billTokenUsage(params: {
-  appName: string;
   feature: TokenBillingFeature;
   modelKey: string;
   usage: ParsedTokenUsage | unknown;
 }): Promise<ParsedTokenUsage> {
   const parsed = parseUsageMetadata(params.usage);
   const { multiplier, baseTokenCost } = await resolveTokenBillingRule({
-    appName: params.appName,
     feature: params.feature,
     modelKey: normalizeBillingModelKey(params.modelKey),
   });
@@ -53,14 +51,12 @@ export type BilledTokenUsageItem = {
 };
 
 export async function sumBilledTokenUsages(params: {
-  appName: string;
   items: BilledTokenUsageItem[];
 }): Promise<ParsedTokenUsage> {
   const billed: ParsedTokenUsage[] = [];
   for (const item of params.items) {
     billed.push(
       await billTokenUsage({
-        appName: params.appName,
         feature: item.feature,
         modelKey: item.modelKey,
         usage: item.usage,

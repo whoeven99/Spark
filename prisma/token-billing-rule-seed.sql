@@ -1,11 +1,10 @@
--- TokenBillingRule 种子（product-improve；turso:migrate 执行）
+-- TokenBillingRule 种子（turso:migrate 执行）
 -- feature: product_copy | image_prompt | image_generate | picture_translate
 DELETE FROM "TokenBillingRule"
-WHERE "appName" = 'generate-description' OR "ruleKey" LIKE 'gd:%';
+WHERE "ruleKey" LIKE 'gd:%';
 
 INSERT OR IGNORE INTO "TokenBillingRule" (
     "ruleKey",
-    "appName",
     "feature",
     "modelKey",
     "displayName",
@@ -17,7 +16,6 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
 ) VALUES
     (
         'pi:product_copy:deepseek-chat',
-        'product-improve',
         'product_copy',
         'deepseek-chat',
         '商品文案 · deepseek-chat',
@@ -29,7 +27,6 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
     ),
     (
         'pi:image_prompt:deepseek-chat',
-        'product-improve',
         'image_prompt',
         'deepseek-chat',
         '画面扩写 · deepseek-chat',
@@ -41,7 +38,6 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
     ),
     (
         'pi:image_generate:gpt-image-2',
-        'product-improve',
         'image_generate',
         'gpt-image-2',
         '文生图 · gpt-image-2',
@@ -53,7 +49,6 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
     ),
     (
         'pi:picture_translate:volc-translate',
-        'product-improve',
         'picture_translate',
         'volc-translate',
         '整图翻译 · 火山',
@@ -65,7 +60,6 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
     ),
     (
         'pi:picture_translate:aidge-translate',
-        'product-improve',
         'picture_translate',
         'aidge-translate',
         '整图翻译 · Aidge',

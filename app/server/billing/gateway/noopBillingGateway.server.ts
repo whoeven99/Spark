@@ -9,8 +9,10 @@ const NOOP_SUBSCRIPTION_GID = "gid://shopify/AppSubscription/noop";
 const NOOP_PURCHASE_GID_PREFIX = "gid://shopify/AppPurchaseOneTime/noop-";
 
 export const noopBillingGateway: BillingGateway = {
-  async createSubscription({ shop, appName, plan }) {
+  async createSubscription({ shop, plan, trialDays }) {
     const subscriptionId = `${NOOP_SUBSCRIPTION_GID}-${plan.planKey}`;
+    const now = new Date();
+    const effectiveTrialDays = trialDays !== undefined ? trialDays : plan.trialDays;
     const periodEnd = new Date();
     if (plan.billingInterval === "ANNUAL") {
       periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
@@ -20,18 +22,21 @@ export const noopBillingGateway: BillingGateway = {
 
     await applyActiveSubscription({
       shop,
-      appName,
       shopifySubscriptionId: subscriptionId,
       planKey: plan.planKey,
       billingInterval: plan.billingInterval ?? "MONTHLY",
       tokensPerPeriod: plan.tokens,
+      trialEndsAt:
+        effectiveTrialDays && effectiveTrialDays > 0
+          ? new Date(now.getTime() + effectiveTrialDays * 24 * 60 * 60 * 1000)
+          : null,
       period: {
         planKey: plan.planKey,
         tokensPerPeriod: plan.tokens,
-        currentPeriodStart: new Date(),
+        currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
       },
-      rawPayload: { noop: true },
+      rawPayload: { noop: true, trialDays: effectiveTrialDays ?? 0 },
     });
 
     return {
@@ -40,11 +45,10 @@ export const noopBillingGateway: BillingGateway = {
     };
   },
 
-  async createOneTimePurchase({ shop, appName, plan }) {
+  async createOneTimePurchase({ shop, plan }) {
     const purchaseId = `${NOOP_PURCHASE_GID_PREFIX}${plan.planKey}-${Date.now()}`;
     await applyTokenPackPurchase({
       shop,
-      appName,
       plan,
       shopifyPurchaseId: purchaseId,
       metadata: { noop: true },
@@ -58,12 +62,9 @@ export const noopBillingGateway: BillingGateway = {
 };
 
 /** Noop 模式下将 pending 订阅标记为本地 ACTIVE（开发用）。 */
-export async function noopActivatePendingSubscription(
-  shop: string,
-  appName: string,
-): Promise<void> {
+export async function noopActivatePendingSubscription(shop: string): Promise<void> {
   const sub = await prisma.appSubscription.findUnique({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
   });
   if (!sub || sub.status !== APP_SUBSCRIPTION_STATUS.PENDING) return;
 
@@ -76,7 +77,6 @@ export async function noopActivatePendingSubscription(
 
   await applyActiveSubscription({
     shop,
-    appName,
     shopifySubscriptionId: sub.shopifySubscriptionId,
     planKey: sub.planKey,
     billingInterval: sub.billingInterval,
@@ -87,6 +87,6 @@ export async function noopActivatePendingSubscription(
       currentPeriodStart: new Date(),
       currentPeriodEnd: periodEnd,
     },
-    rawPayload: { noop: true, activatedFromPending: true },
+    rawPayload: { noop: true, activatedFromPending: true } as Prisma.InputJsonValue,
   });
 }

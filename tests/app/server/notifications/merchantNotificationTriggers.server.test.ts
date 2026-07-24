@@ -43,7 +43,7 @@ vi.mock("../../../../app/db.server", () => ({
 }));
 
 vi.mock("../../../../app/config/appEntry.server", () => ({
-  getAppEntry: () => "generate-description",
+  getAppEntry: () => "spark",
 }));
 
 vi.mock("../../../../app/server/commonEventLog/appendCommonEventLog.server", () => ({
@@ -104,7 +104,7 @@ vi.mock("../../../../app/server/notifications/notifyMerchant.server", () => ({
 }));
 
 const SHOP = "demo.myshopify.com";
-const APP_NAME = "generate-description";
+const APP_NAME = "spark";
 
 const samplePlan = {
   planKey: "token-pack-10k",

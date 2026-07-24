@@ -3,7 +3,9 @@ export function shopDomainFromHostParam(host: string): string | null {
   const trimmed = host.trim();
   if (!trimmed) return null;
   try {
-    const decoded = Buffer.from(trimmed, "base64").toString("utf-8");
+    // URLSearchParams 会将 + 解释为空格，需要还原
+    const normalized = trimmed.replace(/ /g, "+");
+    const decoded = Buffer.from(normalized, "base64").toString("utf-8");
     const slash = decoded.indexOf("/");
     const domain = (slash >= 0 ? decoded.slice(0, slash) : decoded).trim();
     if (!domain || !/^[a-z0-9][a-z0-9.-]*$/i.test(domain)) return null;

@@ -1,5 +1,3 @@
-import type { AppEntry } from "../../config/appEntry.server";
-
 export type AgentRunFeature =
   | "chat"
   | "chat_stream"
@@ -51,7 +49,7 @@ export type AgentRunReflection = {
 export type AgentRunDoc = {
   id: string;
   shop: string;
-  appName: AppEntry | string;
+  appName: string;
   feature: AgentRunFeature;
   status: AgentRunStatus;
   startedAt: string;
@@ -70,7 +68,7 @@ export type AgentRunDoc = {
 export type RecordAgentRunInput = {
   runId: string;
   shop: string;
-  appName: AppEntry | string;
+  appName: string;
   feature: AgentRunFeature;
   status: AgentRunStatus;
   startedAt: string;

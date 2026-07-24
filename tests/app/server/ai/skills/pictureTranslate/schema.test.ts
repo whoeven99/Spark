@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import {
   pictureTranslateToolSchema,
   resolvePictureTranslateInput,
-} from "../../../../../../app/server/ai/skills/pictureTranslate/schema";
+} from "../../../../../../app/server/ai/skills/pictureTranslate/pictureTranslate.schema";
 
 describe("pictureTranslateToolSchema", () => {
   it("accepts https imageUrl with required targetLanguage", () => {

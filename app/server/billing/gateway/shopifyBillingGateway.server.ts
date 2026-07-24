@@ -9,7 +9,7 @@ import {
 import { APP_SUBSCRIPTION_STATUS } from "../types.server";
 
 export const shopifyBillingGateway: BillingGateway = {
-  async createSubscription({ admin, shop, appName, plan, returnUrl }) {
+  async createSubscription({ admin, shop, plan, returnUrl, trialDays }) {
     const name = plan.shopifyPlanName ?? plan.displayName;
     const { confirmationUrl, subscriptionId } = await shopifyCreateSubscription(
       admin,
@@ -19,15 +19,14 @@ export const shopifyBillingGateway: BillingGateway = {
         currencyCode: plan.currencyCode,
         billingInterval: plan.billingInterval,
         returnUrl,
-        trialDays: plan.trialDays,
+        trialDays: trialDays !== undefined ? trialDays : plan.trialDays,
       },
     );
 
     await prisma.appSubscription.upsert({
-      where: { shop_appName: { shop, appName } },
+      where: { shop },
       create: {
         shop,
-        appName,
         planKey: plan.planKey,
         shopifySubscriptionId: subscriptionId,
         billingInterval: plan.billingInterval ?? "MONTHLY",
@@ -51,7 +50,7 @@ export const shopifyBillingGateway: BillingGateway = {
     };
   },
 
-  async createOneTimePurchase({ admin, shop, appName, plan, returnUrl }) {
+  async createOneTimePurchase({ admin, shop, plan, returnUrl }) {
     const name = plan.shopifyPlanName ?? plan.displayName;
     const { confirmationUrl, purchaseId } = await shopifyCreateOneTimePurchase(
       admin,
@@ -65,7 +64,6 @@ export const shopifyBillingGateway: BillingGateway = {
 
     await appendBillingLog({
       shop,
-      appName,
       eventType: BILLING_LOG_EVENT.TOKEN_PACK_INITIATED,
       planKey: plan.planKey,
       referenceId: purchaseId,

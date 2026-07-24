@@ -1,16 +1,65 @@
 import prisma from "../../db.server";
 import { getGeneratedImageReadUrl } from "../imageGeneration/imageGenerationBlob.server";
+import { getPictureTranslateResultImageUrl } from "../pictureTranslate/pictureTranslateBlob.server";
 import type {
   AITaskItem,
+  AITaskListMetrics,
+  AITaskListPageData,
+  AITaskListView,
   AITaskLogEntry,
   AITaskStatus,
   AITaskType,
 } from "../../lib/aiTaskTypes";
+import {
+  parseAITaskMessage,
+  serializeAITaskMessage,
+  type AITaskMessageInput,
+} from "../../lib/aiTaskMessage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PrismaJson = any;
 
 const TASK_LIST_LIMIT = 20;
+const RECENT_TASK_FETCH_LIMIT = 200;
+const TASK_PAGE_SIZE = 4;
+
+function normalizeTaskPage(page: number | undefined): number {
+  if (!Number.isFinite(page) || !page || page < 1) return 1;
+  return Math.floor(page);
+}
+
+function normalizeTaskPageSize(pageSize: number | undefined): number {
+  if (!Number.isFinite(pageSize) || !pageSize || pageSize < 1) return TASK_PAGE_SIZE;
+  return Math.min(Math.floor(pageSize), TASK_LIST_LIMIT);
+}
+
+function buildTaskTypeWhere(params: {
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}) {
+  if (params.taskType) {
+    return { taskType: params.taskType };
+  }
+  if (params.taskTypes && params.taskTypes.length > 0) {
+    return { taskType: { in: params.taskTypes } };
+  }
+  return {};
+}
+
+function buildTaskListWhere(params: {
+  shop: string;
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}) {
+  return {
+    shop: params.shop,
+    ...buildTaskTypeWhere(params),
+  };
+}
+
+function buildTaskViewWhere(view: AITaskListView, cutoff: Date) {
+  return view === "current" ? { createdAt: { gte: cutoff } } : { createdAt: { lt: cutoff } };
+}
 
 function toAITaskStatus(raw: string): AITaskStatus {
   if (
@@ -27,27 +76,22 @@ function toAITaskStatus(raw: string): AITaskStatus {
   return "failed";
 }
 
-function resolveImageUrl(blobPath: string | null | undefined): string | null {
-  if (!blobPath?.trim()) return null;
-  try {
-    return getGeneratedImageReadUrl(blobPath.trim());
-  } catch {
-    return null;
-  }
-}
-
 function resolveResultImageUrl(
   taskType: string,
   result: Record<string, unknown> | null,
 ): Record<string, unknown> | null {
   if (!result) return null;
   const out = { ...result };
-  if (taskType === "image_generation") {
-    const url = resolveImageUrl(result.blobPath as string | null);
-    if (url) out.imageUrl = url;
-  } else if (taskType === "picture_translate") {
-    const url = resolveImageUrl(result.translatedBlobPath as string | null);
-    if (url) out.imageUrl = url;
+  try {
+    if (taskType === "image_generation") {
+      const blobPath = (result.blobPath as string | null)?.trim();
+      if (blobPath) out.imageUrl = getGeneratedImageReadUrl(blobPath);
+    } else if (taskType === "picture_translate") {
+      const blobPath = (result.translatedBlobPath as string | null)?.trim();
+      if (blobPath) out.imageUrl = getPictureTranslateResultImageUrl(blobPath);
+    }
+  } catch {
+    // URL 生成失败时保持原 result，不影响其他字段
   }
   return out;
 }
@@ -56,7 +100,6 @@ function rowToAITaskItem(row: {
   id: string;
   batchId: string;
   shop: string;
-  appName: string;
   taskType: string;
   status: string;
   config: unknown;
@@ -71,11 +114,11 @@ function rowToAITaskItem(row: {
 }): AITaskItem {
   const result =
     row.result != null ? (row.result as Record<string, unknown>) : null;
+  const parsedError = parseAITaskMessage(row.errorMsg);
   return {
     id: row.id,
     batchId: row.batchId,
     shop: row.shop,
-    appName: row.appName,
     taskType: row.taskType as AITaskType,
     status: toAITaskStatus(row.status),
     config: row.config as Record<string, unknown>,
@@ -84,7 +127,9 @@ function rowToAITaskItem(row: {
     actualCredits: row.actualCredits,
     startedAt: row.startedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
-    errorMsg: row.errorMsg,
+    errorMsg: parsedError.text || null,
+    errorMsgKey: parsedError.key,
+    errorMsgParams: parsedError.params,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -92,7 +137,6 @@ function rowToAITaskItem(row: {
 
 export async function createBatchWithTask(params: {
   shop: string;
-  appName: string;
   taskType: AITaskType;
   batchConfig: Record<string, unknown>;
   taskConfig: Record<string, unknown>;
@@ -101,13 +145,11 @@ export async function createBatchWithTask(params: {
   const batch = await prisma.aITaskBatch.create({
     data: {
       shop: params.shop,
-      appName: params.appName,
       taskType: params.taskType,
       config: params.batchConfig as unknown as PrismaJson,
       tasks: {
         create: {
           shop: params.shop,
-          appName: params.appName,
           taskType: params.taskType,
           status: "running",
           config: params.taskConfig as unknown as PrismaJson,
@@ -124,6 +166,7 @@ export async function markTaskSucceeded(params: {
   taskId: string;
   result: Record<string, unknown>;
   actualCredits?: number;
+  completedAt?: Date;
 }): Promise<void> {
   await prisma.aITask.update({
     where: { id: params.taskId },
@@ -131,20 +174,38 @@ export async function markTaskSucceeded(params: {
       status: "succeeded",
       result: params.result as unknown as PrismaJson,
       actualCredits: params.actualCredits ?? null,
-      completedAt: new Date(),
+      completedAt: params.completedAt ?? new Date(),
     },
   });
 }
 
+export async function getTaskMeta(taskId: string): Promise<{
+  taskType: string;
+  startedAt: Date;
+  config: Record<string, unknown> | null;
+} | null> {
+  const row = await prisma.aITask.findUnique({
+    where: { id: taskId },
+    select: { taskType: true, startedAt: true, config: true },
+  });
+  if (!row) return null;
+  return {
+    taskType: row.taskType,
+    startedAt: row.startedAt,
+    config: (row.config as Record<string, unknown> | null) ?? null,
+  };
+}
+
 export async function markTaskFailed(params: {
   taskId: string;
-  errorMsg: string;
+  errorMsg: AITaskMessageInput;
 }): Promise<void> {
+  const serializedError = serializeAITaskMessage(params.errorMsg);
   await prisma.aITask.update({
     where: { id: params.taskId },
     data: {
       status: "failed",
-      errorMsg: params.errorMsg.slice(0, 2000),
+      errorMsg: serializedError.slice(0, 2000),
       completedAt: new Date(),
     },
   });
@@ -153,12 +214,14 @@ export async function markTaskFailed(params: {
 export async function markTaskPendingReview(params: {
   taskId: string;
   result: Record<string, unknown>;
+  actualCredits?: number;
 }): Promise<void> {
   await prisma.aITask.update({
     where: { id: params.taskId },
     data: {
       status: "pending_review",
       result: params.result as unknown as PrismaJson,
+      actualCredits: params.actualCredits ?? null,
       completedAt: new Date(),
     },
   });
@@ -221,14 +284,12 @@ export async function getTaskForShop(params: {
 
 export async function listRecentTasksForShop(params: {
   shop: string;
-  appName: string;
   taskType?: AITaskType;
   limit?: number;
 }): Promise<AITaskItem[]> {
   const rows = await prisma.aITask.findMany({
     where: {
       shop: params.shop,
-      appName: params.appName,
       ...(params.taskType ? { taskType: params.taskType } : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -237,37 +298,132 @@ export async function listRecentTasksForShop(params: {
   return rows.map(rowToAITaskItem);
 }
 
+export async function getTaskListMetricsForShop(params: {
+  shop: string;
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}): Promise<AITaskListMetrics> {
+  const baseWhere = buildTaskListWhere(params);
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [currentCount, historyCount, runningCount] = await Promise.all([
+    prisma.aITask.count({
+      where: {
+        ...baseWhere,
+        createdAt: { gte: cutoff },
+      },
+    }),
+    prisma.aITask.count({
+      where: {
+        ...baseWhere,
+        createdAt: { lt: cutoff },
+      },
+    }),
+    prisma.aITask.count({
+      where: {
+        ...baseWhere,
+        status: "running",
+      },
+    }),
+  ]);
+
+  return {
+    currentCount,
+    historyCount,
+    runningCount,
+    totalCount: currentCount + historyCount,
+  };
+}
+
+export async function listRecentAITasksForShop(
+  shop: string,
+  limit: number,
+): Promise<AITaskItem[]> {
+  const take = Math.min(Math.max(1, Math.floor(limit)), RECENT_TASK_FETCH_LIMIT);
+  const rows = await prisma.aITask.findMany({
+    where: { shop },
+    orderBy: { updatedAt: "desc" },
+    take,
+  });
+  return rows.map(rowToAITaskItem);
+}
+
+export async function listTasksPageForShop(params: {
+  shop: string;
+  view: AITaskListView;
+  page?: number;
+  pageSize?: number;
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}): Promise<AITaskListPageData> {
+  const pageSize = normalizeTaskPageSize(params.pageSize);
+  const requestedPage = normalizeTaskPage(params.page);
+  const baseWhere = buildTaskListWhere(params);
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const metrics = await getTaskListMetricsForShop(params);
+  const totalCount = params.view === "current" ? metrics.currentCount : metrics.historyCount;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const rows = await prisma.aITask.findMany({
+    where: {
+      ...baseWhere,
+      ...buildTaskViewWhere(params.view, cutoff),
+    },
+    orderBy: { createdAt: "desc" },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
+
+  return {
+    tasks: rows.map(rowToAITaskItem),
+    view: params.view,
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    metrics,
+  };
+}
+
 export async function listTaskLogs(taskId: string): Promise<AITaskLogEntry[]> {
   const rows = await prisma.aITaskLog.findMany({
     where: { taskId },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    taskId: r.taskId,
-    elapsedSeconds: r.elapsedSeconds,
-    message: r.message,
-    createdAt: r.createdAt.toISOString(),
-  }));
+  return rows.map((r) => {
+    const parsedMessage = parseAITaskMessage(r.message);
+    return {
+      message: parsedMessage.text,
+      messageKey: parsedMessage.key,
+      messageParams: parsedMessage.params,
+      id: r.id,
+      taskId: r.taskId,
+      elapsedSeconds: r.elapsedSeconds,
+      createdAt: r.createdAt.toISOString(),
+    };
+  });
 }
 
 export async function appendTaskLog(params: {
   taskId: string;
   elapsedSeconds: number;
-  message: string;
+  message: AITaskMessageInput;
 }): Promise<AITaskLogEntry> {
+  const serializedMessage = serializeAITaskMessage(params.message);
   const row = await prisma.aITaskLog.create({
     data: {
       taskId: params.taskId,
       elapsedSeconds: params.elapsedSeconds,
-      message: params.message,
+      message: serializedMessage,
     },
   });
+  const parsedMessage = parseAITaskMessage(row.message);
   return {
+    message: parsedMessage.text,
+    messageKey: parsedMessage.key,
+    messageParams: parsedMessage.params,
     id: row.id,
     taskId: row.taskId,
     elapsedSeconds: row.elapsedSeconds,
-    message: row.message,
     createdAt: row.createdAt.toISOString(),
   };
 }

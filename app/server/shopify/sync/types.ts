@@ -51,6 +51,11 @@ export interface ShopifyOrderPayload {
   total_shipping_price_set?: {
     shop_money?: { amount: string };
   };
+  shipping_lines?: Array<{
+    discounted_price_set?: { shop_money?: { amount: string } };
+    discounted_price?: string;
+    price?: string;
+  }>;
   source_name: string | null;
   landing_site: string | null;
   referring_site: string | null;
@@ -65,6 +70,25 @@ export interface ShopifyRefundTransaction {
   kind: string;
   status: string;
   amount: string;
+}
+
+export interface ShopifyRefundOrderAdjustment {
+  id: number;
+  order_id: number;
+  refund_id: number;
+  /// shipping_refund | refund_discrepancy
+  kind: string;
+  amount: string;
+  tax_amount: string;
+  reason: string | null;
+  amount_set?: {
+    shop_money?: { amount: string };
+    presentment_money?: { amount: string };
+  };
+  tax_amount_set?: {
+    shop_money?: { amount: string };
+    presentment_money?: { amount: string };
+  };
 }
 
 export interface ShopifyRefundPayload {
@@ -84,6 +108,12 @@ export interface ShopifyRefundPayload {
     line_item?: ShopifyLineItem | null;
   }>;
   transactions: ShopifyRefundTransaction[];
+  order_adjustments?: ShopifyRefundOrderAdjustment[];
+  refund_shipping_lines?: Array<{
+    subtotal_amount_set?: { shop_money?: { amount: string } };
+    subtotal_set?: { shop_money?: { amount: string } };
+    tax_amount_set?: { shop_money?: { amount: string } };
+  }>;
 }
 
 export interface ShopifyInventoryLevelPayload {

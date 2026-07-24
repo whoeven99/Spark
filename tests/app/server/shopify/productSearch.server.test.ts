@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ShopifyAdminGraphqlClient } from "../../../../app/server/ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../../../app/server/ai/skills/shopifyInfo/shopifyInfo.tool";
 import { buildProductTitleSearchQuery, searchProducts } from "../../../../app/server/shopify/productSearch.server";
 
 describe("buildProductTitleSearchQuery", () => {

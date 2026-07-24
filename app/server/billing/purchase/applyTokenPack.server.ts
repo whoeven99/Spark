@@ -7,28 +7,25 @@ import { appendBillingLog } from "../billingLog.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import type { PlanRecord } from "../plans/planCatalog.server";
 import { BILLING_LOG_EVENT } from "../types.server";
-
 const LOG = "[Billing][TokenPackApply]";
 
 export async function applyTokenPackPurchase(params: {
   shop: string;
-  appName: string;
   plan: PlanRecord;
   shopifyPurchaseId: string;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  const { shop, appName, plan, shopifyPurchaseId } = params;
+  const { shop, plan, shopifyPurchaseId } = params;
 
   console.info(
-    `${LOG} enter shop=${shop} appName=${appName} planKey=${plan.planKey} purchaseId=${shopifyPurchaseId} tokens=${plan.tokens}`,
+    `${LOG} enter shop=${shop} planKey=${plan.planKey} purchaseId=${shopifyPurchaseId} tokens=${plan.tokens}`,
   );
 
-  await ensureAccount(shop, appName);
+  await ensureAccount(shop);
 
   const prior = await prisma.billingLog.findFirst({
     where: {
       shop,
-      appName,
       eventType: BILLING_LOG_EVENT.TOKEN_PACK_PURCHASED,
       referenceId: shopifyPurchaseId,
     },
@@ -41,14 +38,12 @@ export async function applyTokenPackPurchase(params: {
   }
 
   const accountBefore = await prisma.account.findUnique({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
   });
-  const creditsBefore = accountBefore
-    ? getAvailableTokens(accountBefore)
-    : 0;
+  const creditsBefore = accountBefore ? getAvailableTokens(accountBefore) : 0;
 
   await prisma.account.update({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
     data: {
       purchasedTokens: { increment: plan.tokens },
     },
@@ -64,7 +59,6 @@ export async function applyTokenPackPurchase(params: {
 
   await appendBillingLog({
     shop,
-    appName,
     eventType: BILLING_LOG_EVENT.TOKEN_PACK_PURCHASED,
     planKey: plan.planKey,
     referenceId: shopifyPurchaseId,
@@ -76,20 +70,19 @@ export async function applyTokenPackPurchase(params: {
   try {
     const feishuResult = await sendTokenPackFeishuNotify({
       shop,
-      appName,
       planKey: plan.planKey,
     });
     console.info(
       `${LOG} notify-feishu-done shop=${shop} ok=${feishuResult.ok} skipped=${"skipped" in feishuResult ? feishuResult.skipped : false} reason=${"reason" in feishuResult ? feishuResult.reason : "sent"}`,
     );
   } catch (error) {
-    console.error(`${LOG} notify-feishu-failed shop=${shop} appName=${appName}:`, error);
+    console.error(`${LOG} notify-feishu-failed shop=${shop}:`, error);
   }
 
   console.info(`${LOG} notify-email-start shop=${shop} event=purchaseCreated`);
   await notifyPurchaseCreatedEmail({
     shop,
-    appName,
+    appName: "spark",
     plan,
     shopifyPurchaseId,
     occurredAt: new Date(),

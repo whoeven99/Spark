@@ -9,15 +9,11 @@ vi.mock("../../../../app/db.server", () => ({
 }));
 
 vi.mock("../../../../app/server/billing/constants.server", () => ({
-  isBillingEnabledForApp: vi.fn(),
+  isBillingEnabled: vi.fn(),
 }));
 
 vi.mock("../../../../app/server/billing/requireBilling.server", () => ({
   requireBillingAccess: vi.fn(),
-}));
-
-vi.mock("../../../../app/config/appEntry.server", () => ({
-  getAppEntry: vi.fn(() => "product-improve"),
 }));
 
 vi.mock("../../../../app/server/tokenUsage/tokenBillingCatalog.server", () => ({
@@ -25,14 +21,14 @@ vi.mock("../../../../app/server/tokenUsage/tokenBillingCatalog.server", () => ({
 }));
 
 import prisma from "../../../../app/db.server";
-import { isBillingEnabledForApp } from "../../../../app/server/billing/constants.server";
+import { isBillingEnabled } from "../../../../app/server/billing/constants.server";
 import { resolveTokenBillingRule } from "../../../../app/server/tokenUsage/tokenBillingCatalog.server";
 import { recordVisualToolTokenUsage } from "../../../../app/server/tokenUsage/visualToolTokenUsage.server";
 
 describe("recordVisualToolTokenUsage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(isBillingEnabledForApp).mockReturnValue(true);
+    vi.mocked(isBillingEnabled).mockReturnValue(true);
     vi.mocked(resolveTokenBillingRule).mockResolvedValue({
       rule: null,
       multiplier: 2,

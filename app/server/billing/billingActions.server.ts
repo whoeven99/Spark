@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   BILLING_PAGE_PATH,
   buildBillingReturnUrl,
@@ -11,14 +11,11 @@ import { PLAN_CATALOG_KIND } from "./types.server";
 export async function startSubscriptionCheckout(params: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
-  appName: string;
   planKey: string;
   request: Request;
+  trialDays?: number | null;
 }): Promise<{ confirmationUrl: string | null }> {
   const plan = await getPlanByKey(params.planKey);
-  if (plan.appName !== params.appName) {
-    throw new BillingError("套餐与当前 App 不匹配", BILLING_ERROR_CODE.PLAN_NOT_FOUND, 400);
-  }
   if (plan.kind !== PLAN_CATALOG_KIND.SUBSCRIPTION) {
     throw new BillingError("该套餐不是订阅类型", BILLING_ERROR_CODE.INVALID_PLAN_KIND, 400);
   }
@@ -31,14 +28,14 @@ export async function startSubscriptionCheckout(params: {
 
   const gateway = getBillingGateway();
   console.info(
-    `[Billing][Checkout] subscribe-start shop=${params.shop} appName=${params.appName} planKey=${params.planKey}`,
+    `[Billing][Checkout] subscribe-start shop=${params.shop} planKey=${params.planKey}`,
   );
   const result = await gateway.createSubscription({
     admin: params.admin,
     shop: params.shop,
-    appName: params.appName,
     plan: plan,
     returnUrl,
+    trialDays: params.trialDays,
   });
   console.info(
     `[Billing][Checkout] subscribe-done shop=${params.shop} confirmationUrl=${result.confirmationUrl ? "set" : "null"} subscriptionId=${result.shopifySubscriptionId ?? "(none)"}`,
@@ -50,14 +47,10 @@ export async function startSubscriptionCheckout(params: {
 export async function startTokenPackCheckout(params: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
-  appName: string;
   planKey: string;
   request: Request;
 }): Promise<{ confirmationUrl: string | null }> {
   const plan = await getPlanByKey(params.planKey);
-  if (plan.appName !== params.appName) {
-    throw new BillingError("套餐与当前 App 不匹配", BILLING_ERROR_CODE.PLAN_NOT_FOUND, 400);
-  }
   if (plan.kind !== PLAN_CATALOG_KIND.ONE_TIME_PACK) {
     throw new BillingError("该套餐不是按量购包", BILLING_ERROR_CODE.INVALID_PLAN_KIND, 400);
   }
@@ -70,12 +63,11 @@ export async function startTokenPackCheckout(params: {
 
   const gateway = getBillingGateway();
   console.info(
-    `[Billing][Checkout] token-pack-start shop=${params.shop} appName=${params.appName} planKey=${params.planKey}`,
+    `[Billing][Checkout] token-pack-start shop=${params.shop} planKey=${params.planKey}`,
   );
   const result = await gateway.createOneTimePurchase({
     admin: params.admin,
     shop: params.shop,
-    appName: params.appName,
     plan,
     returnUrl,
   });

@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { updateSessionScope } from "./sessionTable.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
@@ -23,16 +22,11 @@ export async function handleScopesUpdate(params: {
   const scopeString = current.join(",");
 
   if (params.sessionId && scopeString) {
-    await updateSessionScope(
-      params.sessionId,
-      scopeString,
-      getAppEntry(),
-    );
+    await updateSessionScope(params.sessionId, scopeString);
   }
 
   await appendCommonEventLog({
     shop,
-    appName: getAppEntry(),
     eventType: COMMON_EVENT_TYPE.SCOPES_UPDATE,
     topic: params.topic,
     referenceId: params.sessionId

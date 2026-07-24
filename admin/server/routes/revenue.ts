@@ -117,6 +117,7 @@ revenueRouter.get("/trend", async (req, res) => {
     const conditions: string[] = [
       "CAST(pc.priceAmount AS REAL) > 0",
       "pc.priceAmount IS NOT NULL",
+      "bl.eventType IN ('SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_RENEWED', 'TOKEN_PACK_PURCHASED')",
     ];
     const args: string[] = [];
 
@@ -176,6 +177,7 @@ revenueRouter.get("/charges", async (req, res) => {
     const conditions: string[] = [
       "CAST(pc.priceAmount AS REAL) > 0",
       "pc.priceAmount IS NOT NULL",
+      "bl.eventType IN ('SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_RENEWED', 'TOKEN_PACK_PURCHASED')",
     ];
     const args: (string | number)[] = [];
 

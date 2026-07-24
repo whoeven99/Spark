@@ -1,28 +1,17 @@
-import { getAppEntry, isAppEntryKey } from "../../config/appEntry.server";
+import { MERCHANT_SUPPORT_EMAIL } from "../email/templates/emailTemplates.server";
 import type { NotificationAppConfig } from "./types";
 
-import { MERCHANT_SUPPORT_EMAIL } from "../email/templates/emailTemplates.server";
-
 const DEFAULT_SUPPORT_EMAIL = MERCHANT_SUPPORT_EMAIL;
-
-/** APP_ENTRY key → 人类可读展示名（优先级低于 NOTIFICATION_APP_NAME 环境变量）。 */
-const APP_ENTRY_DISPLAY_NAMES: Partial<Record<string, string>> = {
-  "product-improve": "Ciwi.ai: Image & Alt Translate",
-};
 
 function resolveSupportEmail(): string {
   return process.env.NOTIFICATION_SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
 }
 
 function buildConfigForAppKey(appKey: string): NotificationAppConfig {
-  const entry = isAppEntryKey(appKey) ? appKey : getAppEntry();
-  const displayName =
-    process.env.NOTIFICATION_APP_NAME?.trim() ||
-    APP_ENTRY_DISPLAY_NAMES[entry] ||
-    entry;
+  const displayName = process.env.NOTIFICATION_APP_NAME?.trim() || appKey;
 
   return {
-    appKey: entry,
+    appKey,
     appName: displayName,
     brandName: process.env.NOTIFICATION_BRAND_NAME?.trim() || displayName,
     supportEmail: resolveSupportEmail(),
@@ -31,16 +20,13 @@ function buildConfigForAppKey(appKey: string): NotificationAppConfig {
   };
 }
 
-/** 按 AppEntry 缓存的商户通知配置（进程内构建）。 */
 const configCache = new Map<string, NotificationAppConfig>();
 
 export function getNotificationAppConfig(appKey: string): NotificationAppConfig {
-  const key = isAppEntryKey(appKey) ? appKey : getAppEntry();
-  const cached = configCache.get(key);
+  const cached = configCache.get(appKey);
   if (cached) return cached;
-
-  const config = buildConfigForAppKey(key);
-  configCache.set(key, config);
+  const config = buildConfigForAppKey(appKey);
+  configCache.set(appKey, config);
   return config;
 }
 

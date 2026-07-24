@@ -6,8 +6,10 @@ import {
   syncSessionShopProfile,
   syncSessionUserProfileFromOnline,
 } from "../server/session/syncSessionUserProfile.server";
+import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
 import { buildSessionTokenBounceParamRedirect } from "../server/shopify/sessionTokenBounce.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { buildEmbeddedAppPath, getAppHomePath } from "../config/appEntry.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const recoveredBounceUrl = buildSessionTokenBounceParamRedirect(request);
@@ -15,7 +17,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(recoveredBounceUrl);
   }
 
-  const { session, admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   try {
     await recordAppInstalled({
@@ -41,7 +43,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.warn("[SessionSync] syncSessionShopProfile failed:", error);
   }
 
-  return null;
+  // fire-and-forget：失败只记日志，不阻断 OAuth 跳转
+  void ensureWebPixel(admin, session.shop);
+
+  throw redirect(buildEmbeddedAppPath(getAppHomePath(), request));
 };
 
 export const headers: HeadersFunction = (headersArgs) => {

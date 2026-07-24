@@ -10,7 +10,7 @@ type Options = {
   /** 用户输入的原始关键词（未 trim 的防抖前状态由调用方维护） */
   input: string;
   /**
-   * 与 `/api/generate-description` 等请求一致：嵌入环境下需带上当前 URL query（含 shop / host 等）。
+   * 与 `/api/product-improve` 等请求一致：嵌入环境下需带上当前 URL query（含 shop / host 等）。
    * 传 `typeof window !== "undefined" ? window.location.search : ""` 即可。
    */
   locationSearch: string;

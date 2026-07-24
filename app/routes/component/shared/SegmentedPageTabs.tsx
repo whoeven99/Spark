@@ -13,6 +13,8 @@ type Props<T extends string> = {
   ariaLabel: string;
   className?: string;
   style?: CSSProperties;
+  density?: "default" | "compact";
+  mobileFullWidth?: boolean;
 };
 
 export function SegmentedPageTabs<T extends string>({
@@ -22,12 +24,23 @@ export function SegmentedPageTabs<T extends string>({
   ariaLabel,
   className,
   style,
+  density = "default",
+  mobileFullWidth = false,
 }: Props<T>) {
+  const baseClassName = [
+    "spark-segmented-tabs",
+    density === "compact" ? "is-compact" : "",
+    mobileFullWidth ? "is-mobile-full" : "",
+    className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className={className ? `spark-segmented-tabs ${className}` : "spark-segmented-tabs"}
+      className={baseClassName}
       style={style}
     >
       {items.map((item) => {

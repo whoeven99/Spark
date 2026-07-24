@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ERROR_MESSAGES, MAX_IMAGE_BYTES } from "../../../../../../app/server/ai/skills/pictureTranslate/constants";
+import { ERROR_MESSAGES, MAX_IMAGE_BYTES } from "../../../../../../app/server/ai/skills/pictureTranslate/pictureTranslate.constants";
 
 const mocks = vi.hoisted(() => ({
   executePictureTranslatePipeline: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("~/server/productImprove/generateDescriptionLog.server", () => ({
 import {
   executePictureTranslateTool,
   safeExecutePictureTranslateTool,
-} from "../../../../../../app/server/ai/skills/pictureTranslate/service";
+} from "../../../../../../app/server/ai/skills/pictureTranslate/pictureTranslate.service";
 
 function pngBytes(): Buffer {
   return Buffer.from([

@@ -5,7 +5,7 @@ export {
 } from "./types.server";
 export {
   isBillingDevCancelEnabled,
-  isBillingEnabledForApp,
+  isBillingEnabled,
   isBillingTestMode,
   useNoopBillingGateway,
 } from "./constants.server";
@@ -23,8 +23,8 @@ export {
   startTokenPackCheckout,
 } from "./billingActions.server";
 export { cancelActiveSubscription } from "./subscription/cancelActiveSubscription.server";
-export { grantProductTrialIfEligible } from "./account/grantTrial.server";
 export { handleAppSubscriptionWebhook } from "./subscription/handleSubscriptionWebhook.server";
 export { handleAppPurchaseOneTimeWebhook } from "./purchase/handlePurchaseWebhook.server";
-export { syncPendingBillingFromShopify } from "./syncPendingBillingFromShopify.server";
+export { reconcilePendingTokenPackPurchases } from "./purchase/reconcilePendingTokenPackPurchases.server";
+export { reconcilePendingSubscriptions } from "./subscription/reconcilePendingSubscriptions.server";
 export { getBillingGateway } from "./gateway/getBillingGateway.server";

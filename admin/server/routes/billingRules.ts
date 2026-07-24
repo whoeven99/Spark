@@ -34,11 +34,10 @@ billingRulesRouter.get("/", async (_req, res) => {
     await readyBillingRuleTable();
     const db = getDb();
     const result = await db.execute(
-      "SELECT ruleKey, appName, feature, modelKey, displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled, createdAt, updatedAt FROM TokenBillingRule ORDER BY feature, modelKey",
+      "SELECT ruleKey, feature, modelKey, displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled, createdAt, updatedAt FROM TokenBillingRule ORDER BY feature, modelKey",
     );
     const rules = result.rows.map((r) => ({
       ruleKey: r.ruleKey as string,
-      appName: r.appName as string,
       feature: r.feature as string,
       modelKey: r.modelKey as string,
       displayName: r.displayName as string,
@@ -64,7 +63,6 @@ billingRulesRouter.post("/", requireOwner, async (req, res) => {
     await readyBillingRuleTable();
     const db = getDb();
     const {
-      appName,
       feature,
       modelKey,
       displayName,
@@ -73,17 +71,16 @@ billingRulesRouter.post("/", requireOwner, async (req, res) => {
       costUsdPerMillionToken,
       enabled,
     } = req.body as Record<string, unknown>;
-    if (!appName || !feature || !modelKey || !displayName || multiplier == null) {
-      res.status(400).json({ error: "Missing required fields: appName, feature, modelKey, displayName, multiplier" });
+    if (!feature || !modelKey || !displayName || multiplier == null) {
+      res.status(400).json({ error: "Missing required fields: feature, modelKey, displayName, multiplier" });
       return;
     }
-    const ruleKey = `${appName}:${feature}:${modelKey}`;
+    const ruleKey = `${feature}:${modelKey}`;
     const now = new Date().toISOString();
     await db.execute({
-      sql: "INSERT INTO TokenBillingRule (ruleKey, appName, feature, modelKey, displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      sql: "INSERT INTO TokenBillingRule (ruleKey, feature, modelKey, displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       args: [
         ruleKey,
-        String(appName),
         String(feature),
         String(modelKey),
         String(displayName),
@@ -99,7 +96,7 @@ billingRulesRouter.post("/", requireOwner, async (req, res) => {
   } catch (err) {
     console.error("[billing-rules POST]", err);
     if (String(err).includes("UNIQUE") || String(err).includes("unique")) {
-      res.status(409).json({ error: "该 appName/feature/modelKey 组合已存在" });
+      res.status(409).json({ error: "该 feature/modelKey 组合已存在" });
       return;
     }
     res.status(500).json({ error: String(err) });

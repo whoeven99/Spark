@@ -9,9 +9,7 @@ import {
 let containerPromise: Promise<ContainerClient> | null = null;
 
 function blobConnectionString(): string {
-  const conn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const conn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
     throw new Error(
       "Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING",
@@ -160,6 +158,29 @@ export function buildPictureTranslateResultBlobPath(params: {
   requestId: string;
 }): string {
   return `picture-translate/${sanitizeShopSegment(params.shop)}/${params.requestId}.jpg`;
+}
+
+/**
+ * 根据已存储的 blobPath 生成可读 URL。
+ * - 配置了 PICTURE_TRANSLATE_CDN_BASE_URL 时直接拼 CDN URL（无需 SAS，容器须开放公共读）
+ * - 未配置时 fallback 到带 SAS 的 Blob 直连 URL
+ */
+export function getPictureTranslateResultImageUrl(blobPath: string): string {
+  const cdnBase = process.env.PICTURE_TRANSLATE_CDN_BASE_URL?.trim().replace(/\/+$/, "");
+  if (cdnBase) {
+    return `${cdnBase}/${blobPath}`;
+  }
+
+  const containerName = blobContainerName();
+  const conn = blobConnectionString();
+  const { accountName } = parseAccountFromConnectionString(conn);
+  const blobUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}`;
+
+  const sasTtl = resolvePictureTranslateBlobSasTtlMinutes();
+  if (sasTtl == null) {
+    return blobUrl;
+  }
+  return appendReadSasToBlobUrl({ blobUrl, blobPath, sasTtlMinutes: sasTtl });
 }
 
 export async function uploadPictureTranslateJpegAndGetUrl(params: {

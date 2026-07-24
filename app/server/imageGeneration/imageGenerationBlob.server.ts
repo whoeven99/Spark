@@ -10,9 +10,7 @@ import { resolvePictureTranslateBlobSasTtlMinutes } from "../pictureTranslate/pi
 let containerPromise: Promise<ContainerClient> | null = null;
 
 function blobConnectionString(): string {
-  const conn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const conn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
     throw new Error(
       "Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING",

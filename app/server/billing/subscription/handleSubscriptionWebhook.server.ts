@@ -1,11 +1,10 @@
-import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   mapShopifySubscriptionStatus,
   periodStartFromCreatedAt,
   shopifyFetchAppSubscription,
 } from "../gateway/shopifyGraphqlBilling.server";
 import { getPlanByKey } from "../plans/planCatalog.server";
-import { getAppEntry } from "../../../config/appEntry.server";
 import {
   applyActiveSubscription,
   markSubscriptionNonActive,
@@ -38,10 +37,8 @@ export async function handleAppSubscriptionWebhook(params: {
   shop: string;
   payload: unknown;
   admin?: ShopifyAdminGraphqlClient;
-  appName?: string;
 }): Promise<void> {
-  const appName = params.appName ?? getAppEntry();
-  console.info(`${LOG} enter shop=${params.shop} appName=${appName} hasAdmin=${Boolean(params.admin)}`);
+  console.info(`${LOG} enter shop=${params.shop} hasAdmin=${Boolean(params.admin)}`);
 
   const webhookSub = parseWebhookSubscription(params.payload);
   if (!webhookSub?.admin_graphql_api_id) {
@@ -60,7 +57,7 @@ export async function handleAppSubscriptionWebhook(params: {
   let planKey =
     (
       await prisma.appSubscription.findUnique({
-        where: { shop_appName: { shop: params.shop, appName } },
+        where: { shop: params.shop },
       })
     )?.planKey ?? null;
 
@@ -124,7 +121,6 @@ export async function handleAppSubscriptionWebhook(params: {
     console.info(`${LOG} apply-active-subscription shop=${params.shop} planKey=${planKey}`);
     await applyActiveSubscription({
       shop: params.shop,
-      appName,
       shopifySubscriptionId,
       planKey,
       billingInterval,
@@ -150,7 +146,6 @@ export async function handleAppSubscriptionWebhook(params: {
     console.info(`${LOG} mark-non-active shop=${params.shop} status=${mappedStatus}`);
     await markSubscriptionNonActive({
       shop: params.shop,
-      appName,
       shopifySubscriptionId,
       status: mappedStatus,
       rawPayload,
@@ -159,10 +154,9 @@ export async function handleAppSubscriptionWebhook(params: {
   } else if (mappedStatus === APP_SUBSCRIPTION_STATUS.PENDING) {
     console.info(`${LOG} upsert-pending shop=${params.shop} planKey=${planKey ?? "unknown"}`);
     await prisma.appSubscription.upsert({
-      where: { shop_appName: { shop: params.shop, appName } },
+      where: { shop: params.shop },
       create: {
         shop: params.shop,
-        appName,
         planKey: planKey ?? "unknown",
         shopifySubscriptionId,
         billingInterval,

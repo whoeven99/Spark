@@ -1,47 +1,62 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
+import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
-import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
-import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
+import { TaskProposalCard } from "./TaskProposalCard";
+import { TaskRunChatCard } from "./TaskRunChatCard";
+import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
+import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
-  onTranslationCardSuccess: (
-    messageIndex: number,
-    detail: { jobId?: string; jobIds?: string[]; message: string },
+  streamingSlot?: ReactNode;
+  onAiTaskUpdated?: (
+    taskId: string,
+    status: AITaskStatus,
+    result?: Record<string, unknown>,
   ) => void;
-  onPictureTranslateCardSuccess: (
-    messageIndex: number,
-    detail: { taskId: string; batchId: string },
-  ) => void;
+  onOpenTasks?: () => void;
+  /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
+  onTaskProposalExecuted?: (run: TaskRunPayload) => void;
+  /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */
+  tasksById?: Record<string, AITaskItem>;
 };
 
 export function ChatMessages({
   messages,
-  onTranslationCardSuccess,
-  onPictureTranslateCardSuccess,
+  streamingSlot,
+  onAiTaskUpdated,
+  onOpenTasks,
+  onTaskProposalExecuted,
+  tasksById,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
+  const locationSearch =
+    typeof window !== "undefined" ? window.location.search : "";
   return (
     <s-stack direction="block" gap="base">
       {messages.map((item, index) => {
-        const hasTranslationCard =
-          item.role === "assistant" && Boolean(item.translationTaskForm);
+        const hasTaskProposalCard =
+          item.role === "assistant" && Boolean(item.taskProposal);
         const hasGenerateDescriptionCard =
-          item.role === "assistant" && Boolean(item.productImproveCard);
-        const hasPictureTranslateCard =
-          item.role === "assistant" && Boolean(item.pictureTranslateCard);
+          item.role === "assistant" &&
+          Boolean(item.productImproveCard) &&
+          !hasTaskProposalCard;
+        const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
+        const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
             : [];
         const hasImageAttachments = imageAttachments.length > 0;
         const hasEmbeddedCard =
-          hasTranslationCard ||
           hasGenerateDescriptionCard ||
-          hasPictureTranslateCard ||
+          hasTaskProposalCard ||
+          hasTaskRunCard ||
+          hasAiTaskCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -61,6 +76,9 @@ export function ChatMessages({
         return (
           <div
             key={`${item.role}-${index}`}
+            {...(item.role === "assistant" && item.taskRun
+              ? { "data-task-run-id": item.taskRun.runId }
+              : {})}
             style={{
               display: "flex",
               justifyContent:
@@ -79,6 +97,11 @@ export function ChatMessages({
                       {item.role === "assistant" ? "AI Assistant" : "你"}
                     </s-badge>
                   </div>
+                  {item.role === "assistant" && item.thinkingContent ? (
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <ThinkingReview text={item.thinkingContent} />
+                    </div>
+                  ) : null}
                   <div style={{ marginTop: "0.35rem" }}>
                     {item.role === "assistant" ? (
                       <ChatMessageContent content={item.content} />
@@ -127,18 +150,6 @@ export function ChatMessages({
                     </div>
                   ) : null}
 
-                  {hasTranslationCard && item.translationTaskForm ? (
-                    <div style={{ marginTop: "0.85rem" }}>
-                      <TranslationTaskChatCard
-                        embedded
-                        initialPayload={item.translationTaskForm}
-                        onSuccess={(detail) =>
-                          onTranslationCardSuccess(index, detail)
-                        }
-                      />
-                    </div>
-                  ) : null}
-
                   {hasGenerateDescriptionCard ? (
                     <div style={{ marginTop: "0.85rem" }}>
                       <ProductImproveChatCard
@@ -148,13 +159,34 @@ export function ChatMessages({
                     </div>
                   ) : null}
 
-                  {hasPictureTranslateCard ? (
+                  {hasTaskProposalCard && item.role === "assistant" && item.taskProposal ? (
                     <div style={{ marginTop: "0.85rem" }}>
-                      <PictureTranslateChatCard
+                      <TaskProposalCard
                         embedded
-                        onTaskCreated={(taskId, batchId) =>
-                          onPictureTranslateCardSuccess(index, { taskId, batchId })
-                        }
+                        proposal={item.taskProposal}
+                        onExecuted={onTaskProposalExecuted}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasTaskRunCard && item.role === "assistant" && item.taskRun ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <TaskRunChatCard
+                        run={item.taskRun}
+                        locationSearch={locationSearch}
+                        onOpenTasks={onOpenTasks}
+                        tasksById={tasksById}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasAiTaskCard && item.role === "assistant" && item.aiTask ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ChatEmbeddedAiTaskCard
+                        task={item.aiTask}
+                        locationSearch={locationSearch}
+                        onOpenTasks={onOpenTasks}
+                        onTaskUpdated={onAiTaskUpdated}
                       />
                     </div>
                   ) : null}
@@ -164,6 +196,7 @@ export function ChatMessages({
           </div>
         );
       })}
+      {streamingSlot}
     </s-stack>
   );
 }

@@ -15,6 +15,13 @@ describe("shopDomainFromHostParam", () => {
   it("returns null for invalid base64", () => {
     expect(shopDomainFromHostParam("not-valid!!!")).toBeNull();
   });
+
+  it("handles + decoded as space by URLSearchParams", () => {
+    // base64 中的 + 被 URLSearchParams 解释为空格
+    const host = buildShopifyAdminHostParam("test-shop.myshopify.com");
+    const hostWithSpaces = host.replace(/\+/g, " ");
+    expect(shopDomainFromHostParam(hostWithSpaces)).toBe("test-shop.myshopify.com");
+  });
 });
 
 describe("resolveShopQueryFromRequest", () => {

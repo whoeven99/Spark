@@ -45,3 +45,8 @@ roadmap
 
 # AI translation quality reports (local, disposable)
 translation-reports/
+.cursor/
+/docs/tmp
+scripts/qps-data.json
+/scripts/tmp
+/.agents/skills/huashu-nuwa

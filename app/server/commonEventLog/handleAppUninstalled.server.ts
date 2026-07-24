@@ -1,17 +1,15 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { deleteSessionsForShop } from "./sessionTable.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
 
 export function buildUninstallEventReferenceId(params: {
   shop: string;
-  appName: string;
   webhookId?: string;
   sessionId?: string;
 }): string {
   if (params.webhookId) return `uninstall:webhook:${params.webhookId}`;
   if (params.sessionId) return `uninstall:${params.sessionId}`;
-  return `uninstall:${params.shop}:${params.appName}:${Date.now()}`;
+  return `uninstall:${params.shop}:${Date.now()}`;
 }
 
 export async function handleAppUninstalled(params: {
@@ -24,17 +22,14 @@ export async function handleAppUninstalled(params: {
   const shop = params.shop.trim();
   if (!shop) return;
 
-  const appName = getAppEntry();
   const referenceId = buildUninstallEventReferenceId({
     shop,
-    appName,
     webhookId: params.webhookId,
     sessionId: params.sessionId,
   });
 
   await appendCommonEventLog({
     shop,
-    appName,
     eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
     topic: params.topic,
     referenceId,
@@ -44,5 +39,5 @@ export async function handleAppUninstalled(params: {
         : { raw: params.payload },
   });
 
-  await deleteSessionsForShop(shop, appName);
+  await deleteSessionsForShop(shop);
 }

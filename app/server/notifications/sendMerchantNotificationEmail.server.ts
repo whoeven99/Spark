@@ -54,7 +54,7 @@ export async function dispatchMerchantNotificationEmail<
 
   const locale = resolveNotificationLocale(params.recipient?.locale);
   const baseConfig = getNotificationAppConfig(appName);
-  const dashboardUrl = buildNotificationDashboardUrl(shop, baseConfig.appKey);
+  const dashboardUrl = buildNotificationDashboardUrl(shop);
   const appConfig = dashboardUrl ? { ...baseConfig, dashboardUrl } : baseConfig;
 
   const subject = renderNotificationEmail({

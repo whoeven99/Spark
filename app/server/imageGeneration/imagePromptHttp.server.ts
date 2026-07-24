@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { getAppEntry } from "../../config/appEntry.server";
 import { billingErrorToResponse } from "../billing/index.server";
 import {
   buildImagePromptBillingItem,
@@ -83,7 +82,6 @@ export async function executeImagePromptRequest(params: {
 
   await recordVisualToolTokenUsage({
     shop: params.sessionShop,
-    appName: getAppEntry(),
     items: [
       buildImagePromptBillingItem(
         normalizeBillingModelKey(result.modelLabel),

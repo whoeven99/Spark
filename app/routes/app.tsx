@@ -2,10 +2,10 @@ import type {
   ActionFunctionArgs,
   HeadersFunction,
   LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
 } from "react-router";
 import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ConfigProvider } from "antd";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { AppI18nProvider } from "../i18n/provider";
@@ -16,77 +16,45 @@ import {
 } from "../i18n/config";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
-import { recordAppInstalled, recordVisitSource } from "../server/commonEventLog/index.server";
-import { ensureSessionAppName } from "../server/session/sessionManager.server";
+import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
 import {
   syncSessionShopProfile,
   syncSessionUserProfileFromOnline,
 } from "../server/session/syncSessionUserProfile.server";
 import {
-  getAppEntry,
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
-import { sparkAntTheme } from "./component/shared/antdTheme";
+import { SupportChatWidget } from "./component/SupportChatWidget";
 
 const NAV_ITEMS: Record<
   NavItemKey,
   {
     href: string;
-    labelKey:
-      | "nav.aiAssistant"
-      | "nav.diagnosis"
-      | "nav.translationV4"
-      | "nav.productImprove"
-      | "nav.imageStudio"
-      | "nav.billing"
-      | "nav.orderMonitor";
+    labelKey: "nav.ask" | "nav.today" | "nav.studio" | "nav.tasks" | "nav.settings";
   }
 > = {
-  chat: { href: "/app", labelKey: "nav.aiAssistant" },
-  diagnosis: { href: "/app/additional", labelKey: "nav.diagnosis" },
-  "translation-v4": { href: "/app/translation-v4", labelKey: "nav.translationV4" },
-  "product-improve": {
-    href: "/app/product-improve",
-    labelKey: "nav.productImprove",
-  },
-  "image-studio": {
-    href: "/app/image-studio",
-    labelKey: "nav.imageStudio",
-  },
-  "picture-translate": {
-    href: "/app/image-studio?tab=translate",
-    labelKey: "nav.imageStudio",
-  },
-  "generate-image": {
-    href: "/app/image-studio?tab=generate",
-    labelKey: "nav.imageStudio",
-  },
-  "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
-  billing: { href: "/app/billing", labelKey: "nav.billing" },
+  ask: { href: "/app", labelKey: "nav.ask" },
+  today: { href: "/app/today", labelKey: "nav.today" },
+  studio: { href: "/app/studio", labelKey: "nav.studio" },
+  tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
+  settings: { href: "/app/settings", labelKey: "nav.settings" },
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
-  const appName = getAppEntry();
+  const { admin, session } = await authenticate.admin(request);
 
-  // 入口来源归因：带 utm 的外链首次进入时记一条（fire-and-forget，失败不影响页面）
-  recordVisitSource({ shop: session.shop, appName, request }).catch((error) => {
-    console.error("[VisitSource] recordVisitSource failed:", error);
-  });
-
-  try {
-    await ensureSessionAppName(session.id, appName);
-    await recordAppInstalled({
-      shop: session.shop,
-      sessionId: session.id,
-      scope: session.scope,
-      isOnline: session.isOnline,
-      source: "app_shell",
-    });
-  } catch (error) {
+  // fire-and-forget：不阻断页面切换（幂等 + 日志短路）
+  void recordAppInstalled({
+    shop: session.shop,
+    sessionId: session.id,
+    scope: session.scope,
+    isOnline: session.isOnline,
+    source: "app_shell",
+  }).catch((error) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
-  }
+  });
 
   try {
     await syncSessionUserProfileFromOnline(session);
@@ -99,6 +67,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.warn("[SessionSync] syncSessionShopProfile failed:", error);
   }
+
+  // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
+  void ensureWebPixel(admin, session.shop);
+
   const locale = detectRequestLocale(request, {
     sessionLocale: readShopifySessionLocale(session),
   });
@@ -106,6 +78,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
+};
+
+/** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用。 */
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formAction,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (formAction?.includes("/app")) {
+    return defaultShouldRevalidate;
+  }
+
+  const isAppChildNavigation =
+    currentUrl.pathname.startsWith("/app") &&
+    nextUrl.pathname.startsWith("/app") &&
+    currentUrl.pathname !== nextUrl.pathname;
+
+  if (isAppChildNavigation) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -136,14 +131,11 @@ export default function App() {
 
   return (
     <AppI18nProvider locale={locale}>
-      <ConfigProvider theme={sparkAntTheme}>
-        <AppProvider embedded apiKey={apiKey}>
-          <div className="spark-ant-app">
-            <AppNav nav={nav} />
-            <Outlet />
-          </div>
-        </AppProvider>
-      </ConfigProvider>
+      <AppProvider embedded apiKey={apiKey}>
+        <AppNav nav={nav} />
+        <Outlet />
+        <SupportChatWidget />
+      </AppProvider>
     </AppI18nProvider>
   );
 }

@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { logDetailedError } from "../generateDescriptionLog.server";
 import { plainDescriptionTextToDescriptionHtml } from "../plainDescriptionTextToHtml.server";
 import { toProductGid } from "../productContextFetcher.server";

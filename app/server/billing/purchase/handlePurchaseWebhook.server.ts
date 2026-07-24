@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../../config/appEntry.server";
 import prisma from "../../../db.server";
 import { getPlanByKey } from "../plans/planCatalog.server";
 import { applyTokenPackPurchase } from "./applyTokenPack.server";
@@ -24,10 +23,8 @@ const LOG = "[Billing][TokenPackWebhook]";
 export async function handleAppPurchaseOneTimeWebhook(params: {
   shop: string;
   payload: unknown;
-  appName?: string;
 }): Promise<void> {
-  const appName = params.appName ?? getAppEntry();
-  console.info(`${LOG} enter shop=${params.shop} appName=${appName}`);
+  console.info(`${LOG} enter shop=${params.shop}`);
 
   const purchase = parseOneTimePurchase(params.payload);
   if (!purchase?.admin_graphql_api_id) {
@@ -37,6 +34,7 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
 
   const status = (purchase.status ?? "").toUpperCase();
   const purchaseId = purchase.admin_graphql_api_id;
+
   console.info(
     `${LOG} parsed shop=${params.shop} purchaseId=${purchaseId} status=${status || "(empty)"}`,
   );
@@ -51,7 +49,6 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
   const pendingLog = await prisma.billingLog.findFirst({
     where: {
       shop: params.shop,
-      appName,
       referenceId: purchaseId,
       eventType: "TOKEN_PACK_INITIATED",
     },
@@ -64,7 +61,7 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
 
   if (!planKey) {
     console.error(
-      `${LOG} skip reason=missing-token-pack-initiated shop=${params.shop} appName=${appName} purchaseId=${purchaseId}`,
+      `${LOG} skip reason=missing-token-pack-initiated shop=${params.shop} purchaseId=${purchaseId}`,
     );
     return;
   }
@@ -75,7 +72,6 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
   );
   await applyTokenPackPurchase({
     shop: params.shop,
-    appName,
     plan,
     shopifyPurchaseId: purchaseId,
     metadata: {

@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
 export const pageColorTokens = {
   textPrimary: "#1a1d1f",
@@ -74,8 +76,84 @@ export const pageContentStyle: CSSProperties = {
   maxWidth: "1120px",
 };
 
+export const mobilePageContentStyle: CSSProperties = {
+  gap: "1rem",
+  width: "100%",
+};
+
+export const pageBackButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.45rem",
+  width: "fit-content",
+  padding: "0.55rem 0.85rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textBody,
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: pageColorTokens.shadowCard,
+};
+
+export const pageBackButtonMobileStyle: CSSProperties = {
+  ...pageBackButtonStyle,
+  minHeight: 40,
+  padding: "0.5rem 0.75rem",
+  fontSize: "0.75rem",
+};
+
+export const pageHeaderNavStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "1rem",
+  flexWrap: "wrap",
+};
+
+export const pageHeaderNavMobileStyle: CSSProperties = {
+  ...pageHeaderNavStyle,
+  gap: "0.75rem",
+  flexDirection: "column",
+};
+
+export const pageHeaderNavMainStyle: CSSProperties = {
+  flex: "1 1 16rem",
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.25rem",
+};
+
+export const pageHeaderNavTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "1.375rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.2,
+};
+
+export const pageHeaderNavTitleMobileStyle: CSSProperties = {
+  ...pageHeaderNavTitleStyle,
+  fontSize: "1.125rem",
+};
+
+export const pageHeaderNavSubtitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.875rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textSecondary,
+  maxWidth: "44rem",
+};
+
+export const pageHeaderNavSubtitleMobileStyle: CSSProperties = {
+  ...pageHeaderNavSubtitleStyle,
+  fontSize: "0.8125rem",
+};
+
 export const pageSurfaceStyle: CSSProperties = {
-  background: "linear-gradient(160deg, #ffffff 0%, #fbfcfd 100%)",
+  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: "1.25rem",
@@ -88,8 +166,8 @@ export const pageCompactSurfaceStyle: CSSProperties = {
 };
 
 export const pageInnerPanelStyle: CSSProperties = {
-  background: pageColorTokens.surfaceSubtle,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusControl,
   padding: "1.25rem",
 };
@@ -112,11 +190,7 @@ export const pageHintTextStyle: CSSProperties = {
 export const pageLinkHintStyle: CSSProperties = {
   cursor: "pointer",
   fontSize: "0.8125rem",
-  color: pageColorTokens.textSecondary,
-  fontWeight: 600,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.35rem",
+  color: pageColorTokens.brandBlue,
   userSelect: "none",
 };
 
@@ -129,12 +203,10 @@ export function pageSelectStyle(disabled = false): CSSProperties {
     padding: "0.5rem 0.65rem",
     fontSize: "0.875rem",
     borderRadius: pageColorTokens.radiusControl,
-    border: `1px solid ${disabled ? pageColorTokens.borderSubtle : pageColorTokens.borderInput}`,
-    background: disabled ? pageColorTokens.surfaceMuted : pageColorTokens.surfaceSubtle,
+    border: `1px solid ${pageColorTokens.borderInput}`,
+    background: disabled ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
     color: pageColorTokens.textBody,
     boxSizing: "border-box",
-    boxShadow: disabled ? "none" : "inset 0 1px 0 rgba(255,255,255,0.6)",
-    transition: "border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease",
   };
 }
 
@@ -146,9 +218,9 @@ export const languageSelectorBarStyle: CSSProperties = {
   marginTop: "0.5rem",
   padding: "0.65rem 0.85rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, #fafafa 0%, #f5f6f8 100%)",
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
+  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
+  border: `1px solid ${pageColorTokens.border}`,
+  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
 };
 
 export const languageSelectorLabelStyle: CSSProperties = {
@@ -219,22 +291,21 @@ export const pageSectionSubtitleStyle: CSSProperties = {
 
 export const pageStatusBadgeStyle: CSSProperties = {
   flexShrink: 0,
-  padding: "0.32rem 0.78rem",
+  padding: "0.3rem 0.8rem",
   borderRadius: "999px",
   fontSize: "0.8125rem",
   fontWeight: 700,
-  color: pageColorTokens.brandGreenDark,
-  background: pageColorTokens.brandGreenLight,
-  border: "1px solid rgba(0, 166, 124, 0.18)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5)",
+  color: "#006e52",
+  background: "linear-gradient(135deg, #edfaf5 0%, #d4f5e9 100%)",
+  border: "1px solid rgba(0, 166, 124, 0.3)",
+  boxShadow: "0 1px 4px rgba(0, 166, 124, 0.12)",
 };
 
 export const pageTrustFootnoteStyle: CSSProperties = {
   margin: 0,
   padding: "0.85rem 1rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, #fafafa 0%, #f5f6f8 100%)",
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
   fontSize: "0.75rem",
   lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
@@ -260,19 +331,14 @@ export const pageSectionHeaderRowStyle: CSSProperties = {
 export const pageAccentBadgeStyle: CSSProperties = {
   fontSize: "0.875rem",
   fontWeight: 700,
-  color: pageColorTokens.brandGreenDark,
-  padding: "0.28rem 0.6rem",
-  borderRadius: "999px",
-  background: pageColorTokens.brandGreenLight,
-  border: "1px solid rgba(0, 166, 124, 0.16)",
+  color: pageColorTokens.brandGreen,
 };
 
 export const pageMetaTextStyle: CSSProperties = {
   margin: 0,
   padding: "0.65rem 0.75rem",
-  background: "linear-gradient(135deg, #fafafa 0%, #f5f6f8 100%)",
+  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
   borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
   fontSize: "0.8125rem",
   color: pageColorTokens.textBody,
 };
@@ -331,19 +397,18 @@ export function pageIntroBannerStyle(
     lineHeight: 1.55,
     padding: "0.9rem 1.25rem",
     background: token.gradient,
-    border: `1px solid ${pageColorTokens.borderSubtle}`,
     borderLeft: `4px solid ${token.borderColor}`,
-    borderRadius: pageColorTokens.radiusControl,
+    borderRadius: `0 ${pageColorTokens.radiusControl} ${pageColorTokens.radiusControl} 0`,
     marginBottom: options?.marginBottom ?? "1rem",
-    boxShadow: pageColorTokens.shadowCard,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
   };
 }
 
 export const pageEmptyStateStyle: CSSProperties = {
   padding: "2.5rem 1.5rem",
   borderRadius: pageColorTokens.radiusCard,
-  background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
-  border: `1px dashed ${pageColorTokens.borderSubtle}`,
+  background: "linear-gradient(160deg, #f7f9ff 0%, #f0f2f7 100%)",
+  border: `1.5px dashed ${pageColorTokens.borderInput}`,
   color: pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   lineHeight: 1.5,
@@ -365,7 +430,7 @@ export const formErrorBoxStyle: CSSProperties = {
 };
 
 export const pageMetricCardStyle: CSSProperties = {
-  background: "linear-gradient(160deg, #ffffff 0%, #fbfcfd 100%)",
+  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   overflow: "hidden",
@@ -419,7 +484,7 @@ export const pageStatusCardStyle: CSSProperties = {
   padding: "0.85rem 1rem",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
-  background: "linear-gradient(160deg, #ffffff 0%, #fbfcfd 100%)",
+  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
   boxShadow: pageColorTokens.shadowCard,
 };
 
@@ -437,6 +502,128 @@ export function PageSectionHeader({ title, subtitle, badge }: PageSectionHeaderP
         {subtitle ? <p style={pageSectionSubtitleStyle}>{subtitle}</p> : null}
       </div>
       {badge ?? null}
+    </div>
+  );
+}
+
+type PageBackButtonProps = {
+  label: string;
+  fallbackPath?: string;
+  preserveSearch?: boolean;
+  workspaceOnly?: boolean;
+  style?: CSSProperties;
+  returnTo?: string;
+};
+
+function resolveBackDestination(params: {
+  locationKey: string;
+  locationSearch: string;
+  navigate: ReturnType<typeof useNavigate>;
+  fallbackPath: string;
+  preserveSearch: boolean;
+  returnTo?: string;
+}) {
+  if (params.returnTo) {
+    params.navigate(params.returnTo);
+    return;
+  }
+
+  if (params.locationKey !== "default") {
+    params.navigate(-1);
+    return;
+  }
+
+  const search = params.preserveSearch ? params.locationSearch : "";
+  params.navigate(`${params.fallbackPath}${search}`);
+}
+
+export function PageBackButton({
+  label,
+  fallbackPath = "/app",
+  preserveSearch = true,
+  workspaceOnly = false,
+  style,
+  returnTo,
+}: PageBackButtonProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isMobile } = useResponsiveLayout();
+
+  if (workspaceOnly && new URLSearchParams(location.search).get("from") !== "workspace") {
+    return null;
+  }
+
+  const handleBack = () => {
+    resolveBackDestination({
+      locationKey: location.key,
+      locationSearch: location.search,
+      navigate,
+      fallbackPath,
+      preserveSearch,
+      returnTo,
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      style={{
+        ...(isMobile ? pageBackButtonMobileStyle : pageBackButtonStyle),
+        ...style,
+      }}
+      onClick={handleBack}
+    >
+      <span aria-hidden="true">←</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+type PageHeaderNavProps = {
+  title: string;
+  subtitle?: string;
+  backLabel: string;
+  fallbackPath?: string;
+  preserveSearch?: boolean;
+  workspaceOnly?: boolean;
+  returnTo?: string;
+  rightAction?: ReactNode;
+};
+
+export function PageHeaderNav({
+  title,
+  subtitle,
+  backLabel,
+  fallbackPath,
+  preserveSearch,
+  workspaceOnly,
+  returnTo,
+  rightAction,
+}: PageHeaderNavProps) {
+  const { isMobile } = useResponsiveLayout();
+
+  return (
+    <div style={isMobile ? pageHeaderNavMobileStyle : pageHeaderNavStyle}>
+      <div style={pageHeaderNavMainStyle}>
+        <PageBackButton
+          label={backLabel}
+          fallbackPath={fallbackPath}
+          preserveSearch={preserveSearch}
+          workspaceOnly={workspaceOnly}
+          returnTo={returnTo}
+        />
+        <div>
+          <h1 style={isMobile ? pageHeaderNavTitleMobileStyle : pageHeaderNavTitleStyle}>
+            {title}
+          </h1>
+          {subtitle ? (
+            <p style={isMobile ? pageHeaderNavSubtitleMobileStyle : pageHeaderNavSubtitleStyle}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      {rightAction ?? null}
     </div>
   );
 }

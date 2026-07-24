@@ -1,9 +1,4 @@
-import {
-  getAppEntry,
-  getAppHomePath,
-  isAppEntryKey,
-  type AppEntry,
-} from "../../config/appEntry.server";
+import { getAppHomePath } from "../../config/appEntry.server";
 import {
   defaultRecipientFallback,
   formatBillingPeriod,
@@ -89,16 +84,8 @@ function resolveShopAdminIdentifier(shopDomain: string | undefined): string {
   return normalized;
 }
 
-/** 邮件 Admin 链接 apps 路径段；与内嵌路由 home 可能不一致。 */
-const SHOPIFY_ADMIN_APP_PATH_BY_ENTRY: Partial<Record<AppEntry, string>> = {
-  "product-improve": "ciwi-image-translation/app/product-improve",
-};
-
-function resolveAppAdminPath(appKey: string | undefined): string {
-  const entry = appKey && isAppEntryKey(appKey) ? appKey : getAppEntry();
-  const mapped = SHOPIFY_ADMIN_APP_PATH_BY_ENTRY[entry];
-  if (mapped) return mapped;
-  return getAppHomePath(entry).split("?")[0].replace(/^\/+/, "");
+function resolveAppAdminPath(): string {
+  return getAppHomePath().split("?")[0].replace(/^\/+/, "");
 }
 
 /**
@@ -134,16 +121,17 @@ export function buildNotificationTemplateData(
 
   const data: Record<string, string> = {
     shop_id: resolveShopAdminIdentifier(variables.shopDomain),
-    path: resolveAppAdminPath(appConfig.appKey),
+    path: resolveAppAdminPath(),
     appName,
     brandName,
     recipientName: str(variables.recipientName) || recipientFallback,
     supportEmail: str(variables.supportEmail) || appConfig.supportEmail,
+    dashboardUrl: str(appConfig.dashboardUrl),
     shopName: str(variables.shopName),
     shopDomain: str(variables.shopDomain),
     occurredAtUtc: str(variables.occurredAtUtc),
-    installedAtUtc: str(variables.installedAtUtc) || str(variables.occurredAtUtc),
-    uninstalledAtUtc: str(variables.uninstalledAtUtc) || str(variables.occurredAtUtc),
+    installedAtUtc: str(variables.installedAtUtc),
+    uninstalledAtUtc: str(variables.uninstalledAtUtc),
     purchaseType: formatPurchaseType(variables.purchaseType, locale),
     orderId: variables.orderId
       ? formatShopifyOrderDisplayId(variables.orderId)

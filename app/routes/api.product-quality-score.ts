@@ -7,7 +7,6 @@ import {
   billingErrorToResponse,
   requireBillingAccess,
 } from "../server/billing/index.server";
-import { getAppEntry } from "../config/appEntry.server";
 import type { ProductQualityScoreApiResponse } from "../lib/productQualityScoreTypes";
 
 const LOG_PREFIX = "[ProductQualityScore][Route]";
@@ -55,7 +54,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { admin, session } = await authenticate.admin(request);
     console.info(`${LOG_PREFIX} requestId=${requestId} shop=${session.shop} productId=${productId}`);
 
-    await requireBillingAccess(session.shop, getAppEntry());
+    await requireBillingAccess(session.shop);
 
     const result = await runProductQualityScore({ admin, productId, requestId });
 

@@ -9,7 +9,6 @@ import { authMiddleware, requireOwner } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
 import { overviewRouter } from "./routes/overview.js";
 import { shopsRouter } from "./routes/shops.js";
-import { translationsRouter } from "./routes/translations.js";
 import { usageRouter } from "./routes/usage.js";
 import { capabilitiesRouter } from "./routes/capabilities.js";
 import { subscriptionsRouter } from "./routes/subscriptions.js";
@@ -20,6 +19,25 @@ import { pricingWorkbenchV2Router } from "./routes/pricingWorkbenchV2.js";
 import { todosRouter } from "./routes/todos.js";
 import { opsChecklistRouter } from "./routes/opsChecklist.js";
 import { visitSourceRouter } from "./routes/visitSource.js";
+import { pixelLogsRouter } from "./routes/pixelLogs.js";
+import { appLogsRouter } from "./routes/appLogs.js";
+import { supportRouter } from "./routes/support.js";
+import { translationsRouter } from "./routes/translations.js";
+import { shopProfileRouter } from "./routes/shopProfile.js";
+import { redisExplorerRouter } from "./routes/redisExplorer.js";
+import { tsfOverviewRouter } from "./routes/tsfOverview.js";
+import { tsfShopsRouter } from "./routes/tsfShops.js";
+import { tsfUsageRouter } from "./routes/tsfUsage.js";
+import { tsfSubscriptionsRouter } from "./routes/tsfSubscriptions.js";
+import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
+import { tsfPacksRouter } from "./routes/tsfPacks.js";
+import { tsfBillingRouter } from "./routes/tsfBilling.js";
+import { tsfShopProfilesRouter } from "./routes/tsfShopProfiles.js";
+import { tsfLanguageCoverageRouter } from "./routes/tsfLanguageCoverage.js";
+import { tsfRoiRouter } from "./routes/tsfRoi.js";
+import { translationOpsRouter } from "./routes/translationOps.js";
+import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
+import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,7 +62,6 @@ app.use("/api/auth", authRouter);
 // All authenticated users can access all routes
 app.use("/api/overview", authMiddleware, overviewRouter);
 app.use("/api/shops", authMiddleware, shopsRouter);
-app.use("/api/translations", authMiddleware, translationsRouter);
 app.use("/api/usage", authMiddleware, usageRouter);
 app.use("/api/capabilities", authMiddleware, capabilitiesRouter);
 app.use("/api/subscriptions", authMiddleware, subscriptionsRouter);
@@ -55,6 +72,38 @@ app.use("/api/pricing-workbench", authMiddleware, pricingWorkbenchV2Router);
 app.use("/api/todos", authMiddleware, todosRouter);
 app.use("/api/ops-checklist", authMiddleware, opsChecklistRouter);
 app.use("/api/visit-source", authMiddleware, visitSourceRouter);
+// webpixel 日志含 checkout PII（email / 地址），仅 owner 可查
+app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
+// App 功能埋点日志（无 checkout PII），所有登录用户可查
+app.use("/api/app-logs", authMiddleware, appLogsRouter);
+// 人工客服会话：所有登录运营可见可回复
+app.use("/api/support", authMiddleware, supportRouter);
+// 翻译 V4 任务列表 / 内容 / LLM key 统计（Cosmos + Redis + Blob）
+app.use("/api/translations", authMiddleware, translationsRouter);
+// 店铺体量画像（翻译页标注大/中/小商店）
+app.use("/api/shop-profile", authMiddleware, shopProfileRouter);
+// Redis 缓存查看器（所有登录用户可查）
+app.use("/api/redis-explorer", authMiddleware, redisExplorerRouter);
+
+// TSF（TypeScriptFrontend）新用户统计：读 TSF 独立 Turso 库
+app.use("/api/tsf/overview", authMiddleware, tsfOverviewRouter);
+app.use("/api/tsf/shops", authMiddleware, tsfShopsRouter);
+app.use("/api/tsf/usage", authMiddleware, tsfUsageRouter);
+app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
+app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
+app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
+app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
+app.use("/api/tsf/language-coverage", authMiddleware, tsfLanguageCoverageRouter);
+// 收入分析仅 owner 可见
+app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);
+// 翻译 ROI / 商业闭环（含收入 KPI，仅 owner）
+app.use("/api/tsf/roi", authMiddleware, requireOwner, tsfRoiRouter);
+// 翻译运维（系统配置 + 增加额度）
+app.use("/api/translation-ops", authMiddleware, translationOpsRouter);
+// Shopify 翻译资源查询 / Query CSV 写回 / 单条写回删除
+app.use("/api/shopify-translation", authMiddleware, shopifyTranslationRouter);
+// OpenRouter 模型探测（服务端转发；消耗 OPENROUTER 额度，仅 owner）
+app.use("/api/openrouter-probe", authMiddleware, requireOwner, openrouterProbeRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

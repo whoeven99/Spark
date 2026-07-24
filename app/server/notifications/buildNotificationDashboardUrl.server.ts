@@ -1,9 +1,4 @@
-import {
-  getAppEntry,
-  getAppHomePath,
-  isAppEntryKey,
-  type AppEntry,
-} from "../../config/appEntry.server";
+import { getAppHomePath } from "../../config/appEntry.server";
 import { buildShopifyAdminHostParam } from "../billing/buildBillingReturnUrl.server";
 
 function resolveAppOrigin(): string | null {
@@ -15,16 +10,11 @@ function resolveAppOrigin(): string | null {
   return new URL(withProtocol).origin;
 }
 
-export function buildNotificationDashboardUrl(
-  shop: string,
-  appKey?: string,
-): string | undefined {
+export function buildNotificationDashboardUrl(shop: string): string | undefined {
   const origin = resolveAppOrigin();
   if (!origin) return undefined;
 
-  const entry: AppEntry = appKey && isAppEntryKey(appKey) ? appKey : getAppEntry();
-  const home = getAppHomePath(entry);
-  const url = new URL(home, origin);
+  const url = new URL(getAppHomePath(), origin);
   const normalizedShop = shop.trim();
   if (normalizedShop) {
     url.searchParams.set("shop", normalizedShop);

@@ -1,34 +1,55 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { ImageGenerationFormPayload } from "../lib/imageGenerationFormPayload";
 import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
+import { trackFeature } from "../lib/featureTrack";
 
 const LOG_PREFIX = "[useImageGeneration]";
 
 export type UseImageGenerationParams = {
   locationSearch: string;
+  initialFormPayload?: ImageGenerationFormPayload;
   toastShow: (message: string) => void;
-  onTaskCreated?: (taskId: string, batchId: string, taskType: AITaskType) => void;
+  onTaskCreated?: (
+    taskId: string,
+    batchId: string,
+    taskType: AITaskType,
+    optimisticConfig?: Record<string, unknown>,
+  ) => void;
 };
 
 export function useImageGeneration(params: UseImageGenerationParams) {
-  const { locationSearch, toastShow, onTaskCreated } = params;
+  const { locationSearch, toastShow, onTaskCreated, initialFormPayload } = params;
   const { t } = useTranslation();
 
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(
+    initialFormPayload?.description?.trim() ?? "",
+  );
   const [descriptionErrorText, setDescriptionErrorText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submitGenerate = useCallback(async () => {
+  const prepareSubmit = useCallback(() => {
     const trimmed = description.trim();
     setDescriptionErrorText("");
 
     if (trimmed.length < 4) {
       setDescriptionErrorText(t("imageGeneration.validationDescriptionMin"));
-      return;
+      return null;
     }
+
+    return trimmed;
+  }, [description, t]);
+
+  const submitGenerate = useCallback(async () => {
+    const trimmed = prepareSubmit();
+    if (!trimmed) return;
 
     setIsSubmitting(true);
     console.info(`${LOG_PREFIX} start descriptionLen=${trimmed.length}`);
+
+    trackFeature("image-studio", "generate_image", {
+      descriptionLen: trimmed.length,
+    });
 
     try {
       const res = await fetch(`/api/generate-image${locationSearch}`, {
@@ -47,7 +68,9 @@ export function useImageGeneration(params: UseImageGenerationParams) {
         `${LOG_PREFIX} task created taskId=${body.taskId} batchId=${body.batchId}`,
       );
       toastShow(t("imageGeneration.submitSuccess"));
-      onTaskCreated?.(body.taskId, body.batchId, "image_generation");
+      onTaskCreated?.(body.taskId, body.batchId, "image_generation", {
+        description: trimmed,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("imageGeneration.submitFailed");
       setDescriptionErrorText(msg);
@@ -55,13 +78,14 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [description, locationSearch, onTaskCreated, t, toastShow]);
+  }, [locationSearch, onTaskCreated, prepareSubmit, t, toastShow]);
 
   return {
     description,
     setDescription,
     descriptionErrorText,
     isSubmitting,
+    prepareSubmit,
     submitGenerate,
   };
 }

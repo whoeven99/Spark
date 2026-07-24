@@ -17,30 +17,38 @@ import {
 const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
   en: "English",
   "zh-CN": "中文（简体）",
-  ja: "日本語",
-  ko: "한국어",
-  es: "Español",
-  fr: "Français",
-  de: "Deutsch",
-  it: "Italiano",
-  pt: "Português",
 };
 
 type LanguageSelectorProps = {
   locale?: SupportedLocale;
+  variant?: "bar" | "inline";
 };
 
-export function LanguageSelector({ locale = DEFAULT_LOCALE }: LanguageSelectorProps) {
+export function LanguageSelector({
+  locale = DEFAULT_LOCALE,
+  variant = "bar",
+}: LanguageSelectorProps) {
   const { i18n, t } = useTranslation();
   const { setLocale, isSyncingLocale } = useLocaleActions();
+  const isInline = variant === "inline";
 
   return (
     <div
-      style={languageSelectorBarStyle}
+      style={
+        isInline
+          ? {
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }
+          : languageSelectorBarStyle
+      }
       role="group"
       aria-label={t("common.languageSelectorLabel")}
     >
-      <span style={languageSelectorLabelStyle}>{t("common.languageSelectorLabel")}</span>
+      {!isInline ? (
+        <span style={languageSelectorLabelStyle}>{t("common.languageSelectorLabel")}</span>
+      ) : null}
       <select
         id="spark-language-selector"
         value={isSupportedLocale(i18n.language) ? i18n.language : locale}
@@ -51,7 +59,15 @@ export function LanguageSelector({ locale = DEFAULT_LOCALE }: LanguageSelectorPr
           setLocale(next);
         }}
         disabled={isSyncingLocale}
-        style={pageSelectCompactStyle(isSyncingLocale)}
+        style={
+          isInline
+            ? {
+                ...pageSelectCompactStyle(isSyncingLocale),
+                minWidth: "8.5rem",
+                maxWidth: "12rem",
+              }
+            : pageSelectCompactStyle(isSyncingLocale)
+        }
       >
         {SUPPORTED_LOCALES.map((item) => (
           <option key={item} value={item}>

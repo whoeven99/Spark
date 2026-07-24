@@ -3,20 +3,18 @@ import { BillingError, BILLING_ERROR_CODE } from "./errors.server";
 /** Shopify Billing API `returnUrl` 上限（字符数）。 */
 export const SHOPIFY_BILLING_RETURN_URL_MAX_LENGTH = 255;
 
-/** 计费与订阅页路径（支付/购包批准后应回到此页）。 */
-export const BILLING_PAGE_PATH = "/app/billing";
+/** 计费与订阅页路径（支付/购包批准后应回到此页）。新 IA 下归入设置目的地。 */
+export const BILLING_PAGE_PATH = "/app/settings/billing";
 
 /** 根路径或 `/app` 兜底重定向时识别「来自计费结账」的 query 标记。 */
 export const BILLING_RETURN_QUERY_FLAG = "billing_return";
 
 const ADMIN_APP_IDENTIFIER_BY_API_KEY: Record<string, string> = {
-  "81b68c6dd0b7e1b594b78ddcd202cd09": "desc-test-1",
-  b896c10abe3ca220b1efbc333ef41ad1: "ciwi-image-translation",
+  "940b967eda872dd81f9ffc283e29a013": "aiassistant-test",
 };
 
 const ADMIN_APP_IDENTIFIER_BY_APP_HOST: Record<string, string> = {
-  "smartdescriptiontest.onrender.com": "desc-test-1",
-  "product-improve.onrender.com": "ciwi-image-translation",
+  "aiassistant-wi7b.onrender.com": "aiassistant-test",
 };
 
 export function isBillingReturnRequest(request: Request): boolean {

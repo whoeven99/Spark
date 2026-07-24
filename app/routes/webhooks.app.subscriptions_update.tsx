@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs } from "react-router";
-import { getAppEntry } from "../config/appEntry.server";
 import { handleAppSubscriptionWebhook } from "../server/billing/index.server";
 import { runWebhookWorkInBackground } from "../server/webhook/runWebhookWork.server";
 import {
@@ -10,7 +9,6 @@ import { unauthenticated } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, topic, payload } = await authenticateWebhookLogged(request);
-  const appName = getAppEntry();
 
   runWebhookWorkInBackground(
     (async () => {
@@ -19,7 +17,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop,
         payload,
         admin,
-        appName,
       });
     })(),
     { shop, topic, label: "app_subscriptions/update" },
