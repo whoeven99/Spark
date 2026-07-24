@@ -28,6 +28,7 @@ import {
   IdcardOutlined,
   FundOutlined,
   GlobalOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -70,6 +71,12 @@ const sparkMenuItems: MenuItemDef[] = [
   { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
   { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
   { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
+  {
+    key: "/openrouter-probe",
+    icon: <ExperimentOutlined />,
+    label: <Link to="/openrouter-probe">OpenRouter 探测</Link>,
+    ownerOnly: true,
+  },
   { key: "/visit-source", icon: <AimOutlined />, label: <Link to="/visit-source">访问来源</Link>, ownerOnly: false },
   { key: "/pixel-logs", icon: <FileSearchOutlined />, label: <Link to="/pixel-logs">WebPixel 日志</Link>, ownerOnly: true },
   { key: "/app-logs", icon: <AppstoreOutlined />, label: <Link to="/app-logs">Spark 应用日志</Link>, ownerOnly: false },

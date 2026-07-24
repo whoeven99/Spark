@@ -208,6 +208,11 @@ npm run build     # Vite client + tsc server
   `Account`（在装）为准；目标语言/自动翻译来自 `ShopTargetLocale`；覆盖率按
   `tsf:items_count:{shop}:{locale}` 批量查 Redis。快照约 60s，`refresh=1`
   强制重载。
+- Spark tab「OpenRouter 探测」（owner）：`/openrouter-probe` →
+  `admin/src/pages/OpenRouterProbe.tsx` +
+  `admin/server/routes/openrouterProbe.ts`。服务端用 `OPENROUTER_API_KEY`
+  转发 `/models` / `/chat/completions`，用于验证不同模型与地区出口；
+  key 不下发浏览器。本地写在 `Spark/.env` 或 `admin/.env`，生产写 Render secrets。
 
 ## 10. 常用命令
 

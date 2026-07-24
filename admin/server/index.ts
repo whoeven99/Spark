@@ -37,6 +37,7 @@ import { tsfLanguageCoverageRouter } from "./routes/tsfLanguageCoverage.js";
 import { tsfRoiRouter } from "./routes/tsfRoi.js";
 import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
+import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -101,6 +102,8 @@ app.use("/api/tsf/roi", authMiddleware, requireOwner, tsfRoiRouter);
 app.use("/api/translation-ops", authMiddleware, translationOpsRouter);
 // Shopify 翻译资源查询 / Query CSV 写回 / 单条写回删除
 app.use("/api/shopify-translation", authMiddleware, shopifyTranslationRouter);
+// OpenRouter 模型探测（服务端转发；消耗 OPENROUTER 额度，仅 owner）
+app.use("/api/openrouter-probe", authMiddleware, requireOwner, openrouterProbeRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

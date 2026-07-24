@@ -2628,3 +2628,67 @@ export function downloadBase64Csv(csvBase64: string, filename: string): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// --- OpenRouter probe (owner-only server proxy) ---
+
+export type OpenRouterStatus = {
+  configured: boolean;
+  error?: string;
+  keyStatus?: number;
+  creditsStatus?: number;
+  key?: {
+    is_free_tier: unknown;
+    limit: unknown;
+    limit_remaining: unknown;
+    usage: unknown;
+    usage_daily: unknown;
+    expires_at: unknown;
+  } | null;
+  credits?: Record<string, unknown> | null;
+  keyError?: string | null;
+  note?: string;
+};
+
+export type OpenRouterModelOption = {
+  id: string;
+  name: string;
+  context_length: number | null;
+  pricing: { prompt: string | null; completion: string | null } | null;
+  free: boolean;
+  provider: string;
+};
+
+export type OpenRouterChatResult = {
+  ok: boolean;
+  httpStatus: number;
+  model: string;
+  modelUsed: string | null;
+  content: string | null;
+  finish_reason: string | null;
+  usage: Record<string, unknown> | null;
+  error: { code: number | string; message: string; metadata: unknown } | null;
+};
+
+export function fetchOpenRouterStatus(): Promise<OpenRouterStatus> {
+  return apiFetch("/openrouter-probe/status");
+}
+
+export function fetchOpenRouterModels(
+  modalities: string = "text",
+): Promise<{ total_count: number; models: OpenRouterModelOption[] }> {
+  const qs = new URLSearchParams({ modalities });
+  return apiFetch(`/openrouter-probe/models?${qs.toString()}`);
+}
+
+export function postOpenRouterChat(body: {
+  model: string;
+  prompt: string;
+  system?: string;
+  max_tokens?: number;
+  temperature?: number;
+}): Promise<OpenRouterChatResult> {
+  return apiFetch("/openrouter-probe/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
