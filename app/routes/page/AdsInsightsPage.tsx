@@ -12,6 +12,7 @@ import {
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { AdsInsightsTreeTable } from "../component/adsInsights/AdsInsightsTreeTable";
 import { AdsInsightsDeepTable } from "../component/adsInsights/AdsInsightsDeepTable";
+import { TiktokAdsLevelView } from "../component/adsInsights/TiktokAdsLevelView";
 import { MetaAdsConnectPanel } from "../component/adsInsights/MetaAdsConnectPanel";
 import { GoogleAdsSandboxConnectPanel } from "../component/adsInsights/GoogleAdsSandboxConnectPanel";
 import {
@@ -626,10 +627,17 @@ export function AdsInsightsPage() {
               </div>
             </div>
             {view === "structure" ? (
-              <AdsInsightsTreeTable
-                campaigns={displayCampaigns}
-                currencyCode={okData.currencyCode}
-              />
+              platform === "tiktok" ? (
+                <TiktokAdsLevelView
+                  campaigns={displayCampaigns}
+                  currencyCode={okData.currencyCode}
+                />
+              ) : (
+                <AdsInsightsTreeTable
+                  campaigns={displayCampaigns}
+                  currencyCode={okData.currencyCode}
+                />
+              )
             ) : (
               <AdsInsightsDeepTable
                 view={view}

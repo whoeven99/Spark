@@ -1829,7 +1829,13 @@
     "colLeads": "线索",
     "colViewContent": "查看内容",
     "colInitiateCheckout": "发起结账",
-    "colAllConversions": "全部转化"
+    "colAllConversions": "全部转化",
+    "tiktokLevelTabsAria": "TikTok 层级切换",
+    "emptyAdGroups": "该时间范围内暂无广告组数据。",
+    "emptyAds": "该时间范围内暂无广告数据。",
+    "colCampaign": "所属广告系列",
+    "colAdGroup": "所属广告组",
+    "colAdGroupsCount": "广告组 / 广告数"
   },
   "adsCreate": {
     "pageTitle": "创建广告",

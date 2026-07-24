@@ -1829,7 +1829,13 @@
     "colLeads": "Leads",
     "colViewContent": "View content",
     "colInitiateCheckout": "Initiate checkout",
-    "colAllConversions": "All conversions"
+    "colAllConversions": "All conversions",
+    "tiktokLevelTabsAria": "TikTok level tabs",
+    "emptyAdGroups": "No ad groups found for this date range.",
+    "emptyAds": "No ads found for this date range.",
+    "colCampaign": "Campaign",
+    "colAdGroup": "Ad group",
+    "colAdGroupsCount": "Ad groups / Ads"
   },
   "adsCreate": {
     "pageTitle": "Create Ads",
