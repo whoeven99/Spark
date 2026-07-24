@@ -72,6 +72,40 @@ export function mergeMetrics(
   });
 }
 
+/**
+ * 用报表扁平行给实体广告补齐指标；无报表数据的广告保留空指标。
+ * 报表中存在但实体列表缺失的广告（如已删除）仍会保留。
+ */
+export function mergeEntityAdsWithFlatMetrics(
+  ads: EntityAd[],
+  flat: FlatAdRow[],
+): EntityAd[] {
+  const metricsByAdId = new Map(flat.map((row) => [row.adId, row.metrics]));
+  const seen = new Set<string>();
+
+  const merged = ads.map((ad) => {
+    seen.add(ad.id);
+    return {
+      ...ad,
+      metrics: metricsByAdId.get(ad.id) ?? ad.metrics ?? emptyMetrics(),
+    };
+  });
+
+  for (const row of flat) {
+    if (seen.has(row.adId)) continue;
+    merged.push({
+      id: row.adId,
+      name: row.adName,
+      status: row.adStatus,
+      campaignId: row.campaignId,
+      adSetId: row.adSetId,
+      metrics: row.metrics,
+    });
+  }
+
+  return merged;
+}
+
 /** 将扁平 Ad 行聚合成 Campaign → AdSet → Ad 树。 */
 export function nestFlatAdRows(rows: FlatAdRow[]): AdsInsightsCampaign[] {
   type AdSetBucket = {
@@ -171,7 +205,7 @@ export function nestFlatAdRows(rows: FlatAdRow[]): AdsInsightsCampaign[] {
 
 type EntityCampaign = { id: string; name: string; status: string };
 type EntityAdSet = { id: string; name: string; status: string; campaignId: string };
-type EntityAd = {
+export type EntityAd = {
   id: string;
   name: string;
   status: string;

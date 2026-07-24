@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
-import { nestEntityHierarchy, nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
+import { mergeEntityAdsWithFlatMetrics, nestEntityHierarchy, nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
 import { emptyMetrics, finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
 import {
   applyTiktokSandboxMockMetrics,
@@ -143,6 +143,88 @@ describe("adsInsights view parse", () => {
     expect(parseAdsInsightsView("creatives")).toBe("creatives");
     expect(parseAdsInsightsView("nope")).toBe("structure");
     expect(parseAdsInsightsView(null)).toBe("structure");
+  });
+});
+
+describe("adsInsights mergeEntityAdsWithFlatMetrics", () => {
+  it("keeps all entity ads with empty metrics when report is empty", () => {
+    const ads = mergeEntityAdsWithFlatMetrics(
+      [
+        {
+          id: "a1",
+          name: "Ad 1",
+          status: "DISABLE",
+          campaignId: "c1",
+          adSetId: "s1",
+        },
+        {
+          id: "a2",
+          name: "Ad 2",
+          status: "DISABLE",
+          campaignId: "c2",
+          adSetId: "s2",
+        },
+      ],
+      [],
+    );
+    expect(ads).toHaveLength(2);
+    expect(ads[0].metrics).toEqual(emptyMetrics());
+    expect(ads[1].metrics).toEqual(emptyMetrics());
+  });
+
+  it("merges report metrics and keeps campaigns without delivery", () => {
+    const ads = mergeEntityAdsWithFlatMetrics(
+      [
+        {
+          id: "a1",
+          name: "Ad 1",
+          status: "DISABLE",
+          campaignId: "c1",
+          adSetId: "s1",
+        },
+        {
+          id: "a2",
+          name: "Ad 2",
+          status: "DISABLE",
+          campaignId: "c2",
+          adSetId: "s2",
+        },
+      ],
+      [
+        {
+          campaignId: "c1",
+          campaignName: "Campaign 1",
+          campaignStatus: "DISABLE",
+          adSetId: "s1",
+          adSetName: "AdSet 1",
+          adSetStatus: "DISABLE",
+          adId: "a1",
+          adName: "Ad 1",
+          adStatus: "DISABLE",
+          metrics: finalizeMetrics({
+            impressions: 10,
+            clicks: 1,
+            spend: 2,
+          }),
+        },
+      ],
+    );
+
+    const campaigns = nestEntityHierarchy({
+      campaigns: [
+        { id: "c1", name: "Campaign 1", status: "DISABLE" },
+        { id: "c2", name: "Campaign 2", status: "DISABLE" },
+      ],
+      adSets: [
+        { id: "s1", name: "AdSet 1", status: "DISABLE", campaignId: "c1" },
+        { id: "s2", name: "AdSet 2", status: "DISABLE", campaignId: "c2" },
+      ],
+      ads,
+    });
+
+    expect(campaigns).toHaveLength(2);
+    expect(campaigns.find((c) => c.id === "c1")?.metrics.impressions).toBe(10);
+    expect(campaigns.find((c) => c.id === "c2")?.metrics).toEqual(emptyMetrics());
   });
 });
 

@@ -17,7 +17,7 @@ import {
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
 import { resolveDateWindow } from "./dateRange.server";
-import { nestEntityHierarchy, nestFlatAdRows } from "./nest.server";
+import { mergeEntityAdsWithFlatMetrics, nestEntityHierarchy } from "./nest.server";
 import {
   getTiktokSandboxCredentials,
   isTiktokSandboxApiBase,
@@ -25,6 +25,7 @@ import {
   TIKTOK_SANDBOX_API_BASE,
 } from "./tiktokSandbox.server";
 import {
+  type AdsInsightsCampaign,
   type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
   type AdsInsightsResult,
@@ -522,11 +523,8 @@ export async function fetchTiktokAdsInsights(
   }
 
   const wantCreatives = Boolean(options?.includeCreatives);
-  let campaigns = wantCreatives ? [] : nestFlatAdRows(flat);
-
-  // 沙盒：展示真实 API 返回的实体结构，指标全为 0（沙盒无真实投放）。
-  // 前端可通过手动输入测试指标覆盖来验证 UI 展示效果。
-  if (sandbox && !wantCreatives) {
+  let campaigns: AdsInsightsCampaign[] = [];
+  if (!wantCreatives) {
     campaigns = nestEntityHierarchy({
       campaigns: [...campaignMeta.entries()].map(([id, v]) => ({
         id,
@@ -539,10 +537,12 @@ export async function fetchTiktokAdsInsights(
         status: v.status,
         campaignId: v.parentId || "",
       })),
-      ads: adsWithParents.map((ad) => ({
-        ...ad,
-        metrics: emptyMetrics(),
-      })),
+      ads: sandbox
+        ? adsWithParents.map((ad) => ({
+            ...ad,
+            metrics: emptyMetrics(),
+          }))
+        : mergeEntityAdsWithFlatMetrics(adsWithParents, flat),
     });
   }
 
