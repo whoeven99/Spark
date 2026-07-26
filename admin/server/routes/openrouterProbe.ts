@@ -29,11 +29,11 @@ function openRouterHeaders(apiKey: string): Record<string, string> {
 
 async function fetchOpenRouter(
   path: string,
-  init: RequestInit & { apiKey: string },
+  init: RequestInit & { apiKey: string; timeoutMs?: number },
 ): Promise<{ status: number; body: unknown }> {
-  const { apiKey, ...rest } = init;
+  const { apiKey, timeoutMs = 90_000, ...rest } = init;
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 90_000);
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
     const res = await fetch(`${OPENROUTER_BASE}${path}`, {
       ...rest,
@@ -48,6 +48,61 @@ async function fetchOpenRouter(
   } finally {
     clearTimeout(timer);
   }
+}
+
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function estimateBase64Bytes(b64: string): number {
+  const cleaned = b64.replace(/\s/g, "");
+  const padding = cleaned.endsWith("==") ? 2 : cleaned.endsWith("=") ? 1 : 0;
+  return Math.floor((cleaned.length * 3) / 4) - padding;
+}
+
+function normalizeImageDataUrl(params: {
+  imageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+}): { ok: true; url: string } | { ok: false; error: string } {
+  const imageUrl = typeof params.imageUrl === "string" ? params.imageUrl.trim() : "";
+  const imageBase64 = typeof params.imageBase64 === "string" ? params.imageBase64.trim() : "";
+  const mimeType =
+    typeof params.mimeType === "string" && params.mimeType.trim()
+      ? params.mimeType.trim().toLowerCase()
+      : "image/png";
+
+  if (imageUrl && imageBase64) {
+    return { ok: false, error: "imageUrl 与 imageBase64 只能传其一" };
+  }
+  if (!imageUrl && !imageBase64) {
+    return { ok: false, error: "缺少 imageUrl 或 imageBase64" };
+  }
+
+  if (imageUrl) {
+    if (/^https:\/\//i.test(imageUrl)) {
+      if (imageUrl.length > 200_000) {
+        return { ok: false, error: "imageUrl 过长" };
+      }
+      return { ok: true, url: imageUrl };
+    }
+    if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(imageUrl)) {
+      const comma = imageUrl.indexOf(",");
+      const b64 = comma >= 0 ? imageUrl.slice(comma + 1) : "";
+      if (!b64 || estimateBase64Bytes(b64) > MAX_IMAGE_BYTES) {
+        return { ok: false, error: "图片过大（上限 8MB）" };
+      }
+      return { ok: true, url: imageUrl };
+    }
+    return { ok: false, error: "imageUrl 必须为 HTTPS 或 data:image/*;base64,..." };
+  }
+
+  if (!mimeType.startsWith("image/")) {
+    return { ok: false, error: "mimeType 必须为 image/*" };
+  }
+  const raw = imageBase64.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, "");
+  if (!raw || estimateBase64Bytes(raw) > MAX_IMAGE_BYTES) {
+    return { ok: false, error: "图片过大（上限 8MB）或不完整" };
+  }
+  return { ok: true, url: `data:${mimeType};base64,${raw}` };
 }
 
 /** Key / credits status (never returns the secret). */
@@ -153,9 +208,13 @@ openrouterProbeRouter.get("/models", async (req, res) => {
         : null,
       free: String(m.id).endsWith(":free"),
       provider: String(m.id).split("/")[0] || "unknown",
+      modality: m.architecture?.modality ?? null,
+      output_modalities: Array.isArray(m.architecture?.output_modalities)
+        ? m.architecture.output_modalities
+        : null,
     }));
 
-    res.json({ total_count, models });
+    res.json({ total_count, models, modalities });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(502).json({ error: `拉取模型列表失败：${msg}` });
@@ -247,5 +306,143 @@ openrouterProbeRouter.post("/chat", async (req, res) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(502).json({ error: `调用 OpenRouter 失败：${msg}` });
+  }
+});
+
+/** Forward a single-step image generation / img2img request (no persistence). */
+openrouterProbeRouter.post("/images", async (req, res) => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    res.status(503).json({ error: "未配置 OPENROUTER_API_KEY" });
+    return;
+  }
+
+  const model = typeof req.body?.model === "string" ? req.body.model.trim() : "";
+  const prompt = typeof req.body?.prompt === "string" ? req.body.prompt : "";
+  const resolution =
+    typeof req.body?.resolution === "string" ? req.body.resolution.trim() : "";
+  const outputFormat =
+    typeof req.body?.output_format === "string"
+      ? req.body.output_format.trim().toLowerCase()
+      : "";
+  const aspectRatio =
+    typeof req.body?.aspect_ratio === "string"
+      ? req.body.aspect_ratio.trim()
+      : "";
+
+  if (!model) {
+    res.status(400).json({ error: "缺少 model" });
+    return;
+  }
+  if (!prompt.trim()) {
+    res.status(400).json({ error: "缺少 prompt" });
+    return;
+  }
+  if (prompt.length > 20_000) {
+    res.status(400).json({ error: "prompt 过长（上限 20000 字符）" });
+    return;
+  }
+
+  const imageNorm = normalizeImageDataUrl({
+    imageUrl: typeof req.body?.imageUrl === "string" ? req.body.imageUrl : undefined,
+    imageBase64:
+      typeof req.body?.imageBase64 === "string" ? req.body.imageBase64 : undefined,
+    mimeType: typeof req.body?.mimeType === "string" ? req.body.mimeType : undefined,
+  });
+  if (!imageNorm.ok) {
+    res.status(400).json({ error: imageNorm.error });
+    return;
+  }
+
+  const payload: Record<string, unknown> = {
+    model,
+    prompt,
+    input_references: [{ image_url: { url: imageNorm.url } }],
+    n: 1,
+  };
+  if (resolution) payload.resolution = resolution;
+  if (
+    outputFormat === "png" ||
+    outputFormat === "jpeg" ||
+    outputFormat === "webp" ||
+    outputFormat === "svg"
+  ) {
+    payload.output_format = outputFormat;
+  }
+  if (aspectRatio) payload.aspect_ratio = aspectRatio;
+
+  try {
+    const { status, body } = await fetchOpenRouter("/images", {
+      method: "POST",
+      apiKey,
+      timeoutMs: 180_000,
+      body: JSON.stringify(payload),
+    });
+
+    const errObj = (body as { error?: { message?: string; code?: number; metadata?: unknown } })
+      ?.error;
+    const usage = (body as { usage?: Record<string, unknown> })?.usage ?? null;
+    const modelUsed =
+      typeof (body as { model?: unknown }).model === "string"
+        ? ((body as { model: string }).model)
+        : null;
+    const rawImages =
+      (body as {
+        data?: Array<{ b64_json?: string; url?: string; media_type?: string }>;
+      })?.data ?? [];
+
+    const images = rawImages
+      .map((item) => {
+        const b64 =
+          typeof item.b64_json === "string" && item.b64_json.trim()
+            ? item.b64_json.trim()
+            : null;
+        const url =
+          typeof item.url === "string" && item.url.trim() ? item.url.trim() : null;
+        const mimeType =
+          typeof item.media_type === "string" && item.media_type.trim()
+            ? item.media_type.trim()
+            : b64
+              ? outputFormat === "jpeg"
+                ? "image/jpeg"
+                : outputFormat === "webp"
+                  ? "image/webp"
+                  : outputFormat === "svg"
+                    ? "image/svg+xml"
+                    : "image/png"
+              : null;
+        if (!b64 && !url) return null;
+        return { b64, url, mimeType };
+      })
+      .filter((x): x is { b64: string | null; url: string | null; mimeType: string | null } =>
+        Boolean(x),
+      );
+
+    res.json({
+      ok: status >= 200 && status < 300 && !errObj && images.length > 0,
+      httpStatus: status,
+      model,
+      modelUsed,
+      images,
+      usage,
+      error: errObj
+        ? {
+            code: errObj.code ?? status,
+            message: errObj.message ?? `HTTP ${status}`,
+            metadata: errObj.metadata ?? null,
+          }
+        : status >= 400
+          ? { code: status, message: `OpenRouter HTTP ${status}`, metadata: null }
+          : status >= 200 && status < 300 && images.length === 0
+            ? {
+                code: status,
+                message: "上游未返回图片数据（模型可能不支持参考图/译图）",
+                metadata: null,
+              }
+            : null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(502).json({ error: `调用 OpenRouter Images 失败：${msg}` });
   }
 });

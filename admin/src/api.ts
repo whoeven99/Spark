@@ -2656,6 +2656,8 @@ export type OpenRouterModelOption = {
   pricing: { prompt: string | null; completion: string | null } | null;
   free: boolean;
   provider: string;
+  modality?: string | null;
+  output_modalities?: string[] | null;
 };
 
 export type OpenRouterChatResult = {
@@ -2669,13 +2671,31 @@ export type OpenRouterChatResult = {
   error: { code: number | string; message: string; metadata: unknown } | null;
 };
 
+export type OpenRouterImageResult = {
+  ok: boolean;
+  httpStatus: number;
+  model: string;
+  modelUsed: string | null;
+  images: Array<{
+    b64: string | null;
+    url: string | null;
+    mimeType: string | null;
+  }>;
+  usage: Record<string, unknown> | null;
+  error: { code: number | string; message: string; metadata: unknown } | null;
+};
+
 export function fetchOpenRouterStatus(): Promise<OpenRouterStatus> {
   return apiFetch("/openrouter-probe/status");
 }
 
 export function fetchOpenRouterModels(
   modalities: string = "text",
-): Promise<{ total_count: number; models: OpenRouterModelOption[] }> {
+): Promise<{
+  total_count: number;
+  models: OpenRouterModelOption[];
+  modalities?: string;
+}> {
   const qs = new URLSearchParams({ modalities });
   return apiFetch(`/openrouter-probe/models?${qs.toString()}`);
 }
@@ -2688,6 +2708,22 @@ export function postOpenRouterChat(body: {
   temperature?: number;
 }): Promise<OpenRouterChatResult> {
   return apiFetch("/openrouter-probe/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postOpenRouterImages(body: {
+  model: string;
+  prompt: string;
+  imageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  resolution?: string;
+  output_format?: string;
+  aspect_ratio?: string;
+}): Promise<OpenRouterImageResult> {
+  return apiFetch("/openrouter-probe/images", {
     method: "POST",
     body: JSON.stringify(body),
   });
