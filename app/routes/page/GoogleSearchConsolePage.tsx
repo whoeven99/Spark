@@ -17,6 +17,26 @@ type DisconnectResponse = { ok: true } | { ok: false; error: string };
 
 type Days = 7 | 28 | 90;
 
+type AuthBanner = { tone: "ok" | "error"; text: string };
+
+const GSC_OAUTH_QUERY_KEYS = ["gscAuth", "reason", "errorCode", "siteUrl"] as const;
+
+function cleanGscOAuthParams() {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  let changed = false;
+  for (const key of GSC_OAUTH_QUERY_KEYS) {
+    if (params.has(key)) {
+      params.delete(key);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  const query = params.toString();
+  const nextSearch = query ? `?${query}` : "";
+  window.history.replaceState(null, "", `${window.location.pathname}${nextSearch}`);
+}
+
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
@@ -381,7 +401,7 @@ export function GoogleSearchConsolePage() {
   const [hasPending, setHasPending] = useState(loaderData.hasPending);
   const [pendingSites, setPendingSites] = useState(loaderData.pendingSites);
   const [days, setDays] = useState<Days>(7);
-  const [statusError, setStatusError] = useState<string | null>(null);
+  const [authBanner, setAuthBanner] = useState<AuthBanner | null>(null);
 
   const authFetcher = useFetcher<AuthUrlResponse>();
   const siteFetcher = useFetcher<SiteSelectResponse>();
@@ -395,6 +415,11 @@ export function GoogleSearchConsolePage() {
   const gscAuth = searchParams.get("gscAuth");
 
   useEffect(() => {
+    if (!gscAuth) return;
+
+    const reason = searchParams.get("reason");
+    const errorCode = searchParams.get("errorCode");
+
     if (gscAuth === "select") {
       setHasPending(true);
     } else if (gscAuth === "success") {
@@ -403,9 +428,20 @@ export function GoogleSearchConsolePage() {
         setConnected(true);
         setSiteUrl(urlSite);
         setHasPending(false);
+        setAuthBanner({ tone: "ok", text: t("gsc.authSuccess", { siteUrl: urlSite }) });
       }
+    } else if (gscAuth === "error") {
+      if (errorCode === "no_verified_sites") {
+        setAuthBanner({ tone: "error", text: t("gsc.authNoVerifiedSites") });
+      } else {
+        setAuthBanner({ tone: "error", text: reason || t("gsc.authError") });
+      }
+    } else if (gscAuth === "cancelled") {
+      setAuthBanner({ tone: "error", text: t("gsc.authCancelled") });
     }
-  }, [gscAuth, searchParams]);
+
+    cleanGscOAuthParams();
+  }, [gscAuth, searchParams, t]);
 
   // Fetch analytics when connected
   useEffect(() => {
@@ -435,6 +471,7 @@ export function GoogleSearchConsolePage() {
   }, [disconnectFetcher.data]);
 
   const handleConnect = useCallback(() => {
+    setAuthBanner(null);
     authFetcher.load("/api/gsc/auth-url");
   }, [authFetcher]);
 
@@ -442,7 +479,7 @@ export function GoogleSearchConsolePage() {
     if (authFetcher.data?.ok && authFetcher.data.authUrl) {
       window.open(authFetcher.data.authUrl, "_top");
     } else if (authFetcher.data && !authFetcher.data.ok) {
-      setStatusError(authFetcher.data.error);
+      setAuthBanner({ tone: "error", text: authFetcher.data.error });
     }
   }, [authFetcher.data]);
 
@@ -479,18 +516,27 @@ export function GoogleSearchConsolePage() {
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-        {statusError && (
+        {authBanner && (
           <div
             style={{
               padding: "0.75rem 1rem",
-              background: pageColorTokens.criticalBg,
-              border: `1px solid ${pageColorTokens.critical}`,
+              background:
+                authBanner.tone === "ok"
+                  ? pageColorTokens.brandGreenLight
+                  : pageColorTokens.criticalBg,
+              border: `1px solid ${
+                authBanner.tone === "ok" ? pageColorTokens.brandGreenDeep : pageColorTokens.critical
+              }`,
               borderRadius: 8,
               fontSize: "0.875rem",
-              color: pageColorTokens.criticalText,
+              color:
+                authBanner.tone === "ok"
+                  ? pageColorTokens.brandGreenDeep
+                  : pageColorTokens.criticalText,
+              lineHeight: 1.5,
             }}
           >
-            {statusError}
+            {authBanner.text}
           </div>
         )}
 

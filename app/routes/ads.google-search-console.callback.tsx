@@ -67,7 +67,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (sites.length === 0) {
       return appRedirect(request, shop, host, appOrigin, {
         gscAuth: "error",
-        reason: "该 Google 账号下未发现已验证的 Search Console 站点",
+        errorCode: "no_verified_sites",
       });
     }
 
