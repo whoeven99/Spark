@@ -10,7 +10,7 @@
 | 能力 | 状态 | 关联清单模块 |
 |------|------|-------------|
 | LangGraph ReAct Agent 框架 | ✅ 完成 | 所有 Playbook 基础 |
-| 多语言翻译流水线（V4） | ✅ 完成 | 国际化：批量翻译与本地化 |
+| TSF 多语言翻译观测 | ✅ 完成 | 国际化：批量翻译与本地化的 Admin 观测边界 |
 | 商品文案生成 | ✅ 完成 | 商品日常运营：文案草案 |
 | 商品质量评分 | ✅ 完成 | 转化率提升：商品页质量评分 |
 | 图片翻译 / 图片生成 | ✅ 完成 | 国际化：多语言素材 |
@@ -20,7 +20,7 @@
 | 广告平台凭证存储（Google/Meta/TikTok） | ✅ 完成 | 获客：广告渠道基础 |
 | 多租户 store_id 隔离 + OAuth | ✅ 完成 | Phase 0 基础 |
 
-**核心缺口**：当前 Agent 工具池仅覆盖内容生产（翻译、文案、图片）与基础店铺信息，**缺少完整的数据同步层**（订单/退款/客户/库存/履约），导致"发现→定位→方案→执行→复盘"闭环无法跑通。
+**核心缺口**：当前 Agent 工具池主要覆盖内容生产（文案、图片）与基础店铺信息，经营闭环仍需持续强化数据同步、口径统一和受控写回，才能稳定跑通"发现→定位→方案→执行→复盘"。
 
 ---
 
@@ -71,7 +71,7 @@
 1. 在 `prisma/schema.prisma` 添加 `Order`, `Refund`, `Customer`, `InventoryLevel`, `Fulfillment` 表
 2. 在 `app/server/shopify/` 新增各模块同步 service（`orderSync`, `customerSync`, etc.）
 3. 注册 Shopify Webhook（`app/server/session/shopifyAppSetup.ts` 里已有模式）
-4. 在 `/worker` 新增回补任务（`backfill` job）用于初始历史数据
+4. 在 `app/server/shopify/sync/` 和 `/app/settings/data` 完善历史数据回补与同步状态展示
 
 #### 3.2 语义层（指标口径统一）
 
@@ -95,7 +95,7 @@
 | `anomalyBreakdown` | 自动化 | 将异常拆解到渠道/地区/SKU 维度 |
 | `dataFreshnessCheck` | 自动化 | 检测数据延迟/缺失，输出置信度 |
 
-**升级现有诊断报告**（`app/routes/app.additional.tsx`）：
+**升级现有 Today 诊断页**（`app/routes/app.today.diagnosis.tsx`）：
 - 接入真实订单/退款/客户数据
 - 增加异常告警列表
 - 增加"建议清单"输出

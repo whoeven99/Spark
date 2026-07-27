@@ -1210,7 +1210,9 @@ export type TmLookupResult = {
   source?: string;
   sourceText?: string;
   shop?: string;
-  digest?: string;
+  digest?: string | null;
+  /** text 模式实际使用的 keyId（digest 或 CRC-32） */
+  keyId?: string;
   results: TmLookupRow[];
   note?: string;
 };
@@ -1238,7 +1240,33 @@ export type TmBrowseResult = {
 
 export type TmShopTargetsResult = {
   shop: string;
+  sources?: string[];
   targets: string[];
+  note?: string;
+};
+
+export type TmValueCrc32Entry = {
+  key: string;
+  source: string;
+  target: string;
+  model: string;
+  keyId: string;
+  value: string;
+  valuePreview: string;
+  ttl: number;
+};
+
+export type TmValueCrc32BrowseResult = {
+  shop: string;
+  sources: string[];
+  targets: string[];
+  entries: TmValueCrc32Entry[];
+  byTarget: Record<string, number>;
+  byModel: Record<string, number>;
+  patterns?: string[];
+  pairCount?: number;
+  scanned?: number;
+  truncated?: boolean;
   note?: string;
 };
 
@@ -1276,9 +1304,25 @@ export function browseTmCache(params: {
   return apiFetch(`/redis-explorer/tm/browse?${query}`);
 }
 
+export function browseValueCrc32Cache(params: {
+  shop: string;
+  source?: string;
+  target?: string;
+  model?: string;
+  limit?: number;
+}): Promise<TmValueCrc32BrowseResult> {
+  const query = new URLSearchParams();
+  query.set("shop", params.shop);
+  if (params.source) query.set("source", params.source);
+  if (params.target) query.set("target", params.target);
+  if (params.model) query.set("model", params.model);
+  if (params.limit) query.set("limit", String(params.limit));
+  return apiFetch(`/redis-explorer/tm/browse-value-crc32?${query}`);
+}
+
 // ============================================================
 // TSF（TypeScriptFrontend）新用户统计 —— 读 TSF 独立 Turso 库
-// 额度单位为 Credits；仅统计 billingSystem='tsf' 的新用户。
+// 额度单位为 Credits；用户以 Account 为准（ShopBillingBinding 已废弃）。
 // ============================================================
 
 export type TsfOverviewData = {
@@ -1292,15 +1336,14 @@ export type TsfOverviewData = {
   totalTrialCredits: number;
   recentRegistrations: {
     shop: string;
-    billingSystem: string;
-    boundReason: string | null;
+    installed: boolean;
+    deletedAt: string | null;
     createdAt: string;
   }[];
 };
 
 export type TsfShopRow = {
   shop: string;
-  boundReason: string | null;
   boundAt: string;
   subscriptionCredits: number;
   purchasedCredits: number;
@@ -1313,6 +1356,7 @@ export type TsfShopRow = {
   billingInterval: string | null;
   currentPeriodEnd: string | null;
   installed: boolean;
+  sessionCount?: number;
 };
 
 export type TsfBillingLogRow = {
@@ -1325,6 +1369,14 @@ export type TsfBillingLogRow = {
 };
 
 export type TsfShopDetail = {
+  account: {
+    shop: string;
+    deletedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    installed: boolean;
+  } | null;
+  /** @deprecated 兼容旧字段；等于 account 的展示投影 */
   binding: {
     shop: string;
     billingSystem: string;
@@ -1333,6 +1385,150 @@ export type TsfShopDetail = {
     updatedAt: string;
   } | null;
   billingLogs: TsfBillingLogRow[];
+};
+
+export type TsfShopProfileRow = {
+  shop: string;
+  installed: boolean;
+  hasProfile: boolean;
+  shopName: string | null;
+  primaryLocale: string | null;
+  industry: string | null;
+  keywords: string[];
+  description: string | null;
+  brandTone: string | null;
+  aiModel: string | null;
+  lastScanId: string | null;
+  lastScannedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type TsfShopProfilesData = {
+  stats: {
+    totalShops: number;
+    profileShops: number;
+    missingProfileShops: number;
+    installedShops: number;
+  };
+  profiles: TsfShopProfileRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type TsfShopScanStageState = "PENDING" | "DONE" | "SKIPPED" | "FAILED";
+
+export type TsfShopScan = {
+  id: string;
+  shopName: string;
+  trigger: "install" | "scheduled" | "manual";
+  status: "CREATED" | "QUEUED" | "SCANNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+  stages: Record<"contentSize" | "profile" | "coverage" | "glossary", TsfShopScanStageState>;
+  blobPrefix: string;
+  summary: {
+    totalItems?: number;
+    totalChars?: number;
+    moduleStats?: Record<string, { items: number; chars: number }>;
+    coverage?: Array<{
+      locale: string;
+      published: boolean;
+      translated: number;
+      total: number;
+      percent: number | null;
+    }>;
+    glossaryCount?: number;
+  };
+  claimedBy: string | null;
+  claimedAt: string | null;
+  lastHeartbeat: string | null;
+  attempts: number;
+  errorMessage: string | null;
+  errorStage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TsfProfileStrategy = {
+  brandTerms: string[];
+  doNotTranslateTerms: string[];
+  preferredTerms: Array<{ source: string; note: string | null }>;
+  seoTerms: string[];
+  moduleHints: Array<{
+    module: string;
+    tonePolicy: string | null;
+    keywordPolicy: string | null;
+    literalVsAdaptive: string | null;
+  }>;
+};
+
+export type TsfShopUnderstanding = {
+  industry: string | null;
+  subIndustry: string | null;
+  brandPositioning: string | null;
+  coreProductTypes: string[];
+  sellingPoints: string[];
+  priceRange: string | null;
+  voiceStyle: string | null;
+  seoDirection: string | null;
+  marketNotes: string[];
+  description: string | null;
+  keywords: string[];
+};
+
+export type TsfShopMarket = {
+  name: string;
+  handle: string;
+  status: string;
+  baseCurrency: string | null;
+  locales: string[];
+};
+
+export type TsfShopSignals = {
+  weightedTopTerms: Array<{ term: string; score: number; count: number; sources: string[] }>;
+  weightedTopPhrases: Array<{ term: string; score: number; count: number; sources: string[] }>;
+  brandTerms: string[];
+  categoryTerms: string[];
+  menuTerms: string[];
+  representativeSamples: Array<{ source: string; text: string }>;
+  sourceStats: Record<string, number>;
+};
+
+export type TsfShopProfileFacts = {
+  shopName: string;
+  primaryDomain: string | null;
+  currencyCode: string | null;
+  productTypes: string[];
+  vendors: string[];
+  topProductTitles: string[];
+  collectionTitles: string[];
+  collectionDescriptions: string[];
+  articleTitles: string[];
+  articleSummaries: string[];
+  menuTitles: string[];
+  tags: string[];
+};
+
+export type TsfThemeTextSample = {
+  text: string;
+  module: string;
+  key: string;
+  weight: number;
+};
+
+export type TsfShopProfileDetailData = {
+  profile: TsfShopProfileRow;
+  scan: TsfShopScan | null;
+  promptBlock: string | null;
+  strategy: TsfProfileStrategy | null;
+  glossarySuggestions: Array<{ locale: string; source: string; target: string }>;
+  understanding: TsfShopUnderstanding | null;
+  markets: TsfShopMarket[];
+  signals: TsfShopSignals | null;
+  facts: TsfShopProfileFacts | null;
+  themeTexts: TsfThemeTextSample[];
+  source: "cosmos" | "blob" | "mixed" | "none";
+  scanNote: string | null;
 };
 
 export type TsfUsageRow = {
@@ -1425,6 +1621,98 @@ export type TsfRevenueTrendPoint = {
   packRevenue: number;
 };
 
+export type TsfRoiSource = "turso" | "cosmos" | "sls" | "mock";
+
+export type TsfRoiMetric = {
+  key: string;
+  label: string;
+  value: number | string | null;
+  display: string;
+  wired: boolean;
+  source: TsfRoiSource;
+  howto: string | null;
+};
+
+export type TsfRoiFunnelStep = {
+  key: string;
+  label: string;
+  count: number;
+  pctOfInstall: number;
+  kind: "forward" | "churn" | "branch";
+  note: string | null;
+  wired: boolean;
+  source: TsfRoiSource;
+  howto: string | null;
+};
+
+export type TsfRoiChainRate = {
+  label: string;
+  value: number;
+  wired: boolean;
+};
+
+export type TsfRoiActionRow = {
+  shop: string;
+  signal: string;
+  detail: string;
+  wired: boolean;
+  source: TsfRoiSource;
+};
+
+export type TsfRoiActionList = {
+  title: string;
+  wired: boolean;
+  source: TsfRoiSource;
+  howto: string | null;
+  rows: TsfRoiActionRow[];
+};
+
+export type TsfRoiHowtoItem = {
+  id: string;
+  title: string;
+  detail: string;
+  priority: "P0" | "P1" | "P2";
+};
+
+export type TsfRoiData = {
+  generatedAt: string;
+  windowDays: number;
+  decision: {
+    wired: boolean;
+    source: TsfRoiSource;
+    title: string;
+    body: string;
+    howto: string | null;
+  };
+  overview: TsfRoiMetric[];
+  funnel: TsfRoiFunnelStep[];
+  chainRates: Record<string, TsfRoiChainRate>;
+  breakdown: {
+    trialShops: number;
+    expandShops: number;
+    trialWired: boolean;
+    expandWired: boolean;
+    everSubscribed: number;
+  };
+  slsEvents: {
+    name: string;
+    count: number;
+    wired: false;
+    source: "mock";
+    howto: string;
+  }[];
+  actionLists: {
+    stuckTrialExpand: TsfRoiActionList;
+    payingNoAuto: TsfRoiActionList;
+  };
+  howtoList: TsfRoiHowtoItem[];
+  notes: string[];
+};
+
+export function fetchTsfRoi(): Promise<TsfRoiData> {
+  return apiFetch("/tsf/roi");
+}
+
 export function fetchTsfOverview(): Promise<TsfOverviewData> {
   return apiFetch("/tsf/overview");
 }
@@ -1436,6 +1724,112 @@ export function fetchTsfShops(search?: string): Promise<{ shops: TsfShopRow[] }>
 
 export function fetchTsfShopDetail(shop: string): Promise<TsfShopDetail> {
   return apiFetch(`/tsf/shops/${encodeURIComponent(shop)}/events`);
+}
+
+export function fetchTsfShopProfiles(params?: {
+  search?: string;
+  profileState?: "all" | "with" | "without";
+  page?: number;
+  pageSize?: number;
+}): Promise<TsfShopProfilesData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.profileState && params.profileState !== "all") {
+    query.set("profileState", params.profileState);
+  }
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/shop-profiles${qs ? `?${qs}` : ""}`);
+}
+
+export type CoverageBucket = "all" | "low" | "mid" | "high" | "missing";
+export type AutoTranslateFilter = "all" | "on" | "off";
+
+export type TsfLocaleCoverage = {
+  locale: string;
+  translated: number;
+  total: number;
+  percent: number | null;
+  updatedAt: string | null;
+  cacheMissing: boolean;
+  autoTranslate: boolean;
+};
+
+export type TsfShopLanguageCoverageRow = {
+  shop: string;
+  autoTranslate: boolean;
+  autoTranslateLocaleCount: number;
+  cacheMissing: boolean;
+  localeCount: number;
+  translated: number;
+  total: number;
+  overallPercent: number | null;
+  lowestLocale: { locale: string; percent: number } | null;
+  updatedAt: string | null;
+  updatedAtLabel: string;
+  locales: TsfLocaleCoverage[];
+};
+
+export type TsfLanguageCoverageData = {
+  stats: {
+    tursoShopCount: number;
+    shopsWithCache: number;
+    shopsWithoutCache: number;
+    autoTranslateShops: number;
+    avgOverallPercent: number | null;
+    lowCoverageShops: number;
+    redisKeyCount: number;
+    snapshotAt: string | null;
+  };
+  shops: TsfShopLanguageCoverageRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  note: string | null;
+};
+
+export function fetchTsfLanguageCoverage(params?: {
+  search?: string;
+  bucket?: CoverageBucket;
+  autoTranslate?: AutoTranslateFilter;
+  page?: number;
+  pageSize?: number;
+  refresh?: boolean;
+}): Promise<TsfLanguageCoverageData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.bucket && params.bucket !== "all") query.set("bucket", params.bucket);
+  if (params?.autoTranslate && params.autoTranslate !== "all") {
+    query.set("autoTranslate", params.autoTranslate);
+  }
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  if (params?.refresh) query.set("refresh", "1");
+  const qs = query.toString();
+  return apiFetch(`/tsf/language-coverage${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchTsfShopProfileDetail(
+  shop: string,
+): Promise<TsfShopProfileDetailData> {
+  return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}`);
+}
+
+export type TsfShopProfileScanResult = {
+  enqueued: true;
+  scanId: string;
+  status: "CREATED";
+  hintPushed: boolean;
+  note: string | null;
+};
+
+export function triggerTsfShopProfileScan(
+  shop: string,
+): Promise<TsfShopProfileScanResult> {
+  return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}/scan`, {
+    method: "POST",
+  });
 }
 
 export function fetchTsfUsage(search?: string): Promise<{ usage: TsfUsageRow[] }> {
@@ -2233,4 +2627,104 @@ export function downloadBase64Csv(csvBase64: string, filename: string): void {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// --- OpenRouter probe (owner-only server proxy) ---
+
+export type OpenRouterStatus = {
+  configured: boolean;
+  error?: string;
+  keyStatus?: number;
+  creditsStatus?: number;
+  key?: {
+    is_free_tier: unknown;
+    limit: unknown;
+    limit_remaining: unknown;
+    usage: unknown;
+    usage_daily: unknown;
+    expires_at: unknown;
+  } | null;
+  credits?: Record<string, unknown> | null;
+  keyError?: string | null;
+  note?: string;
+};
+
+export type OpenRouterModelOption = {
+  id: string;
+  name: string;
+  context_length: number | null;
+  pricing: { prompt: string | null; completion: string | null } | null;
+  free: boolean;
+  provider: string;
+  modality?: string | null;
+  output_modalities?: string[] | null;
+};
+
+export type OpenRouterChatResult = {
+  ok: boolean;
+  httpStatus: number;
+  model: string;
+  modelUsed: string | null;
+  content: string | null;
+  finish_reason: string | null;
+  usage: Record<string, unknown> | null;
+  error: { code: number | string; message: string; metadata: unknown } | null;
+};
+
+export type OpenRouterImageResult = {
+  ok: boolean;
+  httpStatus: number;
+  model: string;
+  modelUsed: string | null;
+  images: Array<{
+    b64: string | null;
+    url: string | null;
+    mimeType: string | null;
+  }>;
+  usage: Record<string, unknown> | null;
+  error: { code: number | string; message: string; metadata: unknown } | null;
+};
+
+export function fetchOpenRouterStatus(): Promise<OpenRouterStatus> {
+  return apiFetch("/openrouter-probe/status");
+}
+
+export function fetchOpenRouterModels(
+  modalities: string = "text",
+): Promise<{
+  total_count: number;
+  models: OpenRouterModelOption[];
+  modalities?: string;
+}> {
+  const qs = new URLSearchParams({ modalities });
+  return apiFetch(`/openrouter-probe/models?${qs.toString()}`);
+}
+
+export function postOpenRouterChat(body: {
+  model: string;
+  prompt: string;
+  system?: string;
+  max_tokens?: number;
+  temperature?: number;
+}): Promise<OpenRouterChatResult> {
+  return apiFetch("/openrouter-probe/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postOpenRouterImages(body: {
+  model: string;
+  prompt: string;
+  imageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  resolution?: string;
+  output_format?: string;
+  aspect_ratio?: string;
+}): Promise<OpenRouterImageResult> {
+  return apiFetch("/openrouter-probe/images", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
