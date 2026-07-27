@@ -15,8 +15,9 @@ export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 export const GMC_SCOPE = "https://www.googleapis.com/auth/content";
 export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
+export const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 
-export type OAuthFlow = "gmc" | "ads" | "ads_sandbox";
+export type OAuthFlow = "gmc" | "ads" | "ads_sandbox" | "gsc";
 
 export interface OAuthTokens {
   accessToken: string;
@@ -150,7 +151,7 @@ export function verifyOAuthState(
     };
     if (
       !payload.shop ||
-      (payload.flow !== "gmc" && payload.flow !== "ads" && payload.flow !== "ads_sandbox")
+      (payload.flow !== "gmc" && payload.flow !== "ads" && payload.flow !== "ads_sandbox" && payload.flow !== "gsc")
     ) {
       return null;
     }
@@ -175,7 +176,8 @@ export function buildAuthUrl(params: {
   reauth?: boolean;
 }): string {
   const { clientId } = getGoogleOAuthClient();
-  const scope = params.flow === "gmc" ? GMC_SCOPE : ADS_SCOPE;
+  const scope =
+    params.flow === "gmc" ? GMC_SCOPE : params.flow === "gsc" ? GSC_SCOPE : ADS_SCOPE;
   const query = new URLSearchParams({
     client_id: clientId,
     redirect_uri: params.redirectUri,
@@ -357,6 +359,64 @@ export function formatCustomerId(id: string): string {
   const digits = id.replace(/\D/g, "");
   if (digits.length !== 10) return id;
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+/** Google Search Console OAuth 完成后跳回 GSC 设置页。 */
+export function buildGscOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/settings/google-search-console",
+    shop: params.shop,
+    request: params.request,
+    query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL(
+    "/app/settings/google-search-console",
+    base.replace(/\/$/, "") || base,
+  );
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
+}
+
+/** 在嵌入式 iframe 内通过 API 鉴权后生成 Google Search Console 授权 URL。 */
+export function buildGscOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  reauth?: boolean;
+}): { ok: true; authUrl: string } | { ok: false; error: string } {
+  const { clientId } = getGoogleOAuthClient();
+  if (!clientId) {
+    return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
+  }
+
+  const callbackPath = "/ads/google-search-console/callback";
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createOAuthState(params.shop, "gsc", params.host ?? "", appOrigin);
+  const authUrl = buildAuthUrl({
+    flow: "gsc",
+    state,
+    redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
+    reauth: params.reauth,
+  });
+  return { ok: true, authUrl };
 }
 
 /**
