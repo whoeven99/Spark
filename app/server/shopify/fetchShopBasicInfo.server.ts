@@ -26,6 +26,9 @@ const SHOP_BASIC_INFO_QUERY = `#graphql
         host
         url
       }
+      billingAddress {
+        countryCodeV2
+      }
     }
   }
 `;
@@ -37,6 +40,8 @@ export type ShopBasicInfo = {
   email?: string;
   contactEmail?: string;
   currencyCode?: string;
+  /** ISO 3166-1 alpha-2，来自 shop.billingAddress.countryCodeV2。 */
+  countryCode?: string;
   ianaTimezone?: string;
   timezoneAbbreviation?: string;
   url?: string;
@@ -56,6 +61,7 @@ type ShopBasicInfoResponse = {
       email?: string;
       contactEmail?: string;
       currencyCode?: string;
+      billingAddress?: { countryCodeV2?: string | null };
       ianaTimezone?: string;
       timezoneAbbreviation?: string;
       url?: string;
@@ -84,6 +90,7 @@ function mapShopResponse(shop: NonNullable<ShopBasicInfoResponse["data"]>["shop"
     email: shop?.email ?? undefined,
     contactEmail: shop?.contactEmail ?? undefined,
     currencyCode: shop?.currencyCode ?? undefined,
+    countryCode: shop?.billingAddress?.countryCodeV2?.trim().toUpperCase() || undefined,
     ianaTimezone: shop?.ianaTimezone ?? undefined,
     timezoneAbbreviation: shop?.timezoneAbbreviation ?? undefined,
     url: shop?.url ?? undefined,

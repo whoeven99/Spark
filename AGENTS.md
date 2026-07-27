@@ -16,12 +16,12 @@
 
 ## 1. 项目现状
 
-Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独立运行的应用和一个 Shopify 扩展：
+Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独立运行的应用和 Shopify 扩展：
 
 - **主应用（仓库根目录）**：React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端，默认由 Shopify CLI 启动。
 - **Admin 后台（`admin/`）**：Express API（本地默认 `3099`）+ Vite React 前端（本地默认 `5174`）。它有独立的 `package.json`、依赖和构建流程。
 - **Web Pixel 扩展（`extensions/ciwi-spark-web-pixel/`）**：采集 Shopify analytics/custom events，经主应用 `/api/pixel-ingest` 上报。
-
+- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。测试模式写入 `testEventCode` + `storefrontTrackUrl`，店面浏览/加购会双发 Events API 到 Test Events；测完须删除。
 重要边界：
 
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
@@ -48,7 +48,7 @@ Spark/
 │  ├─ routes.ts               @react-router/fs-routes 入口
 │  └─ root.tsx                React Router 根组件
 ├─ admin/                     独立 Express + Vite 管理后台
-├─ extensions/                Shopify 扩展，目前为 Web Pixel
+├─ extensions/                Shopify 扩展：Web Pixel + TikTok Theme App Embed
 ├─ prisma/                    schema、迁移和计费种子 SQL
 ├─ tests/                     与 app/ 大体镜像的 Vitest 测试
 ├─ scripts/                   运维、Turso、部署、飞书文档等脚本
