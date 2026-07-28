@@ -5,16 +5,24 @@ import {
   setGscCredential,
 } from "../server/googleSearchConsole/gscCredentials.server";
 import {
-  querySearchAnalytics,
+  type GscDimension,
+  type GscDimensionRow,
+  type GscSummary,
+  querySearchAnalyticsByDimension,
+  querySummaryAndTimeSeries,
   refreshGscAccessToken,
-  type GscSearchAnalyticsResult,
 } from "../server/googleSearchConsole/gscApi.server";
 
 export type GscStatusOk = {
   ok: true;
   connected: true;
   siteUrl: string;
-  analytics: GscSearchAnalyticsResult;
+  startDate: string;
+  endDate: string;
+  summary: GscSummary;
+  timeSeries: GscDimensionRow[];
+  rows: GscDimensionRow[];
+  dimension: GscDimension;
 };
 
 export type GscStatusNotConnected = {
@@ -35,10 +43,25 @@ function parseDays(raw: string | null): number {
   return 7;
 }
 
+const VALID_DIMENSIONS: GscDimension[] = [
+  "query",
+  "page",
+  "country",
+  "device",
+  "searchAppearance",
+  "date",
+];
+
+function parseDimension(raw: string | null): GscDimension {
+  if (raw && VALID_DIMENSIONS.includes(raw as GscDimension)) return raw as GscDimension;
+  return "query";
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const days = parseDays(url.searchParams.get("days"));
+  const dimension = parseDimension(url.searchParams.get("dimension"));
 
   const credential = await getGscCredential(session.shop);
   if (!credential) {
@@ -48,23 +71,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let accessToken = credential.accessToken;
 
   try {
-    // 尝试用 refresh token 获取最新 access token（防止过期）
     if (credential.refreshToken) {
       try {
         accessToken = await refreshGscAccessToken(credential.refreshToken);
         await setGscCredential(session.shop, { ...credential, accessToken });
       } catch {
-        // refresh 失败时继续用旧 token 尝试；若查询也失败再上报
+        // refresh 失败时继续用旧 token 尝试
       }
     }
 
-    const analytics = await querySearchAnalytics(accessToken, credential.siteUrl, days);
+    const [summaryData, dimensionData] = await Promise.all([
+      querySummaryAndTimeSeries(accessToken, credential.siteUrl, days),
+      querySearchAnalyticsByDimension(accessToken, credential.siteUrl, days, dimension),
+    ]);
 
     return Response.json({
       ok: true,
       connected: true,
       siteUrl: credential.siteUrl,
-      analytics,
+      startDate: summaryData.startDate,
+      endDate: summaryData.endDate,
+      summary: summaryData.summary,
+      timeSeries: summaryData.timeSeries,
+      rows: dimensionData.rows,
+      dimension,
     } satisfies GscStatusOk);
   } catch (e) {
     return Response.json(

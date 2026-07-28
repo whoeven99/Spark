@@ -9,14 +9,11 @@ import {
   pageContentStyle,
 } from "./pageUiStyles";
 import type { GscSettingsLoaderData } from "../app.settings.google-search-console";
-import type { GscStatusResponse } from "../api.gsc.status";
+import { GscPerformanceView } from "./GscPerformanceView";
 
 type AuthUrlResponse = { ok: true; authUrl: string } | { ok: false; error: string };
 type SiteSelectResponse = { ok: true; siteUrl: string } | { ok: false; error: string };
 type DisconnectResponse = { ok: true } | { ok: false; error: string };
-
-type Days = 7 | 28 | 90;
-
 type AuthBanner = { tone: "ok" | "error"; text: string };
 
 const GSC_OAUTH_QUERY_KEYS = ["gscAuth", "reason", "errorCode", "siteUrl"] as const;
@@ -37,15 +34,7 @@ function cleanGscOAuthParams() {
   window.history.replaceState(null, "", `${window.location.pathname}${nextSearch}`);
 }
 
-function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatPosition(value: number): string {
-  return value.toFixed(1);
-}
-
-// ─── Connection panel ─────────────────────────────────────────────────────────
+// ─── Connection panels ─────────────────────────────────────────────────────────
 
 function NotConnectedPanel({ onConnect }: { onConnect: () => void }) {
   const { t } = useTranslation();
@@ -84,10 +73,14 @@ function NotConnectedPanel({ onConnect }: { onConnect: () => void }) {
           </svg>
         </div>
         <div>
-          <div style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}>
+          <div
+            style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}
+          >
             {t("gsc.title")}
           </div>
-          <div style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+          <div
+            style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary, marginTop: 2 }}
+          >
             {t("gsc.notConnectedHint")}
           </div>
         </div>
@@ -115,8 +108,6 @@ function NotConnectedPanel({ onConnect }: { onConnect: () => void }) {
   );
 }
 
-// ─── Site selection panel ─────────────────────────────────────────────────────
-
 function SiteSelectPanel({
   sites,
   onSelect,
@@ -141,7 +132,9 @@ function SiteSelectPanel({
         gap: "1rem",
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}>
+      <div
+        style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}
+      >
         {t("gsc.selectSiteTitle")}
       </div>
       <p style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary, margin: 0 }}>
@@ -186,8 +179,6 @@ function SiteSelectPanel({
   );
 }
 
-// ─── Connected status bar ─────────────────────────────────────────────────────
-
 function ConnectedBar({
   siteUrl,
   onDisconnect,
@@ -204,7 +195,7 @@ function ConnectedBar({
         background: pageColorTokens.surface,
         border: `1px solid ${pageColorTokens.border}`,
         borderRadius: pageColorTokens.radiusCard,
-        padding: "1rem 1.25rem",
+        padding: "0.85rem 1.25rem",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -222,7 +213,9 @@ function ConnectedBar({
             flexShrink: 0,
           }}
         />
-        <span style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textPrimary }}>
+        <span
+          style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textPrimary }}
+        >
           {siteUrl}
         </span>
         <span
@@ -256,139 +249,7 @@ function ConnectedBar({
   );
 }
 
-// ─── Analytics table ──────────────────────────────────────────────────────────
-
-function AnalyticsTable({ data }: { data: GscStatusResponse }) {
-  const { t } = useTranslation();
-
-  if (!data.ok) {
-    return (
-      <div
-        style={{
-          padding: "1rem",
-          background: pageColorTokens.surface,
-          border: `1px solid ${pageColorTokens.border}`,
-          borderRadius: pageColorTokens.radiusCard,
-          color: pageColorTokens.textSecondary,
-          fontSize: "0.875rem",
-        }}
-      >
-        {t("gsc.dataError")}: {data.error}
-      </div>
-    );
-  }
-
-  if (!data.connected) return null;
-
-  const { rows, startDate, endDate } = data.analytics;
-
-  const thStyle: React.CSSProperties = {
-    padding: "0.5rem 0.75rem",
-    textAlign: "left",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    color: pageColorTokens.textSecondary,
-    borderBottom: `1px solid ${pageColorTokens.border}`,
-    whiteSpace: "nowrap",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "0.5rem 0.75rem",
-    fontSize: "0.85rem",
-    color: pageColorTokens.textPrimary,
-    borderBottom: `1px solid ${pageColorTokens.divider}`,
-  };
-  const tdNumStyle: React.CSSProperties = { ...tdStyle, textAlign: "right" };
-
-  return (
-    <div
-      style={{
-        background: pageColorTokens.surface,
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: pageColorTokens.radiusCard,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          padding: "0.75rem 1.25rem",
-          fontSize: "0.82rem",
-          color: pageColorTokens.textSecondary,
-          borderBottom: `1px solid ${pageColorTokens.divider}`,
-        }}
-      >
-        {startDate} – {endDate}
-      </div>
-      {rows.length === 0 ? (
-        <div
-          style={{
-            padding: "2rem",
-            textAlign: "center",
-            color: pageColorTokens.textSecondary,
-            fontSize: "0.875rem",
-          }}
-        >
-          {t("gsc.noData")}
-        </div>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>{t("gsc.colQuery")}</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>{t("gsc.colClicks")}</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>{t("gsc.colImpressions")}</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>{t("gsc.colCtr")}</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>{t("gsc.colPosition")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={i} style={{ background: i % 2 === 1 ? pageColorTokens.surfaceEvenRow : undefined }}>
-                  <td style={tdStyle}>{row.query}</td>
-                  <td style={tdNumStyle}>{row.clicks.toLocaleString()}</td>
-                  <td style={tdNumStyle}>{row.impressions.toLocaleString()}</td>
-                  <td style={tdNumStyle}>{formatPercent(row.ctr)}</td>
-                  <td style={tdNumStyle}>{formatPosition(row.position)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Day range selector ───────────────────────────────────────────────────────
-
-function DaysSelector({ days, onChange }: { days: Days; onChange: (d: Days) => void }) {
-  const { t } = useTranslation();
-  const options: Days[] = [7, 28, 90];
-  return (
-    <div style={{ display: "flex", gap: "0.5rem" }}>
-      {options.map((d) => (
-        <button
-          key={d}
-          onClick={() => onChange(d)}
-          style={{
-            padding: "0.35rem 0.85rem",
-            borderRadius: 20,
-            border: `1px solid ${days === d ? "#4285f4" : pageColorTokens.border}`,
-            background: days === d ? "#e8f0fe" : "transparent",
-            color: days === d ? "#4285f4" : pageColorTokens.textSecondary,
-            fontWeight: days === d ? 600 : 400,
-            fontSize: "0.82rem",
-            cursor: "pointer",
-          }}
-        >
-          {t("gsc.days", { count: d })}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function GoogleSearchConsolePage() {
   const { t } = useTranslation();
@@ -400,23 +261,16 @@ export function GoogleSearchConsolePage() {
   const [siteUrl, setSiteUrl] = useState<string | null>(loaderData.siteUrl);
   const [hasPending, setHasPending] = useState(loaderData.hasPending);
   const [pendingSites, setPendingSites] = useState(loaderData.pendingSites);
-  const [days, setDays] = useState<Days>(7);
   const [authBanner, setAuthBanner] = useState<AuthBanner | null>(null);
 
   const authFetcher = useFetcher<AuthUrlResponse>();
   const siteFetcher = useFetcher<SiteSelectResponse>();
   const disconnectFetcher = useFetcher<DisconnectResponse>();
-  const statusFetcher = useFetcher<GscStatusResponse>();
 
-  const statusFetcherRef = useRef(statusFetcher);
-  statusFetcherRef.current = statusFetcher;
-
-  // URL params from OAuth callback
   const gscAuth = searchParams.get("gscAuth");
 
   useEffect(() => {
     if (!gscAuth) return;
-
     const reason = searchParams.get("reason");
     const errorCode = searchParams.get("errorCode");
 
@@ -443,24 +297,15 @@ export function GoogleSearchConsolePage() {
     cleanGscOAuthParams();
   }, [gscAuth, searchParams, t]);
 
-  // Fetch analytics when connected
-  useEffect(() => {
-    if (connected && siteUrl) {
-      statusFetcherRef.current.load(`/api/gsc/status?days=${days}`);
-    }
-  }, [connected, siteUrl, days]);
-
-  // Reload page data after site selection
   useEffect(() => {
     if (siteFetcher.data?.ok) {
       setConnected(true);
-      setSiteUrl(siteFetcher.data.siteUrl);
+      setSiteUrl((siteFetcher.data as { ok: true; siteUrl: string }).siteUrl);
       setHasPending(false);
       setPendingSites([]);
     }
   }, [siteFetcher.data]);
 
-  // Reload after disconnect
   useEffect(() => {
     if (disconnectFetcher.data?.ok) {
       setConnected(false);
@@ -476,23 +321,23 @@ export function GoogleSearchConsolePage() {
   }, [authFetcher]);
 
   useEffect(() => {
-    if (authFetcher.data?.ok && authFetcher.data.authUrl) {
-      window.open(authFetcher.data.authUrl, "_top");
+    if (authFetcher.data?.ok && (authFetcher.data as { ok: true; authUrl: string }).authUrl) {
+      window.open((authFetcher.data as { ok: true; authUrl: string }).authUrl, "_top");
     } else if (authFetcher.data && !authFetcher.data.ok) {
-      setAuthBanner({ tone: "error", text: authFetcher.data.error });
+      setAuthBanner({
+        tone: "error",
+        text: (authFetcher.data as { ok: false; error: string }).error,
+      });
     }
   }, [authFetcher.data]);
 
   const handleSiteSelect = useCallback(
     (selectedSiteUrl: string) => {
-      siteFetcher.submit(
-        JSON.stringify({ siteUrl: selectedSiteUrl }),
-        {
-          method: "POST",
-          action: "/api/gsc/sites",
-          encType: "application/json",
-        },
-      );
+      siteFetcher.submit(JSON.stringify({ siteUrl: selectedSiteUrl }), {
+        method: "POST",
+        action: "/api/gsc/sites",
+        encType: "application/json",
+      });
     },
     [siteFetcher],
   );
@@ -504,7 +349,6 @@ export function GoogleSearchConsolePage() {
   const connectingAuth = authFetcher.state === "loading";
   const disconnecting = disconnectFetcher.state !== "idle";
   const selectingLoading = siteFetcher.state !== "idle";
-  const analyticsLoading = statusFetcher.state !== "idle";
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -525,7 +369,9 @@ export function GoogleSearchConsolePage() {
                   ? pageColorTokens.brandGreenLight
                   : pageColorTokens.criticalBg,
               border: `1px solid ${
-                authBanner.tone === "ok" ? pageColorTokens.brandGreenDeep : pageColorTokens.critical
+                authBanner.tone === "ok"
+                  ? pageColorTokens.brandGreenDeep
+                  : pageColorTokens.critical
               }`,
               borderRadius: 8,
               fontSize: "0.875rem",
@@ -540,9 +386,7 @@ export function GoogleSearchConsolePage() {
           </div>
         )}
 
-        {!connected && !hasPending && (
-          <NotConnectedPanel onConnect={handleConnect} />
-        )}
+        {!connected && !hasPending && <NotConnectedPanel onConnect={handleConnect} />}
 
         {hasPending && !connected && (
           <SiteSelectPanel
@@ -559,45 +403,7 @@ export function GoogleSearchConsolePage() {
               onDisconnect={handleDisconnect}
               disconnecting={disconnecting}
             />
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: "0.5rem",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  color: pageColorTokens.textPrimary,
-                }}
-              >
-                {t("gsc.topQueriesTitle")}
-              </div>
-              <DaysSelector days={days} onChange={setDays} />
-            </div>
-
-            {analyticsLoading ? (
-              <div
-                style={{
-                  padding: "2rem",
-                  textAlign: "center",
-                  color: pageColorTokens.textSecondary,
-                  fontSize: "0.875rem",
-                  background: pageColorTokens.surface,
-                  border: `1px solid ${pageColorTokens.border}`,
-                  borderRadius: pageColorTokens.radiusCard,
-                }}
-              >
-                {t("gsc.loadingData")}
-              </div>
-            ) : statusFetcher.data ? (
-              <AnalyticsTable data={statusFetcher.data} />
-            ) : null}
+            <GscPerformanceView />
           </>
         )}
 

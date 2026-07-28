@@ -6,16 +6,27 @@ export type GscSite = {
   permissionLevel: string;
 };
 
-export type GscQueryRow = {
-  query: string;
+export type GscDimension = "query" | "page" | "country" | "device" | "searchAppearance" | "date";
+
+export type GscDimensionRow = {
+  key: string;
   clicks: number;
   impressions: number;
   ctr: number;
   position: number;
 };
 
+export type GscSummary = {
+  totalClicks: number;
+  totalImpressions: number;
+  avgCtr: number;
+  avgPosition: number;
+};
+
+// Backward compatibility aliases
+export type GscQueryRow = GscDimensionRow & { query: string };
 export type GscSearchAnalyticsResult = {
-  rows: GscQueryRow[];
+  rows: GscDimensionRow[];
   startDate: string;
   endDate: string;
 };
@@ -75,14 +86,19 @@ function buildDateRange(days: number): { startDate: string; endDate: string } {
   return { startDate: fmt(startDate), endDate: fmt(endDate) };
 }
 
-/** 查询站点的搜索分析数据，按查询词分组，返回 top N 行。 */
-export async function querySearchAnalytics(
+type RawGscRow = {
+  keys?: string[];
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+  position?: number;
+};
+
+async function doSearchAnalyticsQuery(
   accessToken: string,
   siteUrl: string,
-  days: number,
-  rowLimit = 25,
-): Promise<GscSearchAnalyticsResult> {
-  const { startDate, endDate } = buildDateRange(days);
+  body: object,
+): Promise<RawGscRow[]> {
   const encodedSite = encodeURIComponent(siteUrl);
   try {
     const response = await fetch(
@@ -93,37 +109,96 @@ export async function querySearchAnalytics(
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          startDate,
-          endDate,
-          dimensions: ["query"],
-          rowLimit,
-          orderBy: [{ fieldName: "clicks", sortOrder: "DESCENDING" }],
-        }),
+        body: JSON.stringify(body),
       },
     );
     const json = (await response.json().catch(() => ({}))) as {
-      rows?: Array<{
-        keys?: string[];
-        clicks?: number;
-        impressions?: number;
-        ctr?: number;
-        position?: number;
-      }>;
+      rows?: RawGscRow[];
       error?: { message?: string };
     };
     if (!response.ok) {
       throw new Error(json.error?.message || `HTTP ${response.status}`);
     }
-    const rows: GscQueryRow[] = (json.rows ?? []).map((r) => ({
-      query: r.keys?.[0] ?? "",
-      clicks: r.clicks ?? 0,
-      impressions: r.impressions ?? 0,
-      ctr: r.ctr ?? 0,
-      position: r.position ?? 0,
-    }));
-    return { rows, startDate, endDate };
+    return json.rows ?? [];
   } catch (e) {
     throw new Error(formatOutboundNetworkError(e));
   }
+}
+
+/** 按指定维度查询搜索分析数据。 */
+export async function querySearchAnalyticsByDimension(
+  accessToken: string,
+  siteUrl: string,
+  days: number,
+  dimension: GscDimension,
+  rowLimit = 25,
+): Promise<{ rows: GscDimensionRow[]; startDate: string; endDate: string }> {
+  const { startDate, endDate } = buildDateRange(days);
+  const rawRows = await doSearchAnalyticsQuery(accessToken, siteUrl, {
+    startDate,
+    endDate,
+    dimensions: [dimension],
+    rowLimit,
+    orderBy:
+      dimension === "date"
+        ? [{ fieldName: "date", sortOrder: "ASCENDING" }]
+        : [{ fieldName: "clicks", sortOrder: "DESCENDING" }],
+  });
+  const rows: GscDimensionRow[] = rawRows.map((r) => ({
+    key: r.keys?.[0] ?? "",
+    clicks: r.clicks ?? 0,
+    impressions: r.impressions ?? 0,
+    ctr: r.ctr ?? 0,
+    position: r.position ?? 0,
+  }));
+  return { rows, startDate, endDate };
+}
+
+/** 查询汇总指标与按日时序数据（用于图表）。 */
+export async function querySummaryAndTimeSeries(
+  accessToken: string,
+  siteUrl: string,
+  days: number,
+): Promise<{ summary: GscSummary; timeSeries: GscDimensionRow[]; startDate: string; endDate: string }> {
+  const { startDate, endDate } = buildDateRange(days);
+  const rawRows = await doSearchAnalyticsQuery(accessToken, siteUrl, {
+    startDate,
+    endDate,
+    dimensions: ["date"],
+    rowLimit: 90,
+    orderBy: [{ fieldName: "date", sortOrder: "ASCENDING" }],
+  });
+  const timeSeries: GscDimensionRow[] = rawRows.map((r) => ({
+    key: r.keys?.[0] ?? "",
+    clicks: r.clicks ?? 0,
+    impressions: r.impressions ?? 0,
+    ctr: r.ctr ?? 0,
+    position: r.position ?? 0,
+  }));
+  const totalClicks = timeSeries.reduce((s, r) => s + r.clicks, 0);
+  const totalImpressions = timeSeries.reduce((s, r) => s + r.impressions, 0);
+  const avgCtr =
+    timeSeries.length > 0
+      ? timeSeries.reduce((s, r) => s + r.ctr, 0) / timeSeries.length
+      : 0;
+  const avgPosition =
+    timeSeries.length > 0
+      ? timeSeries.reduce((s, r) => s + r.position, 0) / timeSeries.length
+      : 0;
+  return {
+    summary: { totalClicks, totalImpressions, avgCtr, avgPosition },
+    timeSeries,
+    startDate,
+    endDate,
+  };
+}
+
+/** 兼容旧版调用：按 query 维度查询，返回旧格式结果。 */
+export async function querySearchAnalytics(
+  accessToken: string,
+  siteUrl: string,
+  days: number,
+  rowLimit = 25,
+): Promise<GscSearchAnalyticsResult> {
+  return querySearchAnalyticsByDimension(accessToken, siteUrl, days, "query", rowLimit);
 }
