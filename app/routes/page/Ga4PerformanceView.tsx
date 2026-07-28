@@ -561,6 +561,20 @@ export function Ga4PerformanceView() {
               {dateRange}
             </span>
           )}
+          {displayData && displayData.propertyCount > 1 && (
+            <span
+              style={{
+                fontSize: "0.72rem",
+                color: "#2e7d32",
+                background: "#e8f5e9",
+                border: "1px solid rgba(52,168,83,0.25)",
+                borderRadius: 999,
+                padding: "2px 8px",
+              }}
+            >
+              {t("ga4.mergedProperties", { count: displayData.propertyCount })}
+            </span>
+          )}
           <span style={{ fontSize: "0.72rem", color: pageColorTokens.textSecondary }}>
             {t("ga4.dataDelayHint")}
           </span>

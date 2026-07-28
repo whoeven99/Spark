@@ -3,13 +3,17 @@ import prisma from "../../db.server";
 const GA4_PLATFORM = "google_analytics";
 const GA4_PENDING_PLATFORM = "google_analytics_pending";
 
+export type Ga4PropertyRef = {
+  propertyId: string;
+  propertyName: string;
+};
+
 export type Ga4Credential = {
   accessToken: string;
   refreshToken?: string;
   clientId?: string;
   clientSecret?: string;
-  propertyId: string;
-  propertyName: string;
+  properties: Ga4PropertyRef[];
   updatedAt: string;
 };
 
@@ -56,23 +60,39 @@ async function deletePlatformCredential(shop: string, platform: string): Promise
 
 // ─── GA4 confirmed credential ──────────────────────────────────────────────────
 
+function parseGa4PropertyRefs(data: Record<string, unknown>): Ga4PropertyRef[] | null {
+  if (Array.isArray(data.properties)) {
+    const properties = (data.properties as Array<Record<string, unknown>>)
+      .map((item) => ({
+        propertyId: String(item.propertyId ?? ""),
+        propertyName: String(item.propertyName ?? ""),
+      }))
+      .filter((item) => item.propertyId && item.propertyName);
+    return properties.length > 0 ? properties : null;
+  }
+
+  if (typeof data.propertyId === "string" && typeof data.propertyName === "string") {
+    return [{ propertyId: data.propertyId, propertyName: data.propertyName }];
+  }
+
+  return null;
+}
+
 export async function getGa4Credential(shop: string): Promise<Ga4Credential | null> {
   const row = await readPlatformCredential(shop, GA4_PLATFORM);
   if (!row) return null;
   const d = row.data;
-  if (
-    typeof d.accessToken !== "string" ||
-    typeof d.propertyId !== "string" ||
-    typeof d.propertyName !== "string"
-  )
-    return null;
+  if (typeof d.accessToken !== "string") return null;
+
+  const properties = parseGa4PropertyRefs(d);
+  if (!properties) return null;
+
   return {
     accessToken: d.accessToken,
     refreshToken: typeof d.refreshToken === "string" ? d.refreshToken : undefined,
     clientId: typeof d.clientId === "string" ? d.clientId : undefined,
     clientSecret: typeof d.clientSecret === "string" ? d.clientSecret : undefined,
-    propertyId: d.propertyId,
-    propertyName: d.propertyName,
+    properties,
     updatedAt: row.updatedAt.toISOString(),
   };
 }

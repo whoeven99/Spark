@@ -3,21 +3,22 @@ import { authenticate } from "../shopify.server";
 import {
   getGa4Credential,
   setGa4Credential,
+  type Ga4PropertyRef,
 } from "../server/googleAnalytics/ga4Credentials.server";
 import {
   type Ga4Dimension,
   type Ga4Row,
   type Ga4Summary,
-  queryGa4ByDimension,
-  queryGa4SummaryAndTimeSeries,
+  queryGa4MergedByDimension,
+  queryGa4MergedSummaryAndTimeSeries,
   refreshGa4AccessToken,
 } from "../server/googleAnalytics/ga4Api.server";
 
 export type Ga4StatusOk = {
   ok: true;
   connected: true;
-  propertyId: string;
-  propertyName: string;
+  properties: Ga4PropertyRef[];
+  propertyCount: number;
   startDate: string;
   endDate: string;
   summary: Ga4Summary;
@@ -64,11 +65,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dimension = parseDimension(url.searchParams.get("dimension"));
 
   const credential = await getGa4Credential(session.shop);
-  if (!credential) {
+  if (!credential || credential.properties.length === 0) {
     return Response.json({ ok: true, connected: false } satisfies Ga4StatusNotConnected);
   }
 
   let accessToken = credential.accessToken;
+  const propertyIds = credential.properties.map((property) => property.propertyId);
 
   try {
     if (credential.refreshToken) {
@@ -81,15 +83,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     const [{ summary, timeSeries, startDate, endDate }, { rows }] = await Promise.all([
-      queryGa4SummaryAndTimeSeries(accessToken, credential.propertyId, days),
-      queryGa4ByDimension(accessToken, credential.propertyId, days, dimension),
+      queryGa4MergedSummaryAndTimeSeries(accessToken, propertyIds, days),
+      queryGa4MergedByDimension(accessToken, propertyIds, days, dimension),
     ]);
 
     return Response.json({
       ok: true,
       connected: true,
-      propertyId: credential.propertyId,
-      propertyName: credential.propertyName,
+      properties: credential.properties,
+      propertyCount: credential.properties.length,
       startDate,
       endDate,
       summary,

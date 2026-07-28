@@ -13,7 +13,7 @@ import { Ga4PerformanceView } from "./Ga4PerformanceView";
 
 type AuthUrlResponse = { ok: true; authUrl: string } | { ok: false; error: string };
 type PropertySelectResponse =
-  | { ok: true; propertyId: string; propertyName: string }
+  | { ok: true; properties: Array<{ propertyId: string; propertyName: string }> }
   | { ok: false; error: string };
 type DisconnectResponse = { ok: true } | { ok: false; error: string };
 type AuthBanner = { tone: "ok" | "error"; text: string };
@@ -106,11 +106,29 @@ function PropertySelectPanel({
   loading,
 }: {
   properties: Array<{ propertyId: string; propertyName: string; accountName: string }>;
-  onSelect: (propertyId: string) => void;
+  onSelect: (propertyIds: string[]) => void;
   loading: boolean;
 }) {
   const { t } = useTranslation();
-  const [selected, setSelected] = useState(properties[0]?.propertyId ?? "");
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    () => properties.map((property) => property.propertyId),
+  );
+
+  const toggleProperty = useCallback((propertyId: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(propertyId)
+        ? prev.filter((id) => id !== propertyId)
+        : [...prev, propertyId],
+    );
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelectedIds((prev) =>
+      prev.length === properties.length ? [] : properties.map((property) => property.propertyId),
+    );
+  }, [properties]);
+
+  const allSelected = selectedIds.length === properties.length;
 
   return (
     <div
@@ -130,36 +148,82 @@ function PropertySelectPanel({
       <p style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary, margin: 0 }}>
         {t("ga4.selectPropertyHint")}
       </p>
-      <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
+
+      <button
+        type="button"
+        onClick={toggleAll}
         style={{
-          padding: "0.5rem 0.65rem",
+          alignSelf: "flex-start",
+          padding: "0.35rem 0.75rem",
           borderRadius: 8,
-          border: `1px solid ${pageColorTokens.borderInput}`,
-          fontSize: "0.875rem",
-          maxWidth: 400,
+          border: `1px solid ${pageColorTokens.border}`,
+          background: "transparent",
+          color: pageColorTokens.textSecondary,
+          fontSize: "0.78rem",
+          fontWeight: 600,
+          cursor: "pointer",
         }}
       >
-        {properties.map((p) => (
-          <option key={p.propertyId} value={p.propertyId}>
-            {p.propertyName} ({p.accountName})
-          </option>
-        ))}
-      </select>
+        {allSelected ? t("ga4.deselectAll") : t("ga4.selectAll")}
+      </button>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.5rem",
+          maxHeight: 280,
+          overflowY: "auto",
+        }}
+      >
+        {properties.map((property) => {
+          const checked = selectedIds.includes(property.propertyId);
+          return (
+            <label
+              key={property.propertyId}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "0.65rem",
+                padding: "0.65rem 0.75rem",
+                borderRadius: 8,
+                border: `1px solid ${checked ? "rgba(52,168,83,0.35)" : pageColorTokens.border}`,
+                background: checked ? "rgba(52,168,83,0.06)" : "transparent",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleProperty(property.propertyId)}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textPrimary }}>
+                  {property.propertyName}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                  {property.accountName} · {property.propertyId}
+                </div>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
       <button
-        onClick={() => onSelect(selected)}
-        disabled={loading || !selected}
+        onClick={() => onSelect(selectedIds)}
+        disabled={loading || selectedIds.length === 0}
         style={{
           alignSelf: "flex-start",
           padding: "0.5rem 1.25rem",
           borderRadius: 8,
           border: "none",
-          background: loading ? pageColorTokens.surfaceMuted : "#34a853",
-          color: loading ? pageColorTokens.textSecondary : "#fff",
+          background: loading || selectedIds.length === 0 ? pageColorTokens.surfaceMuted : "#34a853",
+          color: loading || selectedIds.length === 0 ? pageColorTokens.textSecondary : "#fff",
           fontWeight: 600,
           fontSize: "0.875rem",
-          cursor: loading ? "not-allowed" : "pointer",
+          cursor: loading || selectedIds.length === 0 ? "not-allowed" : "pointer",
         }}
       >
         {loading ? t("ga4.confirming") : t("ga4.confirmBtn")}
@@ -169,17 +233,17 @@ function PropertySelectPanel({
 }
 
 function ConnectedHeader({
-  propertyName,
-  propertyId,
+  properties,
   onDisconnect,
   disconnecting,
 }: {
-  propertyName: string;
-  propertyId: string;
+  properties: Array<{ propertyId: string; propertyName: string }>;
   onDisconnect: () => void;
   disconnecting: boolean;
 }) {
   const { t } = useTranslation();
+  const singleProperty = properties.length === 1 ? properties[0] : null;
+
   return (
     <div
       style={{
@@ -194,7 +258,7 @@ function ConnectedHeader({
         padding: "1rem 1.25rem",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", minWidth: 0 }}>
         <div
           style={{
             padding: "0.3rem 0.75rem",
@@ -204,17 +268,44 @@ function ConnectedHeader({
             fontSize: "0.8rem",
             fontWeight: 700,
             border: "1px solid rgba(52,168,83,0.3)",
+            flexShrink: 0,
           }}
         >
           {t("ga4.connected")}
         </div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
-            {propertyName}
-          </div>
-          <div style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-            {propertyId}
-          </div>
+        <div style={{ minWidth: 0 }}>
+          {singleProperty ? (
+            <>
+              <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
+                {singleProperty.propertyName}
+              </div>
+              <div style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                {singleProperty.propertyId}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
+                {t("ga4.connectedMultiple", { count: properties.length })}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  marginTop: 6,
+                  fontSize: "0.78rem",
+                  color: pageColorTokens.textSecondary,
+                }}
+              >
+                {properties.map((property) => (
+                  <div key={property.propertyId}>
+                    {property.propertyName} · {property.propertyId}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
       <button
@@ -281,8 +372,7 @@ export function GoogleAnalyticsPage() {
   const loaderData = useLoaderData<Ga4SettingsLoaderData>();
 
   const [connected, setConnected] = useState(loaderData.connected);
-  const [propertyId, setPropertyId] = useState(loaderData.propertyId);
-  const [propertyName, setPropertyName] = useState(loaderData.propertyName);
+  const [properties, setProperties] = useState(loaderData.properties);
   const [hasPending, setHasPending] = useState(loaderData.hasPending);
   const [pendingProperties, setPendingProperties] = useState(loaderData.pendingProperties);
   const [banner, setBanner] = useState<AuthBanner | null>(null);
@@ -306,6 +396,9 @@ export function GoogleAnalyticsPage() {
     if (ga4Auth === "success") {
       const name = searchParams.get("propertyName") ?? "";
       setBanner({ tone: "ok", text: t("ga4.authSuccess", { propertyName: name }) });
+      if (name) {
+        setConnected(true);
+      }
     } else if (ga4Auth === "cancelled") {
       setBanner({ tone: "error", text: t("ga4.authCancelled") });
     } else if (ga4Auth === "error") {
@@ -336,14 +429,20 @@ export function GoogleAnalyticsPage() {
   useEffect(() => {
     if (!propertySelectFetcher.data) return;
     if (propertySelectFetcher.data.ok) {
+      const selected = propertySelectFetcher.data.properties;
       setConnected(true);
-      setPropertyId(propertySelectFetcher.data.propertyId);
-      setPropertyName(propertySelectFetcher.data.propertyName);
+      setProperties(selected);
       setHasPending(false);
       setPendingProperties([]);
       setBanner({
         tone: "ok",
-        text: t("ga4.authSuccess", { propertyName: propertySelectFetcher.data.propertyName }),
+        text:
+          selected.length === 1
+            ? t("ga4.authSuccess", { propertyName: selected[0].propertyName })
+            : t("ga4.authSuccessMultiple", {
+                count: selected.length,
+                propertyNames: selected.map((property) => property.propertyName).join(", "),
+              }),
       });
     } else {
       setBanner({ tone: "error", text: propertySelectFetcher.data.error });
@@ -355,8 +454,7 @@ export function GoogleAnalyticsPage() {
     if (!disconnectFetcher.data) return;
     if (disconnectFetcher.data.ok) {
       setConnected(false);
-      setPropertyId(null);
-      setPropertyName(null);
+      setProperties([]);
       setHasPending(false);
       setPendingProperties([]);
     }
@@ -371,9 +469,9 @@ export function GoogleAnalyticsPage() {
   }, []);
 
   const handlePropertySelect = useCallback(
-    (selectedPropertyId: string) => {
+    (selectedPropertyIds: string[]) => {
       propertySelectFetcher.submit(
-        { propertyId: selectedPropertyId },
+        { propertyIds: selectedPropertyIds },
         { method: "POST", action: "/api/ga4/properties", encType: "application/json" },
       );
     },
@@ -418,11 +516,10 @@ export function GoogleAnalyticsPage() {
         />
       )}
 
-      {connected && propertyId && propertyName && (
+      {connected && properties.length > 0 && (
         <>
           <ConnectedHeader
-            propertyId={propertyId}
-            propertyName={propertyName}
+            properties={properties}
             onDisconnect={handleDisconnect}
             disconnecting={isDisconnecting}
           />

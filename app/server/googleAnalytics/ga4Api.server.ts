@@ -245,3 +245,88 @@ export async function queryGa4ByDimension(
 
   return { rows, startDate, endDate };
 }
+
+// ─── Multi-property merge ────────────────────────────────────────────────────────
+
+export function mergeGa4Summaries(summaries: Ga4Summary[]): Ga4Summary {
+  return summaries.reduce(
+    (acc, summary) => ({
+      totalUsers: acc.totalUsers + summary.totalUsers,
+      totalSessions: acc.totalSessions + summary.totalSessions,
+      totalPageViews: acc.totalPageViews + summary.totalPageViews,
+      totalRevenue: acc.totalRevenue + summary.totalRevenue,
+    }),
+    { totalUsers: 0, totalSessions: 0, totalPageViews: 0, totalRevenue: 0 },
+  );
+}
+
+export function mergeGa4Rows(rowsList: Ga4Row[][]): Ga4Row[] {
+  const map = new Map<string, Ga4Row>();
+  for (const rows of rowsList) {
+    for (const row of rows) {
+      const existing = map.get(row.key);
+      if (existing) {
+        map.set(row.key, {
+          key: row.key,
+          users: existing.users + row.users,
+          sessions: existing.sessions + row.sessions,
+          pageViews: existing.pageViews + row.pageViews,
+          revenue: existing.revenue + row.revenue,
+        });
+      } else {
+        map.set(row.key, { ...row });
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+export function mergeGa4TimeSeries(seriesList: Ga4Row[][]): Ga4Row[] {
+  return mergeGa4Rows(seriesList).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+export async function queryGa4MergedSummaryAndTimeSeries(
+  accessToken: string,
+  propertyIds: string[],
+  days: number,
+): Promise<{
+  summary: Ga4Summary;
+  timeSeries: Ga4Row[];
+  startDate: string;
+  endDate: string;
+}> {
+  const results = await Promise.all(
+    propertyIds.map((propertyId) => queryGa4SummaryAndTimeSeries(accessToken, propertyId, days)),
+  );
+  return {
+    summary: mergeGa4Summaries(results.map((result) => result.summary)),
+    timeSeries: mergeGa4TimeSeries(results.map((result) => result.timeSeries)),
+    startDate: results[0]?.startDate ?? "",
+    endDate: results[0]?.endDate ?? "",
+  };
+}
+
+export async function queryGa4MergedByDimension(
+  accessToken: string,
+  propertyIds: string[],
+  days: number,
+  dimension: Ga4Dimension,
+  rowLimit = 25,
+): Promise<{ rows: Ga4Row[]; startDate: string; endDate: string }> {
+  const results = await Promise.all(
+    propertyIds.map((propertyId) =>
+      queryGa4ByDimension(accessToken, propertyId, days, dimension, rowLimit),
+    ),
+  );
+  let rows = mergeGa4Rows(results.map((result) => result.rows));
+  if (dimension === "date") {
+    rows = rows.sort((a, b) => a.key.localeCompare(b.key));
+  } else {
+    rows = rows.sort((a, b) => b.users - a.users).slice(0, rowLimit);
+  }
+  return {
+    rows,
+    startDate: results[0]?.startDate ?? "",
+    endDate: results[0]?.endDate ?? "",
+  };
+}

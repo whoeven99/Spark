@@ -78,8 +78,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         refreshToken: tokens.refreshToken,
         clientId,
         clientSecret,
-        propertyId: properties[0].propertyId,
-        propertyName: properties[0].propertyName,
+        properties: [
+          {
+            propertyId: properties[0].propertyId,
+            propertyName: properties[0].propertyName,
+          },
+        ],
       });
       return appRedirect(request, shop, host, appOrigin, {
         ga4Auth: "success",
