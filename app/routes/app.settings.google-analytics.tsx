@@ -9,7 +9,7 @@ import { GoogleAnalyticsPage } from "./page/GoogleAnalyticsPage";
 
 export type Ga4SettingsLoaderData = {
   connected: boolean;
-  properties: Array<{ propertyId: string; propertyName: string }>;
+  properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   hasPending: boolean;
   pendingProperties: Array<{ propertyId: string; propertyName: string; accountName: string; accountId?: string }>;
 };

@@ -43,7 +43,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!match) {
       return Response.json({ ok: false, error: "所选属性不在授权列表中" }, { status: 400 });
     }
-    chosen.push({ propertyId: match.propertyId, propertyName: match.propertyName });
+    chosen.push({
+      propertyId: match.propertyId,
+      propertyName: match.propertyName,
+      accountName: match.accountName,
+      accountId: match.accountId,
+    });
   }
 
   await setGa4Credential(session.shop, {

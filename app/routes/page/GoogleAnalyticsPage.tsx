@@ -13,7 +13,7 @@ import { Ga4PerformanceView } from "./Ga4PerformanceView";
 
 type AuthUrlResponse = { ok: true; authUrl: string } | { ok: false; error: string };
 type PropertySelectResponse =
-  | { ok: true; properties: Array<{ propertyId: string; propertyName: string }> }
+  | { ok: true; properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }> }
   | { ok: false; error: string };
 type DisconnectResponse = { ok: true } | { ok: false; error: string };
 type AuthBanner = { tone: "ok" | "error"; text: string };
@@ -318,51 +318,158 @@ function PropertySwitcher({
   activeId,
   onSelect,
 }: {
-  properties: Array<{ propertyId: string; propertyName: string }>;
+  properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   activeId: string;
   onSelect: (propertyId: string) => void;
 }) {
+  const { t } = useTranslation();
   if (properties.length <= 1) return null;
+
+  // 按 accountName 分组
+  const accountsMap = new Map<string, { name: string; id: string }>();
+  for (const p of properties) {
+    const key = p.accountName ?? "";
+    if (!accountsMap.has(key)) {
+      accountsMap.set(key, { name: p.accountName ?? "", id: p.accountId ?? "" });
+    }
+  }
+  const accounts = Array.from(accountsMap.values());
+  const hasMultipleAccounts = accounts.length > 1 || (accounts.length === 1 && accounts[0].name !== "");
+
+  const activeProperty = properties.find((p) => p.propertyId === activeId);
+  const [selectedAccount, setSelectedAccount] = useState<string>(
+    activeProperty?.accountName ?? accounts[0]?.name ?? "",
+  );
+
+  useEffect(() => {
+    const ap = properties.find((p) => p.propertyId === activeId);
+    if (ap) setSelectedAccount(ap.accountName ?? accounts[0]?.name ?? "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
+  const accountProperties = properties.filter(
+    (p) => (p.accountName ?? "") === selectedAccount,
+  );
+
+  const colHeaderStyle: React.CSSProperties = {
+    padding: "7px 14px",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase" as const,
+    color: pageColorTokens.textSecondary,
+    borderBottom: `1px solid ${pageColorTokens.border}`,
+    background: pageColorTokens.surfaceMuted,
+    flexShrink: 0,
+  };
+
   return (
     <div
       style={{
+        border: `1px solid ${pageColorTokens.border}`,
+        borderRadius: 10,
+        overflow: "hidden",
         display: "flex",
-        gap: 8,
-        flexWrap: "wrap",
-        padding: "0.5rem 0",
+        minHeight: 160,
+        maxHeight: 280,
+        background: pageColorTokens.surface,
       }}
     >
-      {properties.map((p) => {
-        const active = p.propertyId === activeId;
-        return (
-          <button
-            key={p.propertyId}
-            onClick={() => onSelect(p.propertyId)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "0.35rem 0.85rem",
-              borderRadius: 20,
-              border: `1px solid ${active ? "#34a853" : pageColorTokens.border}`,
-              background: active ? "#e8f5e9" : "transparent",
-              color: active ? "#2e7d32" : pageColorTokens.textSecondary,
-              fontWeight: active ? 700 : 400,
-              fontSize: "0.8rem",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {active && (
-              <span style={{ fontSize: "0.65rem", color: "#34a853" }}>●</span>
-            )}
-            <span>{p.propertyName}</span>
-            <span style={{ opacity: 0.55, fontSize: "0.72rem" }}>
-              {extractNumericId(p.propertyId)}
-            </span>
-          </button>
-        );
-      })}
+      {/* 左侧账号列表（多账号时显示） */}
+      {hasMultipleAccounts && (
+        <div
+          style={{
+            width: 220,
+            flexShrink: 0,
+            borderRight: `1px solid ${pageColorTokens.border}`,
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+          }}
+        >
+          <div style={colHeaderStyle}>{t("ga4.selectAccountLabel")}</div>
+          {accounts.map((account) => {
+            const active = account.name === selectedAccount;
+            return (
+              <div
+                key={account.name}
+                onClick={() => setSelectedAccount(account.name)}
+                style={{
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  borderLeft: `3px solid ${active ? "#34a853" : "transparent"}`,
+                  background: active ? "rgba(52,168,83,0.06)" : "transparent",
+                  userSelect: "none",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: active ? 700 : 500,
+                    fontSize: "0.875rem",
+                    color: active ? "#2e7d32" : pageColorTokens.textPrimary,
+                  }}
+                >
+                  {account.name || "—"}
+                </div>
+                {account.id && (
+                  <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                    {account.id}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 右侧媒体资源和应用 */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", minWidth: 0 }}>
+        <div style={colHeaderStyle}>{t("ga4.selectPropertyLabel")}</div>
+        {accountProperties.map((property) => {
+          const selected = property.propertyId === activeId;
+          const numId = extractNumericId(property.propertyId);
+          return (
+            <div
+              key={property.propertyId}
+              onClick={() => onSelect(property.propertyId)}
+              style={{
+                padding: "10px 14px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                borderLeft: `3px solid ${selected ? "#34a853" : "transparent"}`,
+                background: selected ? "rgba(52,168,83,0.06)" : "transparent",
+                userSelect: "none",
+              }}
+            >
+              <span style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontWeight: selected ? 700 : 500,
+                    fontSize: "0.875rem",
+                    color: selected ? "#2e7d32" : pageColorTokens.textPrimary,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {property.propertyName}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                  {numId}
+                </div>
+              </span>
+              {selected && (
+                <span style={{ color: "#34a853", fontWeight: 700, flexShrink: 0, fontSize: "1rem" }}>
+                  ✓
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -372,7 +479,7 @@ function ConnectedHeader({
   onDisconnect,
   disconnecting,
 }: {
-  properties: Array<{ propertyId: string; propertyName: string }>;
+  properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   onDisconnect: () => void;
   disconnecting: boolean;
 }) {

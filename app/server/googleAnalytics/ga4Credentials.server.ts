@@ -6,6 +6,8 @@ const GA4_PENDING_PLATFORM = "google_analytics_pending";
 export type Ga4PropertyRef = {
   propertyId: string;
   propertyName: string;
+  accountName?: string;
+  accountId?: string;
 };
 
 export type Ga4Credential = {
@@ -66,6 +68,8 @@ function parseGa4PropertyRefs(data: Record<string, unknown>): Ga4PropertyRef[] |
       .map((item) => ({
         propertyId: String(item.propertyId ?? ""),
         propertyName: String(item.propertyName ?? ""),
+        accountName: typeof item.accountName === "string" ? item.accountName : undefined,
+        accountId: typeof item.accountId === "string" ? item.accountId : undefined,
       }))
       .filter((item) => item.propertyId && item.propertyName);
     return properties.length > 0 ? properties : null;
