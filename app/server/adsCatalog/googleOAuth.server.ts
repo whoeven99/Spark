@@ -16,8 +16,9 @@ export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GMC_SCOPE = "https://www.googleapis.com/auth/content";
 export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 export const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
+export const GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
-export type OAuthFlow = "gmc" | "ads" | "ads_sandbox" | "gsc";
+export type OAuthFlow = "gmc" | "ads" | "ads_sandbox" | "gsc" | "ga4";
 
 export interface OAuthTokens {
   accessToken: string;
@@ -151,7 +152,7 @@ export function verifyOAuthState(
     };
     if (
       !payload.shop ||
-      (payload.flow !== "gmc" && payload.flow !== "ads" && payload.flow !== "ads_sandbox" && payload.flow !== "gsc")
+      (payload.flow !== "gmc" && payload.flow !== "ads" && payload.flow !== "ads_sandbox" && payload.flow !== "gsc" && payload.flow !== "ga4")
     ) {
       return null;
     }
@@ -177,7 +178,10 @@ export function buildAuthUrl(params: {
 }): string {
   const { clientId } = getGoogleOAuthClient();
   const scope =
-    params.flow === "gmc" ? GMC_SCOPE : params.flow === "gsc" ? GSC_SCOPE : ADS_SCOPE;
+    params.flow === "gmc" ? GMC_SCOPE :
+    params.flow === "gsc" ? GSC_SCOPE :
+    params.flow === "ga4" ? GA4_SCOPE :
+    ADS_SCOPE;
   const query = new URLSearchParams({
     client_id: clientId,
     redirect_uri: params.redirectUri,
@@ -412,6 +416,61 @@ export function buildGscOAuthStartUrl(params: {
   const state = createOAuthState(params.shop, "gsc", params.host ?? "", appOrigin);
   const authUrl = buildAuthUrl({
     flow: "gsc",
+    state,
+    redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
+    reauth: params.reauth,
+  });
+  return { ok: true, authUrl };
+}
+
+/** Google Analytics 4 OAuth 完成后跳回 GA4 设置页。 */
+export function buildGa4OAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/settings/google-analytics",
+    shop: params.shop,
+    request: params.request,
+    query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL("/app/settings/google-analytics", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
+}
+
+/** 在嵌入式 iframe 内通过 API 鉴权后生成 Google Analytics 4 授权 URL。 */
+export function buildGa4OAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  reauth?: boolean;
+}): { ok: true; authUrl: string } | { ok: false; error: string } {
+  const { clientId } = getGoogleOAuthClient();
+  if (!clientId) {
+    return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
+  }
+
+  const callbackPath = "/ads/google-analytics/callback";
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createOAuthState(params.shop, "ga4", params.host ?? "", appOrigin);
+  const authUrl = buildAuthUrl({
+    flow: "ga4",
     state,
     redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
     reauth: params.reauth,
