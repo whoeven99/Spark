@@ -325,7 +325,7 @@ export function GoogleAnalyticsPage() {
   // Handle auth URL response: redirect top-level to Google
   useEffect(() => {
     if (authUrlFetcher.data?.ok && authUrlFetcher.data.authUrl) {
-      window.top?.location.assign(authUrlFetcher.data.authUrl);
+      window.open(authUrlFetcher.data.authUrl, "_top");
     } else if (authUrlFetcher.data && !authUrlFetcher.data.ok) {
       setRedirecting(false);
       setBanner({ tone: "error", text: authUrlFetcher.data.error });
