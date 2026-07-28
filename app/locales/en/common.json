@@ -215,6 +215,8 @@
     "mergedProperties": "Merged from {{count}} properties",
     "confirmBtn": "Confirm",
     "confirming": "Confirming…",
+    "cancelBtn": "Cancel",
+    "reselectBtn": "Change property",
     "loadingData": "Loading data…",
     "noData": "No data available for this period",
     "dataError": "Failed to fetch data",

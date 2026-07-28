@@ -215,6 +215,8 @@
     "mergedProperties": "合并 {{count}} 个属性",
     "confirmBtn": "确认",
     "confirming": "确认中…",
+    "cancelBtn": "取消",
+    "reselectBtn": "重新选择属性",
     "loadingData": "加载数据中…",
     "noData": "该时间段内暂无数据",
     "dataError": "获取数据失败",

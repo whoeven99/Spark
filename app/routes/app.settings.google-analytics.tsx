@@ -10,6 +10,7 @@ import { GoogleAnalyticsPage } from "./page/GoogleAnalyticsPage";
 export type Ga4SettingsLoaderData = {
   connected: boolean;
   properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
+  allProperties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   hasPending: boolean;
   pendingProperties: Array<{ propertyId: string; propertyName: string; accountName: string; accountId?: string }>;
 };
@@ -24,6 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     connected: Boolean(credential?.properties.length),
     properties: credential?.properties ?? [],
+    allProperties: credential?.allProperties ?? [],
     hasPending: Boolean(pending),
     pendingProperties: pending?.properties ?? [],
   } satisfies Ga4SettingsLoaderData;

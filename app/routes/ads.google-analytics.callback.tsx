@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import {
   buildGa4OAuthReturnUrl,
+  buildGa4OAuthPopupCloseHtml,
   exchangeCodeForTokens,
   getGoogleOAuthClient,
   getRedirectUri,
@@ -27,6 +28,12 @@ function appRedirect(
   return redirect(buildGa4OAuthReturnUrl({ shop, host, appOrigin, query: params, request }));
 }
 
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildGa4OAuthPopupCloseHtml(params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 function oauthStateErrorResponse(): Response {
   return new Response(
     "Google OAuth state 无效或已过期。请关闭此页，从 Shopify 后台重新打开应用后再试。",
@@ -44,16 +51,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified || verified.flow !== "ga4") {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin } = verified;
+  const { shop, host, appOrigin, popup } = verified;
+
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return appRedirect(request, shop, host, appOrigin, { ga4Auth: "cancelled" });
+    return respond({ ga4Auth: "cancelled" });
   }
   if (!code) {
-    return appRedirect(request, shop, host, appOrigin, {
-      ga4Auth: "error",
-      reason: "Google 未返回授权 code",
-    });
+    return respond({ ga4Auth: "error", reason: "Google 未返回授权 code" });
   }
 
   try {
@@ -65,10 +74,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { clientId, clientSecret } = getGoogleOAuthClient();
 
     if (properties.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
-        ga4Auth: "error",
-        errorCode: "no_properties",
-      });
+      return respond({ ga4Auth: "error", errorCode: "no_properties" });
     }
 
     if (properties.length === 1) {
@@ -82,13 +88,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           {
             propertyId: properties[0].propertyId,
             propertyName: properties[0].propertyName,
+            accountName: properties[0].accountName,
+            accountId: properties[0].accountId,
           },
         ],
+        allProperties: properties,
       });
-      return appRedirect(request, shop, host, appOrigin, {
-        ga4Auth: "success",
-        propertyName: properties[0].propertyName,
-      });
+      return respond({ ga4Auth: "success", propertyName: properties[0].propertyName });
     }
 
     // 多属性：存 pending，让用户在设置页选择
@@ -101,9 +107,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       clientSecret,
       properties,
     });
-    return appRedirect(request, shop, host, appOrigin, { ga4Auth: "select" });
+    return respond({ ga4Auth: "select" });
   } catch (e) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       ga4Auth: "error",
       reason: e instanceof Error ? e.message : "Google Analytics 4 授权失败",
     });

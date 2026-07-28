@@ -16,6 +16,8 @@ export type Ga4Credential = {
   clientId?: string;
   clientSecret?: string;
   properties: Ga4PropertyRef[];
+  /** 该 Google 账号下所有可用属性（OAuth 时获取，用于不重新授权即可重新选择）。 */
+  allProperties?: Ga4PropertyRef[];
   updatedAt: string;
 };
 
@@ -91,12 +93,25 @@ export async function getGa4Credential(shop: string): Promise<Ga4Credential | nu
   const properties = parseGa4PropertyRefs(d);
   if (!properties) return null;
 
+  const allPropertiesRaw =
+    Array.isArray(d.allProperties)
+      ? (d.allProperties as Array<Record<string, unknown>>)
+          .map((item) => ({
+            propertyId: String(item.propertyId ?? ""),
+            propertyName: String(item.propertyName ?? ""),
+            accountName: typeof item.accountName === "string" ? item.accountName : undefined,
+            accountId: typeof item.accountId === "string" ? item.accountId : undefined,
+          }))
+          .filter((item) => item.propertyId && item.propertyName)
+      : undefined;
+
   return {
     accessToken: d.accessToken,
     refreshToken: typeof d.refreshToken === "string" ? d.refreshToken : undefined,
     clientId: typeof d.clientId === "string" ? d.clientId : undefined,
     clientSecret: typeof d.clientSecret === "string" ? d.clientSecret : undefined,
     properties,
+    allProperties: allPropertiesRaw,
     updatedAt: row.updatedAt.toISOString(),
   };
 }

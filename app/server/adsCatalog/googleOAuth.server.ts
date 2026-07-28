@@ -115,6 +115,7 @@ export function createOAuthState(
   flow: OAuthFlow,
   host = "",
   appOrigin = "",
+  popup = false,
 ): string {
   const payload = JSON.stringify({
     shop,
@@ -123,6 +124,7 @@ export function createOAuthState(
     appOrigin: appOrigin.replace(/\/$/, ""),
     nonce: crypto.randomBytes(8).toString("hex"),
     ts: Date.now(),
+    ...(popup ? { popup: true } : {}),
   });
   const encoded = Buffer.from(payload).toString("base64url");
   const sig = crypto.createHmac("sha256", stateSecret()).update(encoded).digest("base64url");
@@ -132,7 +134,7 @@ export function createOAuthState(
 export function verifyOAuthState(
   state: string,
   maxAgeMs = 15 * 60 * 1000,
-): { shop: string; flow: OAuthFlow; host: string; appOrigin: string } | null {
+): { shop: string; flow: OAuthFlow; host: string; appOrigin: string; popup: boolean } | null {
   const [encoded, sig] = state.split(".");
   if (!encoded || !sig) return null;
   const expected = crypto
@@ -149,6 +151,7 @@ export function verifyOAuthState(
       host?: string;
       appOrigin?: string;
       ts?: number;
+      popup?: boolean;
     };
     if (
       !payload.shop ||
@@ -162,6 +165,7 @@ export function verifyOAuthState(
       flow: payload.flow,
       host: payload.host ?? "",
       appOrigin: payload.appOrigin ?? "",
+      popup: payload.popup === true,
     };
   } catch {
     return null;
@@ -460,6 +464,7 @@ export function buildGa4OAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
   reauth?: boolean;
+  popup?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   const { clientId } = getGoogleOAuthClient();
   if (!clientId) {
@@ -468,7 +473,7 @@ export function buildGa4OAuthStartUrl(params: {
 
   const callbackPath = "/ads/google-analytics/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createOAuthState(params.shop, "ga4", params.host ?? "", appOrigin);
+  const state = createOAuthState(params.shop, "ga4", params.host ?? "", appOrigin, params.popup);
   const authUrl = buildAuthUrl({
     flow: "ga4",
     state,
@@ -476,6 +481,43 @@ export function buildGa4OAuthStartUrl(params: {
     reauth: params.reauth,
   });
   return { ok: true, authUrl };
+}
+
+/**
+ * OAuth 在弹窗中完成后，弹窗页通过 postMessage 把结果传回父窗口并自动关闭。
+ * 父窗口（Shopify 嵌入 iframe）监听 message 事件即可接收。
+ */
+export function buildGa4OAuthPopupCloseHtml(params: Record<string, string>): string {
+  const safeData = JSON.stringify({ type: "ga4_oauth", ...params }).replace(/<\/script>/gi, "<\\/script>");
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Authorization complete</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;align-items:center;
+         justify-content:center;min-height:100vh;margin:0;background:#f9fafb;color:#374151}
+    .card{text-align:center;padding:2rem;max-width:320px}
+    .icon{font-size:2.5rem;margin-bottom:0.75rem}
+    p{margin:0;font-size:0.9rem;color:#6b7280}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">✓</div>
+  <p>Authorization complete. This window will close automatically.</p>
+</div>
+<script>
+(function(){
+  var data = ${safeData};
+  if (window.opener) {
+    try { window.opener.postMessage(data, '*'); } catch(e) {}
+  }
+  setTimeout(function(){ window.close(); }, 600);
+})();
+</script>
+</body>
+</html>`;
 }
 
 /**

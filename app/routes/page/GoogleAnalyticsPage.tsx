@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
@@ -108,10 +108,12 @@ function PropertySelectPanel({
   properties,
   onSelect,
   loading,
+  onCancel,
 }: {
   properties: Array<{ propertyId: string; propertyName: string; accountName: string; accountId?: string }>;
   onSelect: (propertyIds: string[]) => void;
   loading: boolean;
+  onCancel?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -292,23 +294,42 @@ function PropertySelectPanel({
         </div>
       </div>
 
-      <button
-        onClick={() => selectedPropertyId && onSelect([selectedPropertyId])}
-        disabled={loading || !selectedPropertyId}
-        style={{
-          alignSelf: "flex-start",
-          padding: "0.5rem 1.25rem",
-          borderRadius: 8,
-          border: "none",
-          background: loading || !selectedPropertyId ? pageColorTokens.surfaceMuted : "#34a853",
-          color: loading || !selectedPropertyId ? pageColorTokens.textSecondary : "#fff",
-          fontWeight: 600,
-          fontSize: "0.875rem",
-          cursor: loading || !selectedPropertyId ? "not-allowed" : "pointer",
-        }}
-      >
-        {loading ? t("ga4.confirming") : t("ga4.confirmBtn")}
-      </button>
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <button
+          onClick={() => selectedPropertyId && onSelect([selectedPropertyId])}
+          disabled={loading || !selectedPropertyId}
+          style={{
+            padding: "0.5rem 1.25rem",
+            borderRadius: 8,
+            border: "none",
+            background: loading || !selectedPropertyId ? pageColorTokens.surfaceMuted : "#34a853",
+            color: loading || !selectedPropertyId ? pageColorTokens.textSecondary : "#fff",
+            fontWeight: 600,
+            fontSize: "0.875rem",
+            cursor: loading || !selectedPropertyId ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? t("ga4.confirming") : t("ga4.confirmBtn")}
+        </button>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{
+              padding: "0.5rem 1.25rem",
+              borderRadius: 8,
+              border: `1px solid ${pageColorTokens.border}`,
+              background: "transparent",
+              color: pageColorTokens.textBody,
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {t("ga4.cancelBtn")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -478,10 +499,14 @@ function ConnectedHeader({
   properties,
   onDisconnect,
   disconnecting,
+  onReselect,
+  canReselect,
 }: {
   properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   onDisconnect: () => void;
   disconnecting: boolean;
+  onReselect: () => void;
+  canReselect: boolean;
 }) {
   const { t } = useTranslation();
   const singleProperty = properties.length === 1 ? properties[0] : null;
@@ -526,46 +551,47 @@ function ConnectedHeader({
               </div>
             </>
           ) : (
-            <>
-              <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
-                {t("ga4.connectedMultiple", { count: properties.length })}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  marginTop: 6,
-                  fontSize: "0.78rem",
-                  color: pageColorTokens.textSecondary,
-                }}
-              >
-                {properties.map((property) => (
-                  <div key={property.propertyId}>
-                    {property.propertyName} · {extractNumericId(property.propertyId)}
-                  </div>
-                ))}
-              </div>
-            </>
+            <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
+              {t("ga4.connectedMultiple", { count: properties.length })}
+            </div>
           )}
         </div>
       </div>
-      <button
-        onClick={onDisconnect}
-        disabled={disconnecting}
-        style={{
-          padding: "0.4rem 1rem",
-          borderRadius: 8,
-          border: `1px solid ${pageColorTokens.border}`,
-          background: "transparent",
-          color: disconnecting ? pageColorTokens.textSecondary : pageColorTokens.textBody,
-          fontSize: "0.8rem",
-          fontWeight: 600,
-          cursor: disconnecting ? "not-allowed" : "pointer",
-        }}
-      >
-        {disconnecting ? t("ga4.disconnecting") : t("ga4.disconnectBtn")}
-      </button>
+      <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+        {canReselect && (
+          <button
+            onClick={onReselect}
+            style={{
+              padding: "0.4rem 1rem",
+              borderRadius: 8,
+              border: `1px solid ${pageColorTokens.border}`,
+              background: "transparent",
+              color: pageColorTokens.textBody,
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {t("ga4.reselectBtn")}
+          </button>
+        )}
+        <button
+          onClick={onDisconnect}
+          disabled={disconnecting}
+          style={{
+            padding: "0.4rem 1rem",
+            borderRadius: 8,
+            border: `1px solid ${pageColorTokens.border}`,
+            background: "transparent",
+            color: disconnecting ? pageColorTokens.textSecondary : pageColorTokens.textBody,
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            cursor: disconnecting ? "not-allowed" : "pointer",
+          }}
+        >
+          {disconnecting ? t("ga4.disconnecting") : t("ga4.disconnectBtn")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -612,13 +638,16 @@ export function GoogleAnalyticsPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<Ga4SettingsLoaderData>();
+  const revalidator = useRevalidator();
 
   const [connected, setConnected] = useState(loaderData.connected);
   const [properties, setProperties] = useState(loaderData.properties);
+  const [allProperties, setAllProperties] = useState(loaderData.allProperties);
   const [hasPending, setHasPending] = useState(loaderData.hasPending);
   const [pendingProperties, setPendingProperties] = useState(loaderData.pendingProperties);
   const [banner, setBanner] = useState<AuthBanner | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [isReselecting, setIsReselecting] = useState(false);
   const [activePropertyId, setActivePropertyId] = useState<string>(
     () => loaderData.properties[0]?.propertyId ?? "",
   );
@@ -629,10 +658,26 @@ export function GoogleAnalyticsPage() {
 
   const authUrlFetcherRef = useRef(authUrlFetcher);
   authUrlFetcherRef.current = authUrlFetcher;
+  const popupRef = useRef<Window | null>(null);
 
   const [searchParams] = useSearchParams();
 
-  // Handle OAuth return params
+  // 同步 loader 数据（revalidation 后更新 state）
+  const isFirstMount = useRef(true);
+  useEffect(() => {
+    if (isFirstMount.current) { isFirstMount.current = false; return; }
+    setConnected(loaderData.connected);
+    setProperties(loaderData.properties);
+    setAllProperties(loaderData.allProperties);
+    setHasPending(loaderData.hasPending);
+    setPendingProperties(loaderData.pendingProperties);
+    if (loaderData.properties[0]) {
+      setActivePropertyId(loaderData.properties[0].propertyId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaderData]);
+
+  // Handle OAuth return params（非 popup 模式下的 URL 参数回调）
   useEffect(() => {
     const ga4Auth = searchParams.get("ga4Auth");
     if (!ga4Auth) return;
@@ -660,15 +705,69 @@ export function GoogleAnalyticsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle auth URL response: redirect top-level to Google
+  // Handle auth URL response: 在弹窗中打开 Google 授权页
   useEffect(() => {
     if (authUrlFetcher.data?.ok && authUrlFetcher.data.authUrl) {
-      window.open(authUrlFetcher.data.authUrl, "_top");
+      if (popupRef.current && !popupRef.current.closed) {
+        popupRef.current.location.href = authUrlFetcher.data.authUrl;
+      } else {
+        // 弹窗被拦截时降级为 _top 跳转
+        window.open(authUrlFetcher.data.authUrl, "_top");
+      }
     } else if (authUrlFetcher.data && !authUrlFetcher.data.ok) {
       setRedirecting(false);
       setBanner({ tone: "error", text: authUrlFetcher.data.error });
+      try { popupRef.current?.close(); } catch {}
+      popupRef.current = null;
     }
   }, [authUrlFetcher.data]);
+
+  // 监听弹窗发来的 postMessage（OAuth 完成信号）
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: string;
+        ga4Auth?: string;
+        propertyName?: string;
+        errorCode?: string;
+        reason?: string;
+      } | null;
+      if (!data || data.type !== "ga4_oauth") return;
+
+      popupRef.current = null;
+      setRedirecting(false);
+
+      if (data.ga4Auth === "success") {
+        setBanner({ tone: "ok", text: t("ga4.authSuccess", { propertyName: data.propertyName ?? "" }) });
+        revalidator.revalidate();
+      } else if (data.ga4Auth === "select") {
+        revalidator.revalidate();
+      } else if (data.ga4Auth === "cancelled") {
+        setBanner({ tone: "error", text: t("ga4.authCancelled") });
+      } else if (data.ga4Auth === "error") {
+        if (data.errorCode === "no_properties") {
+          setBanner({ tone: "error", text: t("ga4.authNoProperties") });
+        } else {
+          setBanner({ tone: "error", text: `${t("ga4.authError")}${data.reason ? ` (${data.reason})` : ""}` });
+        }
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [t, revalidator]);
+
+  // 轮询检测弹窗被用户手动关闭（未完成授权）
+  useEffect(() => {
+    if (!redirecting) return;
+    const timer = setInterval(() => {
+      if (popupRef.current?.closed) {
+        clearInterval(timer);
+        popupRef.current = null;
+        setRedirecting(false);
+      }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [redirecting]);
 
   // Handle property selection response
   useEffect(() => {
@@ -680,6 +779,7 @@ export function GoogleAnalyticsPage() {
       setActivePropertyId(selected[0]?.propertyId ?? "");
       setHasPending(false);
       setPendingProperties([]);
+      setIsReselecting(false);
       setBanner({
         tone: "ok",
         text:
@@ -701,6 +801,7 @@ export function GoogleAnalyticsPage() {
     if (disconnectFetcher.data.ok) {
       setConnected(false);
       setProperties([]);
+      setAllProperties([]);
       setHasPending(false);
       setPendingProperties([]);
     }
@@ -709,9 +810,15 @@ export function GoogleAnalyticsPage() {
   const handleConnect = useCallback(() => {
     setRedirecting(true);
     setBanner(null);
+    // 同步打开弹窗（必须在用户点击事件中，否则被浏览器拦截）
+    const popup =
+      typeof window !== "undefined"
+        ? window.open("about:blank", "ga4auth", "popup,width=560,height=680,resizable=yes")
+        : null;
+    popupRef.current = popup;
     const search = window.location.search ?? "";
     const host = new URLSearchParams(search).get("host") ?? "";
-    authUrlFetcherRef.current.load(`/api/ga4/auth-url?host=${encodeURIComponent(host)}`);
+    authUrlFetcherRef.current.load(`/api/ga4/auth-url?host=${encodeURIComponent(host)}&popup=1`);
   }, []);
 
   const handlePropertySelect = useCallback(
@@ -728,8 +835,19 @@ export function GoogleAnalyticsPage() {
     disconnectFetcher.submit({}, { method: "POST", action: "/api/ga4/disconnect" });
   }, [disconnectFetcher]);
 
+  const handleReselect = useCallback(() => {
+    setIsReselecting(true);
+    setBanner(null);
+  }, []);
+
   const isSelectLoading = propertySelectFetcher.state !== "idle";
   const isDisconnecting = disconnectFetcher.state !== "idle";
+
+  // allProperties 类型需满足 PropertySelectPanel 的 accountName: string 要求
+  const allPropertiesForPanel = allProperties.map((p) => ({
+    ...p,
+    accountName: p.accountName ?? "",
+  }));
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -768,13 +886,26 @@ export function GoogleAnalyticsPage() {
             properties={properties}
             onDisconnect={handleDisconnect}
             disconnecting={isDisconnecting}
+            onReselect={handleReselect}
+            canReselect={allPropertiesForPanel.length > 0}
           />
-          <PropertySwitcher
-            properties={properties}
-            activeId={activePropertyId}
-            onSelect={setActivePropertyId}
-          />
-          <Ga4PerformanceView propertyId={activePropertyId} />
+          {isReselecting ? (
+            <PropertySelectPanel
+              properties={allPropertiesForPanel}
+              onSelect={handlePropertySelect}
+              loading={isSelectLoading}
+              onCancel={() => setIsReselecting(false)}
+            />
+          ) : (
+            <>
+              <PropertySwitcher
+                properties={properties}
+                activeId={activePropertyId}
+                onSelect={setActivePropertyId}
+              />
+              <Ga4PerformanceView propertyId={activePropertyId} />
+            </>
+          )}
         </>
       )}
     </div>
