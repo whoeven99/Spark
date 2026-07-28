@@ -7,6 +7,8 @@ export type Ga4Property = {
   propertyId: string;
   propertyName: string;
   accountName: string;
+  /** 纯数字账号 ID，如 "293970993"，由 "accounts/293970993" 截取 */
+  accountId: string;
 };
 
 export type Ga4Dimension =
@@ -84,13 +86,15 @@ export async function listGa4Properties(accessToken: string): Promise<Ga4Propert
 
     const properties: Ga4Property[] = [];
     for (const account of json.accountSummaries ?? []) {
-      const accountName = account.displayName ?? account.account ?? "";
+      const accountId = (account.account ?? "").replace(/^accounts\//, "");
+      const accountName = account.displayName ?? accountId;
       for (const prop of account.propertySummaries ?? []) {
         if (prop.property) {
           properties.push({
             propertyId: prop.property,
             propertyName: prop.displayName ?? prop.property,
             accountName,
+            accountId,
           });
         }
       }

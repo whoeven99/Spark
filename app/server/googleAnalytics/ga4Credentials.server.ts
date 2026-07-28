@@ -22,7 +22,7 @@ export type Ga4PendingCredential = {
   refreshToken?: string;
   clientId?: string;
   clientSecret?: string;
-  properties: Array<{ propertyId: string; propertyName: string; accountName: string }>;
+  properties: Array<{ propertyId: string; propertyName: string; accountName: string; accountId?: string }>;
 };
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -127,6 +127,7 @@ export async function getGa4Pending(shop: string): Promise<Ga4PendingCredential 
       propertyId: String(p.propertyId ?? ""),
       propertyName: String(p.propertyName ?? ""),
       accountName: String(p.accountName ?? ""),
+      accountId: typeof p.accountId === "string" ? p.accountId : undefined,
     })),
   };
 }

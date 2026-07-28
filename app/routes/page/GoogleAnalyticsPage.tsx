@@ -100,35 +100,57 @@ function NotConnectedPanel({ onConnect }: { onConnect: () => void }) {
   );
 }
 
+function extractNumericId(resourceName: string): string {
+  return resourceName.replace(/^(properties|accounts)\//, "");
+}
+
 function PropertySelectPanel({
   properties,
   onSelect,
   loading,
 }: {
-  properties: Array<{ propertyId: string; propertyName: string; accountName: string }>;
+  properties: Array<{ propertyId: string; propertyName: string; accountName: string; accountId?: string }>;
   onSelect: (propertyIds: string[]) => void;
   loading: boolean;
 }) {
   const { t } = useTranslation();
-  const [selectedIds, setSelectedIds] = useState<string[]>(
-    () => properties.map((property) => property.propertyId),
+
+  // 按 accountName 分组，保留顺序
+  const accountsMap = new Map<string, { name: string; id: string }>();
+  for (const p of properties) {
+    if (!accountsMap.has(p.accountName)) {
+      accountsMap.set(p.accountName, { name: p.accountName, id: p.accountId ?? "" });
+    }
+  }
+  const accounts = Array.from(accountsMap.values());
+
+  const [selectedAccount, setSelectedAccount] = useState<string>(accounts[0]?.name ?? "");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+
+  const accountProperties = properties.filter((p) => p.accountName === selectedAccount);
+
+  const handleAccountClick = useCallback(
+    (accountName: string) => {
+      setSelectedAccount(accountName);
+      const inAccount = properties.filter((p) => p.accountName === accountName);
+      if (!inAccount.some((p) => p.propertyId === selectedPropertyId)) {
+        setSelectedPropertyId("");
+      }
+    },
+    [properties, selectedPropertyId],
   );
 
-  const toggleProperty = useCallback((propertyId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(propertyId)
-        ? prev.filter((id) => id !== propertyId)
-        : [...prev, propertyId],
-    );
-  }, []);
-
-  const toggleAll = useCallback(() => {
-    setSelectedIds((prev) =>
-      prev.length === properties.length ? [] : properties.map((property) => property.propertyId),
-    );
-  }, [properties]);
-
-  const allSelected = selectedIds.length === properties.length;
+  const colHeaderStyle: React.CSSProperties = {
+    padding: "7px 14px",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase" as const,
+    color: pageColorTokens.textSecondary,
+    borderBottom: `1px solid ${pageColorTokens.border}`,
+    background: pageColorTokens.surfaceMuted,
+    flexShrink: 0,
+  };
 
   return (
     <div
@@ -149,81 +171,140 @@ function PropertySelectPanel({
         {t("ga4.selectPropertyHint")}
       </p>
 
-      <button
-        type="button"
-        onClick={toggleAll}
-        style={{
-          alignSelf: "flex-start",
-          padding: "0.35rem 0.75rem",
-          borderRadius: 8,
-          border: `1px solid ${pageColorTokens.border}`,
-          background: "transparent",
-          color: pageColorTokens.textSecondary,
-          fontSize: "0.78rem",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
-      >
-        {allSelected ? t("ga4.deselectAll") : t("ga4.selectAll")}
-      </button>
-
+      {/* 双面板：左侧账号 / 右侧媒体资源 */}
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem",
-          maxHeight: 280,
-          overflowY: "auto",
+          border: `1px solid ${pageColorTokens.border}`,
+          borderRadius: 10,
+          overflow: "hidden",
+          minHeight: 240,
+          maxHeight: 320,
         }}
       >
-        {properties.map((property) => {
-          const checked = selectedIds.includes(property.propertyId);
-          return (
-            <label
-              key={property.propertyId}
+        {/* 左侧：Analytics 账号列表 */}
+        <div
+          style={{
+            width: 220,
+            flexShrink: 0,
+            borderRight: `1px solid ${pageColorTokens.border}`,
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+          }}
+        >
+          <div style={colHeaderStyle}>{t("ga4.selectAccountLabel")}</div>
+          {accounts.map((account) => {
+            const active = account.name === selectedAccount;
+            return (
+              <div
+                key={account.name}
+                onClick={() => handleAccountClick(account.name)}
+                style={{
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  borderLeft: `3px solid ${active ? "#34a853" : "transparent"}`,
+                  background: active ? "rgba(52,168,83,0.06)" : "transparent",
+                  userSelect: "none",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: active ? 700 : 500,
+                    fontSize: "0.875rem",
+                    color: active ? "#2e7d32" : pageColorTokens.textPrimary,
+                  }}
+                >
+                  {account.name}
+                </div>
+                {account.id && (
+                  <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                    {account.id}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 右侧：媒体资源和应用 */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", minWidth: 0 }}>
+          <div style={colHeaderStyle}>{t("ga4.selectPropertyLabel")}</div>
+          {accountProperties.length === 0 ? (
+            <div
               style={{
+                flex: 1,
                 display: "flex",
-                alignItems: "flex-start",
-                gap: "0.65rem",
-                padding: "0.65rem 0.75rem",
-                borderRadius: 8,
-                border: `1px solid ${checked ? "rgba(52,168,83,0.35)" : pageColorTokens.border}`,
-                background: checked ? "rgba(52,168,83,0.06)" : "transparent",
-                cursor: "pointer",
+                alignItems: "center",
+                justifyContent: "center",
+                color: pageColorTokens.textSecondary,
+                fontSize: "0.84rem",
               }}
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggleProperty(property.propertyId)}
-                style={{ marginTop: 2 }}
-              />
-              <span>
-                <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textPrimary }}>
-                  {property.propertyName}
+              {t("ga4.noData")}
+            </div>
+          ) : (
+            accountProperties.map((property) => {
+              const selected = property.propertyId === selectedPropertyId;
+              const numId = extractNumericId(property.propertyId);
+              return (
+                <div
+                  key={property.propertyId}
+                  onClick={() => setSelectedPropertyId(property.propertyId)}
+                  style={{
+                    padding: "10px 14px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    borderLeft: `3px solid ${selected ? "#34a853" : "transparent"}`,
+                    background: selected ? "rgba(52,168,83,0.06)" : "transparent",
+                    userSelect: "none",
+                  }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontWeight: selected ? 700 : 500,
+                        fontSize: "0.875rem",
+                        color: selected ? "#2e7d32" : pageColorTokens.textPrimary,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {property.propertyName}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                      {numId}
+                    </div>
+                  </span>
+                  {selected && (
+                    <span style={{ color: "#34a853", fontWeight: 700, flexShrink: 0, fontSize: "1rem" }}>
+                      ✓
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                  {property.accountName} · {property.propertyId}
-                </div>
-              </span>
-            </label>
-          );
-        })}
+              );
+            })
+          )}
+        </div>
       </div>
 
       <button
-        onClick={() => onSelect(selectedIds)}
-        disabled={loading || selectedIds.length === 0}
+        onClick={() => selectedPropertyId && onSelect([selectedPropertyId])}
+        disabled={loading || !selectedPropertyId}
         style={{
           alignSelf: "flex-start",
           padding: "0.5rem 1.25rem",
           borderRadius: 8,
           border: "none",
-          background: loading || selectedIds.length === 0 ? pageColorTokens.surfaceMuted : "#34a853",
-          color: loading || selectedIds.length === 0 ? pageColorTokens.textSecondary : "#fff",
+          background: loading || !selectedPropertyId ? pageColorTokens.surfaceMuted : "#34a853",
+          color: loading || !selectedPropertyId ? pageColorTokens.textSecondary : "#fff",
           fontWeight: 600,
           fontSize: "0.875rem",
-          cursor: loading || selectedIds.length === 0 ? "not-allowed" : "pointer",
+          cursor: loading || !selectedPropertyId ? "not-allowed" : "pointer",
         }}
       >
         {loading ? t("ga4.confirming") : t("ga4.confirmBtn")}
@@ -280,7 +361,7 @@ function ConnectedHeader({
                 {singleProperty.propertyName}
               </div>
               <div style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                {singleProperty.propertyId}
+                {extractNumericId(singleProperty.propertyId)}
               </div>
             </>
           ) : (
@@ -300,7 +381,7 @@ function ConnectedHeader({
               >
                 {properties.map((property) => (
                   <div key={property.propertyId}>
-                    {property.propertyName} · {property.propertyId}
+                    {property.propertyName} · {extractNumericId(property.propertyId)}
                   </div>
                 ))}
               </div>

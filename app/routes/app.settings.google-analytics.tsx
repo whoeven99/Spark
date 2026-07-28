@@ -11,7 +11,7 @@ export type Ga4SettingsLoaderData = {
   connected: boolean;
   properties: Array<{ propertyId: string; propertyName: string }>;
   hasPending: boolean;
-  pendingProperties: Array<{ propertyId: string; propertyName: string; accountName: string }>;
+  pendingProperties: Array<{ propertyId: string; propertyName: string; accountName: string; accountId?: string }>;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
