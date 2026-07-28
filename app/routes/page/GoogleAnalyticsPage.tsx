@@ -313,6 +313,60 @@ function PropertySelectPanel({
   );
 }
 
+function PropertySwitcher({
+  properties,
+  activeId,
+  onSelect,
+}: {
+  properties: Array<{ propertyId: string; propertyName: string }>;
+  activeId: string;
+  onSelect: (propertyId: string) => void;
+}) {
+  if (properties.length <= 1) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        padding: "0.5rem 0",
+      }}
+    >
+      {properties.map((p) => {
+        const active = p.propertyId === activeId;
+        return (
+          <button
+            key={p.propertyId}
+            onClick={() => onSelect(p.propertyId)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "0.35rem 0.85rem",
+              borderRadius: 20,
+              border: `1px solid ${active ? "#34a853" : pageColorTokens.border}`,
+              background: active ? "#e8f5e9" : "transparent",
+              color: active ? "#2e7d32" : pageColorTokens.textSecondary,
+              fontWeight: active ? 700 : 400,
+              fontSize: "0.8rem",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {active && (
+              <span style={{ fontSize: "0.65rem", color: "#34a853" }}>●</span>
+            )}
+            <span>{p.propertyName}</span>
+            <span style={{ opacity: 0.55, fontSize: "0.72rem" }}>
+              {extractNumericId(p.propertyId)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ConnectedHeader({
   properties,
   onDisconnect,
@@ -458,6 +512,9 @@ export function GoogleAnalyticsPage() {
   const [pendingProperties, setPendingProperties] = useState(loaderData.pendingProperties);
   const [banner, setBanner] = useState<AuthBanner | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [activePropertyId, setActivePropertyId] = useState<string>(
+    () => loaderData.properties[0]?.propertyId ?? "",
+  );
 
   const authUrlFetcher = useFetcher<AuthUrlResponse>();
   const propertySelectFetcher = useFetcher<PropertySelectResponse>();
@@ -513,6 +570,7 @@ export function GoogleAnalyticsPage() {
       const selected = propertySelectFetcher.data.properties;
       setConnected(true);
       setProperties(selected);
+      setActivePropertyId(selected[0]?.propertyId ?? "");
       setHasPending(false);
       setPendingProperties([]);
       setBanner({
@@ -604,7 +662,12 @@ export function GoogleAnalyticsPage() {
             onDisconnect={handleDisconnect}
             disconnecting={isDisconnecting}
           />
-          <Ga4PerformanceView />
+          <PropertySwitcher
+            properties={properties}
+            activeId={activePropertyId}
+            onSelect={setActivePropertyId}
+          />
+          <Ga4PerformanceView propertyId={activePropertyId} />
         </>
       )}
     </div>

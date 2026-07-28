@@ -70,7 +70,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   let accessToken = credential.accessToken;
-  const propertyIds = credential.properties.map((property) => property.propertyId);
+
+  // 若指定了 propertyId，只查该属性；否则查所有已保存属性
+  const requestedPropertyId = url.searchParams.get("propertyId");
+  const propertyIds = requestedPropertyId
+    ? credential.properties
+        .filter((p) => p.propertyId === requestedPropertyId)
+        .map((p) => p.propertyId)
+    : credential.properties.map((p) => p.propertyId);
+
+  if (propertyIds.length === 0) {
+    return Response.json({ ok: true, connected: false } satisfies Ga4StatusNotConnected);
+  }
 
   try {
     if (credential.refreshToken) {

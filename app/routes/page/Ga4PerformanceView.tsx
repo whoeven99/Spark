@@ -474,7 +474,7 @@ function DaysSelector({ days, onChange }: { days: Days; onChange: (d: Days) => v
 
 // ─── Main Performance View ─────────────────────────────────────────────────────
 
-export function Ga4PerformanceView() {
+export function Ga4PerformanceView({ propertyId }: { propertyId: string }) {
   const { t } = useTranslation();
   const [days, setDays] = useState<Days>(7);
   const [dimension, setDimension] = useState<Ga4Dimension>("sessionDefaultChannelGroup");
@@ -486,8 +486,10 @@ export function Ga4PerformanceView() {
   statusFetcherRef.current = statusFetcher;
 
   useEffect(() => {
-    statusFetcherRef.current.load(`/api/ga4/status?days=${days}&dimension=${dimension}`);
-  }, [days, dimension]);
+    const params = new URLSearchParams({ days: String(days), dimension });
+    if (propertyId) params.set("propertyId", propertyId);
+    statusFetcherRef.current.load(`/api/ga4/status?${params.toString()}`);
+  }, [days, dimension, propertyId]);
 
   useEffect(() => {
     if (statusFetcher.data?.ok && statusFetcher.data.connected) {
