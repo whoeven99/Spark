@@ -334,7 +334,7 @@ function PropertySwitcher({
     }
   }
   const accounts = Array.from(accountsMap.values());
-  const hasMultipleAccounts = accounts.length > 1 || (accounts.length === 1 && accounts[0].name !== "");
+  const hasAccountInfo = accounts.some((a) => a.name !== "");
 
   const activeProperty = properties.find((p) => p.propertyId === activeId);
   const [selectedAccount, setSelectedAccount] = useState<string>(
@@ -375,8 +375,8 @@ function PropertySwitcher({
         background: pageColorTokens.surface,
       }}
     >
-      {/* 左侧账号列表（多账号时显示） */}
-      {hasMultipleAccounts && (
+      {/* 左侧账号列表（有账号信息时显示） */}
+      {hasAccountInfo && (
         <div
           style={{
             width: 220,
