@@ -1816,6 +1816,22 @@ export function fetchTsfShopProfileDetail(
   return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}`);
 }
 
+export type ShopLocaleCoverageRow = {
+  locale: string;
+  translated: number;
+  total: number;
+  percent: number | null;
+  updatedAt: string | null;
+  cacheMissing: boolean;
+  autoTranslate: boolean;
+};
+
+export function fetchShopLocaleCoverage(
+  shop: string,
+): Promise<{ shop: string; locales: ShopLocaleCoverageRow[] }> {
+  return apiFetch(`/tsf/language-coverage/shop?shop=${encodeURIComponent(shop)}`);
+}
+
 export type TsfShopProfileScanResult = {
   enqueued: true;
   scanId: string;
