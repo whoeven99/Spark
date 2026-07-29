@@ -383,6 +383,85 @@ function formatRelativeUpdatedAt(iso: string | null, now = Date.now()): string {
   return `${days}d`;
 }
 
+/** 查询单个商店的语言覆盖率数据（按 shop 精确查找）。 */
+tsfLanguageCoverageRouter.get("/shop", async (req, res) => {
+  try {
+    const shop = String(req.query.shop ?? "").trim();
+    if (!shop) {
+      res.status(400).json({ error: "shop is required" });
+      return;
+    }
+    if (!isTsfDbConfigured()) {
+      res.status(503).json({ error: "TSF Turso not configured" });
+      return;
+    }
+    const db = getTsfDb();
+    const localesResult = await db.execute({
+      sql: `SELECT locale, autoTranslate FROM ShopTargetLocale WHERE shop = ? ORDER BY locale ASC`,
+      args: [shop],
+    });
+
+    const locales: Array<{ locale: string; autoTranslate: boolean }> =
+      localesResult.rows.map((row) => {
+        const autoRaw = row.autoTranslate;
+        return {
+          locale: String(row.locale ?? "").trim(),
+          autoTranslate:
+            autoRaw === 1 ||
+            autoRaw === "1" ||
+            String(autoRaw).toLowerCase() === "true",
+        };
+      });
+
+    if (locales.length === 0) {
+      res.json({ shop, locales: [] });
+      return;
+    }
+
+    const redis = getRedis();
+    let localeRows: LocaleCoverage[];
+
+    if (redis) {
+      const keySpecs = locales.map((loc) => ({
+        locale: loc.locale,
+        key: itemsCountKey(shop, loc.locale),
+      }));
+      const hashes = await batchHgetall(
+        redis,
+        keySpecs.map((s) => s.key),
+      );
+      localeRows = locales.map((loc, i) => {
+        const agg = aggregateModuleHash(hashes[i] ?? {});
+        const cacheMissing = agg.empty;
+        return {
+          locale: loc.locale,
+          translated: agg.translated,
+          total: agg.total,
+          percent: cacheMissing ? null : ratioPercent(agg.translated, agg.total),
+          updatedAt: agg.updatedAt,
+          cacheMissing,
+          autoTranslate: loc.autoTranslate,
+        };
+      });
+    } else {
+      localeRows = locales.map((loc) => ({
+        locale: loc.locale,
+        translated: 0,
+        total: 0,
+        percent: null,
+        updatedAt: null,
+        cacheMissing: true,
+        autoTranslate: loc.autoTranslate,
+      }));
+    }
+
+    res.json({ shop, locales: localeRows });
+  } catch (err) {
+    console.error("[tsf/language-coverage/shop]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 tsfLanguageCoverageRouter.get("/", async (req, res) => {
   try {
     const search = String(req.query.search ?? "").trim().toLowerCase();

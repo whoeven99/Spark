@@ -34,6 +34,7 @@ import {
   fetchTsfShops,
   fetchTsfUsageAccount,
   fetchTsfUsageHistory,
+  fetchShopLocaleCoverage,
   AUTO_TASK_SOURCE,
   type TranslationJob,
   type ShopTranslationSummary,
@@ -42,6 +43,7 @@ import {
   type ShopLangPairRow,
   type TsfUsageRow,
   type TsfUsageHistoryRow,
+  type ShopLocaleCoverageRow,
 } from "../api";
 import { TranslationContentViewer } from "../components/translation/TranslationContentViewer";
 
@@ -177,6 +179,8 @@ export default function ShopTranslation() {
   const [tsfHistory, setTsfHistory] = useState<TsfUsageHistoryRow[]>([]);
   const [tsfHistoryLoading, setTsfHistoryLoading] = useState(false);
 
+  const [shopLocales, setShopLocales] = useState<ShopLocaleCoverageRow[]>([]);
+
   const buildFiltersFromUi = useCallback((): ShopTranslationFilters | null => {
     const shop = shopInput.trim();
     if (!shop) return null;
@@ -220,6 +224,7 @@ export default function ShopTranslation() {
         setSizeProfile(null);
         setTsfAccount(null);
         setTsfNote("");
+        setShopLocales([]);
       }
 
       const pairFilters: ShopTranslationFilters = {
@@ -229,7 +234,7 @@ export default function ShopTranslation() {
       };
 
       try {
-        const [summaryRes, jobsRes, pairsRes, sizeRes, tsfRes] = await Promise.all([
+        const [summaryRes, jobsRes, pairsRes, sizeRes, tsfRes, localeRes] = await Promise.all([
           append ? Promise.resolve(null) : fetchShopTranslationSummary(filters),
           fetchTranslations({ ...filters, limit: PAGE_SIZE, offset }),
           append ? Promise.resolve(null) : fetchShopLangPairs(pairFilters),
@@ -238,6 +243,7 @@ export default function ShopTranslation() {
             account: null,
             note: String(e),
           })),
+          append ? Promise.resolve(null) : fetchShopLocaleCoverage(filters.shop).catch(() => null),
         ]);
 
         if (summaryRes) setSummary(summaryRes);
@@ -251,6 +257,7 @@ export default function ShopTranslation() {
           setTsfAccount(tsfRes.account);
           if (tsfRes.note) setTsfNote(tsfRes.note);
         }
+        if (localeRes) setShopLocales(localeRes.locales);
         if (!append) saveRecentShop(filters.shop);
       } catch (e) {
         setError(String(e));
@@ -655,6 +662,63 @@ export default function ShopTranslation() {
                     title: "Token 消耗",
                     dataIndex: "tokens",
                     render: (v: number) => v.toLocaleString(),
+                  },
+                ]}
+              />
+            </Card>
+          )}
+
+          {shopLocales.length > 0 && (
+            <Card size="small" title="语言设置" style={{ marginBottom: 24 }}>
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="locale"
+                dataSource={shopLocales}
+                columns={[
+                  {
+                    title: "语言",
+                    dataIndex: "locale",
+                    width: 140,
+                    render: (v: string) => (
+                      <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text>
+                    ),
+                  },
+                  {
+                    title: "状态",
+                    key: "status",
+                    render: (_: unknown, row: ShopLocaleCoverageRow) => {
+                      if (row.cacheMissing || row.total === 0) {
+                        return <Tag>未翻译</Tag>;
+                      }
+                      if (row.percent === 100) {
+                        return <Tag color="success">已翻译</Tag>;
+                      }
+                      return (
+                        <Tag color="warning">
+                          部分翻译 {row.percent != null ? `${row.percent}%` : ""}
+                        </Tag>
+                      );
+                    },
+                  },
+                  {
+                    title: "自动翻译",
+                    dataIndex: "autoTranslate",
+                    width: 100,
+                    render: (v: boolean) =>
+                      v ? (
+                        <Tag color="blue">开启</Tag>
+                      ) : (
+                        <Tag color="default">关闭</Tag>
+                      ),
+                  },
+                  {
+                    title: "已译 / 总数",
+                    key: "count",
+                    render: (_: unknown, row: ShopLocaleCoverageRow) =>
+                      row.cacheMissing
+                        ? "—"
+                        : `${row.translated.toLocaleString()} / ${row.total.toLocaleString()}`,
                   },
                 ]}
               />
