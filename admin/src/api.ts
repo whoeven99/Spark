@@ -293,12 +293,29 @@ export function fetchTranslationJob(
   return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
 }
 
+export type TranslationContentCallCost = {
+  provider: string;
+  model?: string;
+  requestId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  chars?: number;
+  batchSize?: number;
+};
+
+export type TranslationContentFieldCost = TranslationContentCallCost & {
+  calls?: TranslationContentCallCost[];
+};
+
 export type TranslationContentField = {
   key: string;
   originalValue: string;
   translatedValue: string;
   digest?: string;
   status?: string;
+  /** Per-field LLM/Google/cache cost metadata from translate blob. */
+  cost?: TranslationContentFieldCost;
 };
 
 export type TranslationContentResource = {
