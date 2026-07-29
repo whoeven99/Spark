@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../hooks/useOAuthPopup";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
   PageHeaderNav,
@@ -11,7 +12,6 @@ import {
 import type { GscSettingsLoaderData } from "../app.settings.google-search-console";
 import { GscPerformanceView } from "./GscPerformanceView";
 
-type AuthUrlResponse = { ok: true; authUrl: string } | { ok: false; error: string };
 type SiteSelectResponse = { ok: true; siteUrl: string } | { ok: false; error: string };
 type DisconnectResponse = { ok: true } | { ok: false; error: string };
 type AuthBanner = { tone: "ok" | "error"; text: string };
@@ -256,46 +256,91 @@ export function GoogleSearchConsolePage() {
   const { isMobile } = useResponsiveLayout();
   const [searchParams] = useSearchParams();
   const loaderData = useLoaderData<GscSettingsLoaderData>();
+  const revalidator = useRevalidator();
 
   const [connected, setConnected] = useState(loaderData.connected);
   const [siteUrl, setSiteUrl] = useState<string | null>(loaderData.siteUrl);
   const [hasPending, setHasPending] = useState(loaderData.hasPending);
   const [pendingSites, setPendingSites] = useState(loaderData.pendingSites);
   const [authBanner, setAuthBanner] = useState<AuthBanner | null>(null);
+  const [oauthResolving, setOauthResolving] = useState(false);
 
-  const authFetcher = useFetcher<AuthUrlResponse>();
+  const gscOAuth = useOAuthPopup("gsc_oauth");
   const siteFetcher = useFetcher<SiteSelectResponse>();
   const disconnectFetcher = useFetcher<DisconnectResponse>();
 
-  const gscAuth = searchParams.get("gscAuth");
+  useEffect(() => {
+    setConnected(loaderData.connected);
+    setSiteUrl(loaderData.siteUrl);
+    setHasPending(loaderData.hasPending);
+    setPendingSites(loaderData.pendingSites);
+  }, [loaderData]);
+
+  const applyGscAuthResult = useCallback(
+    (result: {
+      gscAuth?: string;
+      siteUrl?: string;
+      errorCode?: string;
+      reason?: string;
+    }) => {
+      if (result.gscAuth === "success") {
+        if (result.siteUrl) {
+          setConnected(true);
+          setSiteUrl(result.siteUrl);
+          setHasPending(false);
+          setAuthBanner({ tone: "ok", text: t("gsc.authSuccess", { siteUrl: result.siteUrl }) });
+        }
+        setOauthResolving(true);
+        void revalidator.revalidate();
+        return;
+      }
+      if (result.gscAuth === "select") {
+        setHasPending(true);
+        setOauthResolving(true);
+        void revalidator.revalidate();
+        return;
+      }
+      if (result.gscAuth === "error") {
+        if (result.errorCode === "no_verified_sites") {
+          setAuthBanner({ tone: "error", text: t("gsc.authNoVerifiedSites") });
+        } else {
+          setAuthBanner({ tone: "error", text: result.reason || t("gsc.authError") });
+        }
+        return;
+      }
+      if (result.gscAuth === "cancelled") {
+        setAuthBanner({ tone: "error", text: t("gsc.authCancelled") });
+      }
+    },
+    [revalidator, t],
+  );
 
   useEffect(() => {
+    const gscAuth = searchParams.get("gscAuth");
     if (!gscAuth) return;
-    const reason = searchParams.get("reason");
-    const errorCode = searchParams.get("errorCode");
-
-    if (gscAuth === "select") {
-      setHasPending(true);
-    } else if (gscAuth === "success") {
-      const urlSite = searchParams.get("siteUrl");
-      if (urlSite) {
-        setConnected(true);
-        setSiteUrl(urlSite);
-        setHasPending(false);
-        setAuthBanner({ tone: "ok", text: t("gsc.authSuccess", { siteUrl: urlSite }) });
-      }
-    } else if (gscAuth === "error") {
-      if (errorCode === "no_verified_sites") {
-        setAuthBanner({ tone: "error", text: t("gsc.authNoVerifiedSites") });
-      } else {
-        setAuthBanner({ tone: "error", text: reason || t("gsc.authError") });
-      }
-    } else if (gscAuth === "cancelled") {
-      setAuthBanner({ tone: "error", text: t("gsc.authCancelled") });
-    }
-
     cleanGscOAuthParams();
-  }, [gscAuth, searchParams, t]);
+    applyGscAuthResult({
+      gscAuth,
+      siteUrl: searchParams.get("siteUrl") ?? undefined,
+      errorCode: searchParams.get("errorCode") ?? undefined,
+      reason: searchParams.get("reason") ?? undefined,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!oauthResolving) return;
+    if (loaderData.connected || loaderData.hasPending) {
+      setOauthResolving(false);
+    }
+  }, [loaderData.connected, loaderData.hasPending, oauthResolving]);
+
+  useEffect(() => {
+    if (!oauthResolving || revalidator.state !== "idle") return;
+    if (loaderData.connected || loaderData.hasPending) return;
+    const timer = window.setTimeout(() => setOauthResolving(false), 500);
+    return () => window.clearTimeout(timer);
+  }, [oauthResolving, revalidator.state, loaderData.connected, loaderData.hasPending]);
 
   useEffect(() => {
     if (siteFetcher.data?.ok) {
@@ -317,19 +362,26 @@ export function GoogleSearchConsolePage() {
 
   const handleConnect = useCallback(() => {
     setAuthBanner(null);
-    authFetcher.load("/api/gsc/auth-url");
-  }, [authFetcher]);
-
-  useEffect(() => {
-    if (authFetcher.data?.ok && (authFetcher.data as { ok: true; authUrl: string }).authUrl) {
-      window.open((authFetcher.data as { ok: true; authUrl: string }).authUrl, "_top");
-    } else if (authFetcher.data && !authFetcher.data.ok) {
-      setAuthBanner({
-        tone: "error",
-        text: (authFetcher.data as { ok: false; error: string }).error,
-      });
-    }
-  }, [authFetcher.data]);
+    const search = window.location.search ?? "";
+    const host = new URLSearchParams(search).get("host") ?? "";
+    void (async () => {
+      try {
+        await gscOAuth.startOAuth(`/api/gsc/auth-url?host=${encodeURIComponent(host)}`, (data) => {
+          applyGscAuthResult({
+            gscAuth: data.gscAuth,
+            siteUrl: data.siteUrl,
+            errorCode: data.errorCode,
+            reason: data.reason,
+          });
+        });
+      } catch (error) {
+        setAuthBanner({
+          tone: "error",
+          text: error instanceof Error ? error.message : t("gsc.authError"),
+        });
+      }
+    })();
+  }, [applyGscAuthResult, gscOAuth, t]);
 
   const handleSiteSelect = useCallback(
     (selectedSiteUrl: string) => {
@@ -346,9 +398,9 @@ export function GoogleSearchConsolePage() {
     disconnectFetcher.submit({}, { method: "POST", action: "/api/gsc/disconnect" });
   }, [disconnectFetcher]);
 
-  const connectingAuth = authFetcher.state === "loading";
   const disconnecting = disconnectFetcher.state !== "idle";
   const selectingLoading = siteFetcher.state !== "idle";
+  const connectingAuth = gscOAuth.redirecting || oauthResolving;
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -386,7 +438,7 @@ export function GoogleSearchConsolePage() {
           </div>
         )}
 
-        {!connected && !hasPending && <NotConnectedPanel onConnect={handleConnect} />}
+        {!connected && !hasPending && !connectingAuth && <NotConnectedPanel onConnect={handleConnect} />}
 
         {hasPending && !connected && (
           <SiteSelectPanel

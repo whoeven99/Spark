@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import {
+  buildGscOAuthPopupCloseHtml,
   buildGscOAuthReturnUrl,
   exchangeCodeForTokens,
   getGoogleOAuthClient,
@@ -27,6 +28,12 @@ function appRedirect(
   return redirect(buildGscOAuthReturnUrl({ shop, host, appOrigin, query: params, request }));
 }
 
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildGscOAuthPopupCloseHtml(params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 function oauthStateErrorResponse(): Response {
   return new Response(
     "Google OAuth state 无效或已过期。请关闭此页，从 Shopify 后台重新打开应用后再试。",
@@ -44,13 +51,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified || verified.flow !== "gsc") {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin } = verified;
+  const { shop, host, appOrigin, popup } = verified;
+
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return appRedirect(request, shop, host, appOrigin, { gscAuth: "cancelled" });
+    return respond({ gscAuth: "cancelled" });
   }
   if (!code) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       gscAuth: "error",
       reason: "Google 未返回授权 code",
     });
@@ -65,7 +77,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { clientId, clientSecret } = getGoogleOAuthClient();
 
     if (sites.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         gscAuth: "error",
         errorCode: "no_verified_sites",
       });
@@ -80,7 +92,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         clientSecret,
         siteUrl: sites[0].siteUrl,
       });
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         gscAuth: "success",
         siteUrl: sites[0].siteUrl,
       });
@@ -96,9 +108,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       clientSecret,
       sites,
     });
-    return appRedirect(request, shop, host, appOrigin, { gscAuth: "select" });
+    return respond({ gscAuth: "select" });
   } catch (e) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       gscAuth: "error",
       reason: e instanceof Error ? e.message : "Google Search Console 授权失败",
     });

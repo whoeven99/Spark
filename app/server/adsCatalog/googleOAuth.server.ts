@@ -423,6 +423,7 @@ export function buildGscOAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
   reauth?: boolean;
+  popup?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   const { clientId } = getGoogleOAuthClient();
   if (!clientId) {
@@ -431,7 +432,13 @@ export function buildGscOAuthStartUrl(params: {
 
   const callbackPath = "/ads/google-search-console/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createOAuthState(params.shop, "gsc", params.host ?? "", appOrigin);
+  const state = createOAuthState(
+    params.shop,
+    "gsc",
+    params.host ?? "",
+    appOrigin,
+    params.popup,
+  );
   const authUrl = buildAuthUrl({
     flow: "gsc",
     state,
@@ -539,6 +546,10 @@ export function buildOAuthPopupCloseHtml(
 
 export function buildGa4OAuthPopupCloseHtml(params: Record<string, string>): string {
   return buildOAuthPopupCloseHtml("ga4_oauth", params);
+}
+
+export function buildGscOAuthPopupCloseHtml(params: Record<string, string>): string {
+  return buildOAuthPopupCloseHtml("gsc_oauth", params);
 }
 
 /**
