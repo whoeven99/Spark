@@ -209,6 +209,24 @@ export function AdsInsightsPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: string;
+        googleAdsSandboxAuth?: string;
+      } | null;
+      if (!data || data.type !== "google_ads_sandbox_oauth" || !data.googleAdsSandboxAuth) return;
+      setPlatform("google");
+      setGoogleSandbox(true);
+      const next = new URLSearchParams(searchParams);
+      next.set("platform", "google");
+      next.set("sandbox", "1");
+      setSearchParams(next, { replace: true });
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (seedFetcher.data?.ok) {
       loadMetrics();
     }

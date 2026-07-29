@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import {
   buildGoogleOAuthReturnUrl,
+  buildOAuthPopupCloseHtml,
   exchangeCodeForTokens,
   getGmcMerchantAccounts,
   getGoogleOAuthClient,
@@ -40,6 +41,12 @@ function oauthStateErrorResponse(): Response {
   );
 }
 
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildOAuthPopupCloseHtml("gmc_oauth", params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 function buildGmcPendingPayload(
   tokens: OAuthTokens,
   accounts: MerchantAccount[],
@@ -65,13 +72,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified || verified.flow !== "gmc") {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin } = verified;
+  const { shop, host, appOrigin, popup } = verified;
+
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return appRedirect(request, shop, host, appOrigin, { gmcAuth: "cancelled" });
+    return respond({ gmcAuth: "cancelled" });
   }
   if (!code) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       gmcAuth: "error",
       reason: "Google 未返回授权 code",
     });
@@ -86,7 +98,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { clientId, clientSecret } = getGoogleOAuthClient();
 
     if (accounts.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         gmcAuth: "error",
         reason: "该 Google 账号未关联任何 Merchant Center 账户",
       });
@@ -110,7 +122,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         merchantId: accounts[0].merchantId,
         accessToken: tokens.accessToken,
       }).catch(() => undefined);
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         gmcAuth: "success",
         merchantId: accounts[0].merchantId,
       });
@@ -119,9 +131,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await deleteGoogleMerchantCredential(shop);
     await clearGoogleMerchantPending(shop);
     await setGoogleMerchantPending(shop, buildGmcPendingPayload(tokens, accounts, clientId, clientSecret));
-    return appRedirect(request, shop, host, appOrigin, { gmcAuth: "select" });
+    return respond({ gmcAuth: "select" });
   } catch (e) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       gmcAuth: "error",
       reason: e instanceof Error ? e.message : "GMC 授权失败",
     });

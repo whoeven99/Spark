@@ -208,6 +208,8 @@
     "selectPropertyTitle": "Select a GA4 property",
     "selectPropertyHint": "Multiple GA4 properties were found. Select an Analytics account on the left, then click the property you want to connect.",
     "switchPropertyHint": "Select an Analytics account on the left, then click a property to switch the data you are viewing.",
+    "togglePropertyExpand": "Expand",
+    "togglePropertyCollapse": "Collapse",
     "selectAccountLabel": "Analytics Account",
     "selectPropertyLabel": "Properties",
     "selectAll": "Select all",

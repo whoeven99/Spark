@@ -33,6 +33,7 @@ import type {
   GmcReviewProductView,
 } from "../component/adsCatalog/types";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
+import { resolveAdsCatalogAuthResult } from "../../lib/adsCatalogOAuthResult";
 
 type Tab = "sync" | "credentials" | "tasks";
 type Platform = "facebook" | "google" | "tiktok";
@@ -260,37 +261,60 @@ export function AdsCatalogPage() {
   }, []);
 
   // Surface OAuth callback outcome and route to the right tab.
+  const applyAuthResult = useCallback(
+    (input: {
+      gmc?: string | null;
+      ads?: string | null;
+      meta?: string | null;
+      tiktok?: string | null;
+      reason?: string | null;
+    }) => {
+      const result = resolveAdsCatalogAuthResult({ ...input, t });
+      if (result.action === "none") return;
+      if (result.banner) setAuthBanner(result.banner);
+      setTab(result.tab);
+      revalidator.revalidate();
+    },
+    [revalidator, t],
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const gmc = params.get("gmcAuth");
-    const ads = params.get("adsAuth");
-    const meta = params.get("metaAuth");
-    const tiktok = params.get("tiktokAuth");
-    const reason = params.get("reason");
-    if (gmc === "select" || ads === "select" || meta === "select" || tiktok === "select") {
-      setTab("credentials");
-      revalidator.revalidate();
-    } else if (
-      gmc === "success" ||
-      ads === "success" ||
-      meta === "success" ||
-      tiktok === "success"
-    ) {
-      setAuthBanner({ tone: "ok", text: t("adsCatalog.authSuccess") });
-      setTab("credentials");
-      revalidator.revalidate();
-    } else if (tiktok === "authorized") {
-      setAuthBanner({ tone: "ok", text: t("adsCatalog.tiktokAuthorizedBanner") });
-      setTab("credentials");
-      revalidator.revalidate();
-    } else if (gmc === "error" || ads === "error" || meta === "error" || tiktok === "error") {
-      setAuthBanner({ tone: "error", text: reason || t("adsCatalog.authError") });
-      setTab("credentials");
-    } else if (gmc === "cancelled" || ads === "cancelled" || meta === "cancelled" || tiktok === "cancelled") {
-      setAuthBanner({ tone: "error", text: t("adsCatalog.authCancelled") });
-    }
+    applyAuthResult({
+      gmc: params.get("gmcAuth"),
+      ads: params.get("adsAuth"),
+      meta: params.get("metaAuth"),
+      tiktok: params.get("tiktokAuth"),
+      reason: params.get("reason"),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: string;
+        gmcAuth?: string;
+        adsAuth?: string;
+        metaAuth?: string;
+        tiktokAuth?: string;
+        reason?: string;
+      } | null;
+      if (!data?.type) return;
+
+      if (data.type === "gmc_oauth") {
+        applyAuthResult({ gmc: data.gmcAuth, reason: data.reason });
+      } else if (data.type === "ads_catalog_oauth") {
+        applyAuthResult({ ads: data.adsAuth, reason: data.reason });
+      } else if (data.type === "meta_catalog_oauth") {
+        applyAuthResult({ meta: data.metaAuth, reason: data.reason });
+      } else if (data.type === "tiktok_catalog_oauth") {
+        applyAuthResult({ tiktok: data.tiktokAuth, reason: data.reason });
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [applyAuthResult]);
 
   useEffect(() => {
     if (syncFetcher.state !== "idle" || !syncFetcher.data?.success) return;

@@ -7,6 +7,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const source = new URL(request.url);
   const host = source.searchParams.get("host") ?? "";
   const reauth = source.searchParams.get("reauth") === "1";
+  const popup = source.searchParams.get("popup") === "1";
 
   const result = buildGoogleOAuthStartUrl({
     flow: "gmc",
@@ -14,6 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     host,
     requestOrigin: source.origin,
     reauth,
+    popup,
   });
 
   if (!result.ok) {

@@ -365,6 +365,7 @@ function PropertySwitcher({
   const [selectedAccount, setSelectedAccount] = useState<string>(
     activeProperty?.accountName ?? accounts[0]?.name ?? "",
   );
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const ap = properties.find((p) => p.propertyId === activeId);
@@ -502,6 +503,8 @@ function PropertySwitcher({
 
   if (!showHeader) return dualPanel;
 
+  const activeNumId = activeProperty ? extractNumericId(activeProperty.propertyId) : "";
+
   return (
     <div
       style={{
@@ -514,13 +517,51 @@ function PropertySwitcher({
         gap: "1rem",
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}>
-        {t("ga4.selectPropertyTitle")}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}>
+            {t("ga4.selectPropertyTitle")}
+          </div>
+          {!expanded && activeProperty && (
+            <div style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary, marginTop: 4 }}>
+              {activeProperty.propertyName}
+              {activeNumId ? ` (${activeNumId})` : ""}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          style={{
+            padding: "0.35rem 0.85rem",
+            borderRadius: 8,
+            border: `1px solid ${pageColorTokens.border}`,
+            background: "transparent",
+            color: pageColorTokens.textBody,
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {expanded ? t("ga4.togglePropertyCollapse") : t("ga4.togglePropertyExpand")}
+        </button>
       </div>
-      <p style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary, margin: 0 }}>
-        {t("ga4.switchPropertyHint")}
-      </p>
-      {dualPanel}
+      {expanded && (
+        <>
+          <p style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary, margin: 0 }}>
+            {t("ga4.switchPropertyHint")}
+          </p>
+          {dualPanel}
+        </>
+      )}
     </div>
   );
 }

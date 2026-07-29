@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
 
@@ -54,6 +55,8 @@ export function GoogleConnectPanels({
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const gmcOAuth = useOAuthPopup("gmc_oauth");
+  const adsOAuth = useOAuthPopup("ads_catalog_oauth");
 
   const gmc = credentials.googleMerchant;
   const ads = credentials.googleAds;
@@ -64,22 +67,11 @@ export function GoogleConnectPanels({
         ? "/api/ads-catalog/google-merchant-auth-url"
         : "/api/ads-catalog/google-ads-auth-url";
     const reauthSuffix = reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
+    const popup = kind === "gmc" ? gmcOAuth : adsOAuth;
     void (async () => {
       setBusy(true);
       try {
-        const resp = await fetch(`${apiPath}${locationSearch}${reauthSuffix}`, {
-          headers: { Accept: "application/json" },
-        });
-        const data = (await resp.json().catch(() => ({}))) as {
-          ok?: boolean;
-          authUrl?: string;
-          error?: string;
-        };
-        if (!resp.ok || !data.authUrl) {
-          alert(data.error ?? t("adsCatalog.authError"));
-          return;
-        }
-        window.open(data.authUrl, "_top");
+        await popup.startOAuth(`${apiPath}${locationSearch}${reauthSuffix}`, () => onChanged());
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {

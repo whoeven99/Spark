@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRevalidator } from "react-router";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 
 type PendingAccount = { id: string; name?: string; formatted?: string };
@@ -57,23 +58,15 @@ export function MetaAdsConnectPanel({
   const { t } = useTranslation();
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
+  const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
 
   async function openOAuth() {
     setBusy(true);
     try {
-      const resp = await fetch(`/api/ads-insights/meta-auth-url${locationSearch}`, {
-        headers: { Accept: "application/json" },
+      await metaAdsOAuth.startOAuth(`/api/ads-insights/meta-auth-url${locationSearch}`, () => {
+        onChanged();
+        revalidator.revalidate();
       });
-      const data = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        authUrl?: string;
-        error?: string;
-      };
-      if (!resp.ok || !data.authUrl) {
-        alert(data.error ?? t("adsInsights.authError"));
-        return;
-      }
-      window.open(data.authUrl, "_top");
     } catch (e) {
       alert(e instanceof Error ? e.message : t("adsInsights.authError"));
     } finally {

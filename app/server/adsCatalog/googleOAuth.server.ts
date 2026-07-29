@@ -206,6 +206,7 @@ export function buildGoogleOAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
   reauth?: boolean;
+  popup?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   const { clientId } = getGoogleOAuthClient();
   if (!clientId) {
@@ -215,7 +216,13 @@ export function buildGoogleOAuthStartUrl(params: {
   const callbackPath =
     params.flow === "gmc" ? "/ads/google-merchant/callback" : "/ads/google-ads/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createOAuthState(params.shop, params.flow, params.host ?? "", appOrigin);
+  const state = createOAuthState(
+    params.shop,
+    params.flow,
+    params.host ?? "",
+    appOrigin,
+    params.popup,
+  );
   const authUrl = buildAuthUrl({
     flow: params.flow,
     state,
@@ -231,6 +238,7 @@ export function buildGoogleAdsSandboxOAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
   reauth?: boolean;
+  popup?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   const { clientId } = getGoogleOAuthClient();
   if (!clientId) {
@@ -239,7 +247,13 @@ export function buildGoogleAdsSandboxOAuthStartUrl(params: {
 
   const callbackPath = "/ads/google-ads/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createOAuthState(params.shop, "ads_sandbox", params.host ?? "", appOrigin);
+  const state = createOAuthState(
+    params.shop,
+    "ads_sandbox",
+    params.host ?? "",
+    appOrigin,
+    params.popup,
+  );
   const authUrl = buildAuthUrl({
     flow: "ads_sandbox",
     state,
@@ -487,8 +501,11 @@ export function buildGa4OAuthStartUrl(params: {
  * OAuth 在弹窗中完成后，弹窗页通过 postMessage 把结果传回父窗口并自动关闭。
  * 父窗口（Shopify 嵌入 iframe）监听 message 事件即可接收。
  */
-export function buildGa4OAuthPopupCloseHtml(params: Record<string, string>): string {
-  const safeData = JSON.stringify({ type: "ga4_oauth", ...params }).replace(/<\/script>/gi, "<\\/script>");
+export function buildOAuthPopupCloseHtml(
+  messageType: string,
+  params: Record<string, string>,
+): string {
+  const safeData = JSON.stringify({ type: messageType, ...params }).replace(/<\/script>/gi, "<\\/script>");
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -518,6 +535,10 @@ export function buildGa4OAuthPopupCloseHtml(params: Record<string, string>): str
 </script>
 </body>
 </html>`;
+}
+
+export function buildGa4OAuthPopupCloseHtml(params: Record<string, string>): string {
+  return buildOAuthPopupCloseHtml("ga4_oauth", params);
 }
 
 /**

@@ -3,6 +3,7 @@ import { redirect } from "react-router";
 import {
   buildGoogleOAuthReturnUrl,
   buildGoogleAdsSandboxOAuthReturnUrl,
+  buildOAuthPopupCloseHtml,
   exchangeCodeForTokens,
   getAdsCustomers,
   getGoogleAdsDeveloperToken,
@@ -48,6 +49,13 @@ function oauthStateErrorResponse(): Response {
   );
 }
 
+function popupClose(flow: "ads" | "ads_sandbox", params: Record<string, string>): Response {
+  const messageType = flow === "ads_sandbox" ? "google_ads_sandbox_oauth" : "ads_catalog_oauth";
+  return new Response(buildOAuthPopupCloseHtml(messageType, params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 function buildAdsPendingPayload(
   tokens: OAuthTokens,
   customers: AdsCustomer[],
@@ -91,46 +99,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified || (verified.flow !== "ads" && verified.flow !== "ads_sandbox")) {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin, flow } = verified;
+  const { shop, host, appOrigin, flow, popup } = verified;
   const isSandbox = flow === "ads_sandbox";
 
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(flow, params)
+      : appRedirect(request, shop, host, appOrigin, params, flow);
+
   if (oauthError) {
-    return appRedirect(
-      request,
-      shop,
-      host,
-      appOrigin,
+    return respond(
       isSandbox ? { googleAdsSandboxAuth: "cancelled" } : { adsAuth: "cancelled" },
-      flow,
     );
   }
   if (!code) {
-    return appRedirect(
-      request,
-      shop,
-      host,
-      appOrigin,
+    return respond(
       isSandbox
         ? { googleAdsSandboxAuth: "error", reason: "Google 未返回授权 code" }
         : { adsAuth: "error", reason: "Google 未返回授权 code" },
-      flow,
     );
   }
 
   const developerToken = getGoogleAdsDeveloperToken();
   if (!developerToken) {
-    return appRedirect(
-      request,
-      shop,
-      host,
-      appOrigin,
+    return respond(
       isSandbox
         ? {
             googleAdsSandboxAuth: "error",
             reason: "缺少 GOOGLE_ADS_DEVELOPER_TOKEN 环境变量",
           }
         : { adsAuth: "error", reason: "缺少 GOOGLE_ADS_DEVELOPER_TOKEN 环境变量" },
-      flow,
     );
   }
 
@@ -143,18 +141,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { clientId, clientSecret } = getGoogleOAuthClient();
 
     if (customers.length === 0) {
-      return appRedirect(
-        request,
-        shop,
-        host,
-        appOrigin,
+      return respond(
         isSandbox
           ? {
               googleAdsSandboxAuth: "error",
               reason: "该 Google 账号未关联任何 Google Ads 广告账户",
             }
           : { adsAuth: "error", reason: "该 Google 账号未关联任何 Google Ads 广告账户" },
-        flow,
       );
     }
 
@@ -183,10 +176,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           loginCustomerId,
           descriptiveName: customers[0].descriptiveName,
         });
-        return appRedirect(request, shop, host, appOrigin, {
+        return respond({
           googleAdsSandboxAuth: "success",
           customerId: customers[0].formatted,
-        }, flow);
+        });
       }
       await clearGoogleAdsPending(shop);
       await setGoogleAdsCredential(shop, {
@@ -195,10 +188,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         customerId,
         loginCustomerId,
       });
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         adsAuth: "success",
         customerId: customers[0].formatted,
-      }, flow);
+      });
     }
 
     const pendingPayload = buildAdsPendingPayload(tokens, customers, clientId, clientSecret);
@@ -207,19 +200,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       await deleteGoogleAdsSandboxCredential(shop);
       await clearGoogleAdsSandboxPending(shop);
       await setGoogleAdsSandboxPending(shop, pendingPayload);
-      return appRedirect(request, shop, host, appOrigin, { googleAdsSandboxAuth: "select" }, flow);
+      return respond({ googleAdsSandboxAuth: "select" });
     }
 
     await deleteGoogleAdsCredential(shop);
     await clearGoogleAdsPending(shop);
     await setGoogleAdsPending(shop, pendingPayload);
-    return appRedirect(request, shop, host, appOrigin, { adsAuth: "select" }, flow);
+    return respond({ adsAuth: "select" });
   } catch (e) {
-    return appRedirect(
-      request,
-      shop,
-      host,
-      appOrigin,
+    return respond(
       isSandbox
         ? {
             googleAdsSandboxAuth: "error",
@@ -229,7 +218,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             adsAuth: "error",
             reason: e instanceof Error ? e.message : "Google Ads 授权失败",
           },
-      flow,
     );
   }
 };
