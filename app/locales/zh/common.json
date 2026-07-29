@@ -207,6 +207,7 @@
     "disconnecting": "断开中…",
     "selectPropertyTitle": "选择 GA4 媒体资源",
     "selectPropertyHint": "该 Google 账号下发现多个 GA4 媒体资源，请在左侧选择 Analytics 账号，然后点击右侧要连接的媒体资源。",
+    "switchPropertyHint": "在左侧选择 Analytics 账号，点击右侧媒体资源即可切换查看的数据。",
     "selectAccountLabel": "Analytics 账号",
     "selectPropertyLabel": "媒体资源和应用",
     "selectAll": "全选",

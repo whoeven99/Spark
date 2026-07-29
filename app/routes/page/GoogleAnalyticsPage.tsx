@@ -338,13 +338,17 @@ function PropertySwitcher({
   properties,
   activeId,
   onSelect,
+  loading = false,
+  showHeader = false,
 }: {
   properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   activeId: string;
   onSelect: (propertyId: string) => void;
+  loading?: boolean;
+  showHeader?: boolean;
 }) {
   const { t } = useTranslation();
-  if (properties.length <= 1) return null;
+  if (properties.length === 0) return null;
 
   // 按 accountName 分组
   const accountsMap = new Map<string, { name: string; id: string }>();
@@ -384,7 +388,7 @@ function PropertySwitcher({
     flexShrink: 0,
   };
 
-  return (
+  const dualPanel = (
     <div
       style={{
         border: `1px solid ${pageColorTokens.border}`,
@@ -394,6 +398,8 @@ function PropertySwitcher({
         minHeight: 160,
         maxHeight: 280,
         background: pageColorTokens.surface,
+        opacity: loading ? 0.65 : 1,
+        pointerEvents: loading ? "none" : "auto",
       }}
     >
       {/* 左侧账号列表（有账号信息时显示） */}
@@ -493,23 +499,40 @@ function PropertySwitcher({
       </div>
     </div>
   );
+
+  if (!showHeader) return dualPanel;
+
+  return (
+    <div
+      style={{
+        background: pageColorTokens.surface,
+        border: `1px solid ${pageColorTokens.border}`,
+        borderRadius: pageColorTokens.radiusCard,
+        padding: "1.5rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: "0.95rem", color: pageColorTokens.textPrimary }}>
+        {t("ga4.selectPropertyTitle")}
+      </div>
+      <p style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary, margin: 0 }}>
+        {t("ga4.switchPropertyHint")}
+      </p>
+      {dualPanel}
+    </div>
+  );
 }
 
 function ConnectedHeader({
-  properties,
   onDisconnect,
   disconnecting,
-  onReselect,
-  canReselect,
 }: {
-  properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }>;
   onDisconnect: () => void;
   disconnecting: boolean;
-  onReselect: () => void;
-  canReselect: boolean;
 }) {
   const { t } = useTranslation();
-  const singleProperty = properties.length === 1 ? properties[0] : null;
 
   return (
     <div
@@ -540,41 +563,8 @@ function ConnectedHeader({
         >
           {t("ga4.connected")}
         </div>
-        <div style={{ minWidth: 0 }}>
-          {singleProperty ? (
-            <>
-              <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
-                {singleProperty.propertyName}
-              </div>
-              <div style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                {extractNumericId(singleProperty.propertyId)}
-              </div>
-            </>
-          ) : (
-            <div style={{ fontWeight: 600, fontSize: "0.9rem", color: pageColorTokens.textPrimary }}>
-              {t("ga4.connectedMultiple", { count: properties.length })}
-            </div>
-          )}
-        </div>
       </div>
       <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-        {canReselect && (
-          <button
-            onClick={onReselect}
-            style={{
-              padding: "0.4rem 1rem",
-              borderRadius: 8,
-              border: `1px solid ${pageColorTokens.border}`,
-              background: "transparent",
-              color: pageColorTokens.textBody,
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {t("ga4.reselectBtn")}
-          </button>
-        )}
         <button
           onClick={onDisconnect}
           disabled={disconnecting}
@@ -647,7 +637,6 @@ export function GoogleAnalyticsPage() {
   const [pendingProperties, setPendingProperties] = useState(loaderData.pendingProperties);
   const [banner, setBanner] = useState<AuthBanner | null>(null);
   const [redirecting, setRedirecting] = useState(false);
-  const [isReselecting, setIsReselecting] = useState(false);
   const [activePropertyId, setActivePropertyId] = useState<string>(
     () => loaderData.properties[0]?.propertyId ?? "",
   );
@@ -659,6 +648,7 @@ export function GoogleAnalyticsPage() {
   const authUrlFetcherRef = useRef(authUrlFetcher);
   authUrlFetcherRef.current = authUrlFetcher;
   const popupRef = useRef<Window | null>(null);
+  const propertySelectIntentRef = useRef<"pending" | "switch">("pending");
 
   const [searchParams] = useSearchParams();
 
@@ -779,19 +769,23 @@ export function GoogleAnalyticsPage() {
       setActivePropertyId(selected[0]?.propertyId ?? "");
       setHasPending(false);
       setPendingProperties([]);
-      setIsReselecting(false);
-      setBanner({
-        tone: "ok",
-        text:
-          selected.length === 1
-            ? t("ga4.authSuccess", { propertyName: selected[0].propertyName })
-            : t("ga4.authSuccessMultiple", {
-                count: selected.length,
-                propertyNames: selected.map((property) => property.propertyName).join(", "),
-              }),
-      });
+      if (propertySelectIntentRef.current === "pending") {
+        setBanner({
+          tone: "ok",
+          text:
+            selected.length === 1
+              ? t("ga4.authSuccess", { propertyName: selected[0].propertyName })
+              : t("ga4.authSuccessMultiple", {
+                  count: selected.length,
+                  propertyNames: selected.map((property) => property.propertyName).join(", "),
+                }),
+        });
+      }
     } else {
       setBanner({ tone: "error", text: propertySelectFetcher.data.error });
+      if (propertySelectIntentRef.current === "switch" && properties[0]) {
+        setActivePropertyId(properties[0].propertyId);
+      }
     }
   }, [propertySelectFetcher.data, t]);
 
@@ -823,6 +817,7 @@ export function GoogleAnalyticsPage() {
 
   const handlePropertySelect = useCallback(
     (selectedPropertyIds: string[]) => {
+      propertySelectIntentRef.current = "pending";
       propertySelectFetcher.submit(
         { propertyIds: selectedPropertyIds },
         { method: "POST", action: "/api/ga4/properties", encType: "application/json" },
@@ -831,14 +826,22 @@ export function GoogleAnalyticsPage() {
     [propertySelectFetcher],
   );
 
+  const handlePropertySwitch = useCallback(
+    (propertyId: string) => {
+      if (propertyId === activePropertyId) return;
+      setActivePropertyId(propertyId);
+      propertySelectIntentRef.current = "switch";
+      propertySelectFetcher.submit(
+        { propertyIds: [propertyId] },
+        { method: "POST", action: "/api/ga4/properties", encType: "application/json" },
+      );
+    },
+    [activePropertyId, propertySelectFetcher],
+  );
+
   const handleDisconnect = useCallback(() => {
     disconnectFetcher.submit({}, { method: "POST", action: "/api/ga4/disconnect" });
   }, [disconnectFetcher]);
-
-  const handleReselect = useCallback(() => {
-    setIsReselecting(true);
-    setBanner(null);
-  }, []);
 
   const isSelectLoading = propertySelectFetcher.state !== "idle";
   const isDisconnecting = disconnectFetcher.state !== "idle";
@@ -848,6 +851,10 @@ export function GoogleAnalyticsPage() {
     ...p,
     accountName: p.accountName ?? "",
   }));
+  const selectorProperties =
+    allPropertiesForPanel.length > 0
+      ? allPropertiesForPanel
+      : properties.map((p) => ({ ...p, accountName: p.accountName ?? "" }));
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -883,29 +890,17 @@ export function GoogleAnalyticsPage() {
       {connected && properties.length > 0 && (
         <>
           <ConnectedHeader
-            properties={properties}
             onDisconnect={handleDisconnect}
             disconnecting={isDisconnecting}
-            onReselect={handleReselect}
-            canReselect={allPropertiesForPanel.length > 0}
           />
-          {isReselecting ? (
-            <PropertySelectPanel
-              properties={allPropertiesForPanel}
-              onSelect={handlePropertySelect}
-              loading={isSelectLoading}
-              onCancel={() => setIsReselecting(false)}
-            />
-          ) : (
-            <>
-              <PropertySwitcher
-                properties={properties}
-                activeId={activePropertyId}
-                onSelect={setActivePropertyId}
-              />
-              <Ga4PerformanceView propertyId={activePropertyId} />
-            </>
-          )}
+          <PropertySwitcher
+            properties={selectorProperties}
+            activeId={activePropertyId}
+            onSelect={handlePropertySwitch}
+            loading={isSelectLoading}
+            showHeader
+          />
+          <Ga4PerformanceView propertyId={activePropertyId} />
         </>
       )}
     </div>
