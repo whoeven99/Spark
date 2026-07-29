@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../hooks/useOAuthPopup";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
   PageHeaderNav,
@@ -11,7 +12,6 @@ import {
 import type { Ga4SettingsLoaderData } from "../app.settings.google-analytics";
 import { Ga4PerformanceView } from "./Ga4PerformanceView";
 
-type AuthUrlResponse = { ok: true; authUrl: string } | { ok: false; error: string };
 type PropertySelectResponse =
   | { ok: true; properties: Array<{ propertyId: string; propertyName: string; accountName?: string; accountId?: string }> }
   | { ok: false; error: string };
@@ -677,18 +677,15 @@ export function GoogleAnalyticsPage() {
   const [hasPending, setHasPending] = useState(loaderData.hasPending);
   const [pendingProperties, setPendingProperties] = useState(loaderData.pendingProperties);
   const [banner, setBanner] = useState<AuthBanner | null>(null);
-  const [redirecting, setRedirecting] = useState(false);
+  const [oauthResolving, setOauthResolving] = useState(false);
   const [activePropertyId, setActivePropertyId] = useState<string>(
     () => loaderData.properties[0]?.propertyId ?? "",
   );
 
-  const authUrlFetcher = useFetcher<AuthUrlResponse>();
+  const ga4OAuth = useOAuthPopup("ga4_oauth");
   const propertySelectFetcher = useFetcher<PropertySelectResponse>();
   const disconnectFetcher = useFetcher<DisconnectResponse>();
 
-  const authUrlFetcherRef = useRef(authUrlFetcher);
-  authUrlFetcherRef.current = authUrlFetcher;
-  const popupRef = useRef<Window | null>(null);
   const propertySelectIntentRef = useRef<"pending" | "switch">("pending");
 
   const [searchParams] = useSearchParams();
@@ -708,97 +705,74 @@ export function GoogleAnalyticsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaderData]);
 
+  const applyGa4AuthResult = useCallback(
+    (result: {
+      ga4Auth?: string;
+      propertyName?: string;
+      errorCode?: string;
+      reason?: string;
+    }) => {
+      if (result.ga4Auth === "success") {
+        setBanner({
+          tone: "ok",
+          text: t("ga4.authSuccess", { propertyName: result.propertyName ?? "" }),
+        });
+        setOauthResolving(true);
+        void revalidator.revalidate();
+        return;
+      }
+      if (result.ga4Auth === "select") {
+        setHasPending(true);
+        setOauthResolving(true);
+        void revalidator.revalidate();
+        return;
+      }
+      if (result.ga4Auth === "cancelled") {
+        setBanner({ tone: "error", text: t("ga4.authCancelled") });
+        return;
+      }
+      if (result.ga4Auth === "error") {
+        if (result.errorCode === "no_properties") {
+          setBanner({ tone: "error", text: t("ga4.authNoProperties") });
+        } else {
+          setBanner({
+            tone: "error",
+            text: `${t("ga4.authError")}${result.reason ? ` (${result.reason})` : ""}`,
+          });
+        }
+      }
+    },
+    [revalidator, t],
+  );
+
   // Handle OAuth return params（非 popup 模式下的 URL 参数回调）
   useEffect(() => {
     const ga4Auth = searchParams.get("ga4Auth");
     if (!ga4Auth) return;
     cleanGa4OAuthParams();
-
-    if (ga4Auth === "success") {
-      const name = searchParams.get("propertyName") ?? "";
-      setBanner({ tone: "ok", text: t("ga4.authSuccess", { propertyName: name }) });
-      if (name) {
-        setConnected(true);
-      }
-    } else if (ga4Auth === "cancelled") {
-      setBanner({ tone: "error", text: t("ga4.authCancelled") });
-    } else if (ga4Auth === "error") {
-      const errorCode = searchParams.get("errorCode");
-      if (errorCode === "no_properties") {
-        setBanner({ tone: "error", text: t("ga4.authNoProperties") });
-      } else {
-        const reason = searchParams.get("reason") ?? "";
-        setBanner({ tone: "error", text: `${t("ga4.authError")}${reason ? ` (${reason})` : ""}` });
-      }
-    } else if (ga4Auth === "select") {
-      // pending state already set via loader; just show the panel
-    }
+    applyGa4AuthResult({
+      ga4Auth,
+      propertyName: searchParams.get("propertyName") ?? undefined,
+      errorCode: searchParams.get("errorCode") ?? undefined,
+      reason: searchParams.get("reason") ?? undefined,
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle auth URL response: 在弹窗中打开 Google 授权页
+  // 弹窗授权完成后，等 loader 同步 connected / pending 再结束 resolving，避免闪回「未连接」
   useEffect(() => {
-    if (authUrlFetcher.data?.ok && authUrlFetcher.data.authUrl) {
-      if (popupRef.current && !popupRef.current.closed) {
-        popupRef.current.location.href = authUrlFetcher.data.authUrl;
-      } else {
-        // 弹窗被拦截时降级为 _top 跳转
-        window.open(authUrlFetcher.data.authUrl, "_top");
-      }
-    } else if (authUrlFetcher.data && !authUrlFetcher.data.ok) {
-      setRedirecting(false);
-      setBanner({ tone: "error", text: authUrlFetcher.data.error });
-      try { popupRef.current?.close(); } catch {}
-      popupRef.current = null;
+    if (!oauthResolving) return;
+    if (loaderData.connected || loaderData.hasPending) {
+      setOauthResolving(false);
     }
-  }, [authUrlFetcher.data]);
+  }, [loaderData.connected, loaderData.hasPending, oauthResolving]);
 
-  // 监听弹窗发来的 postMessage（OAuth 完成信号）
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const data = event.data as {
-        type?: string;
-        ga4Auth?: string;
-        propertyName?: string;
-        errorCode?: string;
-        reason?: string;
-      } | null;
-      if (!data || data.type !== "ga4_oauth") return;
-
-      popupRef.current = null;
-      setRedirecting(false);
-
-      if (data.ga4Auth === "success") {
-        setBanner({ tone: "ok", text: t("ga4.authSuccess", { propertyName: data.propertyName ?? "" }) });
-        revalidator.revalidate();
-      } else if (data.ga4Auth === "select") {
-        revalidator.revalidate();
-      } else if (data.ga4Auth === "cancelled") {
-        setBanner({ tone: "error", text: t("ga4.authCancelled") });
-      } else if (data.ga4Auth === "error") {
-        if (data.errorCode === "no_properties") {
-          setBanner({ tone: "error", text: t("ga4.authNoProperties") });
-        } else {
-          setBanner({ tone: "error", text: `${t("ga4.authError")}${data.reason ? ` (${data.reason})` : ""}` });
-        }
-      }
-    };
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [t, revalidator]);
-
-  // 轮询检测弹窗被用户手动关闭（未完成授权）
-  useEffect(() => {
-    if (!redirecting) return;
-    const timer = setInterval(() => {
-      if (popupRef.current?.closed) {
-        clearInterval(timer);
-        popupRef.current = null;
-        setRedirecting(false);
-      }
-    }, 500);
-    return () => clearInterval(timer);
-  }, [redirecting]);
+    if (!oauthResolving || revalidator.state !== "idle") return;
+    if (loaderData.connected || loaderData.hasPending) return;
+    const timer = window.setTimeout(() => setOauthResolving(false), 500);
+    return () => window.clearTimeout(timer);
+  }, [oauthResolving, revalidator.state, loaderData.connected, loaderData.hasPending]);
 
   // Handle property selection response
   useEffect(() => {
@@ -843,18 +817,27 @@ export function GoogleAnalyticsPage() {
   }, [disconnectFetcher.data]);
 
   const handleConnect = useCallback(() => {
-    setRedirecting(true);
     setBanner(null);
-    // 同步打开弹窗（必须在用户点击事件中，否则被浏览器拦截）
-    const popup =
-      typeof window !== "undefined"
-        ? window.open("about:blank", "ga4auth", "popup,width=560,height=680,resizable=yes")
-        : null;
-    popupRef.current = popup;
     const search = window.location.search ?? "";
     const host = new URLSearchParams(search).get("host") ?? "";
-    authUrlFetcherRef.current.load(`/api/ga4/auth-url?host=${encodeURIComponent(host)}&popup=1`);
-  }, []);
+    void (async () => {
+      try {
+        await ga4OAuth.startOAuth(`/api/ga4/auth-url?host=${encodeURIComponent(host)}`, (data) => {
+          applyGa4AuthResult({
+            ga4Auth: data.ga4Auth,
+            propertyName: data.propertyName,
+            errorCode: data.errorCode,
+            reason: data.reason,
+          });
+        });
+      } catch (error) {
+        setBanner({
+          tone: "error",
+          text: error instanceof Error ? error.message : t("ga4.authError"),
+        });
+      }
+    })();
+  }, [applyGa4AuthResult, ga4OAuth, t]);
 
   const handlePropertySelect = useCallback(
     (selectedPropertyIds: string[]) => {
@@ -910,13 +893,13 @@ export function GoogleAnalyticsPage() {
         <AuthBannerView banner={banner} onDismiss={() => setBanner(null)} />
       )}
 
-      {redirecting && (
+      {(ga4OAuth.redirecting || oauthResolving) && (
         <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>
           {t("ga4.redirecting")}
         </div>
       )}
 
-      {!connected && !hasPending && !redirecting && (
+      {!connected && !hasPending && !ga4OAuth.redirecting && !oauthResolving && (
         <NotConnectedPanel onConnect={handleConnect} />
       )}
 
