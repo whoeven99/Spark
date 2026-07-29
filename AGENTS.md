@@ -201,7 +201,8 @@ npm run build     # Vite client + tsc server
   已废弃）；Turso 收入/auto 已接；漏斗行为与 LLM 成本走 SLS（未接时页面 Mock + howto）。
 - TSF「每日收入」：`/tsf/revenue` → `admin/src/pages/tsf/TsfRevenue.tsx` +
   `admin/server/routes/tsfRevenue.ts`。按 `BillingLog`×`PlanCatalog` 聚合；必须排除
-  `metadata.source = legacy_migration`（Spring→Turso 迁移审计，非真实扣款日）。
+  `metadata.source = legacy_migration`（Spring→Turso 迁移审计，非真实扣款日）；
+  同店 24h 内被后续 `SUBSCRIPTION_ACTIVATED` 覆盖的激活不计入（改套餐只计终态）。
 - 翻译 tab「语言覆盖率」：`/tsf/language-coverage` →
   `admin/src/pages/tsf/TsfLanguageCoverage.tsx` +
   `admin/server/routes/tsfLanguageCoverage.ts`。商店列表以 Turso
