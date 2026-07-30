@@ -129,7 +129,7 @@ export default function TsfLanguageCoverage() {
               {row.localeCount === 0
                 ? "无目标语言"
                 : row.cacheMissing
-                  ? "无 Redis 缓存"
+                  ? "未统计覆盖率"
                   : `${row.localeCount} 个目标语言`}
             </Typography.Text>
           </Space>
@@ -143,7 +143,7 @@ export default function TsfLanguageCoverage() {
       width: 100,
       render: (percent: number | null, row: TsfShopLanguageCoverageRow) => {
         if (row.localeCount === 0) return <Tag>无语言</Tag>;
-        if (row.cacheMissing || percent == null) return <Tag>无缓存</Tag>;
+        if (row.cacheMissing || percent == null) return <Tag>未统计</Tag>;
         const tone = coverageTone(percent);
         return (
           <Space direction="vertical" size={2}>
@@ -215,7 +215,7 @@ export default function TsfLanguageCoverage() {
                   </div>
                   <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
                     {locale.cacheMissing
-                      ? "无缓存"
+                      ? "未统计"
                       : `${formatCount(locale.translated)} / ${formatCount(locale.total)}`}
                   </Typography.Text>
                 </Flex>
@@ -248,7 +248,7 @@ export default function TsfLanguageCoverage() {
             </Space>
           </Typography.Title>
           <Typography.Text type="secondary">
-            商店以 Turso 在装 Account 为准；覆盖率按目标语言查 Redis items_count。
+            商店以 Turso 在装 Account 为准；覆盖率读 ShopTargetLocale.coverage*。
           </Typography.Text>
         </div>
         <Button icon={<ReloadOutlined />} onClick={hardRefresh}>
@@ -262,7 +262,7 @@ export default function TsfLanguageCoverage() {
         message="数据口径"
         description={
           data.note ||
-          "商店列表：Turso Account；自动翻译：ShopTargetLocale.autoTranslate；覆盖率：Redis tsf:items_count:{shop}:{locale}。"
+          "商店列表：Turso Account；自动翻译与覆盖率均来自 ShopTargetLocale（coverageTranslated/Total/Percent）。"
         }
         style={{ marginBottom: 16 }}
       />
@@ -303,7 +303,7 @@ export default function TsfLanguageCoverage() {
         <Col xs={12} lg={6}>
           <Card size="small">
             <Statistic
-              title="低覆盖 / 无缓存"
+              title="低覆盖 / 未统计"
               value={`${data.stats.lowCoverageShops} / ${data.stats.shopsWithoutCache}`}
             />
           </Card>
@@ -333,7 +333,7 @@ export default function TsfLanguageCoverage() {
               { value: "low", label: "< 50%" },
               { value: "mid", label: "50–90%" },
               { value: "high", label: "≥ 90%" },
-              { value: "missing", label: "无 Redis 缓存" },
+              { value: "missing", label: "未统计覆盖率" },
             ]}
           />
           <Select<AutoTranslateFilter>
