@@ -21,7 +21,7 @@ type ProfileState = "all" | "with" | "without";
 type ShopScanJobRecord = {
   id: string;
   shopName: string;
-  trigger: "install" | "scheduled" | "manual";
+  trigger: "install" | "scheduled" | "manual" | "admin";
   status: "CREATED" | "QUEUED" | "SCANNING" | "COMPLETED" | "PARTIAL" | "FAILED";
   stages: Record<"contentSize" | "profile" | "coverage" | "glossary", "PENDING" | "DONE" | "SKIPPED" | "FAILED">;
   blobPrefix: string;
