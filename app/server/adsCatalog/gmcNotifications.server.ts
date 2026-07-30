@@ -1,13 +1,15 @@
 import prisma from "../../db.server";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
-import { refreshGoogleAccessToken } from "./clients/googleMerchantClient.server";
+import {
+  getGoogleMerchantProduct,
+  refreshGoogleAccessToken,
+} from "./clients/googleMerchantClient.server";
 import {
   getGoogleMerchantCredential,
   setGmcSubscriptionName,
 } from "./credentialStore.server";
 
 const MERCHANT_API_BASE = "https://merchantapi.googleapis.com/notifications/v1";
-const GMC_CONTENT_API_BASE = "https://shoppingcontent.googleapis.com/content/v2.1";
 const LOG_PREFIX = "[AdsCatalog][GmcNotify]";
 
 // ─── Webhook URL ──────────────────────────────────────────────────────────────
@@ -181,7 +183,9 @@ export function parseGmcNotificationBody(body: unknown): GmcProductStatusNotific
 /** Derive offerId from tilde-separated resourceId ("online~en~US~sku123" → "sku123"). */
 function offerIdFromResourceId(resourceId: string): string {
   const parts = resourceId.split("~");
-  return parts.length >= 4 ? parts.slice(3).join("~") : resourceId;
+  if (parts.length < 3) return resourceId;
+  const prefixLength = parts[0] === "online" || parts[0] === "local" ? 3 : 2;
+  return parts.slice(prefixLength).join("~") || resourceId;
 }
 
 /** Worst-case status from the change list (disapproved > pending > approved). */
@@ -211,26 +215,8 @@ async function findShopByMerchantId(merchantId: string): Promise<string | null> 
   }
 }
 
-interface ContentApiProductStatus {
-  productId?: string;
-  title?: string;
-  destinationStatuses?: Array<{
-    status?: string;
-    approvedCountries?: string[];
-    pendingCountries?: string[];
-    disapprovedCountries?: string[];
-  }>;
-  itemLevelIssues?: Array<{
-    code?: string;
-    servability?: string;
-    description?: string;
-    detail?: string;
-  }>;
-  error?: { message?: string };
-}
-
 /**
- * Fetch a single product's status from Content API v2.1 and upsert into DB.
+ * Fetch a single product's processed status from Merchant API v1 and upsert it.
  * Throws on API or network errors so callers can fall back.
  */
 async function refreshSingleProductStatus(params: {
@@ -240,59 +226,39 @@ async function refreshSingleProductStatus(params: {
   resourceId: string;
   accessToken: string;
 }): Promise<void> {
-  const url = `${GMC_CONTENT_API_BASE}/${encodeURIComponent(params.merchantId)}/productstatuses/${encodeURIComponent(params.resourceId)}`;
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: { Authorization: `Bearer ${params.accessToken}` },
-    });
-  } catch (e) {
-    throw new Error(formatOutboundNetworkError(e));
-  }
-
-  const json = (await response.json().catch(() => ({}))) as ContentApiProductStatus;
-  if (!response.ok) {
-    throw new Error(json.error?.message ?? `HTTP ${response.status}`);
-  }
-
-  // productId in Content API response uses ":" separator
-  const pidParts = (json.productId ?? "").split(":");
-  const offerId = pidParts.length >= 4 ? pidParts.slice(3).join(":") : json.productId ?? "";
+  const product = await getGoogleMerchantProduct(params);
+  const offerId = product.offerId ?? offerIdFromResourceId(params.resourceId);
   if (!offerId) return;
 
-  const destinations = json.destinationStatuses ?? [];
+  const destinations = product.productStatus?.destinationStatuses ?? [];
   const statuses: string[] = destinations.flatMap((d) => {
-    const s = (d.status ?? "").toLowerCase();
-    if (s === "disapproved" || s === "rejected") return ["disapproved"];
-    if (s === "pending") return ["pending"];
-    if (s === "approved") return ["approved"];
     if ((d.disapprovedCountries?.length ?? 0) > 0) return ["disapproved"];
     if ((d.pendingCountries?.length ?? 0) > 0) return ["pending"];
     if ((d.approvedCountries?.length ?? 0) > 0) return ["approved"];
     return [];
   });
-  const rawIssues = json.itemLevelIssues ?? [];
+  const rawIssues = product.productStatus?.itemLevelIssues ?? [];
 
   let status: "approved" | "disapproved" | "pending" | "expiring" | "unknown";
   if (statuses.includes("disapproved")) status = "disapproved";
   else if (statuses.includes("pending")) status = "pending";
   else if (statuses.includes("approved")) status = "approved";
-  else if (rawIssues.some((i) => (i.servability ?? "").toLowerCase() === "disapproved")) status = "disapproved";
+  else if (rawIssues.some((issue) => issue.severity === "DISAPPROVED")) status = "disapproved";
   else if (rawIssues.length > 0) status = "pending";
   else status = "unknown";
 
-  const issues = rawIssues.map((i) => ({
-    code: i.code ?? "unknown",
-    servability: i.servability ?? "unknown",
-    description: i.description ?? "",
-    detail: i.detail,
+  const issues = rawIssues.map((issue) => ({
+    code: issue.code ?? "unknown",
+    servability: issue.severity?.toLowerCase() ?? "unknown",
+    description: issue.description ?? "",
+    detail: issue.detail,
   }));
 
   await prisma.gmcProductStatus.upsert({
     where: { shop_offerId: { shop: params.shop, offerId } },
     update: {
       merchantId: params.merchantId,
-      title: json.title ?? null,
+      title: product.productAttributes?.title ?? null,
       status,
       issues: issues as unknown as object,
       checkedAt: new Date(),
@@ -301,7 +267,7 @@ async function refreshSingleProductStatus(params: {
       shop: params.shop,
       merchantId: params.merchantId,
       offerId,
-      title: json.title ?? null,
+      title: product.productAttributes?.title ?? null,
       status,
       issues: issues as unknown as object,
       checkedAt: new Date(),
@@ -311,7 +277,7 @@ async function refreshSingleProductStatus(params: {
 
 /**
  * Main entry point for incoming Google Merchant product status change notifications.
- * Resolves shop from merchantId, refreshes the product's status via Content API,
+ * Resolves shop from merchantId, refreshes the product's status via Merchant API,
  * and falls back to notification-derived status on API failure.
  */
 export async function handleGmcProductStatusNotification(
@@ -358,7 +324,7 @@ export async function handleGmcProductStatusNotification(
 
   const offerId = offerIdFromResourceId(notification.resourceId);
 
-  // Primary: fetch full product detail from Content API (includes issues)
+  // Primary: fetch the processed Merchant API product (includes issues)
   try {
     await refreshSingleProductStatus({
       shop,

@@ -73,6 +73,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - Redis：Admin 运营排查和部分历史/兼容状态读取，不作为新核心业务对象的默认存储。
 - Aliyun SLS：Pixel、访问与功能行为日志。
 - Shopify Admin GraphQL / Billing：店铺数据、写回、订阅与一次性购包。
+- Google Merchant API v1：Ads Catalog 使用 Accounts、Data Sources 和 Products 子 API 完成 Merchant 账户发现、primary API data source 绑定、`ProductInput` 写入及审核状态读取；Notifications v1 负责商品状态通知，OAuth scope 仍为 `https://www.googleapis.com/auth/content`。对应 Google Cloud 项目必须在 Merchant Center 完成 Developer registration（开发者注册）并具备目标账户权限。
 - 腾讯 SES / 飞书：商户邮件与内部运营通知，通知失败通常不阻断主流程。
   - 发送入口：`app/server/email/`（`sendTemplateEmail`）+ `app/server/notifications/`（`notify*Email` → `dispatchMerchantNotificationEmail`）。
   - 商户模板 ID：`notificationTemplateIds.server.ts`（安装 `180498`、卸载 `180499`、购包 `180500`、订阅 `180501–180503`）；Agent `task_*` 模板仍在 `emailTemplates.server.ts`。

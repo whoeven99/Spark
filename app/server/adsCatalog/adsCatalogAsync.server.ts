@@ -23,6 +23,7 @@ import {
 } from "./validators/googleProductValidator";
 import { upsertFacebookCatalogItems } from "./clients/facebookGraphClient.server";
 import {
+  ensureGoogleMerchantDataSource,
   refreshGoogleAccessToken,
   upsertGoogleMerchantProducts,
 } from "./clients/googleMerchantClient.server";
@@ -387,9 +388,34 @@ async function runGoogleSync(params: {
     message: params.msg("adsCatalog.asyncPushingGoogle", { count: products.length }),
   });
 
+  const feedLabel = params.targetCountry.trim().toUpperCase();
+  const contentLanguage = params.contentLanguage.trim().toLowerCase();
+  const dataSource = await ensureGoogleMerchantDataSource({
+    accessToken: credential.accessToken,
+    merchantId: credential.merchantId,
+    contentLanguage,
+    feedLabel,
+    preferredName: credential.dataSourceName,
+  });
+  if (!dataSource.name) {
+    throw new Error("Merchant API data source response returned no resource name");
+  }
+  await setGoogleMerchantCredential(params.shop, {
+    accessToken: credential.accessToken,
+    refreshToken: credential.refreshToken,
+    clientId: credential.clientId,
+    clientSecret: credential.clientSecret,
+    merchantId: credential.merchantId,
+    dataSourceName: dataSource.name,
+    dataSourceContentLanguage: contentLanguage,
+    dataSourceFeedLabel: feedLabel,
+  });
+
   const apiResult = await upsertGoogleMerchantProducts({
     accessToken: credential.accessToken,
     merchantId: credential.merchantId,
+    dataSourceName: dataSource.name,
+    feedLabel,
     products,
   });
   for (const err of apiResult.errors) {

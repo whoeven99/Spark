@@ -5,7 +5,7 @@ OAuth 凭证归属
 Spark 应用申请 OAuth App，客户授权自己的 Google 账号
 2
 merchantId 获取
-Content API 自动读取，多账号时提供选择界面
+Merchant API v1 `accounts.list` 自动读取，多账号时提供选择界面
 3
 审核轮询时机
 同步完成后立即查一次 + 30 分钟后再查一次；后台每天一次 cron
@@ -34,7 +34,7 @@ Google Ads 绑定
     → 用户在 Google 授权页同意
     → GET /ads.google-merchant.callback?code=xxx&state=xxx
         校验 state，code 换 access_token + refresh_token
-        调用 GET /content/v2.1/accounts/authinfo 读取 merchantIds
+        调用 GET /accounts/v1/accounts 读取 merchantIds
         若只有 1 个 → 直接存入 DB
         若多个 → 返回列表，前端弹「选择 Merchant 账号」弹窗
         存入 AdPlatformCredential (platform=google_merchant)
@@ -105,15 +105,17 @@ Google Ads 绑定
     → fetchProductsForCatalog（Shopify GraphQL，带筛选条件，max 250）
     → validateForGoogle（再次校验，过滤掉硬性错误商品）
     → mapShopifyToGoogle（字段映射，仅处理通过校验的商品）
-    → upsertGoogleMerchantProducts（Content API custombatch，每批 100 条）
+    → 复用或创建匹配语言/Feed Label 的 Merchant API primary API data source
+    → upsertGoogleMerchantProducts（Merchant API v1 productInputs.insert，并发逐商品写入）
     → 创建 AITask，实时展示进度（现有 AITaskCardShell）
     → 同步完成后：
         ① 立即触发一次 GMC 状态查询（见 Step 5）
         ② 安排 30 分钟后再查一次（延迟任务）
 【Step 5】GMC 审核状态感知
   查询逻辑（复用于同步后即时查 + 30min 延迟查 + 每日 cron）：
-    → GET /content/v2.1/{merchantId}/products?maxResults=250
-    → 逐条检查 status 和 issues[].servability
+    → GET /products/v1/accounts/{merchantId}/products?pageSize=250
+    → 逐条检查 productStatus.destinationStatuses 和 itemLevelIssues[].severity
+    → GET /accounts/v1/accounts/{merchantId}/issues 查询账户级问题
     → 写入 / 更新 GmcProductStatus 表
     → 若有 disapproved 商品或账户级问题 → 更新页面 badge + 飞书通知
   前端展示：
@@ -322,9 +324,9 @@ scheduleGmcStatusCheck({ shop, merchantId, delayMs: 30 * 60 * 1000 });
 5.4 新增 GMC 状态查询服务
 app/server/adsCatalog/gmcStatusChecker.server.ts
 // 核心逻辑：
-// 1. GET /content/v2.1/{merchantId}/products（分页，最多 250）
-// 2. 对比 status 字段，写入 GmcProductStatus 表
-// 3. 检查账户级状态（accountstatuses API）
+// 1. GET /products/v1/accounts/{merchantId}/products（分页，最多 250）
+// 2. 读取 productStatus，写入 GmcProductStatus 表
+// 3. 通过 /accounts/v1/accounts/{merchantId}/issues 检查账户级状态
 // 4. 若有 disapproved → 写通知标记
 export async function checkGmcProductStatuses(params: {
   shop: string;
@@ -509,18 +511,21 @@ Phase 3（后期优化）
 ---
 九、关键外部 API 参考
 API	用途	文档
-GET /content/v2.1/accounts/authinfo
+GET /accounts/v1/accounts
 读取授权账号关联的所有 Merchant ID
-Content API
-GET /content/v2.1/{merchantId}/products
+Merchant API v1 Accounts
+GET /datasources/v1/accounts/{merchantId}/dataSources
+列出或创建 primary API data source
+Merchant API v1 Data Sources
+GET /products/v1/accounts/{merchantId}/products
 拉取 GMC 商品列表（含审核状态）
-Content API
-GET /content/v2.1/{merchantId}/accountstatuses/{merchantId}
+Merchant API v1 Products
+GET /accounts/v1/accounts/{merchantId}/issues
 查询账户级封禁状态
-Content API
-POST /content/v2.1/products/batch
-批量推送商品（已实现）
-Content API
+Merchant API v1 Accounts
+POST /products/v1/accounts/{merchantId}/productInputs:insert
+逐商品并发推送（dataSource query 参数必填）
+Merchant API v1 Products
 GoogleAdsService.SearchStream
 读取 Ads 账户信息
 Google Ads API v17

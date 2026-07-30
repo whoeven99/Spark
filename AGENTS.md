@@ -127,6 +127,7 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 - **Redis**：Admin 运营排查和部分历史/兼容状态读取。不要未经确认把新的核心业务对象只存 Redis。
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。
+- **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。
 - **腾讯 SES / 飞书**：商户邮件与内部运营通知。通知失败通常不应阻断主业务，沿用现有场景封装。
 - **TSF 只读观测**：Admin `admin/server/routes/tsf*.ts`、`translationOps.ts`、`shopifyTranslation.ts` 等读取 TSF Turso、Cosmos、Redis、Blob 或 Shopify 翻译资源。它们是运维/报表边界，不代表 Spark 重新拥有整店翻译执行链路。
 

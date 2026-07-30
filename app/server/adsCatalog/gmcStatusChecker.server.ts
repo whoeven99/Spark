@@ -1,12 +1,16 @@
 import prisma from "../../db.server";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 import {
+  listGoogleMerchantAccountIssues,
+  listGoogleMerchantProducts,
+  refreshGoogleAccessToken,
+  type GoogleMerchantProductResource,
+} from "./clients/googleMerchantClient.server";
+import {
   getGoogleMerchantCredential,
   setGoogleMerchantCredential,
 } from "./credentialStore.server";
-import { refreshGoogleAccessToken } from "./clients/googleMerchantClient.server";
 
-const GMC_BASE = "https://shoppingcontent.googleapis.com/content/v2.1";
 const LOG_PREFIX = "[AdsCatalog][GmcStatus]";
 
 export interface GmcProductReview {
@@ -27,58 +31,31 @@ export interface GmcCheckResult {
 
 interface ProductStatusDestination {
   destination?: string;
-  status?: string;
+  reportingContext?: string;
   approvedCountries?: string[];
   pendingCountries?: string[];
   disapprovedCountries?: string[];
 }
 
-interface ProductStatusResource {
-  productId?: string;
-  title?: string;
-  destinationStatuses?: ProductStatusDestination[];
-  itemLevelIssues?: Array<{
-    code?: string;
-    servability?: string;
-    description?: string;
-    detail?: string;
-  }>;
-}
-
-function deriveOfferId(productId: string | undefined): string {
-  // productId format: "online:en:US:<offerId>"
-  if (!productId) return "";
-  const parts = productId.split(":");
-  return parts.length >= 4 ? parts.slice(3).join(":") : productId;
-}
-
-/** GMC v2.1 often omits deprecated destinationStatuses.status; use country arrays. */
 export function normalizeDestinationReviewStatus(
   destination: ProductStatusDestination,
 ): GmcProductReview["status"] | null {
-  const legacy = (destination.status ?? "").toLowerCase();
-  if (legacy === "disapproved" || legacy === "rejected") return "disapproved";
-  if (legacy === "pending") return "pending";
-  if (legacy === "expiring" || legacy === "outdated") return "expiring";
-  if (legacy === "approved") return "approved";
-
   if ((destination.disapprovedCountries?.length ?? 0) > 0) return "disapproved";
   if ((destination.pendingCountries?.length ?? 0) > 0) return "pending";
   if ((destination.approvedCountries?.length ?? 0) > 0) return "approved";
   return null;
 }
 
-function normalizeStatus(resource: ProductStatusResource): GmcProductReview["status"] {
-  const statuses = (resource.destinationStatuses ?? [])
+function normalizeStatus(resource: GoogleMerchantProductResource): GmcProductReview["status"] {
+  const statuses = (resource.productStatus?.destinationStatuses ?? [])
     .map(normalizeDestinationReviewStatus)
     .filter((s): s is GmcProductReview["status"] => s != null);
   if (statuses.includes("disapproved")) return "disapproved";
   if (statuses.includes("pending")) return "pending";
-  if (statuses.includes("expiring")) return "expiring";
   if (statuses.includes("approved")) return "approved";
 
-  const issues = resource.itemLevelIssues ?? [];
-  if (issues.some((i) => (i.servability ?? "").toLowerCase() === "disapproved")) {
+  const issues = resource.productStatus?.itemLevelIssues ?? [];
+  if (issues.some((issue) => issue.severity === "DISAPPROVED")) {
     return "disapproved";
   }
   if (issues.length > 0) return "pending";
@@ -89,42 +66,18 @@ async function fetchProductStatuses(params: {
   accessToken: string;
   merchantId: string;
 }): Promise<GmcProductReview[]> {
-  const out: GmcProductReview[] = [];
-  let pageToken: string | undefined;
-  do {
-    const url = new URL(
-      `${GMC_BASE}/${encodeURIComponent(params.merchantId)}/productstatuses`,
-    );
-    url.searchParams.set("maxResults", "250");
-    if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const response = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${params.accessToken}` },
-    });
-    const json = (await response.json().catch(() => ({}))) as {
-      resources?: ProductStatusResource[];
-      nextPageToken?: string;
-      error?: { message?: string };
-    };
-    if (!response.ok) {
-      throw new Error(json.error?.message || `HTTP ${response.status}`);
-    }
-    for (const resource of json.resources ?? []) {
-      out.push({
-        offerId: deriveOfferId(resource.productId),
-        title: resource.title ?? null,
-        status: normalizeStatus(resource),
-        issues: (resource.itemLevelIssues ?? []).map((i) => ({
-          code: i.code ?? "unknown",
-          servability: i.servability ?? "unknown",
-          description: i.description ?? "",
-          detail: i.detail,
-        })),
-      });
-    }
-    pageToken = json.nextPageToken;
-    if (out.length >= 250) break;
-  } while (pageToken);
-  return out;
+  const resources = await listGoogleMerchantProducts({ ...params, limit: 250 });
+  return resources.map((resource) => ({
+    offerId: resource.offerId ?? "",
+    title: resource.productAttributes?.title ?? null,
+    status: normalizeStatus(resource),
+    issues: (resource.productStatus?.itemLevelIssues ?? []).map((issue) => ({
+      code: issue.code ?? "unknown",
+      servability: issue.severity?.toLowerCase() ?? "unknown",
+      description: issue.description ?? "",
+      detail: issue.detail,
+    })),
+  }));
 }
 
 async function fetchAccountSuspended(params: {
@@ -132,22 +85,8 @@ async function fetchAccountSuspended(params: {
   merchantId: string;
 }): Promise<boolean> {
   try {
-    const response = await fetch(
-      `${GMC_BASE}/${encodeURIComponent(params.merchantId)}/accountstatuses/${encodeURIComponent(
-        params.merchantId,
-      )}`,
-      { headers: { Authorization: `Bearer ${params.accessToken}` } },
-    );
-    if (!response.ok) return false;
-    const json = (await response.json().catch(() => ({}))) as {
-      accountLevelIssues?: Array<{ id?: string; severity?: string }>;
-    };
-    return (json.accountLevelIssues ?? []).some(
-      (i) =>
-        i.severity === "critical" ||
-        (i.id ?? "").toLowerCase().includes("suspend") ||
-        (i.id ?? "").toLowerCase().includes("disapprov"),
-    );
+    const issues = await listGoogleMerchantAccountIssues(params);
+    return issues.some((issue) => issue.severity === "CRITICAL");
   } catch {
     return false;
   }

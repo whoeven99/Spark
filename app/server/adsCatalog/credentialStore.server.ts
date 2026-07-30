@@ -44,6 +44,10 @@ export type GoogleMerchantCredential = {
   merchantId: string;
   /** Merchant Notifications API subscription name, e.g. "accounts/123/notificationsubscriptions/456". */
   subscriptionName?: string;
+  /** Merchant API primary data source resource name. */
+  dataSourceName?: string;
+  dataSourceContentLanguage?: string;
+  dataSourceFeedLabel?: string;
   updatedAt: string;
 };
 
@@ -139,6 +143,18 @@ export async function getGoogleMerchantCredential(
       typeof record.data.subscriptionName === "string"
         ? record.data.subscriptionName
         : undefined,
+    dataSourceName:
+      typeof record.data.dataSourceName === "string"
+        ? record.data.dataSourceName
+        : undefined,
+    dataSourceContentLanguage:
+      typeof record.data.dataSourceContentLanguage === "string"
+        ? record.data.dataSourceContentLanguage
+        : undefined,
+    dataSourceFeedLabel:
+      typeof record.data.dataSourceFeedLabel === "string"
+        ? record.data.dataSourceFeedLabel
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -148,19 +164,55 @@ export async function setGoogleMerchantCredential(
   payload: Pick<
     GoogleMerchantCredential,
     "accessToken" | "refreshToken" | "clientId" | "clientSecret" | "merchantId"
-  >,
+  > &
+    Partial<
+      Pick<
+        GoogleMerchantCredential,
+        "dataSourceName" | "dataSourceContentLanguage" | "dataSourceFeedLabel"
+      >
+    >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
   const merchantId = payload.merchantId.trim();
   if (!accessToken || !merchantId) {
     throw new Error("Google Merchant accessToken and merchantId are required");
   }
+  const existing = await readPlatformCredential(shop, GOOGLE_MERCHANT_PLATFORM);
+  const sameMerchant = String(existing?.data.merchantId ?? "") === merchantId;
   await writePlatformCredential(shop, GOOGLE_MERCHANT_PLATFORM, {
+    ...(sameMerchant ? existing?.data : {}),
     accessToken,
-    refreshToken: payload.refreshToken?.trim() || null,
-    clientId: payload.clientId?.trim() || null,
-    clientSecret: payload.clientSecret?.trim() || null,
+    refreshToken:
+      payload.refreshToken?.trim() ||
+      (sameMerchant && typeof existing?.data.refreshToken === "string"
+        ? existing.data.refreshToken
+        : null),
+    clientId:
+      payload.clientId?.trim() ||
+      (sameMerchant && typeof existing?.data.clientId === "string"
+        ? existing.data.clientId
+        : null),
+    clientSecret:
+      payload.clientSecret?.trim() ||
+      (sameMerchant && typeof existing?.data.clientSecret === "string"
+        ? existing.data.clientSecret
+        : null),
     merchantId,
+    dataSourceName:
+      payload.dataSourceName?.trim() ||
+      (sameMerchant && typeof existing?.data.dataSourceName === "string"
+        ? existing.data.dataSourceName
+        : null),
+    dataSourceContentLanguage:
+      payload.dataSourceContentLanguage?.trim().toLowerCase() ||
+      (sameMerchant && typeof existing?.data.dataSourceContentLanguage === "string"
+        ? existing.data.dataSourceContentLanguage
+        : null),
+    dataSourceFeedLabel:
+      payload.dataSourceFeedLabel?.trim().toUpperCase() ||
+      (sameMerchant && typeof existing?.data.dataSourceFeedLabel === "string"
+        ? existing.data.dataSourceFeedLabel
+        : null),
   });
 }
 

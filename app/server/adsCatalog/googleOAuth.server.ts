@@ -7,6 +7,7 @@ import {
   listSelectableAdsCustomers,
   normalizeCustomerId,
 } from "./googleAdsApi.server";
+import { listGoogleMerchantAccounts } from "./clients/googleMerchantClient.server";
 
 export { googleAdsApiUrl, GOOGLE_ADS_API_VERSION } from "./googleAdsApi.server";
 
@@ -338,22 +339,13 @@ export async function getGmcMerchantAccounts(
   accessToken: string,
 ): Promise<MerchantAccount[]> {
   try {
-    const response = await fetch(
-      "https://shoppingcontent.googleapis.com/content/v2.1/accounts/authinfo",
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    const json = (await response.json().catch(() => ({}))) as {
-      accountIdentifiers?: Array<{ merchantId?: string; aggregatorId?: string }>;
-      error?: { message?: string };
-    };
-    if (!response.ok) {
-      throw new Error(json.error?.message || `HTTP ${response.status}`);
-    }
-    const ids = json.accountIdentifiers ?? [];
-    return ids
-      .map((i) => i.merchantId || i.aggregatorId)
-      .filter((id): id is string => Boolean(id))
-      .map((merchantId) => ({ merchantId }));
+    const accounts = await listGoogleMerchantAccounts(accessToken);
+    return accounts.flatMap((account): MerchantAccount[] => {
+      const merchantId =
+        account.accountId?.trim() || account.name?.replace(/^accounts\//, "").trim() || "";
+      if (!merchantId) return [];
+      return [{ merchantId, name: account.accountName?.trim() || undefined }];
+    });
   } catch (e) {
     throw new Error(formatOutboundNetworkError(e));
   }
