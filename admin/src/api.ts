@@ -293,12 +293,29 @@ export function fetchTranslationJob(
   return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
 }
 
+export type TranslationContentCallCost = {
+  provider: string;
+  model?: string;
+  requestId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  chars?: number;
+  batchSize?: number;
+};
+
+export type TranslationContentFieldCost = TranslationContentCallCost & {
+  calls?: TranslationContentCallCost[];
+};
+
 export type TranslationContentField = {
   key: string;
   originalValue: string;
   translatedValue: string;
   digest?: string;
   status?: string;
+  /** Per-field LLM/Google/cache cost metadata from translate blob. */
+  cost?: TranslationContentFieldCost;
 };
 
 export type TranslationContentResource = {
@@ -1422,7 +1439,7 @@ export type TsfShopScanStageState = "PENDING" | "DONE" | "SKIPPED" | "FAILED";
 export type TsfShopScan = {
   id: string;
   shopName: string;
-  trigger: "install" | "scheduled" | "manual";
+  trigger: "install" | "scheduled" | "manual" | "admin";
   status: "CREATED" | "QUEUED" | "SCANNING" | "COMPLETED" | "PARTIAL" | "FAILED";
   stages: Record<"contentSize" | "profile" | "coverage" | "glossary", TsfShopScanStageState>;
   blobPrefix: string;
@@ -1830,6 +1847,27 @@ export function fetchShopLocaleCoverage(
   shop: string,
 ): Promise<{ shop: string; locales: ShopLocaleCoverageRow[] }> {
   return apiFetch(`/tsf/language-coverage/shop?shop=${encodeURIComponent(shop)}`);
+}
+
+export type TsfLanguageCoverageRefreshResult = {
+  enqueued: true;
+  scanId: string;
+  shop: string;
+  status: "CREATED";
+  trigger: "admin";
+  hintPushed: boolean;
+  note: string | null;
+};
+
+/** Owner：入队现算覆盖率（Worker trigger=admin，只跑 coverage → Turso）。 */
+export function triggerTsfLanguageCoverageRefresh(
+  shop: string,
+): Promise<TsfLanguageCoverageRefreshResult> {
+  return apiFetch(`/tsf/language-coverage/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ shop }),
+  });
 }
 
 export type TsfShopProfileScanResult = {

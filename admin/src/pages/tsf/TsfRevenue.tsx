@@ -160,7 +160,7 @@ function DailyRevenueTrend() {
       style={{ marginBottom: 16 }}
       extra={
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {startDate} ~ {endDate} · Shopify 扣款日
+          {startDate} ~ {endDate} · Shopify 扣款日 · 同店 24h 内多次改套餐只计最后一次激活
         </Typography.Text>
       }
     >

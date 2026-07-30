@@ -14,10 +14,14 @@ import {
   buildLocaleCookieHeader,
   normalizeLocale,
 } from "../i18n/config";
-import { detectRequestLocale } from "../i18n/detector.server";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import {
+  syncSessionShopProfile,
+  syncSessionUserProfileFromOnline,
+} from "../server/session/syncSessionUserProfile.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
@@ -63,10 +67,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   });
 
+  try {
+    await syncSessionUserProfileFromOnline(session);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionUserProfileFromOnline failed:", error);
+  }
+
+  try {
+    await syncSessionShopProfile(session.shop, admin);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionShopProfile failed:", error);
+  }
+
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
 
-  const locale = detectRequestLocale(request);
+  const locale = detectRequestLocale(request, {
+    sessionLocale: readShopifySessionLocale(session),
+  });
   const { nav, home } = getAppEntryConfig();
 
   // eslint-disable-next-line no-undef

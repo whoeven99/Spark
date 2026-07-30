@@ -2,7 +2,7 @@
 
 client_id = "940b967eda872dd81f9ffc283e29a013"
 name = "AiAssistant-Test"
-application_url = "https://aiassistant-wi7b.onrender.com/app"
+application_url = "https://aiassistant-wi7b.onrender.com"
 embedded = true
 
 [webhooks]

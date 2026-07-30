@@ -22,7 +22,6 @@ describe("resolveOpsEmailDestination", () => {
   it("falls back to ops notify when session email missing", () => {
     process.env.OPS_NOTIFY_EMAIL = "ops@example.com";
     const to = resolveOpsEmailDestination({
-      firstName: "Aviva",
       email: "",
     });
     expect(to).toBe("ops@example.com");
