@@ -5,18 +5,20 @@ export type RedisClient = Redis | Cluster;
 let _redis: RedisClient | null = null;
 
 /**
- * 云 Redis Cluster（如 Azure Redis Enterprise）需用 Cluster 客户端，否则会报 MOVED。
- * 仅本地单机 Redis 时显式设 REDIS_CLUSTER=false。
+ * 是否对当前解析到的 URL 使用 Cluster 客户端。
+ * `RENDER_KEY_VALUE`（Render KV）始终单机；旧 `REDIS_URL` 默认 Cluster，
+ * 本地单机设 `REDIS_CLUSTER=false`。
  */
-export function isRedisClusterMode(): boolean {
+export function isRedisClusterMode(
+  source: "RENDER_KEY_VALUE" | "REDIS_URL" | null = null,
+): boolean {
+  const resolvedSource = source ?? resolveRedisUrl()?.source ?? null;
+  if (resolvedSource === "RENDER_KEY_VALUE") return false;
   const v = process.env.REDIS_CLUSTER?.trim().toLowerCase();
   if (v === "0" || v === "false" || v === "no") return false;
   if (v === "1" || v === "true" || v === "yes") return true;
-  return true;
-}
-
-function isClusterMode(): boolean {
-  return isRedisClusterMode();
+  // 兼容旧 Azure REDIS_URL：默认 Cluster
+  return resolvedSource === "REDIS_URL";
 }
 
 export function isRedisClusterClient(client: RedisClient): client is Cluster {
@@ -97,7 +99,9 @@ function parseRedisUrl(url: string) {
   const parsed = new URL(url);
   const port = parsed.port
     ? Number(parsed.port)
-    : parsed.protocol === "rediss:" ? 6380 : 6379;
+    : parsed.protocol === "rediss:"
+      ? 6380
+      : 6379;
   const password = parsed.password
     ? decodeURIComponent(parsed.password)
     : undefined;
@@ -119,17 +123,35 @@ const commonOpts = {
 } as const;
 
 /**
- * Admin 专用 Redis 客户端。读取 `REDIS_URL`（与 Render 等部署配置一致）。
- * 默认按 Redis Cluster 连接；本地单机 Redis 设 `REDIS_CLUSTER=false`。
+ * 解析 Admin Redis URL。
+ * TSF 已切 Render KV 后优先 `RENDER_KEY_VALUE`；兼容旧 `REDIS_URL`（Azure Cluster）。
+ */
+export function resolveRedisUrl(): {
+  url: string;
+  source: "RENDER_KEY_VALUE" | "REDIS_URL";
+} | null {
+  const renderKv = process.env.RENDER_KEY_VALUE?.trim();
+  if (renderKv) return { url: renderKv, source: "RENDER_KEY_VALUE" };
+  const redisUrl = process.env.REDIS_URL?.trim();
+  if (redisUrl) return { url: redisUrl, source: "REDIS_URL" };
+  return null;
+}
+
+/**
+ * Admin 专用 Redis 客户端（TSF 翻译运维只读/补 hint）。
+ * - `RENDER_KEY_VALUE`：Render Key Value，单机客户端
+ * - `REDIS_URL`：兼容旧 Azure；默认 Cluster，本地单机设 `REDIS_CLUSTER=false`
  */
 export function getRedis(): RedisClient | null {
   if (_redis) return _redis;
 
-  const url = process.env.REDIS_URL?.trim();
-  if (!url) return null;
+  const resolved = resolveRedisUrl();
+  if (!resolved) return null;
 
-  if (isClusterMode()) {
-    const node = parseRedisUrl(url);
+  const useCluster = isRedisClusterMode(resolved.source);
+
+  if (useCluster) {
+    const node = parseRedisUrl(resolved.url);
     _redis = new Cluster([{ host: node.host, port: node.port }], {
       // Azure / 云 Redis Cluster 的 MOVED 可能返回内网 IP，跳过 DNS 解析
       dnsLookup: (address, callback) => callback(null, address),
@@ -141,8 +163,15 @@ export function getRedis(): RedisClient | null {
       },
     });
   } else {
-    _redis = new Redis(url, commonOpts);
+    _redis = new Redis(resolved.url, {
+      ...commonOpts,
+      connectionName: "spark-admin",
+    });
   }
+
+  console.info(
+    `[redis] using ${resolved.source} mode=${useCluster ? "cluster" : "standalone"}`,
+  );
 
   return _redis;
 }
