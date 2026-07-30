@@ -42,10 +42,6 @@ vi.mock("../../../../app/db.server", () => ({
   },
 }));
 
-vi.mock("../../../../app/config/appEntry.server", () => ({
-  getAppEntry: () => "spark",
-}));
-
 vi.mock("../../../../app/server/commonEventLog/appendCommonEventLog.server", () => ({
   appendCommonEventLog: vi.fn().mockResolvedValue({ created: true }),
 }));
@@ -231,7 +227,6 @@ describe("merchant notification triggers", () => {
 
       await applyTokenPackPurchase({
         shop: SHOP,
-        appName: APP_NAME,
         plan: samplePlan,
         shopifyPurchaseId: "gid://shopify/AppPurchaseOneTime/123",
       });
@@ -245,7 +240,6 @@ describe("merchant notification triggers", () => {
 
       await applyTokenPackPurchase({
         shop: SHOP,
-        appName: APP_NAME,
         plan: samplePlan,
         shopifyPurchaseId: "gid://shopify/AppPurchaseOneTime/123",
       });
@@ -279,7 +273,6 @@ describe("merchant notification triggers", () => {
 
     const baseParams = {
       shop: SHOP,
-      appName: APP_NAME,
       shopifySubscriptionId: "gid://shopify/AppSubscription/1",
       planKey: "sub-monthly",
       billingInterval: "EVERY_30_DAYS",
@@ -371,7 +364,6 @@ describe("merchant notification triggers", () => {
 
       await markSubscriptionNonActive({
         shop: SHOP,
-        appName: APP_NAME,
         shopifySubscriptionId: "gid://shopify/AppSubscription/1",
         status: APP_SUBSCRIPTION_STATUS.CANCELLED,
       });
@@ -390,7 +382,7 @@ describe("merchant notification triggers", () => {
         tokensPerPeriod: 500_000,
       };
       vi.mocked(prisma.appSubscription.findFirst).mockResolvedValue(sub as never);
-      vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<void>) => {
         const tx = {
           account: {
             findUnique: vi.fn().mockResolvedValue({
@@ -410,7 +402,6 @@ describe("merchant notification triggers", () => {
 
       await markSubscriptionNonActive({
         shop: SHOP,
-        appName: APP_NAME,
         shopifySubscriptionId: sub.shopifySubscriptionId,
         status: APP_SUBSCRIPTION_STATUS.CANCELLED,
       });

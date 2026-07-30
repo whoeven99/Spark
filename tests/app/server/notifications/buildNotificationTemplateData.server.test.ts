@@ -34,6 +34,7 @@ describe("buildNotificationTemplateData", () => {
     const data = buildNotificationTemplateData(
       { ...appConfig, appKey: "product-improve" },
       {
+        shopName: "Demo Shop",
         shopDomain: "demo.myshopify.com",
         occurredAtUtc: "2026-05-28 02:00 UTC",
       },

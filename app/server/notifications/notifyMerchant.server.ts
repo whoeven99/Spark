@@ -14,17 +14,16 @@ import { dispatchMerchantNotificationEmail } from "./sendMerchantNotificationEma
 import { enrichSessionSnapshotFromShopInfo } from "./enrichSessionSnapshotFromShopInfo.server";
 import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 import type { CreditAccountChange } from "./types";
-import { getAppEntry } from "../../config/appEntry.server";
 import prisma from "../../db.server";
 
 const LOG = "[MerchantEmail]";
+const APP_NAME = "spark";
 
 /** 从 offline session 读取缓存的 shopName（API 失败时的降级来源）。 */
 async function loadCachedShopName(shop: string): Promise<string | null> {
   try {
-    const appName = getAppEntry();
     const row = await prisma.session.findFirst({
-      where: { shop, appName, isOnline: false },
+      where: { shop, appName: APP_NAME, isOnline: false },
       select: { shopName: true },
     });
     return row?.shopName ?? null;
