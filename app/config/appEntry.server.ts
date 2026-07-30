@@ -2,8 +2,15 @@
  * 一级目的地（新信息架构，docs 见迁移方案 PR1）。
  * 旧的 per-tool 入口（product-improve / image-studio / order-monitor 等）已收敛进
  * today / studio / settings 三个目的地，导航统一为 5 项。
+ * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
  */
-export type NavItemKey = "ask" | "today" | "studio" | "tasks" | "settings";
+export type NavItemKey =
+  | "ask"
+  | "today"
+  | "studio"
+  | "tasks"
+  | "settings"
+  | "ads-catalog";
 
 type AppShellConfig = {
   home: string;

@@ -215,9 +215,13 @@ export function LogViewer({
       }
       if (event.type === "status_change") {
         applyStatusChange(event.status, event.result);
+        return;
+      }
+      if (event.type === "result_update") {
+        onStatusChangeRef.current?.(currentStatus, event.result);
       }
     },
-    [applyStatusChange],
+    [applyStatusChange, currentStatus],
   );
 
   useEffect(() => {
@@ -266,6 +270,9 @@ export function LogViewer({
                 : [...prev, ...body.logs!],
             ),
           );
+        }
+        if (body.task?.result && body.task.status === "running") {
+          onStatusChangeRef.current?.("running", body.task.result);
         }
         if (body.task?.status && body.task.status !== "running") {
           applyStatusChange(

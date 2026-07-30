@@ -16,10 +16,19 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from "antd";
-import { GlobalOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  CalculatorOutlined,
+  GlobalOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import {
   fetchTsfLanguageCoverage,
+  fetchTsfShopProfileDetail,
+  isOwner,
+  triggerTsfLanguageCoverageRefresh,
   type AutoTranslateFilter,
   type CoverageBucket,
   type TsfLanguageCoverageData,
@@ -56,7 +65,13 @@ function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function TsfLanguageCoverage() {
+  const owner = isOwner();
+  const [messageApi, messageContext] = message.useMessage();
   const [data, setData] = useState<TsfLanguageCoverageData>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,6 +82,7 @@ export default function TsfLanguageCoverage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [computingShop, setComputingShop] = useState<string | null>(null);
   const forceRefreshRef = useRef(false);
 
   const load = useCallback(() => {
@@ -103,6 +119,42 @@ export default function TsfLanguageCoverage() {
     setRefreshKey((key) => key + 1);
   }
 
+  async function computeCoverage(shop: string) {
+    if (computingShop) return;
+    setComputingShop(shop);
+    try {
+      const result = await triggerTsfLanguageCoverageRefresh(shop);
+      messageApi.loading(`现算已入队 ${result.scanId.slice(0, 24)}…`, 0);
+      const terminal = new Set(["COMPLETED", "PARTIAL", "FAILED"]);
+      const deadline = Date.now() + 5 * 60_000;
+      let finalStatus = "CREATED";
+      while (Date.now() < deadline) {
+        await sleep(3000);
+        const detail = await fetchTsfShopProfileDetail(shop);
+        const scan = detail.scan;
+        if (!scan) continue;
+        if (scan.id === result.scanId) {
+          finalStatus = scan.status;
+          if (terminal.has(scan.status)) break;
+        }
+      }
+      messageApi.destroy();
+      if (finalStatus === "FAILED") {
+        messageApi.error(`${shop} 现算失败`);
+      } else if (terminal.has(finalStatus)) {
+        messageApi.success(`${shop} 覆盖率已更新（${finalStatus}）`);
+      } else {
+        messageApi.warning(`${shop} 仍在计算，稍后点右上角「刷新」`);
+      }
+      hardRefresh();
+    } catch (err) {
+      messageApi.destroy();
+      messageApi.error(String(err instanceof Error ? err.message : err));
+    } finally {
+      setComputingShop(null);
+    }
+  }
+
   const columns = [
     {
       title: "商店",
@@ -129,7 +181,7 @@ export default function TsfLanguageCoverage() {
               {row.localeCount === 0
                 ? "无目标语言"
                 : row.cacheMissing
-                  ? "无 Redis 缓存"
+                  ? "未统计覆盖率"
                   : `${row.localeCount} 个目标语言`}
             </Typography.Text>
           </Space>
@@ -143,7 +195,7 @@ export default function TsfLanguageCoverage() {
       width: 100,
       render: (percent: number | null, row: TsfShopLanguageCoverageRow) => {
         if (row.localeCount === 0) return <Tag>无语言</Tag>;
-        if (row.cacheMissing || percent == null) return <Tag>无缓存</Tag>;
+        if (row.cacheMissing || percent == null) return <Tag>未统计</Tag>;
         const tone = coverageTone(percent);
         return (
           <Space direction="vertical" size={2}>
@@ -215,7 +267,7 @@ export default function TsfLanguageCoverage() {
                   </div>
                   <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
                     {locale.cacheMissing
-                      ? "无缓存"
+                      ? "未统计"
                       : `${formatCount(locale.translated)} / ${formatCount(locale.total)}`}
                   </Typography.Text>
                 </Flex>
@@ -227,18 +279,34 @@ export default function TsfLanguageCoverage() {
     },
     {
       title: "更新",
-      dataIndex: "updatedAtLabel",
-      key: "updatedAtLabel",
-      width: 80,
+      key: "updatedAt",
+      width: 140,
       align: "right" as const,
-      render: (label: string) => (
-        <Typography.Text type="secondary">{label || "—"}</Typography.Text>
+      render: (_: unknown, row: TsfShopLanguageCoverageRow) => (
+        <Space direction="vertical" size={4} style={{ alignItems: "flex-end" }}>
+          <Typography.Text type="secondary">
+            {row.updatedAtLabel || "—"}
+          </Typography.Text>
+          {owner ? (
+            <Button
+              size="small"
+              type={row.cacheMissing ? "primary" : "default"}
+              icon={<CalculatorOutlined />}
+              loading={computingShop === row.shop}
+              disabled={computingShop != null && computingShop !== row.shop}
+              onClick={() => void computeCoverage(row.shop)}
+            >
+              现算
+            </Button>
+          ) : null}
+        </Space>
       ),
     },
   ];
 
   return (
     <div>
+      {messageContext}
       <Flex justify="space-between" align="center" gap={16} wrap="wrap" style={{ marginBottom: 16 }}>
         <div>
           <Typography.Title level={4} style={{ margin: 0 }}>
@@ -248,7 +316,8 @@ export default function TsfLanguageCoverage() {
             </Space>
           </Typography.Title>
           <Typography.Text type="secondary">
-            商店以 Turso 在装 Account 为准；覆盖率按目标语言查 Redis items_count。
+            商店以 Turso 在装 Account 为准；覆盖率读 ShopTargetLocale.coverage*。
+            「现算」入队 Worker 重算该店覆盖率（对齐 App「刷新统计」）。
           </Typography.Text>
         </div>
         <Button icon={<ReloadOutlined />} onClick={hardRefresh}>
@@ -262,7 +331,7 @@ export default function TsfLanguageCoverage() {
         message="数据口径"
         description={
           data.note ||
-          "商店列表：Turso Account；自动翻译：ShopTargetLocale.autoTranslate；覆盖率：Redis tsf:items_count:{shop}:{locale}。"
+          "商店列表：Turso Account；自动翻译与覆盖率均来自 ShopTargetLocale。行内「现算」= shop scan trigger=admin（仅 coverage → Turso），需 Owner。"
         }
         style={{ marginBottom: 16 }}
       />
@@ -303,7 +372,7 @@ export default function TsfLanguageCoverage() {
         <Col xs={12} lg={6}>
           <Card size="small">
             <Statistic
-              title="低覆盖 / 无缓存"
+              title="低覆盖 / 未统计"
               value={`${data.stats.lowCoverageShops} / ${data.stats.shopsWithoutCache}`}
             />
           </Card>
@@ -333,7 +402,7 @@ export default function TsfLanguageCoverage() {
               { value: "low", label: "< 50%" },
               { value: "mid", label: "50–90%" },
               { value: "high", label: "≥ 90%" },
-              { value: "missing", label: "无 Redis 缓存" },
+              { value: "missing", label: "未统计覆盖率" },
             ]}
           />
           <Select<AutoTranslateFilter>

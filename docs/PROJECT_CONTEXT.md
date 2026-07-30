@@ -4,11 +4,12 @@
 
 ## 1. 项目定位
 
-Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由三块组成：
+Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
 - 主应用：仓库根目录，React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端。
 - Admin 后台：`admin/` 独立 Express API + Vite React 前端。
 - Web Pixel 扩展：`extensions/ciwi-spark-web-pixel/`，采集 Shopify analytics/custom events 并上报 `/api/pixel-ingest`。
+- Theme App Extension：`extensions/spark-tiktok-pixel/`，店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。
 
 整店/多语言翻译执行链路归 TypeScriptFrontend（TSF）所有。Spark 主应用不再注册整店翻译工具，也没有 `worker/` 目录或 Translation Worker 可部署服务。Spark 仍保留图片翻译、兼容 Blob 读取和 Admin 只读观测/运维页。
 
@@ -37,6 +38,8 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - `/api/automation-overview`：Today 和工作台自动化概览。
 - `/api/support`、`/api/external-support`：客服会话入口。
 - `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
+- 广告 Catalog / Insights OAuth：`app.ads-catalog.tsx`、`app.settings.ads-insights.tsx`、`app.ads.*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx`、`ads.meta-ads.callback.tsx`、`ads.google-*.callback.tsx`、`ads.tiktok-catalog.callback.tsx`。
+- TikTok 店面测试事件双发：`POST /api/ads-catalog/tiktok-storefront-track`（仅测试模式）。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单、退款、库存、履约 Webhook。
 
 ## 4. 服务端领域入口
@@ -49,6 +52,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 | 商品目录和 Shopify 对象 | `app/server/productSearch/`、`app/server/shopify/` |
 | 图片生成 | `app/server/imageGeneration/`、`app/server/ai/skills/imageGeneration/` |
 | 图片翻译 | `app/server/pictureTranslate/`、`app/server/ai/skills/pictureTranslate/` |
+| 广告 Catalog / Insights | `app/server/adsCatalog/`、`app/server/adsInsights/` |
 | AI 任务和任务估算 | `app/server/aiTask/` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | Today、诊断、ROI、自动化 | `app/server/operations/`、`app/server/automation/` |
@@ -63,7 +67,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 
 ## 5. 数据和外部系统
 
-- Turso / libSQL + Prisma：主业务数据，schema 在 `prisma/schema.prisma`，运行时入口是 `app/db.server.ts`。
+- Turso / libSQL + Prisma：主业务数据，schema 在 `prisma/schema.prisma`，运行时入口是 `app/db.server.ts`。广告 OAuth 凭证写入 `AdPlatformCredential`（按 `shop` + `platform` 唯一），读写见 `app/server/adsCatalog/credentialStore.server.ts`。
 - Azure Cosmos DB：Agent 运行摘要、Playbook Case，以及 Admin 翻译观测中读取的外部任务数据。
 - Azure Blob Storage：上传文件、图片生成、图片翻译和少量兼容翻译内容。
 - Redis：Admin 运营排查和部分历史/兼容状态读取，不作为新核心业务对象的默认存储。
@@ -74,6 +78,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
   - 商户模板 ID：`notificationTemplateIds.server.ts`（安装 `180498`、卸载 `180499`、购包 `180500`、订阅 `180501–180503`）；Agent `task_*` 模板仍在 `emailTemplates.server.ts`。
   - 触发：安装（`recordAppInstalled` → `onAppInstalled`）、卸载（`onAppUninstalled`，删 Session 前读收件人快照）、订阅/购包（`activateSubscription` / `applyTokenPackPurchase`）。
   - 模板展示用 support 邮箱：`MERCHANT_SUPPORT_EMAIL`（`support@ciwi.ai`），与 SES From（`support@msg.ciwi.ai`）分离。
+- 物流承运商凭证：本地 JSON `.data/logistics-provider-credentials.json`（`app/server/logisticsCredentialStore.server.ts`），未做加密存储。
 
 存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service；涉及整店翻译时同时核对 TSF 当前实现。
 
@@ -125,6 +130,16 @@ npm run turso:migrate:test
 - Billing：`BILLING_GATEWAY`、`BILLING_TEST`、`BILLING_ENABLED`。
 - 邮件和飞书：`TENCENT_*`、`EMAIL_*`、`OPS_NOTIFY_EMAIL`、`FEISHU_*`。
 - Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
+- 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
+- TikTok Pixel（Ads Catalog）：
+  - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
+  - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。
+  - 服务端：`orders/paid` 按勾选上报 `CompletePayment`（Events API `pixel/track`；凭证含 Test Event Code 时带 `test_event_code`）。
+- TikTok Insights 沙盒（`app/server/adsInsights/tiktokSandbox.server.ts`）：
+  - `TIKTOK_SANDBOX_ACCESS_TOKEN`、`TIKTOK_SANDBOX_ADVERTISER_ID`（必需）
+  - `TIKTOK_SANDBOX_IDENTITY_ID`、`TIKTOK_SANDBOX_IDENTITY_TYPE`（seed 建 Ad 必需）
+  - `TIKTOK_SANDBOX_ACCOUNT_NAME`、`TIKTOK_SANDBOX_IMAGE_ID`（可选）
+  - 请求 `sandbox-ads.tiktok.com`，不复用 Catalog OAuth token；Insights 指标为本地 mock。
 
 ## 9. 改动落点
 
@@ -135,6 +150,8 @@ npm run turso:migrate:test
 - 改图片工具：`app/routes/app.studio.image.tsx`、`app/server/imageGeneration/`、`app/server/pictureTranslate/`。
 - 改 Today/运营诊断：`app/routes/app.today.*`、`app/server/operations/`。
 - 改订单回补/数据同步：`app/routes/app.settings.data.tsx`、`app/server/shopify/sync/`。
+- 改广告 OAuth / Catalog / Insights：`app/server/adsCatalog/**`、`app/server/adsInsights/**`、相关 `app/routes/app.ads-catalog.tsx`、`app.settings.ads-insights.tsx` 与 OAuth start/callback。
+- 改 TikTok Pixel / Theme App Embed：`extensions/spark-tiktok-pixel/`、`app/server/adsCatalog/`（metafield 下发与 Events API）。
 - 改计费：先读 `app/server/billing/agent.md`，再改 `app/server/billing/`、`app/server/tokenUsage/`、`app/routes/app.settings.billing.tsx` 和 Webhook。
 - 改 Admin：在 `admin/` 内修改并运行 `npm run build`。
 - 改 Web Pixel：`extensions/ciwi-spark-web-pixel/`，同时检查 `/api/pixel-ingest`。

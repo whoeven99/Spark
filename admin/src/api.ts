@@ -293,12 +293,29 @@ export function fetchTranslationJob(
   return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
 }
 
+export type TranslationContentCallCost = {
+  provider: string;
+  model?: string;
+  requestId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  chars?: number;
+  batchSize?: number;
+};
+
+export type TranslationContentFieldCost = TranslationContentCallCost & {
+  calls?: TranslationContentCallCost[];
+};
+
 export type TranslationContentField = {
   key: string;
   originalValue: string;
   translatedValue: string;
   digest?: string;
   status?: string;
+  /** Per-field LLM/Google/cache cost metadata from translate blob. */
+  cost?: TranslationContentFieldCost;
 };
 
 export type TranslationContentResource = {
@@ -1422,7 +1439,7 @@ export type TsfShopScanStageState = "PENDING" | "DONE" | "SKIPPED" | "FAILED";
 export type TsfShopScan = {
   id: string;
   shopName: string;
-  trigger: "install" | "scheduled" | "manual";
+  trigger: "install" | "scheduled" | "manual" | "admin";
   status: "CREATED" | "QUEUED" | "SCANNING" | "COMPLETED" | "PARTIAL" | "FAILED";
   stages: Record<"contentSize" | "profile" | "coverage" | "glossary", TsfShopScanStageState>;
   blobPrefix: string;
@@ -1814,6 +1831,43 @@ export function fetchTsfShopProfileDetail(
   shop: string,
 ): Promise<TsfShopProfileDetailData> {
   return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}`);
+}
+
+export type ShopLocaleCoverageRow = {
+  locale: string;
+  translated: number;
+  total: number;
+  percent: number | null;
+  updatedAt: string | null;
+  cacheMissing: boolean;
+  autoTranslate: boolean;
+};
+
+export function fetchShopLocaleCoverage(
+  shop: string,
+): Promise<{ shop: string; locales: ShopLocaleCoverageRow[] }> {
+  return apiFetch(`/tsf/language-coverage/shop?shop=${encodeURIComponent(shop)}`);
+}
+
+export type TsfLanguageCoverageRefreshResult = {
+  enqueued: true;
+  scanId: string;
+  shop: string;
+  status: "CREATED";
+  trigger: "admin";
+  hintPushed: boolean;
+  note: string | null;
+};
+
+/** Owner：入队现算覆盖率（Worker trigger=admin，只跑 coverage → Turso）。 */
+export function triggerTsfLanguageCoverageRefresh(
+  shop: string,
+): Promise<TsfLanguageCoverageRefreshResult> {
+  return apiFetch(`/tsf/language-coverage/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ shop }),
+  });
 }
 
 export type TsfShopProfileScanResult = {
@@ -2656,6 +2710,8 @@ export type OpenRouterModelOption = {
   pricing: { prompt: string | null; completion: string | null } | null;
   free: boolean;
   provider: string;
+  modality?: string | null;
+  output_modalities?: string[] | null;
 };
 
 export type OpenRouterChatResult = {
@@ -2669,13 +2725,31 @@ export type OpenRouterChatResult = {
   error: { code: number | string; message: string; metadata: unknown } | null;
 };
 
+export type OpenRouterImageResult = {
+  ok: boolean;
+  httpStatus: number;
+  model: string;
+  modelUsed: string | null;
+  images: Array<{
+    b64: string | null;
+    url: string | null;
+    mimeType: string | null;
+  }>;
+  usage: Record<string, unknown> | null;
+  error: { code: number | string; message: string; metadata: unknown } | null;
+};
+
 export function fetchOpenRouterStatus(): Promise<OpenRouterStatus> {
   return apiFetch("/openrouter-probe/status");
 }
 
 export function fetchOpenRouterModels(
   modalities: string = "text",
-): Promise<{ total_count: number; models: OpenRouterModelOption[] }> {
+): Promise<{
+  total_count: number;
+  models: OpenRouterModelOption[];
+  modalities?: string;
+}> {
   const qs = new URLSearchParams({ modalities });
   return apiFetch(`/openrouter-probe/models?${qs.toString()}`);
 }
@@ -2688,6 +2762,22 @@ export function postOpenRouterChat(body: {
   temperature?: number;
 }): Promise<OpenRouterChatResult> {
   return apiFetch("/openrouter-probe/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postOpenRouterImages(body: {
+  model: string;
+  prompt: string;
+  imageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  resolution?: string;
+  output_format?: string;
+  aspect_ratio?: string;
+}): Promise<OpenRouterImageResult> {
+  return apiFetch("/openrouter-probe/images", {
     method: "POST",
     body: JSON.stringify(body),
   });

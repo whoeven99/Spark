@@ -5,6 +5,7 @@ import {
   markTaskPendingReview,
   markTaskSucceeded,
   getTaskMeta,
+  updateTaskResult,
 } from "./aiTaskStore.server";
 import { updateTaskEstimation } from "./aiTaskEstimation.server";
 import { deriveBucket } from "./estimationBucket";
@@ -32,6 +33,18 @@ export async function appendLog(params: {
     messageKey: entry.messageKey,
     messageParams: entry.messageParams,
     createdAt: entry.createdAt,
+  });
+}
+
+export async function updateTaskProgress(params: {
+  taskId: string;
+  result: Record<string, unknown>;
+}): Promise<void> {
+  await updateTaskResult(params);
+  emitTaskEvent(params.taskId, {
+    type: "result_update",
+    taskId: params.taskId,
+    result: params.result,
   });
 }
 
@@ -142,6 +155,7 @@ export async function failTask(params: {
   errorMsg: AITaskMessageInput;
   startedAt: number;
   finalMessage?: AITaskMessageInput;
+  result?: Record<string, unknown>;
 }): Promise<void> {
   if (params.finalMessage) {
     const elapsedSeconds = Math.floor((Date.now() - params.startedAt) / 1000);
@@ -163,11 +177,13 @@ export async function failTask(params: {
   await markTaskFailed({
     taskId: params.taskId,
     errorMsg: params.errorMsg,
+    result: params.result,
   });
   emitTaskEvent(params.taskId, {
     type: "status_change",
     taskId: params.taskId,
     status: "failed",
+    result: params.result,
     ...(typeof params.errorMsg === "string"
       ? { errorMsg: params.errorMsg }
       : {

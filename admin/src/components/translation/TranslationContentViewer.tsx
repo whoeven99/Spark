@@ -4,6 +4,9 @@ import { ReloadOutlined } from "@ant-design/icons";
 import {
   fetchTranslationContent,
   fetchTranslationContentModules,
+  type TranslationContentField,
+  type TranslationContentFieldCost,
+  type TranslationContentCallCost,
   type TranslationContentPage,
   type TranslationContentModule,
   type TranslationJob,
@@ -36,6 +39,86 @@ function ContentCell({ value, fallback }: { value: string; fallback?: boolean })
       }}
     >
       {value || <span style={{ color: C.faint }}>—</span>}
+    </div>
+  );
+}
+
+function formatTokenPair(call: TranslationContentCallCost): string | null {
+  if (call.inputTokens != null || call.outputTokens != null) {
+    return `in ${call.inputTokens ?? "—"} / out ${call.outputTokens ?? "—"}`;
+  }
+  if (call.totalTokens != null) return `total ${call.totalTokens}`;
+  return null;
+}
+
+function CostCallLines({ call }: { call: TranslationContentCallCost }) {
+  const tokenLine = formatTokenPair(call);
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ color: C.sub }}>
+        {call.provider === "llm" ? call.model || "llm" : call.provider === "google" ? "google" : call.provider}
+        {call.batchSize != null && call.batchSize > 1 ? ` · batch ${call.batchSize}` : ""}
+      </div>
+      {call.requestId ? (
+        <Typography.Text
+          copyable={{ text: call.requestId }}
+          style={{
+            fontSize: 11,
+            color: C.faint,
+            fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
+            wordBreak: "break-all",
+          }}
+        >
+          {call.requestId}
+        </Typography.Text>
+      ) : null}
+      {tokenLine ? <div style={{ color: C.ink }}>{tokenLine}</div> : null}
+      {call.provider === "google" && call.chars != null ? (
+        <div style={{ color: C.ink }}>{call.chars.toLocaleString()} chars</div>
+      ) : null}
+    </div>
+  );
+}
+
+function CostCell({ cost }: { cost?: TranslationContentFieldCost }) {
+  if (!cost) {
+    return <span style={{ color: C.faint, fontSize: 12 }}>—</span>;
+  }
+  if (cost.provider === "cache") {
+    return <span style={{ fontSize: 12, color: C.sub }}>缓存</span>;
+  }
+  if (cost.provider === "skip") {
+    return <span style={{ fontSize: 12, color: C.sub }}>跳过</span>;
+  }
+
+  const calls =
+    cost.calls && cost.calls.length > 0
+      ? cost.calls
+      : cost.provider === "llm" || cost.provider === "google"
+        ? [cost]
+        : [];
+
+  if (calls.length === 0 && (cost.inputTokens != null || cost.outputTokens != null || cost.chars != null)) {
+    return (
+      <div style={{ fontSize: 11.5, lineHeight: 1.45 }}>
+        {cost.provider === "mixed" ? <div style={{ color: C.sub }}>mixed</div> : null}
+        {formatTokenPair(cost) ? <div>{formatTokenPair(cost)}</div> : null}
+        {cost.chars != null ? <div>{cost.chars.toLocaleString()} chars</div> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ fontSize: 11.5, lineHeight: 1.45, maxHeight: 180, overflow: "auto" }}>
+      {cost.provider === "mixed" ? <div style={{ color: C.sub, marginBottom: 4 }}>mixed</div> : null}
+      {calls.map((call, i) => (
+        <CostCallLines key={call.requestId || `${call.provider}-${i}`} call={call} />
+      ))}
+      {cost.provider !== "google" &&
+      cost.chars != null &&
+      !calls.some((c) => c.provider === "google" && c.chars != null) ? (
+        <div style={{ color: C.ink }}>{cost.chars.toLocaleString()} chars</div>
+      ) : null}
     </div>
   );
 }
@@ -227,6 +310,12 @@ export function TranslationContentViewer({ job }: { job: TranslationJob }) {
                       render: (v: string, r: { status?: string }) => (
                         <ContentCell value={v} fallback={r.status === "fallback"} />
                       ),
+                    },
+                    {
+                      title: "翻译成本",
+                      dataIndex: "cost",
+                      width: 200,
+                      render: (_: unknown, r: TranslationContentField) => <CostCell cost={r.cost} />,
                     },
                   ]}
                 />
