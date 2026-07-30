@@ -1439,7 +1439,7 @@ export type TsfShopScanStageState = "PENDING" | "DONE" | "SKIPPED" | "FAILED";
 export type TsfShopScan = {
   id: string;
   shopName: string;
-  trigger: "install" | "scheduled" | "manual";
+  trigger: "install" | "scheduled" | "manual" | "admin";
   status: "CREATED" | "QUEUED" | "SCANNING" | "COMPLETED" | "PARTIAL" | "FAILED";
   stages: Record<"contentSize" | "profile" | "coverage" | "glossary", TsfShopScanStageState>;
   blobPrefix: string;
@@ -1847,6 +1847,27 @@ export function fetchShopLocaleCoverage(
   shop: string,
 ): Promise<{ shop: string; locales: ShopLocaleCoverageRow[] }> {
   return apiFetch(`/tsf/language-coverage/shop?shop=${encodeURIComponent(shop)}`);
+}
+
+export type TsfLanguageCoverageRefreshResult = {
+  enqueued: true;
+  scanId: string;
+  shop: string;
+  status: "CREATED";
+  trigger: "admin";
+  hintPushed: boolean;
+  note: string | null;
+};
+
+/** Owner：入队现算覆盖率（Worker trigger=admin，只跑 coverage → Turso）。 */
+export function triggerTsfLanguageCoverageRefresh(
+  shop: string,
+): Promise<TsfLanguageCoverageRefreshResult> {
+  return apiFetch(`/tsf/language-coverage/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ shop }),
+  });
 }
 
 export type TsfShopProfileScanResult = {
