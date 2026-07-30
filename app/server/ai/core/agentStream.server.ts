@@ -32,6 +32,7 @@ import {
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
 import { buildReflectionFromRun, fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection.server";
+import { recordPlaybookCasesFromMessages } from "../../playbookCase/recordPlaybookCase.server";
 import {
   shouldSuppressProductImproveForBatch,
 } from "../skills/batchTasks/batchTasks.extract";
@@ -431,6 +432,14 @@ export function invokeChatAgentStream(
           void persistStreamRun({ status: "success", resultMessages }).catch((err) => {
             console.error("[AgentRunLog] async persist failed:", err);
           });
+          void recordPlaybookCasesFromMessages({
+            messages: resultMessages,
+            shop,
+            appName,
+            agentRunId: runId,
+          }).catch((err) => {
+            console.error("[PlaybookCase] async persist failed:", err);
+          });
           const fb = await generateFallbackReplyStream(
             lastUserText,
             extractMessagesContext(resultMessages),
@@ -467,17 +476,6 @@ export function invokeChatAgentStream(
                 shouldSuppressProductImproveForBatch(lastUserText);
               if (!skipProductImprovePayload) {
                 uiPayloads[def.uiPayloadKey] = payload;
-              }
-
-              if (
-                def.name === "translationTaskForm" &&
-                !streamContext.emittedFlags.has("translationTaskForm")
-              ) {
-                controller.enqueue({
-                  type: "tool_call",
-                  name: "open_translation_task_form",
-                  args: payload,
-                });
               }
 
               if (def.name === "batchTasksForm") {
@@ -587,6 +585,14 @@ export function invokeChatAgentStream(
           backgroundWrites.push(recordTokenUsage({ shop, usage: agentUsage }));
         }
         backgroundWrites.push(persistStreamRun({ status: "success", resultMessages }));
+        backgroundWrites.push(
+          recordPlaybookCasesFromMessages({
+            messages: resultMessages,
+            shop,
+            appName,
+            agentRunId: runId,
+          }),
+        );
 
         if (finalReply.length > streamedTextAccum.length) {
           const remainder = finalReply.slice(streamedTextAccum.length);

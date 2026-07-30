@@ -4,7 +4,7 @@ import type {
   LoaderFunctionArgs,
   ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -14,70 +14,44 @@ import {
   buildLocaleCookieHeader,
   normalizeLocale,
 } from "../i18n/config";
-import { detectRequestLocale } from "../i18n/detector.server";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
-import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
+import {
+  syncSessionShopProfile,
+  syncSessionUserProfileFromOnline,
+} from "../server/session/syncSessionUserProfile.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
+import { SupportChatWidget } from "./component/SupportChatWidget";
+import {
+  appendEmbeddedSearchToPath,
+  resolveEmbeddedLocationSearch,
+} from "../lib/embeddedLocationSearch";
 
 const NAV_ITEMS: Record<
   NavItemKey,
   {
     href: string;
     labelKey:
-      | "nav.aiAssistant"
-      | "nav.translationV4"
-      | "nav.productImprove"
-      | "nav.imageStudio"
-      | "nav.billing"
-      | "nav.orderMonitor"
-      | "nav.dailyOperations";
+      | "nav.ask"
+      | "nav.today"
+      | "nav.studio"
+      | "nav.tasks"
+      | "nav.settings"
+      | "nav.adsCatalog";
   }
 > = {
-  chat: { href: "/app", labelKey: "nav.aiAssistant" },
-  "translation-v4": { href: "/app/translation-v4", labelKey: "nav.translationV4" },
-  "product-improve": {
-    href: "/app/product-improve",
-    labelKey: "nav.productImprove",
-  },
-  "image-studio": {
-    href: "/app/image-studio",
-    labelKey: "nav.imageStudio",
-  },
-  "picture-translate": {
-    href: "/app/image-studio?tab=translate",
-    labelKey: "nav.imageStudio",
-  },
-  "generate-image": {
-    href: "/app/image-studio?tab=generate",
-    labelKey: "nav.imageStudio",
-  },
-  "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
-  "daily-operations": {
-    href: "/app/daily-operations",
-    labelKey: "nav.dailyOperations",
-  },
-  billing: { href: "/app/billing", labelKey: "nav.billing" },
+  ask: { href: "/app", labelKey: "nav.ask" },
+  today: { href: "/app/today", labelKey: "nav.today" },
+  studio: { href: "/app/studio", labelKey: "nav.studio" },
+  tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
+  settings: { href: "/app/settings", labelKey: "nav.settings" },
+  "ads-catalog": { href: "/app/ads-catalog", labelKey: "nav.adsCatalog" },
 };
-
-/** 同一进程内每个 shop 的 V4 token 同步间隔，避免重复打 Cosmos。 */
-const V4_TOKEN_SYNC_TTL_MS = 10 * 60 * 1000;
-const lastV4TokenSyncAt = new Map<string, number>();
-
-function scheduleV4TokenSync(shop: string, accessToken?: string | null) {
-  const now = Date.now();
-  const last = lastV4TokenSyncAt.get(shop) ?? 0;
-  if (now - last < V4_TOKEN_SYNC_TTL_MS) return;
-  lastV4TokenSyncAt.set(shop, now);
-
-  void syncV4JobShopifyTokensFromSession(shop, accessToken).catch((error) => {
-    console.error("[v4:token-sync] app shell sync failed:", error);
-  });
-}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -93,19 +67,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   });
 
+  try {
+    await syncSessionUserProfileFromOnline(session);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionUserProfileFromOnline failed:", error);
+  }
+
+  try {
+    await syncSessionShopProfile(session.shop, admin);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionShopProfile failed:", error);
+  }
+
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
 
-  scheduleV4TokenSync(session.shop, session.accessToken);
-
-  const locale = detectRequestLocale(request);
+  const locale = detectRequestLocale(request, {
+    sessionLocale: readShopifySessionLocale(session),
+  });
   const { nav, home } = getAppEntryConfig();
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
 };
 
-/** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用与 Cosmos 同步。 */
+/** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用。 */
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
@@ -159,6 +145,7 @@ export default function App() {
       <AppProvider embedded apiKey={apiKey}>
         <AppNav nav={nav} />
         <Outlet />
+        <SupportChatWidget />
       </AppProvider>
     </AppI18nProvider>
   );
@@ -166,12 +153,18 @@ export default function App() {
 
 function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const embeddedSearch = resolveEmbeddedLocationSearch(location.search);
+
   return (
     <s-app-nav>
       {nav.map((item) => {
         const config = NAV_ITEMS[item];
         return (
-          <s-link key={item} href={config.href}>
+          <s-link
+            key={item}
+            href={appendEmbeddedSearchToPath(config.href, embeddedSearch)}
+          >
             {t(config.labelKey)}
           </s-link>
         );

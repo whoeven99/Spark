@@ -4,11 +4,10 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
-import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 
-export type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
+export type WorkspacePanel = "home" | "dashboard" | "chat" | "skills" | "automation" | "tasks";
 export type AutomationView = "configured" | "history" | "templates";
 export type ObjectType = "product" | "article" | "order";
 export type ContextTool = ObjectType | "file" | "media" | "constraint";
@@ -36,7 +35,6 @@ export type WorkspaceConversationMessage = {
   text: string;
   time: string;
   attachments?: ChatMessageAttachment[];
-  translationTaskForm?: TranslationTaskFormPayload;
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
   taskProposal?: TaskProposalPayload;
@@ -99,7 +97,14 @@ export const objectTypeLabels: Record<ObjectType, string> = {
 };
 
 export function isWorkspacePanel(value: string | null): value is WorkspacePanel {
-  return value === "dashboard" || value === "chat" || value === "skills" || value === "automation" || value === "tasks";
+  return (
+    value === "home" ||
+    value === "dashboard" ||
+    value === "chat" ||
+    value === "skills" ||
+    value === "automation" ||
+    value === "tasks"
+  );
 }
 
 export function isObjectType(value: ContextTool | null): value is ObjectType {

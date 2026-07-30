@@ -1,4 +1,5 @@
 import { EMAIL_TEMPLATE_IDS } from "../../../email/templates/emailTemplates.server";
+import { NOTIFICATION_TEMPLATE_IDS } from "../../../notifications/notificationTemplateIds.server";
 
 export const SEND_TEMPLATE_EMAIL_TOOL_NAME = "send_template_email";
 
@@ -11,27 +12,27 @@ export const SEND_TEMPLATE_EMAIL_LOG_PREFIX = "[EmailTool]";
  */
 export const EMAIL_SCENARIOS = {
   app_install_success: {
-    templateId: EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS,
+    templateId: NOTIFICATION_TEMPLATE_IDS.appInstalled,
     description: "应用安装成功通知",
   },
   app_uninstall: {
-    templateId: EMAIL_TEMPLATE_IDS.APP_UNINSTALL,
+    templateId: NOTIFICATION_TEMPLATE_IDS.appUninstalled,
     description: "应用被卸载通知",
   },
   order_pay_success: {
-    templateId: EMAIL_TEMPLATE_IDS.ORDER_PAY_SUCCESS,
+    templateId: NOTIFICATION_TEMPLATE_IDS.purchaseCreated,
     description: "订单/一次性付款成功通知",
   },
   subscription_success: {
-    templateId: EMAIL_TEMPLATE_IDS.SUBSCRIPTION_SUCCESS,
+    templateId: NOTIFICATION_TEMPLATE_IDS.subscriptionStarted,
     description: "订阅开通/续费成功通知",
   },
   subscription_updated: {
-    templateId: EMAIL_TEMPLATE_IDS.SUBSCRIPTION_UPDATED,
+    templateId: NOTIFICATION_TEMPLATE_IDS.subscriptionChanged,
     description: "订阅变更（升/降级）通知",
   },
   subscription_cancelled: {
-    templateId: EMAIL_TEMPLATE_IDS.SUBSCRIPTION_CANCELLED,
+    templateId: NOTIFICATION_TEMPLATE_IDS.subscriptionCanceled,
     description: "订阅取消通知",
   },
   task_started: {

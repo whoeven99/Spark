@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { onAppUninstalled } from "../server/appLifecycle/onAppUninstalled.server";
+import { runWebhookWorkInBackground } from "../server/webhook/runWebhookWork.server";
 import {
   authenticateWebhookLogged,
   returnWebhookOk,
@@ -23,24 +24,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     throw error;
   }
 
-  try {
-    console.info(`[Webhook] before-uninstall-handlers shop=${shop}`);
-    const webhookId = request.headers.get("X-Shopify-Webhook-Id") ?? undefined;
+  const webhookId = request.headers.get("X-Shopify-Webhook-Id") ?? undefined;
 
-    await onAppUninstalled({
+  runWebhookWorkInBackground(
+    onAppUninstalled({
       shop,
       topic,
       payload,
       sessionId: session?.id,
       webhookId,
       uninstalledAt: new Date(),
-    });
-    console.info(`[Webhook] after-uninstall-handlers shop=${shop}`);
-  } catch (error) {
-    console.error(`[Webhook] uninstall handlers failed shop=${shop}:`, error);
-    throw error;
-  }
+    }),
+    { shop, topic, label: "app/uninstalled" },
+  );
 
-  console.info(`[Webhook] app/uninstalled completed shop=${shop} status=200`);
   return returnWebhookOk({ shop, topic });
 };

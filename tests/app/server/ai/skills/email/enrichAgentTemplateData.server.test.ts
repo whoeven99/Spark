@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { EMAIL_TEMPLATE_IDS } from "../../../../../../app/server/email/templates/emailTemplates.server";
+import { NOTIFICATION_TEMPLATE_IDS } from "../../../../../../app/server/notifications/notificationTemplateIds.server";
 import type { AgentContext } from "../../../../../../app/server/ai/core/toolRegistry.server";
 import { fetchShopBasicInfo } from "../../../../../../app/server/shopify/fetchShopBasicInfo.server";
 import {
@@ -75,7 +75,7 @@ describe("enrichAgentTemplateData", () => {
 
   it("fills install template fields for APP_INSTALL_SUCCESS", async () => {
     const data = await enrichAgentTemplateData(
-      EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS,
+      NOTIFICATION_TEMPLATE_IDS.appInstalled,
       context,
     );
 
@@ -91,7 +91,7 @@ describe("enrichAgentTemplateData", () => {
 
   it("normalizes APP_Name and allows agent appName override", async () => {
     const data = await enrichAgentTemplateData(
-      EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS,
+      NOTIFICATION_TEMPLATE_IDS.appInstalled,
       context,
       { APP_Name: "spark_zz" },
     );
@@ -103,7 +103,7 @@ describe("enrichAgentTemplateData", () => {
 
   it("allows recipientName override from agent", async () => {
     const data = await enrichAgentTemplateData(
-      EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS,
+      NOTIFICATION_TEMPLATE_IDS.appInstalled,
       context,
       { recipientName: "Alice" },
     );
@@ -113,7 +113,7 @@ describe("enrichAgentTemplateData", () => {
 
   it("fills uninstalledAtUtc for APP_UNINSTALL", async () => {
     const data = await enrichAgentTemplateData(
-      EMAIL_TEMPLATE_IDS.APP_UNINSTALL,
+      NOTIFICATION_TEMPLATE_IDS.appUninstalled,
       context,
     );
 

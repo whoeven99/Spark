@@ -8,7 +8,6 @@ name = "spark_zz"
 [build]
 automatically_update_urls_on_dev = true
 
-
 [webhooks] 
 api_version = "2026-07"
 

@@ -1,9 +1,14 @@
 import prisma from "../../db.server";
-import { handleAppUninstalled } from "../commonEventLog/handleAppUninstalled.server";
+import { appendCommonEventLog } from "../commonEventLog/appendCommonEventLog.server";
+import {
+  buildUninstallEventReferenceId,
+  handleAppUninstalled,
+} from "../commonEventLog/handleAppUninstalled.server";
+import { loadSessionSnapshotForUninstall } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
 import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
 import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeishuNotify.server";
+import { notifyAppUninstalledEmail } from "../notifications/notifyMerchant.server";
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
-
 const LOG = "[AppLifecycle:uninstall]";
 const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
@@ -16,6 +21,11 @@ export type OnAppUninstalledParams = {
   uninstalledAt: Date;
 };
 
+/**
+ * 快速幂等检查（两层）：
+ * 1. webhookId 精确匹配已有 CommonEventLog referenceId
+ * 2. 10 分钟窗口内已有同店铺卸载事件
+ */
 async function shouldSkipUninstallOpsNotify(params: {
   shop: string;
   webhookId?: string;
@@ -100,22 +110,72 @@ async function sendAppUninstalledFeishuNotify(
   }
 }
 
+/**
+ * 卸载：两层幂等门禁，再删 Session。
+ *
+ * 执行顺序：
+ * 1. 加载收件人快照（Session 删除前）
+ * 2. shouldSkipUninstallOpsNotify（webhookId / 10min 窗口）→ 快速跳过
+ * 3. appendCommonEventLog（referenceId 精确去重）→ created=true 则首次，发飞书+邮件
+ * 4. persistAppUninstalled（内部 appendCommonEventLog 因 dedup 幂等，deleteSessionsForShop 正常执行）
+ */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
   console.info(
     `${LOG} enter shop=${params.shop} webhookId=${params.webhookId ?? "(none)"}`,
   );
 
+  // 1. 在删除 Session 之前加载收件人快照
+  let recipient: Awaited<ReturnType<typeof loadSessionSnapshotForUninstall>> = null;
+  try {
+    recipient = await loadSessionSnapshotForUninstall(params.shop, params.sessionId);
+  } catch (error) {
+    console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
+  }
+
+  // 2. 快速幂等检查（webhookId 精确匹配 + 10min 窗口）
   const skipOpsNotify = await shouldSkipUninstallOpsNotify({
     shop: params.shop,
     webhookId: params.webhookId,
   });
+
   if (skipOpsNotify) {
     console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
   } else {
-    await sendAppUninstalledFeishuNotify(params);
+    // 3. 提前写日志作幂等门禁：第一条 Webhook 写入成功（created=true），后续重复投递找到已有记录（created=false）
+    const referenceId = buildUninstallEventReferenceId({
+      shop: params.shop,
+      webhookId: params.webhookId,
+      sessionId: params.sessionId,
+    });
+    const { created } = await appendCommonEventLog({
+      shop: params.shop,
+      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+      topic: params.topic,
+      referenceId,
+      payload:
+        params.payload && typeof params.payload === "object"
+          ? (params.payload as Record<string, unknown>)
+          : { raw: params.payload },
+    });
+
+    if (created) {
+      await sendAppUninstalledFeishuNotify(params);
+      // 传入预加载的收件人快照，Session 删除前已缓存
+      await notifyAppUninstalledEmail({
+        shop: params.shop,
+        appName: "spark",
+        uninstalledAt: params.uninstalledAt,
+        recipient,
+      });
+    } else {
+      console.info(
+        `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
+      );
+    }
   }
 
+  // 4. 持久化（appendCommonEventLog 内部 dedup 幂等，deleteSessionsForShop 正常执行）
   await persistAppUninstalled(params);
 
   console.info(`${LOG} done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`);

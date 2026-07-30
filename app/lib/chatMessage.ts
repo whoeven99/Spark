@@ -1,7 +1,6 @@
 import type { AITaskItem } from "./aiTaskTypes";
 import type { TaskProposalPayload } from "./taskProposalPayload";
 import type { TaskRunPayload } from "./taskRunPayload";
-import type { TranslationTaskFormPayload } from "./translationTaskFormPayload";
 
 export type ChatMessageImageAttachment = {
   type: "image";
@@ -55,7 +54,6 @@ export type ChatMessage =
       role: "assistant";
       content: string;
       attachments?: ChatMessageAttachment[];
-      translationTaskForm?: TranslationTaskFormPayload;
       /** 为 true 时在气泡内渲染「商品描述生成结果」卡片（即时生成结果展示/应用）。 */
       productImproveCard?: boolean;
       /** 通用任务确认卡片（TaskProposal 协议，走 /api/task-proposal）。 */

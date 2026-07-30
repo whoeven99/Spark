@@ -2,8 +2,11 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import {
+  syncSessionShopProfile,
+  syncSessionUserProfileFromOnline,
+} from "../server/session/syncSessionUserProfile.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
-import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import { buildSessionTokenBounceParamRedirect } from "../server/shopify/sessionTokenBounce.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { buildEmbeddedAppPath, getAppHomePath } from "../config/appEntry.server";
@@ -28,14 +31,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
 
-  // fire-and-forget：失败只记日志，不阻断 OAuth 跳转
-  void ensureWebPixel(admin, session.shop);
+  try {
+    await syncSessionUserProfileFromOnline(session);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionUserProfileFromOnline failed:", error);
+  }
 
   try {
-    await syncV4JobShopifyTokensFromSession(session.shop, session.accessToken);
+    await syncSessionShopProfile(session.shop, admin);
   } catch (error) {
-    console.error("[v4:token-sync] auth callback sync failed:", error);
+    console.warn("[SessionSync] syncSessionShopProfile failed:", error);
   }
+
+  // fire-and-forget：失败只记日志，不阻断 OAuth 跳转
+  void ensureWebPixel(admin, session.shop);
 
   throw redirect(buildEmbeddedAppPath(getAppHomePath(), request));
 };

@@ -22,37 +22,24 @@ export function getTranslationJobsContainer(): Container {
   return getClient().database(db).container(container);
 }
 
+/** TSF 店铺画像扫描任务；与 TSF Worker 共享，分区键为 /shopName。 */
+export function getShopScanJobsContainer(): Container {
+  const db = getEnv("COSMOS_TRANSLATION_DATABASE_ID", "translation");
+  const container = getEnv("COSMOS_SHOP_SCAN_CONTAINER", "shop_scan_jobs");
+  return getClient().database(db).container(container);
+}
+
 export function getAgentRunsContainer(): Container {
   const db = getEnv("COSMOS_AGENT_RUNS_DATABASE_ID", "spark_ops");
   const container = getEnv("COSMOS_AGENT_RUNS_CONTAINER", "agent_runs");
   return getClient().database(db).container(container);
 }
 
-export function getShopAnalysisContainer(): Container {
-  const db = getEnv("COSMOS_TRANSLATION_DATABASE_ID", "translation");
-  const container = getEnv("COSMOS_SHOP_ANALYSIS_CONTAINER", "shop_analysis_jobs");
+/** shop DB → shop_profile container (store-size tiers; partition key /shopName). */
+export function getShopProfileContainer(): Container {
+  const db = getEnv("COSMOS_SHOP_DATABASE_ID", "shop");
+  const container = getEnv("COSMOS_SHOP_PROFILE_CONTAINER", "shop_profile");
   return getClient().database(db).container(container);
-}
-
-let ensureShopAnalysisContainerPromise: Promise<Container> | null = null;
-
-/** Ensures translation DB + shop_analysis_jobs container exist (partition key /shopName). */
-export async function ensureShopAnalysisContainer(): Promise<Container> {
-  if (ensureShopAnalysisContainerPromise) return ensureShopAnalysisContainerPromise;
-
-  ensureShopAnalysisContainerPromise = (async () => {
-    const dbId = getEnv("COSMOS_TRANSLATION_DATABASE_ID", "translation");
-    const containerId = getEnv("COSMOS_SHOP_ANALYSIS_CONTAINER", "shop_analysis_jobs");
-    const client = getClient();
-    const { database } = await client.databases.createIfNotExists({ id: dbId });
-    const { container } = await database.containers.createIfNotExists({
-      id: containerId,
-      partitionKey: { paths: ["/shopName"] },
-    });
-    return container;
-  })();
-
-  return ensureShopAnalysisContainerPromise;
 }
 
 export function isCosmosConfigured(): boolean {

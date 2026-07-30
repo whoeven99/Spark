@@ -1,328 +1,167 @@
-# Spark 项目说明文档
+# Spark 项目上下文
 
-本文档描述 **Spark 与本模板分叉部分的架构与约定**（路由、持久化、翻译、环境变量）。路径：`docs/PROJECT_CONTEXT.md`。Shopify 通用脚手架说明仍可参考仓库根目录 `README.md`；二者冲突时以本仓库 **代码** 为准，并应回头更新本文档。
-
-相关文档（均在 `docs/`）：
-- `TRANSLATION_AGENT.md` — 翻译功能约定
-- `GENERATE_DESCRIPTION.md` — 商品描述生成方案
-- `shop-insight-agent-roadmap.md` — 店铺洞察 Agent 数据/工具路线图（商业建议能力演进）
-- `shop-profile.md` — 店铺画像（Cosmos + Blob，安装时 Shopify 基础信息）
-- `INTERACTION_DESIGN.md` — 任务型工具交互规范（页面层级、流程导航、主次操作）
-- `DESIGN.md` — 前端视觉系统与组件设计规范
-- `agent-run-log.md` — Agent 运行摘要（Cosmos `spark_ops`）与 LangSmith 互链
-- `render-daily-digest.md` — Render 日志日报（GitHub Actions → 飞书）
+本文档记录 Spark 当前代码事实和长期约定。若本文档、README、旧设计文档与代码冲突，优先级为：当前代码与配置 > `package.json` / `prisma/schema.prisma` > 根目录 `AGENTS.md` > 本文档。
 
 ## 1. 项目定位
-- 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V3 / JSON Runtime）+ 商品文案优化 + 订阅计费`。
-- 当前主要用户入口：
-  - `AI Assistant`：自然语言问答、店铺数据查询、运营建议、授权引导。
-  - `诊断报告`：最近 7 天核心指标、健康状态与结论建议。
-  - `翻译`：在嵌入式应用中创建翻译任务（写入 Cosmos）、查看 JSON Runtime 任务列表与详情（Cosmos / Redis / Blob；详情可走 AgentTask 代理或 Spark 本机聚合）。
-- **商品文案优化**：`/app/product-improve` 创建异步任务、审核并写回 Shopify 商品标题与描述。
-- **计费与订阅**：`/app/billing` 开通月/年订阅、按量购包、查看 Credit 配额；商品优化与图片工具在余额不足时拦截。
 
-## 2. 技术栈与运行形态
-- 前端：React + TypeScript + React Router（文件系统路由）。
-- UI：Shopify Web Components（`s-*` 标签）+ App Bridge。
-- 服务端：React Router action/loader + Shopify Admin GraphQL。
-- AI：LangGraph（`@langchain/langgraph/prebuilt` 的 ReAct Agent）+ `@langchain/openai` 兼容 DeepSeek Base URL；消息与工具类型仍基于 `@langchain/core`。
-- 持久化与服务依赖（与代码一致）：
-  - **Shopify Session、用户建议、广告 OAuth 配置、计费账户**：同一 Prisma Client，运行时通过 `@prisma/adapter-libsql` 连接 **Turso（libSQL）**（见 `app/db.server.ts`）。计费相关模型：`Account`、`AppSubscription`、`PlanCatalog`、`AccountPeriodUsage`、`BillingLog`（见 `prisma/schema.prisma`；套餐种子 `prisma/billing-plan-catalog-seed.sql`）。`prisma/schema.prisma` 中 datasource 仍为 `sqlite` + `DATABASE_URL`，用于迁移与类型生成；线上/测试库 URL 与 Token 由 `TURSO_*` 环境变量提供。
-  - **翻译任务元数据**：**Azure Cosmos DB**（容器默认 `translation` / `translation_jobs`，与 Spring 后端文档模型对齐，见 `app/server/translation/cosmosJobStore.server.ts`）。
-  - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage** 容器 `translation-content`（见 `app/server/translation/translateBlobStore.server.ts`）。
-  - **整图翻译 / 文生图 Blob**：同一 Storage 账号下独立容器 `picturetranslate`、`generatedimages`（见 `pictureTranslateBlob.server.ts`、`imageGenerationBlob.server.ts`）。
-  - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
-  - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
-  - **事务邮件（腾讯 SES 模板）**：`app/server/email/` + `app/server/notifications/`（商户邮件 TemplateData 与模板 ID）；安装/卸载/订阅/购包由 `appLifecycle` / `billing` 调用 `sendNotificationEmail`（见 §10）。
-  - **飞书运营通知**：`app/server/feishu/`（按 channel 映射独立 Webhook；失败不阻断主流程，见 §10 飞书小节）。
+Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
-## 3. 目录结构（迁移后，根目录即应用目录）
-- `app/routes/`：页面路由与 API action/loader。
-- `app/routes/page/`：聊天页、翻译页等页面级组件；`chat/` 子目录为 `ChatPage` 拆分模块。
-- `app/routes/component/`：按域分子目录（`chat/`、`translation/` 等）。
-- `app/server/`：AI Agent、工具、授权凭证存储、`translation/` 流水线与外部存储客户端、`billing/` 订阅与按量计费、`tokenUsage/` token 用量累加、`email/` 腾讯 SES 发信、`appLifecycle/` 安装/卸载副作用。
-- `prisma/`：数据库 schema 与迁移文件。
-- `.github/workflows/`：CI/CD（Shopify deploy + Render deploy）。
-- `.cursor/rules/`：Cursor 规则（包括本项目上下文规则）。
+- 主应用：仓库根目录，React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端。
+- Admin 后台：`admin/` 独立 Express API + Vite React 前端。
+- Web Pixel 扩展：`extensions/ciwi-spark-web-pixel/`，采集 Shopify analytics/custom events 并上报 `/api/pixel-ingest`。
+- Theme App Extension：`extensions/spark-tiktok-pixel/`，店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。
 
-## 4. 核心路由地图
-- 页面路由：
-  - `app/routes/app.tsx`：应用壳、导航、鉴权入口。
-  - `app/routes/app._index.tsx`：默认页，渲染 `ChatPage`。
-  - `app/routes/app.additional.tsx`：诊断报告页。
-  - `app/routes/app.translation.tsx`：翻译入口页（嵌入 `TranslationPage`）。
-  - `app/routes/app.product-improve.tsx`：商品文案优化页（嵌入 `ProductImprovePage`，路径 `/app/product-improve`）；loader 注入 `loadBillingContext`。
-  - `app/routes/app.billing.tsx`：计费与订阅页（`/app/billing`，`BillingPage`）。
-  - `app/routes/app.image-studio.tsx`：图片工作室（文生图 + 整图翻译 Tab，`/app/image-studio`）；旧路径 `/app/picture-translate`、`/app/generate-image` 重定向至此。
-- AI 聊天路由（流式 SSE，唯一入口）：
-  - `app/routes/chat-stream.ts` -> `app/server/chat-stream.ts` 的 action（`POST /chat-stream`，请求体 `{ messages }` 或兼容 `{ message }`）。
-- 授权配置路由（均需 `authenticate.admin`）：
-  - 广告：`app.ads.google.config.tsx` / `app.ads.tiktok.config.tsx` / `app.ads.microsoft.config.tsx` / `app.ads.meta.config.tsx` / `app.ads.meta.start.tsx`；OAuth 回调 `ads.meta.callback.tsx`。
-  - 物流：`app.logistics.sf.config.tsx` / `app.logistics.fedex.config.tsx`
-- 反馈路由：
-  - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
-- **商品文案优化**：`POST /api/product-improve`（`api.product-improve.ts`）与 `POST /app/product-improve`（页面 action），服务端逻辑见 `app/server/productImprove/**`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`）。AI Assistant 聊天内可通过 `ProductImproveChatCard` 走同一套生成接口。方案与契约见 **`docs/GENERATE_DESCRIPTION.md`**（改动前先读）。
-- **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。成功译图后通过 `recordVisualToolTokenUsage` 累加 `Account.usedTokens`（默认定额 `PICTURE_TRANSLATE_TOKEN_COST=2000`，对齐 Spring `APP_PIC_FEE` 量级）。
-- 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
-  - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
-  - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
-- 翻译服务端约定与边界： **`docs/TRANSLATION_AGENT.md`**（改动翻译功能前先读）。
-- **计费 Webhook**（`shopify.app.test.toml` 已注册）：
-  - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
-  - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
-  - `app/uninstalled` → `webhooks.app.uninstalled.tsx`（`CommonEventLog`）
-  - `app/scopes_update` → `webhooks.app.scopes_update.tsx`（`CommonEventLog`）
-- 计费服务端约定与边界： **`app/server/billing/agent.md`**（改动计费/订阅/购包前先读）。
+整店/多语言翻译执行链路归 TypeScriptFrontend（TSF）所有。Spark 主应用不再注册整店翻译工具，也没有 `worker/` 目录或 Translation Worker 可部署服务。Spark 仍保留图片翻译、兼容 Blob 读取和 Admin 只读观测/运维页。
 
-## 5. 计费与订阅
+## 2. 主应用信息架构
 
-- **启用范围**：`BILLING_ENABLED` 未设为 `false` 时全局启用；`Account.appName` 为 `spark`。
-- **测试环境**：`https://aiassistant-wi7b.onrender.com`（`shopify.app.test.toml`，Render 服务 `srv-d7j6ogaqqhas739in900`）。
-- **网关**：`getBillingGateway()` — 生产走 Shopify Billing GraphQL；`BILLING_GATEWAY=noop` 时本地直接生效（开发）。
-- **访问控制**：`requireBillingAccess` / `loadBillingContext`（`app/server/billing/`）；生成描述 HTTP 在调用前校验余额。
-- **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `usedTokens`；可用余额为 `getAvailableTokens()`（三池之和减 `usedTokens` 判断见 `hasTokenQuota`）；订阅续费时按 `tokenPools.server.ts` 结算按量包真实剩余。
-- **表与流水**：见 `app/server/billing/agent.md`（续费顺序、`BillingLog` / `CommonEventLog` 事件类型、Turso 迁移命令）。
-- **App 生命周期事件**：`CommonEventLog` 记录安装 / 卸载 / scope 变更；卸载与 scope webhook 见 `app/server/billing/agent.md`；安装在进入 `/app` 或 OAuth 时写入。
-- **与整图翻译计费区分**：`PICTURE_TRANSLATE_BILLING_*` 仅作用于 `/api/picture-translate` 的 Spring 点数对齐，与 Shopify 订阅模块无关。
+一级导航由 `app/config/appEntry.server.ts` 定义，应用壳是 `app/routes/app.tsx`。
 
-## 6. AI 聊天链路（端到端）
-- 前端 `ChatPage` 经 `useChatStream` 调用 `POST /chat-stream`（SSE），请求体为 `messages` 数组（兼容单条 `message`）。
-- 服务端 `app/server/chat-stream.ts`：
-  - 先做 Shopify admin 鉴权。
-  - 通过 `buildChatAgentExtraTools(admin)` 注入 Shopify 指标工具、翻译表单工具与 **`generate_product_description`** 等。
-  - 调用 `invokeChatAgent()` 获取回复。
-- `app/server/ai/graph/shopChatGraph.server.ts`：`buildShopChatGraph`、`getShopChatModel`（LangGraph ReAct 编译图）；系统提示词见同目录 `shopAssistantPrompt.ts`（简体中文、鼓励结构化输出、避免 Markdown 表格）。
-- `app/server/ai/core/invokeChatAgent.server.ts`：`invokeChatAgent`（图执行、表单解析、兜底模型）；若无可用 AIMessage 文本则走 fallback。
-- **流式**：`app/server/ai/core/agentStream.server.ts`：`invokeChatAgentStream`（`graph.stream`，供 `/chat-stream` 等）。
-- **回复后处理**（`app/server/ai/postprocess/`，便于单测与单独演进）：
-  - `langchainMessageText.ts`：从 LangChain `BaseMessage` 抽取纯文本；拼接对话上下文供兜底（`extractMessagesContext`，最长 4000 字符）。
-  - `markdownTableNormalize.ts`：识别 Markdown 表格、转为列表（粗体首列 + 「列名：值」）。
-  - `polishFinalReply.ts`：在表格规整基础上做最终润色（代码围栏保护、已有标题/列表则跳过重排、多行「指标：值」格式化为小节等）。
-  - `translationTaskFormExtract.ts`：从 ToolMessage / 对话推断翻译任务表单载荷。
-- **配套测试**：`tests/app/server/ai/postprocess/*.test.ts`（Vitest）；改动上述模块后建议执行 `npm run test`。
+| 目的地 | URL | 实现 |
+| --- | --- | --- |
+| Ask | `/app` | `app._index.tsx` + `page/workspace/WorkspaceAppShellPage.tsx` |
+| Today | `/app/today` | `app.today._index.tsx`、`app.today.diagnosis.tsx`、`app.today.orders.tsx` |
+| Studio | `/app/studio` | `app.studio.copy.tsx`、`app.studio.image.tsx`；`app.studio.translate.tsx` 重定向到 copy |
+| Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
+| Settings | `/app/settings` | `billing`、`channels`、`logistics`、`data`、`feedback` |
 
-## 7. AI 工具能力概览
-- 基础工具：
-  - `get_current_time`
-  - `get_weather`
-- Shopify 工具（按需注入）：
-  - 商店基础信息：店铺名、域名、币种、时区、套餐等。
-  - scopes 查询与订单访问诊断。
-  - 经营指标：销售额、订单数、转化率、AOV、来源表现、弃购率、退款率、库存健康。
-- 商品文案：`generate_product_description`（按商品 ID 生成结构化 `description`，见 `app/server/ai/tools/implementations/generateDescriptionTool.ts`）。
-- 模板邮件：`send_template_email`（`app/server/ai/skills/email/`，凭证齐全时挂载；经 `sendTemplateEmail` 发送，模板 ID 白名单校验）。
-- 说明：部分指标依赖权限（如 `read_orders`），工具内置了缺权限诊断文案。
+React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路由时必须先核对文件名到 URL 的映射。
 
-## 8. 诊断报告页口径（`app.additional.tsx`）
-- 时间窗口：默认最近 7 天，对比前 7 天。
-- 指标来源：Shopify Admin GraphQL（orders / abandonedCheckouts / productVariants）。
-- 输出内容：
-  - 核心看板：销售额、订单、AOV、转化、退款、低库存率、缺货率。
-  - 健康状态：销售趋势、转化健康、库存健康、退款健康。
-  - 系统结论：根据阈值输出“健康/关注/风险”与诊断文案。
+## 3. 关键 HTTP 入口
 
-## 9. 广告与物流授权数据
-- **广告（Google / TikTok / Microsoft / Meta OAuth 配置）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），入口见 `app/server/adAuthCredentialStore.server.ts` 与各 `app.ads.*.config.tsx`。Meta 专用读写封装见 `app/server/adsCredentialStore.server.ts`。
-- **物流**：`.data/logistics-provider-credentials.json`，组织方式 `shop -> provider -> credential`（`app/server/logisticsCredentialStore.server.ts`）。
-- 现状：
-  - 广告凭证已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
-  - 物流仍为本地 JSON；未做加密存储、KMS。
-- 图片工具与商品文案 token 入账前按 Turso **`TokenBillingRule`**（能力 × 模型 × `multiplier`）折算，运维配置见 **`docs/token-billing-rules.md`**。图片工具在启用计费的 App 上 `requireVisualToolBillingAccess` 校验余额；成功后 `recordBilledTokenUsage` / `recordVisualToolTokenUsage` 累加 `usedTokens`。主 App（`chat`）未启用计费时不扣减。
-- 安全建议：
-  - 敏感字段生产环境优先 KMS / 字段级加密；`.data` 目录禁止提交到仓库。
+- `POST /chat-stream`：SSE 聊天入口，`app/routes/chat-stream.ts` -> `app/server/chat-stream.ts`。
+- `/api/ai-task*`、`/api/batch-ai-tasks`、`/api/unified-tasks`：AI 异步任务、批次、日志与统一任务列表。
+- `/api/product-improve`、`/api/product-quality-score`、`/api/update-product-description`、`/api/product-search`、`/api/shop-locales`、`/api/shopify.objects`：商品文案、质量评分、商品/对象查询与写回。
+- `/api/generate-image*`、`/api/picture-translate*`：图片生成和图片翻译。
+- `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话和文件上下文。
+- `/api/task-proposal`：聊天中的任务建议/确认载荷。
+- `/api/automation-overview`：Today 和工作台自动化概览。
+- `/api/support`、`/api/external-support`：客服会话入口。
+- `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
+- 广告 Catalog / Insights OAuth：`app.ads-catalog.tsx`、`app.settings.ads-insights.tsx`、`app.ads.*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx`、`ads.meta-ads.callback.tsx`、`ads.google-*.callback.tsx`、`ads.tiktok-catalog.callback.tsx`。
+- TikTok 店面测试事件双发：`POST /api/ads-catalog/tiktok-storefront-track`（仅测试模式）。
+- `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单、退款、库存、履约 Webhook。
 
-## 10. 事务邮件（腾讯 SES）
+## 4. 服务端领域入口
 
-Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（`tencentcloud-sdk-nodejs-ses`）。模板 ID、发件人、CC 等与历史 Java 侧命名对齐，仅作常量参照。
+| 领域 | 入口 |
+| --- | --- |
+| 聊天、Agent 图、Tool Registry | `app/server/chat-stream.ts`、`app/server/ai/core/`、`app/server/ai/skills/` |
+| Playbook 与 Case | `app/server/ai/playbooks/`、`app/server/playbookCase/` |
+| 商品文案与商品质量 | `app/server/productImprove/`、`app/server/ai/skills/productOptimization/` |
+| 商品目录和 Shopify 对象 | `app/server/productSearch/`、`app/server/shopify/` |
+| 图片生成 | `app/server/imageGeneration/`、`app/server/ai/skills/imageGeneration/` |
+| 图片翻译 | `app/server/pictureTranslate/`、`app/server/ai/skills/pictureTranslate/` |
+| 广告 Catalog / Insights | `app/server/adsCatalog/`、`app/server/adsInsights/` |
+| AI 任务和任务估算 | `app/server/aiTask/` |
+| 统一任务列表 | `app/server/unifiedTask/` |
+| Today、诊断、ROI、自动化 | `app/server/operations/`、`app/server/automation/` |
+| Shopify 同步和历史回补 | `app/server/shopify/sync/`、`app/routes/app.settings.data.tsx` |
+| 计费、订阅、购包、token | `app/server/billing/`、`app/server/tokenUsage/` |
+| 会话、文件上下文 | `app/server/conversation/`、`app/server/fileContext/` |
+| 支持聊天 | `app/server/support/` |
+| 邮件、通知、飞书 | `app/server/email/`、`app/server/notifications/`、`app/server/feishu/` |
+| 生命周期和通用事件 | `app/server/appLifecycle/`、`app/server/commonEventLog/` |
+| Web Pixel 和 SLS | `app/server/webPixel/`、`app/server/aliyunLog/` |
+| Agent 运行摘要 | `app/server/agentRunLog/` |
 
-### 目录结构（`app/server/email/`）
+## 5. 数据和外部系统
 
-| 路径 | 职责 |
-|------|------|
-| `config/emailConfig.server.ts` | 读取 `TENCENT_*`、`EMAIL_*` 等环境变量 |
-| `services/emailService.server.ts` | **`sendTemplateEmail`** 统一入口（业务勿直连 Provider） |
-| `providers/providerFactory.server.ts` | 按 `EMAIL_PROVIDER` 选择实现（默认 `tencent`） |
-| `providers/tencentSesProvider.server.ts` | 腾讯 `SendEmail` API + 重试 |
-| `utils/retryWithTimeout.server.ts` | 超时与重试（可配置次数；HTTP 400 不重试） |
-| `templates/emailTemplates.server.ts` | 模板 ID / 主题常量（`EMAIL_TEMPLATE_IDS`） |
-| `scenarios/sendNotificationEmail.server.ts` | 商户事务邮件（`renderNotificationEmail` + 腾讯模板 ID） |
-| `opsNotifyEmail.server.ts` | 收件人解析（Session 邮箱优先，`OPS_NOTIFY_EMAIL` 兜底） |
-| `index.ts` | 对外导出 |
+- Turso / libSQL + Prisma：主业务数据，schema 在 `prisma/schema.prisma`，运行时入口是 `app/db.server.ts`。广告 OAuth 凭证写入 `AdPlatformCredential`（按 `shop` + `platform` 唯一），读写见 `app/server/adsCatalog/credentialStore.server.ts`。
+- Azure Cosmos DB：Agent 运行摘要、Playbook Case，以及 Admin 翻译观测中读取的外部任务数据。
+- Azure Blob Storage：上传文件、图片生成、图片翻译和少量兼容翻译内容。
+- Redis：Admin 运营排查和部分历史/兼容状态读取，不作为新核心业务对象的默认存储。
+- Aliyun SLS：Pixel、访问与功能行为日志。
+- Shopify Admin GraphQL / Billing：店铺数据、写回、订阅与一次性购包。
+- 腾讯 SES / 飞书：商户邮件与内部运营通知，通知失败通常不阻断主流程。
+  - 发送入口：`app/server/email/`（`sendTemplateEmail`）+ `app/server/notifications/`（`notify*Email` → `dispatchMerchantNotificationEmail`）。
+  - 商户模板 ID：`notificationTemplateIds.server.ts`（安装 `180498`、卸载 `180499`、购包 `180500`、订阅 `180501–180503`）；Agent `task_*` 模板仍在 `emailTemplates.server.ts`。
+  - 触发：安装（`recordAppInstalled` → `onAppInstalled`）、卸载（`onAppUninstalled`，删 Session 前读收件人快照）、订阅/购包（`activateSubscription` / `applyTokenPackPurchase`）。
+  - 模板展示用 support 邮箱：`MERCHANT_SUPPORT_EMAIL`（`support@ciwi.ai`），与 SES From（`support@msg.ciwi.ai`）分离。
+- 物流承运商凭证：本地 JSON `.data/logistics-provider-credentials.json`（`app/server/logisticsCredentialStore.server.ts`），未做加密存储。
 
-### App 生命周期运营邮件（`app/server/appLifecycle/`）
+存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service；涉及整店翻译时同时核对 TSF 当前实现。
 
-| 文件 | 触发 | 行为 |
-|------|------|------|
-| `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `sendNotificationEmail`（`appInstalled`，模板 `180498`） |
-| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendNotificationEmail`（`appUninstalled`，`180499`），**再** 飞书卸载通知，**再** `handleAppUninstalled`（写日志并删 Session） |
+## 6. Admin 后台
 
-安装 enrichment：`unauthenticated.admin(shop)` + `fetchShopBasicInfo`。卸载 enrichment：`loadSessionSnapshotForUninstall`（不调 GraphQL）。邮件失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化；持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
+Admin 是独立项目，不能假设根目录命令会检查它。
 
-### 首期接入范围
+```powershell
+cd admin
+npm run dev
+npm run build
+```
 
-- 已实现：通用 `sendTemplateEmail`、商户事务邮件（`app/server/notifications/` + `sendNotificationEmail`；安装 `180498`、卸载 `180499`、订阅 `180501–180503`、购包 `180500`）、AI 工具 `send_template_email`（`app/server/ai/skills/email/`，模板 ID 白名单）。
-- 未接入：`emailTemplates.server.ts` 中其余 templateId（翻译成功/失败、APG 等）按需后续在 `scenarios/` 扩展；`task*` 通知模板（`180504–180507`）未挂载。
+- API 入口：`admin/server/index.ts`、`admin/server/routes/`。
+- 前端入口：`admin/src/App.tsx`、`admin/src/pages/`、`admin/src/api.ts`。
+- 存储连接：`admin/server/lib/`。
+- 鉴权：`admin/server/middleware/auth.ts`；收入、Pixel checkout PII、TSF billing/ROI 等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。
+- 翻译相关 Admin 页面是 TSF/外部存储的观测和运维边界，不代表 Spark 主应用拥有整店翻译 Worker。
 
-### 日志与排错
+## 7. 运行、构建和迁移
 
-- 前缀：`[Email][Service]`、`[Email][Tencent]`、`[Email][Notification]`、`[AppLifecycle:install]`、`[AppLifecycle:uninstall]`。
-- 缺凭证：`sendTemplateEmail` 返回 `EMAIL_MISSING_CREDENTIALS`，主流程不阻断。
-- 发送失败：`TENCENT_SEND_FAILED`；成功以响应非空 `RequestId` 为准。
+根目录常用命令：
 
-### 飞书运营通知（`app/server/feishu/`）
+```powershell
+npm run dev
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run turso:migrate:test
+```
 
-与 GitHub Actions 日志日报（`scripts/render-daily-log-digest.cjs` 使用 `FEISHU_WEBHOOK_URL`）**分离**，App 内按场景配置独立 Webhook。
+补充：
 
-| 路径 | 职责 |
-|------|------|
-| `feishuConfig.server.ts` | `FeishuChannel` → `FEISHU_WEBHOOK_URL_*`；`FEISHU_ENABLED` 总开关 |
-| `sendFeishuTextMessage.server.ts` | 唯一 `fetch` 出口（text 消息） |
-| `scenarios/sendUninstallFeishuNotify.server.ts` | 卸载 → `ops_uninstall` |
-| `scenarios/sendSubscriptionFeishuNotify.server.ts` | 首次订阅生效 → `ops_subscription` |
-| `scenarios/sendTokenPackFeishuNotify.server.ts` | 按量购包入账 → `ops_subscription` |
+- Node 版本以 `package.json` 为准：`>=20.19 <22 || >=22.12`。
+- `npm run dev` 包装 Shopify CLI，需要 Shopify CLI 登录和应用配置。
+- Turso 迁移使用 `npm run turso:migrate:test` / `npm run turso:migrate:prod`，不要把 `prisma migrate deploy` 直接指向 `libsql://`。
+- 修改 Prisma schema 后至少运行 `npx prisma generate`，并按风险执行 typecheck/build/test。
+- 不读取或输出 `.env` / `.env.prod` 的值。只记录变量名和用途。
 
-| channel | 环境变量 | 触发 |
-|---------|----------|------|
-| `ops_uninstall` | `FEISHU_WEBHOOK_URL_UNINSTALL` | `onAppUninstalled`（邮件之后、持久化之前） |
-| `ops_subscription` | `FEISHU_WEBHOOK_URL_SUBSCRIPTION` | `applyActiveSubscription` 且 `wasPending`（`SUBSCRIPTION_ACTIVATED` 之后）；`applyTokenPackPurchase` 首次 `TOKEN_PACK_PURCHASED` 之后 |
+## 8. 关键环境变量分组
 
-日志前缀：`[Feishu]`、`[Feishu][UninstallOps]`、`[Feishu][SubscriptionOps]`、`[Feishu][TokenPackOps]`、`[AppLifecycle:uninstall] feishu-*`。未配置 URL 或 `FEISHU_ENABLED=false` 时 skipped，不抛错。
+- Shopify：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`。
+- Turso：`TURSO_TARGET`、`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`、`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`、`DATABASE_URL`。
+- AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。
+- Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`、`REDIS_*`。
+- 图片翻译：`HUOSHAN_*` / `VOLC_*`、`AIDGE_*`、`PICTURE_TRANSLATE_*`。
+- 图片生成：`AZURE_BLOB_GENERATED_IMAGES_CONTAINER`、`IMAGE_GEN_BLOB_SAS_TTL_MINUTES`。
+- Billing：`BILLING_GATEWAY`、`BILLING_TEST`、`BILLING_ENABLED`。
+- 邮件和飞书：`TENCENT_*`、`EMAIL_*`、`OPS_NOTIFY_EMAIL`、`FEISHU_*`。
+- Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
+- 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
+- TikTok Pixel（Ads Catalog）：
+  - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
+  - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。
+  - 服务端：`orders/paid` 按勾选上报 `CompletePayment`（Events API `pixel/track`；凭证含 Test Event Code 时带 `test_event_code`）。
+- TikTok Insights 沙盒（`app/server/adsInsights/tiktokSandbox.server.ts`）：
+  - `TIKTOK_SANDBOX_ACCESS_TOKEN`、`TIKTOK_SANDBOX_ADVERTISER_ID`（必需）
+  - `TIKTOK_SANDBOX_IDENTITY_ID`、`TIKTOK_SANDBOX_IDENTITY_TYPE`（seed 建 Ad 必需）
+  - `TIKTOK_SANDBOX_ACCOUNT_NAME`、`TIKTOK_SANDBOX_IMAGE_ID`（可选）
+  - 请求 `sandbox-ads.tiktok.com`，不复用 Catalog OAuth token；Insights 指标为本地 mock。
 
-卸载原因与用户反馈（仅飞书文案，非 webhook payload）：
-- `app/uninstalled` webhook 不含卸载问卷字段；发飞书前由 `app/server/partner/fetchUninstallFeedbackFromPartner.server.ts` 查询 Partner API `RelationshipUninstalled`（`reason` / `description`）。
-- `SHOPIFY_PARTNER_API_TOKEN` + `SHOPIFY_PARTNER_ORGANIZATION_ID` + `SHOPIFY_PARTNER_APP_ID`（组织 ID、Partner API client **Manage apps**、App ID 如 `gid://partners/App/361747677185` 或纯数字）未配置或查询失败时，飞书仍发送，对应行显示「（未提供）」；Partner 失败不阻断卸载主流程。查询为 `app(id).events(types: [RELATIONSHIP_UNINSTALLED])`。
-- 重复 `app/uninstalled` 投递：10 分钟内同 shop+app 或相同 `X-Shopify-Webhook-Id` 已处理则跳过邮件/飞书，仍执行持久化与删 Session。
-- 与 `FEISHU_WEBHOOK_URL_UNINSTALL` 分工：后者仅负责 Spark → 飞书推送；前者仅负责 Spark → Shopify Partner 拉取问卷数据。
+## 9. 改动落点
 
-## 11. 运行与部署
-- 常用命令（根目录执行）：
-  - `npm run dev`：本地开发（Shopify CLI）。
-  - `npm run build` / `npm run start`：构建与启动。
-  - `npm run lint` / `npm run typecheck` / `npm run test`：质量检查与测试。
-- CI 工作流：
-  - Spark Test 部署（手动）：`.github/workflows/spark-deploy-test.yml`（Render `srv-d7j6ogaqqhas739in900`；可选 Admin `srv-d8a49ortqb8s7392ed4g`）。
-  - Render 日志日报（仅手动）：`.github/workflows/render-daily-log-digest.yml`（定时已关）。
-  - Shopify 配置发布：`shopify app deploy -c shopify.app.test.toml`。
+- 改聊天 UI：`app/routes/page/workspace/`、`app/routes/component/chat/`。
+- 改聊天行为/工具：`app/server/chat-stream.ts`、`app/server/ai/core/`、`app/server/ai/skills/index.ts`。
+- 加 AI Skill / Tool / Playbook：先读 `docs/ROADMAP.md`，再改 registry、schema、service、计费、任务卡片和测试。
+- 改商品文案：`app/routes/app.studio.copy.tsx`、`app/routes/page/ProductImprovePage.tsx`、`app/server/productImprove/`。
+- 改图片工具：`app/routes/app.studio.image.tsx`、`app/server/imageGeneration/`、`app/server/pictureTranslate/`。
+- 改 Today/运营诊断：`app/routes/app.today.*`、`app/server/operations/`。
+- 改订单回补/数据同步：`app/routes/app.settings.data.tsx`、`app/server/shopify/sync/`。
+- 改广告 OAuth / Catalog / Insights：`app/server/adsCatalog/**`、`app/server/adsInsights/**`、相关 `app/routes/app.ads-catalog.tsx`、`app.settings.ads-insights.tsx` 与 OAuth start/callback。
+- 改 TikTok Pixel / Theme App Embed：`extensions/spark-tiktok-pixel/`、`app/server/adsCatalog/`（metafield 下发与 Events API）。
+- 改计费：先读 `app/server/billing/agent.md`，再改 `app/server/billing/`、`app/server/tokenUsage/`、`app/routes/app.settings.billing.tsx` 和 Webhook。
+- 改 Admin：在 `admin/` 内修改并运行 `npm run build`。
+- 改 Web Pixel：`extensions/ciwi-spark-web-pixel/`，同时检查 `/api/pixel-ingest`。
 
-### Turso 数据库（迁移与同步）
+## 10. 验证原则
 
-Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sqlite` 时要求 `file:` URL）。对 Turso 请用仓库脚本，运行时仍由 `app/db.server.ts` + `TURSO_*` 连接。
+先跑与改动相关的聚焦检查，再按风险决定是否跑完整门禁：
 
-| 命令 | 用途 |
-|------|------|
-| `npm run turso:migrate:test` / `turso:migrate:prod` | 维护 `_prisma_migrations`，只执行未应用的 `prisma/migrations/*/migration.sql`，并写入 PlanCatalog / TokenBillingRule 种子 |
-| `prisma/token-billing-rule-seed.sql` | Token 计费系数种子（`turso:migrate` 执行时自动写入） |
-
-推荐流程：
-
-1. 本地改 schema → `npx prisma migrate dev`（`DATABASE_URL=file:...`）。
-2. 推到 Turso 测试库 → `npm run turso:migrate:test`。
-3. 生产 → `npm run turso:migrate:prod`。
-
-实现见 `scripts/turso-migrate.cjs`。
-
-## 12. 环境变量（代码中实际依赖）
-- Shopify 侧：
-  - `SHOPIFY_API_KEY`
-  - `SHOPIFY_API_SECRET`
-  - `SCOPES`
-  - `SHOPIFY_APP_URL`
-  - `SHOP_CUSTOM_DOMAIN`（可选）
-- Web Pixel 自动配置（`app/server/webPixel/ensureWebPixel.server.ts`，OAuth 回调 / 进入 `/app` 时幂等执行）：
-  - `PIXEL_INGEST_ENDPOINT`（可选）：像素上报地址；未设时回退 `SHOPIFY_APP_URL` + `/api/pixel-ingest`，二者均缺则跳过自动配置
-- AI 模型侧：
-  - `DEEPSEEK_API_KEY`（优先）或 `OPENAI_API_KEY`
-  - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）
-  - `DEEPSEEK_BASE_URL`（可选，默认 DeepSeek v1）
-- Prisma / Turso（`app/db.server.ts`）：
-  - `TURSO_TARGET`：`test` | `prod`（可选；未设时 `NODE_ENV=prod`（或 `production`）默认连 **prod** 并读 `TURSO_PROD_*`；非 prod 默认 test）
-  - 占位 prod URL（如 `your-prod-db`）视为未配置，不会误连
-  - Render Test：同为 `NODE_ENV=prod` 时，须显式 `TURSO_TARGET=test` 或**仅**配置 `TURSO_TEST_*`（勿留占位 `TURSO_PROD_*`）
-  - **Render 环境变量**：在 Web Service → **Environment** 面板添加（会注入 `process.env`）。若用 **Secret File** 上传 `.env`，需挂载到 `/etc/secrets/.env`（或设 `ENV_FILE` 指向路径）；Secret File **不会**自动进 `process.env`，启动时由 `app/config/runtimeEnv.server.ts` 读取
-  - 测试库：`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`
-  - 生产库：`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`
-  - `DATABASE_URL`：`schema.prisma` / 迁移用（本地 SQLite 等）
-- 翻译 Cosmos（`cosmosJobStore.server.ts`）：
-  - `COSMOS_ENDPOINT`、`COSMOS_KEY`
-  - `COSMOS_TRANSLATION_DATABASE_ID`（可选，默认 `translation`）
-  - `COSMOS_TRANSLATION_JOBS_CONTAINER`（可选，默认 `translation_jobs`）
-- Agent 运行摘要 Cosmos（`app/server/agentRunLog/`，见 `docs/agent-run-log.md`）：
-  - 与翻译共用 `COSMOS_ENDPOINT`、`COSMOS_KEY`
-  - `COSMOS_OPS_DATABASE_ID`（可选，默认 `spark_ops`）
-  - `COSMOS_AGENT_RUNS_CONTAINER`（可选，默认 `agent_runs`）
-  - `AGENT_RUN_LOG_ENABLED`（默认开启；`false` 关闭写入）
-  - `AGENT_RUN_TIMEOUT_MS`（可选，默认 `120000`）
-- 翻译 Blob（`translateBlobStore.server.ts`）：
-  - `BLOB_TRANSLATE_V3_CONNECTION_STRING` 或 `AZURE_BLOB_CONNECTION_STRING`
-  - `BLOB_TRANSLATE_V3_CONTAINER` 或 `AZURE_BLOB_TRANSLATION_CONTAINER`（可选，默认 `translation-content`）
-- 翻译 Redis（`translateRedis.server.ts`）：
-  - `REDIS_URL`，或 `REDIS_HOSTNAME`（或 `REDIS_HOST`）+ `REDIS_PASSWORD`（或 `REDIS_CACHEKEY_VAULT`）；可选 `REDIS_PORT`（默认 `6380`）、`REDIS_TLS`
-- 翻译详情代理：
-  - `AGENT_TASK_BASE_URL`（可选；未设时使用代码内默认 Render 基址）
-  - `JSON_RUNTIME_TASK_DETAIL_SOURCE`：设为 `local` 时详情由 Spark 本机聚合，否则走 AgentTask
-- 整图翻译（火山 `TranslateImage` + Aidge IOP + Azure Blob，见 `app/server/pictureTranslate/`）：
-  - 火山：`HUOSHAN_API_KEY`、`HUOSHAN_API_SECRET`；兼容 `VOLC_ACCESSKEY`、`VOLC_SECRETKEY`
-  - Aidge：`AIDGE_ACCESS_KEY_ID`（或 `AIDGE_ACCESS_KEY_NAME`）、`AIDGE_ACCESS_KEY_SECRET`；`AIDGE_BASE_URL`（默认 `https://cn-api.aidc-ai.com`）；`AIDGE_IMAGE_TRANSLATE_PATH`（默认 `/ai/image/translation`）
-  - 可选：`AIDGE_REQUEST_TIMEOUT_MS`（默认 `30000`）、`AIDGE_IOP_TRIAL=true`（试用请求头）、`AIDGE_PARTNER_ID`（默认 `iop`）
-  - 可选：`PICTURE_TRANSLATE_IMAGE_FETCH_CONNECT_MS`、`PICTURE_TRANSLATE_IMAGE_FETCH_READ_MS`（毫秒，默认各 `5000`）
-  - 可选：`PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES`、`PICTURE_TRANSLATE_BILLING_STRICT`
-  - Blob 容器：`AZURE_BLOB_PICTURE_TRANSLATE_CONTAINER`（可选，默认 `picturetranslate`）；连接串与 V3 共用 `BLOB_TRANSLATE_V3_CONNECTION_STRING` 或 `AZURE_BLOB_CONNECTION_STRING`
-- 文生图（见 `app/server/imageGeneration/`）：
-  - Blob 容器：`AZURE_BLOB_GENERATED_IMAGES_CONTAINER`（可选，默认 `generatedimages`）
-  - 可选：`IMAGE_GEN_BLOB_SAS_TTL_MINUTES`（未设时回退 `PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES` 规则）
-- 订阅计费（`app/server/billing/`）：
-  - `BILLING_GATEWAY=noop`：不调 Shopify Billing，本地直接生效（开发）
-  - `BILLING_TEST=true`：Shopify 测试计费（开发店）；未设时非 production 亦视为测试模式
-- 腾讯 SES 邮件（`app/server/email/`，结构见 §10）：
-  - `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY`（与 Spring 同名）
-  - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
-  - 商户/运营收件人兜底：`OPS_NOTIFY_EMAIL`（未设则取 `TENCENT_SES_CC` 首地址）；商户模板 ID 见 `app/server/notifications/notificationTemplateIds.server.ts`（可用 `NOTIFICATION_TEMPLATE_ID_*` 覆盖）
-  - App 安装/卸载运营邮件：安装在 `recordAppInstalled` 成功后直接调用 `onAppInstalled`；卸载 Webhook 直接调用 `onAppUninstalled`（先邮件后删 Session）
-- 飞书运营通知（`app/server/feishu/`，与日报 `FEISHU_WEBHOOK_URL` 分离）：
-  - `FEISHU_ENABLED`（可选，默认 `true`）；`false` 关闭全部 channel
-  - `FEISHU_WEBHOOK_URL_UNINSTALL`：卸载通知群（未设则 skipped）
-  - `FEISHU_WEBHOOK_URL_SUBSCRIPTION`：首次订阅生效通知群（未设则 skipped）
-  - `SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`：卸载飞书通知中的原因/反馈（Partner API `app.events`；未设则两行显示「未提供」）
-
-## 13. 文案与交互约定
-- 角色命名统一使用：`AI Assistant`。
-- 中文文案优先，保持简洁与可执行。
-- 欢迎语、诊断文案、按钮文案要全局一致。
-- 涉及指标输出时，优先列表与短段落，避免大段堆叠。
-
-## 14. 改动落点指南（按需求类型）
-- 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
-- 改聊天行为/工具调用：`app/server/chat-stream.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/core/agentStream.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
-- 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
-- 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
-- 加新 AI 工具：`app/server/ai/skills/index.ts` 的 `globalToolRegistry.register`（或 legacy `app/server/ai/tools/implementations/*`），由 `buildChatAgentExtraTools` 注入聊天链路。
-- 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / scenario 封装，勿直接用 Provider）。
-- 改 App 安装/卸载商户邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendNotificationEmail.server.ts`、`app/server/notifications/**`。
-- 改飞书运营通知：`app/server/feishu/**`；卸载挂载 `onAppUninstalled`；订阅挂载 `activateSubscription.server.ts`（仅 `wasPending`）。
-- 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
-- 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
-- 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
-- 改商品文案优化页或 API（先读 `docs/GENERATE_DESCRIPTION.md`）：`app/routes/app.product-improve.tsx`、`app/routes/page/ProductImprovePage.tsx`、`app/routes/component/productImprove/**`、`app/routes/api.product-improve.ts`、`app/routes/api.update-product-description.ts`、`app/server/productImprove/**`、`app/hooks/useProductImprove.ts`、`app/routes/component/chat/ProductImproveChatCard.tsx`。
-- 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
-- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `docs/TRANSLATION_AGENT.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
-- 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `app/server/billing/agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
-
-## 15. 改动边界与风险提示
-- 未明确要求时，不改以下区域：
-  - Shopify 鉴权与 session 逻辑（`app/shopify.server.ts`、`app/db.server.ts`）。
-  - 部署流水线与环境配置（workflow 与 `shopify.app.*.toml`）。
-  - 密钥与凭证处理逻辑。
-- 涉及路由或目录重构时，必须同步检查：
-  - CI 路径
-  - Shopify CLI 配置路径
-  - 代码中硬编码路径（`process.cwd()` 相关）
-
-## 16. 开发检查清单
-- 改前：
-  - 明确影响范围（聊天/诊断/授权/部署）。
-  - 只改需求相关文件，避免无关重构。
-- 改后：
-  - 至少执行 `npm run lint` 与关键页面回归检查。
-  - 确认文案一致性、鉴权流程可用、接口返回结构未破坏。
-  - **Agent 每次修改代码后，必须运行 `npm run build` 确保构建成功，并运行 `npm run test` 确保所有测试通过，以避免引入回归。**
-  - **在将修改推送上线前，Agent 必须再次运行 `npm run build` 和 `npm run test`，确保代码可直接发布上线。**
+- 纯文档：检查路径和 `git diff --check`。
+- 前端页面/i18n：`npm run typecheck` + `npm run build`，必要时浏览器验证。
+- 服务端/API/计费/任务状态：相关测试 + `npm run typecheck` + `npm run build`。
+- Admin：`cd admin && npm run build`。
+- Prisma：`npx prisma generate` + 相关测试 + typecheck/build。

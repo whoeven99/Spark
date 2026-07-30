@@ -1,0 +1,20 @@
+{
+  "name": "@spark/tiktok-mcp",
+  "version": "1.0.0",
+  "description": "TikTok Ads + Catalog MCP server (stdio) for Spark development",
+  "type": "module",
+  "bin": {
+    "tiktok-mcp": "./bin/tiktok-mcp.mjs"
+  },
+  "main": "./src/index.mjs",
+  "scripts": {
+    "start": "node ./bin/tiktok-mcp.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "license": "MIT"
+}

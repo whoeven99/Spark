@@ -4,6 +4,7 @@ import type {
   PlaybookDefinition,
   PlaybookRunParams,
 } from "../../../../../app/server/ai/core/playbookRegistry.server";
+import { ensureDailySnapshot } from "../../../../../app/server/operations/dailyInspection.server";
 
 // mock LLM 避免真实 API 调用（必须在顶层，vitest 会提升）
 vi.mock("../../../../../app/server/ai/core/shopChatGraph.server", () => ({
@@ -245,5 +246,133 @@ describe("productLaunchPipeline playbook run", () => {
     expect(result.steps).toHaveLength(4);
     expect(result.data?.productTitle).toBe("测试商品");
     expect((result.data?.completenessCheck as { score: number }).score).toBeGreaterThan(0);
+  });
+});
+
+describe("inventoryRiskMitigation playbook run", () => {
+  it("builds a prioritized inventory mitigation plan from daily diagnosis", async () => {
+    const { inventoryRiskMitigationPlaybook } = await import(
+      "../../../../../app/server/ai/playbooks/inventoryRiskMitigation/index"
+    );
+
+    vi.mocked(ensureDailySnapshot).mockResolvedValueOnce({
+      shop: "test-shop.myshopify.com",
+      snapshotDate: "2026-07-01",
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      hasData: true,
+      metrics: {
+        currency: "USD",
+        riskSkuCount: 2,
+        watchSkuCount: 1,
+        estimatedInventoryLoss: 920,
+      },
+      detail: {
+        inventoryRisks: [
+          {
+            sku: "LOW-LOSS",
+            title: "Low Loss Product",
+            variantTitle: "Default",
+            available: 3,
+            dailySalesVelocity: 1,
+            sellableDays: 3,
+            estimatedLoss: 120,
+            risk: "risk",
+          },
+          {
+            sku: "HIGH-LOSS",
+            title: "High Loss Product",
+            variantTitle: "Default",
+            available: 0,
+            dailySalesVelocity: 5,
+            sellableDays: 0,
+            estimatedLoss: 800,
+            risk: "risk",
+          },
+        ],
+        topRefundSkus: [],
+        abnormalRefundOrders: [],
+        overdueOrders: [],
+        routineUnfulfilledOrders: [],
+        carrierIssues: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof ensureDailySnapshot>>);
+
+    const result = await inventoryRiskMitigationPlaybook.run({
+      goal: "哪些 SKU 要先补货",
+      context: mockContext(),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.steps).toHaveLength(3);
+    expect(result.summary).toContain("库存止损方案");
+    expect(result.summary.indexOf("HIGH-LOSS")).toBeLessThan(
+      result.summary.indexOf("LOW-LOSS"),
+    );
+    expect(result.data?.riskSkuCount).toBe(2);
+  });
+});
+
+describe("refundIssueReview playbook run", () => {
+  it("builds a refund review plan from top SKU and abnormal orders", async () => {
+    const { refundIssueReviewPlaybook } = await import(
+      "../../../../../app/server/ai/playbooks/refundIssueReview/index"
+    );
+
+    vi.mocked(ensureDailySnapshot).mockResolvedValueOnce({
+      shop: "test-shop.myshopify.com",
+      snapshotDate: "2026-07-01",
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      hasData: true,
+      metrics: {
+        currency: "USD",
+        refundRate30d: 8.5,
+        refundRateDelta: 3.2,
+        refundAmount30d: 1430,
+      },
+      detail: {
+        topRefundSkus: [
+          {
+            sku: "SKU-A",
+            title: "Refund Product A",
+            quantity: 4,
+            amount: 900,
+            reason: "size",
+          },
+          {
+            sku: "SKU-B",
+            title: "Refund Product B",
+            quantity: 2,
+            amount: 120,
+            reason: "quality",
+          },
+        ],
+        abnormalRefundOrders: [
+          {
+            orderNumber: "#1001",
+            amount: 500,
+            rate: 80,
+            reason: "quality",
+            skus: "SKU-A",
+            processedAt: "2026-07-01T00:00:00.000Z",
+          },
+        ],
+        inventoryRisks: [],
+        overdueOrders: [],
+        routineUnfulfilledOrders: [],
+        carrierIssues: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof ensureDailySnapshot>>);
+
+    const result = await refundIssueReviewPlaybook.run({
+      goal: "退款率为什么上升",
+      context: mockContext(),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.steps).toHaveLength(3);
+    expect(result.summary).toContain("退款异常治理方案");
+    expect(result.summary).toContain("SKU-A");
+    expect(result.summary).toContain("#1001");
+    expect(result.data?.refundRate30d).toBe(8.5);
   });
 });

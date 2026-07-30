@@ -181,12 +181,6 @@ function logCriticalEnvStatus(): void {
   logEnvCheck("Cosmos", Boolean(process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim()), [
     ["COSMOS_ENDPOINT", process.env.COSMOS_ENDPOINT],
     ["COSMOS_KEY", process.env.COSMOS_KEY],
-    ["COSMOS_TRANSLATION_DATABASE_ID", process.env.COSMOS_TRANSLATION_DATABASE_ID, "translation"],
-    [
-      "COSMOS_TRANSLATION_V4_JOBS_CONTAINER",
-      process.env.COSMOS_TRANSLATION_V4_JOBS_CONTAINER,
-      "translation_v4_jobs",
-    ],
     ["COSMOS_AGENT_RUNS_CONTAINER", process.env.COSMOS_AGENT_RUNS_CONTAINER, "agent_runs"],
   ]);
 

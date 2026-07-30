@@ -1,15 +1,23 @@
 ---
-description: Spark 项目上下文与改动约束
+description: Spark Agent 入口：改代码前必须先读 AGENTS.md
 alwaysApply: true
 ---
 
-# Spark 项目上下文规则
+# Spark Agent 入口规则
 
-每次开始修改代码前，请先阅读 `docs/PROJECT_CONTEXT.md`，并遵循其中的约定与边界。
+任何开发、排错、评审、规划或**修改代码**前，必须先完整阅读仓库根目录的 `AGENTS.md`，不能只依赖对话中的旧副本或历史记忆。
 
-## 执行要求
-1. 在动手改代码前，先确认需求影响范围，并阅读 `docs/PROJECT_CONTEXT.md`；若涉及翻译、商品描述生成或计费，另读对应 `docs/translation-agent.md`、`docs/generateDescription.md` 或 `app/server/billing/agent.md`。
-2. 尽量做最小改动，避免无关重构。
-3. 保持文案与命名一致，角色名统一使用 `AI Assistant`。
-4. 未被明确要求时，不改动鉴权、部署流程、密钥相关逻辑。
-5. 完成改动后，检查是否引入新的 lint 问题与明显回归。
+## 改代码前必做（摘自 AGENTS.md §0）
+
+1. **先读 `AGENTS.md`**：从头到尾完整阅读，确认项目边界、仓库地图与必读文档路由。
+2. **`git status --short`**：识别并保护用户已有改动和未跟踪文件。
+3. **按任务读领域文档**：遵循 `AGENTS.md` 第 6 节「必读文档路由」，再动手。
+4. **核对真实调用链**：用 `rg` / `rg --files` 确认目标文件与调用方仍存在，再制定方案。
+5. **完成后按验证矩阵检查**：遵循 `AGENTS.md` 第 11 节，如实报告未执行项。
+
+## 改动约束
+
+- 尽量做最小改动，避免无关重构。
+- 保持文案与命名一致，角色名统一使用 `AI Assistant`。
+- 未被明确要求时，不改动鉴权、部署流程、密钥相关逻辑。
+- 若 `AGENTS.md` 与旧文档冲突，优先级见 `AGENTS.md` §0。

@@ -31,20 +31,27 @@ function parseWebhookSubscription(
   return sub as WebhookAppSubscription;
 }
 
+const LOG = "[Billing][SubscriptionWebhook]";
+
 export async function handleAppSubscriptionWebhook(params: {
   shop: string;
   payload: unknown;
   admin?: ShopifyAdminGraphqlClient;
 }): Promise<void> {
+  console.info(`${LOG} enter shop=${params.shop} hasAdmin=${Boolean(params.admin)}`);
+
   const webhookSub = parseWebhookSubscription(params.payload);
   if (!webhookSub?.admin_graphql_api_id) {
-    console.warn("[Billing] subscription webhook missing id", params.payload);
+    console.warn(`${LOG} skip reason=missing-subscription-id`, params.payload);
     return;
   }
 
   const shopifySubscriptionId = webhookSub.admin_graphql_api_id;
   const mappedStatus = mapShopifySubscriptionStatus(
     webhookSub.status ?? "UNKNOWN",
+  );
+  console.info(
+    `${LOG} parsed shop=${params.shop} subscriptionId=${shopifySubscriptionId} webhookStatus=${webhookSub.status ?? "(empty)"} mappedStatus=${mappedStatus}`,
   );
 
   let planKey =
@@ -99,15 +106,19 @@ export async function handleAppSubscriptionWebhook(params: {
       ? (params.payload as Record<string, unknown>)
       : undefined;
 
+  console.info(
+    `${LOG} resolved-plan shop=${params.shop} planKey=${planKey ?? "(none)"} tokensPerPeriod=${tokensPerPeriod} billingInterval=${billingInterval}`,
+  );
+
   if (mappedStatus === APP_SUBSCRIPTION_STATUS.ACTIVE) {
     if (!planKey) {
       console.warn(
-        "[Billing] ACTIVE subscription but unknown planKey",
-        shopifySubscriptionId,
+        `${LOG} skip reason=unknown-plan-key shop=${params.shop} subscriptionId=${shopifySubscriptionId}`,
       );
       return;
     }
 
+    console.info(`${LOG} apply-active-subscription shop=${params.shop} planKey=${planKey}`);
     await applyActiveSubscription({
       shop: params.shop,
       shopifySubscriptionId,
@@ -123,6 +134,7 @@ export async function handleAppSubscriptionWebhook(params: {
       },
       rawPayload,
     });
+    console.info(`${LOG} done-active shop=${params.shop} subscriptionId=${shopifySubscriptionId}`);
     return;
   }
 
@@ -131,13 +143,16 @@ export async function handleAppSubscriptionWebhook(params: {
     mappedStatus === APP_SUBSCRIPTION_STATUS.EXPIRED ||
     mappedStatus === APP_SUBSCRIPTION_STATUS.FROZEN
   ) {
+    console.info(`${LOG} mark-non-active shop=${params.shop} status=${mappedStatus}`);
     await markSubscriptionNonActive({
       shop: params.shop,
       shopifySubscriptionId,
       status: mappedStatus,
       rawPayload,
     });
+    console.info(`${LOG} done-non-active shop=${params.shop} status=${mappedStatus}`);
   } else if (mappedStatus === APP_SUBSCRIPTION_STATUS.PENDING) {
+    console.info(`${LOG} upsert-pending shop=${params.shop} planKey=${planKey ?? "unknown"}`);
     await prisma.appSubscription.upsert({
       where: { shop: params.shop },
       create: {

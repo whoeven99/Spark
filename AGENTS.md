@@ -1,557 +1,287 @@
 # AGENTS.md
 
-## Cursor Cloud specific instructions
+本文件是 Codex 在 `Spark` 仓库中的强制入口和长期维护的代码导航。它适用于仓库根目录及所有子目录；若某个子目录以后新增更具体的 `AGENTS.md`，则子目录文件在其作用域内优先。
 
-### Project Overview
+## 0. 每次任务必须先做
 
-Spark is an embedded Shopify app with 3 deployable services:
-- **Main App** (root `/workspace`): React Router + Vite + Shopify CLI, port 3000
-- **Admin Panel** (`/workspace/admin`): Express backend (port 3099) + Vite React frontend (port 5174)
-- **Translation Worker** (`/workspace/worker`): Background job processor
+任何开发、排错、评审、规划、运行命令或文件定位开始前，必须：
 
-### Quick Commands
+1. 从头到尾完整读取当前 `AGENTS.md`，不能只依赖对话中附带的旧副本或历史记忆。
+2. 执行 `git status --short`，识别并保护用户已有改动和未跟踪文件。
+3. 根据“必读文档路由”读取与任务直接相关的文档。
+4. 用 `rg` / `rg --files` 核对真实调用链和文件是否仍存在，再制定方案或修改代码。
+5. 修改后按“验证矩阵”执行与风险匹配的检查，并如实报告未执行或被环境阻塞的项目。
 
-| Task | Command | Notes |
-|------|---------|-------|
-| Lint | `npm run lint` | Pre-existing lint errors in codebase (worker, some tests) |
-| Typecheck | `npm run typecheck` | Pre-existing TS errors in some files |
-| Test | `npm run test` | Vitest; 7 test files require `TURSO_TEST_DATABASE_URL` |
-| Build (main) | `npm run build` | React Router build (Vite) |
-| Build (admin) | `cd admin && npm run build` | Vite client + tsc server |
-| Dev (main) | `npm run dev` | Requires Shopify CLI auth (`shopify app dev`) |
-| Dev (admin) | `cd admin && npm run dev` | No external deps needed to start |
+若本文件、旧文档和当前代码冲突，优先级为：**当前代码与配置 > `package.json` / Prisma schema > 本文件 > 领域文档 > README**。发现漂移时，应在本次改动范围内同步更新本文件或对应文档。
 
-### Feishu 文档读取约定（强制）
+## 1. 项目现状
 
-当用户在对话中贴出飞书文档链接（如 `https://*.feishu.cn/wiki/...` 或 `https://*.feishu.cn/docx/...`），默认先用仓库脚本读取文档正文，再进行分析，不要仅基于截图或链接标题推断内容。
+Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独立运行的应用和 Shopify 扩展：
 
-- 环境变量（放在根目录 `.env`）：
-  - `FEISHU_APP_ID`
-  - `FEISHU_APP_SECRET`
-- 统一命令：
-  - `node scripts/fetch-feishu-doc.mjs "<飞书链接>"`
-- 需要落盘时：
-  - `node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md`
-- 成功判定：
-  - 命令退出码为 `0`，且输出包含文档标题/正文内容。
-- 失败排查顺序：
-  1. 检查 `FEISHU_APP_ID/FEISHU_APP_SECRET` 是否存在且无多余空格。
-  2. 确认飞书应用已发布并安装到对应企业。
-  3. 确认应用具备 Wiki/Docx 读取权限，且目标文档已授权给该应用。
+- **主应用（仓库根目录）**：React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端，默认由 Shopify CLI 启动。
+- **Admin 后台（`admin/`）**：Express API（本地默认 `3099`）+ Vite React 前端（本地默认 `5174`）。它有独立的 `package.json`、依赖和构建流程。
+- **Web Pixel 扩展（`extensions/ciwi-spark-web-pixel/`）**：采集 Shopify analytics/custom events，经主应用 `/api/pixel-ingest` 上报。
+- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。测试模式写入 `testEventCode` + `storefrontTrackUrl`，店面浏览/加购会双发 Events API 到 Test Events；测完须删除。
+重要边界：
 
-### Database Setup (Prisma)
+- 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
+- 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
+- Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。`/app/studio/translate` 当前只重定向到 `/app/studio/copy`，不要把图片翻译、兼容 Blob 读取或 Admin 运维页误判为整店翻译运行时。
+- Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。
+- 根目录存在若干 `tmp-*` 未跟踪恢复文件；除非用户明确要求，禁止删除、覆盖或纳入改动。
 
-- Prisma client generates to `app/generated/prisma/` (custom output path).
-- `npm run setup` = `prisma generate && prisma migrate deploy`. The migrate step needs `DATABASE_URL`.
-- For local dev without Turso: `DATABASE_URL=file:./prisma/dev.sqlite npx prisma db push` syncs schema.
-- **Migration ordering issue**: The `20260529082508_add_ai_task_remove_shop_visual_job` migration runs before `20260529142233_init` alphabetically but depends on tables from init. Use `prisma db push` for fresh local setups instead of `prisma migrate deploy`.
+## 2. 仓库地图
 
-### External Service Dependencies
-
-The main app **requires** these env vars at runtime (will crash without them):
-- `TURSO_TEST_DATABASE_URL` + `TURSO_TEST_AUTH_TOKEN` (or PROD variants)
-- `SHOPIFY_API_KEY` + `SHOPIFY_API_SECRET`
-
-Optional services (app works partially without): Cosmos DB, Azure Blob, Redis, DeepSeek/OpenAI API.
-
-### Running Services Locally
-
-1. **Admin panel** starts without any external credentials:
-   ```
-   cd admin && npm run dev
-   ```
-   Backend: http://localhost:3099/health → `{"ok":true}`
-   Frontend: http://localhost:5174/
-
-2. **Main app** needs Shopify CLI auth + Turso credentials:
-   ```
-   npm run dev   # wraps shopify app dev
-   ```
-   Without Shopify CLI auth, use Vite directly for frontend-only dev:
-   ```
-   SHOPIFY_API_KEY=test SHOPIFY_API_SECRET=test npx vite --port 3000
-   ```
-   (Server-side routes will fail without Turso, but Vite HMR works)
-
-3. **Worker**: `cd worker && npm run dev` (needs Cosmos/Redis/Blob env vars)
-
-### Testing Notes
-
-- Tests in `tests/` use Vitest with `~/` alias pointing to `app/`.
-- Tests that import `app/db.server.ts` transitively require `TURSO_TEST_DATABASE_URL` (a real Turso URL). These tests will fail in environments without the secret configured.
-- Pure unit tests (postprocess, formatting, utility) pass without any env vars.
-- After code changes: `npm run lint && npm run typecheck && npm run test && npm run build`
-- Admin has no test framework; verify with `cd admin && npm run build`.
-
----
-
-## Spark 项目 Agent 上下文指南
-
-本文档是 AI Agent 在对话中需要的完整项目上下文。包含代码结构、业务流程、快速定位、改动指南等。
-
-**关键约定**：改代码前必先读对应的 `docs/` 文档（translation、generateDescription、billing 等）。改代码后必须 `npm run test && npm run build` 通过。**admin 项目改动后必须进入 `admin/` 目录运行 `npm run build` 检查编译错误**。
-
-**新增 Skill / Tool 前必读**：[`docs/ROADMAP.md`](docs/ROADMAP.md) — 包含全部规划中的原子 Skill、优先级、实现路径和所需新增 Shopify Scope，避免重复造轮子或遗漏依赖。
-
----
-
-## 项目概览
-
-**Spark** 是一个嵌入式 Shopify 应用，核心能力：
-- 🤖 **AI Assistant**：自然语言聊天、店铺数据查询、运营建议、工具调用
-- 📊 **诊断报告**：7 天核心指标、健康状态评估
-- 🌐 **翻译 V3**：JSON Runtime 任务创建与监控（Cosmos + Redis + Blob）
-- 💰 **计费与订阅**：卫星 App 订阅制、按量购包、Credit 配额（Shopify Billing）
-- 🎨 **生成商品描述**：AI 驱动的产品文案生成
-- 🖼️ **图片工具**：整图翻译（火山 + Aidge）、文生图
-
----
-
-## 完整目录结构
-
-```
+```text
 Spark/
-├── app/                          应用核心（React Router + Node）
-│   ├── routes/                   文件系统路由（页面与 API）
-│   │   ├── app.tsx              应用壳、鉴权、导航
-│   │   ├── app._index.tsx       首页（聊天）
-│   │   ├── app.additional.tsx   诊断报告
-│   │   ├── app.translation.tsx  翻译页
-│   │   ├── app.product-improve.tsx  商品文案优化页
-│   │   ├── app.billing.tsx      订阅与计费页
-│   │   ├── app.image-studio.tsx 图片工具（文生图+图片翻译）
-│   │   ├── api.*.ts             API 端点
-│   │   ├── chat-stream.ts       聊天 SSE 流入口
-│   │   ├── page/                页面级组件（ChatPage、TranslationPage 等）
-│   │   ├── component/           UI 组件按域分（chat/、translation/、billing/ 等）
-│   │   └── webhooks.*.tsx       Shopify Webhook（安装、订阅、卸载等）
-│   │
-│   ├── server/                   服务端逻辑
-│   │   ├── ai/                   AI Agent 链路（LangGraph + ReAct）
-│   │   │   ├── chat/            聊天链路入口（invokeChatAgent）
-│   │   │   ├── graph/           LangGraph 图定义（shopChatGraph）+ 系统提示
-│   │   │   ├── core/            核心执行（agentStream、fallback 等）
-│   │   │   ├── tools/           AI 工具集合（Shopify 指标、生成描述等）
-│   │   │   ├── skills/          技能模块（邮件、图片翻译等）
-│   │   │   ├── postprocess/     回复后处理（文本抽取、表格规整、润色）
-│   │   │   └── langsmith.server.ts  LangSmith 集成
-│   │   │
-│   │   ├── generateDescription/ 商品描述生成
-│   │   │   ├── services/        生成服务（AI 调用、写回 Shopify）
-│   │   │   ├── prompts/         Prompt 模板
-│   │   │   └── *.server.ts      路由、HTML 转换、日志等
-│   │   │
-│   │   ├── translation/         翻译 V3 / JSON Runtime 流水线
-│   │   │   ├── cosmosJobStore.server.ts     Cosmos 任务存储
-│   │   │   ├── translateBlobStore.server.ts Azure Blob 报表/chunk
-│   │   │   ├── translateRedis.server.ts     Redis 进度键
-│   │   │   ├── translationPipelineCore.server.ts  核心流水线
-│   │   │   └── types.ts         类型定义
-│   │   │
-│   │   ├── pictureTranslate/    整图翻译（火山 + Aidge）
-│   │   │   ├── huoshan/         火山引擎实现
-│   │   │   ├── aidge/           Aidge 实现
-│   │   │   ├── pictureTranslateBlob.server.ts
-│   │   │   └── pictureTranslateBillingService.server.ts
-│   │   │
-│   │   ├── imageGeneration/     文生图
-│   │   │   └── imageGenerationBlob.server.ts
-│   │   │
-│   │   ├── billing/             订阅与计费（Shopify Billing GraphQL）
-│   │   │   ├── activateSubscription.server.ts
-│   │   │   ├── applyTokenPackPurchase.server.ts
-│   │   │   ├── tokenPools.server.ts
-│   │   │   ├── hasTokenQuota.server.ts
-│   │   │   └── agent.md         计费详细说明（改前必读）
-│   │   │
-│   │   ├── email/               腾讯 SES 邮件（事务邮件）
-│   │   │   ├── config/          环境变量读取
-│   │   │   ├── services/        sendTemplateEmail 统一入口
-│   │   │   ├── providers/       邮件提供商（Tencent）
-│   │   │   ├── scenarios/       场景化邮件（安装、卸载、订阅等）
-│   │   │   └── templates/       模板 ID 与数据转换
-│   │   │
-│   │   ├── feishu/              飞书运营通知
-│   │   │   ├── feishuConfig.server.ts
-│   │   │   ├── sendFeishuTextMessage.server.ts
-│   │   │   └── scenarios/       卸载、订阅、购包通知
-│   │   │
-│   │   ├── appLifecycle/        App 安装/卸载运营副作用
-│   │   │   ├── onAppInstalled.server.ts
-│   │   │   └── onAppUninstalled.server.ts
-│   │   │
-│   │   ├── commonEventLog/      通用事件日志（安装、卸载、订阅等）
-│   │   ├── tokenUsage/          Token 使用量累加
-│   │   ├── agentRunLog/         Agent 运行摘要（Cosmos 写入）
-│   │   ├── shopify/             Shopify GraphQL 查询
-│   │   ├── productSearch/       产品搜索路由
-│   │   ├── adAuthCredentialStore.server.ts  广告 OAuth 配置
-│   │   ├── adsCredentialStore.server.ts     Meta 广告凭证读写
-│   │   ├── logisticsCredentialStore.server.ts  物流凭证 JSON 存储
-│   │   ├── chat.ts              聊天 action 处理
-│   │   ├── chat-stream.server.ts 聊天 SSE 流服务
-│   │   └── chatPayload.server.ts 聊天请求/响应序列化
-│   │
-│   ├── hooks/                    React 自定义 Hook
-│   ├── lib/                      工具函数、类型定义、常量
-│   ├── i18n/                     国际化配置（i18next）
-│   ├── locales/                  翻译文件（en、zh）
-│   ├── db.server.ts              Prisma Client + Turso 连接
-│   ├── shopify.server.ts         Shopify Admin GraphQL 初始化
-│   ├── entry.server.tsx          React Router 服务端入口
-│   ├── root.tsx                  React Router 根组件
-│   ├── routes.ts                 路由生成
-│   ├── config/                   运行时配置（环境变量、Turso 选择等）
-│   └── globals.d.ts              全局类型定义
-│
-├── prisma/                       ORM Schema + 迁移
-│   ├── schema.prisma             Prisma 数据模型
-│   ├── migrations/               迁移文件（Turso 版本追踪）
-│   ├── dev.sqlite                本地开发数据库
-│   ├── billing-plan-catalog-seed.sql  套餐种子数据
-│   └── token-billing-rule-seed.sql    Token 计费系数种子
-│
-├── admin/                        管理后台（独立 Vite + TS 应用）
-├── worker/                       后台任务（未来扩展点）
-├── extensions/                   Shopify 应用扩展占位
-├── scripts/                      工具脚本（turso-migrate 等）
-├── docs/                         项目文档
-├── .github/workflows/            CI/CD（Shopify + Render 部署）
-├── public/                       静态资源
-├── tests/                        测试文件
-├── vite.config.ts                Vite 构建配置
-├── vitest.config.ts              Vitest 测试配置
-├── tsconfig.json                 TypeScript 配置
-├── package.json                  项目依赖与脚本
-└── README.md                     项目 README
+├─ app/
+│  ├─ routes/                 React Router 页面、API、Webhook；flatRoutes 自动发现
+│  │  ├─ page/                页面级组合与 workspace UI
+│  │  └─ component/           按业务域拆分的可复用组件
+│  ├─ server/                 服务端业务、AI、存储和外部集成
+│  ├─ config/                 运行时与应用入口配置
+│  ├─ hooks/ + lib/           前端 hooks、共享类型、feature track、表单 payload
+│  ├─ i18n/ + locales/        i18next 配置及中英文资源
+│  ├─ generated/prisma/       Prisma 生成物，不手工编辑
+│  ├─ db.server.ts            Prisma + libSQL/Turso 连接
+│  ├─ shopify.server.ts       Shopify 鉴权和 Admin API 初始化
+│  ├─ routes.ts               @react-router/fs-routes 入口
+│  └─ root.tsx                React Router 根组件
+├─ admin/                     独立 Express + Vite 管理后台
+├─ extensions/                Shopify 扩展：Web Pixel + TikTok Theme App Embed
+├─ prisma/                    schema、迁移和计费种子 SQL
+├─ tests/                     与 app/ 大体镜像的 Vitest 测试
+├─ scripts/                   运维、Turso、部署、飞书文档等脚本
+├─ docs/                      架构、交互、设计、路线图和运营文档
+├─ .github/workflows/         部署工作流
+├─ .codex/config.toml         仓库级 Codex MCP 配置
+└─ package.json               主应用命令和依赖的事实来源
 ```
 
----
+不要手工编辑 `build/`、`.react-router/`、`coverage/`、`node_modules/`、`admin/dist/` 或 `app/generated/prisma/`。
 
-## 核心路由映射
+## 3. 当前信息架构与入口
 
-| 路由 | 文件 | 功能 |
-|------|------|------|
-| `/app` | `app/routes/app.tsx` | 应用壳、鉴权入口 |
-| `/app/_index` | `app/routes/app._index.tsx` | 首页（聊天） |
-| `/app/additional` | `app/routes/app.additional.tsx` | 诊断报告 |
-| `/app/translation` | `app/routes/app.translation.tsx` | 翻译页 |
-| `/app/product-improve` | `app/routes/app.product-improve.tsx` | 商品文案优化页 |
-| `/app/billing` | `app/routes/app.billing.tsx` | 订阅与计费页 |
-| `/app/image-studio` | `app/routes/app.image-studio.tsx` | 图片工具 |
-| `POST /chat-stream` | `app/routes/chat-stream.ts` | 聊天 SSE 流 |
-| `POST /api/product-improve` | `app/routes/api.product-improve.ts` | 商品文案生成 API |
-| `POST /api/picture-translate` | `app/routes/api.picture-translate.ts` | 整图翻译 API |
-| `GET /api/translate/v3/json-runtime-tasks` | `app/routes/api.translate.v3.json-runtime-tasks.ts` | 翻译任务列表 |
-| `GET /api/translate/v3/json-runtime-task-detail` | `app/routes/api.translate.v3.json-runtime-task-detail.ts` | 翻译任务详情 |
+`app/routes/app.tsx` 是嵌入式应用壳和鉴权入口。一级导航由 `app/config/appEntry.server.ts` 定义，当前固定为：
 
----
+| 目的地 | URL | 主要实现 |
+|---|---|---|
+| Ask | `/app` | `app._index.tsx` → `page/workspace/WorkspaceAppShellPage.tsx`，聊天与上下文工作台 |
+| Today | `/app/today` | `app.today.*`，`_index` 概览、`diagnosis` 每日诊断/ROI、`orders` 订单风险 |
+| Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
+| Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
+| Settings | `/app/settings` | `app.settings.*`，`billing` 计费、`channels` 渠道、`logistics` 物流、`data` 历史回补、`feedback` 反馈 |
 
-## 关键业务流程
+关键 HTTP 入口：
 
-### 聊天流程（AI Agent）
-```
-ChatPage (前端) → POST /chat-stream (SSE) → app/server/chat-stream.ts
-  ├─ Shopify admin 鉴权
-  ├─ 注入工具（Shopify 指标、翻译表单、生成描述等）
-  └─ invokeChatAgent() → LangGraph ReAct 执行
-    ├─ shopChatGraph 按系统提示执行
-    ├─ 工具调用（Shopify GraphQL、生成描述、翻译等）
-    ├─ 抽取 AIMessage 文本
-    └─ 后处理（表格规整、润色）→ 客户端
-```
+- `POST /chat-stream`：`app/routes/chat-stream.ts` → `app/server/chat-stream.ts`，SSE 聊天入口。
+- `/api/ai-task*`、`/api/batch-ai-tasks`、`/api/unified-tasks`：异步任务创建、状态、日志与统一列表。
+- `/api/product-improve`、`/api/product-quality-score`、`/api/update-product-description`、`/api/product-search`、`/api/shop-locales`、`/api/shopify.objects`：商品内容优化、对象/商品查询与语言数据。
+- `/api/generate-image*`、`/api/picture-translate*`：图片生成和图片翻译。
+- `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源。
+- `/api/automation-overview`：Today/自动化概览。
+- `/api/task-proposal`：聊天中的任务建议/确认载荷。
+- `/api/support`、`/api/external-support`：客服会话与外部支持入口。
+- `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
+- `/api/pixel-ingest`：Web Pixel 采集入口。
+- `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单、退款、库存、履约 Webhook。
 
-### 商品描述生成流程
-```
-生成描述页或 AI 工具 → generateDescriptionService.ts
-  ├─ AI 客户端调用（DeepSeek / OpenAI）
-  ├─ Prompt 模板 + 商品上下文
-  └─ 结构化 JSON → 前端编辑或直写 Shopify
-```
+React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路由时必须按文件路由规则核对最终 URL，并检查父布局/索引路由关系。
 
-### 翻译 V3 / JSON Runtime 流程
-```
-翻译页 → 创建任务 → app/server/translation/translationPipelineCore.server.ts
-  ├─ 写入 Azure Cosmos（job 元数据）
-  ├─ 上传内容到 Azure Blob（chunk）
-  ├─ 写入 Redis 进度键
-  └─ 返回任务 ID
-  ↓
-查看任务 → GET /api/translate/v3/json-runtime-tasks（Cosmos）
-        或 GET /api/translate/v3/json-runtime-task-detail（Cosmos+Redis+Blob 聚合或转发 AgentTask）
-```
+## 4. 服务端领域导航
 
-### 图片翻译流程（双引擎）
-```
-AI 工具 picture_translate 或 /api/picture-translate
-  ├─ 语言范围判断（火山 vs Aidge）
-  ├─ 火山 TranslateImage API 或 Aidge IOP
-  ├─ 上传结果到 Azure Blob
-  ├─ 记录 token 使用（若启用计费）
-  └─ 返回 SAS URL
-```
+| 需求 | 首要代码入口 |
+|---|---|
+| 聊天请求与 SSE | `app/server/chat-stream.ts`、`app/server/chatPayload.server.ts` |
+| Agent 图、模型、提示词 | `app/server/ai/core/shopChatGraph.server.ts`、`agentStream.server.ts`、`shopAssistantPrompt.ts` |
+| Skill / Tool 注册 | `app/server/ai/skills/index.ts`、`app/server/ai/core/toolRegistry.server.ts` |
+| Playbook 与能力目录 | `app/server/ai/playbooks/`、`app/server/ai/core/playbookRegistry.server.ts`、`skillManifest.server.ts` |
+| AI 任务执行与日志 | `app/server/aiTask/`、`app/server/ai/core/stepRunner.server.ts`、各 Skill service |
+| 商品文案与质量优化 | `app/server/productImprove/` |
+| 商品目录和对象查询 | `app/server/productSearch/`、`app/server/shopify/productSearch.server.ts`、`app/server/shopify/shopifyObjectList.server.ts` |
+| 图片生成 | `app/server/imageGeneration/` |
+| 图片翻译 | `app/server/pictureTranslate/` |
+| 视觉工具页聚合 | `app/server/visualTools/` |
+| 统一任务列表 | `app/server/unifiedTask/` |
+| 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts` |
+| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/` |
+| Shopify 数据读取与同步 | `app/server/shopify/`、`app/server/shopify/sync/` |
+| 计费、订阅、购包 | `app/server/billing/`、`app/server/tokenUsage/` |
+| 会话与文件上下文 | `app/server/conversation/`、`app/server/fileContext/` |
+| 支持聊天 | `app/server/support/` |
+| 邮件与商户通知 | `app/server/email/`、`app/server/notifications/` |
+| 飞书运营通知 | `app/server/feishu/` |
+| App 生命周期与事件 | `app/server/appLifecycle/`、`app/server/commonEventLog/` |
+| 会话、运行时环境、嵌入式回跳 | `app/server/session/`、`app/config/runtimeEnv.server.ts`、`app/server/shopify/embeddedEntry.server.ts`、`app/server/shopify/sessionTokenBounce.server.ts` |
+| Web Pixel / 阿里云日志 | `app/server/webPixel/`、`app/server/aliyunLog/` |
+| Agent 运行摘要 | `app/server/agentRunLog/` |
+| Playbook Case | `app/server/playbookCase/` |
 
-### 订阅与计费流程
-```
-Shopify Billing GraphQL
-  ├─ 订阅创建 / 续费 → Webhook app_subscriptions/update
-  └─ 一次性购包 → Webhook app_purchases_one_time/update
-    ↓
-activateSubscription / applyTokenPackPurchase
-  ├─ 计算 token 池（订阅赠送 + 购包 - 使用）
-  ├─ 写入 Account 表
-  └─ 记录 BillingLog + 飞书通知
-    ↓
-生成描述 API 校验 hasTokenQuota()
-  ├─ 余额充足 → 执行，累加 usedTokens
-  └─ 余额不足 → 拦截，提示续费
-```
+AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传。修改工具时同时检查注册、schema、执行器、token 计费、任务卡片和测试，不要只改工具实现文件。
 
-### App 安装/卸载流程
-```
-安装：oauth 成功 / 进入 /app
-  → recordAppInstalled()
-  → sendInstallOpsEmail() (可选)
-  → onAppInstalled() 写入 CommonEventLog
-  ↓
-卸载：webhooks.app.uninstalled
-  → fetchUninstallFeedbackFromPartner() (可选)
-  → sendUninstallOpsEmail() → sendUninstallFeishuNotify()
-  → handleAppUninstalled() 删 Session、记日志
-```
+## 5. 数据与外部系统边界
 
----
+- **Turso / libSQL + Prisma**：业务主数据。模型在 `prisma/schema.prisma`，包括 Session、Account/订阅/计费、AITask、订单/退款/客户/库存/履约镜像、WorkspaceFile、Conversation/Message、运营诊断、成本/ROI、支持会话等。
+- **Azure Cosmos DB**：Agent 运行摘要和 Playbook Case 等事件/结果型数据；入口集中在 `app/server/cosmos/`、`agentRunLog/`、`playbookCase/`。默认不应假设容器会自动创建。
+- **Azure Blob Storage**：上传文件、图片生成、图片翻译及兼容翻译内容。写入前确认容器、SAS 生命周期和清理策略。
+- **Redis**：Admin 运营排查和部分历史/兼容状态读取。不要未经确认把新的核心业务对象只存 Redis。
+- **Aliyun SLS**：Pixel、访问与功能行为日志。
+- **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。
+- **腾讯 SES / 飞书**：商户邮件与内部运营通知。通知失败通常不应阻断主业务，沿用现有场景封装。
+- **TSF 只读观测**：Admin `admin/server/routes/tsf*.ts`、`translationOps.ts`、`shopifyTranslation.ts` 等读取 TSF Turso、Cosmos、Redis、Blob 或 Shopify 翻译资源。它们是运维/报表边界，不代表 Spark 重新拥有整店翻译执行链路。
 
-## 数据存储详解
+存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service，再考虑新增容器或表；涉及跨仓库整店翻译边界时同时核对 TSF 当前实现。
 
-| 数据 | 存储 | 环境变量 | 备注 |
-|------|------|---------|------|
-| Session、Account、订阅、建议、广告凭证、计费日志 | Turso (libSQL) | `TURSO_*` | Prisma Client via libSQL adapter |
-| 翻译任务元数据、Agent 运行摘要 | Azure Cosmos DB | `COSMOS_*` | 容器：`translation_jobs`、`agent_runs` |
-| 翻译报表/chunk、图片翻译结果、生成图片 | Azure Blob Storage | `BLOB_TRANSLATE_V3_*`、`AZURE_BLOB_*` | 容器：`translation-content`、`picturetranslate`、`generatedimages` |
-| 翻译进度键、监控指标 | Redis | `REDIS_*` | ioredis 客户端 |
-| 物流承运商凭证 | 本地 JSON | `.data/logistics-provider-credentials.json` | 不加密，建议 KMS |
+## 6. 必读文档路由
 
----
+只读取与当前任务相关的文档，但下列规则是强制的：
 
-## AI 工具列表
+| 任务类型 | 修改前必须读取 |
+|---|---|
+| 项目架构、跨域改动、环境变量、部署 | `docs/PROJECT_CONTEXT.md`，并以当前代码复核过时路径 |
+| 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
+| Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
+| 任意前端视觉、布局、组件样式 | `docs/DESIGN.md` |
+| 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
+| Today 运营工作流 | `docs/DAILY_OPERATIONS_WORKFLOWS.md` |
+| 信息架构和功能归属 | `docs/SPARK_FUNCTION_INVENTORY.md` |
+| 整店翻译兼容、运营排查或跨 TSF 边界 | 直接读取 TSF 根 `AGENTS.md` 和 `packages/translation-core/*`；Spark 只保留图片翻译、兼容清理与 Admin 只读观测 |
 
-在 `app/server/ai/skills/index.ts` 中注册，由 `buildChatAgentExtraTools` 注入聊天：
+文档名和路径区分大小写时以磁盘实际文件为准。不要引用不存在的旧文档（例如旧版说明中的 `docs/generateDescription.md` 或 `docs/agent-run-log.md`）。
 
-- `get_current_time` - 获取当前时间
-- `get_weather` - 获取天气
-- `get_shop_info` - Shopify 店铺信息（名称、域名、币种、时区、套餐等）
-- `get_shop_kpis` - 经营指标（销售额、订单数、转化率、AOV、来源表现、弃购率、退款率、库存健康）
-- `generate_product_description` - 商品描述生成（按商品 ID，生成结构化 description）
-- `picture_translate` - 整图翻译
-- `send_template_email` - 模板邮件发送（白名单校验）
-- 翻译表单工具（通过 `translationTaskFormExtract` 推断）
+用户粘贴飞书 Wiki/Docx 链接时，必须先读取正文再分析：
 
-**部分指标依赖权限**（如 `read_orders`），工具内置缺权限诊断文案。
-
----
-
-## 计费系统核心
-
-- **启用开关**：`BILLING_ENABLED=false` 时关闭计费；默认启用，`Account.appName` 为 `spark`
-- **网关**：`BILLING_GATEWAY=noop` 时本地生效（开发）；否则走 Shopify Billing GraphQL
-- **Token 池**：`Account.tokenPools` = 订阅赠送 + 购包 - usedTokens
-- **校验**：`hasTokenQuota(account)` 判断余额，生成描述 API 调用前校验
-- **累加**：`recordBilledTokenUsage()` / `recordVisualToolTokenUsage()` 记录使用
-- **Webhook**：`app_subscriptions/update`、`app_purchases_one_time/update` 触发 `activateSubscription` / `applyTokenPackPurchase`
-- **表与流水**：见 `app/server/billing/agent.md`（续费顺序、BillingLog / CommonEventLog 事件类型、Turso 迁移）
-
----
-
-## 翻译系统核心
-
-- **创建任务**：`translationPipelineCore` 写入 Cosmos、Blob、Redis
-- **查看任务**：
-  - `GET /api/translate/v3/json-runtime-tasks` → Cosmos 查询
-  - `GET /api/translate/v3/json-runtime-task-detail` → Cosmos + Redis + Blob 聚合 或 转发 AgentTask
-- **环境变量**：`COSMOS_*`、`REDIS_*`、`BLOB_TRANSLATE_V3_*`、`JSON_RUNTIME_TASK_DETAIL_SOURCE`（local 或转发）
-
----
-
-## 改动快速索引
-
-| 需求 | 文件 | 备注 |
-|------|------|------|
-| 改聊天、工具、AI 行为 | `app/server/chat-stream.ts`、`app/server/ai/**` | LangGraph 图见 `shopChatGraph.server.ts` |
-| 改商品描述生成 | `app/server/generateDescription/**` 先读 `docs/generateDescription.md` | **改前读文档** |
-| 改翻译流程 | `app/server/translation/**` 先读 `docs/translation-agent.md` | **改前读文档** |
-| 改图片翻译 | `app/server/pictureTranslate/**`、`app/routes/api.picture-translate.ts` | 火山 vs Aidge 路由 |
-| 改订阅计费 | `app/server/billing/**` 先读 `app/server/billing/agent.md` | **改前读文档** |
-| 改邮件、App 生命周期 | `app/server/email/**`、`app/server/appLifecycle/**` | 业务只调 `sendTemplateEmail` |
-| 改飞书通知 | `app/server/feishu/**` | 卸载、订阅、购包场景 |
-| 改诊断报告 | `app/routes/app.additional.tsx` | 包括查询、阈值、文案 |
-| 改 AI 回复处理 | `app/server/ai/postprocess/*.ts` | 附带单测 |
-| 加新 AI 工具 | `app/server/ai/skills/index.ts` 或 `tools/implementations/*` | `buildChatAgentExtraTools` 注入 |
-| 改聊天 UI | `app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*` | 包括凭证弹层 |
-| 改翻译 UI | `app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*` | — |
-| 改计费页 UI | `app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx` | — |
-| 改数据库模型 | `prisma/schema.prisma` → `npm run turso:migrate:*` | — |
-| 改广告 OAuth 配置 | `app/routes/app.ads.*.config.tsx`、`app/server/adAuthCredentialStore.server.ts` | — |
-| 改物流凭证 | `app/routes/app.logistics.*.config.tsx`、`app/server/logisticsCredentialStore.server.ts` | — |
-| **[admin]** 改 Todo 功能 | `admin/server/routes/todos.ts`、`admin/src/pages/Todo.tsx`、`admin/src/api.ts` | 改后需 `cd admin && npm run build` 验证 |
-
----
-
-## UI 规范：任务列表 Card
-
-**所有任务类型的列表 Card 必须使用 `AITaskCardShell` 作为基础组件，禁止自行实现 card 布局。**
-
-组件路径：`app/routes/component/aiTask/AITaskCardShell.tsx`
-
-### 设计原则
-
-Shell 负责**纯展示**，每个任务类型负责**业务逻辑**：
-
-- **Shell 负责**：card 容器样式、header 布局、分割线、进度条、按钮行、LogViewer 挂载
-- **任务组件负责**：计算文案（primaryCopy / secondaryCopy）、计算进度值、组装 actions 列表、读取 config 字段
-
-### 接入方法
-
-```tsx
-import { AITaskCardShell, type CardAction, formatActualElapsed, actionButtonStyle } from "../aiTask/AITaskCardShell";
-
-// 1. 用 useState 维护 localStatus（LogViewer 会实时更新它）
-// 2. 计算好所有展示值后，直接渲染 shell
-
-<AITaskCardShell
-  task={task}                          // AITaskItem，提供 id / 时间戳 / LogViewer 数据
-  locationSearch={locationSearch}
-  status={localStatus}                 // 实时状态（useState）
-
-  title="任务目标：生成产品描述"         // string | ReactNode
-  metaLine={<>10 个商品 | 英语 | ...</>} // 可选，标题下方详情行
-  extraBadges={<span>积分不足</span>}   // 可选，#id / 状态徽章旁边的额外标签
-
-  primaryCopy="正在生成商品文案..."      // 主状态句
-  primaryCopyColor="#0f172a"           // 可选，primaryCopy 文字颜色
-  secondaryCopy="已运行 1m 23s"        // 次要说明句
-
-  progressPercent={62}                 // 0–100
-  progressBackground="linear-gradient(90deg, #00a67c, #35b486)"  // 进度条颜色
-
-  actions={[                           // CardAction[]，shell 负责渲染按钮
-    { label: "查看详情", tone: "primary", onClick: onOpenDetail },
-    { label: "删除",     tone: "subtle",  onClick: () => onDelete(task.id), disabled: deleting },
-  ]}
-
-  showLogViewer={localStatus === "running"}   // 仅 running 时展示实时日志
-  onStatusChange={(s, r) => {                 // LogViewer 状态回调 → 更新 localStatus
-    setLocalStatus(s);
-    onTaskUpdated?.(task.id, s, r);
-  }}
-/>
+```powershell
+node scripts/fetch-feishu-doc.mjs "<飞书链接>"
+node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 ```
 
-### CardAction tone 说明
+凭证仅从根目录环境变量 `FEISHU_APP_ID`、`FEISHU_APP_SECRET` 读取；禁止把值写入日志、文档或提交。
 
-| tone | 用途 |
-|------|------|
-| `primary` | 主要操作（审核、查看结果等），绿色填充按钮 |
-| `secondary` | 次要操作（查看详情、查看失败原因等），白色描边按钮 |
-| `subtle` | 危险或低权重操作（删除等），浅灰背景按钮 |
+## 7. 前端和任务 UI 约束
 
-### 可复用导出
+- 保持现有五目的地信息架构；除非用户明确要求重构，不新增一级导航或恢复旧的 per-tool 导航。
+- 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
+- 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。
+- 标准参考：`ProductImproveTaskCard.tsx`、`ImageGenerationTaskCard.tsx`、`PictureTranslateTaskCard.tsx`。
+- 用户可见文案必须同步维护 `app/locales/zh/common.json` 与 `app/locales/en/common.json`，不得在组件中新增只覆盖一种语言的硬编码文案。
+- 使用现有 Shopify Web Components、Ant Design 和样式体系；不要引入第二套设计系统。
+- 页面 loader/action、API 和 Webhook 必须沿用 `authenticate.admin(request)` 等现有鉴权边界；不要为了复用把 server secret 或 Admin API 客户端带入浏览器代码。
+- `.server.ts` 模块保持服务端专用。组件中不要直接导入 Node-only、Prisma、Azure、Redis 或 secret 配置。
 
-```ts
-import {
-  AITaskCardShell,   // shell 组件
-  type CardAction,   // 按钮类型定义
-  formatActualElapsed,  // 计算"已完成耗时"字符串（startedAt, completedAt → "1m 23s"）
-  actionButtonStyle,    // 按钮样式函数（tone, disabled → CSSProperties）
-} from "../aiTask/AITaskCardShell";
+## 8. 数据库与迁移规则
+
+- Prisma schema：`prisma/schema.prisma`；生成目录：`app/generated/prisma/`。
+- 修改 schema 后至少运行 `npx prisma generate` 和适当的 schema 校验/测试。
+- Turso 运行时由 `app/db.server.ts` 和 `TURSO_*` 变量连接；Prisma datasource 的 `DATABASE_URL` 主要用于 CLI、本地 SQLite 和生成流程。
+- 测试/生产 Turso 迁移使用仓库脚本：`npm run turso:migrate:test`、`npm run turso:migrate:prod`。
+- 不要把 `prisma migrate deploy` 直接指向 `libsql://`。
+- 当前迁移目录中部分 `add_*` 迁移时间早于 `init`；新建本地库前先核对迁移顺序。必要时使用本地 SQLite + `prisma db push`，不要擅自重排或改写已上线迁移。
+- 未经用户明确授权，不执行生产迁移、删表、drop schema、批量数据回填或真实 Shopify 写操作。
+
+## 9. Admin 后台
+
+Admin 是独立项目，不能假设根目录命令会检查它。
+
+```powershell
+cd admin
+npm run dev       # Express 3099 + Vite 5174
+npm run build     # Vite client + tsc server
 ```
 
-### 参考实现
+- API 入口：`admin/server/index.ts`、`admin/server/routes/`。
+- 前端入口：`admin/src/App.tsx`、`admin/src/pages/`、`admin/src/api.ts`。
+- 外部存储连接：`admin/server/lib/`。
+- 鉴权边界：`admin/server/middleware/auth.ts`；收入、Pixel checkout PII、TSF billing/ROI 等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。
+- 主要路由族：Spark 运营（overview/shops/usage/subscriptions/revenue/agent-runs/support/app-logs/pixel-logs）、TSF 观测（`/api/tsf/*`）、翻译运维只读/修复（`/api/translations`、`/api/translation-ops`、`/api/shopify-translation`）、Redis Explorer、Pricing Workbench。
+- Admin 没有配置测试框架；改动后必须在 `admin/` 中运行 `npm run build`。
+- 修改共享 Prisma schema 后，主应用和 Admin 的 Prisma 类型/构建都要考虑。
+- 翻译 tab「翻译 ROI」：`/tsf/roi`（owner）→ `admin/src/pages/tsf/TsfRoi.tsx` +
+  `admin/server/routes/tsfRoi.ts`。安装/留存以 TSF `Account` 为准（`ShopBillingBinding`
+  已废弃）；Turso 收入/auto 已接；漏斗行为与 LLM 成本走 SLS（未接时页面 Mock + howto）。
+- TSF「每日收入」：`/tsf/revenue` → `admin/src/pages/tsf/TsfRevenue.tsx` +
+  `admin/server/routes/tsfRevenue.ts`。按 `BillingLog`×`PlanCatalog` 聚合；必须排除
+  `metadata.source = legacy_migration`（Spring→Turso 迁移审计，非真实扣款日）；
+  同店 24h 内被后续 `SUBSCRIPTION_ACTIVATED` 覆盖的激活不计入（改套餐只计终态）。
+- 翻译 tab「语言覆盖率」：`/tsf/language-coverage` →
+  `admin/src/pages/tsf/TsfLanguageCoverage.tsx` +
+  `admin/server/routes/tsfLanguageCoverage.ts`。商店列表以 Turso
+  `Account`（在装）为准；目标语言/自动翻译来自 `ShopTargetLocale`；覆盖率按
+  `tsf:items_count:{shop}:{locale}` 批量查 Redis。快照约 60s，`refresh=1`
+  强制重载。
+- Spark tab「OpenRouter 探测」（owner）：`/openrouter-probe` →
+  `admin/src/pages/OpenRouterProbe.tsx` +
+  `admin/server/routes/openrouterProbe.ts`。服务端用 `OPENROUTER_API_KEY`
+  转发 `/models` / `/chat/completions`，用于验证不同模型与地区出口；
+  key 不下发浏览器。本地写在 `Spark/.env` 或 `admin/.env`，生产写 Render secrets。
 
-`ProductImproveTaskCard`（`app/routes/component/productImprove/ProductImproveTaskCard.tsx`）是标准接入示例，新任务类型可对照此文件实现自己的业务逻辑层。
+## 10. 常用命令
 
----
+根目录：
 
-## 必读文档导航
-
-| 文档 | 路径 | 何时阅读 |
-|------|------|---------|
-| **项目架构与约定** | `docs/PROJECT_CONTEXT.md` | 改代码前（环保变量、路由、改动落点等） |
-| **翻译功能设计** | `docs/translation-agent.md` | 改翻译流程前 |
-| **生成描述方案** | `docs/generateDescription.md` | 改生成描述前 |
-| **计费系统详解** | `app/server/billing/agent.md` | 改订阅/计费/购包前 |
-| **Agent 运行摘要** | `docs/agent-run-log.md` | 改 Agent 日志记录前 |
-| **工具交互规范** | `docs/INTERACTION_DESIGN.md` | 改 tools 页面流程与任务交互前 |
-| **设计系统规范** | `docs/DESIGN.md` | 改前端组件前 |
-
----
-
-## 开发命令速查
-
-```bash
-# 本地开发
-npm run dev                    # Shopify CLI + React Router 热刷新
-
-# 构建与启动
-npm run build                  # 生产构建
-npm run start                  # 启动 React Router 服务
-
-# 代码质量（改代码后必须运行）
-npm run lint                   # ESLint 检查
-npm run typecheck              # TypeScript 类型检查
-npm run test                   # Vitest 单测
-npm run test:watch             # 监听模式
-
-# 数据库
-npm run setup                  # Prisma generate + 本地迁移
-npm run prisma:studio          # Prisma Studio
-npm run turso:migrate:test     # Turso 迁移（测试库）
-npm run turso:migrate:prod     # Turso 迁移（生产库）
-
-# 其他
-npm run deploy                 # Shopify 应用部署
-npm run render:digest          # 生成日报
+```powershell
+npm run dev
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run test:watch
+npm run prisma:studio
+npm run turso:migrate:test
 ```
 
----
+补充：
 
-## 快速诊断
+- Node 版本要求以 `package.json` 为准：`>=20.19 <22 || >=22.12`。
+- `npm run dev` 包装 `shopify app dev`，需要 Shopify CLI 登录和应用配置。
+- 主应用服务端运行需要 Shopify 和 Turso 相关变量；AI、Cosmos、Blob、Redis、SES、飞书等能力按功能依赖相应变量。
+- 单元测试位于 `tests/`；`scripts/*.test.cjs` 不属于 Vitest，需按脚本单独用 `node --test` 执行。
+- 不读取或输出 `.env` / `.env.prod` 的值。只记录所需变量名。
 
-**聊天不工作**
-1. 检查 `app/server/chat-stream.ts` 是否正确调用 `invokeChatAgent()`
-2. 检查 `app/server/ai/graph/shopChatGraph.server.ts` 中的 LangGraph 图
-3. 检查 Shopify admin 鉴权是否成功（`authenticate.admin(request)`）
-4. 查看浏览器控制台与服务器日志
+## 11. 验证矩阵
 
-**工具不工作**
-1. 确认工具是否在 `app/server/ai/skills/index.ts` 中注册
-2. 检查工具实现是否抛出异常
-3. 查看 LangSmith 链接（若 `LANGSMITH_API_KEY` 已配置）
+根据改动范围先跑聚焦检查，再跑交付门禁：
 
-**翻译不工作**
-1. 检查 `COSMOS_*`、`REDIS_*`、`BLOB_*` 环境变量是否正确
-2. 查看 `app/server/translation/translationPipelineCore.server.ts` 逻辑
-3. 检查 Cosmos 任务元数据是否已写入
-4. 查看 Redis 进度键是否更新
+| 改动 | 最低验证 |
+|---|---|
+| 纯文档 | 检查链接、路径、命令与 `git diff --check` |
+| 纯工具函数/服务 | 对应 Vitest 文件 + `npm run typecheck` |
+| 路由/API/服务端业务 | 相关测试 + `npm run typecheck` + `npm run build` |
+| 前端组件/页面/i18n | `npm run typecheck` + `npm run build`，必要时浏览器验证 |
+| Prisma schema/计费/任务状态 | 相关测试 + `npx prisma generate` + `npm run typecheck` + `npm run build` |
+| Admin 任意代码 | `cd admin && npm run build` |
+| Web Pixel 扩展 | 根构建 + Shopify 扩展相关验证/部署前检查 |
 
-**计费不工作**
-1. 检查 `BILLING_GATEWAY` 是否为 `noop`（开发）或 Shopify
-2. 查看 `BILLING_ENABLED` 是否为 `false`
-3. 检查 Shopify Billing GraphQL 权限配置
-4. 查看 `hasTokenQuota()` 返回值
+代码改动的默认完整门禁：
 
----
+```powershell
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
 
-## 改动前检查清单
+若仓库存在与本次无关的既有失败，必须记录准确命令、错误摘要，并证明本次相关的聚焦验证已通过；不能笼统写“有旧错误”。文档改动无需为形式而运行整套构建。
 
-- ✅ 改代码前，读对应的 `docs/` 文档（如有）
-- ✅ 只改需求相关文件，避免无关重构
-- ✅ 改后运行：`npm run lint && npm run typecheck && npm run test`
-- ✅ **改后必须 `npm run build && npm run test` 通过**
-- ✅ **若改 admin 项目，进入 `admin/` 目录运行 `npm run build` 验证编译（无测试框架）**
-- ✅ 推送前再次检查文案一致性、鉴权流程、API 返回结构
+## 12. 工作纪律
 
----
+- 只改需求相关文件；不顺手格式化、重命名或清理无关代码。
+- 工作树可能不干净。用户改动优先，禁止使用 `git reset --hard`、`git checkout --` 或删除未跟踪文件来“清理”环境。
+- 搜索优先使用 `rg` / `rg --files`；先追真实调用方，再删除 wrapper、兼容层或旧 API。
+- 不猜接口。Shopify GraphQL、scope、版本或平台约束可能变化时，使用仓库配置的 Shopify 开发工具或官方文档核实。
+- 对外部写操作保持最小权限：部署、生产迁移、发送真实邮件/飞书消息、修改 Shopify 数据、推送分支或创建 PR，只有在用户明确要求时执行。
+- 新增环境变量时同步更新相应配置校验和文档，只记录名称、用途、是否必需，不提交 secret。
+- 设计跨存储或跨仓库方案时，先画清所有权和调用路径；Telemetry、Agent 运行摘要和业务对象默认分开存储。
+- 完成后报告：修改了什么、关键文件、验证结果、剩余风险或被阻塞项。
 
-*最后更新：2026-05-30*
-*本文档由 Agent 在每次对话时自动加载，用于快速定位文件、理解项目结构、改进代码改动准确性*
+## 13. 维护本文件
+
+当以下事实发生变化时，相关代码改动必须同步更新本文件：
+
+- 一级导航、主要路由或服务边界变化；
+- 新增/删除可部署应用、worker、扩展或外部存储；
+- package scripts、Node 版本或验证门禁变化；
+- 新增强制设计/交互/计费/迁移约束；
+- 领域文档重命名或迁移。
+
+更新时以代码扫描结果为准，删除过时描述，不把一次性排错记录、机器路径、密钥值或长篇实现细节堆进本文件。
