@@ -23,6 +23,8 @@ export type NotificationAppConfig = {
   brandName?: string;
   helpCenterUrl?: string;
   legalName?: string;
+  /** Optional absolute dashboard URL for TemplateData. */
+  dashboardUrl?: string;
 };
 
 export type { CreditReasonKey };

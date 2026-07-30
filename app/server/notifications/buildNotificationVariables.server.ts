@@ -108,12 +108,14 @@ export function buildAppInstalledVariables(params: {
 export function buildAppUninstalledVariables(params: {
   shop: string;
   uninstalledAt: Date;
+  shopInfo?: ShopBasicInfo | null;
   sessionSnapshot?: UninstallSessionSnapshot | null;
 }): AppLifecycleNotificationVariables {
   return {
     ...baseFields({
       shop: params.shop,
       occurredAt: params.uninstalledAt,
+      shopInfo: params.shopInfo,
       sessionSnapshot: params.sessionSnapshot,
     }),
     installedAtUtc: undefined,
