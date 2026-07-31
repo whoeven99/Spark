@@ -6,14 +6,14 @@ let _redis: RedisClient | null = null;
 
 /**
  * 是否对当前解析到的 URL 使用 Cluster 客户端。
- * `RENDER_KEY_VALUE`（Render KV）始终单机；旧 `REDIS_URL` 默认 Cluster，
+ * `RENDER_KV`（Render KV）始终单机；旧 `REDIS_URL` 默认 Cluster，
  * 本地单机设 `REDIS_CLUSTER=false`。
  */
 export function isRedisClusterMode(
-  source: "RENDER_KEY_VALUE" | "REDIS_URL" | null = null,
+  source: "RENDER_KV" | "REDIS_URL" | null = null,
 ): boolean {
   const resolvedSource = source ?? resolveRedisUrl()?.source ?? null;
-  if (resolvedSource === "RENDER_KEY_VALUE") return false;
+  if (resolvedSource === "RENDER_KV") return false;
   const v = process.env.REDIS_CLUSTER?.trim().toLowerCase();
   if (v === "0" || v === "false" || v === "no") return false;
   if (v === "1" || v === "true" || v === "yes") return true;
@@ -124,14 +124,14 @@ const commonOpts = {
 
 /**
  * 解析 Admin Redis URL。
- * TSF 已切 Render KV 后优先 `RENDER_KEY_VALUE`；兼容旧 `REDIS_URL`（Azure Cluster）。
+ * 与 TSF 对齐：优先 `RENDER_KV`；兼容旧 `REDIS_URL`（Azure Cluster）。
  */
 export function resolveRedisUrl(): {
   url: string;
-  source: "RENDER_KEY_VALUE" | "REDIS_URL";
+  source: "RENDER_KV" | "REDIS_URL";
 } | null {
-  const renderKv = process.env.RENDER_KEY_VALUE?.trim();
-  if (renderKv) return { url: renderKv, source: "RENDER_KEY_VALUE" };
+  const renderKv = process.env.RENDER_KV?.trim();
+  if (renderKv) return { url: renderKv, source: "RENDER_KV" };
   const redisUrl = process.env.REDIS_URL?.trim();
   if (redisUrl) return { url: redisUrl, source: "REDIS_URL" };
   return null;
@@ -139,7 +139,7 @@ export function resolveRedisUrl(): {
 
 /**
  * Admin 专用 Redis 客户端（TSF 翻译运维只读/补 hint）。
- * - `RENDER_KEY_VALUE`：Render Key Value，单机客户端
+ * - `RENDER_KV`：Render Key Value，单机客户端（与 TSF 同名）
  * - `REDIS_URL`：兼容旧 Azure；默认 Cluster，本地单机设 `REDIS_CLUSTER=false`
  */
 export function getRedis(): RedisClient | null {
