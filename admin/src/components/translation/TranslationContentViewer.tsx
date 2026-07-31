@@ -48,7 +48,15 @@ type TokenBreakdown = {
   line: string;
   /** Merchant credit line when cache hit is excluded. */
   billableNote?: string;
+  /** Provider ¥ estimate for DeepSeek bill reconciliation. */
+  moneyLine?: string;
 };
+
+function formatMoneyCny(n: number): string {
+  if (n >= 0.01) return `¥${n.toFixed(4)}`;
+  if (n >= 0.0001) return `¥${n.toFixed(6)}`;
+  return `¥${n.toFixed(8)}`;
+}
 
 /**
  * Prefer DeepSeek billing buckets (cache hit / miss / out) when present.
@@ -58,6 +66,13 @@ type TokenBreakdown = {
 function formatTokenBreakdown(call: TranslationContentCallCost): TokenBreakdown | null {
   const hasCacheBreakdown =
     call.promptCacheHitTokens != null || call.promptCacheMissTokens != null;
+  const moneyLine =
+    call.costCny != null
+      ? `DeepSeek ${formatMoneyCny(call.costCny)}${
+          call.pricingPeakMultiplier === 2 ? " · 高峰×2" : ""
+        }`
+      : undefined;
+
   if (hasCacheBreakdown) {
     const hit = call.promptCacheHitTokens ?? 0;
     const miss =
@@ -69,17 +84,20 @@ function formatTokenBreakdown(call: TranslationContentCallCost): TokenBreakdown 
       hasCache: true,
       line: `hit ${hit.toLocaleString()}（不计积分） / miss ${miss.toLocaleString()} / out ${out.toLocaleString()}`,
       billableNote: `用户积分按 ${billable.toLocaleString()} tokens（miss+out）`,
+      moneyLine,
     };
   }
   if (call.inputTokens != null || call.outputTokens != null) {
     return {
       hasCache: false,
       line: `in ${call.inputTokens ?? "—"} / out ${call.outputTokens ?? "—"}`,
+      moneyLine,
     };
   }
   if (call.totalTokens != null) {
-    return { hasCache: false, line: `total ${call.totalTokens}` };
+    return { hasCache: false, line: `total ${call.totalTokens}`, moneyLine };
   }
+  if (moneyLine) return { hasCache: false, line: moneyLine };
   return null;
 }
 
@@ -109,6 +127,9 @@ function CostCallLines({ call }: { call: TranslationContentCallCost }) {
           <div style={{ color: C.ink }}>{breakdown.line}</div>
           {breakdown.billableNote ? (
             <div style={{ color: C.sub, fontSize: 11 }}>{breakdown.billableNote}</div>
+          ) : null}
+          {breakdown.moneyLine && breakdown.moneyLine !== breakdown.line ? (
+            <div style={{ color: C.active, fontSize: 11 }}>{breakdown.moneyLine}</div>
           ) : null}
         </>
       ) : null}
@@ -154,6 +175,9 @@ function CostCell({ cost }: { cost?: TranslationContentFieldCost }) {
             <div>{breakdown.line}</div>
             {breakdown.billableNote ? (
               <div style={{ color: C.sub, fontSize: 11 }}>{breakdown.billableNote}</div>
+            ) : null}
+            {breakdown.moneyLine && breakdown.moneyLine !== breakdown.line ? (
+              <div style={{ color: C.active, fontSize: 11 }}>{breakdown.moneyLine}</div>
             ) : null}
           </>
         ) : null}
