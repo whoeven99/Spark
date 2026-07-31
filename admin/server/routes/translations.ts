@@ -425,6 +425,10 @@ type BlobTranslationCost = {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** DeepSeek usage.prompt_cache_hit_tokens */
+  promptCacheHitTokens?: number;
+  /** DeepSeek usage.prompt_cache_miss_tokens */
+  promptCacheMissTokens?: number;
   chars?: number;
   batchSize?: number;
   calls?: Array<{
@@ -434,6 +438,8 @@ type BlobTranslationCost = {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    promptCacheHitTokens?: number;
+    promptCacheMissTokens?: number;
     chars?: number;
     batchSize?: number;
   }>;
