@@ -124,7 +124,7 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 - **Turso / libSQL + Prisma**：业务主数据。模型在 `prisma/schema.prisma`，包括 Session、Account/订阅/计费、AITask、订单/退款/客户/库存/履约镜像、WorkspaceFile、Conversation/Message、运营诊断、成本/ROI、支持会话等。
 - **Azure Cosmos DB**：Agent 运行摘要和 Playbook Case 等事件/结果型数据；入口集中在 `app/server/cosmos/`、`agentRunLog/`、`playbookCase/`。默认不应假设容器会自动创建。
 - **Azure Blob Storage**：上传文件、图片生成、图片翻译及兼容翻译内容。写入前确认容器、SAS 生命周期和清理策略。
-- **Redis**：Admin 运营排查和部分历史/兼容状态读取。不要未经确认把新的核心业务对象只存 Redis。
+- **Redis**：仅 Admin 翻译运维读取/补 hint（优先 `RENDER_KV`，与 TSF 同名；兼容 `REDIS_URL`）。主应用不连 Redis。不要未经确认把新的核心业务对象只存 Redis。
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。
 - **腾讯 SES / 飞书**：商户邮件与内部运营通知。通知失败通常不应阻断主业务，沿用现有场景封装。
