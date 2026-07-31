@@ -297,9 +297,14 @@ export type TranslationContentCallCost = {
   provider: string;
   model?: string;
   requestId?: string;
+  /** Full prompt_tokens (includes cache hits). */
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** DeepSeek usage.prompt_cache_hit_tokens (cache-hit billed rate). */
+  promptCacheHitTokens?: number;
+  /** DeepSeek usage.prompt_cache_miss_tokens (cache-miss billed rate). */
+  promptCacheMissTokens?: number;
   chars?: number;
   batchSize?: number;
 };
