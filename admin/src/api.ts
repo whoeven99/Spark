@@ -305,6 +305,10 @@ export type TranslationContentCallCost = {
   promptCacheHitTokens?: number;
   /** DeepSeek usage.prompt_cache_miss_tokens (cache-miss billed rate). */
   promptCacheMissTokens?: number;
+  /** Estimated provider CNY (元; official 中文价目 × usage). */
+  costCny?: number;
+  pricingPeakMultiplier?: number;
+  pricingSource?: string;
   chars?: number;
   batchSize?: number;
 };
