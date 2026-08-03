@@ -26,10 +26,15 @@ export type MetaSandboxSeedResult = {
   adSetId: string | null;
   adId: string | null;
   campaignName: string;
+  /** 最终成功的 seed 策略 */
+  strategy?: string;
+  strategyLabel?: string;
+  /** 各策略尝试记录（成功时含失败项） */
+  attempts?: Array<{ strategy: string; ok: boolean; message?: string }>;
   warnings: string[];
 };
 
-type MetaApiError = {
+export type MetaApiError = {
   message?: string;
   error_user_title?: string;
   error_user_msg?: string;
@@ -57,8 +62,13 @@ function readEnv(name: string): string {
   return (process.env[name] || "").trim();
 }
 
+/** 供 seed 子模块读取沙盒 env（不暴露 token）。 */
+export function readMetaSandboxEnv(name: string): string {
+  return readEnv(name);
+}
+
 /** Meta API 预算单位为账户货币的最小单位（如 USD/CNY 为分）。默认 1000 = 10.00，满足 CNY 最低约 6.81。 */
-function resolveSandboxSeedDailyBudgetCents(): number {
+export function resolveSandboxSeedDailyBudgetCents(): number {
   const raw = readEnv("META_SANDBOX_SEED_DAILY_BUDGET_CENTS");
   if (raw) {
     const parsed = Number.parseInt(raw, 10);
@@ -86,7 +96,7 @@ export function getMetaSandboxCredentials(): MetaSandboxCredentials | null {
   };
 }
 
-function normalizeAdAccountId(id: string): string {
+export function normalizeAdAccountId(id: string): string {
   const stripped = id.replace(/^act_/, "");
   return `act_${stripped}`;
 }
@@ -111,7 +121,7 @@ function formatMetaError(error: MetaApiError | undefined, fallback: string): str
   return [...new Set(parts)].join(" — ") || fallback;
 }
 
-async function metaPost<T = Record<string, unknown>>(
+export async function metaPost<T = Record<string, unknown>>(
   path: string,
   accessToken: string,
   body: Record<string, unknown>,
@@ -147,7 +157,7 @@ async function metaPost<T = Record<string, unknown>>(
   return json as T;
 }
 
-async function metaGet<T>(path: string, accessToken: string, query?: Record<string, string>): Promise<T> {
+export async function metaGet<T>(path: string, accessToken: string, query?: Record<string, string>): Promise<T> {
   const url = new URL(`${META_GRAPH_BASE}/${path.replace(/^\//, "")}`);
   url.searchParams.set("access_token", accessToken);
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -184,7 +194,7 @@ async function resolveSandboxCurrencyCode(params: {
   }
 }
 
-async function resolveSandboxPageId(params: {
+export async function resolveSandboxPageId(params: {
   accessToken: string;
   adAccountId: string;
   pageId?: string | null;
@@ -307,7 +317,7 @@ async function createPageLinkPostStoryId(params: {
   return normalizeObjectStoryId(params.pageId, resp.id);
 }
 
-function buildMetaDevModeCreativeHint(): string {
+export function buildMetaDevModeCreativeHint(): string {
   return [
     "Meta App 处于开发模式，无法通过 API 隐式创建广告帖。",
     "请任选其一：① 在 Facebook 主页手动发一条带链接的帖文后重试；",
@@ -321,37 +331,45 @@ type SandboxObjectStoryResolution = {
   source: "env" | "existing_posts" | "page_feed" | "none";
 };
 
-async function resolveSandboxObjectStoryId(params: {
+export async function resolveSandboxObjectStoryId(params: {
   accessToken: string;
   pageId: string;
   linkUrl: string;
   message: string;
+  /** 是否允许通过 Page Token 发新帖 */
+  allowCreatePagePost?: boolean;
+  /** 为 true 时跳过复用已有帖，仅尝试发新帖 */
+  requireNewPagePost?: boolean;
 }): Promise<SandboxObjectStoryResolution> {
-  const envStoryId = readEnv("META_SANDBOX_SEED_OBJECT_STORY_ID");
-  if (envStoryId) {
-    return {
-      objectStoryId: normalizeObjectStoryId(params.pageId, envStoryId),
-      source: "env",
-    };
+  if (!params.requireNewPagePost) {
+    const envStoryId = readEnv("META_SANDBOX_SEED_OBJECT_STORY_ID");
+    if (envStoryId) {
+      return {
+        objectStoryId: normalizeObjectStoryId(params.pageId, envStoryId),
+        source: "env",
+      };
+    }
+
+    const existingPosts = await listPagePostStoryIds(params.accessToken, params.pageId);
+    if (existingPosts.length > 0) {
+      return { objectStoryId: existingPosts[0], source: "existing_posts" };
+    }
   }
 
-  const existingPosts = await listPagePostStoryIds(params.accessToken, params.pageId);
-  if (existingPosts.length > 0) {
-    return { objectStoryId: existingPosts[0], source: "existing_posts" };
-  }
-
-  const pageAccessToken = await resolvePageAccessToken(params.accessToken, params.pageId);
-  if (pageAccessToken) {
-    try {
-      const objectStoryId = await createPageLinkPostStoryId({
-        pageId: params.pageId,
-        pageAccessToken,
-        linkUrl: params.linkUrl,
-        message: params.message,
-      });
-      return { objectStoryId, source: "page_feed" };
-    } catch (e) {
-      console.warn(`${LOG_PREFIX} page feed post failed ${formatOutboundErrorLog(e)}`);
+  if (params.allowCreatePagePost !== false) {
+    const pageAccessToken = await resolvePageAccessToken(params.accessToken, params.pageId);
+    if (pageAccessToken) {
+      try {
+        const objectStoryId = await createPageLinkPostStoryId({
+          pageId: params.pageId,
+          pageAccessToken,
+          linkUrl: params.linkUrl,
+          message: params.message,
+        });
+        return { objectStoryId, source: "page_feed" };
+      } catch (e) {
+        console.warn(`${LOG_PREFIX} page feed post failed ${formatOutboundErrorLog(e)}`);
+      }
     }
   }
 
@@ -432,151 +450,4 @@ export async function fetchMetaSandboxInsights(
   });
 }
 
-/**
- * 在 Meta 沙盒广告账户创建测试结构：Campaign → Ad Set → Ad Creative → Ad（PAUSED）。
- * 需要 META_SANDBOX_PAGE_ID，或 token 可访问的 Facebook Page。
- */
-export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeedResult> {
-  const creds = getMetaSandboxCredentials();
-  if (!creds) {
-    throw new Error(
-      "未配置 Meta 沙盒：请设置 META_SANDBOX_ACCESS_TOKEN 与 META_SANDBOX_AD_ACCOUNT_ID",
-    );
-  }
-
-  const pageId = await resolveSandboxPageId({
-    accessToken: creds.accessToken,
-    adAccountId: creds.adAccountId,
-    pageId: creds.pageId,
-  });
-  if (!pageId) {
-    throw new Error(
-      "未找到可用于创建广告的 Facebook Page。请任选其一：① 在 Business Manager 将 Page 关联到沙盒广告账户；② 在 facebook.com/pages/create 创建主页；③ 在 .env 设置 META_SANDBOX_PAGE_ID=<Page 数字 ID>",
-    );
-  }
-
-  const stamp = Date.now().toString(36);
-  const campaignName = `Spark Meta Sandbox Campaign ${stamp}`;
-  const adSetName = `Spark Meta Sandbox AdSet ${stamp}`;
-  const adName = `Spark Meta Sandbox Ad ${stamp}`;
-  const warnings: string[] = [];
-  const accountPath = normalizeAdAccountId(creds.adAccountId);
-  const linkUrl = readEnv("META_SANDBOX_SEED_LINK_URL") || "https://example.com";
-  const dailyBudgetCents = resolveSandboxSeedDailyBudgetCents();
-  const bidAmountCents = Math.max(100, Math.round(dailyBudgetCents * 0.2));
-
-  const campaignResp = await metaPost<{ id: string }>(
-    `${accountPath}/campaigns`,
-    creds.accessToken,
-    {
-      name: campaignName,
-      objective: "OUTCOME_TRAFFIC",
-      status: "PAUSED",
-      special_ad_categories: [],
-      is_adset_budget_sharing_enabled: false,
-    },
-    "创建沙盒广告系列",
-  );
-  const campaignId = campaignResp.id;
-
-  const adSetBody: Record<string, unknown> = {
-    name: adSetName,
-    campaign_id: campaignId,
-    billing_event: "IMPRESSIONS",
-    optimization_goal: "LINK_CLICKS",
-    destination_type: "WEBSITE",
-    targeting: {
-      geo_locations: { countries: ["US"] },
-      age_min: 18,
-      age_max: 65,
-      targeting_automation: { advantage_audience: 0 },
-    },
-    status: "PAUSED",
-    start_time: new Date().toISOString(),
-    bid_strategy: "LOWEST_COST_WITH_BID_CAP",
-    bid_amount: bidAmountCents,
-    daily_budget: dailyBudgetCents,
-  };
-
-  const adSetResp = await metaPost<{ id: string }>(
-    `${accountPath}/adsets`,
-    creds.accessToken,
-    adSetBody,
-    "创建沙盒广告组",
-  );
-  const adSetId = adSetResp.id;
-
-  const storyResolution = await resolveSandboxObjectStoryId({
-    accessToken: creds.accessToken,
-    pageId,
-    linkUrl,
-    message: "Spark Meta sandbox test",
-  });
-
-  let creativeId: string;
-  if (storyResolution.objectStoryId) {
-    if (storyResolution.source === "existing_posts") {
-      warnings.push("广告创意复用主页现有帖文（开发模式 App 无法隐式创建新帖）");
-    } else if (storyResolution.source === "page_feed") {
-      warnings.push("广告创意使用主页新发布的帖文（开发模式 App 无法隐式创建新帖）");
-    }
-
-    const creativeResp = await metaPost<{ id: string }>(
-      `${accountPath}/adcreatives`,
-      creds.accessToken,
-      {
-        name: `${adName}_creative`,
-        object_story_id: storyResolution.objectStoryId,
-      },
-      "创建沙盒广告创意",
-    );
-    creativeId = creativeResp.id;
-  } else {
-    try {
-      const creativeResp = await metaPost<{ id: string }>(
-        `${accountPath}/adcreatives`,
-        creds.accessToken,
-        {
-          name: `${adName}_creative`,
-          object_story_spec: {
-            page_id: pageId,
-            link_data: {
-              message: "Spark Meta sandbox test",
-              link: linkUrl,
-              name: adName,
-              call_to_action: { type: "LEARN_MORE", value: { link: linkUrl } },
-            },
-          },
-        },
-        "创建沙盒广告创意",
-      );
-      creativeId = creativeResp.id;
-    } catch (e) {
-      const metaError = (e as Error & { metaError?: MetaApiError }).metaError;
-      if (isMetaDevModeCreativePostError(metaError)) {
-        throw new Error(`[创建沙盒广告创意] ${buildMetaDevModeCreativeHint()}`, { cause: e });
-      }
-      throw e;
-    }
-  }
-
-  const adResp = await metaPost<{ id: string }>(
-    `${accountPath}/ads`,
-    creds.accessToken,
-    {
-      name: adName,
-      adset_id: adSetId,
-      creative: { creative_id: creativeId },
-      status: "PAUSED",
-    },
-    "创建沙盒广告",
-  );
-
-  return {
-    campaignId,
-    adSetId,
-    adId: adResp.id,
-    campaignName,
-    warnings,
-  };
-}
+export { seedMetaSandboxMinimalStructure } from "./metaSandboxSeed.server";

@@ -1949,7 +1949,7 @@
     "metaSandboxNotConfigured": "未配置 META_SANDBOX_ACCESS_TOKEN / META_SANDBOX_AD_ACCOUNT_ID，无法启用沙盒。",
     "metaSandboxSeed": "生成测试结构",
     "metaSandboxSeeding": "创建中…",
-    "metaSandboxSeedOk": "已创建：{{campaign}}（系列 {{campaignId}} / 组 {{adSetId}} / 广告 {{adId}}）",
+    "metaSandboxSeedOk": "已创建：{{campaign}}（{{strategy}} · 系列 {{campaignId}} / 组 {{adSetId}} / 广告 {{adId}}）",
     "metaSandboxSeedError": "Meta 沙盒测试结构创建失败。",
     "tableTitleMetaSandbox": "Meta 沙盒账户 {{accountId}}",
     "tableSubtitleMetaSandbox": "{{start}} → {{end}} · Meta Graph API（沙盒广告账户）",

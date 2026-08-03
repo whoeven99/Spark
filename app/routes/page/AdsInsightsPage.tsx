@@ -570,6 +570,7 @@ export function AdsInsightsPage() {
                     : metaSandbox
                       ? t("adsInsights.metaSandboxSeedOk", {
                           campaign: seedData.campaignName,
+                          strategy: seedData.strategyLabel || seedData.strategy || "—",
                           campaignId: seedData.campaignId || "—",
                           adSetId: seedData.adSetId || seedData.adgroupId || seedData.adGroupId || "—",
                           adId: seedData.adId || "—",

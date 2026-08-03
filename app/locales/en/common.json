@@ -1949,7 +1949,7 @@
     "metaSandboxNotConfigured": "Set META_SANDBOX_ACCESS_TOKEN / META_SANDBOX_AD_ACCOUNT_ID to enable sandbox.",
     "metaSandboxSeed": "Create test structure",
     "metaSandboxSeeding": "Creating…",
-    "metaSandboxSeedOk": "Created: {{campaign}} (campaign {{campaignId}} / ad set {{adSetId}} / ad {{adId}})",
+    "metaSandboxSeedOk": "Created: {{campaign}} ({{strategy}} · campaign {{campaignId}} / ad set {{adSetId}} / ad {{adId}})",
     "metaSandboxSeedError": "Failed to create Meta sandbox test structure.",
     "tableTitleMetaSandbox": "Meta sandbox account {{accountId}}",
     "tableSubtitleMetaSandbox": "{{start}} → {{end}} · Meta Graph API (sandbox ad account)",
