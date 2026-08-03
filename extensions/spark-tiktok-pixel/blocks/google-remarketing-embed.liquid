@@ -1,0 +1,260 @@
+{% comment %}
+  Spark Google Remarketing — isolated App Embed block.
+  Reads the app-owned Shop metafield declared as google_remarketing_config.
+{% endcomment %}
+{% if block.settings.enable_google_remarketing %}
+  {% assign cfg = shop.metafields['$app'].google_remarketing_config.value %}
+  {% if cfg != blank and cfg.tagId != blank %}
+    <script>
+      (function () {
+        var config = {{ cfg | json }};
+        var currency = {{ cart.currency.iso_code | default: shop.currency | json }};
+        var pageType = {{ request.page_type | json }};
+        var productContext = null;
+        var listContext = [];
+        var cartContext = [];
+
+        {% if request.page_type == "product" and product %}
+          productContext = {
+            title: {{ product.title | json }},
+            productId: {{ product.id | json }},
+            variants: [
+              {% for variant in product.variants %}
+                {
+                  id: {{ variant.id | json }},
+                  sku: {{ variant.sku | json }},
+                  title: {{ variant.title | json }},
+                  price: {{ variant.price | divided_by: 100.0 | json }}
+                }{% unless forloop.last %},{% endunless %}
+              {% endfor %}
+            ]
+          };
+        {% endif %}
+
+        {% if request.page_type == "collection" and collection %}
+          listContext = [
+            {% for item in collection.products limit: 10 %}
+              {
+                title: {{ item.title | json }},
+                productId: {{ item.id | json }},
+                variantId: {{ item.selected_or_first_available_variant.id | json }},
+                sku: {{ item.selected_or_first_available_variant.sku | json }},
+                price: {{ item.selected_or_first_available_variant.price | divided_by: 100.0 | json }}
+              }{% unless forloop.last %},{% endunless %}
+            {% endfor %}
+          ];
+        {% elsif request.page_type == "search" and search.performed %}
+          listContext = [
+            {% assign first_google_search_item = true %}
+            {% for result in search.results limit: 10 %}
+              {% if result.object_type == "product" %}
+                {% unless first_google_search_item %},{% endunless %}
+                {
+                  title: {{ result.title | json }},
+                  productId: {{ result.id | json }},
+                  variantId: {{ result.selected_or_first_available_variant.id | json }},
+                  sku: {{ result.selected_or_first_available_variant.sku | json }},
+                  price: {{ result.selected_or_first_available_variant.price | divided_by: 100.0 | json }}
+                }
+                {% assign first_google_search_item = false %}
+              {% endif %}
+            {% endfor %}
+          ].filter(Boolean);
+        {% endif %}
+
+        {% for item in cart.items %}
+          cartContext.push({
+            title: {{ item.product.title | json }},
+            productId: {{ item.product.id | json }},
+            variantId: {{ item.variant.id | json }},
+            sku: {{ item.variant.sku | json }},
+            price: {{ item.final_price | divided_by: 100.0 | json }},
+            quantity: {{ item.quantity | json }}
+          });
+        {% endfor %}
+
+        var enabledEvents = Array.isArray(config.enabledEvents) ? config.enabledEvents : [];
+        var fieldGroups = Array.isArray(config.enabledFieldGroups) ? config.enabledFieldGroups : [];
+        var marketingAllowed = false;
+        var loaded = false;
+        var actionIds = new Set();
+
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { window.dataLayer.push(arguments); }
+        gtag("consent", "default", { ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+
+        function on(name) { return enabledEvents.indexOf(name) !== -1; }
+        function field(name) { return fieldGroups.indexOf(name) !== -1; }
+        function numericId(value) {
+          var match = String(value || "").match(/(\d+)$/);
+          return match ? match[1] : String(value || "");
+        }
+        function offerId(sku, productId, variantId) {
+          var normalized = String(sku || "").trim().replace(/\s+/g, " ");
+          return normalized || numericId(productId) + "-" + numericId(variantId);
+        }
+        function item(value, index) {
+          var id = offerId(value.sku, value.productId, value.variantId || value.id);
+          var out = {
+            id: id,
+            item_id: id,
+            google_business_vertical: "retail"
+          };
+          if (field("product")) {
+            out.item_name = value.title || undefined;
+            out.price = value.price;
+            out.quantity = value.quantity || 1;
+          }
+          if (field("list")) out.index = index;
+          return out;
+        }
+        function send(name, payload) {
+          if (!marketingAllowed || !loaded || !on(name)) return;
+          var eventPayload = Object.assign({}, payload || {});
+          if (Array.isArray(eventPayload.items)) {
+            eventPayload.items = eventPayload.items.map(item);
+          }
+          if (field("legacy_ecomm") && eventPayload.items && eventPayload.items[0]) {
+            eventPayload.ecomm_prodid = eventPayload.items.map(function (entry) { return entry.id; });
+            eventPayload.ecomm_pagetype = pageType;
+            if (typeof eventPayload.value === "number") eventPayload.ecomm_totalvalue = eventPayload.value;
+          }
+          gtag("event", name, eventPayload);
+        }
+        function loadTag() {
+          if (loaded || !marketingAllowed) return;
+          loaded = true;
+          gtag("consent", "update", { ad_storage: "granted", ad_user_data: "granted", ad_personalization: "granted" });
+          gtag("js", new Date());
+          gtag("config", config.tagId, { send_page_view: false });
+          var script = document.createElement("script");
+          script.async = true;
+          script.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(config.tagId);
+          document.head.appendChild(script);
+          sendInitialEvents();
+        }
+        function applyConsent(allowed) {
+          marketingAllowed = allowed === true;
+          if (marketingAllowed) loadTag();
+          else if (loaded) {
+            gtag("consent", "update", { ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+          }
+        }
+        function readConsent(attempt) {
+          var privacy = window.Shopify && window.Shopify.customerPrivacy;
+          if (privacy && typeof privacy.marketingAllowed === "function") {
+            applyConsent(privacy.marketingAllowed());
+            return;
+          }
+          if (attempt < 50) setTimeout(function () { readConsent(attempt + 1); }, 100);
+        }
+        document.addEventListener("visitorConsentCollected", function (event) {
+          var detail = event && event.detail ? event.detail : {};
+          applyConsent(detail.marketingAllowed === true || detail.firstPartyMarketingAllowed === true);
+        });
+
+        function selectedProductVariant() {
+          if (!productContext || !productContext.variants.length) return null;
+          var params = new URLSearchParams(location.search);
+          var id = params.get("variant");
+          var selected = productContext.variants.find(function (variant) {
+            return String(variant.id) === String(id);
+          }) || productContext.variants[0];
+          return Object.assign({}, selected, {
+            title: productContext.title,
+            productId: productContext.productId,
+            variantId: selected.id
+          });
+        }
+        function cartPayload() {
+          return {
+            currency: currency,
+            value: {{ cart.total_price | divided_by: 100.0 | json }},
+            items: cartContext
+          };
+        }
+        function sendInitialEvents() {
+          send("page_view");
+          if (pageType === "product") {
+            var selected = selectedProductVariant();
+            if (selected) send("view_item", { currency: currency, value: selected.price, items: [selected] });
+          } else if (pageType === "collection") {
+            send("view_item_list", { currency: currency, items: listContext });
+          } else if (pageType === "search") {
+            send("view_search_results", {
+              search_term: {{ search.terms | default: "" | json }},
+              currency: currency,
+              items: listContext
+            });
+          } else if (pageType === "cart") {
+            send("view_cart", cartPayload());
+          }
+        }
+        function reportCartAdd(body) {
+          var actionId = typeof body === "string" ? body : JSON.stringify(body || {});
+          if (actionIds.has(actionId)) return;
+          actionIds.add(actionId);
+          var selected = selectedProductVariant();
+          if (selected) send("add_to_cart", { currency: currency, value: selected.price, items: [selected] });
+        }
+
+        var originalFetch = window.fetch;
+        if (originalFetch) {
+          window.fetch = function () {
+            var args = arguments;
+            return originalFetch.apply(this, args).then(function (response) {
+              var url = String(args[0] && args[0].url ? args[0].url : args[0] || "");
+              if (response.ok && /\/cart\/add(?:\.js)?(?:\?|$)/.test(url)) reportCartAdd(args[1] && args[1].body);
+              return response;
+            });
+          };
+        }
+        var originalOpen = XMLHttpRequest.prototype.open;
+        var originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function (method, url) {
+          this.__sparkGoogleUrl = String(url || "");
+          return originalOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function (body) {
+          var xhr = this;
+          xhr.addEventListener("load", function () {
+            if (xhr.status >= 200 && xhr.status < 300 && /\/cart\/add(?:\.js)?(?:\?|$)/.test(xhr.__sparkGoogleUrl || "")) {
+              reportCartAdd(body);
+            }
+          });
+          return originalSend.apply(this, arguments);
+        };
+        document.addEventListener("click", function (event) {
+          var checkout = event.target && event.target.closest
+            ? event.target.closest('button[name="checkout"], [href*="/checkout"], form[action*="/checkout"] button')
+            : null;
+          if (checkout) send("begin_checkout", cartPayload());
+        }, true);
+        document.addEventListener("change", function () {
+          if (pageType !== "product") return;
+          setTimeout(function () {
+            var selected = selectedProductVariant();
+            if (selected) send("view_item", { currency: currency, value: selected.price, items: [selected] });
+          }, 0);
+        });
+
+        readConsent(0);
+      })();
+    </script>
+  {% endif %}
+{% endif %}
+
+{% schema %}
+{
+  "name": "Spark Google Remarketing",
+  "target": "body",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enable_google_remarketing",
+      "label": "Enable Google remarketing",
+      "default": true
+    }
+  ]
+}
+{% endschema %}

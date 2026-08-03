@@ -12,7 +12,10 @@ vi.mock("../../../../app/db.server", () => ({
   },
 }));
 
-import { setGoogleMerchantCredential } from "../../../../app/server/adsCatalog/credentialStore.server";
+import {
+  setGoogleAdsCredential,
+  setGoogleMerchantCredential,
+} from "../../../../app/server/adsCatalog/credentialStore.server";
 
 describe("Google Merchant credential merge", () => {
   beforeEach(() => {
@@ -81,5 +84,41 @@ describe("Google Merchant credential merge", () => {
       dataSourceName: null,
     });
     expect(payload).not.toHaveProperty("subscriptionName");
+  });
+
+  it("Google Ads token 刷新保留再营销配置", async () => {
+    findUnique.mockResolvedValue({
+      credentials: {
+        accessToken: "old-token",
+        refreshToken: "refresh-token",
+        customerId: "123",
+        remarketing: {
+          tagId: "AW-123456789",
+          source: "auto",
+          confirmedAt: "2026-07-31T00:00:00.000Z",
+          enabledEvents: ["view_item"],
+          enabledFieldGroups: ["product"],
+        },
+      },
+      updatedAt: new Date("2026-07-31T00:00:00.000Z"),
+    });
+
+    await setGoogleAdsCredential("shop.myshopify.com", {
+      accessToken: "new-token",
+      refreshToken: "refresh-token",
+      customerId: "123",
+      loginCustomerId: "123",
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: {
+          credentials: expect.objectContaining({
+            accessToken: "new-token",
+            remarketing: expect.objectContaining({ tagId: "AW-123456789" }),
+          }),
+        },
+      }),
+    );
   });
 });

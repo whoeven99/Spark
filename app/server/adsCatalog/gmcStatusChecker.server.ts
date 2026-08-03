@@ -15,6 +15,8 @@ const LOG_PREFIX = "[AdsCatalog][GmcStatus]";
 
 export interface GmcProductReview {
   offerId: string;
+  contentLanguage: string;
+  feedLabel: string;
   title: string | null;
   status: "approved" | "disapproved" | "pending" | "expiring" | "unknown";
   issues: Array<{ code: string; servability: string; description: string; detail?: string }>;
@@ -69,6 +71,8 @@ async function fetchProductStatuses(params: {
   const resources = await listGoogleMerchantProducts({ ...params, limit: 250 });
   return resources.map((resource) => ({
     offerId: resource.offerId ?? "",
+    contentLanguage: resource.contentLanguage?.toLowerCase() || "und",
+    feedLabel: resource.feedLabel?.toUpperCase() || "ZZ",
     title: resource.productAttributes?.title ?? null,
     status: normalizeStatus(resource),
     issues: (resource.productStatus?.itemLevelIssues ?? []).map((issue) => ({
@@ -101,7 +105,14 @@ async function persistStatuses(params: {
   for (const review of params.reviews) {
     if (!review.offerId) continue;
     await prisma.gmcProductStatus.upsert({
-      where: { shop_offerId: { shop: params.shop, offerId: review.offerId } },
+      where: {
+        shop_offerId_contentLanguage_feedLabel: {
+          shop: params.shop,
+          offerId: review.offerId,
+          contentLanguage: review.contentLanguage,
+          feedLabel: review.feedLabel,
+        },
+      },
       update: {
         merchantId: params.merchantId,
         title: review.title,
@@ -113,6 +124,8 @@ async function persistStatuses(params: {
         shop: params.shop,
         merchantId: params.merchantId,
         offerId: review.offerId,
+        contentLanguage: review.contentLanguage,
+        feedLabel: review.feedLabel,
         title: review.title,
         status: review.status,
         issues: review.issues as unknown as object,

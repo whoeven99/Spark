@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { Prisma } from "../../generated/prisma";
 import type { TiktokCatalogBindingMode } from "./tiktokOAuth.server";
 
 export type { TiktokCatalogBindingMode };
@@ -73,8 +74,12 @@ async function writePlatformCredential(
 ): Promise<void> {
   await prisma.adPlatformCredential.upsert({
     where: { shop_platform: { shop, platform } },
-    update: { credentials: payload },
-    create: { shop, platform, credentials: payload },
+    update: { credentials: payload as Prisma.InputJsonValue },
+    create: {
+      shop,
+      platform,
+      credentials: payload as Prisma.InputJsonValue,
+    },
   });
 }
 
@@ -244,8 +249,59 @@ export type GoogleAdsCredential = {
   customerId: string;
   /** MCC 场景下访问子账户所需的经理账户 ID；直连账户与 customerId 相同。 */
   loginCustomerId?: string;
+  remarketing?: GoogleRemarketingConfig;
   updatedAt: string;
 };
+
+export type GoogleRemarketingConfig = {
+  tagId: string;
+  source: "auto" | "manual";
+  confirmedAt: string;
+  enabledEvents: string[];
+  enabledFieldGroups: string[];
+  customPixelConfirmedAt?: string;
+  metafieldSync?: {
+    status: "synced" | "failed";
+    updatedAt: string;
+    error?: string;
+  };
+};
+
+function parseGoogleRemarketingConfig(value: unknown): GoogleRemarketingConfig | undefined {
+  if (!isJsonObject(value)) return undefined;
+  const tagId = typeof value.tagId === "string" ? value.tagId : "";
+  const source = value.source === "manual" ? "manual" : "auto";
+  const confirmedAt = typeof value.confirmedAt === "string" ? value.confirmedAt : "";
+  if (!tagId || !confirmedAt) return undefined;
+  return {
+    tagId,
+    source,
+    confirmedAt,
+    enabledEvents: Array.isArray(value.enabledEvents)
+      ? value.enabledEvents.filter((item): item is string => typeof item === "string")
+      : [],
+    enabledFieldGroups: Array.isArray(value.enabledFieldGroups)
+      ? value.enabledFieldGroups.filter((item): item is string => typeof item === "string")
+      : [],
+    customPixelConfirmedAt:
+      typeof value.customPixelConfirmedAt === "string"
+        ? value.customPixelConfirmedAt
+        : undefined,
+    metafieldSync: isJsonObject(value.metafieldSync)
+      ? {
+          status: value.metafieldSync.status === "synced" ? "synced" : "failed",
+          updatedAt:
+            typeof value.metafieldSync.updatedAt === "string"
+              ? value.metafieldSync.updatedAt
+              : "",
+          error:
+            typeof value.metafieldSync.error === "string"
+              ? value.metafieldSync.error
+              : undefined,
+        }
+      : undefined,
+  };
+}
 
 export async function getGoogleAdsCredential(
   shop: string,
@@ -264,6 +320,7 @@ export async function getGoogleAdsCredential(
       typeof record.data.loginCustomerId === "string"
         ? record.data.loginCustomerId
         : undefined,
+    remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -293,6 +350,31 @@ export async function setGoogleAdsCredential(
         ? existing.data.loginCustomerId
         : null),
   });
+}
+
+export async function setGoogleRemarketingConfig(
+  shop: string,
+  config: GoogleRemarketingConfig,
+): Promise<void> {
+  if (!/^AW-\d+$/.test(config.tagId)) {
+    throw new Error("Google AW 标签格式无效");
+  }
+  const existing = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
+  if (!existing) throw new Error("Google Ads 账户未连接");
+  await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
+    ...existing.data,
+    remarketing: config,
+  });
+}
+
+export async function resetGoogleCustomPixelConfirmation(
+  shop: string,
+): Promise<void> {
+  const credential = await getGoogleAdsCredential(shop);
+  if (!credential?.remarketing) return;
+  const remarketing = { ...credential.remarketing };
+  delete remarketing.customPixelConfirmedAt;
+  await setGoogleRemarketingConfig(shop, remarketing);
 }
 
 // ─── Pending OAuth selection (multi-account) ─────────────────────────────────

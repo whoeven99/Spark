@@ -103,6 +103,30 @@ describe("Merchant API v1 accounts and data sources", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("reuses a matching primary source when list omits output-only input", async () => {
+    const source = {
+      name: "accounts/123/dataSources/456",
+      primaryProductDataSource: {
+        channel: "ONLINE",
+        contentLanguage: "en",
+        feedLabel: "US",
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ dataSources: [source] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureGoogleMerchantDataSource({
+        accessToken: "token",
+        merchantId: "123",
+        contentLanguage: "en",
+        feedLabel: "US",
+        preferredName: source.name,
+      }),
+    ).resolves.toEqual(source);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a primary API data source when none matches", async () => {
     const fetchMock = vi
       .fn()

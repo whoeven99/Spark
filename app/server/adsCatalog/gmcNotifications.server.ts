@@ -6,6 +6,7 @@ import {
 } from "./clients/googleMerchantClient.server";
 import {
   getGoogleMerchantCredential,
+  setGoogleMerchantCredential,
   setGmcSubscriptionName,
 } from "./credentialStore.server";
 
@@ -188,6 +189,18 @@ function offerIdFromResourceId(resourceId: string): string {
   return parts.slice(prefixLength).join("~") || resourceId;
 }
 
+function marketFromResourceId(resourceId: string): {
+  contentLanguage: string;
+  feedLabel: string;
+} {
+  const parts = resourceId.split("~");
+  const offset = parts[0] === "online" || parts[0] === "local" ? 1 : 0;
+  return {
+    contentLanguage: parts[offset]?.toLowerCase() || "und",
+    feedLabel: parts[offset + 1]?.toUpperCase() || "ZZ",
+  };
+}
+
 /** Worst-case status from the change list (disapproved > pending > approved). */
 function statusFromChanges(
   changes: GmcProductStatusNotification["changes"],
@@ -229,6 +242,9 @@ async function refreshSingleProductStatus(params: {
   const product = await getGoogleMerchantProduct(params);
   const offerId = product.offerId ?? offerIdFromResourceId(params.resourceId);
   if (!offerId) return;
+  const market = marketFromResourceId(params.resourceId);
+  const contentLanguage = product.contentLanguage?.toLowerCase() || market.contentLanguage;
+  const feedLabel = product.feedLabel?.toUpperCase() || market.feedLabel;
 
   const destinations = product.productStatus?.destinationStatuses ?? [];
   const statuses: string[] = destinations.flatMap((d) => {
@@ -255,7 +271,14 @@ async function refreshSingleProductStatus(params: {
   }));
 
   await prisma.gmcProductStatus.upsert({
-    where: { shop_offerId: { shop: params.shop, offerId } },
+    where: {
+      shop_offerId_contentLanguage_feedLabel: {
+        shop: params.shop,
+        offerId,
+        contentLanguage,
+        feedLabel,
+      },
+    },
     update: {
       merchantId: params.merchantId,
       title: product.productAttributes?.title ?? null,
@@ -267,6 +290,8 @@ async function refreshSingleProductStatus(params: {
       shop: params.shop,
       merchantId: params.merchantId,
       offerId,
+      contentLanguage,
+      feedLabel,
       title: product.productAttributes?.title ?? null,
       status,
       issues: issues as unknown as object,
@@ -299,9 +324,17 @@ export async function handleGmcProductStatusNotification(
   const allDeleted = notification.changes.every((c) => !c.newValue);
   if (allDeleted) {
     const offerId = offerIdFromResourceId(notification.resourceId);
+    const market = marketFromResourceId(notification.resourceId);
     if (offerId) {
       await prisma.gmcProductStatus
-        .deleteMany({ where: { shop, offerId } })
+        .deleteMany({
+          where: {
+            shop,
+            offerId,
+            contentLanguage: market.contentLanguage,
+            feedLabel: market.feedLabel,
+          },
+        })
         .catch(() => undefined);
       console.info(`${LOG_PREFIX} removed deleted product shop=${shop} offerId=${offerId}`);
     }
@@ -319,10 +352,20 @@ export async function handleGmcProductStatusNotification(
       clientSecret: credential.clientSecret,
       refreshToken: credential.refreshToken,
     }).catch(() => null);
-    if (refreshed) accessToken = refreshed.accessToken;
+    if (refreshed) {
+      accessToken = refreshed.accessToken;
+      await setGoogleMerchantCredential(shop, {
+        accessToken,
+        refreshToken: credential.refreshToken,
+        clientId: credential.clientId,
+        clientSecret: credential.clientSecret,
+        merchantId: credential.merchantId,
+      });
+    }
   }
 
   const offerId = offerIdFromResourceId(notification.resourceId);
+  const market = marketFromResourceId(notification.resourceId);
 
   // Primary: fetch the processed Merchant API product (includes issues)
   try {
@@ -341,12 +384,21 @@ export async function handleGmcProductStatusNotification(
     if (!offerId) return;
     await prisma.gmcProductStatus
       .upsert({
-        where: { shop_offerId: { shop, offerId } },
+        where: {
+          shop_offerId_contentLanguage_feedLabel: {
+            shop,
+            offerId,
+            contentLanguage: market.contentLanguage,
+            feedLabel: market.feedLabel,
+          },
+        },
         update: { merchantId, status, checkedAt: new Date() },
         create: {
           shop,
           merchantId,
           offerId,
+          contentLanguage: market.contentLanguage,
+          feedLabel: market.feedLabel,
           title: null,
           status,
           issues: [] as unknown as object,

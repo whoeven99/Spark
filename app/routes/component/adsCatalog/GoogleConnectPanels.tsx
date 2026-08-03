@@ -3,14 +3,22 @@ import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
+import { GoogleRemarketingPanel } from "./GoogleRemarketingPanel";
 
-type AdsLink = { bound: boolean; customerId: string | null; linked: boolean | null };
+type AdsLink = {
+  bound: boolean;
+  customerId: string | null;
+  state: "not_linked" | "pending" | "linked" | "failed" | null;
+  error?: string;
+};
 
 type Props = {
   credentials: CredentialsView;
   adsLink: AdsLink | null;
   locationSearch: string;
   languageCode: string;
+  shopDomain: string;
+  shopifyApiKey: string;
   onChanged: () => void;
 };
 
@@ -51,6 +59,8 @@ export function GoogleConnectPanels({
   adsLink,
   locationSearch,
   languageCode,
+  shopDomain,
+  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
@@ -177,17 +187,23 @@ export function GoogleConnectPanels({
               <div style={{ color: "#0f7a52", fontWeight: 600 }}>{t("adsCatalog.adsBound")}</div>
               <div>{t("adsCatalog.adsCustomerId", { id: ads.customerIdFormatted || ads.customerId })}</div>
               <div style={{ marginTop: 4 }}>
-                {adsLink?.linked === true
+                {adsLink?.state === "linked"
                   ? <span style={{ color: "#0f7a52" }}>{t("adsCatalog.adsLinked")}</span>
-                  : adsLink?.linked === false
-                    ? <a
-                        href="https://merchants.google.com/"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: "#a36a00" }}
+                  : adsLink?.state === "pending"
+                    ? <span style={{ color: "#a36a00" }}>{t("adsCatalog.adsLinkPending")}</span>
+                    : adsLink?.state === "not_linked"
+                      ? <button
+                        type="button"
+                        style={secondaryBtn}
+                        disabled={busy}
+                        onClick={() =>
+                          void post("/api/ads-catalog/google-status", {
+                            operation: "ensure_link",
+                          })
+                        }
                       >
-                        {t("adsCatalog.adsNotLinked")}
-                      </a>
+                        {t("adsCatalog.adsCreateLink")}
+                      </button>
                     : <span style={pageHintTextStyle}>{t("adsCatalog.adsLinkUnknown")}</span>}
               </div>
             </div>
@@ -216,6 +232,13 @@ export function GoogleConnectPanels({
           </>
         )}
       </div>
+      <GoogleRemarketingPanel
+        googleAds={ads}
+        locationSearch={locationSearch}
+        shopDomain={shopDomain}
+        shopifyApiKey={shopifyApiKey}
+        onChanged={onChanged}
+      />
     </div>
   );
 }

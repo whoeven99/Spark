@@ -41,3 +41,8 @@ redirect_urls = [
 
 [build]
 automatically_update_urls_on_dev = true
+
+[shop.metafields.app.google_remarketing_config]
+type = "json"
+name = "Google remarketing configuration"
+access.admin = "merchant_read"

@@ -21,7 +21,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - **主应用（仓库根目录）**：React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端，默认由 Shopify CLI 启动。
 - **Admin 后台（`admin/`）**：Express API（本地默认 `3099`）+ Vite React 前端（本地默认 `5174`）。它有独立的 `package.json`、依赖和构建流程。
 - **Web Pixel 扩展（`extensions/ciwi-spark-web-pixel/`）**：采集 Shopify analytics/custom events，经主应用 `/api/pixel-ingest` 上报。
-- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。测试模式写入 `testEventCode` + `storefrontTrackUrl`，店面浏览/加购会双发 Events API 到 Test Events；测完须删除。
+- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：受 Shopify 单应用 Theme Extension 数量上限约束，同一扩展包内包含相互隔离的 TikTok 与 Google App Embed blocks。TikTok 配置经 `spark_tiktok.pixel_config` 下发；Google 动态再营销配置经 app-owned Shop metafield `google_remarketing_config` 下发并受 Customer Privacy API 营销同意门禁控制。
 重要边界：
 
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
@@ -128,6 +128,7 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。
 - **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。
+- **Google Ads 再营销**：Ads Catalog 使用 `product_link` / `product_link_invitation` 完成 GMC↔Ads 幂等关联，并从 Ads customer 设置发现 AW 标签。Theme block 只发送非 purchase 店面事件；purchase 由商户手动安装的实验性 Custom Pixel 发送，Google 官方不支持该运行方式，UI 必须持续展示数据损失、重复上报与 Support 不保障告警。
 - **腾讯 SES / 飞书**：商户邮件与内部运营通知。通知失败通常不应阻断主业务，沿用现有场景封装。
 - **TSF 只读观测**：Admin `admin/server/routes/tsf*.ts`、`translationOps.ts`、`shopifyTranslation.ts` 等读取 TSF Turso、Cosmos、Redis、Blob 或 Shopify 翻译资源。它们是运维/报表边界，不代表 Spark 重新拥有整店翻译执行链路。
 

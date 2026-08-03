@@ -2,10 +2,7 @@ import crypto from "node:crypto";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 import { buildShopifyAdminHostParam, buildAdminEmbeddedAppReturnUrl } from "../billing/buildBillingReturnUrl.server";
 import {
-  buildGoogleAdsHeaders,
-  googleAdsApiUrl,
   listSelectableAdsCustomers,
-  normalizeCustomerId,
 } from "./googleAdsApi.server";
 import { listGoogleMerchantAccounts } from "./clients/googleMerchantClient.server";
 
@@ -542,45 +539,4 @@ export function buildGa4OAuthPopupCloseHtml(params: Record<string, string>): str
 
 export function buildGscOAuthPopupCloseHtml(params: Record<string, string>): string {
   return buildOAuthPopupCloseHtml("gsc_oauth", params);
-}
-
-/**
- * Query the GMC ↔ Ads link status for a Google Ads customer.
- * Returns whether the given merchantId is linked to the customer account.
- */
-export async function getMerchantCenterLinkStatus(params: {
-  accessToken: string;
-  developerToken: string;
-  customerId: string;
-  loginCustomerId?: string;
-  merchantId?: string;
-}): Promise<{ linked: boolean; links: Array<{ merchantId: string; status: string }> }> {
-  const customerDigits = normalizeCustomerId(params.customerId);
-  const response = await fetch(
-    googleAdsApiUrl(`/customers/${customerDigits}/merchantCenterLinks`),
-    {
-      headers: buildGoogleAdsHeaders({
-        accessToken: params.accessToken,
-        developerToken: params.developerToken,
-        loginCustomerId: params.loginCustomerId ?? params.customerId,
-      }),
-    },
-  );
-  const json = (await response.json().catch(() => ({}))) as {
-    merchantCenterLinks?: Array<{ id?: string; merchantCenterId?: string; status?: string }>;
-    error?: { message?: string };
-  };
-  if (!response.ok) {
-    throw new Error(json.error?.message || `HTTP ${response.status}`);
-  }
-  const links = (json.merchantCenterLinks ?? []).map((l) => ({
-    merchantId: String(l.merchantCenterId ?? l.id ?? ""),
-    status: l.status ?? "UNKNOWN",
-  }));
-  const linked = params.merchantId
-    ? links.some(
-        (l) => l.merchantId === params.merchantId && l.status === "ENABLED",
-      )
-    : links.some((l) => l.status === "ENABLED");
-  return { linked, links };
 }

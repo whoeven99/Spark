@@ -9,7 +9,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 - 主应用：仓库根目录，React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端。
 - Admin 后台：`admin/` 独立 Express API + Vite React 前端。
 - Web Pixel 扩展：`extensions/ciwi-spark-web-pixel/`，采集 Shopify analytics/custom events 并上报 `/api/pixel-ingest`。
-- Theme App Extension：`extensions/spark-tiktok-pixel/`，店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。
+- Theme App Extension：`extensions/spark-tiktok-pixel/`。由于 Shopify 单应用只允许一个 Theme Extension 包，包内分别提供 TikTok 与 Google App Embed blocks；两者配置和运行时隔离。Google block 从 app-owned Shop metafield 读取 AW 配置，并在营销同意后才加载 `gtag.js`。
 
 整店/多语言翻译执行链路归 TypeScriptFrontend（TSF）所有。Spark 主应用不再注册整店翻译工具，也没有 `worker/` 目录或 Translation Worker 可部署服务。Spark 仍保留图片翻译、兼容 Blob 读取和 Admin 只读观测/运维页。
 
@@ -74,6 +74,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - Aliyun SLS：Pixel、访问与功能行为日志。
 - Shopify Admin GraphQL / Billing：店铺数据、写回、订阅与一次性购包。
 - Google Merchant API v1：Ads Catalog 使用 Accounts、Data Sources 和 Products 子 API 完成 Merchant 账户发现、primary API data source 绑定、`ProductInput` 写入及审核状态读取；Notifications v1 负责商品状态通知，OAuth scope 仍为 `https://www.googleapis.com/auth/content`。对应 Google Cloud 项目必须在 Merchant Center 完成 Developer registration（开发者注册）并具备目标账户权限。
+- Google Ads 动态再营销：`product_link` / `product_link_invitation` 提供 GMC↔Ads 关联状态机；AW 候选来自 customer remarketing/conversion tracking 设置。确认后的配置同时写 `AdPlatformCredential.credentials` 和 app-owned Shop metafield。店面 Theme block 不发送 purchase；purchase Custom Pixel 是商户手动安装、Google 官方不支持的实验能力，可能存在数据损失、归因偏差和重复上报。
 - 腾讯 SES / 飞书：商户邮件与内部运营通知，通知失败通常不阻断主流程。
   - 发送入口：`app/server/email/`（`sendTemplateEmail`）+ `app/server/notifications/`（`notify*Email` → `dispatchMerchantNotificationEmail`）。
   - 商户模板 ID：`notificationTemplateIds.server.ts`（安装 `180498`、卸载 `180499`、购包 `180500`、订阅 `180501–180503`）；Agent `task_*` 模板仍在 `emailTemplates.server.ts`。
@@ -131,7 +132,7 @@ npm run turso:migrate:test
 - Billing：`BILLING_GATEWAY`、`BILLING_TEST`、`BILLING_ENABLED`。
 - 邮件和飞书：`TENCENT_*`、`EMAIL_*`、`OPS_NOTIFY_EMAIL`、`FEISHU_*`。
 - Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
-- 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
+- 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）；Catalog Webhook：`META_WEBHOOK_VERIFY_TOKEN`（默认 `123456`），回调 `SHOPIFY_APP_URL/webhooks/meta/catalog`。
 - TikTok Pixel（Ads Catalog）：
   - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
   - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。

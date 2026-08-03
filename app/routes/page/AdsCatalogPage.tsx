@@ -138,7 +138,12 @@ interface GoogleStatusData {
   accountRestricted?: boolean;
   products?: GmcReviewProductView[];
   lastCheckedAt?: string | null;
-  adsLink?: { bound: boolean; customerId: string | null; linked: boolean | null };
+  adsLink?: {
+    bound: boolean;
+    customerId: string | null;
+    state: "not_linked" | "pending" | "linked" | "failed" | null;
+    error?: string;
+  };
 }
 
 export function AdsCatalogPage() {
@@ -888,6 +893,8 @@ export function AdsCatalogPage() {
               adsLink={adsLink}
               locationSearch={locationSearch}
               languageCode={i18n.language}
+              shopDomain={loaderData.shopDomain}
+              shopifyApiKey={loaderData.shopifyApiKey}
               onChanged={() => {
                 revalidator.revalidate();
                 statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);

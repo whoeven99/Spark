@@ -1,5 +1,6 @@
 import type { RawShopifyProductForCatalog } from "../productFetcher.server";
 import { stripHtml } from "../productFetcher.server";
+import { resolveGoogleOfferId } from "../../../lib/googleOfferId";
 
 export interface ProductIssue {
   level: "error" | "warning";
@@ -277,6 +278,38 @@ export function validateProductsForGoogle(
   products: RawShopifyProductForCatalog[],
 ): FeedValidationReport {
   const results = products.map(evaluate);
+  const occurrencesByOfferId = new Map<string, string[]>();
+  for (const product of products) {
+    const variants =
+      product.variants.length > 0
+        ? product.variants
+        : [{ id: product.variantId ?? product.id, sku: product.sku }];
+    for (const variant of variants) {
+      const offerId = resolveGoogleOfferId({
+        sku: variant.sku,
+        productId: product.id,
+        variantId: variant.id,
+      });
+      const productIds = occurrencesByOfferId.get(offerId) ?? [];
+      productIds.push(product.id);
+      occurrencesByOfferId.set(offerId, productIds);
+    }
+  }
+  const duplicates = new Map(
+    [...occurrencesByOfferId].filter(([, productIds]) => productIds.length > 1),
+  );
+  for (const result of results) {
+    const offerIds = [...duplicates]
+      .filter(([, productIds]) => productIds.includes(result.productId))
+      .map(([offerId]) => offerId);
+    if (offerIds.length === 0) continue;
+    result.issues.push({
+      level: "error",
+      rule: "DUPLICATE_OFFER_ID",
+      message: `重复商品 ID [offerId]：${offerIds.join("、")}。请为冲突变体设置唯一 SKU`,
+    });
+    result.status = "error";
+  }
   return {
     totalProducts: results.length,
     readyToSync: results.filter((r) => r.status === "ok").length,

@@ -3,11 +3,9 @@ import type {
   RawVariantForCatalog,
 } from "../productFetcher.server";
 import { stripHtml } from "../productFetcher.server";
+import { resolveGoogleOfferId } from "../../../lib/googleOfferId";
 
-/**
- * Google Merchant Center "Product" resource (Content API for Shopping v2.1).
- * @see https://developers.google.com/shopping-content/reference/rest/v2.1/products
- */
+/** Google Merchant API v1 商品写入所需的内部规范化模型。 */
 export interface GoogleMerchantProduct {
   offerId: string;
   title: string;
@@ -150,6 +148,8 @@ export function mapShopifyVariantsToGoogle(
             inventoryQuantity: product.inventoryQuantity,
             availableForSale: product.availableForSale ?? false,
             inventoryPolicy: "DENY" as const,
+            color: null,
+            size: null,
           },
         ];
 
@@ -172,8 +172,11 @@ export function mapShopifyVariantsToGoogle(
     const { price, salePrice } = resolvePricing(variant, currency);
     const gtin = variant.barcode?.trim() || undefined;
     const mpn = variant.sku?.trim() || undefined;
-    const variantNumericId = extractNumericId(variant.id);
-    const offerId = variant.sku?.trim() || `${productNumericId}-${variantNumericId}`;
+    const offerId = resolveGoogleOfferId({
+      sku: variant.sku,
+      productId: product.id,
+      variantId: variant.id,
+    });
     const title =
       isMulti && variant.title
         ? `${product.title} - ${variant.title}`.slice(0, 149)

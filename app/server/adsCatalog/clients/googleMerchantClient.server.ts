@@ -158,7 +158,7 @@ function isMatchingApiPrimaryDataSource(
 ): boolean {
   const primary = source.primaryProductDataSource;
   return (
-    source.input === "API" &&
+    (source.input === undefined || source.input === "API") &&
     primary?.channel === "ONLINE" &&
     primary.contentLanguage?.toLowerCase() === contentLanguage.toLowerCase() &&
     primary.feedLabel?.toUpperCase() === feedLabel.toUpperCase()

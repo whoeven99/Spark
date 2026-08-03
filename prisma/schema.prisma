@@ -68,6 +68,8 @@ model GmcProductStatus {
   shop             String
   merchantId       String
   offerId          String
+  contentLanguage  String   @default("und")
+  feedLabel        String   @default("ZZ")
   shopifyProductId String?
   title            String?
   status           String
@@ -75,7 +77,7 @@ model GmcProductStatus {
   checkedAt        DateTime
   updatedAt        DateTime @updatedAt
 
-  @@unique([shop, offerId])
+  @@unique([shop, offerId, contentLanguage, feedLabel])
   @@index([shop, status])
   @@index([shop, merchantId])
 }
