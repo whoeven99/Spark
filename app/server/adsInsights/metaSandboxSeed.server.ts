@@ -1,23 +1,27 @@
 /**
  * Meta 沙盒 seed：按优先级尝试多种广告结构，失败自动切换下一策略。
- * 优先 DPA（商品目录广告），其次流量广告（复用帖 / 新发帖 / 链接创意）。
+ * 优先 DPA（商品目录广告），其次流量广告（复用帖 / 新发帖 / 图片链接 / 链接创意）。
  */
 
 import {
-  buildMetaDevModeCreativeHint,
+  ensureSandboxPageLinkedToAdAccount,
   getMetaSandboxCredentials,
-  isMetaDevModeCreativePostError,
-  metaGet,
+  listPagePostStoryIds,
   metaPost,
   normalizeAdAccountId,
   readMetaSandboxEnv,
   resolveSandboxObjectStoryId,
   resolveSandboxPageId,
   resolveSandboxSeedDailyBudgetCents,
-  type MetaApiError,
+  tryCreateSandboxAdCreative,
+  uploadSandboxAdImageHash,
   type MetaSandboxCredentials,
   type MetaSandboxSeedResult,
 } from "./metaSandbox.server";
+import {
+  formatCatalogSourceLabelForUi,
+  resolveSandboxCatalogContext,
+} from "./metaSandboxCatalog.server";
 
 const LOG_PREFIX = "[AdsInsights][Meta][SandboxSeed]";
 
@@ -25,6 +29,7 @@ export type MetaSandboxSeedStrategyId =
   | "catalog_dpa"
   | "traffic_existing_post"
   | "traffic_page_feed_post"
+  | "traffic_image_link"
   | "traffic_link_spec";
 
 type SeedAttempt = {
@@ -37,6 +42,7 @@ type MetaSandboxSeedContext = {
   creds: MetaSandboxCredentials;
   accountPath: string;
   pageId: string;
+  shop: string | null;
   stamp: string;
   campaignName: string;
   adSetName: string;
@@ -44,11 +50,7 @@ type MetaSandboxSeedContext = {
   linkUrl: string;
   dailyBudgetCents: number;
   bidAmountCents: number;
-};
-
-type CatalogSeedContext = {
-  catalogId: string;
-  productSetId: string;
+  prepWarnings: string[];
 };
 
 type StrategyDefinition = {
@@ -67,99 +69,38 @@ function baseTargeting() {
   };
 }
 
-async function resolveSandboxCatalogContext(
-  accessToken: string,
-  adAccountId: string,
-): Promise<CatalogSeedContext | null> {
-  const envCatalogId = readMetaSandboxEnv("META_SANDBOX_PRODUCT_CATALOG_ID");
-  const envProductSetId = readMetaSandboxEnv("META_SANDBOX_PRODUCT_SET_ID");
-
-  if (envCatalogId) {
-    const productSetId =
-      envProductSetId || (await resolveFirstProductSetId(accessToken, envCatalogId));
-    return productSetId ? { catalogId: envCatalogId, productSetId } : null;
-  }
-
-  const accountPath = normalizeAdAccountId(adAccountId);
-  const catalogIds: string[] = [];
-
-  try {
-    const json = await metaGet<{ data?: Array<{ id?: string }> }>(
-      `${accountPath}/product_catalogs`,
-      accessToken,
-      { fields: "id,name", limit: "25" },
-    );
-    for (const row of json.data ?? []) {
-      const id = row.id?.trim();
-      if (id) catalogIds.push(id);
-    }
-  } catch {
-    // 部分 token 无此边
-  }
-
-  if (catalogIds.length === 0) {
-    try {
-      const businesses = await metaGet<{ data?: Array<{ id?: string }> }>(
-        "me/businesses",
-        accessToken,
-        { fields: "id", limit: "25" },
-      );
-      for (const biz of businesses.data ?? []) {
-        const businessId = biz.id?.trim();
-        if (!businessId) continue;
-        try {
-          const json = await metaGet<{ data?: Array<{ id?: string }> }>(
-            `${businessId}/owned_product_catalogs`,
-            accessToken,
-            { fields: "id,name", limit: "25" },
-          );
-          for (const row of json.data ?? []) {
-            const id = row.id?.trim();
-            if (id) catalogIds.push(id);
-          }
-        } catch {
-          // 跳过无权限 Business
-        }
-      }
-    } catch {
-      // 无 business 权限
-    }
-  }
-
-  for (const catalogId of catalogIds) {
-    const productSetId = await resolveFirstProductSetId(accessToken, catalogId);
-    if (productSetId) return { catalogId, productSetId };
-  }
-
-  return null;
+function trafficCampaignBody(ctx: MetaSandboxSeedContext) {
+  return {
+    name: ctx.campaignName,
+    objective: "OUTCOME_TRAFFIC",
+    status: "PAUSED",
+    special_ad_categories: [],
+    is_adset_budget_sharing_enabled: false,
+  };
 }
 
-async function resolveFirstProductSetId(
-  accessToken: string,
-  catalogId: string,
-): Promise<string | null> {
-  try {
-    const json = await metaGet<{ data?: Array<{ id?: string; name?: string }> }>(
-      `${catalogId}/product_sets`,
-      accessToken,
-      { fields: "id,name", limit: "25" },
-    );
-    const rows = json.data ?? [];
-    const preferred = rows.find((row) => /all products/i.test(row.name ?? ""));
-    return (preferred ?? rows[0])?.id?.trim() || null;
-  } catch {
-    return null;
-  }
+function trafficAdSetBody(ctx: MetaSandboxSeedContext) {
+  return {
+    name: ctx.adSetName,
+    billing_event: "IMPRESSIONS",
+    optimization_goal: "LINK_CLICKS",
+    destination_type: "WEBSITE",
+    targeting: baseTargeting(),
+    status: "PAUSED",
+    start_time: new Date().toISOString(),
+    bid_strategy: "LOWEST_COST_WITH_BID_CAP",
+    bid_amount: ctx.bidAmountCents,
+    daily_budget: ctx.dailyBudgetCents,
+  };
 }
 
-async function createPausedAd(params: {
+async function createPausedAdFromCreative(params: {
   ctx: MetaSandboxSeedContext;
   campaignBody: Record<string, unknown>;
   adSetBody: Record<string, unknown>;
-  creativeBody: Record<string, unknown>;
-  warnings: string[];
-}): Promise<{ campaignId: string; adSetId: string; adId: string; creativeId: string }> {
-  const { ctx, campaignBody, adSetBody, creativeBody, warnings } = params;
+  creativeId: string;
+}): Promise<{ campaignId: string; adSetId: string; adId: string }> {
+  const { ctx, campaignBody, adSetBody, creativeId } = params;
 
   const campaignResp = await metaPost<{ id: string }>(
     `${ctx.accountPath}/campaigns`,
@@ -177,23 +118,6 @@ async function createPausedAd(params: {
   );
   const adSetId = adSetResp.id;
 
-  let creativeId: string;
-  try {
-    const creativeResp = await metaPost<{ id: string }>(
-      `${ctx.accountPath}/adcreatives`,
-      ctx.creds.accessToken,
-      creativeBody,
-      "创建沙盒广告创意",
-    );
-    creativeId = creativeResp.id;
-  } catch (e) {
-    const metaError = (e as Error & { metaError?: MetaApiError }).metaError;
-    if (isMetaDevModeCreativePostError(metaError)) {
-      throw new Error(buildMetaDevModeCreativeHint(), { cause: e });
-    }
-    throw e;
-  }
-
   const adResp = await metaPost<{ id: string }>(
     `${ctx.accountPath}/ads`,
     ctx.creds.accessToken,
@@ -206,24 +130,51 @@ async function createPausedAd(params: {
     "创建沙盒广告",
   );
 
-  return { campaignId, adSetId, adId: adResp.id, creativeId };
+  return { campaignId, adSetId, adId: adResp.id };
 }
 
 async function runCatalogDpaSeed(
   ctx: MetaSandboxSeedContext,
 ): Promise<Omit<MetaSandboxSeedResult, "attempts">> {
-  const catalog = await resolveSandboxCatalogContext(ctx.creds.accessToken, ctx.creds.adAccountId);
+  const catalog = await resolveSandboxCatalogContext({
+    sandboxAccessToken: ctx.creds.accessToken,
+    adAccountId: ctx.creds.adAccountId,
+    shop: ctx.shop,
+  });
   if (!catalog) {
-    throw new Error("未找到 Product Catalog / Product Set（可设置 META_SANDBOX_PRODUCT_CATALOG_ID）");
+    throw new Error(
+      "未找到 Product Catalog。请先在 /app/ads-catalog 连接 Meta Catalog，或在 .env 设置 META_SANDBOX_PRODUCT_CATALOG_ID",
+    );
   }
 
   const warnings = [
-    `DPA 商品广告：catalog ${catalog.catalogId} / product set ${catalog.productSetId}`,
+    ...ctx.prepWarnings,
+    `DPA 商品广告：catalog ${catalog.catalogId} / product set ${catalog.productSetId}（来源：${formatCatalogSourceLabelForUi(catalog.source)}）`,
   ];
 
-  const { campaignId, adSetId, adId } = await createPausedAd({
+  const { creativeId } = await tryCreateSandboxAdCreative({
+    accessToken: ctx.creds.accessToken,
+    accountPath: ctx.accountPath,
+    adName: ctx.adName,
+    creativeBodies: [
+      {
+        product_set_id: catalog.productSetId,
+        object_story_spec: {
+          page_id: ctx.pageId,
+          template_data: {
+            link: ctx.linkUrl,
+            message: "Spark Meta sandbox catalog {{product.name}}",
+            name: "{{product.price}}",
+            call_to_action: { type: "SHOP_NOW" },
+          },
+        },
+      },
+    ],
+  });
+
+  const { campaignId, adSetId, adId } = await createPausedAdFromCreative({
     ctx,
-    warnings,
+    creativeId,
     campaignBody: {
       name: ctx.campaignName,
       objective: "OUTCOME_SALES",
@@ -244,19 +195,6 @@ async function runCatalogDpaSeed(
       bid_amount: ctx.bidAmountCents,
       daily_budget: ctx.dailyBudgetCents,
     },
-    creativeBody: {
-      name: `${ctx.adName}_creative`,
-      product_set_id: catalog.productSetId,
-      object_story_spec: {
-        page_id: ctx.pageId,
-        template_data: {
-          link: ctx.linkUrl,
-          message: "Spark Meta sandbox catalog {{product.name}}",
-          name: "{{product.price}}",
-          call_to_action: { type: "SHOP_NOW" },
-        },
-      },
-    },
   });
 
   return {
@@ -273,46 +211,32 @@ async function runCatalogDpaSeed(
 async function runTrafficExistingPostSeed(
   ctx: MetaSandboxSeedContext,
 ): Promise<Omit<MetaSandboxSeedResult, "attempts">> {
-  const storyResolution = await resolveSandboxObjectStoryId({
-    accessToken: ctx.creds.accessToken,
-    pageId: ctx.pageId,
-    linkUrl: ctx.linkUrl,
-    message: "Spark Meta sandbox test",
-    allowCreatePagePost: false,
-  });
+  const envStoryId = readMetaSandboxEnv("META_SANDBOX_SEED_OBJECT_STORY_ID");
+  const postIds = envStoryId
+    ? [envStoryId.includes("_") ? envStoryId : `${ctx.pageId}_${envStoryId}`]
+    : await listPagePostStoryIds(ctx.creds.accessToken, ctx.pageId);
 
-  if (!storyResolution.objectStoryId) {
+  if (postIds.length === 0) {
     throw new Error("主页上无可复用帖文（可设置 META_SANDBOX_SEED_OBJECT_STORY_ID）");
   }
 
-  const warnings = ["流量广告：复用主页现有帖文"];
+  const { creativeId, usedObjectStoryId } = await tryCreateSandboxAdCreative({
+    accessToken: ctx.creds.accessToken,
+    accountPath: ctx.accountPath,
+    adName: ctx.adName,
+    objectStoryIds: postIds,
+  });
 
-  const { campaignId, adSetId, adId } = await createPausedAd({
+  const warnings = [
+    ...ctx.prepWarnings,
+    `流量广告：复用主页帖文 ${usedObjectStoryId ?? postIds[0]}`,
+  ];
+
+  const { campaignId, adSetId, adId } = await createPausedAdFromCreative({
     ctx,
-    warnings,
-    campaignBody: {
-      name: ctx.campaignName,
-      objective: "OUTCOME_TRAFFIC",
-      status: "PAUSED",
-      special_ad_categories: [],
-      is_adset_budget_sharing_enabled: false,
-    },
-    adSetBody: {
-      name: ctx.adSetName,
-      billing_event: "IMPRESSIONS",
-      optimization_goal: "LINK_CLICKS",
-      destination_type: "WEBSITE",
-      targeting: baseTargeting(),
-      status: "PAUSED",
-      start_time: new Date().toISOString(),
-      bid_strategy: "LOWEST_COST_WITH_BID_CAP",
-      bid_amount: ctx.bidAmountCents,
-      daily_budget: ctx.dailyBudgetCents,
-    },
-    creativeBody: {
-      name: `${ctx.adName}_creative`,
-      object_story_id: storyResolution.objectStoryId,
-    },
+    creativeId,
+    campaignBody: trafficCampaignBody(ctx),
+    adSetBody: trafficAdSetBody(ctx),
   });
 
   return {
@@ -339,37 +263,28 @@ async function runTrafficPageFeedSeed(
   });
 
   if (!storyResolution.objectStoryId || storyResolution.source !== "page_feed") {
-    throw new Error("无法通过 Page Token 在主页发布测试帖");
+    throw new Error(
+      "无法通过 Page Token 在主页发布测试帖。请手动在主页发一条公开帖，或授予主页 MANAGE/CREATE_CONTENT 权限",
+    );
   }
 
-  const warnings = ["流量广告：使用主页新发布的帖文"];
+  const { creativeId, usedObjectStoryId } = await tryCreateSandboxAdCreative({
+    accessToken: ctx.creds.accessToken,
+    accountPath: ctx.accountPath,
+    adName: ctx.adName,
+    objectStoryIds: [storyResolution.objectStoryId],
+  });
 
-  const { campaignId, adSetId, adId } = await createPausedAd({
+  const warnings = [
+    ...ctx.prepWarnings,
+    `流量广告：使用主页新帖 ${usedObjectStoryId ?? storyResolution.objectStoryId}`,
+  ];
+
+  const { campaignId, adSetId, adId } = await createPausedAdFromCreative({
     ctx,
-    warnings,
-    campaignBody: {
-      name: ctx.campaignName,
-      objective: "OUTCOME_TRAFFIC",
-      status: "PAUSED",
-      special_ad_categories: [],
-      is_adset_budget_sharing_enabled: false,
-    },
-    adSetBody: {
-      name: ctx.adSetName,
-      billing_event: "IMPRESSIONS",
-      optimization_goal: "LINK_CLICKS",
-      destination_type: "WEBSITE",
-      targeting: baseTargeting(),
-      status: "PAUSED",
-      start_time: new Date().toISOString(),
-      bid_strategy: "LOWEST_COST_WITH_BID_CAP",
-      bid_amount: ctx.bidAmountCents,
-      daily_budget: ctx.dailyBudgetCents,
-    },
-    creativeBody: {
-      name: `${ctx.adName}_creative`,
-      object_story_id: storyResolution.objectStoryId,
-    },
+    creativeId,
+    campaignBody: trafficCampaignBody(ctx),
+    adSetBody: trafficAdSetBody(ctx),
   });
 
   return {
@@ -383,45 +298,88 @@ async function runTrafficPageFeedSeed(
   };
 }
 
+async function runTrafficImageLinkSeed(
+  ctx: MetaSandboxSeedContext,
+): Promise<Omit<MetaSandboxSeedResult, "attempts">> {
+  const imageHash = await uploadSandboxAdImageHash({
+    accessToken: ctx.creds.accessToken,
+    accountPath: ctx.accountPath,
+  });
+  if (!imageHash) {
+    throw new Error("广告图片上传失败（可设置 META_SANDBOX_SEED_IMAGE_URL）");
+  }
+
+  const linkData: Record<string, unknown> = {
+    message: "Spark Meta sandbox test",
+    link: ctx.linkUrl,
+    name: ctx.adName,
+    image_hash: imageHash,
+    call_to_action: { type: "LEARN_MORE", value: { link: ctx.linkUrl } },
+  };
+
+  const { creativeId } = await tryCreateSandboxAdCreative({
+    accessToken: ctx.creds.accessToken,
+    accountPath: ctx.accountPath,
+    adName: ctx.adName,
+    creativeBodies: [
+      {
+        object_story_spec: {
+          page_id: ctx.pageId,
+          link_data: linkData,
+        },
+      },
+    ],
+  });
+
+  const warnings = [...ctx.prepWarnings, "流量广告：广告账户图片 + 链接创意"];
+
+  const { campaignId, adSetId, adId } = await createPausedAdFromCreative({
+    ctx,
+    creativeId,
+    campaignBody: trafficCampaignBody(ctx),
+    adSetBody: trafficAdSetBody(ctx),
+  });
+
+  return {
+    campaignId,
+    adSetId,
+    adId,
+    campaignName: ctx.campaignName,
+    strategy: "traffic_image_link",
+    strategyLabel: "流量广告（图片链接）",
+    warnings,
+  };
+}
+
 async function runTrafficLinkSpecSeed(
   ctx: MetaSandboxSeedContext,
 ): Promise<Omit<MetaSandboxSeedResult, "attempts">> {
-  const warnings = ["流量广告：链接创意 object_story_spec（开发模式 App 可能失败）"];
-
-  const { campaignId, adSetId, adId } = await createPausedAd({
-    ctx,
-    warnings,
-    campaignBody: {
-      name: ctx.campaignName,
-      objective: "OUTCOME_TRAFFIC",
-      status: "PAUSED",
-      special_ad_categories: [],
-      is_adset_budget_sharing_enabled: false,
-    },
-    adSetBody: {
-      name: ctx.adSetName,
-      billing_event: "IMPRESSIONS",
-      optimization_goal: "LINK_CLICKS",
-      destination_type: "WEBSITE",
-      targeting: baseTargeting(),
-      status: "PAUSED",
-      start_time: new Date().toISOString(),
-      bid_strategy: "LOWEST_COST_WITH_BID_CAP",
-      bid_amount: ctx.bidAmountCents,
-      daily_budget: ctx.dailyBudgetCents,
-    },
-    creativeBody: {
-      name: `${ctx.adName}_creative`,
-      object_story_spec: {
-        page_id: ctx.pageId,
-        link_data: {
-          message: "Spark Meta sandbox test",
-          link: ctx.linkUrl,
-          name: ctx.adName,
-          call_to_action: { type: "LEARN_MORE", value: { link: ctx.linkUrl } },
+  const { creativeId } = await tryCreateSandboxAdCreative({
+    accessToken: ctx.creds.accessToken,
+    accountPath: ctx.accountPath,
+    adName: ctx.adName,
+    creativeBodies: [
+      {
+        object_story_spec: {
+          page_id: ctx.pageId,
+          link_data: {
+            message: "Spark Meta sandbox test",
+            link: ctx.linkUrl,
+            name: ctx.adName,
+            call_to_action: { type: "LEARN_MORE", value: { link: ctx.linkUrl } },
+          },
         },
       },
-    },
+    ],
+  });
+
+  const warnings = [...ctx.prepWarnings, "流量广告：链接创意 object_story_spec"];
+
+  const { campaignId, adSetId, adId } = await createPausedAdFromCreative({
+    ctx,
+    creativeId,
+    campaignBody: trafficCampaignBody(ctx),
+    adSetBody: trafficAdSetBody(ctx),
   });
 
   return {
@@ -440,21 +398,22 @@ const META_SANDBOX_SEED_STRATEGIES: StrategyDefinition[] = [
     id: "catalog_dpa",
     label: "DPA 商品广告",
     canAttempt: async (ctx) =>
-      Boolean(await resolveSandboxCatalogContext(ctx.creds.accessToken, ctx.creds.adAccountId)),
+      Boolean(
+        await resolveSandboxCatalogContext({
+          sandboxAccessToken: ctx.creds.accessToken,
+          adAccountId: ctx.creds.adAccountId,
+          shop: ctx.shop,
+        }),
+      ),
     run: runCatalogDpaSeed,
   },
   {
     id: "traffic_existing_post",
     label: "流量广告（复用主页帖）",
     canAttempt: async (ctx) => {
-      const story = await resolveSandboxObjectStoryId({
-        accessToken: ctx.creds.accessToken,
-        pageId: ctx.pageId,
-        linkUrl: ctx.linkUrl,
-        message: "Spark Meta sandbox test",
-        allowCreatePagePost: false,
-      });
-      return Boolean(story.objectStoryId);
+      if (readMetaSandboxEnv("META_SANDBOX_SEED_OBJECT_STORY_ID")) return true;
+      const posts = await listPagePostStoryIds(ctx.creds.accessToken, ctx.pageId);
+      return posts.length > 0;
     },
     run: runTrafficExistingPostSeed,
   },
@@ -463,6 +422,12 @@ const META_SANDBOX_SEED_STRATEGIES: StrategyDefinition[] = [
     label: "流量广告（主页新发帖）",
     canAttempt: async () => true,
     run: runTrafficPageFeedSeed,
+  },
+  {
+    id: "traffic_image_link",
+    label: "流量广告（图片链接）",
+    canAttempt: async () => true,
+    run: runTrafficImageLinkSeed,
   },
   {
     id: "traffic_link_spec",
@@ -481,10 +446,23 @@ export function formatMetaSandboxSeedFailure(attempts: SeedAttempt[]): string {
   return ["所有 Meta 沙盒 seed 策略均失败：", ...lines].join("\n");
 }
 
+function formatCatalogSkipReason(shop: string | null): string {
+  if (shop) {
+    return "未找到 Catalog：请先在 /app/ads-catalog 连接 Meta Catalog，或设置 META_SANDBOX_PRODUCT_CATALOG_ID";
+  }
+  return "未找到 Catalog：请设置 META_SANDBOX_PRODUCT_CATALOG_ID（沙盒 token 通常无 business/catalog 权限）";
+}
+
+export type MetaSandboxSeedOptions = {
+  shop?: string | null;
+};
+
 /**
  * 按优先级尝试多种 Meta 沙盒广告结构；任一成功即返回，全部失败则抛错。
  */
-export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeedResult> {
+export async function seedMetaSandboxMinimalStructure(
+  options?: MetaSandboxSeedOptions,
+): Promise<MetaSandboxSeedResult> {
   const creds = getMetaSandboxCredentials();
   if (!creds) {
     throw new Error(
@@ -503,12 +481,19 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
     );
   }
 
+  const linkResult = await ensureSandboxPageLinkedToAdAccount({
+    accessToken: creds.accessToken,
+    adAccountId: creds.adAccountId,
+    pageId,
+  });
+
   const stamp = Date.now().toString(36);
   const dailyBudgetCents = resolveSandboxSeedDailyBudgetCents();
   const ctx: MetaSandboxSeedContext = {
     creds,
     accountPath: normalizeAdAccountId(creds.adAccountId),
     pageId,
+    shop: options?.shop?.trim() || null,
     stamp,
     campaignName: `Spark Meta Sandbox Campaign ${stamp}`,
     adSetName: `Spark Meta Sandbox AdSet ${stamp}`,
@@ -516,6 +501,7 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
     linkUrl: readMetaSandboxEnv("META_SANDBOX_SEED_LINK_URL") || "https://example.com",
     dailyBudgetCents,
     bidAmountCents: Math.max(100, Math.round(dailyBudgetCents * 0.2)),
+    prepWarnings: [...linkResult.warnings],
   };
 
   const attempts: SeedAttempt[] = [];
@@ -527,7 +513,10 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
         attempts.push({
           strategy: strategy.id,
           ok: false,
-          message: "前置条件不满足，已跳过",
+          message:
+            strategy.id === "catalog_dpa"
+              ? formatCatalogSkipReason(ctx.shop)
+              : "前置条件不满足，已跳过",
         });
         continue;
       }

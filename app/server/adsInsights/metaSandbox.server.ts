@@ -51,6 +51,12 @@ export function isMetaDevModeCreativePostError(error: MetaApiError | undefined):
   return /development mode/i.test(text);
 }
 
+export function isPostUnavailableForAdError(error: MetaApiError | undefined): boolean {
+  if (!error) return false;
+  const text = [error.error_user_title, error.error_user_msg, error.message].filter(Boolean).join(" ");
+  return /not available|not eligible|cannot be promoted|permissions to see it/i.test(text);
+}
+
 export function normalizeObjectStoryId(pageId: string, rawId: string): string {
   const id = rawId.trim();
   if (!id) return id;
@@ -255,7 +261,62 @@ async function resolvePageAccessToken(accessToken: string, pageId: string): Prom
   }
 }
 
-async function listPagePostStoryIds(accessToken: string, pageId: string): Promise<string[]> {
+/** 主页是否已关联到广告账户（promote_pages 可见）。 */
+export async function isSandboxPageLinkedToAdAccount(params: {
+  accessToken: string;
+  adAccountId: string;
+  pageId: string;
+}): Promise<boolean> {
+  const accountPath = normalizeAdAccountId(params.adAccountId);
+  try {
+    const json = await metaGet<{ data?: Array<{ id?: string }> }>(
+      `${accountPath}/promote_pages`,
+      params.accessToken,
+      { fields: "id", limit: "100" },
+    );
+    return (json.data ?? []).some((row) => row.id?.trim() === params.pageId);
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} promote_pages check failed ${formatOutboundErrorLog(e)}`);
+    return false;
+  }
+}
+
+/**
+ * 确保沙盒 Page 已关联广告账户；未关联时尝试 assigned_pages API。
+ */
+export async function ensureSandboxPageLinkedToAdAccount(params: {
+  accessToken: string;
+  adAccountId: string;
+  pageId: string;
+}): Promise<{ linked: boolean; warnings: string[] }> {
+  const warnings: string[] = [];
+  if (await isSandboxPageLinkedToAdAccount(params)) {
+    return { linked: true, warnings };
+  }
+
+  const accountPath = normalizeAdAccountId(params.adAccountId);
+  try {
+    await metaPost(
+      `${accountPath}/assigned_pages`,
+      params.accessToken,
+      { page_id: params.pageId },
+      "关联主页到广告账户",
+    );
+    if (await isSandboxPageLinkedToAdAccount(params)) {
+      warnings.push("已自动将 Facebook Page 关联到沙盒广告账户");
+      return { linked: true, warnings };
+    }
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} assigned_pages failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  warnings.push(
+    "主页尚未关联到沙盒广告账户（promote_pages 为空）。请在 Business Manager 将 Page 分配给该广告账户，或切换 Meta App 为 Live 模式后重试",
+  );
+  return { linked: false, warnings };
+}
+
+export async function listPagePostStoryIds(accessToken: string, pageId: string): Promise<string[]> {
   const out: string[] = [];
   const seen = new Set<string>();
   const pushRows = (rows: Array<{ id?: string }> | undefined) => {
@@ -267,21 +328,30 @@ async function listPagePostStoryIds(accessToken: string, pageId: string): Promis
     }
   };
 
-  try {
-    const json = await metaGet<{ data?: Array<{ id?: string }> }>(
-      `${pageId}/promotable_posts`,
-      accessToken,
-      { fields: "id", limit: "25" },
-    );
-    pushRows(json.data);
-    if (out.length > 0) return out;
-  } catch (e) {
-    console.warn(`${LOG_PREFIX} promotable_posts lookup failed ${formatOutboundErrorLog(e)}`);
-  }
-
-  // published_posts / feed 需要 Page Access Token
   const pageAccessToken = await resolvePageAccessToken(accessToken, pageId);
   const postToken = pageAccessToken ?? accessToken;
+
+  for (const edge of ["promotable_posts", "ads_posts"] as const) {
+    try {
+      const json = await metaGet<{
+        data?: Array<{ id?: string; is_eligible_for_promotion?: boolean }>;
+      }>(`${pageId}/${edge}`, postToken, {
+        fields: "id,is_eligible_for_promotion",
+        limit: "25",
+      });
+      for (const row of json.data ?? []) {
+        if (row.is_eligible_for_promotion === false) continue;
+        const storyId = normalizeObjectStoryId(pageId, row.id ?? "");
+        if (!storyId || seen.has(storyId)) continue;
+        seen.add(storyId);
+        out.push(storyId);
+      }
+      if (out.length > 0) return out;
+    } catch (e) {
+      console.warn(`${LOG_PREFIX} ${edge} lookup failed ${formatOutboundErrorLog(e)}`);
+    }
+  }
+
   for (const edge of ["published_posts", "feed"] as const) {
     try {
       const json = await metaGet<{ data?: Array<{ id?: string }> }>(
@@ -305,16 +375,116 @@ async function createPageLinkPostStoryId(params: {
   linkUrl: string;
   message: string;
 }): Promise<string> {
-  const resp = await metaPost<{ id: string }>(
-    `${params.pageId}/feed`,
-    params.pageAccessToken,
-    {
-      message: params.message,
-      link: params.linkUrl,
-    },
-    "创建沙盒主页帖",
+  const attempts: Array<Record<string, unknown>> = [
+    { message: params.message, link: params.linkUrl, published: true },
+    { message: params.message, published: true },
+  ];
+
+  let lastError: Error | null = null;
+  for (const body of attempts) {
+    try {
+      const resp = await metaPost<{ id: string }>(
+        `${params.pageId}/feed`,
+        params.pageAccessToken,
+        body,
+        "创建沙盒主页帖",
+      );
+      return normalizeObjectStoryId(params.pageId, resp.id);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      const text = lastError.message;
+      if (/administrative permission|Two Factor Authentication/i.test(text)) {
+        throw new Error(
+          "Page Token 无发帖权限（仅 ADVERTISE）。请在 Business Manager 授予主页 MANAGE/CREATE_CONTENT，或手动发一条公开帖后重试",
+          { cause: e },
+        );
+      }
+    }
+  }
+
+  throw lastError ?? new Error("无法在主页发布测试帖");
+}
+
+/** 依次尝试 object_story_id 或创意 body，返回首个成功的 creative id。 */
+export async function tryCreateSandboxAdCreative(params: {
+  accessToken: string;
+  accountPath: string;
+  adName: string;
+  objectStoryIds?: string[];
+  creativeBodies?: Array<Record<string, unknown>>;
+}): Promise<{ creativeId: string; usedObjectStoryId?: string }> {
+  const errors: string[] = [];
+
+  for (const objectStoryId of params.objectStoryIds ?? []) {
+    try {
+      const creativeResp = await metaPost<{ id: string }>(
+        `${params.accountPath}/adcreatives`,
+        params.accessToken,
+        {
+          name: `${params.adName}_creative`,
+          object_story_id: objectStoryId,
+        },
+        "创建沙盒广告创意",
+      );
+      return { creativeId: creativeResp.id, usedObjectStoryId: objectStoryId };
+    } catch (e) {
+      const metaError = (e as Error & { metaError?: MetaApiError }).metaError;
+      const message = e instanceof Error ? e.message : String(e);
+      if (isMetaDevModeCreativePostError(metaError)) {
+        throw new Error(buildMetaDevModeCreativeHint(), { cause: e });
+      }
+      if (isPostUnavailableForAdError(metaError) || /not available/i.test(message)) {
+        errors.push(`${objectStoryId}: 帖文不可用于广告`);
+        continue;
+      }
+      errors.push(`${objectStoryId}: ${message}`);
+    }
+  }
+
+  for (const creativeBody of params.creativeBodies ?? []) {
+    try {
+      const creativeResp = await metaPost<{ id: string }>(
+        `${params.accountPath}/adcreatives`,
+        params.accessToken,
+        { name: `${params.adName}_creative`, ...creativeBody },
+        "创建沙盒广告创意",
+      );
+      return { creativeId: creativeResp.id };
+    } catch (e) {
+      const metaError = (e as Error & { metaError?: MetaApiError }).metaError;
+      const message = e instanceof Error ? e.message : String(e);
+      if (isMetaDevModeCreativePostError(metaError)) {
+        throw new Error(buildMetaDevModeCreativeHint(), { cause: e });
+      }
+      errors.push(message);
+    }
+  }
+
+  throw new Error(
+    errors.length > 0 ? errors.slice(0, 3).join("；") : "无法创建广告创意",
   );
-  return normalizeObjectStoryId(params.pageId, resp.id);
+}
+
+export async function uploadSandboxAdImageHash(params: {
+  accessToken: string;
+  accountPath: string;
+}): Promise<string | null> {
+  const imageUrl =
+    readMetaSandboxEnv("META_SANDBOX_SEED_IMAGE_URL") ||
+    "https://www.facebook.com/images/fb_icon_325x325.png";
+  try {
+    const resp = await metaPost<{ images?: Record<string, { hash?: string }> }>(
+      `${params.accountPath}/adimages`,
+      params.accessToken,
+      { url: imageUrl },
+      "上传沙盒广告图片",
+    );
+    const first = Object.values(resp.images ?? {})[0];
+    return first?.hash?.trim() || null;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} adimages upload failed ${formatOutboundErrorLog(e)}`);
+    return null;
+  }
 }
 
 export function buildMetaDevModeCreativeHint(): string {

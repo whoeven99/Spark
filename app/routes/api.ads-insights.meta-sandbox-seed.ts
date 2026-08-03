@@ -11,9 +11,10 @@ const LOG_PREFIX = "[AdsInsights][Meta][SandboxSeed]";
 /**
  * POST /api/ads-insights/meta-sandbox-seed
  * 在 Meta 沙盒广告账户创建 Campaign → Ad Set → Ad（需 Page；指标来自真实 Insights API）。
+ * Catalog 自动发现：优先读取当前店铺 Meta Catalog OAuth（ads-catalog 已连接时）。
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   if (request.method !== "POST") {
     return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
   }
@@ -31,7 +32,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const result = await seedMetaSandboxMinimalStructure();
+    const result = await seedMetaSandboxMinimalStructure({ shop: session.shop });
     return Response.json({ ok: true, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

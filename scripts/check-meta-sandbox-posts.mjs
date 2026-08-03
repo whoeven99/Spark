@@ -128,6 +128,27 @@ async function main() {
   console.log("");
   console.log(`Page Access Token: ${pageAccessToken ? "已获取" : "未获取（可能缺少 pages_show_list）"}`);
 
+  const promoteResp = await graphGet(token, `act_${adAccountId}/promote_pages`, {
+    fields: "id,name",
+    limit: "20",
+  });
+  console.log(
+    `promote_pages (广告账户可投放主页): ${promoteResp.ok ? promoteResp.json.data?.length ?? 0 : promoteResp.json.error?.message}`,
+  );
+  if (promoteResp.ok) {
+    for (const row of promoteResp.json.data ?? []) {
+      console.log(`  - ${row.name ?? "(no name)"} | ${row.id}`);
+    }
+  }
+  if (configuredPageId && promoteResp.ok) {
+    const linked = (promoteResp.json.data ?? []).some((r) => String(r.id) === configuredPageId);
+    console.log(
+      linked
+        ? "主页已关联到广告账户"
+        : "警告: META_SANDBOX_PAGE_ID 未出现在 promote_pages，复用帖文创意可能失败",
+    );
+  }
+
   for (const page of targetPages) {
     console.log("");
     console.log(`--- 主页 ${page.pageId} (${page.name}) ---`);
@@ -139,7 +160,10 @@ async function main() {
         : null;
 
     for (const edge of ["promotable_posts", "published_posts", "feed"]) {
-      const queryToken = edge === "promotable_posts" ? token : pageToken ?? token;
+      const queryToken =
+        edge === "promotable_posts" || edge === "published_posts" || edge === "feed"
+          ? pageToken ?? token
+          : token;
       const { ok, json } = await graphGet(queryToken, `${page.pageId}/${edge}`, {
         fields: "id,message,created_time,is_eligible_for_promotion",
         limit: "10",

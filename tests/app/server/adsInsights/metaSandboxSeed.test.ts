@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   META_DEV_MODE_CREATIVE_POST_SUBCODE,
   isMetaDevModeCreativePostError,
+  isPostUnavailableForAdError,
   normalizeObjectStoryId,
 } from "~/server/adsInsights/metaSandbox.server";
 import { formatMetaSandboxSeedFailure } from "~/server/adsInsights/metaSandboxSeed.server";
@@ -26,6 +27,15 @@ describe("meta sandbox seed helpers", () => {
       isMetaDevModeCreativePostError({
         error_user_msg:
           "Ads creative post was created by an app that is in development mode. It must be in public to create this ad.",
+      }),
+    ).toBe(true);
+  });
+
+  it("detects post unavailable for ad error", () => {
+    expect(
+      isPostUnavailableForAdError({
+        error_user_msg:
+          "The post you selected for your ad is not available. It could be deleted or you might not have permissions to see it.",
       }),
     ).toBe(true);
   });
