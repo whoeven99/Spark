@@ -564,6 +564,8 @@ export type MetaAdsCredential = {
   adAccountId: string;
   adAccountName?: string;
   currencyCode?: string;
+  /** OAuth 时可切换的全部广告账户（持久化，便于已连接后切换）。 */
+  availableAccounts?: PendingOAuthAccount[];
   updatedAt: string;
 };
 
@@ -586,6 +588,9 @@ export async function getMetaAdsCredential(
       typeof record.data.currencyCode === "string"
         ? record.data.currencyCode
         : undefined,
+    availableAccounts: Array.isArray(record.data.availableAccounts)
+      ? (record.data.availableAccounts as PendingOAuthAccount[])
+      : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -594,7 +599,7 @@ export async function setMetaAdsCredential(
   shop: string,
   payload: Pick<
     MetaAdsCredential,
-    "accessToken" | "adAccountId" | "adAccountName" | "currencyCode"
+    "accessToken" | "adAccountId" | "adAccountName" | "currencyCode" | "availableAccounts"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -602,11 +607,18 @@ export async function setMetaAdsCredential(
   if (!accessToken || !adAccountId) {
     throw new Error("Meta Ads accessToken and adAccountId are required");
   }
+  const existing = await readPlatformCredential(shop, META_ADS_PLATFORM);
+  const availableAccounts =
+    payload.availableAccounts ??
+    (Array.isArray(existing?.data.availableAccounts)
+      ? (existing.data.availableAccounts as PendingOAuthAccount[])
+      : []);
   await writePlatformCredential(shop, META_ADS_PLATFORM, {
     accessToken,
     adAccountId,
     adAccountName: payload.adAccountName?.trim() || null,
     currencyCode: payload.currencyCode?.trim() || null,
+    availableAccounts,
   });
 }
 

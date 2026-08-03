@@ -663,6 +663,7 @@ export function AdsInsightsPage() {
             adAccountId={connections.meta.adAccountId}
             adAccountName={connections.meta.adAccountName}
             pendingAccounts={connections.meta.pendingAccounts}
+            availableAccounts={connections.meta.availableAccounts}
             locationSearch={locationSearch}
             onChanged={loadMetrics}
           />

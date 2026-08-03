@@ -22,6 +22,7 @@ export type AdsInsightsPageLoaderData = {
       adAccountName: string | null;
       currencyCode: string | null;
       pendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+      availableAccounts: Array<{ id: string; name?: string; formatted?: string }>;
       sandboxConfigured: boolean;
     };
     google: {
@@ -62,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         adAccountName: meta?.adAccountName ?? null,
         currencyCode: meta?.currencyCode ?? null,
         pendingAccounts: metaPending?.accounts ?? [],
+        availableAccounts: meta?.availableAccounts ?? [],
         sandboxConfigured: isMetaSandboxConfigured(),
       },
       google: {

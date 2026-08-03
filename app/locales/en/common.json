@@ -1961,6 +1961,8 @@
     "metaDisconnect": "Disconnect",
     "metaConnected": "Connected: {{name}}",
     "metaSelectAccount": "Select an ad account",
+    "metaSwitchAccount": "Switch ad account",
+    "metaCurrentAccount": "Current",
     "connecting": "Connecting…",
     "authError": "Failed to start Meta Ads authorization",
     "levelCampaign": "Campaign",

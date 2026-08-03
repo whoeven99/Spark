@@ -1961,6 +1961,8 @@
     "metaDisconnect": "断开连接",
     "metaConnected": "已连接：{{name}}",
     "metaSelectAccount": "选择广告账户",
+    "metaSwitchAccount": "切换广告账户",
+    "metaCurrentAccount": "当前",
     "connecting": "连接中…",
     "authError": "无法启动 Meta Ads 授权",
     "levelCampaign": "广告系列",

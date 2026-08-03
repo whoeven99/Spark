@@ -95,12 +95,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     if (accounts.length === 1) {
+      const accountOptions = accounts.map((a) => ({
+        id: a.adAccountId,
+        name: a.name,
+        formatted: a.currencyCode,
+      }));
       await clearMetaAdsPending(shop);
       await setMetaAdsCredential(shop, {
         accessToken,
         adAccountId: accounts[0].adAccountId,
         adAccountName: accounts[0].name,
         currencyCode: accounts[0].currencyCode,
+        availableAccounts: accountOptions,
       });
       return respond({
         metaAdsAuth: "success",
