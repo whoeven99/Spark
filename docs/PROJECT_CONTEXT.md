@@ -147,6 +147,7 @@ npm run turso:migrate:test
   - `META_SANDBOX_ACCOUNT_NAME`、`META_SANDBOX_PAGE_ID`、`META_SANDBOX_CURRENCY_CODE`（可选）
   - `META_SANDBOX_SEED_LINK_URL`（seed 建 Ad 时的落地页，可选）
   - `META_SANDBOX_SEED_DAILY_BUDGET_CENTS`（seed Ad Set 日预算，账户货币最小单位，默认 1000 = 10.00）
+  - `META_SANDBOX_SEED_OBJECT_STORY_ID`（seed 建创意时复用的主页帖 `pageId_postId`；开发模式 App 无法隐式创建帖文时可用）
   - 不复用 Meta Ads OAuth token；Insights 走真实 Graph API。
 
 ## 9. 改动落点

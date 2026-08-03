@@ -116,6 +116,8 @@ async function main() {
   }
   console.log("");
   console.log(`推荐写入 .env：META_SANDBOX_PAGE_ID=${pages[0].pageId}`);
+  console.log("");
+  console.log("若「生成测试结构」报开发模式帖文错误，请先在主页发一条帖文，或设置 META_SANDBOX_SEED_OBJECT_STORY_ID=<pageId_postId>");
 }
 
 main().catch((e) => {

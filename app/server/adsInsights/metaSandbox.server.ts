@@ -33,7 +33,25 @@ type MetaApiError = {
   message?: string;
   error_user_title?: string;
   error_user_msg?: string;
+  error_subcode?: number;
 };
+
+/** Meta 拒绝开发模式 App 通过 object_story_spec 隐式创建主页帖时的 subcode。 */
+export const META_DEV_MODE_CREATIVE_POST_SUBCODE = 1885183;
+
+export function isMetaDevModeCreativePostError(error: MetaApiError | undefined): boolean {
+  if (!error) return false;
+  if (error.error_subcode === META_DEV_MODE_CREATIVE_POST_SUBCODE) return true;
+  const text = [error.error_user_title, error.error_user_msg, error.message].filter(Boolean).join(" ");
+  return /development mode/i.test(text);
+}
+
+export function normalizeObjectStoryId(pageId: string, rawId: string): string {
+  const id = rawId.trim();
+  if (!id) return id;
+  if (id.includes("_")) return id;
+  return `${pageId}_${id}`;
+}
 
 function readEnv(name: string): string {
   return (process.env[name] || "").trim();
@@ -120,9 +138,11 @@ async function metaPost<T = Record<string, unknown>>(
     throw new Error(`[${step}] Meta API HTTP ${response.status}: ${text.slice(0, 300)}`);
   }
   if (!response.ok || json.error) {
-    throw new Error(
-      `[${step}] ${formatMetaError(json.error, `Meta API HTTP ${response.status}`)}`,
-    );
+    const err = json.error;
+    const message = formatMetaError(err, `Meta API HTTP ${response.status}`);
+    const error = new Error(`[${step}] ${message}`) as Error & { metaError?: MetaApiError };
+    error.metaError = err;
+    throw error;
   }
   return json as T;
 }
@@ -208,6 +228,117 @@ async function resolveSandboxPageId(params: {
   }
 
   return null;
+}
+
+async function resolvePageAccessToken(accessToken: string, pageId: string): Promise<string | null> {
+  try {
+    const json = await metaGet<{ data?: Array<{ id?: string; access_token?: string }> }>(
+      "me/accounts",
+      accessToken,
+      { fields: "id,access_token", limit: "100" },
+    );
+    const match = json.data?.find((row) => row.id?.trim() === pageId);
+    return match?.access_token?.trim() || null;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} page access_token lookup failed ${formatOutboundErrorLog(e)}`);
+    return null;
+  }
+}
+
+async function listPagePostStoryIds(accessToken: string, pageId: string): Promise<string[]> {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const edges = ["promotable_posts", "published_posts"] as const;
+
+  for (const edge of edges) {
+    try {
+      const json = await metaGet<{ data?: Array<{ id?: string }> }>(
+        `${pageId}/${edge}`,
+        accessToken,
+        { fields: "id", limit: "25" },
+      );
+      for (const row of json.data ?? []) {
+        const storyId = normalizeObjectStoryId(pageId, row.id ?? "");
+        if (!storyId || seen.has(storyId)) continue;
+        seen.add(storyId);
+        out.push(storyId);
+      }
+      if (out.length > 0) break;
+    } catch (e) {
+      console.warn(`${LOG_PREFIX} ${edge} lookup failed ${formatOutboundErrorLog(e)}`);
+    }
+  }
+
+  return out;
+}
+
+async function createPageLinkPostStoryId(params: {
+  pageId: string;
+  pageAccessToken: string;
+  linkUrl: string;
+  message: string;
+}): Promise<string> {
+  const resp = await metaPost<{ id: string }>(
+    `${params.pageId}/feed`,
+    params.pageAccessToken,
+    {
+      message: params.message,
+      link: params.linkUrl,
+    },
+    "创建沙盒主页帖",
+  );
+  return normalizeObjectStoryId(params.pageId, resp.id);
+}
+
+function buildMetaDevModeCreativeHint(): string {
+  return [
+    "Meta App 处于开发模式，无法通过 API 隐式创建广告帖。",
+    "请任选其一：① 在 Facebook 主页手动发一条带链接的帖文后重试；",
+    "② 在 .env 设置 META_SANDBOX_SEED_OBJECT_STORY_ID=<pageId_postId>；",
+    "③ 在 Meta 开发者后台将 App 切换为 Live（公开）模式。",
+  ].join("");
+}
+
+type SandboxObjectStoryResolution = {
+  objectStoryId: string | null;
+  source: "env" | "promotable_posts" | "page_feed" | "none";
+};
+
+async function resolveSandboxObjectStoryId(params: {
+  accessToken: string;
+  pageId: string;
+  linkUrl: string;
+  message: string;
+}): Promise<SandboxObjectStoryResolution> {
+  const envStoryId = readEnv("META_SANDBOX_SEED_OBJECT_STORY_ID");
+  if (envStoryId) {
+    return {
+      objectStoryId: normalizeObjectStoryId(params.pageId, envStoryId),
+      source: "env",
+    };
+  }
+
+  const existingPosts = await listPagePostStoryIds(params.accessToken, params.pageId);
+  if (existingPosts.length > 0) {
+    return { objectStoryId: existingPosts[0], source: "promotable_posts" };
+  }
+
+  const pageAccessToken = await resolvePageAccessToken(params.accessToken, params.pageId);
+  if (pageAccessToken) {
+    try {
+      const objectStoryId = await createPageLinkPostStoryId({
+        pageId: params.pageId,
+        pageAccessToken,
+        linkUrl: params.linkUrl,
+        message: params.message,
+      });
+      return { objectStoryId, source: "page_feed" };
+    } catch (e) {
+      console.warn(`${LOG_PREFIX} page feed post failed ${formatOutboundErrorLog(e)}`);
+    }
+  }
+
+  return { objectStoryId: null, source: "none" };
 }
 
 /** 列举沙盒 token 可发现的 Facebook Page（调试用）。 */
@@ -358,24 +489,59 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
   );
   const adSetId = adSetResp.id;
 
-  const creativeResp = await metaPost<{ id: string }>(
-    `${accountPath}/adcreatives`,
-    creds.accessToken,
-    {
-      name: `${adName}_creative`,
-      object_story_spec: {
-        page_id: pageId,
-        link_data: {
-          message: "Spark Meta sandbox test",
-          link: linkUrl,
-          name: adName,
-          call_to_action: { type: "LEARN_MORE", value: { link: linkUrl } },
-        },
+  const storyResolution = await resolveSandboxObjectStoryId({
+    accessToken: creds.accessToken,
+    pageId,
+    linkUrl,
+    message: "Spark Meta sandbox test",
+  });
+
+  let creativeId: string;
+  if (storyResolution.objectStoryId) {
+    if (storyResolution.source === "promotable_posts") {
+      warnings.push("广告创意复用主页现有帖文（开发模式 App 无法隐式创建新帖）");
+    } else if (storyResolution.source === "page_feed") {
+      warnings.push("广告创意使用主页新发布的帖文（开发模式 App 无法隐式创建新帖）");
+    }
+
+    const creativeResp = await metaPost<{ id: string }>(
+      `${accountPath}/adcreatives`,
+      creds.accessToken,
+      {
+        name: `${adName}_creative`,
+        object_story_id: storyResolution.objectStoryId,
       },
-    },
-    "创建沙盒广告创意",
-  );
-  const creativeId = creativeResp.id;
+      "创建沙盒广告创意",
+    );
+    creativeId = creativeResp.id;
+  } else {
+    try {
+      const creativeResp = await metaPost<{ id: string }>(
+        `${accountPath}/adcreatives`,
+        creds.accessToken,
+        {
+          name: `${adName}_creative`,
+          object_story_spec: {
+            page_id: pageId,
+            link_data: {
+              message: "Spark Meta sandbox test",
+              link: linkUrl,
+              name: adName,
+              call_to_action: { type: "LEARN_MORE", value: { link: linkUrl } },
+            },
+          },
+        },
+        "创建沙盒广告创意",
+      );
+      creativeId = creativeResp.id;
+    } catch (e) {
+      const metaError = (e as Error & { metaError?: MetaApiError }).metaError;
+      if (isMetaDevModeCreativePostError(metaError)) {
+        throw new Error(`[创建沙盒广告创意] ${buildMetaDevModeCreativeHint()}`, { cause: e });
+      }
+      throw e;
+    }
+  }
 
   const adResp = await metaPost<{ id: string }>(
     `${accountPath}/ads`,
