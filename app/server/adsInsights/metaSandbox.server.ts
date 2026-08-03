@@ -3,7 +3,7 @@
  * 凭证仅来自环境变量，绝不读取 AdPlatformCredential。
  */
 
-import { META_GRAPH_BASE } from "../adsCatalog/metaOAuth.server";
+import { META_GRAPH_BASE, getMetaPages } from "../adsCatalog/metaOAuth.server";
 import {
   formatOutboundErrorLog,
   formatOutboundNetworkError,
@@ -37,6 +37,16 @@ type MetaApiError = {
 
 function readEnv(name: string): string {
   return (process.env[name] || "").trim();
+}
+
+/** Meta API 预算单位为账户货币的最小单位（如 USD/CNY 为分）。默认 1000 = 10.00，满足 CNY 最低约 6.81。 */
+function resolveSandboxSeedDailyBudgetCents(): number {
+  const raw = readEnv("META_SANDBOX_SEED_DAILY_BUDGET_CENTS");
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 1000;
 }
 
 /** 沙盒凭证是否已配置（不暴露 token）。 */
@@ -156,21 +166,98 @@ async function resolveSandboxCurrencyCode(params: {
 
 async function resolveSandboxPageId(params: {
   accessToken: string;
+  adAccountId: string;
   pageId?: string | null;
 }): Promise<string | null> {
   if (params.pageId) return params.pageId;
+
+  const accountId = normalizeAdAccountId(params.adAccountId);
+
+  // 广告账户可投放的主页（与 Business Manager 资产关联最相关）
   try {
     const json = await metaGet<{ data?: Array<{ id?: string }> }>(
-      "me/accounts",
+      `${accountId}/promote_pages`,
       params.accessToken,
-      { fields: "id,name", limit: "1" },
+      { fields: "id,name", limit: "25" },
     );
     const pageId = json.data?.[0]?.id?.trim();
-    return pageId || null;
+    if (pageId) return pageId;
   } catch (e) {
-    console.warn(`${LOG_PREFIX} page lookup failed ${formatOutboundErrorLog(e)}`);
-    return null;
+    console.warn(`${LOG_PREFIX} promote_pages lookup failed ${formatOutboundErrorLog(e)}`);
   }
+
+  // 用户可管理的主页（与广告创建页 getMetaPages 一致）
+  try {
+    const pages = await getMetaPages(params.accessToken);
+    if (pages.length > 0) return pages[0].pageId;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} getMetaPages failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  // 部分 token 仅暴露 me/pages
+  try {
+    const json = await metaGet<{ data?: Array<{ id?: string }> }>(
+      "me/pages",
+      params.accessToken,
+      { fields: "id,name", limit: "25" },
+    );
+    const pageId = json.data?.[0]?.id?.trim();
+    if (pageId) return pageId;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} me/pages lookup failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  return null;
+}
+
+/** 列举沙盒 token 可发现的 Facebook Page（调试用）。 */
+export async function listMetaSandboxPages(): Promise<Array<{ pageId: string; name?: string }>> {
+  const creds = getMetaSandboxCredentials();
+  if (!creds) return [];
+
+  const seen = new Set<string>();
+  const out: Array<{ pageId: string; name?: string }> = [];
+  const push = (rows: Array<{ id?: string; name?: string; pageId?: string }> | undefined) => {
+    for (const row of rows ?? []) {
+      const pageId = (row.pageId ?? row.id ?? "").trim();
+      if (!pageId || seen.has(pageId)) continue;
+      seen.add(pageId);
+      out.push({ pageId, name: row.name });
+    }
+  };
+
+  const accountId = normalizeAdAccountId(creds.adAccountId);
+  try {
+    const json = await metaGet<{ data?: Array<{ id?: string; name?: string }> }>(
+      `${accountId}/promote_pages`,
+      creds.accessToken,
+      { fields: "id,name", limit: "50" },
+    );
+    push(json.data);
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} list promote_pages failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  try {
+    push(await getMetaPages(creds.accessToken).then((pages) =>
+      pages.map((p) => ({ id: p.pageId, name: p.name })),
+    ));
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} list getMetaPages failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  try {
+    const json = await metaGet<{ data?: Array<{ id?: string; name?: string }> }>(
+      "me/pages",
+      creds.accessToken,
+      { fields: "id,name", limit: "50" },
+    );
+    push(json.data);
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} list me/pages failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  return out;
 }
 
 export async function fetchMetaSandboxInsights(
@@ -211,11 +298,12 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
 
   const pageId = await resolveSandboxPageId({
     accessToken: creds.accessToken,
+    adAccountId: creds.adAccountId,
     pageId: creds.pageId,
   });
   if (!pageId) {
     throw new Error(
-      "未找到可用于创建广告的 Facebook Page：请设置 META_SANDBOX_PAGE_ID，或确保 token 可访问至少一个 Page",
+      "未找到可用于创建广告的 Facebook Page。请任选其一：① 在 Business Manager 将 Page 关联到沙盒广告账户；② 在 facebook.com/pages/create 创建主页；③ 在 .env 设置 META_SANDBOX_PAGE_ID=<Page 数字 ID>",
     );
   }
 
@@ -226,6 +314,8 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
   const warnings: string[] = [];
   const accountPath = normalizeAdAccountId(creds.adAccountId);
   const linkUrl = readEnv("META_SANDBOX_SEED_LINK_URL") || "https://example.com";
+  const dailyBudgetCents = resolveSandboxSeedDailyBudgetCents();
+  const bidAmountCents = Math.max(100, Math.round(dailyBudgetCents * 0.2));
 
   const campaignResp = await metaPost<{ id: string }>(
     `${accountPath}/campaigns`,
@@ -256,8 +346,8 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
     status: "PAUSED",
     start_time: new Date().toISOString(),
     bid_strategy: "LOWEST_COST_WITH_BID_CAP",
-    bid_amount: 100,
-    daily_budget: 500,
+    bid_amount: bidAmountCents,
+    daily_budget: dailyBudgetCents,
   };
 
   const adSetResp = await metaPost<{ id: string }>(
