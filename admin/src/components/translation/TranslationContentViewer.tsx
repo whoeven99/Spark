@@ -13,6 +13,13 @@ import {
 } from "../../api";
 
 const CONTENT_PAGE_SIZE = 10;
+/** 对照表最小宽度：字段 + 翻译前/后 + 成本，避免长文本挤没「翻译后」列 */
+const CONTENT_TABLE_SCROLL_X = 1000;
+const COL = {
+  key: 96,
+  text: 320,
+  cost: 220,
+} as const;
 
 const C = {
   border: "#e6e8ec",
@@ -26,20 +33,24 @@ const C = {
 };
 
 function ContentCell({ value, fallback }: { value: string; fallback?: boolean }) {
+  if (!value) {
+    return <span style={{ color: C.faint }}>—</span>;
+  }
   return (
-    <div
+    <Typography.Paragraph
       style={{
         fontSize: 12,
         lineHeight: 1.5,
+        marginBottom: 0,
         whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        maxHeight: 180,
-        overflow: "auto",
+        wordBreak: "break-all",
+        overflowWrap: "anywhere",
         color: fallback ? C.warn : C.ink,
       }}
+      ellipsis={{ rows: 8, expandable: true, symbol: "展开" }}
     >
-      {value || <span style={{ color: C.faint }}>—</span>}
-    </div>
+      {value}
+    </Typography.Paragraph>
   );
 }
 
@@ -358,19 +369,22 @@ export function TranslationContentViewer({ job }: { job: TranslationJob }) {
                 <Table
                   size="small"
                   pagination={false}
+                  tableLayout="fixed"
+                  scroll={{ x: CONTENT_TABLE_SCROLL_X }}
                   rowKey={(_r, i) => String(i)}
                   dataSource={res.translations}
                   columns={[
                     {
                       title: "字段",
                       dataIndex: "key",
-                      width: 110,
+                      width: COL.key,
                       render: (v: string) => (
                         <span
                           style={{
                             fontSize: 11.5,
                             fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
                             color: C.sub,
+                            wordBreak: "break-all",
                           }}
                         >
                           {v}
@@ -380,11 +394,13 @@ export function TranslationContentViewer({ job }: { job: TranslationJob }) {
                     {
                       title: "翻译前",
                       dataIndex: "originalValue",
+                      width: COL.text,
                       render: (v: string) => <ContentCell value={v} />,
                     },
                     {
                       title: "翻译后",
                       dataIndex: "translatedValue",
+                      width: COL.text,
                       render: (v: string, r: { status?: string }) => (
                         <ContentCell value={v} fallback={r.status === "fallback"} />
                       ),
@@ -396,7 +412,7 @@ export function TranslationContentViewer({ job }: { job: TranslationJob }) {
                         </span>
                       ),
                       dataIndex: "cost",
-                      width: 220,
+                      width: COL.cost,
                       render: (_: unknown, r: TranslationContentField) => <CostCell cost={r.cost} />,
                     },
                   ]}
