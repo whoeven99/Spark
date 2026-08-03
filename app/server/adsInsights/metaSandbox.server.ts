@@ -248,22 +248,39 @@ async function resolvePageAccessToken(accessToken: string, pageId: string): Prom
 async function listPagePostStoryIds(accessToken: string, pageId: string): Promise<string[]> {
   const out: string[] = [];
   const seen = new Set<string>();
-  const edges = ["promotable_posts", "published_posts"] as const;
+  const pushRows = (rows: Array<{ id?: string }> | undefined) => {
+    for (const row of rows ?? []) {
+      const storyId = normalizeObjectStoryId(pageId, row.id ?? "");
+      if (!storyId || seen.has(storyId)) continue;
+      seen.add(storyId);
+      out.push(storyId);
+    }
+  };
 
-  for (const edge of edges) {
+  try {
+    const json = await metaGet<{ data?: Array<{ id?: string }> }>(
+      `${pageId}/promotable_posts`,
+      accessToken,
+      { fields: "id", limit: "25" },
+    );
+    pushRows(json.data);
+    if (out.length > 0) return out;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} promotable_posts lookup failed ${formatOutboundErrorLog(e)}`);
+  }
+
+  // published_posts / feed 需要 Page Access Token
+  const pageAccessToken = await resolvePageAccessToken(accessToken, pageId);
+  const postToken = pageAccessToken ?? accessToken;
+  for (const edge of ["published_posts", "feed"] as const) {
     try {
       const json = await metaGet<{ data?: Array<{ id?: string }> }>(
         `${pageId}/${edge}`,
-        accessToken,
+        postToken,
         { fields: "id", limit: "25" },
       );
-      for (const row of json.data ?? []) {
-        const storyId = normalizeObjectStoryId(pageId, row.id ?? "");
-        if (!storyId || seen.has(storyId)) continue;
-        seen.add(storyId);
-        out.push(storyId);
-      }
-      if (out.length > 0) break;
+      pushRows(json.data);
+      if (out.length > 0) return out;
     } catch (e) {
       console.warn(`${LOG_PREFIX} ${edge} lookup failed ${formatOutboundErrorLog(e)}`);
     }
@@ -301,7 +318,7 @@ function buildMetaDevModeCreativeHint(): string {
 
 type SandboxObjectStoryResolution = {
   objectStoryId: string | null;
-  source: "env" | "promotable_posts" | "page_feed" | "none";
+  source: "env" | "existing_posts" | "page_feed" | "none";
 };
 
 async function resolveSandboxObjectStoryId(params: {
@@ -320,7 +337,7 @@ async function resolveSandboxObjectStoryId(params: {
 
   const existingPosts = await listPagePostStoryIds(params.accessToken, params.pageId);
   if (existingPosts.length > 0) {
-    return { objectStoryId: existingPosts[0], source: "promotable_posts" };
+    return { objectStoryId: existingPosts[0], source: "existing_posts" };
   }
 
   const pageAccessToken = await resolvePageAccessToken(params.accessToken, params.pageId);
@@ -498,7 +515,7 @@ export async function seedMetaSandboxMinimalStructure(): Promise<MetaSandboxSeed
 
   let creativeId: string;
   if (storyResolution.objectStoryId) {
-    if (storyResolution.source === "promotable_posts") {
+    if (storyResolution.source === "existing_posts") {
       warnings.push("广告创意复用主页现有帖文（开发模式 App 无法隐式创建新帖）");
     } else if (storyResolution.source === "page_feed") {
       warnings.push("广告创意使用主页新发布的帖文（开发模式 App 无法隐式创建新帖）");
