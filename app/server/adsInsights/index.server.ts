@@ -1,6 +1,7 @@
 import { fetchGoogleAdsInsights } from "./googleAdsInsights.server";
 import { fetchGoogleAdsSandboxInsights } from "./googleSandbox.server";
 import { fetchMetaAdsInsights } from "./metaAdsInsights.server";
+import { fetchMetaSandboxInsights } from "./metaSandbox.server";
 import { fetchTiktokAdsInsights } from "./tiktokAdsInsights.server";
 import type {
   AdsInsightsPlatform,
@@ -14,16 +15,19 @@ export async function fetchAdsInsights(params: {
   platform: AdsInsightsPlatform;
   rangeDays: AdsInsightsRangeDays;
   view?: AdsInsightsView;
-  /** TikTok / Google：沙盒或测试账号模式，与正式 Catalog OAuth 隔离 */
+  /** Meta / TikTok / Google：沙盒或测试账号模式，与正式 Catalog OAuth 隔离 */
   sandbox?: boolean;
 }): Promise<AdsInsightsResult | null> {
   const view = params.view ?? "structure";
 
   if (params.platform === "meta") {
-    if (params.sandbox) return null;
-    const result = await fetchMetaAdsInsights(params.shop, params.rangeDays, {
-      includeCreatives: view === "creatives",
-    });
+    const result = params.sandbox
+      ? await fetchMetaSandboxInsights(params.rangeDays, {
+          includeCreatives: view === "creatives",
+        })
+      : await fetchMetaAdsInsights(params.shop, params.rangeDays, {
+          includeCreatives: view === "creatives",
+        });
     if (!result) return null;
     if (view === "structure") {
       return { ...result, keywords: undefined, searchTerms: undefined, creatives: undefined };

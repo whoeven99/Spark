@@ -288,17 +288,20 @@ function mapInsightRow(
   };
 }
 
-export async function fetchMetaAdsInsights(
-  shop: string,
-  rangeDays: AdsInsightsRangeDays,
-  options?: { includeCreatives?: boolean },
-): Promise<AdsInsightsResult | null> {
-  const cred = await getMetaAdsCredential(shop);
-  if (!cred) return null;
-
-  const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
+export async function fetchMetaAdsInsightsWithCredential(params: {
+  shop?: string;
+  accessToken: string;
+  adAccountId: string;
+  currencyCode?: string | null;
+  accountName?: string | null;
+  rangeDays: AdsInsightsRangeDays;
+  options?: { includeCreatives?: boolean };
+  sandbox?: boolean;
+}): Promise<AdsInsightsResult> {
+  const shop = params.shop ?? "sandbox";
+  const { dateStart, dateEnd } = resolveDateWindow(params.rangeDays);
   console.info(
-    `${LOG_PREFIX} step=start shop=${shop} account=${cred.adAccountId} range=${rangeDays}`,
+    `${LOG_PREFIX} step=start shop=${shop} account=${params.adAccountId} range=${params.rangeDays} sandbox=${Boolean(params.sandbox)}`,
   );
 
   let rows: MetaInsightRow[];
@@ -306,14 +309,14 @@ export async function fetchMetaAdsInsights(
   try {
     [rows, statuses] = await Promise.all([
       fetchAllInsights({
-        accessToken: cred.accessToken,
-        adAccountId: cred.adAccountId,
+        accessToken: params.accessToken,
+        adAccountId: params.adAccountId,
         dateStart,
         dateEnd,
       }),
       fetchEntityStatuses({
-        accessToken: cred.accessToken,
-        adAccountId: cred.adAccountId,
+        accessToken: params.accessToken,
+        adAccountId: params.adAccountId,
       }),
     ]);
   } catch (e) {
@@ -325,7 +328,7 @@ export async function fetchMetaAdsInsights(
     .map((row) => mapInsightRow(row, statuses))
     .filter((r) => r.campaignId && r.adSetId && r.adId);
 
-  const wantCreatives = Boolean(options?.includeCreatives);
+  const wantCreatives = Boolean(params.options?.includeCreatives);
   const campaigns = wantCreatives ? [] : nestFlatAdRows(flat);
   const creatives = wantCreatives
     ? flat.map(
@@ -352,9 +355,11 @@ export async function fetchMetaAdsInsights(
 
   return {
     platform: "meta",
-    accountId: cred.adAccountId,
-    currencyCode: cred.currencyCode ?? null,
-    rangeDays,
+    accountId: params.adAccountId,
+    accountName: params.accountName ?? null,
+    sandbox: Boolean(params.sandbox),
+    currencyCode: params.currencyCode ?? null,
+    rangeDays: params.rangeDays,
     dateStart,
     dateEnd,
     campaigns,
@@ -362,4 +367,24 @@ export async function fetchMetaAdsInsights(
     searchTerms: [],
     creatives,
   };
+}
+
+export async function fetchMetaAdsInsights(
+  shop: string,
+  rangeDays: AdsInsightsRangeDays,
+  options?: { includeCreatives?: boolean },
+): Promise<AdsInsightsResult | null> {
+  const cred = await getMetaAdsCredential(shop);
+  if (!cred) return null;
+
+  return fetchMetaAdsInsightsWithCredential({
+    shop,
+    accessToken: cred.accessToken,
+    adAccountId: cred.adAccountId,
+    currencyCode: cred.currencyCode,
+    accountName: cred.adAccountName,
+    rangeDays,
+    options,
+    sandbox: false,
+  });
 }

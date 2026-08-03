@@ -42,6 +42,7 @@ type SeedFetcherData =
       campaignId: string | null;
       adgroupId?: string | null;
       adGroupId?: string | null;
+      adSetId?: string | null;
       adId?: string | null;
       keywordId?: string | null;
       campaignName: string;
@@ -85,6 +86,10 @@ export function AdsInsightsPage() {
   const [tiktokSandbox, setTiktokSandbox] = useState(
     searchParams.get("sandbox") === "1" || searchParams.get("sandbox") === "true",
   );
+  const [metaSandbox, setMetaSandbox] = useState(
+    initialPlatform === "meta" &&
+      (searchParams.get("sandbox") === "1" || searchParams.get("sandbox") === "true"),
+  );
   const [googleSandbox, setGoogleSandbox] = useState(
     initialPlatform === "google" &&
       (searchParams.get("sandbox") === "1" || searchParams.get("sandbox") === "true"),
@@ -93,9 +98,12 @@ export function AdsInsightsPage() {
 
   const connections = loaderData.connections;
   const sandboxConfigured = connections.tiktok.sandboxConfigured;
+  const metaSandboxConfigured = connections.meta.sandboxConfigured;
   const connected =
     platform === "meta"
-      ? connections.meta.connected
+      ? metaSandbox
+        ? metaSandboxConfigured
+        : connections.meta.connected
       : platform === "google"
         ? googleSandbox
           ? connections.google.sandboxConnected
@@ -111,7 +119,7 @@ export function AdsInsightsPage() {
     }
   }, [platform, view]);
 
-  // 离开 TikTok / Google 时关闭对应沙盒开关（避免 query 误传到其他平台）。
+  // 离开 TikTok / Google / Meta 时关闭对应沙盒开关（避免 query 误传到其他平台）。
   useEffect(() => {
     if (platform !== "tiktok" && tiktokSandbox) {
       setTiktokSandbox(false);
@@ -120,7 +128,10 @@ export function AdsInsightsPage() {
     if (platform !== "google" && googleSandbox) {
       setGoogleSandbox(false);
     }
-  }, [platform, tiktokSandbox, googleSandbox]);
+    if (platform !== "meta" && metaSandbox) {
+      setMetaSandbox(false);
+    }
+  }, [platform, tiktokSandbox, googleSandbox, metaSandbox]);
 
   // 沙盒模式关闭时清除自定义指标覆盖
   useEffect(() => {
@@ -128,7 +139,10 @@ export function AdsInsightsPage() {
   }, [tiktokSandbox]);
 
   const loadMetrics = useCallback(() => {
-    if (platform === "meta" && !connections.meta.connected) return;
+    if (platform === "meta") {
+      if (metaSandbox && !metaSandboxConfigured) return;
+      if (!metaSandbox && !connections.meta.connected) return;
+    }
     if (platform === "google") {
       if (googleSandbox && !connections.google.sandboxConnected) return;
       if (!googleSandbox && !connections.google.connected) return;
@@ -143,7 +157,9 @@ export function AdsInsightsPage() {
     params.set("range", String(rangeDays));
     params.set("view", view);
     const useSandbox =
-      (platform === "tiktok" && tiktokSandbox) || (platform === "google" && googleSandbox);
+      (platform === "meta" && metaSandbox) ||
+      (platform === "tiktok" && tiktokSandbox) ||
+      (platform === "google" && googleSandbox);
     if (useSandbox) {
       params.set("sandbox", "1");
     } else {
@@ -154,6 +170,8 @@ export function AdsInsightsPage() {
     connections.google.connected,
     connections.google.sandboxConnected,
     connections.meta.connected,
+    metaSandbox,
+    metaSandboxConfigured,
     connections.tiktok.connected,
     googleSandbox,
     location.search,
@@ -173,9 +191,11 @@ export function AdsInsightsPage() {
     platform,
     rangeDays,
     view,
+    metaSandbox,
     tiktokSandbox,
     googleSandbox,
     connections.meta.connected,
+    metaSandboxConfigured,
     connections.google.connected,
     connections.google.sandboxConnected,
     connections.tiktok.connected,
@@ -320,6 +340,73 @@ export function AdsInsightsPage() {
           mobileFullWidth={isMobile}
         />
 
+        {platform === "meta" && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              background: metaSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: metaSandboxConfigured ? "pointer" : "not-allowed",
+                opacity: metaSandboxConfigured ? 1 : 0.6,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={metaSandbox}
+                disabled={!metaSandboxConfigured}
+                onChange={(e) => setMetaSandbox(e.target.checked)}
+              />
+              {t("adsInsights.metaSandboxToggle")}
+            </label>
+            <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
+              {metaSandboxConfigured
+                ? t("adsInsights.metaSandboxHint")
+                : t("adsInsights.metaSandboxNotConfigured")}
+            </div>
+            {metaSandbox && metaSandboxConfigured && (
+              <button
+                type="button"
+                disabled={seeding}
+                onClick={() => {
+                  seedFetcher.submit(
+                    {},
+                    {
+                      method: "POST",
+                      action: `/api/ads-insights/meta-sandbox-seed${locationSearch}`,
+                    },
+                  );
+                }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  background: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: seeding ? "wait" : "pointer",
+                }}
+              >
+                {seeding ? t("adsInsights.metaSandboxSeeding") : t("adsInsights.metaSandboxSeed")}
+              </button>
+            )}
+          </div>
+        )}
+
         {platform === "google" && (
           <div
             style={{
@@ -461,7 +548,7 @@ export function AdsInsightsPage() {
           </div>
         )}
 
-        {seedData && (tiktokSandbox || googleSandbox) && (
+        {seedData && (metaSandbox || tiktokSandbox || googleSandbox) && (
           <div
             style={{
               ...hintBoxStyle,
@@ -480,6 +567,13 @@ export function AdsInsightsPage() {
                         adId: seedData.adId || "—",
                         keywordId: seedData.keywordId || "—",
                       })
+                    : metaSandbox
+                      ? t("adsInsights.metaSandboxSeedOk", {
+                          campaign: seedData.campaignName,
+                          campaignId: seedData.campaignId || "—",
+                          adSetId: seedData.adSetId || seedData.adgroupId || seedData.adGroupId || "—",
+                          adId: seedData.adId || "—",
+                        })
                     : t("adsInsights.tiktokSandboxSeedOk", {
                         campaign: seedData.campaignName,
                         campaignId: seedData.campaignId || "—",
@@ -501,7 +595,9 @@ export function AdsInsightsPage() {
                 {seedData.message ||
                   (googleSandbox
                     ? t("adsInsights.googleSandboxSeedError")
-                    : t("adsInsights.tiktokSandboxSeedError"))}
+                    : metaSandbox
+                      ? t("adsInsights.metaSandboxSeedError")
+                      : t("adsInsights.tiktokSandboxSeedError"))}
               </div>
             )}
           </div>
@@ -560,7 +656,7 @@ export function AdsInsightsPage() {
           />
         )}
 
-        {platform === "meta" && (
+        {platform === "meta" && !metaSandbox && (
           <MetaAdsConnectPanel
             connected={connections.meta.connected}
             adAccountId={connections.meta.adAccountId}
@@ -623,6 +719,8 @@ export function AdsInsightsPage() {
                   {okData.sandbox
                     ? platform === "google"
                       ? t("adsInsights.tableTitleGoogleSandbox", { accountId: accountLabel })
+                      : platform === "meta"
+                        ? t("adsInsights.tableTitleMetaSandbox", { accountId: accountLabel })
                       : t("adsInsights.tableTitleSandbox", { accountId: accountLabel })
                     : t("adsInsights.tableTitle", { accountId: accountLabel })}
                 </div>
@@ -633,6 +731,11 @@ export function AdsInsightsPage() {
                           start: okData.dateStart,
                           end: okData.dateEnd,
                         })
+                      : platform === "meta"
+                        ? t("adsInsights.tableSubtitleMetaSandbox", {
+                            start: okData.dateStart,
+                            end: okData.dateEnd,
+                          })
                       : t("adsInsights.tableSubtitleSandbox", {
                           start: okData.dateStart,
                           end: okData.dateEnd,

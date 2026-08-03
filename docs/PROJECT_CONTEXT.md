@@ -142,6 +142,11 @@ npm run turso:migrate:test
   - `TIKTOK_SANDBOX_IDENTITY_ID`、`TIKTOK_SANDBOX_IDENTITY_TYPE`（seed 建 Ad 必需）
   - `TIKTOK_SANDBOX_ACCOUNT_NAME`、`TIKTOK_SANDBOX_IMAGE_ID`（可选）
   - 请求 `sandbox-ads.tiktok.com`，不复用 Catalog OAuth token；Insights 指标为本地 mock。
+- Meta Insights 沙盒（`app/server/adsInsights/metaSandbox.server.ts`）：
+  - `META_SANDBOX_ACCESS_TOKEN`、`META_SANDBOX_AD_ACCOUNT_ID`（必需）
+  - `META_SANDBOX_ACCOUNT_NAME`、`META_SANDBOX_PAGE_ID`、`META_SANDBOX_CURRENCY_CODE`（可选）
+  - `META_SANDBOX_SEED_LINK_URL`（seed 建 Ad 时的落地页，可选）
+  - 不复用 Meta Ads OAuth token；Insights 走真实 Graph API。
 
 ## 9. 改动落点
 
