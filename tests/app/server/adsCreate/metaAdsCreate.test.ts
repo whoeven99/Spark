@@ -41,8 +41,10 @@ describe("createMetaAd", () => {
           expect(body.get("billing_event")).toBe("IMPRESSIONS");
           const targeting = JSON.parse(body.get("targeting") || "{}") as {
             geo_locations?: { countries?: string[] };
+            targeting_automation?: { advantage_audience?: number };
           };
           expect(targeting.geo_locations?.countries).toEqual(["US"]);
+          expect(targeting.targeting_automation?.advantage_audience).toBe(0);
           expect(body.get("daily_budget")).toBe("500");
           expect(body.get("bid_strategy")).toBe("LOWEST_COST_WITH_BID_CAP");
           expect(body.get("bid_amount")).toBe("100");

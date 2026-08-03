@@ -243,6 +243,8 @@ export async function createMetaAd(params: {
   targeting.geo_locations = {
     countries: countries.length > 0 ? countries : ["US"],
   };
+  // Marketing API v23+：自定义年龄/性别/地区时必须显式声明赋能型受众（Advantage+ audience）
+  targeting.targeting_automation = { advantage_audience: 0 };
 
   // 多数广告账户创建 Ad Set 时强制要求 bid_amount（即便最低费用策略也一样）。
   // 使用「最低费用 + 出价上限」：bid_amount 单位为分；IMPRESSIONS 计费时为千次展现上限。
