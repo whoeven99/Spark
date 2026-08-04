@@ -33,8 +33,11 @@ import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
 import { tsfPacksRouter } from "./routes/tsfPacks.js";
 import { tsfBillingRouter } from "./routes/tsfBilling.js";
 import { tsfShopProfilesRouter } from "./routes/tsfShopProfiles.js";
+import { tsfLanguageCoverageRouter } from "./routes/tsfLanguageCoverage.js";
+import { tsfRoiRouter } from "./routes/tsfRoi.js";
 import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
+import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -88,14 +91,19 @@ app.use("/api/tsf/shops", authMiddleware, tsfShopsRouter);
 app.use("/api/tsf/usage", authMiddleware, tsfUsageRouter);
 app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
 app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
-app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
 app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
+app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
+app.use("/api/tsf/language-coverage", authMiddleware, tsfLanguageCoverageRouter);
 // 收入分析仅 owner 可见
 app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);
+// 翻译 ROI / 商业闭环（含收入 KPI，仅 owner）
+app.use("/api/tsf/roi", authMiddleware, requireOwner, tsfRoiRouter);
 // 翻译运维（系统配置 + 增加额度）
 app.use("/api/translation-ops", authMiddleware, translationOpsRouter);
 // Shopify 翻译资源查询 / Query CSV 写回 / 单条写回删除
 app.use("/api/shopify-translation", authMiddleware, shopifyTranslationRouter);
+// OpenRouter 模型探测（服务端转发；消耗 OPENROUTER 额度，仅 owner）
+app.use("/api/openrouter-probe", authMiddleware, requireOwner, openrouterProbeRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

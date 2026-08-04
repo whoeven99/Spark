@@ -9,7 +9,11 @@ export type AITaskStatus =
   | "applied"
   | "scored";
 
-export type AITaskType = "image_generation" | "picture_translate" | "product_improve";
+export type AITaskType =
+  | "image_generation"
+  | "picture_translate"
+  | "product_improve"
+  | "ads_catalog_sync";
 
 export type AITaskListView = "current" | "history";
 
@@ -88,6 +92,11 @@ export type AITaskSSEEvent =
       errorMsgKey?: string;
       errorMsgParams?: AITaskMessageParams;
     }
+  | {
+      type: "result_update";
+      taskId: string;
+      result: Record<string, unknown>;
+    }
   | { type: "error"; message: string };
 
 export interface ImageGenTaskConfig {
@@ -129,6 +138,92 @@ export interface ProductImproveTaskResult {
   reviewScore?: number;
   reviewNote?: string;
   optimizationComment?: string;
+}
+
+export type AdsCatalogPlatform = "facebook" | "google" | "tiktok";
+
+export interface AdsCatalogSyncTaskConfig {
+  platform: AdsCatalogPlatform;
+  productIds: string[] | null; // null = all
+  totalProducts: number;
+}
+
+export interface AdsCatalogGmcReviewSummary {
+  checked: number;
+  approved: number;
+  disapproved: number;
+  pending: number;
+  accountSuspended: boolean;
+  checkedAt: string;
+  products: Array<{
+    offerId: string;
+    title: string | null;
+    status: string;
+    issues: Array<{ code: string; servability: string; description: string }>;
+  }>;
+}
+
+/** Meta（Facebook）Catalog 同步后拉取的商品审核状态摘要。 */
+export interface AdsCatalogMetaReviewSummary {
+  checked: number;
+  approved: number;
+  disapproved: number;
+  pending: number;
+  /** Catalog / 商务账户级被限制或封禁。 */
+  accountRestricted: boolean;
+  checkedAt: string;
+  products: Array<{
+    offerId: string;
+    title: string | null;
+    status: string;
+    issues: Array<{ code: string; servability: string; description: string }>;
+  }>;
+}
+
+export interface AdsCatalogSyncTaskResult {
+  platform: AdsCatalogPlatform;
+  totalProcessed: number;
+  succeeded: number;
+  failed: number;
+  /** 校验阶段被跳过的硬错误商品数（仅 Google）。 */
+  skippedByValidation?: number;
+  errors: Array<{ productId: string; reason: string }>;
+  /** 同步后即时拉取的 GMC 审核状态摘要（仅 Google）。 */
+  gmcReview?: AdsCatalogGmcReviewSummary;
+  /** 同步后即时拉取的 Meta Catalog 审核状态摘要（仅 Facebook）。 */
+  metaReview?: AdsCatalogMetaReviewSummary;
+  /**
+   * TikTok：shopify_official = 官方同步目录（仅映射校验，不 API 上传）；
+   * api_managed = Spark API 上传。
+   */
+  syncMode?: "shopify_official" | "api_managed";
+  /** TikTok：api_managed 下的上传方式。 */
+  uploadMethod?: "product_upload" | "product_file";
+  /** TikTok：本次同步绑定的 Catalog ID。 */
+  catalogId?: string;
+  /** TikTok：product/upload 或 product/file 返回的异步 feed_log_id。 */
+  feedLogId?: string;
+  /** TikTok Feed 文件公网 URL（排障用）。 */
+  feedFileUrl?: string;
+  /** TikTok：逐商品同步/审核结果。 */
+  productResults?: TiktokCatalogProductResult[];
+  /** TikTok product_feed_log 处理状态。 */
+  feedLogStatus?: string;
+  /** TikTok feed log CSV 解析摘要。 */
+  feedCsvSummary?: string;
+}
+
+export type TiktokCatalogProductResultStatus =
+  | "success"
+  | "failed"
+  | "warning"
+  | "pending"
+  | "unknown";
+
+export interface TiktokCatalogProductResult {
+  productId: string;
+  status: TiktokCatalogProductResultStatus;
+  reason?: string;
 }
 
 export type AITaskCreateResponse =

@@ -3,7 +3,7 @@ import { getTsfDb } from "../lib/tsfDb.js";
 
 export const tsfShopsRouter = Router();
 
-/** TSF 新用户列表：以 ShopBillingBinding(tsf) 为主表，联 Account / AppSubscription。 */
+/** TSF 新用户列表：以 Account 为主表，联 AppSubscription。 */
 tsfShopsRouter.get("/", async (req, res) => {
   try {
     const db = getTsfDb();
@@ -11,26 +11,24 @@ tsfShopsRouter.get("/", async (req, res) => {
 
     const baseQuery = `
       SELECT
-        b.shop,
-        b.boundReason,
-        b.createdAt  AS boundAt,
+        a.shop,
+        a.createdAt  AS boundAt,
         a.subscriptionCredits,
         a.purchasedCredits,
         a.trialCredits,
         a.usedCredits,
+        a.deletedAt,
         a.createdAt  AS accountCreatedAt,
         a.updatedAt  AS accountUpdatedAt,
         sub.planKey,
         sub.status   AS subStatus,
         sub.billingInterval,
         sub.currentPeriodEnd,
-        (SELECT COUNT(*) FROM Session s WHERE s.shop = b.shop) AS sessionCount
-      FROM ShopBillingBinding b
-      LEFT JOIN Account a ON b.shop = a.shop
-      LEFT JOIN AppSubscription sub ON b.shop = sub.shop
-      WHERE b.billingSystem = 'tsf'
-      ${search ? "AND b.shop LIKE ?" : ""}
-      ORDER BY b.createdAt DESC
+        (SELECT COUNT(*) FROM Session s WHERE s.shop = a.shop) AS sessionCount
+      FROM Account a
+      LEFT JOIN AppSubscription sub ON a.shop = sub.shop
+      ${search ? "WHERE a.shop LIKE ?" : ""}
+      ORDER BY a.createdAt DESC
       LIMIT 200
     `;
 
@@ -40,7 +38,6 @@ tsfShopsRouter.get("/", async (req, res) => {
 
     const shops = result.rows.map((r) => ({
       shop: r.shop,
-      boundReason: r.boundReason ?? null,
       boundAt: r.boundAt,
       subscriptionCredits: Number(r.subscriptionCredits ?? 0),
       purchasedCredits: Number(r.purchasedCredits ?? 0),
@@ -52,7 +49,8 @@ tsfShopsRouter.get("/", async (req, res) => {
       subStatus: r.subStatus ?? null,
       billingInterval: r.billingInterval ?? null,
       currentPeriodEnd: r.currentPeriodEnd ?? null,
-      installed: Number(r.sessionCount ?? 0) > 0,
+      installed: r.deletedAt == null,
+      sessionCount: Number(r.sessionCount ?? 0),
     }));
 
     res.json({ shops });
@@ -62,15 +60,15 @@ tsfShopsRouter.get("/", async (req, res) => {
   }
 });
 
-/** 单店详情：绑定信息 + 计费流水（TSF 无 CommonEventLog）。 */
+/** 单店详情：Account + 计费流水（TSF 无 CommonEventLog / ShopBillingBinding）。 */
 tsfShopsRouter.get("/:shop/events", async (req, res) => {
   try {
     const db = getTsfDb();
     const shop = req.params.shop;
 
-    const [bindingResult, billingResult] = await Promise.all([
+    const [accountResult, billingResult] = await Promise.all([
       db.execute({
-        sql: "SELECT shop, billingSystem, boundReason, createdAt, updatedAt FROM ShopBillingBinding WHERE shop = ?",
+        sql: "SELECT shop, deletedAt, createdAt, updatedAt FROM Account WHERE shop = ?",
         args: [shop],
       }),
       db.execute({
@@ -80,8 +78,28 @@ tsfShopsRouter.get("/:shop/events", async (req, res) => {
       }),
     ]);
 
+    const accountRow = accountResult.rows[0] ?? null;
+
     res.json({
-      binding: bindingResult.rows[0] ?? null,
+      account: accountRow
+        ? {
+            shop: accountRow.shop,
+            deletedAt: accountRow.deletedAt ?? null,
+            createdAt: accountRow.createdAt,
+            updatedAt: accountRow.updatedAt,
+            installed: accountRow.deletedAt == null,
+          }
+        : null,
+      /** @deprecated 兼容旧前端字段名；等于 account */
+      binding: accountRow
+        ? {
+            shop: accountRow.shop,
+            billingSystem: "tsf",
+            boundReason: null,
+            createdAt: accountRow.createdAt,
+            updatedAt: accountRow.updatedAt,
+          }
+        : null,
       billingLogs: billingResult.rows,
     });
   } catch (err) {

@@ -1,0 +1,112 @@
+import type { ActionFunctionArgs } from "react-router";
+import { data } from "react-router";
+import { authenticate } from "../shopify.server";
+import {
+  getMetaAdsCredential,
+  getTiktokAdsInsightsCredential,
+} from "../server/adsCatalog/credentialStore.server";
+import { prepareGoogleAdsApiAuth } from "../server/adsCatalog/googleAdsToken.server";
+import { createMetaAd } from "../server/adsCreate/metaAdsCreate.server";
+import { createTiktokAd } from "../server/adsCreate/tiktokAdsCreate.server";
+import { createGoogleAd } from "../server/adsCreate/googleAdsCreate.server";
+import type {
+  AdsCreateRequest,
+  AdsCreateApiResponse,
+} from "./component/adsCreate/types";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+
+  let body: AdsCreateRequest;
+  try {
+    body = (await request.json()) as AdsCreateRequest;
+  } catch {
+    return data<AdsCreateApiResponse>(
+      { ok: false, platform: "meta", errorMsg: "请求格式错误" },
+      { status: 400 },
+    );
+  }
+
+  const { platform } = body;
+
+  try {
+    if (platform === "meta") {
+      const form = body.meta;
+      if (!form) throw new Error("缺少 meta 表单数据");
+      if (!String(form.pageId ?? "").trim()) {
+        throw new Error("请选择用于投放的 Facebook 主页（Page）");
+      }
+
+      const cred = await getMetaAdsCredential(shop);
+      if (!cred) throw new Error("Meta 广告账户未连接，请前往广告洞察设置授权 Meta Ads");
+
+      const result = await createMetaAd({
+        accessToken: cred.accessToken,
+        adAccountId: cred.adAccountId,
+        form,
+      });
+
+      return data<AdsCreateApiResponse>({
+        ok: true,
+        platform: "meta",
+        campaignId: result.campaignId,
+        adSetId: result.adSetId,
+        adId: result.adId,
+      });
+    }
+
+    if (platform === "tiktok") {
+      const form = body.tiktok;
+      if (!form) throw new Error("缺少 tiktok 表单数据");
+
+      const cred = await getTiktokAdsInsightsCredential(shop);
+      if (!cred) throw new Error("TikTok 广告主账户未连接，请先完成 TikTok 授权");
+
+      const result = await createTiktokAd({
+        accessToken: cred.accessToken,
+        advertiserId: cred.advertiserId,
+        form,
+      });
+
+      return data<AdsCreateApiResponse>({
+        ok: true,
+        platform: "tiktok",
+        campaignId: result.campaignId,
+        adGroupId: result.adGroupId,
+        adId: result.adId,
+      });
+    }
+
+    if (platform === "google") {
+      const form = body.google;
+      if (!form) throw new Error("缺少 google 表单数据");
+
+      const auth = await prepareGoogleAdsApiAuth(shop);
+
+      const result = await createGoogleAd({
+        accessToken: auth.accessToken,
+        customerId: auth.customerId,
+        loginCustomerId: auth.loginCustomerId,
+        form,
+      });
+
+      return data<AdsCreateApiResponse>({
+        ok: true,
+        platform: "google",
+        campaignId: result.campaignId,
+        adGroupId: result.adGroupId,
+        adId: result.adId,
+      });
+    }
+
+    return data<AdsCreateApiResponse>(
+      { ok: false, platform, errorMsg: `不支持的平台：${String(platform)}` },
+      { status: 400 },
+    );
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "广告创建失败，请重试";
+    console.error(`[AdsCreate][${platform}] error:`, errorMsg);
+    return data<AdsCreateApiResponse>({ ok: false, platform, errorMsg });
+  }
+};

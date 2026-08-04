@@ -25,6 +25,10 @@ import {
   SettingOutlined,
   FileTextOutlined,
   CloudUploadOutlined,
+  IdcardOutlined,
+  FundOutlined,
+  GlobalOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -67,6 +71,12 @@ const sparkMenuItems: MenuItemDef[] = [
   { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
   { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
   { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
+  {
+    key: "/openrouter-probe",
+    icon: <ExperimentOutlined />,
+    label: <Link to="/openrouter-probe">OpenRouter 探测</Link>,
+    ownerOnly: true,
+  },
   { key: "/visit-source", icon: <AimOutlined />, label: <Link to="/visit-source">访问来源</Link>, ownerOnly: false },
   { key: "/pixel-logs", icon: <FileSearchOutlined />, label: <Link to="/pixel-logs">WebPixel 日志</Link>, ownerOnly: true },
   { key: "/app-logs", icon: <AppstoreOutlined />, label: <Link to="/app-logs">Spark 应用日志</Link>, ownerOnly: false },
@@ -90,12 +100,19 @@ const translationMenuItems: MenuItemDef[] = [
   },
   { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
   { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">翻译 新用户</Link>, ownerOnly: false },
-  { key: "/tsf/shop-profiles", icon: <FileSearchOutlined />, label: <Link to="/tsf/shop-profiles">翻译 店铺画像</Link>, ownerOnly: false },
+  { key: "/tsf/shop-profiles", icon: <IdcardOutlined />, label: <Link to="/tsf/shop-profiles">翻译 用户画像</Link>, ownerOnly: false },
+  {
+    key: "/tsf/language-coverage",
+    icon: <GlobalOutlined />,
+    label: <Link to="/tsf/language-coverage">语言覆盖率</Link>,
+    ownerOnly: false,
+  },
   { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },
   { key: "/tsf/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/tsf/subscriptions">翻译 订阅</Link>, ownerOnly: false },
   { key: "/tsf/packs", icon: <ShoppingCartOutlined />, label: <Link to="/tsf/packs">翻译 加购流量包</Link>, ownerOnly: false },
   { key: "/tsf/billing", icon: <FileTextOutlined />, label: <Link to="/tsf/billing">翻译账单</Link>, ownerOnly: true },
   { key: "/tsf/revenue", icon: <DollarOutlined />, label: <Link to="/tsf/revenue">翻译 收入</Link>, ownerOnly: true },
+  { key: "/tsf/roi", icon: <FundOutlined />, label: <Link to="/tsf/roi">翻译 ROI</Link>, ownerOnly: true },
   { key: "/tsf/pricing-workbench", icon: <CalculatorOutlined />, label: <Link to="/tsf/pricing-workbench">翻译 定价工作台</Link>, ownerOnly: true },
   {
     key: "/translation-ops",

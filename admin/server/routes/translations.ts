@@ -418,6 +418,27 @@ translationsRouter.get("/auto/summary", async (_req, res) => {
 // 读取某任务某模块下的逐资源翻译结果（翻译前/后），按资源分页。
 // 必须注册在 /:jobId 之前（虽然路径段数不同不会冲突，仍按惯例靠前注册）。
 
+type BlobTranslationCost = {
+  provider: string;
+  model?: string;
+  requestId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  chars?: number;
+  batchSize?: number;
+  calls?: Array<{
+    provider: string;
+    model?: string;
+    requestId?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    chars?: number;
+    batchSize?: number;
+  }>;
+};
+
 type BlobTranslatedResource = {
   resourceId: string;
   translations: Array<{
@@ -426,6 +447,7 @@ type BlobTranslatedResource = {
     translatedValue: string;
     digest?: string;
     status?: string;
+    cost?: BlobTranslationCost;
   }>;
 };
 

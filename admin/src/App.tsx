@@ -26,10 +26,14 @@ import TsfUsage from "./pages/tsf/TsfUsage";
 import TsfSubscriptions from "./pages/tsf/TsfSubscriptions";
 import TsfPacks from "./pages/tsf/TsfPacks";
 import TsfRevenue from "./pages/tsf/TsfRevenue";
+import TsfRoi from "./pages/tsf/TsfRoi";
 import TsfBilling from "./pages/tsf/TsfBilling";
 import TsfShopProfiles from "./pages/tsf/TsfShopProfiles";
+import TsfShopProfileDetail from "./pages/tsf/TsfShopProfileDetail";
+import TsfLanguageCoverage from "./pages/tsf/TsfLanguageCoverage";
 import TranslationOps from "./pages/TranslationOps";
 import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
+import OpenRouterProbe from "./pages/OpenRouterProbe";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -81,6 +85,14 @@ export default function App() {
             <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="agent-runs" element={<AgentRuns />} />
+            <Route
+              path="openrouter-probe"
+              element={
+                <RequireOwner>
+                  <OpenRouterProbe />
+                </RequireOwner>
+              }
+            />
             <Route path="pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="ops-checklist" element={<OpsChecklist />} />
             <Route path="visit-source" element={<VisitSource />} />
@@ -104,9 +116,12 @@ export default function App() {
             <Route path="tsf/usage" element={<TsfUsage />} />
             <Route path="tsf/subscriptions" element={<TsfSubscriptions />} />
             <Route path="tsf/packs" element={<TsfPacks />} />
-            <Route path="tsf/shop-profiles" element={<TsfShopProfiles />} />
             <Route path="tsf/billing" element={<RequireOwner><TsfBilling /></RequireOwner>} />
+            <Route path="tsf/shop-profiles" element={<TsfShopProfiles />} />
+            <Route path="tsf/shop-profiles/:shop" element={<TsfShopProfileDetail />} />
+            <Route path="tsf/language-coverage" element={<TsfLanguageCoverage />} />
             <Route path="tsf/revenue" element={<RequireOwner><TsfRevenue /></RequireOwner>} />
+            <Route path="tsf/roi" element={<RequireOwner><TsfRoi /></RequireOwner>} />
             <Route path="tsf/pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="translation-ops" element={<TranslationOps />} />
             <Route path="shopify-translation" element={<ShopifyTranslationOps />} />

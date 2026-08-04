@@ -14,6 +14,31 @@ const SHOPIFY_CHARGE_AT = `CASE
   ELSE bl.createdAt
 END`;
 
+/**
+ * Spring→Turso 计费迁移会写入 SUBSCRIPTION_ACTIVATED，
+ * metadata.source=legacy_migration，createdAt=迁移日（非真实扣款日）。
+ * 每日/明细收入必须排除，否则会出现 7/8–7/9 假尖峰。
+ */
+const EXCLUDE_LEGACY_MIGRATION =
+  "COALESCE(json_extract(bl.metadata, '$.source'), '') <> 'legacy_migration'";
+
+/**
+ * 同店 24h 内连改套餐会写多条 SUBSCRIPTION_ACTIVATED（每次新 Shopify GID）。
+ * 收入只计突发链中的最后一次，避免按套餐原价叠加虚增。
+ * 续费 / 加量包不受影响。
+ */
+const EXCLUDE_SUPERSEDED_PLAN_CHANGE = `(
+  bl.eventType <> 'SUBSCRIPTION_ACTIVATED'
+  OR NOT EXISTS (
+    SELECT 1 FROM BillingLog later
+    WHERE later.shop = bl.shop
+      AND later.eventType = 'SUBSCRIPTION_ACTIVATED'
+      AND later.createdAt > bl.createdAt
+      AND later.createdAt <= datetime(bl.createdAt, '+24 hours')
+      AND COALESCE(json_extract(later.metadata, '$.source'), '') <> 'legacy_migration'
+  )
+)`;
+
 // GET /api/tsf/revenue/summary — MRR/ARR from active TSF subscriptions
 tsfRevenueRouter.get("/summary", async (_req, res) => {
   try {
@@ -125,6 +150,8 @@ tsfRevenueRouter.get("/trend", async (req, res) => {
       "CAST(pc.priceAmount AS REAL) > 0",
       "pc.priceAmount IS NOT NULL",
       "bl.eventType IN ('SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_RENEWED', 'TOKEN_PACK_PURCHASED')",
+      EXCLUDE_LEGACY_MIGRATION,
+      EXCLUDE_SUPERSEDED_PLAN_CHANGE,
     ];
     const args: string[] = [];
 
@@ -184,6 +211,8 @@ tsfRevenueRouter.get("/charges", async (req, res) => {
       "CAST(pc.priceAmount AS REAL) > 0",
       "pc.priceAmount IS NOT NULL",
       "bl.eventType IN ('SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_RENEWED', 'TOKEN_PACK_PURCHASED')",
+      EXCLUDE_LEGACY_MIGRATION,
+      EXCLUDE_SUPERSEDED_PLAN_CHANGE,
     ];
     const args: (string | number)[] = [];
 

@@ -6,6 +6,7 @@ const AI_TASK_TYPE_LABELS: Record<AITaskType, string> = {
   product_improve: "商品文案优化",
   image_generation: "图片生成",
   picture_translate: "图片翻译",
+  ads_catalog_sync: "广告 Catalog 同步",
 };
 
 const AI_STATUS_LABELS: Record<AITaskStatus, string> = {

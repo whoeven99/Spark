@@ -28,9 +28,15 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupAccount",
   },
   {
-    to: "/app/settings/channels",
-    labelKey: "settingsShell.navChannels",
-    descKey: "settingsShell.descChannels",
+    to: "/app/ads-catalog",
+    labelKey: "settingsShell.navAdsCatalog",
+    descKey: "settingsShell.descAdsCatalog",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
+    to: "/app/settings/ads-insights",
+    labelKey: "settingsShell.navAdsInsights",
+    descKey: "settingsShell.descAdsInsights",
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
@@ -44,6 +50,12 @@ const SETTINGS_MODULES: SettingsModule[] = [
     labelKey: "settingsShell.navData",
     descKey: "settingsShell.descData",
     badgeKey: "settingsShell.groupOther",
+  },
+  {
+    to: "/app/settings/ads-create",
+    labelKey: "settingsShell.navAdsCreate",
+    descKey: "settingsShell.descAdsCreate",
+    badgeKey: "settingsShell.groupIntegrations",
   },
   {
     to: "/app/settings/feedback",
