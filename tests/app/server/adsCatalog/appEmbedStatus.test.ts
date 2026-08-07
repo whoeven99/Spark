@@ -51,4 +51,23 @@ describe("parseAppEmbedEnabled", () => {
   it("非法 JSON 安全返回 false", () => {
     expect(parseAppEmbedEnabled("{not json", HANDLE)).toBe(false);
   });
+
+  it("兼容 GraphQL 返回的注释头 settings_data.json", () => {
+    const json = `/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ * ------------------------------------------------------------
+ */
+{
+  "current": {
+    "blocks": {
+      "uuid-1": {
+        "type": "shopify://apps/spark/blocks/${HANDLE}/1234",
+        "disabled": false,
+      },
+    },
+  },
+}`;
+    expect(parseAppEmbedEnabled(json, HANDLE)).toBe(true);
+  });
 });

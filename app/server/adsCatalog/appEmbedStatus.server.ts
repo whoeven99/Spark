@@ -2,6 +2,21 @@ import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopify
 import { GOOGLE_REMARKETING_APP_EMBED_HANDLE } from "../../lib/googleRemarketing";
 
 /**
+ * Theme GraphQL `files` 返回的 `settings_data.json` 常带 Shopify 自动注入的
+ * 块注释头，且主题 JSON 允许尾逗号；标准 JSON.parse 会失败。
+ * 先剥离注释再做轻量尾逗号清理，再解析。
+ */
+export function parseThemeSettingsJson(raw: string): unknown | null {
+  const withoutComments = raw.replace(/\/\*[\s\S]*?\*\//g, "").trim();
+  const withoutTrailingCommas = withoutComments.replace(/,(\s*[}\]])/g, "$1");
+  try {
+    return JSON.parse(withoutTrailingCommas) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 在主题 `config/settings_data.json` 中查找指定 App Embed block 是否已启用。
  *
  * App Embed block 以 `shopify://apps/<app>/blocks/<handle>/<uuid>` 形式出现在
@@ -13,12 +28,8 @@ export function parseAppEmbedEnabled(
   settingsJson: string,
   handle: string,
 ): boolean {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(settingsJson);
-  } catch {
-    return false;
-  }
+  const parsed = parseThemeSettingsJson(settingsJson);
+  if (parsed === null) return false;
   const needle = `/blocks/${handle}`;
   let enabled = false;
 
