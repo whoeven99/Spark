@@ -64,6 +64,8 @@ describe("实验性 purchase Custom Pixel", () => {
     });
 
     expect(script).toContain("analytics.subscribe('checkout_completed'");
+    expect(script).toContain("api.customerPrivacy.subscribe('visitorConsentCollected'");
+    expect(script).not.toMatch(/(?<!api\.)customerPrivacy\.subscribe/);
     expect(script).toContain("completedTransactions");
     expect(script).toContain("marketingAllowed");
     expect(script).not.toContain("checkout_started");

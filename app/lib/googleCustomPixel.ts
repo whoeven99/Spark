@@ -45,11 +45,14 @@ function loadTag() {
   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(SPARK_CONFIG.tagId);
   document.head.appendChild(script);
 }
-customerPrivacy.subscribe('visitorConsentCollected', (event) => {
-  marketingAllowed = Boolean(event.customerPrivacy && event.customerPrivacy.marketingAllowed);
-  if (marketingAllowed) loadTag();
-  else gtag('consent', 'update', {ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
-});
+// Custom Pixel 沙箱没有全局 customerPrivacy，必须用 api.customerPrivacy。
+if (api && api.customerPrivacy && typeof api.customerPrivacy.subscribe === 'function') {
+  api.customerPrivacy.subscribe('visitorConsentCollected', (event) => {
+    marketingAllowed = Boolean(event.customerPrivacy && event.customerPrivacy.marketingAllowed);
+    if (marketingAllowed) loadTag();
+    else gtag('consent', 'update', {ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+  });
+}
 loadTag();
 analytics.subscribe('checkout_completed', (event) => {
   if (!marketingAllowed) return;
