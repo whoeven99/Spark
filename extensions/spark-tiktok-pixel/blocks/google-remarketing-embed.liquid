@@ -85,9 +85,9 @@
         var actionIds = new Set();
 
         window.dataLayer = window.dataLayer || [];
-        function gtag() { window.dataLayer.push(arguments); }
-        // Tag Assistant / 调试工具依赖全局 gtag，不能只放在 IIFE 局部作用域。
-        window.gtag = gtag;
+        // 必须挂到 window：Tag Assistant / 控制台调试都读 window.gtag。
+        window.gtag = function gtag() { window.dataLayer.push(arguments); };
+        var gtag = window.gtag;
         gtag("consent", "default", {
           ad_storage: "denied",
           ad_user_data: "denied",
