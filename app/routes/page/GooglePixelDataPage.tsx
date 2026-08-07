@@ -15,6 +15,7 @@ import {
   GOOGLE_REMARKETING_FIELD_GROUPS,
 } from "../../lib/googleRemarketing";
 import type { GooglePixelDataLoaderData } from "../app.ads.google-pixel.data";
+import { GoogleAdsPerformancePanel } from "../component/googlePixel/GoogleAdsPerformancePanel";
 
 const cardStyle = {
   border: `1px solid ${pageColorTokens.border}`,
@@ -287,6 +288,8 @@ export function GooglePixelDataPage() {
         </Link>
       </div>
 
+      <GoogleAdsPerformancePanel enabled={data.adsConnected} />
+
       <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelData.sectionOverview")}</h3>
         <DataRow label={t("googlePixelData.pixelName")} value={config.pixelName || "—"} />
@@ -431,9 +434,15 @@ export function GooglePixelDataPage() {
       <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelData.sectionLimits")}</h3>
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>{t("googlePixelData.limitsBody")}</p>
-        <button type="button" style={secondaryBtn} onClick={() => navigate(`/app/settings/ads-insights${locationSearch}`)}>
-          {t("googlePixelData.openInsights")}
-        </button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            style={secondaryBtn}
+            onClick={() => navigate(`/app/settings/ads-insights${locationSearch}`)}
+          >
+            {t("googlePixelData.openInsights")}
+          </button>
+        </div>
       </div>
 
       {hint ? <div style={pageHintTextStyle}>{hint}</div> : null}
