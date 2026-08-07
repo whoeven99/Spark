@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { generateGooglePurchaseCustomPixel } from "../../../../app/lib/googleCustomPixel";
 import { GOOGLE_OFFER_ID_FIXTURES } from "../../../../app/lib/googleOfferId";
+import {
+  buildShopifyCustomerEventsUrl,
+  GOOGLE_REMARKETING_DEFAULT_EVENTS,
+  GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS,
+  normalizeGoogleRemarketingEvents,
+  normalizeGoogleRemarketingFieldGroups,
+} from "../../../../app/lib/googleRemarketing";
 import { parseGoogleAwCandidates } from "../../../../app/server/adsCatalog/googleRemarketing.server";
 
 describe("Google AW 候选", () => {
@@ -29,6 +36,23 @@ describe("Google AW 候选", () => {
       "AW-987654321",
     ]);
     expect(candidates[1]?.crossAccount).toBe(true);
+  });
+});
+
+describe("再营销默认配置", () => {
+  it("缺省时回落到一键推荐事件与字段", () => {
+    expect(normalizeGoogleRemarketingEvents(undefined)).toEqual(
+      GOOGLE_REMARKETING_DEFAULT_EVENTS,
+    );
+    expect(normalizeGoogleRemarketingFieldGroups(undefined)).toEqual(
+      GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS,
+    );
+  });
+
+  it("构建客户事件设置页 deep link", () => {
+    expect(buildShopifyCustomerEventsUrl("ciwishop.myshopify.com")).toBe(
+      "https://admin.shopify.com/store/ciwishop/settings/customer_events",
+    );
   });
 });
 
