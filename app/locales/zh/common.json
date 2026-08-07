@@ -41,7 +41,7 @@
     "enhancedBody": "高级匹配使用哈希后的客户数据以提升受众触达。",
     "enhancedOn": "已启用",
     "enhancedOff": "启用",
-    "purchaseNeedsSave": "点击「完成」以生成购买 Custom Pixel 脚本。",
+    "purchaseNeedsSave": "点击「完成」会生成并复制购买 Custom Pixel 脚本，然后返回广告目录。",
     "finishToCatalog": "完成并返回广告目录",
     "navBack": "上一步",
     "navNext": "下一步",

@@ -227,7 +227,7 @@ export function GooglePixelOnboardingPage() {
       if (!resp.ok || !data.ok) {
         throw new Error(data.error || t("googlePixelOnboarding.saveFailed"));
       }
-      if (data.partial) setError(t("adsCatalog.googleRemarketing.partialSuccess"));
+      // 勾选 purchase 时先生成并复制 Custom Pixel，再回广告目录（避免「完成」无跳转）。
       if (events.includes("purchase")) {
         const script = generateGooglePurchaseCustomPixel({
           tagId: normalizedTag,
@@ -237,12 +237,10 @@ export function GooglePixelOnboardingPage() {
         });
         setSavedScript(script);
         await copyScript(script);
-      } else {
-        navigate(`/app/ads-catalog${locationSearch}`);
       }
+      navigate(`/app/ads-catalog${locationSearch}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("googlePixelOnboarding.saveFailed"));
-    } finally {
       setBusy(false);
     }
   }
