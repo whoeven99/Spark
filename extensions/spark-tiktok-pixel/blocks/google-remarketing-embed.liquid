@@ -140,13 +140,31 @@
             gtag("consent", "update", { ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
           }
         }
-        function readConsent(attempt) {
+        function tryApplyConsentFromApi() {
           var privacy = window.Shopify && window.Shopify.customerPrivacy;
-          if (privacy && typeof privacy.marketingAllowed === "function") {
-            applyConsent(privacy.marketingAllowed());
+          if (!privacy || typeof privacy.marketingAllowed !== "function") return false;
+          applyConsent(privacy.marketingAllowed());
+          return true;
+        }
+        function pollConsent(attempt) {
+          if (tryApplyConsentFromApi()) return;
+          if (attempt < 50) setTimeout(function () { pollConsent(attempt + 1); }, 100);
+        }
+        // 主题不会自动注入 customerPrivacy；必须先 loadFeatures 再读同意状态。
+        function bootConsent() {
+          if (tryApplyConsentFromApi()) return;
+          var shopify = window.Shopify;
+          if (shopify && typeof shopify.loadFeatures === "function") {
+            shopify.loadFeatures(
+              [{ name: "consent-tracking-api", version: "0.1" }],
+              function (error) {
+                if (!error && tryApplyConsentFromApi()) return;
+                pollConsent(0);
+              }
+            );
             return;
           }
-          if (attempt < 50) setTimeout(function () { readConsent(attempt + 1); }, 100);
+          pollConsent(0);
         }
         document.addEventListener("visitorConsentCollected", function (event) {
           var detail = event && event.detail ? event.detail : {};
@@ -238,7 +256,7 @@
           }, 0);
         });
 
-        readConsent(0);
+        bootConsent();
       })();
     </script>
   {% endif %}
