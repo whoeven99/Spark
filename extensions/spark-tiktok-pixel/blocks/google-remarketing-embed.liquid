@@ -5,6 +5,11 @@
 {% if block.settings.enable_google_remarketing %}
   {% assign cfg = shop.metafields['$app'].google_remarketing_config.value %}
   {% if cfg != blank and cfg.tagId != blank %}
+    {% comment %}
+      静态挂载 gtag.js，便于 Tag Assistant / 页面源码扫描识别；
+      事件与广告存储仍由下方 Consent Mode + Customer Privacy 门禁控制。
+    {% endcomment %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ cfg.tagId | url_encode }}"></script>
     <script>
       (function () {
         var config = {{ cfg | json }};
@@ -76,12 +81,21 @@
         var enabledEvents = Array.isArray(config.enabledEvents) ? config.enabledEvents : [];
         var fieldGroups = Array.isArray(config.enabledFieldGroups) ? config.enabledFieldGroups : [];
         var marketingAllowed = false;
-        var loaded = false;
+        var initialEventsSent = false;
         var actionIds = new Set();
 
         window.dataLayer = window.dataLayer || [];
         function gtag() { window.dataLayer.push(arguments); }
-        gtag("consent", "default", { ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+        // Tag Assistant / 调试工具依赖全局 gtag，不能只放在 IIFE 局部作用域。
+        window.gtag = gtag;
+        gtag("consent", "default", {
+          ad_storage: "denied",
+          ad_user_data: "denied",
+          ad_personalization: "denied",
+          wait_for_update: 2000
+        });
+        gtag("js", new Date());
+        gtag("config", config.tagId, { send_page_view: false });
 
         function on(name) { return enabledEvents.indexOf(name) !== -1; }
         function field(name) { return fieldGroups.indexOf(name) !== -1; }
@@ -109,7 +123,7 @@
           return out;
         }
         function send(name, payload) {
-          if (!marketingAllowed || !loaded || !on(name)) return;
+          if (!marketingAllowed || !on(name)) return;
           var eventPayload = Object.assign({}, payload || {});
           if (Array.isArray(eventPayload.items)) {
             eventPayload.items = eventPayload.items.map(item);
@@ -121,23 +135,24 @@
           }
           gtag("event", name, eventPayload);
         }
-        function loadTag() {
-          if (loaded || !marketingAllowed) return;
-          loaded = true;
-          gtag("consent", "update", { ad_storage: "granted", ad_user_data: "granted", ad_personalization: "granted" });
-          gtag("js", new Date());
-          gtag("config", config.tagId, { send_page_view: false });
-          var script = document.createElement("script");
-          script.async = true;
-          script.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(config.tagId);
-          document.head.appendChild(script);
-          sendInitialEvents();
-        }
         function applyConsent(allowed) {
           marketingAllowed = allowed === true;
-          if (marketingAllowed) loadTag();
-          else if (loaded) {
-            gtag("consent", "update", { ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+          if (marketingAllowed) {
+            gtag("consent", "update", {
+              ad_storage: "granted",
+              ad_user_data: "granted",
+              ad_personalization: "granted"
+            });
+            if (!initialEventsSent) {
+              initialEventsSent = true;
+              sendInitialEvents();
+            }
+          } else {
+            gtag("consent", "update", {
+              ad_storage: "denied",
+              ad_user_data: "denied",
+              ad_personalization: "denied"
+            });
           }
         }
         function tryApplyConsentFromApi() {
