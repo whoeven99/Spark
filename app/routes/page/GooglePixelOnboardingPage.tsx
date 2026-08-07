@@ -17,7 +17,7 @@ import {
   normalizeGoogleConversionId,
 } from "../../lib/googleRemarketing";
 import { generateGooglePurchaseCustomPixel } from "../../lib/googleCustomPixel";
-import type { GooglePixelLoaderData } from "../app.ads.google-pixel";
+import type { GooglePixelLoaderData } from "../app.ads.google-pixel._index";
 
 const STOREFRONT_EVENTS = ["page_view", "add_to_cart", "begin_checkout"] as const;
 const WIZARD_EVENTS = ["purchase", "add_to_cart", "page_view", "begin_checkout"] as const;
