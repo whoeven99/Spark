@@ -125,6 +125,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         customerId: ads?.customerId ?? "",
         customerIdFormatted: ads ? formatCustomerId(ads.customerId) : "",
         updatedAt: ads?.updatedAt ?? null,
+        remarketing: {
+          tagId: ads?.remarketing?.tagId ?? "",
+          source: ads?.remarketing?.source ?? "",
+          confirmedAt: ads?.remarketing?.confirmedAt ?? null,
+          enabledEvents: ads?.remarketing?.enabledEvents ?? [],
+          enabledFieldGroups: ads?.remarketing?.enabledFieldGroups ?? [],
+          customPixelConfirmedAt:
+            ads?.remarketing?.customPixelConfirmedAt ?? null,
+          metafieldSyncStatus: ads?.remarketing?.metafieldSync?.status ?? "",
+          metafieldSyncError: ads?.remarketing?.metafieldSync?.error ?? "",
+        },
         pendingAccounts: adsPending?.accounts ?? [],
       },
       tiktok: {

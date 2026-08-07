@@ -39,9 +39,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
-  if (sandbox && platform !== "tiktok" && platform !== "google") {
+  if (sandbox && platform !== "tiktok" && platform !== "google" && platform !== "meta") {
     return Response.json(
-      { ok: false, reason: "invalid_sandbox", message: "sandbox 仅支持 platform=google|tiktok" },
+      { ok: false, reason: "invalid_sandbox", message: "sandbox 仅支持 platform=meta|google|tiktok" },
       { status: 400 },
     );
   }
@@ -61,6 +61,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         message: sandbox
           ? platform === "tiktok"
             ? "TikTok 沙盒未配置：请设置 TIKTOK_SANDBOX_ACCESS_TOKEN 与 TIKTOK_SANDBOX_ADVERTISER_ID"
+            : platform === "meta"
+              ? "Meta 沙盒未配置：请设置 META_SANDBOX_ACCESS_TOKEN 与 META_SANDBOX_AD_ACCOUNT_ID"
             : "Google Ads 测试账号未授权，请先完成 OAuth 并选择测试客户账户"
           : platform === "meta"
             ? "Meta Ads 账户未绑定，请先完成独立授权"

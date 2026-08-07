@@ -58,6 +58,18 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
+    to: "/app/settings/google-search-console",
+    labelKey: "settingsShell.navGsc",
+    descKey: "settingsShell.descGsc",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
+    to: "/app/settings/google-analytics",
+    labelKey: "settingsShell.navGa4",
+    descKey: "settingsShell.descGa4",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
     to: "/app/settings/feedback",
     labelKey: "settingsShell.navFeedback",
     descKey: "settingsShell.descFeedback",

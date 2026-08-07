@@ -1,15 +1,24 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
+import { GoogleRemarketingPanel } from "./GoogleRemarketingPanel";
 
-type AdsLink = { bound: boolean; customerId: string | null; linked: boolean | null };
+type AdsLink = {
+  bound: boolean;
+  customerId: string | null;
+  state: "not_linked" | "pending" | "linked" | "failed" | null;
+  error?: string;
+};
 
 type Props = {
   credentials: CredentialsView;
   adsLink: AdsLink | null;
   locationSearch: string;
   languageCode: string;
+  shopDomain: string;
+  shopifyApiKey: string;
   onChanged: () => void;
 };
 
@@ -50,36 +59,31 @@ export function GoogleConnectPanels({
   adsLink,
   locationSearch,
   languageCode,
+  shopDomain,
+  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const googleOAuth = useOAuthPopup("google_oauth");
 
   const gmc = credentials.googleMerchant;
   const ads = credentials.googleAds;
+  const showPrimaryConnect =
+    !gmc.connected &&
+    !ads.connected &&
+    gmc.pendingAccounts.length === 0 &&
+    ads.pendingAccounts.length === 0;
 
-  function openOAuth(kind: "gmc" | "ads", reauth = false) {
-    const apiPath =
-      kind === "gmc"
-        ? "/api/ads-catalog/google-merchant-auth-url"
-        : "/api/ads-catalog/google-ads-auth-url";
+  function openCombinedOAuth(reauth = false) {
     const reauthSuffix = reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
     void (async () => {
       setBusy(true);
       try {
-        const resp = await fetch(`${apiPath}${locationSearch}${reauthSuffix}`, {
-          headers: { Accept: "application/json" },
-        });
-        const data = (await resp.json().catch(() => ({}))) as {
-          ok?: boolean;
-          authUrl?: string;
-          error?: string;
-        };
-        if (!resp.ok || !data.authUrl) {
-          alert(data.error ?? t("adsCatalog.authError"));
-          return;
-        }
-        window.open(data.authUrl, "_top");
+        await googleOAuth.startOAuth(
+          `/api/ads-catalog/google-auth-url${locationSearch}${reauthSuffix}`,
+          () => onChanged(),
+        );
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {
@@ -105,10 +109,34 @@ export function GoogleConnectPanels({
   }
 
   const fmtDate = (iso: string | null) =>
-    iso ? new Intl.DateTimeFormat(languageCode, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso)) : "—";
+    iso
+      ? new Intl.DateTimeFormat(languageCode, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(iso))
+      : "—";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {showPrimaryConnect ? (
+        <div style={panelStyle}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+            {t("adsCatalog.googleConnectTitle")}
+          </h3>
+          <p style={pageHintTextStyle}>{t("adsCatalog.googleConnectHint")}</p>
+          <div>
+            <button
+              type="button"
+              style={primaryBtn}
+              disabled={busy || googleOAuth.redirecting}
+              onClick={() => openCombinedOAuth()}
+            >
+              {t("adsCatalog.googleConnect")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* ── Google Merchant Center ── */}
       <div style={panelStyle}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
@@ -136,7 +164,12 @@ export function GoogleConnectPanels({
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" style={secondaryBtn} onClick={() => openOAuth("gmc", true)}>
+              <button
+                type="button"
+                style={secondaryBtn}
+                disabled={busy || googleOAuth.redirecting}
+                onClick={() => openCombinedOAuth(true)}
+              >
                 {t("adsCatalog.gmcReauth")}
               </button>
               <button
@@ -149,12 +182,19 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
+        ) : showPrimaryConnect ? (
+          <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectHint")}</p>
         ) : (
           <>
-            <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectHint")}</p>
+            <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectSideHint")}</p>
             <div>
-              <button type="button" style={primaryBtn} onClick={() => openOAuth("gmc")}>
-                {t("adsCatalog.gmcConnect")}
+              <button
+                type="button"
+                style={secondaryBtn}
+                disabled={busy || googleOAuth.redirecting}
+                onClick={() => openCombinedOAuth()}
+              >
+                {t("adsCatalog.googleConnect")}
               </button>
             </div>
           </>
@@ -183,24 +223,41 @@ export function GoogleConnectPanels({
           <>
             <div style={{ fontSize: 13 }}>
               <div style={{ color: "#0f7a52", fontWeight: 600 }}>{t("adsCatalog.adsBound")}</div>
-              <div>{t("adsCatalog.adsCustomerId", { id: ads.customerIdFormatted || ads.customerId })}</div>
+              <div>
+                {t("adsCatalog.adsCustomerId", {
+                  id: ads.customerIdFormatted || ads.customerId,
+                })}
+              </div>
               <div style={{ marginTop: 4 }}>
-                {adsLink?.linked === true
-                  ? <span style={{ color: "#0f7a52" }}>{t("adsCatalog.adsLinked")}</span>
-                  : adsLink?.linked === false
-                    ? <a
-                        href="https://merchants.google.com/"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: "#a36a00" }}
-                      >
-                        {t("adsCatalog.adsNotLinked")}
-                      </a>
-                    : <span style={pageHintTextStyle}>{t("adsCatalog.adsLinkUnknown")}</span>}
+                {adsLink?.state === "linked" ? (
+                  <span style={{ color: "#0f7a52" }}>{t("adsCatalog.adsLinked")}</span>
+                ) : adsLink?.state === "pending" ? (
+                  <span style={{ color: "#a36a00" }}>{t("adsCatalog.adsLinkPending")}</span>
+                ) : adsLink?.state === "not_linked" ? (
+                  <button
+                    type="button"
+                    style={secondaryBtn}
+                    disabled={busy}
+                    onClick={() =>
+                      void post("/api/ads-catalog/google-status", {
+                        operation: "ensure_link",
+                      })
+                    }
+                  >
+                    {t("adsCatalog.adsCreateLink")}
+                  </button>
+                ) : (
+                  <span style={pageHintTextStyle}>{t("adsCatalog.adsLinkUnknown")}</span>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" style={secondaryBtn} onClick={() => openOAuth("ads", true)}>
+              <button
+                type="button"
+                style={secondaryBtn}
+                disabled={busy || googleOAuth.redirecting}
+                onClick={() => openCombinedOAuth(true)}
+              >
                 {t("adsCatalog.adsChange")}
               </button>
               <button
@@ -213,17 +270,31 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
+        ) : showPrimaryConnect ? (
+          <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectHint")}</p>
         ) : (
           <>
-            <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectHint")}</p>
+            <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectSideHint")}</p>
             <div>
-              <button type="button" style={primaryBtn} onClick={() => openOAuth("ads")}>
-                {t("adsCatalog.adsConnect")}
+              <button
+                type="button"
+                style={secondaryBtn}
+                disabled={busy || googleOAuth.redirecting}
+                onClick={() => openCombinedOAuth()}
+              >
+                {t("adsCatalog.googleConnect")}
               </button>
             </div>
           </>
         )}
       </div>
+      <GoogleRemarketingPanel
+        googleAds={ads}
+        locationSearch={locationSearch}
+        shopDomain={shopDomain}
+        shopifyApiKey={shopifyApiKey}
+        onChanged={onChanged}
+      />
     </div>
   );
 }

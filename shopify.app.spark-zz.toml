@@ -65,3 +65,8 @@ scopes = "read_orders,write_products,read_translations,write_translations,read_l
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]
+
+[shop.metafields.app.google_remarketing_config]
+type = "json"
+name = "Google remarketing configuration"
+access.admin = "merchant_read"

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
 import { TiktokCatalogRegionSelect } from "./TiktokCatalogRegionSelect";
@@ -76,6 +77,7 @@ export function TiktokConnectPanels({
   const [busy, setBusy] = useState(false);
   const [pixelBindSuccess, setPixelBindSuccess] = useState(false);
   const [pixelBindError, setPixelBindError] = useState<string | null>(null);
+  const tiktokOAuth = useOAuthPopup("tiktok_catalog_oauth");
 
   const tiktok = credentials.tiktok;
 
@@ -83,19 +85,7 @@ export function TiktokConnectPanels({
     void (async () => {
       setBusy(true);
       try {
-        const resp = await fetch(`/api/ads-catalog/tiktok-auth-url${locationSearch}`, {
-          headers: { Accept: "application/json" },
-        });
-        const data = (await resp.json().catch(() => ({}))) as {
-          ok?: boolean;
-          authUrl?: string;
-          error?: string;
-        };
-        if (!resp.ok || !data.authUrl) {
-          alert(data.error ?? t("adsCatalog.authError"));
-          return;
-        }
-        window.open(data.authUrl, "_top");
+        await tiktokOAuth.startOAuth(`/api/ads-catalog/tiktok-auth-url${locationSearch}`, () => onChanged());
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {

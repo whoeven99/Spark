@@ -4,15 +4,16 @@ import prisma from "../db.server";
 import { checkGmcProductStatusesForShop } from "../server/adsCatalog/gmcStatusChecker.server";
 import {
   getGoogleAdsCredential,
-  getGoogleMerchantCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import {
-  getGoogleAdsDeveloperToken,
-  getMerchantCenterLinkStatus,
-} from "../server/adsCatalog/googleOAuth.server";
+  ensureGoogleProductLink,
+  getGoogleProductLinkStatus,
+} from "../server/adsCatalog/googleProductLink.server";
 
 interface StatusRow {
   offerId: string;
+  contentLanguage: string;
+  feedLabel: string;
   title: string | null;
   status: string;
   issues: unknown;
@@ -31,6 +32,8 @@ async function readCachedStatuses(shop: string): Promise<{
   });
   const products = rows.map((r) => ({
     offerId: r.offerId,
+    contentLanguage: r.contentLanguage,
+    feedLabel: r.feedLabel,
     title: r.title,
     status: r.status,
     issues: r.issues,
@@ -51,30 +54,20 @@ async function readCachedStatuses(shop: string): Promise<{
 async function readAdsLink(shop: string): Promise<{
   bound: boolean;
   customerId: string | null;
-  linked: boolean | null;
+  state: "not_linked" | "pending" | "linked" | "failed" | null;
+  merchantId?: string;
+  error?: string;
 }> {
-  const [gmc, ads] = await Promise.all([
-    getGoogleMerchantCredential(shop),
-    getGoogleAdsCredential(shop),
-  ]);
-  if (!ads) return { bound: false, customerId: null, linked: null };
-  let linked: boolean | null = null;
-  const developerToken = getGoogleAdsDeveloperToken();
-  if (developerToken && gmc) {
-    try {
-      const status = await getMerchantCenterLinkStatus({
-        accessToken: ads.accessToken,
-        developerToken,
-        customerId: ads.customerId,
-        loginCustomerId: ads.loginCustomerId ?? ads.customerId,
-        merchantId: gmc.merchantId,
-      });
-      linked = status.linked;
-    } catch {
-      linked = null;
-    }
-  }
-  return { bound: true, customerId: ads.customerId, linked };
+  const ads = await getGoogleAdsCredential(shop);
+  if (!ads) return { bound: false, customerId: null, state: null };
+  const status = await getGoogleProductLinkStatus(shop).catch(() => null);
+  return {
+    bound: true,
+    customerId: ads.customerId,
+    state: status?.state ?? null,
+    merchantId: status?.merchantId,
+    error: status?.error,
+  };
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -92,6 +85,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   const { session } = await authenticate.admin(request);
   try {
+    const body = (await request.json().catch(() => ({}))) as { operation?: string };
+    if (body.operation === "ensure_link") {
+      return Response.json({
+        ok: true,
+        adsLink: await ensureGoogleProductLink(session.shop),
+      });
+    }
     const result = await checkGmcProductStatusesForShop(session.shop);
     if (!result) {
       return Response.json(

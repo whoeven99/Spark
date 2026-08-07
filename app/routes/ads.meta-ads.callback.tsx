@@ -15,6 +15,7 @@ import {
   setMetaAdsCredential,
   setMetaAdsPending,
 } from "../server/adsCatalog/credentialStore.server";
+import { buildOAuthPopupCloseHtml } from "../server/adsCatalog/googleOAuth.server";
 
 function appRedirect(
   request: Request,
@@ -35,6 +36,12 @@ function oauthStateErrorResponse(): Response {
   );
 }
 
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildOAuthPopupCloseHtml("meta_ads_oauth", params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const incoming = new URL(request.url);
   const state = incoming.searchParams.get("state") ?? "";
@@ -46,13 +53,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified) {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin } = verified;
+  const { shop, host, appOrigin, popup } = verified;
+
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return appRedirect(request, shop, host, appOrigin, { metaAdsAuth: "cancelled" });
+    return respond({ metaAdsAuth: "cancelled" });
   }
   if (!code) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       metaAdsAuth: "error",
       reason: "Meta 未返回授权 code",
     });
@@ -61,7 +73,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const client = resolveMetaOAuthClient();
     if (!client) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         metaAdsAuth: "error",
         reason: "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）",
       });
@@ -76,21 +88,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const accounts = await getMetaAdAccounts(accessToken);
 
     if (accounts.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         metaAdsAuth: "error",
         reason: "该 Meta 账号未关联任何广告账户，请先在 Meta Business 中创建或获得访问权限",
       });
     }
 
     if (accounts.length === 1) {
+      const accountOptions = accounts.map((a) => ({
+        id: a.adAccountId,
+        name: a.name,
+        formatted: a.currencyCode,
+      }));
       await clearMetaAdsPending(shop);
       await setMetaAdsCredential(shop, {
         accessToken,
         adAccountId: accounts[0].adAccountId,
         adAccountName: accounts[0].name,
         currencyCode: accounts[0].currencyCode,
+        availableAccounts: accountOptions,
       });
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         metaAdsAuth: "success",
         adAccountId: accounts[0].adAccountId,
       });
@@ -104,9 +122,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         formatted: a.currencyCode,
       })),
     });
-    return appRedirect(request, shop, host, appOrigin, { metaAdsAuth: "select" });
+    return respond({ metaAdsAuth: "select" });
   } catch (e) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       metaAdsAuth: "error",
       reason: e instanceof Error ? e.message : "Meta Ads 授权失败",
     });

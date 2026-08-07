@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRevalidator } from "react-router";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 
-type PendingAccount = { id: string; name?: string; formatted?: string };
+type AccountOption = { id: string; name?: string; formatted?: string };
 
 type Props = {
   connected: boolean;
   adAccountId: string | null;
   adAccountName: string | null;
-  pendingAccounts: PendingAccount[];
+  pendingAccounts: AccountOption[];
+  availableAccounts: AccountOption[];
   locationSearch: string;
   onChanged: () => void;
 };
@@ -44,6 +46,15 @@ const secondaryBtn = {
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
+  textAlign: "left" as const,
+};
+
+const activeAccountBtn = {
+  ...secondaryBtn,
+  border: `1px solid #0f7a52`,
+  background: "#f4fbf7",
+  color: "#0f7a52",
+  cursor: "default",
 };
 
 export function MetaAdsConnectPanel({
@@ -51,29 +62,53 @@ export function MetaAdsConnectPanel({
   adAccountId,
   adAccountName,
   pendingAccounts,
+  availableAccounts,
   locationSearch,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
+  const [accounts, setAccounts] = useState<AccountOption[]>(() =>
+    pendingAccounts.length > 0 ? pendingAccounts : availableAccounts,
+  );
+  const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
+
+  useEffect(() => {
+    if (pendingAccounts.length > 0) {
+      setAccounts(pendingAccounts);
+      return;
+    }
+    if (availableAccounts.length > 0) {
+      setAccounts(availableAccounts);
+      return;
+    }
+    if (!connected) {
+      setAccounts([]);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(`/api/ads-insights/meta-accounts${locationSearch}`)
+      .then((resp) => resp.json())
+      .then((data: { ok?: boolean; accounts?: AccountOption[] }) => {
+        if (!cancelled && data.ok && Array.isArray(data.accounts)) {
+          setAccounts(data.accounts);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [availableAccounts, connected, locationSearch, pendingAccounts]);
 
   async function openOAuth() {
     setBusy(true);
     try {
-      const resp = await fetch(`/api/ads-insights/meta-auth-url${locationSearch}`, {
-        headers: { Accept: "application/json" },
+      await metaAdsOAuth.startOAuth(`/api/ads-insights/meta-auth-url${locationSearch}`, () => {
+        onChanged();
+        revalidator.revalidate();
       });
-      const data = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        authUrl?: string;
-        error?: string;
-      };
-      if (!resp.ok || !data.authUrl) {
-        alert(data.error ?? t("adsInsights.authError"));
-        return;
-      }
-      window.open(data.authUrl, "_top");
     } catch (e) {
       alert(e instanceof Error ? e.message : t("adsInsights.authError"));
     } finally {
@@ -82,6 +117,7 @@ export function MetaAdsConnectPanel({
   }
 
   async function selectAccount(id: string) {
+    if (connected && id === adAccountId) return;
     setBusy(true);
     try {
       const resp = await fetch(`/api/ads-insights/meta-accounts${locationSearch}`, {
@@ -109,6 +145,7 @@ export function MetaAdsConnectPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
+      setAccounts([]);
       onChanged();
       revalidator.revalidate();
     } finally {
@@ -116,36 +153,49 @@ export function MetaAdsConnectPanel({
     }
   }
 
+  const selectingInitial = !connected && pendingAccounts.length > 0;
+  const showAccountPicker = selectingInitial || (connected && accounts.length > 0);
+
   return (
     <div style={panelStyle}>
       <div style={{ fontSize: 14, fontWeight: 700 }}>{t("adsInsights.metaConnectTitle")}</div>
       <div style={pageHintTextStyle}>{t("adsInsights.metaConnectHint")}</div>
 
-      {pendingAccounts.length > 0 && (
+      {showAccountPicker && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{t("adsInsights.metaSelectAccount")}</div>
-          {pendingAccounts.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              disabled={busy}
-              style={secondaryBtn}
-              onClick={() => void selectAccount(a.id)}
-            >
-              {a.name || a.id}
-              {a.formatted ? ` (${a.formatted})` : ""}
-            </button>
-          ))}
+          <div style={{ fontSize: 13, fontWeight: 600 }}>
+            {selectingInitial
+              ? t("adsInsights.metaSelectAccount")
+              : t("adsInsights.metaSwitchAccount")}
+          </div>
+          {accounts.map((a) => {
+            const isActive = connected && a.id === adAccountId;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                disabled={busy || isActive}
+                style={isActive ? activeAccountBtn : secondaryBtn}
+                onClick={() => void selectAccount(a.id)}
+              >
+                {a.name || a.id}
+                {a.formatted ? ` (${a.formatted})` : ""}
+                {isActive ? ` · ${t("adsInsights.metaCurrentAccount")}` : ""}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {connected ? (
         <>
-          <div style={{ fontSize: 13, color: "#0f7a52", fontWeight: 600 }}>
-            {t("adsInsights.metaConnected", {
-              name: adAccountName || adAccountId || "",
-            })}
-          </div>
+          {accounts.length === 0 && (
+            <div style={{ fontSize: 13, color: "#0f7a52", fontWeight: 600 }}>
+              {t("adsInsights.metaConnected", {
+                name: adAccountName || adAccountId || "",
+              })}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="button" disabled={busy} style={secondaryBtn} onClick={() => void openOAuth()}>
               {t("adsInsights.metaReconnect")}

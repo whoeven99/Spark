@@ -55,7 +55,7 @@
 | 自动化 | 每日经营巡检、执行历史、推荐 Playbook 模板 | `/api/automation-overview`、首页/助手 |
 | 计费与额度 | 套餐订阅、按量购包、取消订阅、Credit 余额与用量 | `/app/settings/billing` |
 | 数据工具 | 历史订单回补、同步状态查看、订单/客户/库存/履约记录数 | `/app/settings/data` |
-| 广告 Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步 | `/app/ads-catalog` |
+| 广告 Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads-catalog` |
 | 广告洞察 | Meta / Google / TikTok 广告系列→广告组→广告实时指标（7/14/30 天）；TikTok 支持沙盒开关 | `/app/settings/ads-insights` |
 | 物流集成配置 | FedEx、顺丰凭证配置 | `/app/settings/logistics` |
 | 用户反馈 | 提交建议或问题 | `/app/settings/feedback` |

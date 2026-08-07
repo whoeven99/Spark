@@ -11,6 +11,7 @@ import {
   getTiktokCatalogCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { isTiktokSandboxConfigured } from "../server/adsInsights/tiktokSandbox.server";
+import { isMetaSandboxConfigured } from "../server/adsInsights/metaSandbox.server";
 import { AdsInsightsPage } from "./page/AdsInsightsPage";
 
 export type AdsInsightsPageLoaderData = {
@@ -21,6 +22,8 @@ export type AdsInsightsPageLoaderData = {
       adAccountName: string | null;
       currencyCode: string | null;
       pendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+      availableAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+      sandboxConfigured: boolean;
     };
     google: {
       connected: boolean;
@@ -60,6 +63,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         adAccountName: meta?.adAccountName ?? null,
         currencyCode: meta?.currencyCode ?? null,
         pendingAccounts: metaPending?.accounts ?? [],
+        availableAccounts: meta?.availableAccounts ?? [],
+        sandboxConfigured: isMetaSandboxConfigured(),
       },
       google: {
         connected: Boolean(google),

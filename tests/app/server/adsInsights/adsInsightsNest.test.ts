@@ -17,6 +17,10 @@ import {
   applyGoogleSandboxMockMetrics,
   buildGoogleSandboxMockMetrics,
 } from "~/server/adsInsights/googleSandboxMock.server";
+import {
+  getMetaSandboxCredentials,
+  isMetaSandboxConfigured,
+} from "~/server/adsInsights/metaSandbox.server";
 
 describe("adsInsights dateRange", () => {
   it("parses allowed ranges and defaults to 7", () => {
@@ -404,5 +408,49 @@ describe("google sandbox mock metrics", () => {
     ]);
     expect(campaigns[0].adSets[0].ads[0].metrics.impressions).toBeGreaterThan(0);
     expect(campaigns[0].metrics.impressions).toBeGreaterThan(0);
+  });
+});
+
+describe("meta sandbox env", () => {
+  it("reports not configured when env missing", () => {
+    const prevToken = process.env.META_SANDBOX_ACCESS_TOKEN;
+    const prevAccount = process.env.META_SANDBOX_AD_ACCOUNT_ID;
+    delete process.env.META_SANDBOX_ACCESS_TOKEN;
+    delete process.env.META_SANDBOX_AD_ACCOUNT_ID;
+    expect(isMetaSandboxConfigured()).toBe(false);
+    expect(getMetaSandboxCredentials()).toBeNull();
+    if (prevToken !== undefined) process.env.META_SANDBOX_ACCESS_TOKEN = prevToken;
+    if (prevAccount !== undefined) process.env.META_SANDBOX_AD_ACCOUNT_ID = prevAccount;
+  });
+
+  it("reads sandbox credentials from env", () => {
+    const prevToken = process.env.META_SANDBOX_ACCESS_TOKEN;
+    const prevAccount = process.env.META_SANDBOX_AD_ACCOUNT_ID;
+    const prevName = process.env.META_SANDBOX_ACCOUNT_NAME;
+    const prevPage = process.env.META_SANDBOX_PAGE_ID;
+    const prevCurrency = process.env.META_SANDBOX_CURRENCY_CODE;
+    process.env.META_SANDBOX_ACCESS_TOKEN = "meta-sandbox-token";
+    process.env.META_SANDBOX_AD_ACCOUNT_ID = "1897816207552745";
+    process.env.META_SANDBOX_ACCOUNT_NAME = "New Sandbox Ad Account";
+    process.env.META_SANDBOX_PAGE_ID = "123456";
+    process.env.META_SANDBOX_CURRENCY_CODE = "USD";
+    expect(isMetaSandboxConfigured()).toBe(true);
+    expect(getMetaSandboxCredentials()).toEqual({
+      accessToken: "meta-sandbox-token",
+      adAccountId: "1897816207552745",
+      accountName: "New Sandbox Ad Account",
+      pageId: "123456",
+      currencyCode: "USD",
+    });
+    if (prevToken === undefined) delete process.env.META_SANDBOX_ACCESS_TOKEN;
+    else process.env.META_SANDBOX_ACCESS_TOKEN = prevToken;
+    if (prevAccount === undefined) delete process.env.META_SANDBOX_AD_ACCOUNT_ID;
+    else process.env.META_SANDBOX_AD_ACCOUNT_ID = prevAccount;
+    if (prevName === undefined) delete process.env.META_SANDBOX_ACCOUNT_NAME;
+    else process.env.META_SANDBOX_ACCOUNT_NAME = prevName;
+    if (prevPage === undefined) delete process.env.META_SANDBOX_PAGE_ID;
+    else process.env.META_SANDBOX_PAGE_ID = prevPage;
+    if (prevCurrency === undefined) delete process.env.META_SANDBOX_CURRENCY_CODE;
+    else process.env.META_SANDBOX_CURRENCY_CODE = prevCurrency;
   });
 });

@@ -121,6 +121,7 @@ export function createMetaOAuthState(
   host = "",
   appOrigin = "",
   flow: MetaOAuthFlow = "meta_catalog",
+  popup = false,
 ): string {
   const payload = JSON.stringify({
     shop,
@@ -129,6 +130,7 @@ export function createMetaOAuthState(
     appOrigin: appOrigin.replace(/\/$/, ""),
     nonce: crypto.randomBytes(8).toString("hex"),
     ts: Date.now(),
+    ...(popup ? { popup: true } : {}),
   });
   const encoded = Buffer.from(payload).toString("base64url");
   const sig = crypto.createHmac("sha256", stateSecret()).update(encoded).digest("base64url");
@@ -139,7 +141,7 @@ export function verifyMetaOAuthState(
   state: string,
   maxAgeMs = 15 * 60 * 1000,
   expectedFlow?: MetaOAuthFlow,
-): { shop: string; host: string; appOrigin: string; flow: MetaOAuthFlow } | null {
+): { shop: string; host: string; appOrigin: string; flow: MetaOAuthFlow; popup: boolean } | null {
   const [encoded, sig] = state.split(".");
   if (!encoded || !sig) return null;
   const expected = crypto
@@ -156,6 +158,7 @@ export function verifyMetaOAuthState(
       host?: string;
       appOrigin?: string;
       ts?: number;
+      popup?: boolean;
     };
     if (!payload.shop) return null;
     const flow = payload.flow as MetaOAuthFlow | undefined;
@@ -167,6 +170,7 @@ export function verifyMetaOAuthState(
       host: payload.host ?? "",
       appOrigin: payload.appOrigin ?? "",
       flow,
+      popup: payload.popup === true,
     };
   } catch {
     return null;
@@ -195,6 +199,7 @@ export async function buildMetaOAuthStartUrl(params: {
   shop: string;
   host?: string;
   requestOrigin: string;
+  popup?: boolean;
 }): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
   const client = resolveMetaOAuthClient();
   if (!client) {
@@ -204,7 +209,13 @@ export async function buildMetaOAuthStartUrl(params: {
     };
   }
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createMetaOAuthState(params.shop, params.host ?? "", appOrigin, "meta_catalog");
+  const state = createMetaOAuthState(
+    params.shop,
+    params.host ?? "",
+    appOrigin,
+    "meta_catalog",
+    params.popup,
+  );
   const authUrl = buildMetaAuthUrl({
     appId: client.appId,
     state,
@@ -219,6 +230,7 @@ export async function buildMetaAdsOAuthStartUrl(params: {
   shop: string;
   host?: string;
   requestOrigin: string;
+  popup?: boolean;
 }): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
   const client = resolveMetaOAuthClient();
   if (!client) {
@@ -228,7 +240,13 @@ export async function buildMetaAdsOAuthStartUrl(params: {
     };
   }
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createMetaOAuthState(params.shop, params.host ?? "", appOrigin, "meta_ads");
+  const state = createMetaOAuthState(
+    params.shop,
+    params.host ?? "",
+    appOrigin,
+    "meta_ads",
+    params.popup,
+  );
   const authUrl = buildMetaAuthUrl({
     appId: client.appId,
     state,

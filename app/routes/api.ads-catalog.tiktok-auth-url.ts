@@ -6,11 +6,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const incoming = new URL(request.url);
   const host = incoming.searchParams.get("host") ?? undefined;
+  const popup = incoming.searchParams.get("popup") === "1";
 
   const result = buildTiktokOAuthStartUrl({
     shop: session.shop,
     host,
     requestOrigin: incoming.origin,
+    popup,
   });
 
   if (!result.ok) {

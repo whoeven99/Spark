@@ -200,6 +200,7 @@ export function createTiktokOAuthState(
   shop: string,
   host = "",
   appOrigin = "",
+  popup = false,
 ): string {
   const payload = JSON.stringify({
     shop,
@@ -208,6 +209,7 @@ export function createTiktokOAuthState(
     appOrigin: appOrigin.replace(/\/$/, ""),
     nonce: crypto.randomBytes(8).toString("hex"),
     ts: Date.now(),
+    ...(popup ? { popup: true } : {}),
   });
   const encoded = Buffer.from(payload).toString("base64url");
   const sig = crypto.createHmac("sha256", stateSecret()).update(encoded).digest("base64url");
@@ -217,7 +219,7 @@ export function createTiktokOAuthState(
 export function verifyTiktokOAuthState(
   state: string,
   maxAgeMs = 15 * 60 * 1000,
-): { shop: string; host: string; appOrigin: string } | null {
+): { shop: string; host: string; appOrigin: string; popup: boolean } | null {
   const [encoded, sig] = state.split(".");
   if (!encoded || !sig) return null;
   const expected = crypto
@@ -236,6 +238,7 @@ export function verifyTiktokOAuthState(
       host?: string;
       appOrigin?: string;
       ts?: number;
+      popup?: boolean;
     };
     if (!payload.shop || payload.flow !== "tiktok_catalog") return null;
     if (typeof payload.ts !== "number" || Date.now() - payload.ts > maxAgeMs) return null;
@@ -243,6 +246,7 @@ export function verifyTiktokOAuthState(
       shop: payload.shop,
       host: payload.host ?? "",
       appOrigin: payload.appOrigin ?? "",
+      popup: payload.popup === true,
     };
   } catch {
     return null;
@@ -268,6 +272,7 @@ export function buildTiktokOAuthStartUrl(params: {
   shop: string;
   host?: string;
   requestOrigin: string;
+  popup?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   const { appId, appSecret } = getTiktokAppCredentials();
   if (!appId || !appSecret) {
@@ -283,7 +288,7 @@ export function buildTiktokOAuthStartUrl(params: {
     };
   }
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createTiktokOAuthState(params.shop, params.host ?? "", appOrigin);
+  const state = createTiktokOAuthState(params.shop, params.host ?? "", appOrigin, params.popup);
   const authUrl = buildTiktokAuthUrl({
     appId,
     state,

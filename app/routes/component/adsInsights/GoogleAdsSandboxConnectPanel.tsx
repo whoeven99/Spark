@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRevalidator } from "react-router";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 
 type PendingAccount = { id: string; name?: string; formatted?: string };
@@ -57,24 +58,19 @@ export function GoogleAdsSandboxConnectPanel({
   const { t } = useTranslation();
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
+  const googleSandboxOAuth = useOAuthPopup("google_ads_sandbox_oauth");
 
   async function openOAuth(reauth = false) {
     setBusy(true);
     try {
       const reauthSuffix = reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
-      const resp = await fetch(`/api/ads-insights/google-sandbox-auth-url${locationSearch}${reauthSuffix}`, {
-        headers: { Accept: "application/json" },
-      });
-      const data = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        authUrl?: string;
-        error?: string;
-      };
-      if (!resp.ok || !data.authUrl) {
-        alert(data.error ?? t("adsInsights.authError"));
-        return;
-      }
-      window.open(data.authUrl, "_top");
+      await googleSandboxOAuth.startOAuth(
+        `/api/ads-insights/google-sandbox-auth-url${locationSearch}${reauthSuffix}`,
+        () => {
+          onChanged();
+          revalidator.revalidate();
+        },
+      );
     } catch (e) {
       alert(e instanceof Error ? e.message : t("adsInsights.authError"));
     } finally {
