@@ -215,6 +215,10 @@ npm run build     # Vite client + tsc server
   `Account`（在装）为准；目标语言/自动翻译来自 `ShopTargetLocale`；覆盖率按
   `tsf:items_count:{shop}:{locale}` 批量查 Redis。快照约 60s，`refresh=1`
   强制重载。
+- 翻译 tab「用户额度查询」：`/tsf/credits` →
+  `admin/src/pages/tsf/TsfCredits.tsx` + `admin/server/routes/tsfCredits.ts`。
+  按 shop 查 TSF Turso：`Account` 额度拆分、`TOKEN_PACK_PURCHASED` 加购记录、
+  `BillingLog` 流水与 `AccountPeriodUsage` 周期归档；所有登录用户可查。
 - Spark tab「OpenRouter 探测」（owner）：`/openrouter-probe` →
   `admin/src/pages/OpenRouterProbe.tsx` +
   `admin/server/routes/openrouterProbe.ts`。服务端用 `OPENROUTER_API_KEY`

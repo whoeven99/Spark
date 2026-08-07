@@ -29,6 +29,7 @@ import {
   FundOutlined,
   GlobalOutlined,
   ExperimentOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -131,6 +132,12 @@ const translationMenuItems: MenuItemDef[] = [
     key: "/translate-v4-support",
     icon: <CustomerServiceOutlined />,
     label: <Link to="/translate-v4-support">翻译 v4 客服</Link>,
+    ownerOnly: false,
+  },
+  {
+    key: "/tsf/credits",
+    icon: <WalletOutlined />,
+    label: <Link to="/tsf/credits">用户额度查询</Link>,
     ownerOnly: false,
   },
 ];
