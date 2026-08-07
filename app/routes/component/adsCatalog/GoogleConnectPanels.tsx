@@ -313,15 +313,30 @@ export function GoogleConnectPanels({
         ) : (
           <p style={pageHintTextStyle}>{t("adsCatalog.googlePixelNotConfigured")}</p>
         )}
-        <div>
-          <Link
-            to={`/app/ads/google-pixel${locationSearch}`}
-            style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
-          >
-            {ads.remarketing.tagId
-              ? t("adsCatalog.googlePixelManage")
-              : t("adsCatalog.googlePixelSetup")}
-          </Link>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {ads.remarketing.tagId ? (
+            <>
+              <Link
+                to={`/app/ads/google-pixel/data${locationSearch}`}
+                style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
+              >
+                {t("adsCatalog.googlePixelViewData")}
+              </Link>
+              <Link
+                to={`/app/ads/google-pixel${locationSearch}`}
+                style={{ ...secondaryBtn, display: "inline-block", textDecoration: "none" }}
+              >
+                {t("adsCatalog.googlePixelManage")}
+              </Link>
+            </>
+          ) : (
+            <Link
+              to={`/app/ads/google-pixel${locationSearch}`}
+              style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
+            >
+              {t("adsCatalog.googlePixelSetup")}
+            </Link>
+          )}
         </div>
       </div>
     </div>

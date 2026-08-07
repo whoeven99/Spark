@@ -227,7 +227,7 @@ export function GooglePixelOnboardingPage() {
       if (!resp.ok || !data.ok) {
         throw new Error(data.error || t("googlePixelOnboarding.saveFailed"));
       }
-      // 勾选 purchase 时先生成并复制 Custom Pixel，再回广告目录（避免「完成」无跳转）。
+      // 勾选 purchase 时先生成并复制 Custom Pixel，再进入 Pixel 数据页。
       if (events.includes("purchase")) {
         const script = generateGooglePurchaseCustomPixel({
           tagId: normalizedTag,
@@ -238,7 +238,7 @@ export function GooglePixelOnboardingPage() {
         setSavedScript(script);
         await copyScript(script);
       }
-      navigate(`/app/ads-catalog${locationSearch}`);
+      navigate(`/app/ads/google-pixel/data${locationSearch}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("googlePixelOnboarding.saveFailed"));
       setBusy(false);
@@ -291,7 +291,7 @@ export function GooglePixelOnboardingPage() {
           customerEventsUrl={customerEventsUrl}
           copiedHint={copiedHint}
           onCopy={() => void copyScript(savedScript)}
-          onDoneToCatalog={() => navigate(`/app/ads-catalog${locationSearch}`)}
+          onDoneToCatalog={() => navigate(`/app/ads/google-pixel/data${locationSearch}`)}
         />
       )}
 
