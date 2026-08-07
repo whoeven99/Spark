@@ -16,7 +16,24 @@ export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 export const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 export const GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
-export type OAuthFlow = "gmc" | "ads" | "ads_sandbox" | "gsc" | "ga4";
+export type OAuthFlow = "gmc" | "ads" | "gmc_ads" | "ads_sandbox" | "gsc" | "ga4";
+
+const VALID_OAUTH_FLOWS: ReadonlySet<OAuthFlow> = new Set([
+  "gmc",
+  "ads",
+  "gmc_ads",
+  "ads_sandbox",
+  "gsc",
+  "ga4",
+]);
+
+/** Catalog 生产授权统一为一次 consent（content + adwords）。 */
+export function normalizeCatalogGoogleOAuthFlow(
+  flow: OAuthFlow,
+): "gmc_ads" | "ads_sandbox" | "gsc" | "ga4" {
+  if (flow === "gmc" || flow === "ads" || flow === "gmc_ads") return "gmc_ads";
+  return flow;
+}
 
 export interface OAuthTokens {
   accessToken: string;
@@ -153,7 +170,8 @@ export function verifyOAuthState(
     };
     if (
       !payload.shop ||
-      (payload.flow !== "gmc" && payload.flow !== "ads" && payload.flow !== "ads_sandbox" && payload.flow !== "gsc" && payload.flow !== "ga4")
+      !payload.flow ||
+      !VALID_OAUTH_FLOWS.has(payload.flow)
     ) {
       return null;
     }
@@ -181,6 +199,7 @@ export function buildAuthUrl(params: {
   const { clientId } = getGoogleOAuthClient();
   const scope =
     params.flow === "gmc" ? GMC_SCOPE :
+    params.flow === "gmc_ads" ? `${GMC_SCOPE} ${ADS_SCOPE}` :
     params.flow === "gsc" ? GSC_SCOPE :
     params.flow === "ga4" ? GA4_SCOPE :
     ADS_SCOPE;
@@ -211,23 +230,36 @@ export function buildGoogleOAuthStartUrl(params: {
     return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
   }
 
+  // 旧 gmc/ads 入口统一升级为一次 consent；沙盒仍走独立 Ads callback。
+  const flow = normalizeCatalogGoogleOAuthFlow(params.flow);
   const callbackPath =
-    params.flow === "gmc" ? "/ads/google-merchant/callback" : "/ads/google-ads/callback";
+    flow === "gmc_ads" ? "/ads/google-merchant/callback" : "/ads/google-ads/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
   const state = createOAuthState(
     params.shop,
-    params.flow,
+    flow,
     params.host ?? "",
     appOrigin,
     params.popup,
   );
   const authUrl = buildAuthUrl({
-    flow: params.flow,
+    flow,
     state,
     redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
     reauth: params.reauth,
   });
   return { ok: true, authUrl };
+}
+
+/** Catalog 页主入口：一次授权 GMC + Ads。 */
+export function buildGoogleCombinedOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  reauth?: boolean;
+  popup?: boolean;
+}): { ok: true; authUrl: string } | { ok: false; error: string } {
+  return buildGoogleOAuthStartUrl({ ...params, flow: "gmc_ads" });
 }
 
 /** Google Ads 测试账号 OAuth（广告洞察沙盒，与 Catalog 生产授权隔离）。 */

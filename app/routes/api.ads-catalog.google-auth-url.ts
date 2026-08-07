@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { buildGoogleCombinedOAuthStartUrl } from "../server/adsCatalog/googleOAuth.server";
 
-/** 兼容旧入口；统一走 GMC + Ads 一次 consent。 */
+/** Catalog 页主入口：一次 consent 授权 GMC + Ads。 */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const source = new URL(request.url);

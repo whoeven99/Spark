@@ -268,11 +268,14 @@ export function AdsCatalogPage() {
   // Surface OAuth callback outcome and route to the right tab.
   const applyAuthResult = useCallback(
     (input: {
+      google?: string | null;
       gmc?: string | null;
       ads?: string | null;
       meta?: string | null;
       tiktok?: string | null;
       reason?: string | null;
+      gmcReason?: string | null;
+      adsReason?: string | null;
     }) => {
       const result = resolveAdsCatalogAuthResult({ ...input, t });
       if (result.action === "none") return;
@@ -286,11 +289,14 @@ export function AdsCatalogPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     applyAuthResult({
+      google: params.get("googleAuth"),
       gmc: params.get("gmcAuth"),
       ads: params.get("adsAuth"),
       meta: params.get("metaAuth"),
       tiktok: params.get("tiktokAuth"),
       reason: params.get("reason"),
+      gmcReason: params.get("gmcReason"),
+      adsReason: params.get("adsReason"),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
@@ -299,15 +305,27 @@ export function AdsCatalogPage() {
     const handleMessage = (event: MessageEvent) => {
       const data = event.data as {
         type?: string;
+        googleAuth?: string;
         gmcAuth?: string;
         adsAuth?: string;
         metaAuth?: string;
         tiktokAuth?: string;
         reason?: string;
+        gmcReason?: string;
+        adsReason?: string;
       } | null;
       if (!data?.type) return;
 
-      if (data.type === "gmc_oauth") {
+      if (data.type === "google_oauth") {
+        applyAuthResult({
+          google: data.googleAuth,
+          gmc: data.gmcAuth,
+          ads: data.adsAuth,
+          reason: data.reason,
+          gmcReason: data.gmcReason,
+          adsReason: data.adsReason,
+        });
+      } else if (data.type === "gmc_oauth") {
         applyAuthResult({ gmc: data.gmcAuth, reason: data.reason });
       } else if (data.type === "ads_catalog_oauth") {
         applyAuthResult({ ads: data.adsAuth, reason: data.reason });

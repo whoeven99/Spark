@@ -1,11 +1,14 @@
 export type AdsCatalogAuthBanner = { tone: "ok" | "error"; text: string };
 
 type AuthResultInput = {
+  google?: string | null;
   gmc?: string | null;
   ads?: string | null;
   meta?: string | null;
   tiktok?: string | null;
   reason?: string | null;
+  gmcReason?: string | null;
+  adsReason?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 };
 
@@ -13,14 +16,87 @@ export type AdsCatalogAuthResult =
   | { action: "revalidate"; tab: "credentials"; banner?: AdsCatalogAuthBanner }
   | { action: "none" };
 
-export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogAuthResult {
-  const { gmc, ads, meta, tiktok, reason, t } = input;
+function hasValue(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.length > 0;
+}
 
-  if (gmc === "select" || ads === "select" || meta === "select" || tiktok === "select") {
+function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | undefined {
+  const { google, gmc, ads, reason, gmcReason, adsReason, t } = input;
+
+  if (google === "cancelled" || gmc === "cancelled" || ads === "cancelled") {
+    return { tone: "error", text: t("adsCatalog.authCancelled") };
+  }
+
+  if (google === "select" || gmc === "select" || ads === "select") {
+    return undefined;
+  }
+
+  if (google === "error" || (gmc === "error" && ads === "error")) {
+    return { tone: "error", text: reason || t("adsCatalog.authError") };
+  }
+
+  const gmcMissing = gmc === "empty" || gmc === "error";
+  const adsMissing = ads === "empty" || ads === "error";
+  const gmcOk = gmc === "success";
+  const adsOk = ads === "success";
+
+  if (google === "partial" || (gmcOk && adsMissing) || (adsOk && gmcMissing)) {
+    const detail = gmcMissing
+      ? gmcReason || reason || t("adsCatalog.googlePartialGmcMissing")
+      : adsReason || reason || t("adsCatalog.googlePartialAdsMissing");
+    return { tone: "ok", text: t("adsCatalog.googleAuthPartial", { detail }) };
+  }
+
+  if (google === "success" || gmcOk || adsOk) {
+    if (google || (gmcOk && adsOk)) {
+      return { tone: "ok", text: t("adsCatalog.googleAuthSuccess") };
+    }
+    // 旧单侧 popup（仅 gmc / 仅 ads）
+    return { tone: "ok", text: t("adsCatalog.authSuccess") };
+  }
+
+  if (gmc === "error" || ads === "error") {
+    return { tone: "error", text: reason || t("adsCatalog.authError") };
+  }
+
+  return undefined;
+}
+
+export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogAuthResult {
+  const { google, gmc, ads, meta, tiktok, reason, t } = input;
+
+  if (
+    google === "select" ||
+    gmc === "select" ||
+    ads === "select" ||
+    meta === "select" ||
+    tiktok === "select"
+  ) {
     return { action: "revalidate", tab: "credentials" };
   }
 
-  if (gmc === "success" || ads === "success" || meta === "success" || tiktok === "success") {
+  if (hasValue(google) || hasValue(gmc) || hasValue(ads)) {
+    const banner = resolveGoogleBanner(input);
+    if (
+      banner ||
+      google === "success" ||
+      google === "partial" ||
+      google === "error" ||
+      google === "cancelled" ||
+      gmc === "success" ||
+      ads === "success" ||
+      gmc === "empty" ||
+      ads === "empty" ||
+      gmc === "error" ||
+      ads === "error" ||
+      gmc === "cancelled" ||
+      ads === "cancelled"
+    ) {
+      return { action: "revalidate", tab: "credentials", banner };
+    }
+  }
+
+  if (meta === "success" || tiktok === "success") {
     return {
       action: "revalidate",
       tab: "credentials",
@@ -36,7 +112,7 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     };
   }
 
-  if (gmc === "error" || ads === "error" || meta === "error" || tiktok === "error") {
+  if (meta === "error" || tiktok === "error") {
     return {
       action: "revalidate",
       tab: "credentials",
@@ -44,7 +120,7 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     };
   }
 
-  if (gmc === "cancelled" || ads === "cancelled" || meta === "cancelled" || tiktok === "cancelled") {
+  if (meta === "cancelled" || tiktok === "cancelled") {
     return {
       action: "revalidate",
       tab: "credentials",

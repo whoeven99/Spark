@@ -1,7 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import {
-  buildGoogleOAuthReturnUrl,
   buildGoogleAdsSandboxOAuthReturnUrl,
   buildOAuthPopupCloseHtml,
   exchangeCodeForTokens,
@@ -15,11 +14,6 @@ import {
 } from "../server/adsCatalog/googleOAuth.server";
 import { resolveLoginCustomerId } from "../server/adsCatalog/googleAdsApi.server";
 import {
-  setGoogleAdsCredential,
-  setGoogleAdsPending,
-  clearGoogleAdsPending,
-  getGoogleAdsCredential,
-  deleteGoogleAdsCredential,
   setGoogleAdsSandboxCredential,
   setGoogleAdsSandboxPending,
   clearGoogleAdsSandboxPending,
@@ -35,11 +29,10 @@ function appRedirect(
   host: string,
   appOrigin: string,
   params: Record<string, string>,
-  flow: "ads" | "ads_sandbox",
 ) {
-  const buildReturn =
-    flow === "ads_sandbox" ? buildGoogleAdsSandboxOAuthReturnUrl : buildGoogleOAuthReturnUrl;
-  return redirect(buildReturn({ shop, host, appOrigin, query: params, request }));
+  return redirect(
+    buildGoogleAdsSandboxOAuthReturnUrl({ shop, host, appOrigin, query: params, request }),
+  );
 }
 
 function oauthStateErrorResponse(): Response {
@@ -49,9 +42,8 @@ function oauthStateErrorResponse(): Response {
   );
 }
 
-function popupClose(flow: "ads" | "ads_sandbox", params: Record<string, string>): Response {
-  const messageType = flow === "ads_sandbox" ? "google_ads_sandbox_oauth" : "ads_catalog_oauth";
-  return new Response(buildOAuthPopupCloseHtml(messageType, params), {
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildOAuthPopupCloseHtml("google_ads_sandbox_oauth", params), {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 }
@@ -76,19 +68,16 @@ function buildAdsPendingPayload(
   };
 }
 
-async function adsOAuthRequiresSelection(
+async function adsSandboxRequiresSelection(
   shop: string,
-  isSandbox: boolean,
   customerCount: number,
 ): Promise<boolean> {
   if (customerCount > 1) return true;
   if (customerCount !== 1) return false;
-  const existing = isSandbox
-    ? await getGoogleAdsSandboxCredential(shop)
-    : await getGoogleAdsCredential(shop);
-  return Boolean(existing);
+  return Boolean(await getGoogleAdsSandboxCredential(shop));
 }
 
+/** 仅服务 Ads Insights 沙盒；生产 Catalog 授权已合并到 /ads/google-merchant/callback。 */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const incoming = new URL(request.url);
   const state = incoming.searchParams.get("state") ?? "";
@@ -96,40 +85,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const oauthError = incoming.searchParams.get("error");
 
   const verified = verifyOAuthState(state);
-  if (!verified || (verified.flow !== "ads" && verified.flow !== "ads_sandbox")) {
+  if (!verified || verified.flow !== "ads_sandbox") {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin, flow, popup } = verified;
-  const isSandbox = flow === "ads_sandbox";
+  const { shop, host, appOrigin, popup } = verified;
 
   const respond = (params: Record<string, string>): Response =>
     popup
-      ? popupClose(flow, params)
-      : appRedirect(request, shop, host, appOrigin, params, flow);
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return respond(
-      isSandbox ? { googleAdsSandboxAuth: "cancelled" } : { adsAuth: "cancelled" },
-    );
+    return respond({ googleAdsSandboxAuth: "cancelled" });
   }
   if (!code) {
-    return respond(
-      isSandbox
-        ? { googleAdsSandboxAuth: "error", reason: "Google 未返回授权 code" }
-        : { adsAuth: "error", reason: "Google 未返回授权 code" },
-    );
+    return respond({
+      googleAdsSandboxAuth: "error",
+      reason: "Google 未返回授权 code",
+    });
   }
 
   const developerToken = getGoogleAdsDeveloperToken();
   if (!developerToken) {
-    return respond(
-      isSandbox
-        ? {
-            googleAdsSandboxAuth: "error",
-            reason: "缺少 GOOGLE_ADS_DEVELOPER_TOKEN 环境变量",
-          }
-        : { adsAuth: "error", reason: "缺少 GOOGLE_ADS_DEVELOPER_TOKEN 环境变量" },
-    );
+    return respond({
+      googleAdsSandboxAuth: "error",
+      reason: "缺少 GOOGLE_ADS_DEVELOPER_TOKEN 环境变量",
+    });
   }
 
   try {
@@ -141,21 +122,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { clientId, clientSecret } = getGoogleOAuthClient();
 
     if (customers.length === 0) {
-      return respond(
-        isSandbox
-          ? {
-              googleAdsSandboxAuth: "error",
-              reason: "该 Google 账号未关联任何 Google Ads 广告账户",
-            }
-          : { adsAuth: "error", reason: "该 Google 账号未关联任何 Google Ads 广告账户" },
-      );
+      return respond({
+        googleAdsSandboxAuth: "error",
+        reason: "该 Google 账号未关联任何 Google Ads 广告账户",
+      });
     }
 
-    const requiresSelection = await adsOAuthRequiresSelection(
-      shop,
-      isSandbox,
-      customers.length,
-    );
+    const requiresSelection = await adsSandboxRequiresSelection(shop, customers.length);
 
     if (!requiresSelection && customers.length === 1) {
       const customerId = customers[0].customerId;
@@ -167,57 +140,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           customerId,
           accessibleCustomerIds: customers.map((c) => c.loginCustomerId ?? c.customerId),
         }));
-      if (isSandbox) {
-        await clearGoogleAdsSandboxPending(shop);
-        await setGoogleAdsSandboxCredential(shop, {
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          customerId,
-          loginCustomerId,
-          descriptiveName: customers[0].descriptiveName,
-        });
-        return respond({
-          googleAdsSandboxAuth: "success",
-          customerId: customers[0].formatted,
-        });
-      }
-      await clearGoogleAdsPending(shop);
-      await setGoogleAdsCredential(shop, {
+      await clearGoogleAdsSandboxPending(shop);
+      await setGoogleAdsSandboxCredential(shop, {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         customerId,
         loginCustomerId,
+        descriptiveName: customers[0].descriptiveName,
       });
       return respond({
-        adsAuth: "success",
+        googleAdsSandboxAuth: "success",
         customerId: customers[0].formatted,
       });
     }
 
-    const pendingPayload = buildAdsPendingPayload(tokens, customers, clientId, clientSecret);
-
-    if (isSandbox) {
-      await deleteGoogleAdsSandboxCredential(shop);
-      await clearGoogleAdsSandboxPending(shop);
-      await setGoogleAdsSandboxPending(shop, pendingPayload);
-      return respond({ googleAdsSandboxAuth: "select" });
-    }
-
-    await deleteGoogleAdsCredential(shop);
-    await clearGoogleAdsPending(shop);
-    await setGoogleAdsPending(shop, pendingPayload);
-    return respond({ adsAuth: "select" });
-  } catch (e) {
-    return respond(
-      isSandbox
-        ? {
-            googleAdsSandboxAuth: "error",
-            reason: e instanceof Error ? e.message : "Google Ads 测试账号授权失败",
-          }
-        : {
-            adsAuth: "error",
-            reason: e instanceof Error ? e.message : "Google Ads 授权失败",
-          },
+    await deleteGoogleAdsSandboxCredential(shop);
+    await clearGoogleAdsSandboxPending(shop);
+    await setGoogleAdsSandboxPending(
+      shop,
+      buildAdsPendingPayload(tokens, customers, clientId, clientSecret),
     );
+    return respond({ googleAdsSandboxAuth: "select" });
+  } catch (e) {
+    return respond({
+      googleAdsSandboxAuth: "error",
+      reason: e instanceof Error ? e.message : "Google Ads 测试账号授权失败",
+    });
   }
 };
