@@ -7,6 +7,8 @@ import {
   Descriptions,
   Empty,
   Input,
+  InputNumber,
+  Modal,
   Progress,
   Row,
   Space,
@@ -15,9 +17,17 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from "antd";
-import { ReloadOutlined, SearchOutlined, WalletOutlined } from "@ant-design/icons";
 import {
+  EditOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  WalletOutlined,
+} from "@ant-design/icons";
+import {
+  adjustTsfPurchasedCredits,
   fetchTsfCredits,
   type TsfCreditsBillingLog,
   type TsfCreditsData,
@@ -37,12 +47,20 @@ function fmtDate(value: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString("zh-CN");
 }
 
+type AdjustMode = "add" | "set";
+
 export default function TsfCredits() {
   const [shopInput, setShopInput] = useState("");
   const [data, setData] = useState<TsfCreditsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustMode, setAdjustMode] = useState<AdjustMode>("add");
+  const [adjustAmount, setAdjustAmount] = useState<number | null>(null);
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
 
   const load = useCallback((shop: string) => {
     const trimmed = shop.trim();
@@ -63,6 +81,62 @@ export default function TsfCredits() {
   }, []);
 
   const account = data?.account ?? null;
+  const canAdjust = Boolean(account);
+
+  function openAdjust(mode: AdjustMode) {
+    if (!account) {
+      message.warning("请先查询到有效账户");
+      return;
+    }
+    setAdjustMode(mode);
+    setAdjustAmount(mode === "set" ? account.purchasedCredits : null);
+    setAdjustNote("");
+    setAdjustOpen(true);
+  }
+
+  async function submitAdjust() {
+    if (!account) return;
+    if (adjustAmount === null || Number.isNaN(adjustAmount)) {
+      message.warning(adjustMode === "add" ? "请输入添加数量" : "请输入目标额度");
+      return;
+    }
+    if (adjustMode === "add" && adjustAmount === 0) {
+      message.warning("添加数量不能为 0");
+      return;
+    }
+    if (adjustMode === "set" && adjustAmount < 0) {
+      message.warning("目标额度不能为负");
+      return;
+    }
+
+    const previewAfter =
+      adjustMode === "add" ? account.purchasedCredits + adjustAmount : adjustAmount;
+    if (previewAfter < 0) {
+      message.warning(`结果额度不能为负（将变为 ${previewAfter.toLocaleString()}）`);
+      return;
+    }
+
+    setAdjusting(true);
+    try {
+      const result = await adjustTsfPurchasedCredits({
+        shop: account.shop,
+        action: adjustMode,
+        amount: adjustAmount,
+        note: adjustNote.trim() || undefined,
+      });
+      message.success(
+        `加购额度已更新：${result.before.toLocaleString()} → ${result.after.toLocaleString()}（${
+          result.creditsDelta >= 0 ? "+" : ""
+        }${result.creditsDelta.toLocaleString()}）`,
+      );
+      setAdjustOpen(false);
+      load(account.shop);
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setAdjusting(false);
+    }
+  }
 
   const packColumns = [
     {
@@ -208,6 +282,13 @@ export default function TsfCredits() {
     },
   ];
 
+  const previewAfter =
+    account && adjustAmount !== null
+      ? adjustMode === "add"
+        ? account.purchasedCredits + adjustAmount
+        : adjustAmount
+      : null;
+
   return (
     <div>
       <Typography.Title level={4} style={{ marginBottom: 8 }}>
@@ -248,6 +329,20 @@ export default function TsfCredits() {
           onClick={() => load(shopInput)}
         >
           刷新
+        </Button>
+        <Button
+          icon={<PlusOutlined />}
+          disabled={!canAdjust || loading}
+          onClick={() => openAdjust("add")}
+        >
+          添加加购额度
+        </Button>
+        <Button
+          icon={<EditOutlined />}
+          disabled={!canAdjust || loading}
+          onClick={() => openAdjust("set")}
+        >
+          修改加购额度
         </Button>
       </Space>
 
@@ -388,6 +483,63 @@ export default function TsfCredits() {
           </>
         )}
       </Spin>
+
+      <Modal
+        title={adjustMode === "add" ? "添加加购额度" : "修改加购额度"}
+        open={adjustOpen}
+        onCancel={() => {
+          if (adjusting) return;
+          setAdjustOpen(false);
+        }}
+        onOk={submitAdjust}
+        okText={adjustMode === "add" ? "确认添加" : "确认修改"}
+        cancelText="取消"
+        confirmLoading={adjusting}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Typography.Text type="secondary">
+            商店：{account?.shop ?? "-"} · 当前加购额度：
+            {(account?.purchasedCredits ?? 0).toLocaleString()}
+          </Typography.Text>
+          <div>
+            <div style={{ marginBottom: 6 }}>
+              {adjustMode === "add" ? "添加数量（可为负数）" : "目标加购额度（绝对值）"}
+            </div>
+            <InputNumber
+              style={{ width: "100%" }}
+              value={adjustAmount}
+              onChange={(v) => setAdjustAmount(typeof v === "number" ? v : null)}
+              disabled={adjusting}
+              precision={0}
+              min={adjustMode === "set" ? 0 : undefined}
+              placeholder={adjustMode === "add" ? "例如 100000" : "例如 500000"}
+            />
+          </div>
+          {previewAfter !== null && (
+            <Alert
+              type={previewAfter < 0 ? "error" : "info"}
+              showIcon
+              message={`调整后加购额度：${previewAfter.toLocaleString()}`}
+            />
+          )}
+          <div>
+            <div style={{ marginBottom: 6 }}>备注（可选）</div>
+            <Input.TextArea
+              value={adjustNote}
+              onChange={(e) => setAdjustNote(e.target.value)}
+              disabled={adjusting}
+              maxLength={500}
+              showCount
+              autoSize={{ minRows: 2, maxRows: 4 }}
+              placeholder="例如：客服补偿 / 对账修正"
+            />
+          </div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            将写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED，不会计入加购收入统计。
+          </Typography.Text>
+        </Space>
+      </Modal>
     </div>
   );
 }

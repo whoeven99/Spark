@@ -218,7 +218,9 @@ npm run build     # Vite client + tsc server
 - 翻译 tab「用户额度查询」：`/tsf/credits` →
   `admin/src/pages/tsf/TsfCredits.tsx` + `admin/server/routes/tsfCredits.ts`。
   按 shop 查 TSF Turso：`Account` 额度拆分、`TOKEN_PACK_PURCHASED` 加购记录、
-  `BillingLog` 流水与 `AccountPeriodUsage` 周期归档；所有登录用户可查。
+  `BillingLog` 流水与 `AccountPeriodUsage` 周期归档；支持添加/修改
+  `purchasedCredits`（`POST /api/tsf/credits/purchased`，审计事件
+  `ADMIN_PURCHASED_CREDITS_ADJUSTED`，不计入加购收入）；所有登录用户可查可改。
 - Spark tab「OpenRouter 探测」（owner）：`/openrouter-probe` →
   `admin/src/pages/OpenRouterProbe.tsx` +
   `admin/server/routes/openrouterProbe.ts`。服务端用 `OPENROUTER_API_KEY`

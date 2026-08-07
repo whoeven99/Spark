@@ -2148,6 +2148,30 @@ export function fetchTsfCredits(shop: string): Promise<TsfCreditsData> {
   return apiFetch(`/tsf/credits?shop=${encodeURIComponent(shop)}`);
 }
 
+export type TsfPurchasedCreditsAdjustResult = {
+  shop: string;
+  action: "add" | "set";
+  before: number;
+  after: number;
+  creditsDelta: number;
+  referenceId?: string;
+  eventType?: string;
+  note?: string;
+};
+
+/** 添加或修改 Account.purchasedCredits。 */
+export function adjustTsfPurchasedCredits(params: {
+  shop: string;
+  action: "add" | "set";
+  amount: number;
+  note?: string;
+}): Promise<TsfPurchasedCreditsAdjustResult> {
+  return apiFetch("/tsf/credits/purchased", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
 export type TsfBillingAccount = {
   shop: string;
   subscriptionCredits: number;

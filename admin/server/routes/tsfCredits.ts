@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { getTsfDb } from "../lib/tsfDb.js";
 import { normalizeShopName } from "../lib/shopSession.js";
 
 export const tsfCreditsRouter = Router();
+
+/** 运维调整加购额度的流水事件（不计入 TOKEN_PACK_PURCHASED 收入/加购统计）。 */
+const ADMIN_PURCHASED_EVENT = "ADMIN_PURCHASED_CREDITS_ADJUSTED";
 
 /** 从输入解析商店域名：支持短名、完整域名或粘贴的 URL。 */
 function resolveShopQuery(input: string): string {
@@ -10,6 +14,17 @@ function resolveShopQuery(input: string): string {
   value = value.replace(/^https?:\/\//, "");
   value = value.split("/")[0] ?? value;
   return normalizeShopName(value);
+}
+
+function parseIntegerAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value.trim());
+    if (Number.isFinite(n)) return Math.trunc(n);
+  }
+  return null;
 }
 
 /**
@@ -174,6 +189,139 @@ tsfCreditsRouter.get("/", async (req, res) => {
     });
   } catch (err) {
     console.error("[tsf/credits]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * 调整 Account.purchasedCredits。
+ * POST /api/tsf/credits/purchased
+ * body: { shop, action: "add" | "set", amount, note? }
+ */
+tsfCreditsRouter.post("/purchased", async (req, res) => {
+  const shop = resolveShopQuery(String(req.body?.shop ?? ""));
+  const actionRaw = String(req.body?.action ?? "").trim().toLowerCase();
+  const action = actionRaw === "add" || actionRaw === "set" ? actionRaw : null;
+  const amount = parseIntegerAmount(req.body?.amount);
+  const note =
+    typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
+
+  if (!shop) {
+    res.status(400).json({ error: "shop is required" });
+    return;
+  }
+  if (!action) {
+    res.status(400).json({ error: 'action must be "add" or "set"' });
+    return;
+  }
+  if (amount == null) {
+    res.status(400).json({ error: "amount must be an integer" });
+    return;
+  }
+  if (action === "set" && amount < 0) {
+    res.status(400).json({ error: "set amount must be >= 0" });
+    return;
+  }
+  if (action === "add" && amount === 0) {
+    res.status(400).json({ error: "add amount must not be 0" });
+    return;
+  }
+
+  try {
+    const db = getTsfDb();
+    const accountResult = await db.execute({
+      sql: `
+        SELECT shop, purchasedCredits, usedCredits, updatedAt
+        FROM Account
+        WHERE shop = ?
+        LIMIT 1
+      `,
+      args: [shop],
+    });
+    const row = accountResult.rows[0];
+    if (!row) {
+      res.status(404).json({ error: `Account not found: ${shop}` });
+      return;
+    }
+
+    const before = Number(row.purchasedCredits ?? 0);
+    const usedCredits = Number(row.usedCredits ?? 0);
+    const after = action === "add" ? before + amount : amount;
+    if (after < 0) {
+      res.status(400).json({
+        error: `结果额度不能为负（当前 ${before}，调整后 ${after}）`,
+      });
+      return;
+    }
+
+    const creditsDelta = after - before;
+    if (creditsDelta === 0) {
+      res.json({
+        shop,
+        action,
+        before,
+        after,
+        creditsDelta: 0,
+        note: "unchanged",
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const logId = randomUUID();
+    const referenceId = `admin-purchased-${logId}`;
+    const metadata = JSON.stringify({
+      source: "spark-admin",
+      action,
+      before,
+      after,
+      amount,
+      note: note || null,
+      adjustedAt: now,
+    });
+
+    await db.batch(
+      [
+        {
+          sql: `
+            UPDATE Account
+            SET purchasedCredits = ?, updatedAt = ?
+            WHERE shop = ?
+          `,
+          args: [after, now, shop],
+        },
+        {
+          sql: `
+            INSERT INTO BillingLog
+              (id, shop, eventType, planKey, referenceId, creditsDelta, usedCredits, metadata, createdAt)
+            VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)
+          `,
+          args: [
+            logId,
+            shop,
+            ADMIN_PURCHASED_EVENT,
+            referenceId,
+            creditsDelta,
+            usedCredits,
+            metadata,
+            now,
+          ],
+        },
+      ],
+      "write",
+    );
+
+    res.json({
+      shop,
+      action,
+      before,
+      after,
+      creditsDelta,
+      referenceId,
+      eventType: ADMIN_PURCHASED_EVENT,
+    });
+  } catch (err) {
+    console.error("[tsf/credits/purchased]", err);
     res.status(500).json({ error: String(err) });
   }
 });
