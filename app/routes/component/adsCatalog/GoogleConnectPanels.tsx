@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
-import { GoogleRemarketingPanel } from "./GoogleRemarketingPanel";
 
 type AdsLink = {
   bound: boolean;
@@ -59,8 +59,6 @@ export function GoogleConnectPanels({
   adsLink,
   locationSearch,
   languageCode,
-  shopDomain,
-  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
@@ -288,13 +286,44 @@ export function GoogleConnectPanels({
           </>
         )}
       </div>
-      <GoogleRemarketingPanel
-        googleAds={ads}
-        locationSearch={locationSearch}
-        shopDomain={shopDomain}
-        shopifyApiKey={shopifyApiKey}
-        onChanged={onChanged}
-      />
+      {/* ── Google Pixel（Nabu 风格三步向导入口）── */}
+      <div style={panelStyle}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+          {t("adsCatalog.googlePixelPanelTitle")}
+        </h3>
+        <p style={pageHintTextStyle}>{t("adsCatalog.googlePixelPanelHint")}</p>
+        {ads.remarketing.tagId ? (
+          <div style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ color: pageColorTokens.brandGreenDeep, fontWeight: 600 }}>
+              {t("adsCatalog.googlePixelSummaryTag", { tag: ads.remarketing.tagId })}
+            </div>
+            {ads.remarketing.conversionLabel ? (
+              <div>
+                {t("adsCatalog.googlePixelSummaryLabel", {
+                  label: ads.remarketing.conversionLabel,
+                })}
+              </div>
+            ) : null}
+            <div style={pageHintTextStyle}>
+              {t("adsCatalog.googlePixelSummaryEvents", {
+                count: ads.remarketing.enabledEvents.length,
+              })}
+            </div>
+          </div>
+        ) : (
+          <p style={pageHintTextStyle}>{t("adsCatalog.googlePixelNotConfigured")}</p>
+        )}
+        <div>
+          <Link
+            to={`/app/ads/google-pixel${locationSearch}`}
+            style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
+          >
+            {ads.remarketing.tagId
+              ? t("adsCatalog.googlePixelManage")
+              : t("adsCatalog.googlePixelSetup")}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   GOOGLE_REMARKETING_METAFIELD_KEY,
+  normalizeGoogleConversionId,
+  normalizeGoogleConversionLabel,
   normalizeGoogleRemarketingEvents,
   normalizeGoogleRemarketingFieldGroups,
   type GoogleRemarketingStorefrontConfig,
@@ -181,17 +183,27 @@ async function syncStorefrontMetafield(params: {
 export async function saveGoogleRemarketingConfig(params: {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
+  /** 接受 `AW-数字` 或裸 Conversion ID（会自动归一化为 AW-数字）。 */
   tagId: string;
   source: "auto" | "manual";
   enabledEvents?: unknown;
   enabledFieldGroups?: unknown;
+  pixelName?: string;
+  conversionLabel?: string;
+  enhancedConversions?: boolean;
   customPixelConfirmed?: boolean;
 }): Promise<{ config: GoogleRemarketingConfig; partial: boolean }> {
-  const tagId = params.tagId.trim().toUpperCase();
-  if (!/^AW-\d+$/.test(tagId)) throw new Error("AW 标签必须符合 AW-数字 格式");
+  const tagId = normalizeGoogleConversionId(params.tagId);
+  if (!tagId) throw new Error("Conversion ID 必须是数字或 AW-数字 格式");
   const existing = await getGoogleAdsCredential(params.shop);
   if (!existing) throw new Error("Google Ads 账户未连接");
   const now = new Date().toISOString();
+  const conversionLabel = normalizeGoogleConversionLabel(params.conversionLabel);
+  const pixelName = params.pixelName?.trim() || existing.remarketing?.pixelName;
+  const enhancedConversions =
+    typeof params.enhancedConversions === "boolean"
+      ? params.enhancedConversions
+      : existing.remarketing?.enhancedConversions;
   const config: GoogleRemarketingConfig = {
     tagId,
     source: params.source,
@@ -200,6 +212,9 @@ export async function saveGoogleRemarketingConfig(params: {
     enabledFieldGroups: normalizeGoogleRemarketingFieldGroups(
       params.enabledFieldGroups,
     ),
+    pixelName: pixelName || undefined,
+    conversionLabel: conversionLabel || undefined,
+    enhancedConversions,
     customPixelConfirmedAt: params.customPixelConfirmed
       ? now
       : existing.remarketing?.customPixelConfirmedAt,
@@ -214,6 +229,8 @@ export async function saveGoogleRemarketingConfig(params: {
         enabledFieldGroups: normalizeGoogleRemarketingFieldGroups(
           config.enabledFieldGroups,
         ),
+        conversionLabel: conversionLabel || undefined,
+        enhancedConversions,
       },
     });
     config.metafieldSync = { status: "synced", updatedAt: now };

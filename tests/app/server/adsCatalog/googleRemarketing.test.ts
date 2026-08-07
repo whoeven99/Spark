@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { generateGooglePurchaseCustomPixel } from "../../../../app/lib/googleCustomPixel";
 import { GOOGLE_OFFER_ID_FIXTURES } from "../../../../app/lib/googleOfferId";
 import {
+  buildGoogleSendTo,
   buildShopifyCustomerEventsUrl,
   GOOGLE_REMARKETING_DEFAULT_EVENTS,
   GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS,
+  normalizeGoogleConversionId,
+  normalizeGoogleConversionLabel,
   normalizeGoogleRemarketingEvents,
   normalizeGoogleRemarketingFieldGroups,
 } from "../../../../app/lib/googleRemarketing";
@@ -72,5 +75,65 @@ describe("实验性 purchase Custom Pixel", () => {
     for (const fixture of GOOGLE_OFFER_ID_FIXTURES) {
       expect(fixture.expected).toBeTruthy();
     }
+  });
+
+  it("配置 Conversion Label 时追加 send_to 转化事件", () => {
+    const script = generateGooglePurchaseCustomPixel({
+      tagId: "AW-123456789",
+      enabledFieldGroups: ["product", "transaction"],
+      conversionLabel: "_fOHCM7Ax90cEL-69aJE",
+    });
+    expect(script).toContain("gtag('event', 'conversion'");
+    expect(script).toContain(
+      "SPARK_CONFIG.tagId + '/' + SPARK_CONFIG.conversionLabel",
+    );
+  });
+
+  it("未配置 Conversion Label 时以运行时守卫禁用转化事件", () => {
+    const script = generateGooglePurchaseCustomPixel({
+      tagId: "AW-123456789",
+      enabledFieldGroups: ["product"],
+    });
+    // 转化上报由 `if (SPARK_CONFIG.conversionLabel)` 守卫，label 为空时运行时不触发。
+    expect(script).toContain('"conversionLabel":""');
+    expect(script).toContain("if (SPARK_CONFIG.conversionLabel)");
+  });
+
+  it("启用 enhanced conversions 时注入 user_data", () => {
+    const script = generateGooglePurchaseCustomPixel({
+      tagId: "AW-123456789",
+      enabledFieldGroups: ["product"],
+      enhancedConversions: true,
+    });
+    expect(script).toContain("allow_enhanced_conversions:true");
+    expect(script).toContain("gtag('set', 'user_data'");
+  });
+});
+
+describe("Conversion ID / Label 归一化", () => {
+  it("裸数字归一化为 AW- 前缀", () => {
+    expect(normalizeGoogleConversionId("18326838591")).toBe("AW-18326838591");
+  });
+
+  it("AW-数字（大小写）统一大写保留", () => {
+    expect(normalizeGoogleConversionId("aw-123")).toBe("AW-123");
+    expect(normalizeGoogleConversionId(" AW-123 ")).toBe("AW-123");
+  });
+
+  it("非法输入返回 null", () => {
+    expect(normalizeGoogleConversionId("abc")).toBeNull();
+    expect(normalizeGoogleConversionId("")).toBeNull();
+    expect(normalizeGoogleConversionId(undefined)).toBeNull();
+  });
+
+  it("Label 去除首尾空白", () => {
+    expect(normalizeGoogleConversionLabel("  label  ")).toBe("label");
+    expect(normalizeGoogleConversionLabel(undefined)).toBe("");
+  });
+
+  it("send_to：有 label 拼接，无 label 退回 tagId", () => {
+    expect(buildGoogleSendTo("AW-123", "abc")).toBe("AW-123/abc");
+    expect(buildGoogleSendTo("AW-123")).toBe("AW-123");
+    expect(buildGoogleSendTo("AW-123", "  ")).toBe("AW-123");
   });
 });

@@ -259,6 +259,12 @@ export type GoogleRemarketingConfig = {
   confirmedAt: string;
   enabledEvents: string[];
   enabledFieldGroups: string[];
+  /** 展示用像素名称（Nabu 风格 Pixel Name），仅用于 UI 标识。 */
+  pixelName?: string;
+  /** Google Ads 转化标签（Conversion Label），配合 tagId 组成 send_to。 */
+  conversionLabel?: string;
+  /** 是否启用 Enhanced Conversions（哈希用户数据）。 */
+  enhancedConversions?: boolean;
   customPixelConfirmedAt?: string;
   metafieldSync?: {
     status: "synced" | "failed";
@@ -283,6 +289,13 @@ function parseGoogleRemarketingConfig(value: unknown): GoogleRemarketingConfig |
     enabledFieldGroups: Array.isArray(value.enabledFieldGroups)
       ? value.enabledFieldGroups.filter((item): item is string => typeof item === "string")
       : [],
+    pixelName: typeof value.pixelName === "string" ? value.pixelName : undefined,
+    conversionLabel:
+      typeof value.conversionLabel === "string" ? value.conversionLabel : undefined,
+    enhancedConversions:
+      typeof value.enhancedConversions === "boolean"
+        ? value.enhancedConversions
+        : undefined,
     customPixelConfirmedAt:
       typeof value.customPixelConfirmedAt === "string"
         ? value.customPixelConfirmedAt

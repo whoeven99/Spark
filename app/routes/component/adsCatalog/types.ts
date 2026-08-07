@@ -104,6 +104,9 @@ export interface CredentialsView {
       confirmedAt: string | null;
       enabledEvents: string[];
       enabledFieldGroups: string[];
+      pixelName: string;
+      conversionLabel: string;
+      enhancedConversions: boolean;
       customPixelConfirmedAt: string | null;
       metafieldSyncStatus: "synced" | "failed" | "";
       metafieldSyncError: string;

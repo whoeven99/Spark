@@ -134,6 +134,14 @@
             if (typeof eventPayload.value === "number") eventPayload.ecomm_totalvalue = eventPayload.value;
           }
           gtag("event", name, eventPayload);
+          // 配置了 Conversion Label 时，把所选店面事件同时上报为 Google Ads 转化。
+          if (config.conversionLabel) {
+            gtag("event", "conversion", {
+              send_to: config.tagId + "/" + config.conversionLabel,
+              value: eventPayload.value,
+              currency: eventPayload.currency
+            });
+          }
         }
         function applyConsent(allowed) {
           marketingAllowed = allowed === true;

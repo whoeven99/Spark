@@ -131,6 +131,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           confirmedAt: ads?.remarketing?.confirmedAt ?? null,
           enabledEvents: ads?.remarketing?.enabledEvents ?? [],
           enabledFieldGroups: ads?.remarketing?.enabledFieldGroups ?? [],
+          pixelName: ads?.remarketing?.pixelName ?? "",
+          conversionLabel: ads?.remarketing?.conversionLabel ?? "",
+          enhancedConversions: ads?.remarketing?.enhancedConversions ?? false,
           customPixelConfirmedAt:
             ads?.remarketing?.customPixelConfirmedAt ?? null,
           metafieldSyncStatus: ads?.remarketing?.metafieldSync?.status ?? "",

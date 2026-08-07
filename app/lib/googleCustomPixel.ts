@@ -1,10 +1,15 @@
 import {
+  normalizeGoogleConversionLabel,
   normalizeGoogleRemarketingFieldGroups,
 } from "./googleRemarketing";
 
 export interface GoogleCustomPixelOptions {
   tagId: string;
   enabledFieldGroups?: unknown;
+  /** Google Ads 转化标签；有值时 purchase 额外发 conversion 事件（send_to=AW-ID/label）。 */
+  conversionLabel?: unknown;
+  /** 是否启用 Enhanced Conversions（用 checkout 邮箱/电话/地址做增强匹配）。 */
+  enhancedConversions?: boolean;
 }
 
 export function generateGooglePurchaseCustomPixel(
@@ -15,9 +20,16 @@ export function generateGooglePurchaseCustomPixel(
   const fieldGroups = normalizeGoogleRemarketingFieldGroups(
     options.enabledFieldGroups,
   );
+  const conversionLabel = normalizeGoogleConversionLabel(options.conversionLabel);
+  const enhancedConversions = options.enhancedConversions === true;
   return `// Spark experimental Google purchase Custom Pixel.
 // Google does not officially support Google tags in Shopify Custom Pixels.
-const SPARK_CONFIG = ${JSON.stringify({ tagId, fieldGroups })};
+const SPARK_CONFIG = ${JSON.stringify({
+    tagId,
+    fieldGroups,
+    conversionLabel,
+    enhancedConversions,
+  })};
 const completedTransactions = new Set();
 let marketingAllowed = Boolean(init.customerPrivacy && init.customerPrivacy.marketingAllowed);
 let loaded = false;
@@ -39,7 +51,7 @@ function loadTag() {
   loaded = true;
   gtag('consent', 'update', {ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted'});
   gtag('js', new Date());
-  gtag('config', SPARK_CONFIG.tagId, {send_page_view:false});
+  gtag('config', SPARK_CONFIG.tagId, SPARK_CONFIG.enhancedConversions ? {send_page_view:false, allow_enhanced_conversions:true} : {send_page_view:false});
   const script = document.createElement('script');
   script.async = true;
   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(SPARK_CONFIG.tagId);
@@ -79,6 +91,32 @@ analytics.subscribe('checkout_completed', (event) => {
     payload.ecomm_pagetype = 'purchase';
     payload.ecomm_totalvalue = payload.value;
   }
+  if (SPARK_CONFIG.enhancedConversions) {
+    const billing = checkout.billingAddress || {};
+    const userData = {};
+    if (checkout.email) userData.email = String(checkout.email);
+    if (checkout.phone || billing.phone) userData.phone_number = String(checkout.phone || billing.phone);
+    if (billing.firstName || billing.lastName || billing.address1) {
+      userData.address = {
+        first_name: billing.firstName || undefined,
+        last_name: billing.lastName || undefined,
+        street: billing.address1 || undefined,
+        city: billing.city || undefined,
+        region: billing.provinceCode || billing.province || undefined,
+        postal_code: billing.zip || undefined,
+        country: billing.countryCode || billing.country || undefined,
+      };
+    }
+    if (Object.keys(userData).length > 0) gtag('set', 'user_data', userData);
+  }
   gtag('event', 'purchase', payload);
+  if (SPARK_CONFIG.conversionLabel) {
+    gtag('event', 'conversion', {
+      send_to: SPARK_CONFIG.tagId + '/' + SPARK_CONFIG.conversionLabel,
+      value: payload.value,
+      currency: payload.currency,
+      transaction_id: transactionId,
+    });
+  }
 });`;
 }

@@ -50,6 +50,37 @@ export interface GoogleRemarketingStorefrontConfig {
   tagId: string;
   enabledEvents: GoogleRemarketingEvent[];
   enabledFieldGroups: GoogleRemarketingFieldGroup[];
+  /** Google Ads 转化标签（Conversion Label），配合 tagId 组成 send_to。缺省表示只做再营销不发转化。 */
+  conversionLabel?: string;
+  /** 是否启用 Enhanced Conversions（哈希用户数据），仅作用于 purchase Custom Pixel。 */
+  enhancedConversions?: boolean;
+}
+
+/**
+ * 归一化 Google Ads Conversion ID：
+ * - 裸数字 `18326838591` → `AW-18326838591`
+ * - `AW-数字`（大小写不敏感）→ 统一大写
+ * 无法识别时返回 null。
+ */
+export function normalizeGoogleConversionId(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) return `AW-${raw}`;
+  const upper = raw.toUpperCase();
+  return /^AW-\d+$/.test(upper) ? upper : null;
+}
+
+/** 归一化 Conversion Label：去除首尾空白；空字符串返回空串。 */
+export function normalizeGoogleConversionLabel(value: unknown): string {
+  if (typeof value !== "string" && typeof value !== "number") return "";
+  return String(value).trim();
+}
+
+/** 组装 gtag send_to：`AW-123/label`。缺 label 时退回纯 tagId。 */
+export function buildGoogleSendTo(tagId: string, conversionLabel?: string): string {
+  const label = (conversionLabel ?? "").trim();
+  return label ? `${tagId}/${label}` : tagId;
 }
 
 export function normalizeGoogleRemarketingEvents(

@@ -24,6 +24,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? generateGooglePurchaseCustomPixel({
           tagId: credential.remarketing.tagId,
           enabledFieldGroups: credential.remarketing.enabledFieldGroups,
+          conversionLabel: credential.remarketing.conversionLabel,
+          enhancedConversions: credential.remarketing.enhancedConversions,
         })
       : null,
   });
@@ -40,6 +42,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         source?: unknown;
         enabledEvents?: unknown;
         enabledFieldGroups?: unknown;
+        pixelName?: unknown;
+        conversionLabel?: unknown;
+        enhancedConversions?: unknown;
         customPixelConfirmed?: unknown;
         operation?: unknown;
       }
@@ -59,6 +64,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       source: body.source === "manual" ? "manual" : "auto",
       enabledEvents: body.enabledEvents,
       enabledFieldGroups: body.enabledFieldGroups,
+      pixelName: typeof body.pixelName === "string" ? body.pixelName : undefined,
+      conversionLabel:
+        typeof body.conversionLabel === "string" ? body.conversionLabel : undefined,
+      enhancedConversions:
+        typeof body.enhancedConversions === "boolean"
+          ? body.enhancedConversions
+          : undefined,
       customPixelConfirmed: body.customPixelConfirmed === true,
     });
     return Response.json({ ok: true, ...result });

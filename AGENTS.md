@@ -21,7 +21,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - **主应用（仓库根目录）**：React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端，默认由 Shopify CLI 启动。
 - **Admin 后台（`admin/`）**：Express API（本地默认 `3099`）+ Vite React 前端（本地默认 `5174`）。它有独立的 `package.json`、依赖和构建流程。
 - **Web Pixel 扩展（`extensions/ciwi-spark-web-pixel/`）**：采集 Shopify analytics/custom events，经主应用 `/api/pixel-ingest` 上报。
-- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：受 Shopify 单应用 Theme Extension 数量上限约束（每应用仅 1 个），同一扩展包内包含相互隔离的 App Embed：TikTok Pixel、Google Remarketing、Ciwi Image Switcher。TikTok 配置经 `spark_tiktok.pixel_config` 下发；Google 动态再营销配置经 app-owned Shop metafield `google_remarketing_config` 下发并受 Customer Privacy API 营销同意门禁控制；Image Switcher 经 App Proxy 做图片替换与 IP 地区跳转。不要再新增第二个 `type = "theme"` 扩展目录。
+- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：受 Shopify 单应用 Theme Extension 数量上限约束（每应用仅 1 个），同一扩展包内包含相互隔离的 App Embed：TikTok Pixel、Google Remarketing、Ciwi Image Switcher。TikTok 配置经 `spark_tiktok.pixel_config` 下发；Google 再营销/转化配置经 app-owned Shop metafield `google_remarketing_config` 下发（含 `tagId`=AW-数字、可选 `conversionLabel`、`enhancedConversions`，配置了 label 时店面事件按 `send_to=AW-ID/label` 上报为 Google Ads 转化），并受 Customer Privacy API 营销同意门禁控制；Image Switcher 经 App Proxy 做图片替换与 IP 地区跳转。不要再新增第二个 `type = "theme"` 扩展目录。Google Pixel 三步向导入口在 `/app/ads/google-pixel`（Nabu 风格：添加像素 / 开启 App Embed / 创建像素），App Embed 启用状态经 `read_themes` 读取主题 `config/settings_data.json` 检测。
 重要边界：
 
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
