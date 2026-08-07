@@ -749,7 +749,7 @@ export default function ShopTranslation() {
         title="任务详情与翻译内容"
         open={!!selected}
         onClose={() => setSelected(null)}
-        width={820}
+        width="min(1180px, 94vw)"
       >
         {detailLoading ? (
           <Spin />

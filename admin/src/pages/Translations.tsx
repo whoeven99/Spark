@@ -1519,7 +1519,12 @@ export default function Translations() {
       </Spin>
 
       {/* Detail drawer */}
-      <Drawer title="翻译任务详情" open={!!selected} onClose={() => setSelected(null)} width={820}>
+      <Drawer
+        title="翻译任务详情"
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        width="min(1180px, 94vw)"
+      >
         {detailLoading ? (
           <Spin />
         ) : selected ? (

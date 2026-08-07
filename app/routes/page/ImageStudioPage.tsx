@@ -17,6 +17,7 @@ import { usePictureTranslateContext } from "../component/pictureTranslate/pictur
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
 import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
+import { ImageSwitcherBanner } from "../component/imageStudio/ImageSwitcherBanner";
 import {
   PageHeaderNav,
   PageSurface,
@@ -85,6 +86,8 @@ type InnerProps = {
   navTab: StudioNavTab;
   setNavTab: (tab: StudioNavTab) => void;
   locationSearch: string;
+  shop: string;
+  appEmbedId: string | null;
   onTaskCreated: (
     taskId: string,
     batchId: string,
@@ -103,6 +106,8 @@ function ImageStudioPageInner({
   navTab,
   setNavTab,
   locationSearch,
+  shop,
+  appEmbedId,
   onTaskCreated,
   onTaskDeleted,
   onTaskUpdated,
@@ -224,6 +229,10 @@ function ImageStudioPageInner({
                 )}
               </PageSurface>
             </div>
+
+            {navTab === "translate" && (
+              <ImageSwitcherBanner shop={shop} appEmbedId={appEmbedId} />
+            )}
 
             {navTab === "translate" && (
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
@@ -606,6 +615,8 @@ export function ImageStudioPage() {
         navTab={navTab}
         setNavTab={setNavTab}
         locationSearch={locationSearch}
+        shop={loaderData.shop}
+        appEmbedId={loaderData.appEmbedId}
         onTaskCreated={handleTaskCreated}
         onTaskDeleted={handleTaskDeleted}
         onTaskUpdated={handleTaskUpdated}

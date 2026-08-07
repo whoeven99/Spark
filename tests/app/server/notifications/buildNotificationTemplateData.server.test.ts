@@ -30,6 +30,19 @@ describe("buildNotificationTemplateData", () => {
     expect(data.creditUnit).toBe("");
   });
 
+  it("uses single-app home path for TemplateData path", () => {
+    const data = buildNotificationTemplateData(
+      { ...appConfig, appKey: "product-improve" },
+      {
+        shopName: "Demo Shop",
+        shopDomain: "demo.myshopify.com",
+        occurredAtUtc: "2026-05-28 02:00 UTC",
+      },
+    );
+
+    expect(data.path).toBe("app");
+  });
+
   it("maps credit account change fields with locale zh-CN", () => {
     const data = buildNotificationTemplateData(
       appConfig,

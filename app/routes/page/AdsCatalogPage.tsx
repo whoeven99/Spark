@@ -33,6 +33,7 @@ import type {
   GmcReviewProductView,
 } from "../component/adsCatalog/types";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
+import { resolveAdsCatalogAuthResult } from "../../lib/adsCatalogOAuthResult";
 
 type Tab = "sync" | "credentials" | "tasks";
 type Platform = "facebook" | "google" | "tiktok";
@@ -137,7 +138,12 @@ interface GoogleStatusData {
   accountRestricted?: boolean;
   products?: GmcReviewProductView[];
   lastCheckedAt?: string | null;
-  adsLink?: { bound: boolean; customerId: string | null; linked: boolean | null };
+  adsLink?: {
+    bound: boolean;
+    customerId: string | null;
+    state: "not_linked" | "pending" | "linked" | "failed" | null;
+    error?: string;
+  };
 }
 
 export function AdsCatalogPage() {
@@ -260,37 +266,78 @@ export function AdsCatalogPage() {
   }, []);
 
   // Surface OAuth callback outcome and route to the right tab.
+  const applyAuthResult = useCallback(
+    (input: {
+      google?: string | null;
+      gmc?: string | null;
+      ads?: string | null;
+      meta?: string | null;
+      tiktok?: string | null;
+      reason?: string | null;
+      gmcReason?: string | null;
+      adsReason?: string | null;
+    }) => {
+      const result = resolveAdsCatalogAuthResult({ ...input, t });
+      if (result.action === "none") return;
+      if (result.banner) setAuthBanner(result.banner);
+      setTab(result.tab);
+      revalidator.revalidate();
+    },
+    [revalidator, t],
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const gmc = params.get("gmcAuth");
-    const ads = params.get("adsAuth");
-    const meta = params.get("metaAuth");
-    const tiktok = params.get("tiktokAuth");
-    const reason = params.get("reason");
-    if (gmc === "select" || ads === "select" || meta === "select" || tiktok === "select") {
-      setTab("credentials");
-      revalidator.revalidate();
-    } else if (
-      gmc === "success" ||
-      ads === "success" ||
-      meta === "success" ||
-      tiktok === "success"
-    ) {
-      setAuthBanner({ tone: "ok", text: t("adsCatalog.authSuccess") });
-      setTab("credentials");
-      revalidator.revalidate();
-    } else if (tiktok === "authorized") {
-      setAuthBanner({ tone: "ok", text: t("adsCatalog.tiktokAuthorizedBanner") });
-      setTab("credentials");
-      revalidator.revalidate();
-    } else if (gmc === "error" || ads === "error" || meta === "error" || tiktok === "error") {
-      setAuthBanner({ tone: "error", text: reason || t("adsCatalog.authError") });
-      setTab("credentials");
-    } else if (gmc === "cancelled" || ads === "cancelled" || meta === "cancelled" || tiktok === "cancelled") {
-      setAuthBanner({ tone: "error", text: t("adsCatalog.authCancelled") });
-    }
+    applyAuthResult({
+      google: params.get("googleAuth"),
+      gmc: params.get("gmcAuth"),
+      ads: params.get("adsAuth"),
+      meta: params.get("metaAuth"),
+      tiktok: params.get("tiktokAuth"),
+      reason: params.get("reason"),
+      gmcReason: params.get("gmcReason"),
+      adsReason: params.get("adsReason"),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: string;
+        googleAuth?: string;
+        gmcAuth?: string;
+        adsAuth?: string;
+        metaAuth?: string;
+        tiktokAuth?: string;
+        reason?: string;
+        gmcReason?: string;
+        adsReason?: string;
+      } | null;
+      if (!data?.type) return;
+
+      if (data.type === "google_oauth") {
+        applyAuthResult({
+          google: data.googleAuth,
+          gmc: data.gmcAuth,
+          ads: data.adsAuth,
+          reason: data.reason,
+          gmcReason: data.gmcReason,
+          adsReason: data.adsReason,
+        });
+      } else if (data.type === "gmc_oauth") {
+        applyAuthResult({ gmc: data.gmcAuth, reason: data.reason });
+      } else if (data.type === "ads_catalog_oauth") {
+        applyAuthResult({ ads: data.adsAuth, reason: data.reason });
+      } else if (data.type === "meta_catalog_oauth") {
+        applyAuthResult({ meta: data.metaAuth, reason: data.reason });
+      } else if (data.type === "tiktok_catalog_oauth") {
+        applyAuthResult({ tiktok: data.tiktokAuth, reason: data.reason });
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [applyAuthResult]);
 
   useEffect(() => {
     if (syncFetcher.state !== "idle" || !syncFetcher.data?.success) return;
@@ -864,6 +911,8 @@ export function AdsCatalogPage() {
               adsLink={adsLink}
               locationSearch={locationSearch}
               languageCode={i18n.language}
+              shopDomain={loaderData.shopDomain}
+              shopifyApiKey={loaderData.shopifyApiKey}
               onChanged={() => {
                 revalidator.revalidate();
                 statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);

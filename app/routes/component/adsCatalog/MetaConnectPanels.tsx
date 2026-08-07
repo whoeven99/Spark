@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
 
@@ -50,6 +51,7 @@ export function MetaConnectPanels({
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const metaOAuth = useOAuthPopup("meta_catalog_oauth");
 
   const meta = credentials.meta;
 
@@ -57,19 +59,7 @@ export function MetaConnectPanels({
     void (async () => {
       setBusy(true);
       try {
-        const resp = await fetch(`/api/ads-catalog/meta-auth-url${locationSearch}`, {
-          headers: { Accept: "application/json" },
-        });
-        const data = (await resp.json().catch(() => ({}))) as {
-          ok?: boolean;
-          authUrl?: string;
-          error?: string;
-        };
-        if (!resp.ok || !data.authUrl) {
-          alert(data.error ?? t("adsCatalog.authError"));
-          return;
-        }
-        window.open(data.authUrl, "_top");
+        await metaOAuth.startOAuth(`/api/ads-catalog/meta-auth-url${locationSearch}`, () => onChanged());
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {

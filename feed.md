@@ -5,7 +5,7 @@ OAuth 凭证归属
 Spark 应用申请 OAuth App，客户授权自己的 Google 账号
 2
 merchantId 获取
-Content API 自动读取，多账号时提供选择界面
+Merchant API v1 `accounts.list` 自动读取，多账号时提供选择界面
 3
 审核轮询时机
 同步完成后立即查一次 + 30 分钟后再查一次；后台每天一次 cron
@@ -17,7 +17,13 @@ Content API 自动读取，多账号时提供选择界面
 本期不做
 6
 Google Ads 绑定
-本期做
+通过 `product_link` / `product_link_invitation` 幂等状态机完成
+7
+动态再营销
+AW 标签人工确认后写入现有 Google Ads 凭证 JSON 与 app-owned Shop metafield；Theme App Embed 发送非 purchase 店面事件
+8
+购买事件
+商户手动安装实验性 Custom Pixel；Google 官方不支持，必须展示数据损失、归因偏差、重复上报和 Support 不保障告警
 
 ---
 二、整体链路
@@ -34,7 +40,7 @@ Google Ads 绑定
     → 用户在 Google 授权页同意
     → GET /ads.google-merchant.callback?code=xxx&state=xxx
         校验 state，code 换 access_token + refresh_token
-        调用 GET /content/v2.1/accounts/authinfo 读取 merchantIds
+        调用 GET /accounts/v1/accounts 读取 merchantIds
         若只有 1 个 → 直接存入 DB
         若多个 → 返回列表，前端弹「选择 Merchant 账号」弹窗
         存入 AdPlatformCredential (platform=google_merchant)
@@ -51,9 +57,14 @@ Google Ads 绑定
         存入 AdPlatformCredential (platform=google，覆盖现有手动配置字段)
     → 页面显示「已绑定 Ads 账户：xxx-xxx-xxxx」
     → 查询 GMC ↔ Ads 关联状态
-        调用 Ads API MerchantCenterLinkService.ListMerchantCenterLinks
-        若已关联 → 显示绿色「已关联」
-        若未关联 → 显示引导「前往 Google Merchant Center 关联广告账户 →」
+        用 GAQL 查询 product_link / product_link_invitation
+        已关联直接成功；有邀请显示 pending；否则先 ProductLinkService.CreateProductLink
+        若返回 CREATION_NOT_PERMITTED，则创建 ProductLinkInvitation
+    → 查询 customer.remarketing_setting / conversion_tracking_setting，提取 AW 候选
+        候选或手动输入均须商户确认，再写入凭证 JSON 与 app-owned Shop metafield
+    → Theme App Embed 在 Customer Privacy API 允许 marketing 后加载 gtag.js
+        发送 page_view、列表/搜索、商品、加购、购物车和 begin_checkout；不发送 purchase
+    → purchase 使用商户手动安装的实验性 Custom Pixel，只订阅 checkout_completed
 【Step 3】配置 Feed 筛选条件
   用户在「筛选配置」区域设置：
     - 商品标签（tag）：多选
@@ -105,15 +116,17 @@ Google Ads 绑定
     → fetchProductsForCatalog（Shopify GraphQL，带筛选条件，max 250）
     → validateForGoogle（再次校验，过滤掉硬性错误商品）
     → mapShopifyToGoogle（字段映射，仅处理通过校验的商品）
-    → upsertGoogleMerchantProducts（Content API custombatch，每批 100 条）
+    → 复用或创建匹配语言/Feed Label 的 Merchant API primary API data source
+    → upsertGoogleMerchantProducts（Merchant API v1 productInputs.insert，并发逐商品写入）
     → 创建 AITask，实时展示进度（现有 AITaskCardShell）
     → 同步完成后：
         ① 立即触发一次 GMC 状态查询（见 Step 5）
         ② 安排 30 分钟后再查一次（延迟任务）
 【Step 5】GMC 审核状态感知
   查询逻辑（复用于同步后即时查 + 30min 延迟查 + 每日 cron）：
-    → GET /content/v2.1/{merchantId}/products?maxResults=250
-    → 逐条检查 status 和 issues[].servability
+    → GET /products/v1/accounts/{merchantId}/products?pageSize=250
+    → 逐条检查 productStatus.destinationStatuses 和 itemLevelIssues[].severity
+    → GET /accounts/v1/accounts/{merchantId}/issues 查询账户级问题
     → 写入 / 更新 GmcProductStatus 表
     → 若有 disapproved 商品或账户级问题 → 更新页面 badge + 飞书通知
   前端展示：
@@ -201,7 +214,9 @@ model GmcProductStatus {
   issues           Json?                     // GMC issues 数组
   checkedAt        DateTime
   updatedAt        DateTime @updatedAt
-  @@unique([shop, offerId])
+  contentLanguage  String   @default("und")
+  feedLabel        String   @default("ZZ")
+  @@unique([shop, offerId, contentLanguage, feedLabel])
   @@index([shop, status])
   @@index([shop, merchantId])
 }
@@ -322,9 +337,9 @@ scheduleGmcStatusCheck({ shop, merchantId, delayMs: 30 * 60 * 1000 });
 5.4 新增 GMC 状态查询服务
 app/server/adsCatalog/gmcStatusChecker.server.ts
 // 核心逻辑：
-// 1. GET /content/v2.1/{merchantId}/products（分页，最多 250）
-// 2. 对比 status 字段，写入 GmcProductStatus 表
-// 3. 检查账户级状态（accountstatuses API）
+// 1. GET /products/v1/accounts/{merchantId}/products（分页，最多 250）
+// 2. 读取 productStatus，写入 GmcProductStatus 表
+// 3. 通过 /accounts/v1/accounts/{merchantId}/issues 检查账户级状态
 // 4. 若有 disapproved → 写通知标记
 export async function checkGmcProductStatuses(params: {
   shop: string;
@@ -509,24 +524,36 @@ Phase 3（后期优化）
 ---
 九、关键外部 API 参考
 API	用途	文档
-GET /content/v2.1/accounts/authinfo
+GET /accounts/v1/accounts
 读取授权账号关联的所有 Merchant ID
-Content API
-GET /content/v2.1/{merchantId}/products
+Merchant API v1 Accounts
+GET /datasources/v1/accounts/{merchantId}/dataSources
+列出或创建 primary API data source
+Merchant API v1 Data Sources
+GET /products/v1/accounts/{merchantId}/products
 拉取 GMC 商品列表（含审核状态）
-Content API
-GET /content/v2.1/{merchantId}/accountstatuses/{merchantId}
+Merchant API v1 Products
+GET /accounts/v1/accounts/{merchantId}/issues
 查询账户级封禁状态
-Content API
-POST /content/v2.1/products/batch
-批量推送商品（已实现）
-Content API
+Merchant API v1 Accounts
+POST /products/v1/accounts/{merchantId}/productInputs:insert
+逐商品并发推送（dataSource query 参数必填）
+Merchant API v1 Products
 GoogleAdsService.SearchStream
-读取 Ads 账户信息
-Google Ads API v17
+读取 Ads 账户、product_link、product_link_invitation 与 AW 候选
+Google Ads API v24
 CustomerService.ListAccessibleCustomers
 列举可访问的广告账户
-Google Ads API v17
-MerchantCenterLinkService.ListMerchantCenterLinks
-查询 GMC ↔ Ads 关联状态
+Google Ads API v24
+ProductLinkService / ProductLinkInvitationService
+创建 GMC ↔ Ads 直接关联或邀请
+Google Ads API v24
+
+---
+十、发布与监控门禁
+- 发布顺序：staging → 单店 canary → 全量；每一阶段先验证营销同意拒绝、授予和撤回。
+- 开启 canary 前，核对 Merchant Center 实际 `offerId` 与 Theme/Custom Pixel 请求中的 `items[].id` 完全一致。
+- 监控项：Merchant 商品同步成功率、商品审核状态空结果、Shop metafield 下发失败、`gtag.js`/Google event 网络请求和重复 purchase。
+- Theme App Embed 与 Custom Pixel 都只记录人工启用确认，不声称 Spark 自动检测成功。
+- 2026-08-18 后不得把 Content API v2.1 作为回滚路径；回滚仅关闭 Google App Embed、Custom Pixel 或关联配置。
 Google Ads API v17

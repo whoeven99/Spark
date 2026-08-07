@@ -15,6 +15,7 @@ import {
   setFacebookCatalogCredential,
   setMetaCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
+import { buildOAuthPopupCloseHtml } from "../server/adsCatalog/googleOAuth.server";
 
 function appRedirect(
   request: Request,
@@ -35,6 +36,12 @@ function oauthStateErrorResponse(): Response {
   );
 }
 
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildOAuthPopupCloseHtml("meta_catalog_oauth", params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const incoming = new URL(request.url);
   const state = incoming.searchParams.get("state") ?? "";
@@ -45,13 +52,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified) {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin } = verified;
+  const { shop, host, appOrigin, popup } = verified;
+
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return appRedirect(request, shop, host, appOrigin, { metaAuth: "cancelled" });
+    return respond({ metaAuth: "cancelled" });
   }
   if (!code) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       metaAuth: "error",
       reason: "Meta 未返回授权 code",
     });
@@ -60,7 +72,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const client = resolveMetaOAuthClient();
     if (!client) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         metaAuth: "error",
         reason: "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）",
       });
@@ -76,7 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const catalogs = await getMetaCatalogs(accessToken);
 
     if (catalogs.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         metaAuth: "error",
         reason: "该 Meta 账号未关联任何商品 Catalog，请先在 Meta Commerce/Business 中创建",
       });
@@ -89,7 +101,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         catalogId: catalogs[0].catalogId,
         businessId: catalogs[0].businessId,
       });
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         metaAuth: "success",
         catalogId: catalogs[0].catalogId,
       });
@@ -103,9 +115,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         businessId: c.businessId,
       })),
     });
-    return appRedirect(request, shop, host, appOrigin, { metaAuth: "select" });
+    return respond({ metaAuth: "select" });
   } catch (e) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       metaAuth: "error",
       reason: e instanceof Error ? e.message : "Meta 授权失败",
     });

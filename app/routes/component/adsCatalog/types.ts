@@ -98,6 +98,16 @@ export interface CredentialsView {
     customerId: string;
     customerIdFormatted: string;
     updatedAt: string | null;
+    remarketing: {
+      tagId: string;
+      source: "auto" | "manual" | "";
+      confirmedAt: string | null;
+      enabledEvents: string[];
+      enabledFieldGroups: string[];
+      customPixelConfirmedAt: string | null;
+      metafieldSyncStatus: "synced" | "failed" | "";
+      metafieldSyncError: string;
+    };
     pendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
   };
   tiktok: {

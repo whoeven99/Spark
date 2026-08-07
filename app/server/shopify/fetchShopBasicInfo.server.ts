@@ -16,6 +16,7 @@ const SHOP_BASIC_INFO_QUERY = `#graphql
       ianaTimezone
       timezoneAbbreviation
       url
+      shopOwnerName
       plan {
         publicDisplayName
         displayName
@@ -45,6 +46,7 @@ export type ShopBasicInfo = {
   ianaTimezone?: string;
   timezoneAbbreviation?: string;
   url?: string;
+  ownerName?: string;
   planName?: string;
   shopifyPlus?: boolean;
   partnerDevelopment?: boolean;
@@ -65,6 +67,7 @@ type ShopBasicInfoResponse = {
       ianaTimezone?: string;
       timezoneAbbreviation?: string;
       url?: string;
+      shopOwnerName?: string;
       plan?: {
         publicDisplayName?: string;
         displayName?: string;
@@ -94,6 +97,7 @@ function mapShopResponse(shop: NonNullable<ShopBasicInfoResponse["data"]>["shop"
     ianaTimezone: shop?.ianaTimezone ?? undefined,
     timezoneAbbreviation: shop?.timezoneAbbreviation ?? undefined,
     url: shop?.url ?? undefined,
+    ownerName: shop?.shopOwnerName ?? undefined,
     planName: planName || undefined,
     shopifyPlus: shop?.plan?.shopifyPlus,
     partnerDevelopment: shop?.plan?.partnerDevelopment,

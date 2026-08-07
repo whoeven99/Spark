@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   NOTIFICATION_TEMPLATE_IDS,
+  NOTIFICATION_TEMPLATE_IDS_EN,
   resolveNotificationTemplateId,
 } from "../../../../app/server/notifications/notificationTemplateIds.server";
 
@@ -32,14 +33,21 @@ describe("resolveNotificationTemplateId", () => {
     expect(resolveNotificationTemplateId("appUninstalled", "zh-CN")).toBe(180499);
   });
 
-  it("falls back to zh template when en id is not configured", () => {
+  it("returns en default template ids when en id is not configured", () => {
     delete process.env.NOTIFICATION_TEMPLATE_ID_PURCHASE_EN;
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
     expect(resolveNotificationTemplateId("purchaseCreated", "en")).toBe(
-      NOTIFICATION_TEMPLATE_IDS.purchaseCreated,
+      NOTIFICATION_TEMPLATE_IDS_EN.purchaseCreated,
     );
-    expect(warn).toHaveBeenCalled();
+    expect(NOTIFICATION_TEMPLATE_IDS_EN.purchaseCreated).toBe(184220);
+  });
+
+  it("returns default en template ids for all events", () => {
+    expect(resolveNotificationTemplateId("appInstalled", "en")).toBe(184217);
+    expect(resolveNotificationTemplateId("appUninstalled", "en")).toBe(184219);
+    expect(resolveNotificationTemplateId("purchaseCreated", "en")).toBe(184220);
+    expect(resolveNotificationTemplateId("subscriptionCanceled", "en")).toBe(184221);
+    expect(resolveNotificationTemplateId("subscriptionChanged", "en")).toBe(184222);
+    expect(resolveNotificationTemplateId("subscriptionStarted", "en")).toBe(184223);
   });
 
   it("uses en env override when configured", () => {

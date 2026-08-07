@@ -10,11 +10,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const source = new URL(request.url);
   const host = source.searchParams.get("host") ?? "";
+  const popup = source.searchParams.get("popup") === "1";
 
   const result = await buildMetaAdsOAuthStartUrl({
     shop: session.shop,
     host,
     requestOrigin: source.origin,
+    popup,
   });
 
   if (!result.ok) {

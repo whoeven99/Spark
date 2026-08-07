@@ -5,6 +5,7 @@ import {
 import { executePictureTranslatePipeline } from "./pictureTranslateExecutor.server";
 import { appendLog, completeTask, failTask } from "../aiTask/aiTaskLogger.server";
 import { getPicTranslateLimiter } from "../aiTask/concurrencyLimiter.server";
+import { upsertImageMapping } from "../imageMapping/imageMappingStore.server";
 
 const LOG_PREFIX = "[PictureTranslate][Async]";
 
@@ -87,6 +88,20 @@ async function runPictureTranslateTask(params: {
     startedAt,
     finalMessage: "任务完成",
   });
+
+  // 翻译成功后自动写入图片映射，供 Theme App Extension 前台替换使用
+  const blobPath = pipeline.blobPath ?? "";
+  if (blobPath && params.imageUrl) {
+    void upsertImageMapping({
+      shop: params.shop,
+      sourceUrl: params.imageUrl,
+      targetBlobPath: blobPath,
+      sourceCode: params.sourceCode,
+      targetCode: params.targetCode,
+    }).catch((e) => {
+      console.error(`${LOG_PREFIX} 写入图片映射失败 taskId=${params.taskId}`, e);
+    });
+  }
 
   console.info(
     `${LOG_PREFIX} ok taskId=${params.taskId} elapsedMs=${Date.now() - startedAt}`,

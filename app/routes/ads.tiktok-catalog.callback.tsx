@@ -16,6 +16,7 @@ import {
   setTiktokCatalogCredential,
   setTiktokCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
+import { buildOAuthPopupCloseHtml } from "../server/adsCatalog/googleOAuth.server";
 
 function appRedirect(
   request: Request,
@@ -36,6 +37,12 @@ function oauthStateErrorResponse(): Response {
   );
 }
 
+function popupClose(params: Record<string, string>): Response {
+  return new Response(buildOAuthPopupCloseHtml("tiktok_catalog_oauth", params), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const incoming = new URL(request.url);
   const state = incoming.searchParams.get("state") ?? "";
@@ -46,13 +53,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!verified) {
     return oauthStateErrorResponse();
   }
-  const { shop, host, appOrigin } = verified;
+  const { shop, host, appOrigin, popup } = verified;
+
+  const respond = (params: Record<string, string>): Response =>
+    popup
+      ? popupClose(params)
+      : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
-    return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "cancelled" });
+    return respond({ tiktokAuth: "cancelled" });
   }
   if (!authCode) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       tiktokAuth: "error",
       reason: "TikTok 未返回授权 code",
     });
@@ -65,7 +77,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
 
     if (advertiserIds.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         tiktokAuth: "error",
         reason: "该 TikTok 账号未关联任何广告主账户，请先在 TikTok for Business 中创建",
       });
@@ -85,7 +97,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         bcId: bcIds[0],
         accounts: [],
       });
-      return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "authorized" });
+      return respond({ tiktokAuth: "authorized" });
     }
 
     const autoBind = pickAutoBindTiktokCatalog(catalogs);
@@ -100,7 +112,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         catalogName: autoBind.catalogName,
         bindingMode: resolveTiktokBindingMode(autoBind),
       });
-      return appRedirect(request, shop, host, appOrigin, {
+      return respond({
         tiktokAuth: "success",
         catalogId: autoBind.catalogId,
         bindingMode: resolveTiktokBindingMode(autoBind),
@@ -119,9 +131,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         isShopifyOfficial: c.isShopifyOfficial,
       })),
     });
-    return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "select" });
+    return respond({ tiktokAuth: "select" });
   } catch (e) {
-    return appRedirect(request, shop, host, appOrigin, {
+    return respond({
       tiktokAuth: "error",
       reason: e instanceof Error ? e.message : "TikTok 授权失败",
     });

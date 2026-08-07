@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { Prisma } from "../../generated/prisma";
 import type { TiktokCatalogBindingMode } from "./tiktokOAuth.server";
 
 export type { TiktokCatalogBindingMode };
@@ -44,6 +45,10 @@ export type GoogleMerchantCredential = {
   merchantId: string;
   /** Merchant Notifications API subscription name, e.g. "accounts/123/notificationsubscriptions/456". */
   subscriptionName?: string;
+  /** Merchant API primary data source resource name. */
+  dataSourceName?: string;
+  dataSourceContentLanguage?: string;
+  dataSourceFeedLabel?: string;
   updatedAt: string;
 };
 
@@ -69,8 +74,12 @@ async function writePlatformCredential(
 ): Promise<void> {
   await prisma.adPlatformCredential.upsert({
     where: { shop_platform: { shop, platform } },
-    update: { credentials: payload },
-    create: { shop, platform, credentials: payload },
+    update: { credentials: payload as Prisma.InputJsonValue },
+    create: {
+      shop,
+      platform,
+      credentials: payload as Prisma.InputJsonValue,
+    },
   });
 }
 
@@ -139,6 +148,18 @@ export async function getGoogleMerchantCredential(
       typeof record.data.subscriptionName === "string"
         ? record.data.subscriptionName
         : undefined,
+    dataSourceName:
+      typeof record.data.dataSourceName === "string"
+        ? record.data.dataSourceName
+        : undefined,
+    dataSourceContentLanguage:
+      typeof record.data.dataSourceContentLanguage === "string"
+        ? record.data.dataSourceContentLanguage
+        : undefined,
+    dataSourceFeedLabel:
+      typeof record.data.dataSourceFeedLabel === "string"
+        ? record.data.dataSourceFeedLabel
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -148,19 +169,55 @@ export async function setGoogleMerchantCredential(
   payload: Pick<
     GoogleMerchantCredential,
     "accessToken" | "refreshToken" | "clientId" | "clientSecret" | "merchantId"
-  >,
+  > &
+    Partial<
+      Pick<
+        GoogleMerchantCredential,
+        "dataSourceName" | "dataSourceContentLanguage" | "dataSourceFeedLabel"
+      >
+    >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
   const merchantId = payload.merchantId.trim();
   if (!accessToken || !merchantId) {
     throw new Error("Google Merchant accessToken and merchantId are required");
   }
+  const existing = await readPlatformCredential(shop, GOOGLE_MERCHANT_PLATFORM);
+  const sameMerchant = String(existing?.data.merchantId ?? "") === merchantId;
   await writePlatformCredential(shop, GOOGLE_MERCHANT_PLATFORM, {
+    ...(sameMerchant ? existing?.data : {}),
     accessToken,
-    refreshToken: payload.refreshToken?.trim() || null,
-    clientId: payload.clientId?.trim() || null,
-    clientSecret: payload.clientSecret?.trim() || null,
+    refreshToken:
+      payload.refreshToken?.trim() ||
+      (sameMerchant && typeof existing?.data.refreshToken === "string"
+        ? existing.data.refreshToken
+        : null),
+    clientId:
+      payload.clientId?.trim() ||
+      (sameMerchant && typeof existing?.data.clientId === "string"
+        ? existing.data.clientId
+        : null),
+    clientSecret:
+      payload.clientSecret?.trim() ||
+      (sameMerchant && typeof existing?.data.clientSecret === "string"
+        ? existing.data.clientSecret
+        : null),
     merchantId,
+    dataSourceName:
+      payload.dataSourceName?.trim() ||
+      (sameMerchant && typeof existing?.data.dataSourceName === "string"
+        ? existing.data.dataSourceName
+        : null),
+    dataSourceContentLanguage:
+      payload.dataSourceContentLanguage?.trim().toLowerCase() ||
+      (sameMerchant && typeof existing?.data.dataSourceContentLanguage === "string"
+        ? existing.data.dataSourceContentLanguage
+        : null),
+    dataSourceFeedLabel:
+      payload.dataSourceFeedLabel?.trim().toUpperCase() ||
+      (sameMerchant && typeof existing?.data.dataSourceFeedLabel === "string"
+        ? existing.data.dataSourceFeedLabel
+        : null),
   });
 }
 
@@ -192,8 +249,59 @@ export type GoogleAdsCredential = {
   customerId: string;
   /** MCC 场景下访问子账户所需的经理账户 ID；直连账户与 customerId 相同。 */
   loginCustomerId?: string;
+  remarketing?: GoogleRemarketingConfig;
   updatedAt: string;
 };
+
+export type GoogleRemarketingConfig = {
+  tagId: string;
+  source: "auto" | "manual";
+  confirmedAt: string;
+  enabledEvents: string[];
+  enabledFieldGroups: string[];
+  customPixelConfirmedAt?: string;
+  metafieldSync?: {
+    status: "synced" | "failed";
+    updatedAt: string;
+    error?: string;
+  };
+};
+
+function parseGoogleRemarketingConfig(value: unknown): GoogleRemarketingConfig | undefined {
+  if (!isJsonObject(value)) return undefined;
+  const tagId = typeof value.tagId === "string" ? value.tagId : "";
+  const source = value.source === "manual" ? "manual" : "auto";
+  const confirmedAt = typeof value.confirmedAt === "string" ? value.confirmedAt : "";
+  if (!tagId || !confirmedAt) return undefined;
+  return {
+    tagId,
+    source,
+    confirmedAt,
+    enabledEvents: Array.isArray(value.enabledEvents)
+      ? value.enabledEvents.filter((item): item is string => typeof item === "string")
+      : [],
+    enabledFieldGroups: Array.isArray(value.enabledFieldGroups)
+      ? value.enabledFieldGroups.filter((item): item is string => typeof item === "string")
+      : [],
+    customPixelConfirmedAt:
+      typeof value.customPixelConfirmedAt === "string"
+        ? value.customPixelConfirmedAt
+        : undefined,
+    metafieldSync: isJsonObject(value.metafieldSync)
+      ? {
+          status: value.metafieldSync.status === "synced" ? "synced" : "failed",
+          updatedAt:
+            typeof value.metafieldSync.updatedAt === "string"
+              ? value.metafieldSync.updatedAt
+              : "",
+          error:
+            typeof value.metafieldSync.error === "string"
+              ? value.metafieldSync.error
+              : undefined,
+        }
+      : undefined,
+  };
+}
 
 export async function getGoogleAdsCredential(
   shop: string,
@@ -212,6 +320,7 @@ export async function getGoogleAdsCredential(
       typeof record.data.loginCustomerId === "string"
         ? record.data.loginCustomerId
         : undefined,
+    remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -241,6 +350,31 @@ export async function setGoogleAdsCredential(
         ? existing.data.loginCustomerId
         : null),
   });
+}
+
+export async function setGoogleRemarketingConfig(
+  shop: string,
+  config: GoogleRemarketingConfig,
+): Promise<void> {
+  if (!/^AW-\d+$/.test(config.tagId)) {
+    throw new Error("Google AW 标签格式无效");
+  }
+  const existing = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
+  if (!existing) throw new Error("Google Ads 账户未连接");
+  await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
+    ...existing.data,
+    remarketing: config,
+  });
+}
+
+export async function resetGoogleCustomPixelConfirmation(
+  shop: string,
+): Promise<void> {
+  const credential = await getGoogleAdsCredential(shop);
+  if (!credential?.remarketing) return;
+  const remarketing = { ...credential.remarketing };
+  delete remarketing.customPixelConfirmedAt;
+  await setGoogleRemarketingConfig(shop, remarketing);
 }
 
 // ─── Pending OAuth selection (multi-account) ─────────────────────────────────
@@ -430,6 +564,8 @@ export type MetaAdsCredential = {
   adAccountId: string;
   adAccountName?: string;
   currencyCode?: string;
+  /** OAuth 时可切换的全部广告账户（持久化，便于已连接后切换）。 */
+  availableAccounts?: PendingOAuthAccount[];
   updatedAt: string;
 };
 
@@ -452,6 +588,9 @@ export async function getMetaAdsCredential(
       typeof record.data.currencyCode === "string"
         ? record.data.currencyCode
         : undefined,
+    availableAccounts: Array.isArray(record.data.availableAccounts)
+      ? (record.data.availableAccounts as PendingOAuthAccount[])
+      : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -460,7 +599,7 @@ export async function setMetaAdsCredential(
   shop: string,
   payload: Pick<
     MetaAdsCredential,
-    "accessToken" | "adAccountId" | "adAccountName" | "currencyCode"
+    "accessToken" | "adAccountId" | "adAccountName" | "currencyCode" | "availableAccounts"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -468,11 +607,18 @@ export async function setMetaAdsCredential(
   if (!accessToken || !adAccountId) {
     throw new Error("Meta Ads accessToken and adAccountId are required");
   }
+  const existing = await readPlatformCredential(shop, META_ADS_PLATFORM);
+  const availableAccounts =
+    payload.availableAccounts ??
+    (Array.isArray(existing?.data.availableAccounts)
+      ? (existing.data.availableAccounts as PendingOAuthAccount[])
+      : []);
   await writePlatformCredential(shop, META_ADS_PLATFORM, {
     accessToken,
     adAccountId,
     adAccountName: payload.adAccountName?.trim() || null,
     currencyCode: payload.currencyCode?.trim() || null,
+    availableAccounts,
   });
 }
 

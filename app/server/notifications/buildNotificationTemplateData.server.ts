@@ -126,11 +126,12 @@ export function buildNotificationTemplateData(
     brandName,
     recipientName: str(variables.recipientName) || recipientFallback,
     supportEmail: str(variables.supportEmail) || appConfig.supportEmail,
+    dashboardUrl: str(appConfig.dashboardUrl),
     shopName: str(variables.shopName),
     shopDomain: str(variables.shopDomain),
     occurredAtUtc: str(variables.occurredAtUtc),
-    installedAtUtc: str(variables.installedAtUtc) || str(variables.occurredAtUtc),
-    uninstalledAtUtc: str(variables.uninstalledAtUtc) || str(variables.occurredAtUtc),
+    installedAtUtc: str(variables.installedAtUtc),
+    uninstalledAtUtc: str(variables.uninstalledAtUtc),
     purchaseType: formatPurchaseType(variables.purchaseType, locale),
     orderId: variables.orderId
       ? formatShopifyOrderDisplayId(variables.orderId)
