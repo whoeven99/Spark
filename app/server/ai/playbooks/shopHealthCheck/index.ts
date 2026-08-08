@@ -6,7 +6,7 @@ import type {
   PlaybookRunResult,
   PlaybookStepResult,
 } from "../../core/playbookRegistry.server";
-import { ensureDailySnapshot } from "../../../operations/dailyInspection.server";
+import { ensureDailySnapshotOverview } from "../../../operations/dailyInspection.server";
 
 // ──────────────────────────────────────────────
 // Shopify GraphQL 查询
@@ -118,7 +118,7 @@ async function run({
   if (context.shop) {
     try {
       onStep?.("数据拉取", "running");
-      const daily = await ensureDailySnapshot(context.shop);
+      const daily = await ensureDailySnapshotOverview(context.shop);
       if (daily.hasData) {
         onStep?.("数据拉取", "completed");
         steps.push({
