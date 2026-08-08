@@ -1,7 +1,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.server";
-import { ensureDailySnapshot } from "../../../operations/dailyInspection.server";
+import { ensureDailySnapshotOverview } from "../../../operations/dailyInspection.server";
 
 export const GET_DAILY_OPERATIONS_TOOL_NAME = "get_daily_operations";
 const LOG_PREFIX = "[DailyOperations]";
@@ -32,7 +32,7 @@ function createGetDailyOperationsTool(context: AgentContext): DynamicStructuredT
         return JSON.stringify({ ok: false, errorMsg: "无法识别当前店铺" });
       }
       try {
-        const result = await ensureDailySnapshot(shop);
+        const result = await ensureDailySnapshotOverview(shop);
         if (!result.hasData) {
           return JSON.stringify({
             ok: true,

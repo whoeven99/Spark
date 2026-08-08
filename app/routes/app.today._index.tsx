@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useLoaderData, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
 import {
   buildWorkspaceDashboardFromDailyOps,
   emptyWorkspaceDashboardSnapshot,
@@ -29,7 +29,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
   try {
     const [dailyOps, recentTaskEntries] = await Promise.all([
-      ensureDailySnapshot(session.shop),
+      ensureDailySnapshotOverview(session.shop),
       listMergedUnifiedTaskEntries(session.shop, { limit: DASHBOARD_RECENT_TASK_LIMIT }),
     ]);
     dashboardSnapshot = {
