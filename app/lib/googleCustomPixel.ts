@@ -10,6 +10,10 @@ export interface GoogleCustomPixelOptions {
   conversionLabel?: unknown;
   /** 是否启用 Enhanced Conversions（用 checkout 邮箱/电话/地址做增强匹配）。 */
   enhancedConversions?: boolean;
+  /** 店铺域名（*.myshopify.com），用于 SLS envelope.shopName。 */
+  shopName?: string;
+  /** 主应用 `/api/pixel-ingest`；缺省时跳过 SLS 双写。 */
+  ingestEndpoint?: string;
 }
 
 export function generateGooglePurchaseCustomPixel(
@@ -22,6 +26,8 @@ export function generateGooglePurchaseCustomPixel(
   );
   const conversionLabel = normalizeGoogleConversionLabel(options.conversionLabel);
   const enhancedConversions = options.enhancedConversions === true;
+  const shopName = (options.shopName ?? "").trim().toLowerCase();
+  const ingestEndpoint = (options.ingestEndpoint ?? "").trim();
   return `// Spark experimental Google purchase Custom Pixel.
 // Google does not officially support Google tags in Shopify Custom Pixels.
 const SPARK_CONFIG = ${JSON.stringify({
@@ -29,6 +35,8 @@ const SPARK_CONFIG = ${JSON.stringify({
     fieldGroups,
     conversionLabel,
     enhancedConversions,
+    shopName,
+    ingestEndpoint,
   })};
 const completedTransactions = new Set();
 let marketingAllowed = Boolean(init.customerPrivacy && init.customerPrivacy.marketingAllowed);
@@ -57,6 +65,95 @@ function loadTag() {
   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(SPARK_CONFIG.tagId);
   document.head.appendChild(script);
 }
+async function resolveClientId() {
+  try {
+    if (typeof browser !== 'undefined' && browser.cookie && typeof browser.cookie.get === 'function') {
+      const y = await browser.cookie.get('_shopify_y');
+      if (y) return String(y);
+    }
+  } catch (e) {}
+  return 'custom-pixel-' + String(Date.now());
+}
+function resolveTrafficSource(event) {
+  try {
+    const href = (event && event.context && event.context.document && event.context.document.location && event.context.document.location.href) || '';
+    const referrer = (event && event.context && event.context.document && event.context.document.referrer) || '';
+    const url = href ? new URL(href) : null;
+    const params = url ? url.searchParams : null;
+    if (params && (params.get('gclid') || params.get('gbraid') || params.get('wbraid'))) return 'paid';
+    const medium = ((params && params.get('utm_medium')) || '').toLowerCase();
+    if (medium === 'cpc' || medium === 'ppc' || medium === 'paid') return 'paid';
+    if (referrer) return 'organic';
+    return 'direct';
+  } catch (e) {
+    return 'unknown';
+  }
+}
+function mirrorPurchase(event, payload, sentToGoogle) {
+  if (!SPARK_CONFIG.ingestEndpoint || !SPARK_CONFIG.shopName) return;
+  resolveClientId().then((clientId) => {
+    let pagePath = '';
+    let pageUrl = '';
+    let referrer = '';
+    let gclid = '';
+    let utmSource = '';
+    let utmMedium = '';
+    try {
+      const loc = event && event.context && event.context.document && event.context.document.location;
+      pageUrl = (loc && loc.href) || '';
+      pagePath = (loc && loc.pathname) || '';
+      referrer = (event.context.document.referrer) || '';
+      if (pageUrl) {
+        const params = new URL(pageUrl).searchParams;
+        gclid = params.get('gclid') || '';
+        utmSource = params.get('utm_source') || '';
+        utmMedium = params.get('utm_medium') || '';
+      }
+    } catch (e) {}
+    const productId = payload.items && payload.items[0] ? String(payload.items[0].id || '') : '';
+    const envelope = {
+      ts: Date.now(),
+      event: 'spark:google:purchase',
+      schemaVersion: 1,
+      shopName: SPARK_CONFIG.shopName,
+      clientId: clientId,
+      source: 'custom-pixel:google-purchase',
+      productId: productId || undefined,
+      payload: {
+        googleEvent: 'purchase',
+        sentToGoogle: !!sentToGoogle,
+        pixelId: SPARK_CONFIG.tagId,
+        conversionLabel: SPARK_CONFIG.conversionLabel || '',
+        account: SPARK_CONFIG.tagId,
+        pagePath: pagePath,
+        pageUrl: pageUrl,
+        referrer: referrer,
+        trafficSource: resolveTrafficSource(event),
+        gclid: gclid || undefined,
+        utmSource: utmSource || undefined,
+        utmMedium: utmMedium || undefined,
+        value: payload.value,
+        currency: payload.currency,
+        items: payload.items,
+        transaction_id: payload.transaction_id,
+        enhancedConversions: SPARK_CONFIG.enhancedConversions
+          ? (sentToGoogle ? 'sent' : 'not_sent')
+          : 'n/a',
+        consent: { marketing: marketingAllowed ? 'granted' : 'denied' },
+      },
+    };
+    try {
+      fetch(SPARK_CONFIG.ingestEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(envelope),
+        keepalive: true,
+        credentials: 'omit',
+        mode: 'cors',
+      }).catch(function () {});
+    } catch (err) {}
+  });
+}
 // Custom Pixel 沙箱没有全局 customerPrivacy，必须用 api.customerPrivacy。
 if (api && api.customerPrivacy && typeof api.customerPrivacy.subscribe === 'function') {
   api.customerPrivacy.subscribe('visitorConsentCollected', (event) => {
@@ -67,8 +164,6 @@ if (api && api.customerPrivacy && typeof api.customerPrivacy.subscribe === 'func
 }
 loadTag();
 analytics.subscribe('checkout_completed', (event) => {
-  if (!marketingAllowed) return;
-  loadTag();
   const checkout = event.data && event.data.checkout ? event.data.checkout : {};
   const transactionId = String((checkout.order && checkout.order.id) || checkout.token || event.id || '');
   if (!transactionId || completedTransactions.has(transactionId)) return;
@@ -91,32 +186,39 @@ analytics.subscribe('checkout_completed', (event) => {
     payload.ecomm_pagetype = 'purchase';
     payload.ecomm_totalvalue = payload.value;
   }
-  if (SPARK_CONFIG.enhancedConversions) {
-    const billing = checkout.billingAddress || {};
-    const userData = {};
-    if (checkout.email) userData.email = String(checkout.email);
-    if (checkout.phone || billing.phone) userData.phone_number = String(checkout.phone || billing.phone);
-    if (billing.firstName || billing.lastName || billing.address1) {
-      userData.address = {
-        first_name: billing.firstName || undefined,
-        last_name: billing.lastName || undefined,
-        street: billing.address1 || undefined,
-        city: billing.city || undefined,
-        region: billing.provinceCode || billing.province || undefined,
-        postal_code: billing.zip || undefined,
-        country: billing.countryCode || billing.country || undefined,
-      };
+  let sentToGoogle = false;
+  if (marketingAllowed) {
+    loadTag();
+    if (SPARK_CONFIG.enhancedConversions) {
+      const billing = checkout.billingAddress || {};
+      const userData = {};
+      if (checkout.email) userData.email = String(checkout.email);
+      if (checkout.phone || billing.phone) userData.phone_number = String(checkout.phone || billing.phone);
+      if (billing.firstName || billing.lastName || billing.address1) {
+        userData.address = {
+          first_name: billing.firstName || undefined,
+          last_name: billing.lastName || undefined,
+          street: billing.address1 || undefined,
+          city: billing.city || undefined,
+          region: billing.provinceCode || billing.province || undefined,
+          postal_code: billing.zip || undefined,
+          country: billing.countryCode || billing.country || undefined,
+        };
+      }
+      if (Object.keys(userData).length > 0) gtag('set', 'user_data', userData);
     }
-    if (Object.keys(userData).length > 0) gtag('set', 'user_data', userData);
+    gtag('event', 'purchase', payload);
+    if (SPARK_CONFIG.conversionLabel) {
+      gtag('event', 'conversion', {
+        send_to: SPARK_CONFIG.tagId + '/' + SPARK_CONFIG.conversionLabel,
+        value: payload.value,
+        currency: payload.currency,
+        transaction_id: transactionId,
+      });
+    }
+    sentToGoogle = true;
   }
-  gtag('event', 'purchase', payload);
-  if (SPARK_CONFIG.conversionLabel) {
-    gtag('event', 'conversion', {
-      send_to: SPARK_CONFIG.tagId + '/' + SPARK_CONFIG.conversionLabel,
-      value: payload.value,
-      currency: payload.currency,
-      transaction_id: transactionId,
-    });
-  }
+  // SLS 双写不带 Enhanced Conversions PII；consent denied 时仍记一条 purchase 尝试。
+  mirrorPurchase(event, payload, sentToGoogle);
 });`;
 }

@@ -2,11 +2,13 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getGoogleAdsCredential } from "../server/adsCatalog/credentialStore.server";
+import { resolvePixelIngestEndpoint } from "../server/webPixel/ensureWebPixel.server";
 import { GooglePixelOnboardingPage } from "./page/GooglePixelOnboardingPage";
 
 export type GooglePixelLoaderData = {
   shopDomain: string;
   shopifyApiKey: string;
+  ingestEndpoint: string;
   connected: boolean;
   config: {
     tagId: string;
@@ -25,6 +27,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     shopDomain: session.shop,
     shopifyApiKey: process.env.SHOPIFY_API_KEY?.trim() ?? "",
+    ingestEndpoint: resolvePixelIngestEndpoint() ?? "",
     connected: Boolean(ads),
     config: remarketing
       ? {

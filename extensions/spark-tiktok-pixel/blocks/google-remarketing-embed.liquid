@@ -83,6 +83,8 @@
         var marketingAllowed = false;
         var initialEventsSent = false;
         var actionIds = new Set();
+        var shopName = {{ shop.permanent_domain | json }};
+        var ingestEndpoint = config && config.ingestEndpoint ? String(config.ingestEndpoint) : "";
 
         window.dataLayer = window.dataLayer || [];
         // 必须挂到 window：Tag Assistant / 控制台调试都读 window.gtag。
@@ -122,8 +124,107 @@
           if (field("list")) out.index = index;
           return out;
         }
+        function getClientId() {
+          try {
+            var match = document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/);
+            if (match) return decodeURIComponent(match[1]);
+          } catch (err) {}
+          try {
+            var key = "spark_google_cid";
+            var existing = sessionStorage.getItem(key);
+            if (existing) return existing;
+            var id = (window.crypto && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+            sessionStorage.setItem(key, id);
+            return id;
+          } catch (err2) {
+            return "anon";
+          }
+        }
+        function resolveTrafficSource() {
+          try {
+            var params = new URLSearchParams(location.search);
+            if (params.get("gclid") || params.get("gbraid") || params.get("wbraid")) return "paid";
+            var medium = String(params.get("utm_medium") || "").toLowerCase();
+            if (medium === "cpc" || medium === "ppc" || medium === "paid") return "paid";
+            if (document.referrer) return "organic";
+            return "direct";
+          } catch (err) {
+            return "unknown";
+          }
+        }
+        function deviceInfo() {
+          var ua = navigator.userAgent || "";
+          var browser = "Unknown";
+          if (/Edg\//.test(ua)) browser = "Edge";
+          else if (/Chrome\//.test(ua)) browser = "Chrome";
+          else if (/Firefox\//.test(ua)) browser = "Firefox";
+          else if (/Safari\//.test(ua)) browser = "Safari";
+          var os = "Unknown";
+          if (/Windows/.test(ua)) os = "Windows";
+          else if (/Mac OS X/.test(ua)) os = "macOS";
+          else if (/Android/.test(ua)) os = "Android";
+          else if (/iPhone|iPad/.test(ua)) os = "iOS";
+          return {
+            browser: browser,
+            os: os,
+            screen: (window.screen && screen.width && screen.height)
+              ? (screen.width + "x" + screen.height)
+              : ""
+          };
+        }
+        function mirrorToSls(name, eventPayload, sentToGoogle) {
+          if (!ingestEndpoint || !shopName) return;
+          var params = null;
+          try { params = new URLSearchParams(location.search); } catch (err) {}
+          var productId = "";
+          if (eventPayload && Array.isArray(eventPayload.items) && eventPayload.items[0]) {
+            productId = String(eventPayload.items[0].productId || eventPayload.items[0].id || "");
+          }
+          var envelope = {
+            ts: Date.now(),
+            event: "spark:google:" + name,
+            schemaVersion: 1,
+            shopName: shopName,
+            clientId: getClientId(),
+            source: "storefront:google-remarketing-embed",
+            productId: productId || undefined,
+            payload: {
+              googleEvent: name,
+              sentToGoogle: !!sentToGoogle,
+              pixelId: config.tagId,
+              conversionLabel: config.conversionLabel || "",
+              account: config.tagId,
+              pagePath: location.pathname || "",
+              pageUrl: location.href || "",
+              referrer: document.referrer || "",
+              trafficSource: resolveTrafficSource(),
+              gclid: params && params.get("gclid") ? params.get("gclid") : undefined,
+              utmSource: params && params.get("utm_source") ? params.get("utm_source") : undefined,
+              utmMedium: params && params.get("utm_medium") ? params.get("utm_medium") : undefined,
+              value: typeof eventPayload.value === "number" ? eventPayload.value : undefined,
+              currency: eventPayload.currency,
+              items: eventPayload.items,
+              enhancedConversions: "n/a",
+              consent: { marketing: marketingAllowed ? "granted" : "denied" },
+              device: deviceInfo()
+            }
+          };
+          try {
+            fetch(ingestEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "text/plain;charset=UTF-8" },
+              body: JSON.stringify(envelope),
+              keepalive: true,
+              credentials: "omit",
+              mode: "cors"
+            }).catch(function () {});
+          } catch (err) {}
+        }
         function send(name, payload) {
-          if (!marketingAllowed || !on(name)) return;
+          // 事件未启用则完全跳过；consent denied 仍写 SLS（sentToGoogle=false）。
+          if (!on(name)) return;
           var eventPayload = Object.assign({}, payload || {});
           if (Array.isArray(eventPayload.items)) {
             eventPayload.items = eventPayload.items.map(item);
@@ -133,15 +234,20 @@
             eventPayload.ecomm_pagetype = pageType;
             if (typeof eventPayload.value === "number") eventPayload.ecomm_totalvalue = eventPayload.value;
           }
-          gtag("event", name, eventPayload);
-          // 配置了 Conversion Label 时，把所选店面事件同时上报为 Google Ads 转化。
-          if (config.conversionLabel) {
-            gtag("event", "conversion", {
-              send_to: config.tagId + "/" + config.conversionLabel,
-              value: eventPayload.value,
-              currency: eventPayload.currency
-            });
+          var sentToGoogle = false;
+          if (marketingAllowed) {
+            gtag("event", name, eventPayload);
+            // 配置了 Conversion Label 时，把所选店面事件同时上报为 Google Ads 转化。
+            if (config.conversionLabel) {
+              gtag("event", "conversion", {
+                send_to: config.tagId + "/" + config.conversionLabel,
+                value: eventPayload.value,
+                currency: eventPayload.currency
+              });
+            }
+            sentToGoogle = true;
           }
+          mirrorToSls(name, eventPayload, sentToGoogle);
         }
         function applyConsent(allowed) {
           marketingAllowed = allowed === true;
@@ -151,16 +257,17 @@
               ad_user_data: "granted",
               ad_personalization: "granted"
             });
-            if (!initialEventsSent) {
-              initialEventsSent = true;
-              sendInitialEvents();
-            }
           } else {
             gtag("consent", "update", {
               ad_storage: "denied",
               ad_user_data: "denied",
               ad_personalization: "denied"
             });
+          }
+          // 同意状态一旦解析（granted/denied）就打初始事件，便于 Activity 看到 Denied 浏览。
+          if (!initialEventsSent) {
+            initialEventsSent = true;
+            sendInitialEvents();
           }
         }
         function tryApplyConsentFromApi() {
@@ -172,6 +279,7 @@
         function pollConsent(attempt) {
           if (tryApplyConsentFromApi()) return;
           if (attempt < 50) setTimeout(function () { pollConsent(attempt + 1); }, 100);
+          else applyConsent(false);
         }
         // 主题不会自动注入 customerPrivacy；必须先 loadFeatures 再读同意状态。
         function bootConsent() {

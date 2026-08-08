@@ -234,6 +234,8 @@ export function GooglePixelOnboardingPage() {
           enabledFieldGroups: [...GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS],
           conversionLabel: conversionLabel.trim(),
           enhancedConversions: enhanced,
+          shopName: loaderData.shopDomain,
+          ingestEndpoint: loaderData.ingestEndpoint,
         });
         setSavedScript(script);
         await copyScript(script);

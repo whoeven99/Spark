@@ -1,6 +1,6 @@
 /**
- * Google Pixel 布局：向导（_index）与数据页（data）共用鉴权父路由。
- * 父级只做 Outlet；否则 child `/data` 会继续渲染向导页。
+ * Google Pixel 布局：向导（_index）、数据页（data）、Activity（activity）共用鉴权父路由。
+ * 父级只做 Outlet；否则 child 路由会继续渲染向导页。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Outlet } from "react-router";

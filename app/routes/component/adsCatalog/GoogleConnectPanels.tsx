@@ -394,6 +394,12 @@ export function GoogleConnectPanels({
                 {t("adsCatalog.googlePixelViewData")}
               </Link>
               <Link
+                to={`/app/ads/google-pixel/activity${locationSearch}`}
+                style={{ ...secondaryBtn, display: "inline-block", textDecoration: "none" }}
+              >
+                {t("adsCatalog.googlePixelViewActivity")}
+              </Link>
+              <Link
                 to={`/app/ads/google-pixel${locationSearch}`}
                 style={{ ...secondaryBtn, display: "inline-block", textDecoration: "none" }}
               >

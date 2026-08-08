@@ -9,6 +9,7 @@ import {
   saveGoogleRemarketingConfig,
 } from "../server/adsCatalog/googleRemarketing.server";
 import { generateGooglePurchaseCustomPixel } from "../lib/googleCustomPixel";
+import { resolvePixelIngestEndpoint } from "../server/webPixel/ensureWebPixel.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -16,16 +17,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getGoogleAdsCredential(session.shop),
     discoverGoogleAwCandidates(session.shop).catch(() => []),
   ]);
+  const ingestEndpoint = resolvePixelIngestEndpoint() ?? "";
   return Response.json({
     ok: true,
     candidates,
     config: credential?.remarketing ?? null,
+    ingestEndpoint,
     customPixelScript: credential?.remarketing
       ? generateGooglePurchaseCustomPixel({
           tagId: credential.remarketing.tagId,
           enabledFieldGroups: credential.remarketing.enabledFieldGroups,
           conversionLabel: credential.remarketing.conversionLabel,
           enhancedConversions: credential.remarketing.enhancedConversions,
+          shopName: session.shop,
+          ingestEndpoint,
         })
       : null,
   });

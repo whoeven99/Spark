@@ -3,12 +3,15 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getGoogleAdsCredential } from "../server/adsCatalog/credentialStore.server";
 import { getGoogleAppEmbedStatus } from "../server/adsCatalog/appEmbedStatus.server";
+import { ensureGoogleRemarketingIngestEndpoint } from "../server/adsCatalog/googleRemarketing.server";
 import { generateGooglePurchaseCustomPixel } from "../lib/googleCustomPixel";
+import { resolvePixelIngestEndpoint } from "../server/webPixel/ensureWebPixel.server";
 import { GooglePixelDataPage } from "./page/GooglePixelDataPage";
 
 export type GooglePixelDataLoaderData = {
   shopDomain: string;
   shopifyApiKey: string;
+  ingestEndpoint: string;
   adsConnected: boolean;
   customerId: string;
   loginCustomerId: string;
@@ -40,11 +43,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const [ads, embed] = await Promise.all([
     getGoogleAdsCredential(session.shop),
     getGoogleAppEmbedStatus(admin),
+    // 已配置店铺补写 ingestEndpoint，避免必须重新保存向导才能双写 SLS。
+    ensureGoogleRemarketingIngestEndpoint({ shop: session.shop, admin }).catch(() => undefined),
   ]);
   const remarketing = ads?.remarketing ?? null;
+  const ingestEndpoint = resolvePixelIngestEndpoint() ?? "";
   return {
     shopDomain: session.shop,
     shopifyApiKey: process.env.SHOPIFY_API_KEY?.trim() ?? "",
+    ingestEndpoint,
     adsConnected: Boolean(ads),
     customerId: ads?.customerId ?? "",
     loginCustomerId: ads?.loginCustomerId ?? "",
@@ -71,6 +78,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           enabledFieldGroups: remarketing.enabledFieldGroups,
           conversionLabel: remarketing.conversionLabel,
           enhancedConversions: remarketing.enhancedConversions,
+          shopName: session.shop,
+          ingestEndpoint,
         })
       : null,
     embed: {

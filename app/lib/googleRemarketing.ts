@@ -54,6 +54,11 @@ export interface GoogleRemarketingStorefrontConfig {
   conversionLabel?: string;
   /** 是否启用 Enhanced Conversions（哈希用户数据），仅作用于 purchase Custom Pixel。 */
   enhancedConversions?: boolean;
+  /**
+   * SLS 双写入口（主应用 `/api/pixel-ingest`）。
+   * 由服务端在 metafield 同步时写入；店面 Liquid / Custom Pixel 只读此字段，不下发密钥。
+   */
+  ingestEndpoint?: string;
 }
 
 /**

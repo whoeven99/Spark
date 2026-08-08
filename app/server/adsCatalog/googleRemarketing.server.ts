@@ -20,6 +20,7 @@ import {
 } from "./googleAdsApi.server";
 import { prepareGoogleAdsApiAuth } from "./googleAdsToken.server";
 import { getGoogleAdsDeveloperToken } from "./googleOAuth.server";
+import { resolvePixelIngestEndpoint } from "../webPixel/ensureWebPixel.server";
 
 export interface GoogleAwCandidate {
   tagId: string;
@@ -221,6 +222,7 @@ export async function saveGoogleRemarketingConfig(params: {
   };
   await setGoogleRemarketingConfig(params.shop, config);
   try {
+    const ingestEndpoint = resolvePixelIngestEndpoint() ?? undefined;
     await syncStorefrontMetafield({
       admin: params.admin,
       config: {
@@ -231,6 +233,7 @@ export async function saveGoogleRemarketingConfig(params: {
         ),
         conversionLabel: conversionLabel || undefined,
         enhancedConversions,
+        ingestEndpoint,
       },
     });
     config.metafieldSync = { status: "synced", updatedAt: now };
@@ -244,5 +247,40 @@ export async function saveGoogleRemarketingConfig(params: {
     };
     await setGoogleRemarketingConfig(params.shop, config);
     return { config, partial: true };
+  }
+}
+
+/**
+ * 已配置店铺补写 ingestEndpoint 到店面 metafield（Activity 双写依赖）。
+ * 失败静默，不阻断数据页加载。
+ */
+export async function ensureGoogleRemarketingIngestEndpoint(params: {
+  shop: string;
+  admin: ShopifyAdminGraphqlClient;
+}): Promise<void> {
+  const existing = await getGoogleAdsCredential(params.shop);
+  const remarketing = existing?.remarketing;
+  if (!remarketing?.tagId) return;
+  const ingestEndpoint = resolvePixelIngestEndpoint();
+  if (!ingestEndpoint) return;
+  try {
+    await syncStorefrontMetafield({
+      admin: params.admin,
+      config: {
+        tagId: remarketing.tagId,
+        enabledEvents: normalizeGoogleRemarketingEvents(remarketing.enabledEvents),
+        enabledFieldGroups: normalizeGoogleRemarketingFieldGroups(
+          remarketing.enabledFieldGroups,
+        ),
+        conversionLabel: remarketing.conversionLabel || undefined,
+        enhancedConversions: remarketing.enhancedConversions,
+        ingestEndpoint,
+      },
+    });
+  } catch (error) {
+    console.warn(
+      `[googleRemarketing] ensure ingestEndpoint failed shop=${params.shop}:`,
+      error,
+    );
   }
 }

@@ -280,6 +280,9 @@ export function GooglePixelDataPage() {
         <Link to={`/app/ads/google-pixel${locationSearch}`} style={primaryBtn}>
           {t("googlePixelData.editWizard")}
         </Link>
+        <Link to={`/app/ads/google-pixel/activity${locationSearch}`} style={secondaryBtn}>
+          {t("googlePixelData.openActivity")}
+        </Link>
         <a href={themeEditorUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("adsCatalog.googleRemarketing.openThemeEditor")}
         </a>
