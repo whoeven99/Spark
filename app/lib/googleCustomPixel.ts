@@ -136,9 +136,7 @@ function mirrorPurchase(event, payload, sentToGoogle) {
         currency: payload.currency,
         items: payload.items,
         transaction_id: payload.transaction_id,
-        enhancedConversions: SPARK_CONFIG.enhancedConversions
-          ? (sentToGoogle ? 'sent' : 'not_sent')
-          : 'n/a',
+        enhancedConversions: !!SPARK_CONFIG.enhancedConversions,
         consent: { marketing: marketingAllowed ? 'granted' : 'denied' },
       },
     };
