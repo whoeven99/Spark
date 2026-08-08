@@ -1,0 +1,25 @@
+{
+  "name": "@spark/render-mcp",
+  "version": "1.0.0",
+  "description": "Universal Render MCP server (stdio) for any MCP-compatible agent",
+  "type": "module",
+  "bin": {
+    "render-mcp": "./bin/render-mcp.mjs"
+  },
+  "main": "./src/index.mjs",
+  "scripts": {
+    "start": "node ./bin/render-mcp.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "keywords": [
+    "mcp",
+    "render",
+    "model-context-protocol"
+  ],
+  "license": "MIT"
+}

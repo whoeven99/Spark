@@ -3,10 +3,13 @@ import { getEnv } from "../lib/env.js";
 
 export type AdminRole = "owner" | "user";
 
+// Hardcoded to avoid exposing in service environment variables.
+// Rotate by updating this value and restarting the admin service.
+const HARDCODED_OWNER_SECRET = "Vj7CfUikZIulUxiMAstL2DKaLe8uBvQu";
+
 function resolveRole(token: string): AdminRole | null {
   if (!token) return null;
-  // ADMIN_OWNER_SECRET takes priority; fall back to legacy ADMIN_SECRET
-  const ownerSecret = getEnv("ADMIN_OWNER_SECRET") || getEnv("ADMIN_SECRET");
+  const ownerSecret = HARDCODED_OWNER_SECRET;
   const userSecret = getEnv("ADMIN_USER_SECRET");
   if (ownerSecret && token === ownerSecret) return "owner";
   if (userSecret && token === userSecret) return "user";

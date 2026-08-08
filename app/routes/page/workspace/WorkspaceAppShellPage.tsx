@@ -1,7 +1,7 @@
 /**
  * 工作台应用壳：侧边栏导航 + 会话管理 + 面板路由。
- * 各面板见同目录 DashboardPanel / ChatPanel / SkillsPanel / AutomationPanel，
- * 对话上下文状态统一在 useWorkspaceContext。
+ * 面板已精简为 首页(HomePanel) + 对话(ChatPanel)；看板/技能/自动化/任务已上升为顶级目的地
+ * 经营(/app/today) / 创作(/app/studio) / 任务(/app/tasks)。对话上下文状态统一在 useWorkspaceContext。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -11,14 +11,11 @@ import { useTranslation } from "react-i18next";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
-import { UnifiedTaskListPage } from "../../component/unifiedTaskList/UnifiedTaskListPage";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { useChatStream } from "../chat/useChatStream";
-import { AutomationPanel } from "./AutomationPanel";
 import { ChatPanel } from "./ChatPanel";
-import { DashboardPanel } from "./DashboardPanel";
-import { SkillsPanel } from "./SkillsPanel";
+import { HomePanel } from "./HomePanel";
 import {
   augmentUserMessage,
   buildAssistantWorkspaceMessage,
@@ -30,7 +27,7 @@ import {
 } from "./messageTransforms";
 import {
   isWorkspacePanel,
-  type AutomationView,
+  type ContextTool,
   type Conversation,
   type ConversationSummary,
   type WorkspaceConversationMessage,
@@ -88,6 +85,14 @@ function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
   };
+  if (name === "home") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M2.2 6.8 L7 3.2 L11.8 6.8" />
+        <path d="M3.8 6.9 V11.4 H10.2 V6.9" />
+      </svg>
+    );
+  }
   if (name === "dashboard") {
     return (
       <svg {...common} aria-hidden="true">
@@ -124,17 +129,15 @@ function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
   );
 }
 
+// 工作台左栏只保留 首页（其余 看板/技能/自动化/任务列表 已上升为顶级目的地 经营/创作/任务）。
 const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string }> = [
-  { key: "dashboard", label: "经营看板" },
-  { key: "skills", label: "技能" },
-  { key: "automation", label: "自动化" },
-  { key: "tasks", label: "任务列表" },
+  { key: "home", label: "首页" },
 ];
 
 // ── 左栏会话列表：时间分组与相对时间 ─────────────────────────────────────────
 
-/** 账户展示名（与左栏底部既有硬编码保持一处定义；待接入真实用户信息） */
-const ACCOUNT_DISPLAY_NAME = "Cedric hu";
+/** 账户展示名兜底（无 session 在线用户信息时，退回到店铺名/通用名，由 loader 传入 accountName）。 */
+const DEFAULT_ACCOUNT_DISPLAY_NAME = "Spark 用户";
 
 const CONVERSATION_GROUP_ORDER = ["今天", "昨天", "7 天内", "更早"] as const;
 
@@ -346,12 +349,15 @@ export function WorkspaceAppShellPage({
   dashboardSnapshot = fallbackDashboardSnapshot,
   currentPlanLabel = "付费计划",
   accountEmail = "",
+  accountName,
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
   currentPlanLabel?: string;
   accountEmail?: string;
+  accountName?: string;
 }) {
+  const displayName = accountName?.trim() || DEFAULT_ACCOUNT_DISPLAY_NAME;
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -367,7 +373,6 @@ export function WorkspaceAppShellPage({
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const processedPrefillPromptRef = useRef<string | null>(null);
-  const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [runningTaskCount, setRunningTaskCount] = useState(0);
   const [conversationSearch, setConversationSearch] = useState("");
   // 置顶与折叠均为本机偏好（localStorage），不进数据库
@@ -500,10 +505,11 @@ export function WorkspaceAppShellPage({
   const stream = useChatStream();
   const { sendMessage: streamConversation, prepareStreaming, abort: abortStream } = stream;
   const replyEpochRef = useRef(0);
+  const pendingHomeContextToolRef = useRef<ContextTool | null>(null);
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
-  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
+  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "home";
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
 
@@ -600,12 +606,19 @@ export function WorkspaceAppShellPage({
       });
   }, [activeConversationId]);
 
+  useEffect(() => {
+    const tool = pendingHomeContextToolRef.current;
+    if (activePanel !== "chat" || !activeConversationId || !tool) return;
+    pendingHomeContextToolRef.current = null;
+    workspaceContext.toggleContextTool(tool);
+  }, [activePanel, activeConversationId, workspaceContext]);
+
   const switchPanel = (panel: WorkspacePanel) => {
     if (panel !== "chat") {
       pruneEmptyDraftConversations();
     }
     const next = new URLSearchParams(searchParams);
-    if (panel === "dashboard") {
+    if (panel === "home") {
       next.delete("panel");
     } else {
       next.set("panel", panel);
@@ -633,7 +646,7 @@ export function WorkspaceAppShellPage({
           if (nextConversation) {
             switchPanel("chat");
           } else {
-            switchPanel("dashboard");
+            switchPanel("home");
           }
         }
         shopify.toast.show("对话已删除");
@@ -669,7 +682,7 @@ export function WorkspaceAppShellPage({
         if (nextConversation) {
           switchPanel("chat");
         } else {
-          switchPanel("dashboard");
+          switchPanel("home");
         }
       }
       shopify.toast.show("对话已删除");
@@ -871,50 +884,6 @@ export function WorkspaceAppShellPage({
     }
   };
 
-  const handleTranslationCardSuccess = (
-    conversationId: string,
-    messageIndex: number,
-    detail: { jobId?: string; jobIds?: string[]; message: string },
-  ) => {
-    shopify.toast.show(detail.message || t("chat.translationCreateSuccess"));
-    const ids = detail.jobIds ?? (detail.jobId ? [detail.jobId] : []);
-    if (ids.length) {
-      const params = new URLSearchParams(
-        typeof window !== "undefined"
-          ? window.location.search.startsWith("?")
-            ? window.location.search.slice(1)
-            : window.location.search
-          : "",
-      );
-      params.set("page", "tasks");
-      params.set("expandJob", ids.join(","));
-      navigate(`/app/translation-v4?${params.toString()}`);
-    }
-    setMessagesByConversation((current) => {
-      const existing = current[conversationId] ?? [];
-      const next = existing.map((message, index) =>
-        index === messageIndex && message.role === "assistant"
-          ? {
-              role: "assistant" as const,
-              text: message.text,
-              time: message.time,
-            }
-          : message,
-      );
-      next.push({
-        role: "assistant",
-        text:
-          ids.length > 1
-            ? detail.message
-            : ids.length === 1
-              ? t("chat.translationSubmittedWithId", { jobId: ids[0] })
-              : t("chat.translationSubmitted"),
-        time: "刚刚",
-      });
-      return { ...current, [conversationId]: next };
-    });
-  };
-
   /**
    * TaskProposal 确认执行成功：向对话追加一轮「开始执行」交互
    * （用户侧指令 + 助手侧 TaskRunChatCard），并落库持久化。
@@ -1015,7 +984,7 @@ export function WorkspaceAppShellPage({
   const openBillingPage = () => {
     setAccountMenuOpen(false);
     if (isMobile) setSidebarOpen(false);
-    navigate("/app/billing");
+    navigate("/app/settings/billing");
   };
 
   const sidebarContent = (
@@ -1044,7 +1013,7 @@ export function WorkspaceAppShellPage({
           type="button"
           className="sidebar-new-chat-btn workspace-primary-btn"
           style={newChatButtonStyle}
-          onClick={createConversation}
+          onClick={() => createConversation()}
         >
           <span style={newChatPlusBadgeStyle}>+</span>
           <span>新建对话</span>
@@ -1271,7 +1240,7 @@ export function WorkspaceAppShellPage({
         ) : null}
         <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={brandTitleStyle}>{ACCOUNT_DISPLAY_NAME}</div>
+            <div style={brandTitleStyle}>{displayName}</div>
             <div
               style={{
                 ...brandMetaStyle,
@@ -1312,7 +1281,7 @@ export function WorkspaceAppShellPage({
             border: "1px solid #008060",
             fontSize: 18,
           }}
-          onClick={createConversation}
+          onClick={() => createConversation()}
           title="新建对话"
           aria-label="新建对话"
         >
@@ -1345,7 +1314,7 @@ export function WorkspaceAppShellPage({
         title="展开侧栏查看账户"
         aria-label="展开侧栏查看账户"
       >
-        {ACCOUNT_DISPLAY_NAME.slice(0, 1).toUpperCase()}
+        {displayName.slice(0, 1).toUpperCase()}
       </button>
     </>
   );
@@ -1381,7 +1350,7 @@ export function WorkspaceAppShellPage({
             <button
               type="button"
               style={mobileTopBarButtonStyle}
-              onClick={createConversation}
+              onClick={() => createConversation()}
               aria-label="新建对话"
             >
               +
@@ -1411,11 +1380,23 @@ export function WorkspaceAppShellPage({
       )}
 
       <main style={isMobile ? mobileContentStyle : contentStyle}>
-        {activePanel === "dashboard" ? (
-          <DashboardPanel
+        {activePanel === "home" ? (
+          <HomePanel
+            displayName={displayName}
             snapshot={dashboardSnapshot}
-            onOpenDailyOps={() => navigate("/app/daily-operations")}
-            onOpenTasks={() => switchPanel("tasks")}
+            runningTaskCount={runningTaskCount}
+            onSubmitPrompt={(prompt) => createConversation({ draft: prompt })}
+            onOpenContextTool={(tool) => {
+              pendingHomeContextToolRef.current = tool;
+              createConversation();
+            }}
+            onMoreContext={() => {
+              pendingHomeContextToolRef.current = "media";
+              createConversation();
+            }}
+            onOpenDashboard={() => navigate("/app/today")}
+            onOpenDailyOps={() => navigate("/app/today/diagnosis")}
+            onOpenTasks={() => navigate("/app/tasks")}
           />
         ) : null}
         {activePanel === "chat" && activeConversation ? (
@@ -1438,30 +1419,10 @@ export function WorkspaceAppShellPage({
               setStreamingConversationId(null);
               abortStream();
             }}
-            onTranslationCardSuccess={handleTranslationCardSuccess}
             onAiTaskUpdated={handleAiTaskUpdated}
-            onOpenTasks={() => switchPanel("tasks")}
+            onOpenTasks={() => navigate("/app/tasks")}
             onTaskProposalExecuted={handleTaskProposalExecuted}
           />
-        ) : null}
-        {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
-        {activePanel === "automation" ? (
-          <AutomationPanel
-            activeView={automationView}
-            onChangeView={setAutomationView}
-            onRunInChat={(prompt: string) => {
-              if (activeConversation) {
-                setDraftByConversation((current: Record<string, string>) => ({
-                  ...current,
-                  [activeConversation.id]: prompt,
-                }));
-              }
-              switchPanel("chat");
-            }}
-          />
-        ) : null}
-        {activePanel === "tasks" ? (
-          <UnifiedTaskListPage locationSearch={typeof window !== "undefined" ? window.location.search : ""} />
         ) : null}
       </main>
     </div>

@@ -1,0 +1,8 @@
+{
+  "name": "spark-tiktok-pixel",
+  "settings": {
+    "enable_pixel": {
+      "label": "Enable TikTok Pixel tracking"
+    }
+  }
+}

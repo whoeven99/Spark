@@ -162,6 +162,18 @@ export async function createBatchWithTask(params: {
   return { batchId: batch.id, taskId: batch.tasks[0].id };
 }
 
+export async function updateTaskResult(params: {
+  taskId: string;
+  result: Record<string, unknown>;
+}): Promise<void> {
+  await prisma.aITask.update({
+    where: { id: params.taskId },
+    data: {
+      result: params.result as unknown as PrismaJson,
+    },
+  });
+}
+
 export async function markTaskSucceeded(params: {
   taskId: string;
   result: Record<string, unknown>;
@@ -199,6 +211,7 @@ export async function getTaskMeta(taskId: string): Promise<{
 export async function markTaskFailed(params: {
   taskId: string;
   errorMsg: AITaskMessageInput;
+  result?: Record<string, unknown>;
 }): Promise<void> {
   const serializedError = serializeAITaskMessage(params.errorMsg);
   await prisma.aITask.update({
@@ -207,6 +220,7 @@ export async function markTaskFailed(params: {
       status: "failed",
       errorMsg: serializedError.slice(0, 2000),
       completedAt: new Date(),
+      ...(params.result ? { result: params.result as PrismaJson } : {}),
     },
   });
 }

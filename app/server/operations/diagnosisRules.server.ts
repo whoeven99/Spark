@@ -261,6 +261,62 @@ const RULES: RuleDefinition[] = [
       };
     },
   },
+  // ── Q2 和 Q3 交界：商品问题（可快速处理）──
+  {
+    key: "product_incomplete",
+    evaluate: (d) => {
+      const item = findItem(d, "product_operations");
+      if (!item || item.status === "healthy") return null;
+      const draftCount = Number(item.metrics.draftProductCount ?? 0);
+      const noImagesCount = Number(item.metrics.noImagesProductCount ?? 0);
+      const noDescCount = Number(item.metrics.noDescriptionProductCount ?? 0);
+      const total = draftCount + noImagesCount + noDescCount;
+      if (total === 0) return null;
+
+      const isRisk = draftCount > 5 || item.status === "risk";
+      const issues: string[] = [];
+      if (draftCount > 0)
+        issues.push(
+          `${draftCount} 个商品草稿待上架`,
+        );
+      if (noImagesCount > 0)
+        issues.push(
+          `${noImagesCount} 个商品缺图`,
+        );
+      if (noDescCount > 0)
+        issues.push(
+          `${noDescCount} 个商品缺描述`,
+        );
+
+      return {
+        sourceKey: "product_incomplete",
+        dedupeKey: "product_incomplete",
+        title:
+          total > 0
+            ? `处理 ${total} 个商品信息不完整问题`
+            : "优化商品信息完整度",
+        quadrant: isRisk ? "q2" : "q3",
+        priority: isRisk ? "P1" : "P2",
+        triggerReason: issues.join("；"),
+        relatedObjects: {
+          draftCount,
+          noImagesCount,
+          noDescriptionCount: noDescCount,
+          samples: item.metrics,
+        },
+        suggestedActions: [
+          draftCount > 0 ? "完成 DRAFT 商品审核与发布" : null,
+          noImagesCount > 0
+            ? "通过 AI 生成或商品优化工具补充缺失图片"
+            : null,
+          noDescCount > 0 ? "批量生成或补充商品描述" : null,
+          "运行商品改进任务完成素材补充",
+        ].filter(Boolean) as string[],
+        ownerRole: "商品/运营",
+        dueWindow: isRisk ? "today" : "this_week",
+      };
+    },
+  },
   // ── Q3 不紧急重要 ────────────────────────────
   {
     key: "inventory_replenish_plan",

@@ -5,6 +5,7 @@
     "build": "react-router build",
     "dev": "shopify app dev",
     "dev:yw": "shopify app dev -c shopify.app.yw.toml",
+    "dev:spark-zz": "shopify app dev -c shopify.app.spark-zz.toml",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",
@@ -30,7 +31,9 @@
     "turso:drop-schema:prod": "node scripts/turso-drop-schema-tables.cjs prod",
     "render:digest": "node scripts/render-daily-log-digest.cjs",
     "test:render-digest": "node --test scripts/render-log-classify.test.cjs",
-    "orders:create": "node scripts/create-test-orders.mjs"
+    "orders:create": "node scripts/create-test-orders.mjs",
+    "deploy:test": "node scripts/deploy-test-render.mjs",
+    "push:pr": "node scripts/cursor-push-pr.mjs"
   },
   "type": "module",
   "engines": {
@@ -51,7 +54,7 @@
     "@react-router/node": "^7.12.0",
     "@react-router/serve": "^7.12.0",
     "@shopify/app-bridge-react": "^4.2.4",
-    "@shopify/shopify-app-react-router": "^1.1.0",
+    "@shopify/shopify-app-react-router": "^1.2.1",
     "@shopify/shopify-app-session-storage-prisma": "^9.0.0",
     "@tailwindcss/vite": "^4.3.0",
     "@volcengine/openapi": "^1.36.2",

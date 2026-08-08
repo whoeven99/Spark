@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "tiktok": {
+      "command": "node",
+      "args": ["D:/code/Spark-wt-tiktok/mcp/tiktok-mcp/bin/tiktok-mcp.mjs"],
+      "env": {
+        "TIKTOK_SANDBOX_ACCESS_TOKEN": "${TIKTOK_SANDBOX_ACCESS_TOKEN}",
+        "TIKTOK_SANDBOX_ADVERTISER_ID": "${TIKTOK_SANDBOX_ADVERTISER_ID}",
+        "TIKTOK_BC_ID": "${TIKTOK_BC_ID}",
+        "TIKTOK_CATALOG_ID": "${TIKTOK_CATALOG_ID}"
+      }
+    }
+  }
+}

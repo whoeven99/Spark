@@ -31,6 +31,7 @@ import {
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
 import { buildReflectionFromRun } from "../../agentRunLog/recentReflection.server";
+import { recordPlaybookCasesFromMessages } from "../../playbookCase/recordPlaybookCase.server";
 import {
   hasAnyChatCardInUiPayloads,
   reconcileReplyWithChatCards,
@@ -186,6 +187,12 @@ export async function invokeChatAgent(
     if (agentUsage.totalTokens > 0) {
       await recordTokenUsage({ shop, usage: agentUsage });
     }
+    await recordPlaybookCasesFromMessages({
+      messages,
+      shop,
+      appName,
+      agentRunId: runId,
+    });
   }
 
   const lastUserText =

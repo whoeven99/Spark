@@ -72,8 +72,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[app._index] dashboard snapshot failed:", error);
   }
+  const associatedUser = (
+    session as {
+      onlineAccessInfo?: {
+        associated_user?: { first_name?: string | null; last_name?: string | null } | null;
+      } | null;
+    }
+  ).onlineAccessInfo?.associated_user;
+  const accountName =
+    [associatedUser?.first_name, associatedUser?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
-  return { conversations, dashboardSnapshot, currentPlanLabel, accountEmail };
+  return {
+    conversations,
+    dashboardSnapshot,
+    currentPlanLabel,
+    accountEmail,
+    accountName,
+  };
 };
 
 /** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
@@ -97,6 +115,7 @@ export default function Index() {
           dashboardSnapshot={data?.dashboardSnapshot}
           currentPlanLabel={data?.currentPlanLabel}
           accountEmail={data?.accountEmail}
+          accountName={data?.accountName}
         />
       </Suspense>
     </ClientMount>

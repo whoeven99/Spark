@@ -2,6 +2,7 @@ export { getNotificationAppConfig, notificationAppConfigs } from "./config";
 export { renderNotificationEmail } from "./renderNotification";
 export {
   NOTIFICATION_TEMPLATE_IDS,
+  NOTIFICATION_TEMPLATE_IDS_EN,
   resolveNotificationTemplateId,
 } from "./notificationTemplateIds.server";
 export { buildNotificationDashboardUrl } from "./buildNotificationDashboardUrl.server";

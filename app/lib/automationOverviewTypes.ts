@@ -16,17 +16,28 @@ export type AutomationHistoryItem = {
   detail: string;
 };
 
-export type AutomationTemplateItem = {
+export type PlaybookSurfaceItem = {
   id: string;
   title: string;
   detail: string;
+  category: string;
   /** Playbook 步骤标签（用于展示执行流程） */
   steps: string[];
+  icon?: string;
+  entrySubtitle?: string;
+  defaultPrompt: string;
+  ctaLabel: string;
+  evidence: string[];
+  recommendationReason?: string;
+  recommended?: boolean;
 };
+
+export type AutomationTemplateItem = PlaybookSurfaceItem;
 
 export type AutomationOverview = {
   configured: AutomationConfiguredItem[];
   history: AutomationHistoryItem[];
+  recommendedPlaybooks: PlaybookSurfaceItem[];
   templates: AutomationTemplateItem[];
 };
 

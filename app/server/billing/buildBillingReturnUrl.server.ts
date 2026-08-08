@@ -3,8 +3,8 @@ import { BillingError, BILLING_ERROR_CODE } from "./errors.server";
 /** Shopify Billing API `returnUrl` 上限（字符数）。 */
 export const SHOPIFY_BILLING_RETURN_URL_MAX_LENGTH = 255;
 
-/** 计费与订阅页路径（支付/购包批准后应回到此页）。 */
-export const BILLING_PAGE_PATH = "/app/billing";
+/** 计费与订阅页路径（支付/购包批准后应回到此页）。新 IA 下归入设置目的地。 */
+export const BILLING_PAGE_PATH = "/app/settings/billing";
 
 /** 根路径或 `/app` 兜底重定向时识别「来自计费结账」的 query 标记。 */
 export const BILLING_RETURN_QUERY_FLAG = "billing_return";
@@ -106,14 +106,33 @@ function buildAdminEmbeddedBillingReturnUrl(
   request: Request,
   shop: string,
 ): string | null {
-  const appIdentifier = resolveAdminAppIdentifier(request);
+  return buildAdminEmbeddedAppReturnUrl({
+    path,
+    shop,
+    request,
+    query: { [BILLING_RETURN_QUERY_FLAG]: "1" },
+  });
+}
+
+/** 外部 OAuth 等整页跳转后，经 admin.shopify.com 回到嵌入式应用（避免 shop: null → /auth/login）。 */
+export function buildAdminEmbeddedAppReturnUrl(params: {
+  path: string;
+  shop: string;
+  request?: Request;
+  query?: Record<string, string>;
+}): string | null {
+  const appIdentifier = resolveAdminAppIdentifier(
+    params.request ?? new Request("https://example.com"),
+  );
   if (!appIdentifier) return null;
 
   const url = new URL(
-    `/store/${shopifyAdminStoreHandle(shop)}/apps/${encodeURIComponent(appIdentifier)}${path}`,
+    `/store/${shopifyAdminStoreHandle(params.shop)}/apps/${encodeURIComponent(appIdentifier)}${params.path}`,
     "https://admin.shopify.com",
   );
-  url.searchParams.set(BILLING_RETURN_QUERY_FLAG, "1");
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 

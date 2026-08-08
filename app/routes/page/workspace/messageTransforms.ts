@@ -6,7 +6,6 @@ import type {
 } from "../../../lib/chatMessage";
 import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
-import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import {
   buildImageGenerationProposal,
@@ -48,7 +47,6 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     role: "assistant",
     content: message.text,
     ...(message.attachments?.length ? { attachments: message.attachments } : {}),
-    ...(message.translationTaskForm ? { translationTaskForm: message.translationTaskForm } : {}),
     ...(message.productImproveCard || message.productImproveCardPayload
       ? { productImproveCard: true }
       : {}),
@@ -66,9 +64,6 @@ export function buildAssistantWorkspaceMessage(
   text: string,
   payload: ChatStreamFinishPayload,
 ): WorkspaceConversationMessage {
-  const translationTaskForm = payload.translationTaskForm
-    ? coerceTranslationTaskFormPayload(payload.translationTaskForm)
-    : undefined;
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
 
@@ -77,7 +72,6 @@ export function buildAssistantWorkspaceMessage(
     text,
     time: "刚刚",
     ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
-    ...(translationTaskForm ? { translationTaskForm } : {}),
     ...(hasProductImproveCard ? { productImproveCard: true } : {}),
     ...(payload.productImproveCardPayload
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
@@ -114,7 +108,6 @@ export function formatConversationTimestamp(isoString: string): string {
 
 export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | null {
   const result: Record<string, unknown> = {};
-  if (payload.translationTaskForm) result.translationTaskForm = payload.translationTaskForm;
   if (payload.attachments?.length) result.attachments = payload.attachments;
   if (payload.productImproveCard || payload.productImproveCardPayload) {
     result.productImproveCard = true;
@@ -130,7 +123,6 @@ export function serializeWorkspaceMessagePayloads(
   message: WorkspaceConversationMessage,
 ): string | null {
   const result: Record<string, unknown> = {};
-  if (message.translationTaskForm) result.translationTaskForm = message.translationTaskForm;
   if (message.attachments?.length) result.attachments = message.attachments;
   if (message.productImproveCard || message.productImproveCardPayload) {
     result.productImproveCard = true;
@@ -152,15 +144,11 @@ export function dbMessageToUiMessage(msg: {
   createdAt: string;
 }): WorkspaceConversationMessage {
   const extras = msg.payloads ? (JSON.parse(msg.payloads) as Record<string, unknown>) : {};
-  const translationTaskForm = extras.translationTaskForm
-    ? coerceTranslationTaskFormPayload(extras.translationTaskForm)
-    : undefined;
   return {
     role: msg.role as "user" | "assistant",
     text: msg.content,
     time: formatTimeLabel(new Date(msg.createdAt)),
     ...(extras.attachments ? { attachments: extras.attachments as ChatMessageAttachment[] } : {}),
-    ...(translationTaskForm ? { translationTaskForm } : {}),
     ...(extras.productImproveCard ? { productImproveCard: true } : {}),
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }

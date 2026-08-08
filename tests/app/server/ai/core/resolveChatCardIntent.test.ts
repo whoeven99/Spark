@@ -6,19 +6,6 @@ import {
 } from "../../../../../app/server/ai/core/resolveChatCardIntent.server";
 
 describe("buildChatCardPayloadFromIntent", () => {
-  it("injects translation card when assistant claimed card opened", () => {
-    const payloads = buildChatCardPayloadFromIntent(
-      {
-        cardType: "translation_task_form",
-        shouldShowCard: true,
-        assistantClaimsCardOpened: true,
-        translationTargetLocales: ["fr"],
-      },
-      "怎么做店铺翻译",
-    );
-    expect(payloads.translationTaskForm).toBeDefined();
-  });
-
   it("injects image generation card for 图片生成 intent", () => {
     const payloads = buildChatCardPayloadFromIntent(
       {
@@ -69,10 +56,10 @@ describe("reconcileReplyWithChatCards", () => {
 });
 
 describe("hasAnyChatCardInUiPayloads", () => {
-  it("detects translation card payload", () => {
+  it("detects product improve card payload", () => {
     expect(
       hasAnyChatCardInUiPayloads({
-        translationTaskForm: { sourceLocale: "zh", targetLocale: "en" },
+        productImproveCardPayload: { productId: "1", title: "t", description: "d" },
       }),
     ).toBe(true);
   });

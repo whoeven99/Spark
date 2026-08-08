@@ -16,6 +16,7 @@ const SHOP_BASIC_INFO_QUERY = `#graphql
       ianaTimezone
       timezoneAbbreviation
       url
+      shopOwnerName
       plan {
         publicDisplayName
         displayName
@@ -25,6 +26,9 @@ const SHOP_BASIC_INFO_QUERY = `#graphql
       primaryDomain {
         host
         url
+      }
+      billingAddress {
+        countryCodeV2
       }
     }
   }
@@ -37,9 +41,12 @@ export type ShopBasicInfo = {
   email?: string;
   contactEmail?: string;
   currencyCode?: string;
+  /** ISO 3166-1 alpha-2，来自 shop.billingAddress.countryCodeV2。 */
+  countryCode?: string;
   ianaTimezone?: string;
   timezoneAbbreviation?: string;
   url?: string;
+  ownerName?: string;
   planName?: string;
   shopifyPlus?: boolean;
   partnerDevelopment?: boolean;
@@ -56,9 +63,11 @@ type ShopBasicInfoResponse = {
       email?: string;
       contactEmail?: string;
       currencyCode?: string;
+      billingAddress?: { countryCodeV2?: string | null };
       ianaTimezone?: string;
       timezoneAbbreviation?: string;
       url?: string;
+      shopOwnerName?: string;
       plan?: {
         publicDisplayName?: string;
         displayName?: string;
@@ -84,9 +93,11 @@ function mapShopResponse(shop: NonNullable<ShopBasicInfoResponse["data"]>["shop"
     email: shop?.email ?? undefined,
     contactEmail: shop?.contactEmail ?? undefined,
     currencyCode: shop?.currencyCode ?? undefined,
+    countryCode: shop?.billingAddress?.countryCodeV2?.trim().toUpperCase() || undefined,
     ianaTimezone: shop?.ianaTimezone ?? undefined,
     timezoneAbbreviation: shop?.timezoneAbbreviation ?? undefined,
     url: shop?.url ?? undefined,
+    ownerName: shop?.shopOwnerName ?? undefined,
     planName: planName || undefined,
     shopifyPlus: shop?.plan?.shopifyPlus,
     partnerDevelopment: shop?.plan?.partnerDevelopment,

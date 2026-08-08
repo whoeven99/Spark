@@ -12,6 +12,7 @@ import {
   Row,
   Space,
   Spin,
+  Statistic,
   Switch,
   Table,
   Tabs,
@@ -33,6 +34,8 @@ import {
   deleteMonthlyFixedCost,
   fetchBillingRules,
   fetchPricingWorkbenchV2,
+  fetchTsfBillingOverview,
+  fetchTsfRevenueSummary,
   isOwner,
   updateBillingRule,
   updateMonthlyFixedCost,
@@ -40,6 +43,8 @@ import {
   type BillingRuleRow,
   type MonthlyFixedCostItem,
   type PlanCatalogItem,
+  type TsfBillingOverviewData,
+  type TsfRevenueSummary,
 } from "../api";
 import {
   DEFAULT_SCENARIOS,
@@ -127,11 +132,133 @@ function parseScenarios(raw: unknown[] | null | undefined): FeatureScenario[] {
   return parsed.length > 0 ? parsed : DEFAULT_SCENARIOS;
 }
 
+type DataSourceKind = "existing" | "manual" | "estimate";
+
+const dataKindMeta: Record<DataSourceKind, { label: string; color: string }> = {
+  existing: { label: "现有数据", color: "blue" },
+  manual: { label: "手动输入", color: "gold" },
+  estimate: { label: "预估结果", color: "purple" },
+};
+
+const dataSourceRows = [
+  {
+    key: "plans",
+    name: "套餐价格与发放 Credits",
+    kind: "existing" as const,
+    source: "PlanCatalog",
+    usage: "套餐对照、满额毛利、建议 Credits",
+  },
+  {
+    key: "revenue",
+    name: "MRR、ARR、付费用户、ARPU",
+    kind: "existing" as const,
+    source: "TSF BillingLog × PlanCatalog",
+    usage: "收入基线与净收入反推",
+  },
+  {
+    key: "credits",
+    name: "订阅 Credits、加购 Credits、已用 Credits",
+    kind: "existing" as const,
+    source: "TSF Account / AppSubscription",
+    usage: "真实使用率与余额风险",
+  },
+  {
+    key: "translation_usage",
+    name: "翻译任务数、失败数、任务 usedTokens",
+    kind: "existing" as const,
+    source: "Cosmos translation jobs",
+    usage: "模型消耗和高用量店铺识别",
+  },
+  {
+    key: "billing_rules",
+    name: "当前 multiplier / baseCredits",
+    kind: "existing" as const,
+    source: "TokenBillingRule",
+    usage: "线上扣费规则对照与写回",
+  },
+  {
+    key: "fixed_cost",
+    name: "工资、服务器、数据库、Blob、Redis、日志",
+    kind: "manual" as const,
+    source: "AdminMonthlyFixedCost",
+    usage: "月固定成本与规模成本假设",
+  },
+  {
+    key: "model_price",
+    name: "模型 input/output 单价、固定 API 成本",
+    kind: "manual" as const,
+    source: "usageScenariosJson",
+    usage: "真实美元成本估算",
+  },
+  {
+    key: "target",
+    name: "目标毛利率、Shopify/支付分成",
+    kind: "manual" as const,
+    source: "AdminPricingConfig",
+    usage: "定价反推约束",
+  },
+  {
+    key: "margin",
+    name: "当前毛利、满额毛利、真实使用率毛利",
+    kind: "estimate" as const,
+    source: "现有数据 + 手动输入",
+    usage: "判断套餐是否亏损",
+  },
+  {
+    key: "suggestions",
+    name: "建议价格、建议 Credits、建议模型系数",
+    kind: "estimate" as const,
+    source: "定价计算引擎",
+    usage: "调价和扣费规则建议",
+  },
+];
+
+function DataKindTag({ kind }: { kind: DataSourceKind }) {
+  const meta = dataKindMeta[kind];
+  return <Tag color={meta.color}>{meta.label}</Tag>;
+}
+
+function ChainNode({
+  title,
+  detail,
+  kinds,
+}: {
+  title: string;
+  detail: string;
+  kinds: DataSourceKind[];
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 150,
+        flex: "1 1 150px",
+        border: "1px solid #e1e3e5",
+        borderRadius: 8,
+        padding: 12,
+        background: "#fff",
+      }}
+    >
+      <Space direction="vertical" size={6} style={{ width: "100%" }}>
+        <Typography.Text strong>{title}</Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, minHeight: 34 }}>
+          {detail}
+        </Typography.Text>
+        <Space size={4} wrap>
+          {kinds.map((kind) => (
+            <DataKindTag key={kind} kind={kind} />
+          ))}
+        </Space>
+      </Space>
+    </div>
+  );
+}
+
 export default function PricingWorkbenchV2() {
   const owner = isOwner();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [tsfDataNote, setTsfDataNote] = useState("");
 
   const [targetGrossMarginPct, setTargetGrossMarginPct] = useState(70);
   const [shopifyRevSharePct, setShopifyRevSharePct] = useState(15);
@@ -141,6 +268,9 @@ export default function PricingWorkbenchV2() {
   const [scenarios, setScenarios] = useState<FeatureScenario[]>(DEFAULT_SCENARIOS);
   const [plans, setPlans] = useState<PlanCatalogItem[]>([]);
   const [billingRules, setBillingRules] = useState<BillingRuleRow[]>([]);
+  const [tsfRevenue, setTsfRevenue] = useState<TsfRevenueSummary | null>(null);
+  const [tsfBillingOverview, setTsfBillingOverview] =
+    useState<TsfBillingOverviewData | null>(null);
   const [rulesLoading, setRulesLoading] = useState(false);
 
   const [fixedModalOpen, setFixedModalOpen] = useState(false);
@@ -267,6 +397,7 @@ export default function PricingWorkbenchV2() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setTsfDataNote("");
     try {
       const data = await fetchPricingWorkbenchV2();
       const s = data.settings;
@@ -276,6 +407,26 @@ export default function PricingWorkbenchV2() {
       setFixedCosts(data.fixedCosts);
       setPlans(data.plans ?? []);
       setScenarios(parseScenarios(s.usageScenarios));
+
+      const [revenueResult, billingResult] = await Promise.allSettled([
+        fetchTsfRevenueSummary(),
+        fetchTsfBillingOverview({ days: 30 }),
+      ]);
+      const notes: string[] = [];
+      if (revenueResult.status === "fulfilled") {
+        setTsfRevenue(revenueResult.value);
+      } else {
+        setTsfRevenue(null);
+        notes.push(`收入数据读取失败：${String(revenueResult.reason)}`);
+      }
+      if (billingResult.status === "fulfilled") {
+        setTsfBillingOverview(billingResult.value);
+        if (billingResult.value.note) notes.push(billingResult.value.note);
+      } else {
+        setTsfBillingOverview(null);
+        notes.push(`账单/任务数据读取失败：${String(billingResult.reason)}`);
+      }
+      setTsfDataNote(notes.join("；"));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -441,8 +592,189 @@ export default function PricingWorkbenchV2() {
     }
   }
 
+  const translationSummary = tsfBillingOverview?.summary;
+
+  const chainCard = (
+    <Card
+      title={
+        <Space>
+          产业链总览
+          <DataKindTag kind="existing" />
+          <DataKindTag kind="manual" />
+          <DataKindTag kind="estimate" />
+        </Space>
+      }
+    >
+      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <ChainNode
+            title="用户付款"
+            detail="订阅和加购形成净收入"
+            kinds={["existing"]}
+          />
+          <Typography.Text type="secondary" style={{ alignSelf: "center" }}>
+            →
+          </Typography.Text>
+          <ChainNode
+            title="套餐 Credits"
+            detail="PlanCatalog 决定价格和额度"
+            kinds={["existing"]}
+          />
+          <Typography.Text type="secondary" style={{ alignSelf: "center" }}>
+            →
+          </Typography.Text>
+          <ChainNode
+            title="翻译任务"
+            detail="真实任务产生 usedTokens"
+            kinds={["existing"]}
+          />
+          <Typography.Text type="secondary" style={{ alignSelf: "center" }}>
+            →
+          </Typography.Text>
+          <ChainNode
+            title="模型成本"
+            detail="模型单价和调用量反算美元成本"
+            kinds={["manual", "estimate"]}
+          />
+          <Typography.Text type="secondary" style={{ alignSelf: "center" }}>
+            →
+          </Typography.Text>
+          <ChainNode
+            title="利润率"
+            detail="收入减成本后得到毛利判断"
+            kinds={["estimate"]}
+          />
+          <Typography.Text type="secondary" style={{ alignSelf: "center" }}>
+            →
+          </Typography.Text>
+          <ChainNode
+            title="调价建议"
+            detail="反推价格、Credits 和模型系数"
+            kinds={["estimate"]}
+          />
+        </div>
+        <Alert
+          type="info"
+          showIcon
+          message="页面口径"
+          description="收入、套餐、Credits、任务用量来自现有账本；工资、基础设施和模型价格由运营手动输入；毛利率、建议价格和建议系数都是估算结果。"
+        />
+      </Space>
+    </Card>
+  );
+
+  const translationMetricsCard = (
+    <Card title="翻译业务现有数据快照">
+      <Row gutter={[16, 16]}>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="MRR"
+            value={tsfRevenue?.mrr ?? 0}
+            precision={2}
+            prefix="$"
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="ARR"
+            value={tsfRevenue?.arr ?? 0}
+            precision={2}
+            prefix="$"
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic title="付费用户" value={tsfRevenue?.payingCustomers ?? 0} />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="ARPU"
+            value={tsfRevenue?.arpu ?? 0}
+            precision={2}
+            prefix="$"
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="近 30 天入账 Credits"
+            value={translationSummary?.creditsGranted ?? 0}
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="近 30 天翻译任务"
+            value={translationSummary?.translationJobs ?? 0}
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="近 30 天任务 usedTokens"
+            value={translationSummary?.translationUsedTokens ?? 0}
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <Statistic
+            title="低余额店铺"
+            value={translationSummary?.lowBalanceShops ?? 0}
+          />
+        </Col>
+      </Row>
+      {tsfDataNote && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 16 }}
+          message="部分现有数据未读取完整"
+          description={tsfDataNote}
+        />
+      )}
+    </Card>
+  );
+
+  const dataSourceCard = (
+    <Card title="数据口径地图">
+      <Table
+        size="small"
+        pagination={false}
+        rowKey="key"
+        dataSource={dataSourceRows}
+        columns={[
+          {
+            title: "数据",
+            dataIndex: "name",
+            width: 240,
+          },
+          {
+            title: "口径",
+            dataIndex: "kind",
+            width: 100,
+            render: (kind: DataSourceKind) => <DataKindTag kind={kind} />,
+          },
+          {
+            title: "来源",
+            dataIndex: "source",
+            width: 220,
+            render: (source: string) => <Typography.Text code>{source}</Typography.Text>,
+          },
+          {
+            title: "用于",
+            dataIndex: "usage",
+          },
+        ]}
+      />
+    </Card>
+  );
+
   const overviewTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      {chainCard}
+      {translationMetricsCard}
       <Card title="反推模拟（主套餐探针）">
         <Row gutter={[24, 16]} align="middle">
           <Col xs={24} md={8}>
@@ -480,18 +812,19 @@ export default function PricingWorkbenchV2() {
           </Col>
           <Col xs={24} md={8}>
             <Typography.Text type="secondary">
-              {USD(probePriceUsd)} 建议发放 Token
+              {USD(probePriceUsd)} 建议发放 Credits
             </Typography.Text>
             <Typography.Title level={2} style={{ margin: "4px 0" }}>
               {NUM(probe.suggestedTokens)}
             </Typography.Title>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               净收 {USD(probe.netRevenueUsd)} · 成本{" "}
-              {USD(probe.effectiveCostPerBilledToken, 6)}/计费 Token
+              {USD(probe.effectiveCostPerBilledToken, 6)}/计费 Credit
             </Typography.Text>
           </Col>
         </Row>
       </Card>
+      {dataSourceCard}
 
       <Card
         title={
@@ -757,7 +1090,7 @@ export default function PricingWorkbenchV2() {
         />
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col xs={24}>
-            <Typography.Text type="secondary">综合 $ / 计费 Token（各能力均权）</Typography.Text>
+            <Typography.Text type="secondary">综合 $ / 计费 Credit（各能力均权）</Typography.Text>
             <Typography.Title level={4} style={{ margin: "4px 0" }}>
               {USD(totals.effectiveCostPerBilledToken, 6)}
             </Typography.Title>
@@ -944,7 +1277,7 @@ export default function PricingWorkbenchV2() {
         type="info"
         showIcon
         message="PlanCatalog 对照"
-        description="读取 Turso 当前启用套餐，按工作台成本模型估算隐含毛利率与建议 Token 发放量（不含年付周期折算）。"
+        description="读取 Turso 当前启用套餐，按工作台成本模型估算隐含毛利率与建议 Credits 发放量（不含年付周期折算）。"
       />
       {plans.length === 0 ? (
         <Alert type="warning" message="未读取到 PlanCatalog，请确认 Turso 已迁移种子数据" />
@@ -990,12 +1323,12 @@ export default function PricingWorkbenchV2() {
               render: (v: number) => USD(v),
             },
             {
-              title: "当前 Token",
+              title: "当前 Credits",
               dataIndex: "tokens",
               render: (v: number) => NUM(v),
             },
             {
-              title: "Token/$",
+              title: "Credits/$",
               dataIndex: "tokensPerDollar",
               render: (v: number) => NUM(v),
             },
@@ -1010,7 +1343,7 @@ export default function PricingWorkbenchV2() {
               ),
             },
             {
-              title: "建议 Token",
+              title: "建议 Credits",
               dataIndex: "suggestedTokens",
               render: (v: number) => NUM(v),
             },
@@ -1254,10 +1587,10 @@ export default function PricingWorkbenchV2() {
       >
         <div>
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
-            定价工作台
+            翻译定价工作台
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ margin: 0, maxWidth: 720 }}>
-            模型/API 成本、基础设施固定成本与 Shopify 分成 → 套餐 Token 面值与计费倍率。
+            订阅收入、Credits、模型成本、固定支出与目标毛利率 → 套餐价格和模型扣费系数。
           </Typography.Paragraph>
         </div>
         <Space>

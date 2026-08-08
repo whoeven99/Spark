@@ -7,7 +7,7 @@ import type {
   BillingToolUsageItem,
   PlanRecord,
 } from "../../lib/billingPageTypes";
-import type { loader, action } from "../app.billing";
+import type { loader, action } from "../app.settings.billing";
 import {
   computeAnnualDiscountPercent,
   formatPlanTagLabel,

@@ -1,4 +1,8 @@
 import { useEffect } from "react";
+import {
+  cacheEmbeddedSearch,
+  resolveEmbeddedLocationSearch,
+} from "./embeddedLocationSearch";
 
 /**
  * 前端功能埋点工具（嵌入式 App）。
@@ -14,11 +18,16 @@ import { useEffect } from "react";
 export type FeatureKey =
   | "chat"
   | "diagnosis"
-  | "translation-v4"
   | "product-improve"
   | "image-studio"
   | "order-monitor"
-  | "billing";
+  | "billing"
+  // 新信息架构的一级目的地（PR1）
+  | "today"
+  | "studio"
+  | "tasks"
+  | "settings"
+  | "ads-catalog";
 
 /** 已上报过的 view 去重集合（page+feature 维度，单次会话内）。 */
 const viewedKeys = new Set<string>();
@@ -31,7 +40,9 @@ export function trackFeature(
   if (typeof window === "undefined") return;
   if (!feature || !action) return;
 
-  const search = window.location.search ?? "";
+  const rawSearch = window.location.search ?? "";
+  cacheEmbeddedSearch(rawSearch);
+  const search = resolveEmbeddedLocationSearch(rawSearch);
   const path = window.location.pathname ?? "";
 
   const payload = JSON.stringify({ feature, action, path, extra });

@@ -15,7 +15,7 @@
 | `purchase/` | 按量购包、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount`、`grantTrial` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
-| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；计费前按 Turso `TokenBillingRule` 乘数（见 `docs/token-billing-rules.md`）经 `recordBilledTokenUsage` / `recordVisualToolTokenUsage`；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
+| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；计费前按 Turso `TokenBillingRule` 乘数（种子见 `prisma/token-billing-rule-seed.sql`，运行时见 `tokenBillingCatalog.server.ts`）经 `recordBilledTokenUsage` / `recordVisualToolTokenUsage`；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
 
 ## 环境变量
 
@@ -27,7 +27,7 @@
 ## Shopify returnUrl
 
 - Billing GraphQL 的 `returnUrl` **最多 255 字符**。
-- `buildBillingReturnUrl` 指向 **`/app/billing`**（订阅与按量购包共用），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
+- `buildBillingReturnUrl` 指向 **`/app/settings/billing`**（订阅与按量购包共用；新 IA 下归入 Settings），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
 - 跳转 Shopify 结账页须用 `authenticate.admin` 返回的 `redirect(url, { target: "_top" })`（嵌入式 exit iframe），勿直接用 React Router `redirect`。
 - 若 Shopify 将商户落到站点根路径 `/` 或 `/app`，`billing_return=1` 会由 `_index` / `app._index` 兜底重定向到计费页。
 - `buildBillingReturnUrl` 对 `aiassistant-wi7b.onrender.com` / `shopify.app.test.toml` client_id 映射 Admin handle `aiassistant-test`；可通过 `SHOPIFY_ADMIN_APP_HANDLE` 覆盖。
@@ -37,7 +37,7 @@
 | 表 | 职责 |
 |----|------|
 | `Account` | 当前 token 分池与 `usedTokens` |
-| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop, appName])`）；取消 / 过期时**删除行** |
+| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop])`）；取消 / 过期时**删除行** |
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
@@ -94,8 +94,8 @@
 
 ## 路由
 
-- `/app/billing`：计费与订阅独立页（`BillingPage`）；主 App 侧栏含「计费与订阅」入口
-- 商品文案优化 API / 页面：调用 `requireBillingAccess`
+- `/app/settings/billing`：计费与订阅页（`BillingPage`）；主 App 通过 Settings 目的地进入。
+- `/app/studio/copy` 与 `/api/product-improve`：商品文案优化调用 `requireBillingAccess`。
 
 ## 启用开关
 
