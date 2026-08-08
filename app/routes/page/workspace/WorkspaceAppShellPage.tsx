@@ -5,9 +5,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
+import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
@@ -356,7 +357,7 @@ export function WorkspaceAppShellPage({
   const displayName = accountName?.trim() || DEFAULT_ACCOUNT_DISPLAY_NAME;
   const shopify = useAppBridge();
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const navigate = useEmbeddedNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const { isMobile } = useResponsiveLayout();

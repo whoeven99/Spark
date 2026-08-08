@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
 export const pageColorTokens = {
@@ -547,6 +548,7 @@ export function PageBackButton({
 }: PageBackButtonProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const embeddedSearch = useEmbeddedLocationSearch();
   const { isMobile } = useResponsiveLayout();
 
   if (workspaceOnly && new URLSearchParams(location.search).get("from") !== "workspace") {
@@ -556,7 +558,7 @@ export function PageBackButton({
   const handleBack = () => {
     resolveBackDestination({
       locationKey: location.key,
-      locationSearch: location.search,
+      locationSearch: preserveSearch ? embeddedSearch : "",
       navigate,
       fallbackPath,
       preserveSearch,

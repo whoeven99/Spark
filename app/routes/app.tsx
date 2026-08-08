@@ -31,6 +31,7 @@ import {
   appendEmbeddedSearchToPath,
   resolveEmbeddedLocationSearch,
 } from "../lib/embeddedLocationSearch";
+import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -67,17 +68,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   });
 
-  try {
-    await syncSessionUserProfileFromOnline(session);
-  } catch (error) {
+  void syncSessionUserProfileFromOnline(session).catch((error) => {
     console.warn("[SessionSync] syncSessionUserProfileFromOnline failed:", error);
-  }
+  });
 
-  try {
-    await syncSessionShopProfile(session.shop, admin);
-  } catch (error) {
+  void syncSessionShopProfile(session.shop, admin).catch((error) => {
     console.warn("[SessionSync] syncSessionShopProfile failed:", error);
-  }
+  });
 
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
@@ -139,6 +136,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function App() {
   const { apiKey, locale, nav } = useLoaderData<typeof loader>();
+  // 尽早缓存 shop/host，供客户端 navigate / fetch 在 query 丢失后兜底。
+  useEmbeddedLocationSearch();
 
   return (
     <AppI18nProvider locale={locale}>
