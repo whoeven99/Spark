@@ -26,6 +26,15 @@ export type Ga4Row = {
   revenue: number;
 };
 
+export type Ga4CampaignAttributionRow = {
+  campaignName: string;
+  users: number;
+  sessions: number;
+  pageViews: number;
+  revenue: number;
+  purchases: number;
+};
+
 export type Ga4Summary = {
   totalUsers: number;
   totalSessions: number;
@@ -147,6 +156,14 @@ const REPORT_METRICS = [
   { name: "purchaseRevenue" },
 ];
 
+const CAMPAIGN_ATTRIBUTION_METRICS = [
+  { name: "activeUsers" },
+  { name: "sessions" },
+  { name: "screenPageViews" },
+  { name: "purchaseRevenue" },
+  { name: "ecommercePurchases" },
+];
+
 async function runReport(
   accessToken: string,
   propertyId: string,
@@ -182,6 +199,18 @@ function parseRow(raw: RawGa4Row): Omit<Ga4Row, "key"> {
     sessions: parseFloat(m[1]?.value ?? "0") || 0,
     pageViews: parseFloat(m[2]?.value ?? "0") || 0,
     revenue: parseFloat(m[3]?.value ?? "0") || 0,
+  };
+}
+
+function parseCampaignAttributionRow(raw: RawGa4Row): Ga4CampaignAttributionRow {
+  const m = raw.metricValues ?? [];
+  return {
+    campaignName: raw.dimensionValues?.[0]?.value?.trim() ?? "",
+    users: parseFloat(m[0]?.value ?? "0") || 0,
+    sessions: parseFloat(m[1]?.value ?? "0") || 0,
+    pageViews: parseFloat(m[2]?.value ?? "0") || 0,
+    revenue: parseFloat(m[3]?.value ?? "0") || 0,
+    purchases: parseFloat(m[4]?.value ?? "0") || 0,
   };
 }
 
@@ -308,6 +337,63 @@ export async function queryGa4MergedSummaryAndTimeSeries(
     startDate: results[0]?.startDate ?? "",
     endDate: results[0]?.endDate ?? "",
   };
+}
+
+/** 按 Google Ads campaign 维度拉取 GA4 归因数据（需 GA4↔Ads Linking）。 */
+export async function queryGa4CampaignAttribution(
+  accessToken: string,
+  propertyId: string,
+  days: number,
+  rowLimit = 200,
+): Promise<Ga4CampaignAttributionRow[]> {
+  const { startDate, endDate } = buildDateRange(days);
+  const result = await runReport(accessToken, propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: "sessionGoogleAdsCampaignName" }],
+    metrics: CAMPAIGN_ATTRIBUTION_METRICS,
+    limit: rowLimit,
+    orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+  });
+  return (result.rows ?? []).map(parseCampaignAttributionRow);
+}
+
+export function mergeGa4CampaignAttributionRows(
+  rowsList: Ga4CampaignAttributionRow[][],
+): Ga4CampaignAttributionRow[] {
+  const map = new Map<string, Ga4CampaignAttributionRow>();
+  for (const rows of rowsList) {
+    for (const row of rows) {
+      const key = row.campaignName.trim().toLowerCase();
+      const existing = map.get(key);
+      if (existing) {
+        map.set(key, {
+          campaignName: existing.campaignName,
+          users: existing.users + row.users,
+          sessions: existing.sessions + row.sessions,
+          pageViews: existing.pageViews + row.pageViews,
+          revenue: existing.revenue + row.revenue,
+          purchases: existing.purchases + row.purchases,
+        });
+      } else {
+        map.set(key, { ...row });
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.sessions - a.sessions);
+}
+
+export async function queryGa4MergedCampaignAttribution(
+  accessToken: string,
+  propertyIds: string[],
+  days: number,
+  rowLimit = 200,
+): Promise<Ga4CampaignAttributionRow[]> {
+  const results = await Promise.all(
+    propertyIds.map((propertyId) =>
+      queryGa4CampaignAttribution(accessToken, propertyId, days, rowLimit),
+    ),
+  );
+  return mergeGa4CampaignAttributionRows(results).slice(0, rowLimit);
 }
 
 export async function queryGa4MergedByDimension(

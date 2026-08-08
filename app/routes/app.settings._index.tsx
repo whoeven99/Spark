@@ -70,6 +70,12 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
+    to: "/app/ads/google-attribution",
+    labelKey: "settingsShell.navGoogleAttribution",
+    descKey: "settingsShell.descGoogleAttribution",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
     to: "/app/settings/feedback",
     labelKey: "settingsShell.navFeedback",
     descKey: "settingsShell.descFeedback",
