@@ -102,12 +102,16 @@ export function isValidShopName(shop: string): boolean {
 }
 
 /**
- * 检索子句：限定店铺 + Google Pixel topic 前缀。
- * 写法对齐 Admin `event: spark`（无引号前缀匹配）；聚合结果再由 parse* 过滤。
+ * 检索子句：限定店铺 + Google Pixel topic。
+ *
+ * SLS 把 `:` 当作 Key:Value 运算符，不能写 `event: spark:google`（会在第二个
+ * 冒号处报 ParameterInvalidError / unexpected COLON）。`:` 又是默认分词符，
+ * `spark:google:page_view` 会拆成 spark / google / page_view，因此用两个
+ * 无引号 token 条件（对齐 Admin `event: spark`），再由 parse* 精滤。
  */
 export function buildGooglePixelBaseQuery(shop: string): string {
   const safeShop = escapeQueryValue(shop.trim().toLowerCase());
-  return `shopName: "${safeShop}" and event: spark:google`;
+  return `shopName: "${safeShop}" and event: spark and event: google`;
 }
 
 export function buildGooglePixelCountQuery(shop: string): string {

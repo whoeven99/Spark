@@ -8,9 +8,9 @@ import {
 } from "../../../../app/server/aliyunLog/googlePixelActivity.server";
 
 describe("buildGooglePixelBaseQuery", () => {
-  it("scopes shop and google topic prefix", () => {
+  it("scopes shop and google topic tokens without illegal colon in value", () => {
     expect(buildGooglePixelBaseQuery("MyShop.myshopify.com")).toBe(
-      'shopName: "myshop.myshopify.com" and event: spark:google',
+      'shopName: "myshop.myshopify.com" and event: spark and event: google',
     );
   });
 });
