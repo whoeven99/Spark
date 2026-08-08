@@ -383,6 +383,8 @@
     "linkingHint": "In GA4 Admin → Product links → Google Ads links, link your ad account so campaign names align automatically.",
     "loading": "Loading attribution data…",
     "loadError": "Failed to load attribution data",
+    "networkError": "Network request failed. The server may be slow to respond — please try again.",
+    "retry": "Retry",
     "notConfigured": "Connect Google Ads and GA4 to view unified attribution.",
     "noCampaigns": "No campaign data for this period",
     "rangeDays": "{{count}} days",
@@ -408,6 +410,7 @@
     "warningLinking": "Link GA4 and Google Ads for more reliable campaign matching.",
     "warningPartial": "Connect both Google Ads and GA4 for the full funnel view.",
     "warningGa4Fetch": "Could not load GA4 campaign breakdown. Other metrics may still be available.",
+    "warningAdsFetch": "Could not load Google Ads campaign data. GA4 metrics may still be available.",
     "dataDelayHint": "Ads and GA4 data are typically delayed 24–48 hours."
   },
   "billing": {

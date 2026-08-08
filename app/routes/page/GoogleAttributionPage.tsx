@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useFetcher, useLoaderData, useLocation } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLoaderData, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
+import { appendEmbeddedSearchToPath } from "../../lib/embeddedLocationSearch";
 import {
   PageHeaderNav,
   pageColorTokens,
@@ -12,6 +13,8 @@ import type { GoogleAttributionLoaderData } from "../app.ads.google-attribution"
 import type { GoogleAttributionOverviewResponse } from "../api.google-attribution.overview";
 
 type RangeDays = 7 | 14 | 30;
+
+const OVERVIEW_FETCH_TIMEOUT_MS = 45_000;
 
 const cardStyle = {
   border: `1px solid ${pageColorTokens.border}`,
@@ -93,6 +96,9 @@ function warningText(
   if (code === "ga4_campaign_fetch_failed") {
     return t("googleAttribution.warningGa4Fetch");
   }
+  if (code === "ads_campaign_fetch_failed") {
+    return t("googleAttribution.warningAdsFetch");
+  }
   return null;
 }
 
@@ -101,37 +107,63 @@ export function GoogleAttributionPage() {
   const loaderData = useLoaderData<GoogleAttributionLoaderData>();
   const location = useLocation();
   const locationSearch = useEmbeddedLocationSearch();
-  const fetcher = useFetcher<GoogleAttributionOverviewResponse>();
   const [rangeDays, setRangeDays] = useState<RangeDays>(7);
+  const [overview, setOverview] = useState<GoogleAttributionOverviewResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [networkError, setNetworkError] = useState(false);
+  const requestIdRef = useRef(0);
 
   const loadData = useCallback(
-    (range: RangeDays) => {
-      const params = new URLSearchParams(location.search);
-      params.set("range", String(range));
-      fetcher.load(`/api/google-attribution/overview?${params.toString()}`);
+    async (range: RangeDays) => {
+      const requestId = ++requestIdRef.current;
+      setLoading(true);
+      setLoadError("");
+      setNetworkError(false);
+
+      const url = appendEmbeddedSearchToPath(
+        `/api/google-attribution/overview?range=${range}`,
+        locationSearch,
+      );
+
+      try {
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(OVERVIEW_FETCH_TIMEOUT_MS),
+        });
+        const data = (await response.json()) as GoogleAttributionOverviewResponse;
+        if (requestId !== requestIdRef.current) return;
+
+        setOverview(data);
+        if (!data.ok && data.reason === "api_error") {
+          setLoadError(data.message);
+        }
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        setNetworkError(true);
+        setOverview(null);
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
+      }
     },
-    [fetcher, location.search],
+    [locationSearch],
   );
 
   useEffect(() => {
     if (loaderData.adsConnected || loaderData.ga4Connected) {
-      loadData(rangeDays);
+      void loadData(rangeDays);
     }
   }, [loaderData.adsConnected, loaderData.ga4Connected, loadData, rangeDays]);
 
-  const overview = fetcher.data?.ok ? fetcher.data : null;
-  const loading = fetcher.state !== "idle" && !overview;
-  const loadError =
-    fetcher.data && !fetcher.data.ok && fetcher.data.reason === "api_error"
-      ? fetcher.data.message
-      : "";
+  const overviewData = overview?.ok ? overview : null;
 
   const warnings = useMemo(
     () =>
-      (overview?.warnings ?? [])
+      (overviewData?.warnings ?? [])
         .map((code) => warningText(t, code))
         .filter((text): text is string => Boolean(text)),
-    [overview?.warnings, t],
+    [overviewData?.warnings, t],
   );
 
   const matchLabel = (quality: string) => {
@@ -200,12 +232,12 @@ export function GoogleAttributionPage() {
             <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginBottom: 6 }}>
               Linking
             </div>
-            <StatusPill tone={overview?.linked ? "ok" : "warn"}>
-              {overview?.linked
+            <StatusPill tone={overviewData?.linked ? "ok" : "warn"}>
+              {overviewData?.linked
                 ? t("googleAttribution.linkingOk")
                 : t("googleAttribution.linkingMissing")}
             </StatusPill>
-            {!overview?.linked ? (
+            {!overviewData?.linked ? (
               <p style={{ ...pageHintTextStyle, margin: "8px 0 0" }}>
                 {t("googleAttribution.linkingHint")}
               </p>
@@ -237,9 +269,33 @@ export function GoogleAttributionPage() {
 
             {loading ? (
               <div style={cardStyle}>{t("googleAttribution.loading")}</div>
+            ) : networkError ? (
+              <div style={cardStyle}>
+                <p style={{ margin: "0 0 12px", color: pageColorTokens.textSecondary }}>
+                  {t("googleAttribution.networkError")}
+                </p>
+                <button
+                  type="button"
+                  style={secondaryBtn(false)}
+                  onClick={() => void loadData(rangeDays)}
+                >
+                  {t("googleAttribution.retry")}
+                </button>
+              </div>
             ) : loadError ? (
-              <div style={cardStyle}>{t("googleAttribution.loadError")}: {loadError}</div>
-            ) : overview ? (
+              <div style={cardStyle}>
+                <p style={{ margin: "0 0 12px", color: pageColorTokens.textSecondary }}>
+                  {t("googleAttribution.loadError")}: {loadError}
+                </p>
+                <button
+                  type="button"
+                  style={secondaryBtn(false)}
+                  onClick={() => void loadData(rangeDays)}
+                >
+                  {t("googleAttribution.retry")}
+                </button>
+              </div>
+            ) : overviewData ? (
               <>
                 {warnings.length > 0 ? (
                   <div
@@ -268,17 +324,17 @@ export function GoogleAttributionPage() {
                   }}
                 >
                   {[
-                    { label: t("googleAttribution.metricSpend"), value: formatCurrency(overview.totals.spend, overview.currencyCode) },
-                    { label: t("googleAttribution.metricClicks"), value: formatNumber(overview.totals.clicks) },
-                    { label: t("googleAttribution.metricSessions"), value: formatNumber(overview.totals.sessions) },
+                    { label: t("googleAttribution.metricSpend"), value: formatCurrency(overviewData.totals.spend, overviewData.currencyCode) },
+                    { label: t("googleAttribution.metricClicks"), value: formatNumber(overviewData.totals.clicks) },
+                    { label: t("googleAttribution.metricSessions"), value: formatNumber(overviewData.totals.sessions) },
                     {
                       label: t("googleAttribution.metricGa4Revenue"),
-                      value: formatCurrency(overview.totals.ga4Revenue, overview.currencyCode),
+                      value: formatCurrency(overviewData.totals.ga4Revenue, overviewData.currencyCode),
                     },
                     {
                       label: t("googleAttribution.metricRoas"),
                       value:
-                        overview.totals.roas == null ? "—" : `${overview.totals.roas.toFixed(2)}x`,
+                        overviewData.totals.roas == null ? "—" : `${overviewData.totals.roas.toFixed(2)}x`,
                     },
                   ].map((metric) => (
                     <div key={metric.label} style={cardStyle}>
@@ -310,7 +366,7 @@ export function GoogleAttributionPage() {
                   >
                     {t("googleAttribution.campaignTableTitle")}
                   </div>
-                  {overview.campaigns.length === 0 ? (
+                  {overviewData.campaigns.length === 0 ? (
                     <p style={{ margin: 0, color: pageColorTokens.textSecondary }}>
                       {t("googleAttribution.noCampaigns")}
                     </p>
@@ -329,19 +385,19 @@ export function GoogleAttributionPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {overview.campaigns.map((row) => (
+                          {overviewData.campaigns.map((row) => (
                             <tr
                               key={`${row.campaignId ?? "ga4"}-${row.campaignName}`}
                               style={{ borderTop: `1px solid ${pageColorTokens.divider}` }}
                             >
                               <td style={{ padding: "10px 6px", fontWeight: 600 }}>{row.campaignName}</td>
                               <td style={{ padding: "10px 6px" }}>
-                                {formatCurrency(row.spend, overview.currencyCode)}
+                                {formatCurrency(row.spend, overviewData.currencyCode)}
                               </td>
                               <td style={{ padding: "10px 6px" }}>{formatNumber(row.clicks)}</td>
                               <td style={{ padding: "10px 6px" }}>{formatNumber(row.sessions)}</td>
                               <td style={{ padding: "10px 6px" }}>
-                                {formatCurrency(row.ga4Revenue, overview.currencyCode)}
+                                {formatCurrency(row.ga4Revenue, overviewData.currencyCode)}
                               </td>
                               <td style={{ padding: "10px 6px" }}>
                                 {row.roas == null ? "—" : `${row.roas.toFixed(2)}x`}
@@ -359,7 +415,7 @@ export function GoogleAttributionPage() {
                   )}
                 </div>
               </>
-            ) : fetcher.data && !fetcher.data.ok && fetcher.data.reason === "not_configured" ? (
+            ) : overview && !overview.ok && overview.reason === "not_configured" ? (
               <div style={cardStyle}>{t("googleAttribution.notConfigured")}</div>
             ) : null}
           </>

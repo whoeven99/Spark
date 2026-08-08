@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   classifyGoogleAdsError,
   formatGoogleAdsUserError,
   parseGoogleAdsError,
+  resolveLoginCustomerId,
 } from "~/server/adsCatalog/googleAdsApi.server";
 
 describe("parseGoogleAdsError", () => {
@@ -73,5 +74,26 @@ describe("formatGoogleAdsUserError", () => {
     expect(
       classifyGoogleAdsError("The developer token is only approved for use with test accounts."),
     ).toBe("developer_token");
+  });
+});
+
+describe("resolveLoginCustomerId", () => {
+  it("caps login-customer-id probe attempts at three", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await resolveLoginCustomerId({
+      accessToken: "access",
+      developerToken: "dev",
+      customerId: "1111111111",
+      accessibleCustomerIds: ["2222222222", "3333333333", "4444444444", "5555555555"],
+    });
+
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(result).toBe("2222222222");
+    vi.unstubAllGlobals();
   });
 });

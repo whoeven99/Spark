@@ -383,6 +383,8 @@
     "linkingHint": "请在 GA4 管理后台 → 产品关联 → Google Ads 关联中绑定广告账户，以便按广告系列自动对齐数据。",
     "loading": "正在加载归因数据…",
     "loadError": "加载归因数据失败",
+    "networkError": "网络连接失败，服务器可能响应较慢，请稍后重试。",
+    "retry": "重试",
     "notConfigured": "请先连接 Google Ads 与 GA4 以查看统一归因。",
     "noCampaigns": "该时间段暂无广告系列数据",
     "rangeDays": "{{count}} 天",
@@ -408,6 +410,7 @@
     "warningLinking": "建议在 GA4 中关联 Google Ads，以获得更可靠的广告系列匹配。",
     "warningPartial": "请同时连接 Google Ads 与 GA4 以查看完整漏斗。",
     "warningGa4Fetch": "无法加载 GA4 广告系列明细，其他指标可能仍可用。",
+    "warningAdsFetch": "无法加载 Google Ads 广告系列数据，GA4 指标可能仍可用。",
     "dataDelayHint": "Ads 与 GA4 数据通常延迟 24–48 小时。"
   },
   "billing": {

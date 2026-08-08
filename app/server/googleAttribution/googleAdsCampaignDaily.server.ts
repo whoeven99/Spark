@@ -96,7 +96,8 @@ export async function fetchGoogleAdsCampaignSummary(
     if (message.includes("未连接") || message.includes("未配置")) {
       return null;
     }
-    throw e;
+    console.error(`${LOG_PREFIX} shop=${shop} auth=${formatOutboundErrorLog(e)}`);
+    return null;
   }
 
   const during = googleDuringClause(rangeDays);
@@ -127,7 +128,7 @@ export async function fetchGoogleAdsCampaignSummary(
     });
   } catch (e) {
     console.error(`${LOG_PREFIX} shop=${shop} ${formatOutboundErrorLog(e)}`);
-    throw e;
+    return null;
   }
 
   let currencyCode: string | null = null;

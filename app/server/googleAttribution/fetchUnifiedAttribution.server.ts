@@ -62,8 +62,19 @@ export async function fetchUnifiedAttribution(
     warnings.push(WARNINGS.partialConnection);
   }
 
-  const [adsSummary, ga4AccessToken] = await Promise.all([
-    adsConnected ? fetchGoogleAdsCampaignSummary(shop, rangeDays) : Promise.resolve(null),
+  let adsSummary: Awaited<ReturnType<typeof fetchGoogleAdsCampaignSummary>> = null;
+  if (adsConnected) {
+    try {
+      adsSummary = await fetchGoogleAdsCampaignSummary(shop, rangeDays);
+      if (adsSummary === null) {
+        warnings.push("ads_campaign_fetch_failed");
+      }
+    } catch {
+      warnings.push("ads_campaign_fetch_failed");
+    }
+  }
+
+  const [ga4AccessToken] = await Promise.all([
     ga4Connected ? resolveGa4AccessToken(shop) : Promise.resolve(null),
   ]);
 
