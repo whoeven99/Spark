@@ -8,6 +8,16 @@ import {
   type GoogleRemarketingStorefrontConfig,
 } from "../../lib/googleRemarketing";
 import {
+  GOOGLE_PIXEL_STOREFRONT_EVENTS,
+  normalizeGooglePixelSetupEvents,
+  resolveEventConversionLabel,
+  type GooglePixelSetupEvent,
+} from "../../lib/googlePixelEvents";
+import {
+  ensureGooglePixelConversionActions,
+  toStorefrontEventLabels,
+} from "./googleConversionActions.server";
+import {
   getGoogleAdsCredential,
   setGoogleRemarketingConfig,
   type GoogleRemarketingConfig,
@@ -180,6 +190,46 @@ async function syncStorefrontMetafield(params: {
   if (error) throw new Error(error);
 }
 
+export async function setupGooglePixel(params: {
+  shop: string;
+  admin: ShopifyAdminGraphqlClient;
+  pixelName: string;
+  selectedEvents: unknown;
+  enhancedConversions?: boolean;
+  labelOf: (event: GooglePixelSetupEvent) => string;
+}): Promise<{ config: GoogleRemarketingConfig; partial: boolean }> {
+  const selectedEvents = normalizeGooglePixelSetupEvents(params.selectedEvents);
+  if (selectedEvents.length === 0) {
+    throw new Error("请至少选择一个追踪事件");
+  }
+  const pixelName = params.pixelName.trim() || "Spark Pixel";
+  const { tagId, eventConversions: createdConversions } = await ensureGooglePixelConversionActions({
+    shop: params.shop,
+    pixelName,
+    selectedEvents,
+    labelOf: params.labelOf,
+  });
+  const existing = await getGoogleAdsCredential(params.shop);
+  const eventConversions = {
+    ...existing?.remarketing?.eventConversions,
+    ...createdConversions,
+  };
+  const storefrontEvents = selectedEvents.filter((event) =>
+    (GOOGLE_PIXEL_STOREFRONT_EVENTS as readonly string[]).includes(event),
+  );
+  return saveGoogleRemarketingConfig({
+    shop: params.shop,
+    admin: params.admin,
+    tagId,
+    source: "auto",
+    enabledEvents: storefrontEvents,
+    enabledFieldGroups: ["product", "transaction"],
+    pixelName,
+    eventConversions,
+    enhancedConversions: params.enhancedConversions,
+  });
+}
+
 export async function saveGoogleRemarketingConfig(params: {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
@@ -190,6 +240,7 @@ export async function saveGoogleRemarketingConfig(params: {
   enabledFieldGroups?: unknown;
   pixelName?: string;
   conversionLabel?: string;
+  eventConversions?: GoogleRemarketingConfig["eventConversions"];
   enhancedConversions?: boolean;
   customPixelConfirmed?: boolean;
 }): Promise<{ config: GoogleRemarketingConfig; partial: boolean }> {
@@ -200,6 +251,13 @@ export async function saveGoogleRemarketingConfig(params: {
   const now = new Date().toISOString();
   const conversionLabel = normalizeGoogleConversionLabel(params.conversionLabel);
   const pixelName = params.pixelName?.trim() || existing.remarketing?.pixelName;
+  const eventConversions =
+    params.eventConversions ?? existing.remarketing?.eventConversions;
+  const purchaseLabel = resolveEventConversionLabel(
+    eventConversions,
+    "purchase",
+    conversionLabel,
+  );
   const enhancedConversions =
     typeof params.enhancedConversions === "boolean"
       ? params.enhancedConversions
@@ -213,13 +271,17 @@ export async function saveGoogleRemarketingConfig(params: {
       params.enabledFieldGroups,
     ),
     pixelName: pixelName || undefined,
-    conversionLabel: conversionLabel || undefined,
+    conversionLabel: purchaseLabel || conversionLabel || undefined,
+    eventConversions,
     enhancedConversions,
     customPixelConfirmedAt: params.customPixelConfirmed
       ? now
       : existing.remarketing?.customPixelConfirmedAt,
   };
   await setGoogleRemarketingConfig(params.shop, config);
+  const eventLabels = toStorefrontEventLabels(eventConversions, conversionLabel);
+  const storefrontConversionLabel =
+    eventLabels.page_view || conversionLabel || purchaseLabel || undefined;
   try {
     await syncStorefrontMetafield({
       admin: params.admin,
@@ -229,7 +291,8 @@ export async function saveGoogleRemarketingConfig(params: {
         enabledFieldGroups: normalizeGoogleRemarketingFieldGroups(
           config.enabledFieldGroups,
         ),
-        conversionLabel: conversionLabel || undefined,
+        conversionLabel: storefrontConversionLabel,
+        eventLabels: Object.keys(eventLabels).length > 0 ? eventLabels : undefined,
         enhancedConversions,
       },
     });

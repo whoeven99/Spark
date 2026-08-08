@@ -1,4 +1,55 @@
 {
+  "googlePixel": {
+    "pageTitle": "Pixels",
+    "pageSubtitle": "Connect Google Ads, auto-create conversion actions, and inject tracking via the Spark app.",
+    "setupPixel": "Setup pixel",
+    "recommendations": "Recommendations",
+    "statusHealthy": "Healthy",
+    "statusDisabled": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "table": {
+      "name": "Name",
+      "event": "Event",
+      "conversionId": "Conversion ID",
+      "label": "Label",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "setup": {
+      "step1Title": "Setup pixel — Step 1 of 2",
+      "step2Title": "Setup pixel — Step 2 of 2",
+      "step1Hint": "Pick the Google Ads account you want to configure.",
+      "accountLabel": "Google Ads account",
+      "accountFallback": "Google Ads Account",
+      "refreshAccounts": "Refresh",
+      "proceed": "Proceed",
+      "save": "Save",
+      "saved": "Pixel setup saved. Conversion actions were created in Google Ads.",
+      "recommended": "Recommended",
+      "optional": "Optional",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "selectAtLeastOne": "Select at least one event.",
+      "accountsFailed": "Failed to load Google Ads accounts.",
+      "embedReminder": "After saving, enable the Spark Google Remarketing App Embed in your theme.",
+      "purchaseReminder": "Purchase uses an experimental Custom Pixel script (copied automatically after save).",
+      "events": {
+        "page_view": "Page View",
+        "add_to_cart": "Add to Cart",
+        "begin_checkout": "Begin Checkout",
+        "purchase": "Purchase",
+        "add_payment_info": "Payment Info Submitted"
+      },
+      "eventHints": {
+        "page_view": "Every page visit on your store",
+        "add_to_cart": "Product added to cart",
+        "begin_checkout": "Checkout started",
+        "purchase": "Completed order with revenue",
+        "add_payment_info": "Payment form submitted (tracking coming soon)"
+      }
+    }
+  },
   "googlePixelOnboarding": {
     "pageTitle": "Get started with Google Pixel",
     "pageSubtitle": "Add your Google Ads conversion pixel, enable the theme App Embed, and choose the events to track.",
@@ -309,7 +360,25 @@
     "colDevice": "Device",
     "colAppearance": "Search appearance",
     "colDate": "Date",
-    "threeMonths": "3 months"
+    "threeMonths": "3 months",
+    "searchTypeLabel": "Search type",
+    "searchTypeWeb": "Web",
+    "searchTypeImage": "Image",
+    "searchTypeVideo": "Video",
+    "searchTypeNews": "News",
+    "searchTypeDiscover": "Discover",
+    "searchTypeGoogleNews": "Google News",
+    "vsPrevious": "vs prev.",
+    "sitemapsTitle": "Sitemap status",
+    "sitemapsEmpty": "No submitted sitemaps found",
+    "sitemapsErrors": "{{count}} errors",
+    "sitemapsWarnings": "{{count}} warnings",
+    "sitemapsPending": "Pending",
+    "sitemapsUrls": "{{count}} URLs",
+    "sitemapsLastSubmitted": "Submitted {{date}}",
+    "sitemapsLastDownloaded": "Downloaded {{date}}",
+    "sitemapsIndex": "Index",
+    "topRowsHint": "Showing top 50"
   },
   "ga4": {
     "title": "Google Analytics 4",
@@ -1855,7 +1924,7 @@
       "partialSuccess": "The database configuration was saved, but the Shop metafield sync failed. Retry saving."
     },
     "googlePixelPanelTitle": "Google Pixel",
-    "googlePixelPanelHint": "Set up a Nabu-style Google Ads conversion pixel with a guided 3-step flow.",
+    "googlePixelPanelHint": "ScaleUp 风格：选账户、勾选事件，自动在 Google Ads 创建转化并由 App 注入 gtag。",
     "googlePixelSetup": "Set up Google Pixel",
     "googlePixelManage": "Manage Google Pixel",
     "googlePixelViewData": "View Pixel data",

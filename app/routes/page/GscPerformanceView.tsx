@@ -3,9 +3,11 @@ import { useFetcher } from "react-router";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "./pageUiStyles";
 import type { GscStatusResponse, GscStatusOk } from "../api.gsc.status";
+import type { GscSitemapsResponse } from "../api.gsc.sitemaps";
 
 type Days = 7 | 28 | 90;
 type GscDimension = "query" | "page" | "country" | "device" | "searchAppearance" | "date";
+type GscSearchType = "web" | "image" | "video" | "news" | "discover" | "googleNews";
 type ActiveMetrics = { clicks: boolean; impressions: boolean };
 
 type DimensionRow = {
@@ -38,6 +40,45 @@ function fmtPosition(v: number): string {
   return v.toFixed(1);
 }
 
+function calcChangePercent(current: number, previous: number): number | null {
+  if (previous === 0) return current === 0 ? null : 100;
+  return ((current - previous) / previous) * 100;
+}
+
+function fmtChangePercent(value: number | null): string {
+  if (value === null) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+const GSC_COUNTRY_ALPHA3_TO_ALPHA2: Record<string, string> = {
+  usa: "US",
+  gbr: "GB",
+  can: "CA",
+  aus: "AU",
+  deu: "DE",
+  fra: "FR",
+  jpn: "JP",
+  chn: "CN",
+  hkg: "HK",
+  twn: "TW",
+  sgp: "SG",
+  ind: "IN",
+  bra: "BR",
+  mex: "MX",
+  esp: "ES",
+  ita: "IT",
+  nld: "NL",
+  kor: "KR",
+};
+
+function fmtDateShort(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 function fmtDateAxis(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -52,6 +93,17 @@ function fmtDateRange(start: string, end: string): string {
 }
 
 function formatDimensionKey(key: string, dimension: GscDimension): string {
+  if (dimension === "country") {
+    const alpha2 = GSC_COUNTRY_ALPHA3_TO_ALPHA2[key.toLowerCase()];
+    if (alpha2) {
+      try {
+        return new Intl.DisplayNames(undefined, { type: "region" }).of(alpha2) ?? key.toUpperCase();
+      } catch {
+        return key.toUpperCase();
+      }
+    }
+    return key.toUpperCase();
+  }
   if (dimension === "device") {
     const map: Record<string, string> = { DESKTOP: "Desktop", MOBILE: "Mobile", TABLET: "Tablet" };
     return map[key.toUpperCase()] ?? key;
@@ -267,6 +319,8 @@ function MetricCard({
   active,
   onToggle,
   toggleable,
+  changePercent,
+  lowerIsBetter = false,
 }: {
   label: string;
   value: string;
@@ -274,7 +328,23 @@ function MetricCard({
   active: boolean;
   onToggle?: () => void;
   toggleable: boolean;
+  changePercent?: number | null;
+  lowerIsBetter?: boolean;
 }) {
+  const { t } = useTranslation();
+  const hasChange = changePercent !== undefined && changePercent !== null;
+  const improved = hasChange
+    ? lowerIsBetter
+      ? (changePercent as number) < 0
+      : (changePercent as number) > 0
+    : false;
+  const worsened = hasChange
+    ? lowerIsBetter
+      ? (changePercent as number) > 0
+      : (changePercent as number) < 0
+    : false;
+  const changeColor = improved ? "#00a67c" : worsened ? "#d93025" : pageColorTokens.textSecondary;
+
   return (
     <div
       onClick={toggleable ? onToggle : undefined}
@@ -316,6 +386,11 @@ function MetricCard({
       <div style={{ fontSize: "1.6rem", fontWeight: 700, color: pageColorTokens.textPrimary }}>
         {value}
       </div>
+      {hasChange && (
+        <div style={{ fontSize: "0.74rem", color: changeColor, marginTop: 4 }}>
+          {fmtChangePercent(changePercent ?? null)} {t("gsc.vsPrevious")}
+        </div>
+      )}
     </div>
   );
 }
@@ -566,12 +641,251 @@ function DaysSelector({ days, onChange }: { days: Days; onChange: (d: Days) => v
   );
 }
 
+const SEARCH_TYPE_OPTIONS: Array<{ value: GscSearchType; i18nKey: string }> = [
+  { value: "web", i18nKey: "gsc.searchTypeWeb" },
+  { value: "image", i18nKey: "gsc.searchTypeImage" },
+  { value: "video", i18nKey: "gsc.searchTypeVideo" },
+  { value: "news", i18nKey: "gsc.searchTypeNews" },
+  { value: "discover", i18nKey: "gsc.searchTypeDiscover" },
+  { value: "googleNews", i18nKey: "gsc.searchTypeGoogleNews" },
+];
+
+function SearchTypeSelector({
+  searchType,
+  onChange,
+}: {
+  searchType: GscSearchType;
+  onChange: (type: GscSearchType) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem" }}>
+      <span style={{ color: pageColorTokens.textSecondary, whiteSpace: "nowrap" }}>
+        {t("gsc.searchTypeLabel")}
+      </span>
+      <select
+        value={searchType}
+        onChange={(e) => onChange(e.target.value as GscSearchType)}
+        style={{
+          padding: "0.3rem 0.6rem",
+          borderRadius: 6,
+          border: `1px solid ${pageColorTokens.border}`,
+          fontSize: "0.8rem",
+          color: pageColorTokens.textPrimary,
+          background: pageColorTokens.surface,
+        }}
+      >
+        {SEARCH_TYPE_OPTIONS.map(({ value, i18nKey }) => (
+          <option key={value} value={value}>
+            {t(i18nKey)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function GscSitemapsPanel() {
+  const { t } = useTranslation();
+  const sitemapsFetcher = useFetcher<GscSitemapsResponse>();
+
+  useEffect(() => {
+    sitemapsFetcher.load("/api/gsc/sitemaps");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loading = sitemapsFetcher.state !== "idle" && !sitemapsFetcher.data;
+  const sitemaps =
+    sitemapsFetcher.data?.ok && sitemapsFetcher.data.connected ? sitemapsFetcher.data.sitemaps : [];
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          background: pageColorTokens.surface,
+          border: `1px solid ${pageColorTokens.border}`,
+          borderRadius: pageColorTokens.radiusCard,
+          padding: "1rem 1.25rem",
+          fontSize: "0.875rem",
+          color: pageColorTokens.textSecondary,
+        }}
+      >
+        {t("gsc.loadingData")}
+      </div>
+    );
+  }
+
+  if (!sitemapsFetcher.data?.ok || !sitemapsFetcher.data.connected) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        background: pageColorTokens.surface,
+        border: `1px solid ${pageColorTokens.border}`,
+        borderRadius: pageColorTokens.radiusCard,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "12px 20px",
+          borderBottom: `1px solid ${pageColorTokens.border}`,
+          fontWeight: 700,
+          fontSize: "0.9rem",
+          color: pageColorTokens.textPrimary,
+        }}
+      >
+        {t("gsc.sitemapsTitle")}
+      </div>
+      {sitemaps.length === 0 ? (
+        <div
+          style={{
+            padding: "1.25rem 20px",
+            fontSize: "0.875rem",
+            color: pageColorTokens.textSecondary,
+          }}
+        >
+          {t("gsc.sitemapsEmpty")}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {sitemaps.map((item) => {
+            const submitted = fmtDateShort(item.lastSubmitted);
+            const downloaded = fmtDateShort(item.lastDownloaded);
+            const hasIssues = item.errors > 0 || item.warnings > 0;
+            return (
+              <div
+                key={item.path}
+                style={{
+                  padding: "12px 20px",
+                  borderBottom: `1px solid ${pageColorTokens.divider}`,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.84rem",
+                      fontWeight: 600,
+                      color: pageColorTokens.textPrimary,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {item.path}
+                  </span>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                    {item.isSitemapsIndex && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          color: pageColorTokens.textSecondary,
+                          background: pageColorTokens.surfaceEvenRow,
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                        }}
+                      >
+                        {t("gsc.sitemapsIndex")}
+                      </span>
+                    )}
+                    {item.isPending && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "#b06000",
+                          background: "#fff8e6",
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                        }}
+                      >
+                        {t("gsc.sitemapsPending")}
+                      </span>
+                    )}
+                    {item.errors > 0 && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "#d93025",
+                          background: pageColorTokens.criticalBg,
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                        }}
+                      >
+                        {t("gsc.sitemapsErrors", { count: item.errors })}
+                      </span>
+                    )}
+                    {item.warnings > 0 && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "#b06000",
+                          background: "#fff8e6",
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                        }}
+                      >
+                        {t("gsc.sitemapsWarnings", { count: item.warnings })}
+                      </span>
+                    )}
+                    {!hasIssues && !item.isPending && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "#00a67c",
+                          background: "#edfaf5",
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                        }}
+                      >
+                        OK
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "1rem",
+                    flexWrap: "wrap",
+                    fontSize: "0.76rem",
+                    color: pageColorTokens.textSecondary,
+                  }}
+                >
+                  {item.submittedUrls > 0 && (
+                    <span>{t("gsc.sitemapsUrls", { count: item.submittedUrls })}</span>
+                  )}
+                  {submitted && <span>{t("gsc.sitemapsLastSubmitted", { date: submitted })}</span>}
+                  {downloaded && (
+                    <span>{t("gsc.sitemapsLastDownloaded", { date: downloaded })}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Performance View ─────────────────────────────────────────────────────
 
 export function GscPerformanceView() {
   const { t } = useTranslation();
 
   const [days, setDays] = useState<Days>(7);
+  const [searchType, setSearchType] = useState<GscSearchType>("web");
   const [dimension, setDimension] = useState<GscDimension>("query");
   const [activeMetrics, setActiveMetrics] = useState<ActiveMetrics>({
     clicks: true,
@@ -585,10 +899,12 @@ export function GscPerformanceView() {
   const statusFetcherRef = useRef(statusFetcher);
   statusFetcherRef.current = statusFetcher;
 
-  // Fetch data when days or dimension changes
+  // Fetch data when days, search type or dimension changes
   useEffect(() => {
-    statusFetcherRef.current.load(`/api/gsc/status?days=${days}&dimension=${dimension}`);
-  }, [days, dimension]);
+    statusFetcherRef.current.load(
+      `/api/gsc/status?days=${days}&dimension=${dimension}&searchType=${searchType}`,
+    );
+  }, [days, dimension, searchType]);
 
   // Cache successful responses
   useEffect(() => {
@@ -630,6 +946,7 @@ export function GscPerformanceView() {
   }
 
   const summary = displayData?.summary;
+  const previousSummary = displayData?.previousSummary;
   const timeSeries = displayData?.timeSeries ?? [];
   const rows = isTableLoading ? [] : (displayData?.rows ?? []);
   const dateRange =
@@ -638,15 +955,17 @@ export function GscPerformanceView() {
       : null;
 
   return (
-    <div
-      style={{
-        background: pageColorTokens.surface,
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: pageColorTokens.radiusCard,
-        overflow: "hidden",
-      }}
-    >
-      {/* Header: title + date range + days selector */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+      <GscSitemapsPanel />
+      <div
+        style={{
+          background: pageColorTokens.surface,
+          border: `1px solid ${pageColorTokens.border}`,
+          borderRadius: pageColorTokens.radiusCard,
+          overflow: "hidden",
+        }}
+      >
+      {/* Header: title + date range + filters */}
       <div
         style={{
           display: "flex",
@@ -655,7 +974,7 @@ export function GscPerformanceView() {
           padding: "14px 20px 12px",
           borderBottom: `1px solid ${pageColorTokens.border}`,
           flexWrap: "wrap",
-          gap: "0.5rem",
+          gap: "0.75rem",
         }}
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -674,7 +993,10 @@ export function GscPerformanceView() {
             </span>
           )}
         </div>
-        <DaysSelector days={days} onChange={setDays} />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <SearchTypeSelector searchType={searchType} onChange={setSearchType} />
+          <DaysSelector days={days} onChange={setDays} />
+        </div>
       </div>
 
       {/* Metric summary cards */}
@@ -692,6 +1014,11 @@ export function GscPerformanceView() {
           active={activeMetrics.clicks}
           onToggle={() => toggleMetric("clicks")}
           toggleable
+          changePercent={
+            summary && previousSummary
+              ? calcChangePercent(summary.totalClicks, previousSummary.totalClicks)
+              : null
+          }
         />
         <MetricCard
           label={t("gsc.metricImpressions")}
@@ -700,6 +1027,11 @@ export function GscPerformanceView() {
           active={activeMetrics.impressions}
           onToggle={() => toggleMetric("impressions")}
           toggleable
+          changePercent={
+            summary && previousSummary
+              ? calcChangePercent(summary.totalImpressions, previousSummary.totalImpressions)
+              : null
+          }
         />
         <MetricCard
           label={t("gsc.metricCtr")}
@@ -707,6 +1039,11 @@ export function GscPerformanceView() {
           color="#00a67c"
           active={false}
           toggleable={false}
+          changePercent={
+            summary && previousSummary
+              ? calcChangePercent(summary.avgCtr, previousSummary.avgCtr)
+              : null
+          }
         />
         <MetricCard
           label={t("gsc.metricPosition")}
@@ -714,6 +1051,12 @@ export function GscPerformanceView() {
           color="#f5a623"
           active={false}
           toggleable={false}
+          lowerIsBetter
+          changePercent={
+            summary && previousSummary
+              ? calcChangePercent(summary.avgPosition, previousSummary.avgPosition)
+              : null
+          }
         />
       </div>
 
@@ -751,7 +1094,27 @@ export function GscPerformanceView() {
       </div>
 
       {/* Dimension tabs */}
-      <DimensionTabs active={dimension} onChange={setDimension} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          flexWrap: "wrap",
+        }}
+      >
+        <DimensionTabs active={dimension} onChange={setDimension} />
+        <span
+          style={{
+            padding: "0 20px 8px",
+            fontSize: "0.74rem",
+            color: pageColorTokens.textSecondary,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {t("gsc.topRowsHint")}
+        </span>
+      </div>
 
       {/* Table */}
       <DimensionTable
@@ -759,6 +1122,7 @@ export function GscPerformanceView() {
         dimension={dimension}
         loading={isTableLoading && !displayData}
       />
+      </div>
     </div>
   );
 }

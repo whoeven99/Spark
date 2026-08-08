@@ -1,5 +1,10 @@
 import prisma from "../../db.server";
 import type { Prisma } from "../../generated/prisma";
+import type {
+  GooglePixelEventConversions,
+  GooglePixelSetupEvent,
+} from "../../lib/googlePixelEvents";
+import { isGooglePixelSetupEvent } from "../../lib/googlePixelEvents";
 import type { TiktokCatalogBindingMode } from "./tiktokOAuth.server";
 
 export type { TiktokCatalogBindingMode };
@@ -261,10 +266,12 @@ export type GoogleRemarketingConfig = {
   confirmedAt: string;
   enabledEvents: string[];
   enabledFieldGroups: string[];
-  /** 展示用像素名称（Nabu 风格 Pixel Name），仅用于 UI 标识。 */
+  /** 展示用像素名称（ScaleUp 风格 Pixel Name），仅用于 UI 标识。 */
   pixelName?: string;
-  /** Google Ads 转化标签（Conversion Label），配合 tagId 组成 send_to。 */
+  /** @deprecated 旧版单 Label；新配置请使用 eventConversions。 */
   conversionLabel?: string;
+  /** 每个事件独立的转化操作与 Label。 */
+  eventConversions?: GooglePixelEventConversions;
   /** 是否启用 Enhanced Conversions（哈希用户数据）。 */
   enhancedConversions?: boolean;
   customPixelConfirmedAt?: string;
@@ -274,6 +281,26 @@ export type GoogleRemarketingConfig = {
     error?: string;
   };
 };
+
+function parseGooglePixelEventConversions(
+  value: unknown,
+): GooglePixelEventConversions | undefined {
+  if (!isJsonObject(value)) return undefined;
+  const out: GooglePixelEventConversions = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!isGooglePixelSetupEvent(key) || !isJsonObject(raw)) continue;
+    const label = typeof raw.label === "string" ? raw.label.trim() : "";
+    if (!label) continue;
+    out[key as GooglePixelSetupEvent] = {
+      label,
+      name: typeof raw.name === "string" ? raw.name : key,
+      conversionActionId:
+        typeof raw.conversionActionId === "string" ? raw.conversionActionId : undefined,
+      disabled: raw.disabled === true,
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 function parseGoogleRemarketingConfig(value: unknown): GoogleRemarketingConfig | undefined {
   if (!isJsonObject(value)) return undefined;
@@ -294,6 +321,7 @@ function parseGoogleRemarketingConfig(value: unknown): GoogleRemarketingConfig |
     pixelName: typeof value.pixelName === "string" ? value.pixelName : undefined,
     conversionLabel:
       typeof value.conversionLabel === "string" ? value.conversionLabel : undefined,
+    eventConversions: parseGooglePixelEventConversions(value.eventConversions),
     enhancedConversions:
       typeof value.enhancedConversions === "boolean"
         ? value.enhancedConversions

@@ -388,7 +388,7 @@ export function GoogleConnectPanels({
           {ads.remarketing.tagId ? (
             <>
               <Link
-                to={`/app/ads/google-pixel/data${locationSearch}`}
+                to={`/app/ads/google-pixel${locationSearch}`}
                 style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
               >
                 {t("adsCatalog.googlePixelViewData")}

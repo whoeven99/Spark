@@ -7,6 +7,7 @@ import {
 import {
   type GscDimension,
   type GscDimensionRow,
+  type GscSearchType,
   type GscSummary,
   querySearchAnalyticsByDimension,
   querySummaryAndTimeSeries,
@@ -20,9 +21,11 @@ export type GscStatusOk = {
   startDate: string;
   endDate: string;
   summary: GscSummary;
+  previousSummary: GscSummary;
   timeSeries: GscDimensionRow[];
   rows: GscDimensionRow[];
   dimension: GscDimension;
+  searchType: GscSearchType;
 };
 
 export type GscStatusNotConnected = {
@@ -52,9 +55,39 @@ const VALID_DIMENSIONS: GscDimension[] = [
   "date",
 ];
 
+const VALID_SEARCH_TYPES: GscSearchType[] = [
+  "web",
+  "image",
+  "video",
+  "news",
+  "discover",
+  "googleNews",
+];
+
 function parseDimension(raw: string | null): GscDimension {
   if (raw && VALID_DIMENSIONS.includes(raw as GscDimension)) return raw as GscDimension;
   return "query";
+}
+
+function parseSearchType(raw: string | null): GscSearchType {
+  if (raw && VALID_SEARCH_TYPES.includes(raw as GscSearchType)) return raw as GscSearchType;
+  return "web";
+}
+
+async function resolveGscAccessToken(shop: string) {
+  const credential = await getGscCredential(shop);
+  if (!credential) return null;
+
+  let accessToken = credential.accessToken;
+  if (credential.refreshToken) {
+    try {
+      accessToken = await refreshGscAccessToken(credential.refreshToken);
+      await setGscCredential(shop, { ...credential, accessToken });
+    } catch {
+      // refresh 失败时继续用旧 token 尝试
+    }
+  }
+  return { ...credential, accessToken };
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -62,27 +95,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const days = parseDays(url.searchParams.get("days"));
   const dimension = parseDimension(url.searchParams.get("dimension"));
+  const searchType = parseSearchType(url.searchParams.get("searchType"));
 
-  const credential = await getGscCredential(session.shop);
+  const credential = await resolveGscAccessToken(session.shop);
   if (!credential) {
     return Response.json({ ok: true, connected: false } satisfies GscStatusNotConnected);
   }
 
-  let accessToken = credential.accessToken;
-
   try {
-    if (credential.refreshToken) {
-      try {
-        accessToken = await refreshGscAccessToken(credential.refreshToken);
-        await setGscCredential(session.shop, { ...credential, accessToken });
-      } catch {
-        // refresh 失败时继续用旧 token 尝试
-      }
-    }
-
     const [summaryData, dimensionData] = await Promise.all([
-      querySummaryAndTimeSeries(accessToken, credential.siteUrl, days),
-      querySearchAnalyticsByDimension(accessToken, credential.siteUrl, days, dimension),
+      querySummaryAndTimeSeries(credential.accessToken, credential.siteUrl, days, searchType),
+      querySearchAnalyticsByDimension(
+        credential.accessToken,
+        credential.siteUrl,
+        days,
+        dimension,
+        50,
+        searchType,
+      ),
     ]);
 
     return Response.json({
@@ -92,9 +122,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       startDate: summaryData.startDate,
       endDate: summaryData.endDate,
       summary: summaryData.summary,
+      previousSummary: summaryData.previousSummary,
       timeSeries: summaryData.timeSeries,
       rows: dimensionData.rows,
       dimension,
+      searchType,
     } satisfies GscStatusOk);
   } catch (e) {
     return Response.json(

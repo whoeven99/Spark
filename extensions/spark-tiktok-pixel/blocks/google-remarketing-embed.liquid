@@ -80,6 +80,7 @@
 
         var enabledEvents = Array.isArray(config.enabledEvents) ? config.enabledEvents : [];
         var fieldGroups = Array.isArray(config.enabledFieldGroups) ? config.enabledFieldGroups : [];
+        var eventLabels = config.eventLabels && typeof config.eventLabels === "object" ? config.eventLabels : {};
         var marketingAllowed = false;
         var initialEventsSent = false;
         var actionIds = new Set();
@@ -134,10 +135,10 @@
             if (typeof eventPayload.value === "number") eventPayload.ecomm_totalvalue = eventPayload.value;
           }
           gtag("event", name, eventPayload);
-          // 配置了 Conversion Label 时，把所选店面事件同时上报为 Google Ads 转化。
-          if (config.conversionLabel) {
+          var eventLabel = eventLabels[name] || config.conversionLabel || "";
+          if (eventLabel) {
             gtag("event", "conversion", {
-              send_to: config.tagId + "/" + config.conversionLabel,
+              send_to: config.tagId + "/" + eventLabel,
               value: eventPayload.value,
               currency: eventPayload.currency
             });

@@ -52,6 +52,8 @@ export interface GoogleRemarketingStorefrontConfig {
   enabledFieldGroups: GoogleRemarketingFieldGroup[];
   /** Google Ads 转化标签（Conversion Label），配合 tagId 组成 send_to。缺省表示只做再营销不发转化。 */
   conversionLabel?: string;
+  /** 每个店面事件独立的 Conversion Label（ScaleUp 风格）。 */
+  eventLabels?: Record<string, string>;
   /** 是否启用 Enhanced Conversions（哈希用户数据），仅作用于 purchase Custom Pixel。 */
   enhancedConversions?: boolean;
 }

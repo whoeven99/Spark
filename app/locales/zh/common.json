@@ -1,4 +1,55 @@
 {
+  "googlePixel": {
+    "pageTitle": "Pixels",
+    "pageSubtitle": "连接 Google Ads 账户，自动创建转化操作并由 App 注入追踪代码。",
+    "setupPixel": "配置像素",
+    "recommendations": "推荐设置",
+    "statusHealthy": "正常",
+    "statusDisabled": "已停用",
+    "enable": "启用",
+    "disable": "停用",
+    "table": {
+      "name": "名称",
+      "event": "事件",
+      "conversionId": "Conversion ID",
+      "label": "Label",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "setup": {
+      "step1Title": "配置像素 — 第 1/2 步",
+      "step2Title": "配置像素 — 第 2/2 步",
+      "step1Hint": "选择要配置的 Google Ads 账户。",
+      "accountLabel": "Google Ads 账户",
+      "accountFallback": "Google Ads 账户",
+      "refreshAccounts": "刷新",
+      "proceed": "继续",
+      "save": "保存",
+      "saved": "像素已保存，转化操作已在 Google Ads 中创建。",
+      "recommended": "推荐",
+      "optional": "可选",
+      "selectAll": "全选",
+      "deselectAll": "取消全选",
+      "selectAtLeastOne": "请至少选择一个事件。",
+      "accountsFailed": "加载 Google Ads 账户失败。",
+      "embedReminder": "保存后请在主题编辑器中启用 Spark Google Remarketing App Embed。",
+      "purchaseReminder": "购买事件使用实验性 Custom Pixel 脚本（保存后会自动复制）。",
+      "events": {
+        "page_view": "Page View",
+        "add_to_cart": "Add to Cart",
+        "begin_checkout": "Begin Checkout",
+        "purchase": "Purchase",
+        "add_payment_info": "Payment Info Submitted"
+      },
+      "eventHints": {
+        "page_view": "店铺每次页面访问",
+        "add_to_cart": "商品加入购物车",
+        "begin_checkout": "开始结账",
+        "purchase": "完成订单并含收入",
+        "add_payment_info": "提交支付信息（追踪即将支持）"
+      }
+    }
+  },
   "googlePixelOnboarding": {
     "pageTitle": "开始配置 Google Pixel",
     "pageSubtitle": "添加 Google Ads 转化像素、启用主题 App Embed，并选择要追踪的事件。",
@@ -309,7 +360,25 @@
     "colDevice": "设备",
     "colAppearance": "搜索外观",
     "colDate": "日期",
-    "threeMonths": "3 个月"
+    "threeMonths": "3 个月",
+    "searchTypeLabel": "搜索类型",
+    "searchTypeWeb": "网页",
+    "searchTypeImage": "图片",
+    "searchTypeVideo": "视频",
+    "searchTypeNews": "新闻",
+    "searchTypeDiscover": "Discover",
+    "searchTypeGoogleNews": "Google 新闻",
+    "vsPrevious": "较上期",
+    "sitemapsTitle": "Sitemap 状态",
+    "sitemapsEmpty": "未发现已提交的 Sitemap",
+    "sitemapsErrors": "{{count}} 个错误",
+    "sitemapsWarnings": "{{count}} 个警告",
+    "sitemapsPending": "处理中",
+    "sitemapsUrls": "{{count}} 个 URL",
+    "sitemapsLastSubmitted": "提交于 {{date}}",
+    "sitemapsLastDownloaded": "抓取于 {{date}}",
+    "sitemapsIndex": "索引文件",
+    "topRowsHint": "显示 Top 50"
   },
   "ga4": {
     "title": "Google Analytics 4",
@@ -1855,7 +1924,7 @@
       "partialSuccess": "数据库配置已保存，但 Shop metafield 下发失败。请重试保存。"
     },
     "googlePixelPanelTitle": "Google Pixel",
-    "googlePixelPanelHint": "通过三步向导配置 Nabu 风格的 Google Ads 转化像素。",
+    "googlePixelPanelHint": "ScaleUp 风格：选账户、勾选事件，自动在 Google Ads 创建转化并由 App 注入 gtag。",
     "googlePixelSetup": "配置 Google Pixel",
     "googlePixelManage": "管理 Google Pixel",
     "googlePixelViewData": "查看 Pixel 数据",
