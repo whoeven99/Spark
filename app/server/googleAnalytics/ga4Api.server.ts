@@ -14,9 +14,12 @@ export type Ga4Property = {
 export type Ga4Dimension =
   | "date"
   | "sessionDefaultChannelGroup"
+  | "sessionSourceMedium"
+  | "sessionGoogleAdsCampaignName"
   | "country"
   | "deviceCategory"
-  | "landingPage";
+  | "landingPage"
+  | "itemName";
 
 export type Ga4Row = {
   key: string;
@@ -24,6 +27,12 @@ export type Ga4Row = {
   sessions: number;
   pageViews: number;
   revenue: number;
+  purchases: number;
+  engagementRate: number;
+  bounceRate: number;
+  averageSessionDuration: number;
+  itemsViewed: number;
+  itemsAddedToCart: number;
 };
 
 export type Ga4CampaignAttributionRow = {
@@ -37,9 +46,14 @@ export type Ga4CampaignAttributionRow = {
 
 export type Ga4Summary = {
   totalUsers: number;
+  newUsers: number;
   totalSessions: number;
   totalPageViews: number;
   totalRevenue: number;
+  totalPurchases: number;
+  engagementRate: number;
+  bounceRate: number;
+  averageSessionDuration: number;
 };
 
 // ─── Token refresh ─────────────────────────────────────────────────────────────
@@ -154,6 +168,29 @@ const REPORT_METRICS = [
   { name: "sessions" },
   { name: "screenPageViews" },
   { name: "purchaseRevenue" },
+  { name: "ecommercePurchases" },
+  { name: "engagementRate" },
+  { name: "bounceRate" },
+  { name: "averageSessionDuration" },
+];
+
+const SUMMARY_METRICS = [
+  { name: "activeUsers" },
+  { name: "newUsers" },
+  { name: "sessions" },
+  { name: "screenPageViews" },
+  { name: "purchaseRevenue" },
+  { name: "ecommercePurchases" },
+  { name: "engagementRate" },
+  { name: "bounceRate" },
+  { name: "averageSessionDuration" },
+];
+
+const ITEM_REPORT_METRICS = [
+  { name: "itemsViewed" },
+  { name: "itemsAddedToCart" },
+  { name: "itemsPurchased" },
+  { name: "itemRevenue" },
 ];
 
 const CAMPAIGN_ATTRIBUTION_METRICS = [
@@ -199,7 +236,55 @@ function parseRow(raw: RawGa4Row): Omit<Ga4Row, "key"> {
     sessions: parseFloat(m[1]?.value ?? "0") || 0,
     pageViews: parseFloat(m[2]?.value ?? "0") || 0,
     revenue: parseFloat(m[3]?.value ?? "0") || 0,
+    purchases: parseFloat(m[4]?.value ?? "0") || 0,
+    engagementRate: parseFloat(m[5]?.value ?? "0") || 0,
+    bounceRate: parseFloat(m[6]?.value ?? "0") || 0,
+    averageSessionDuration: parseFloat(m[7]?.value ?? "0") || 0,
+    itemsViewed: 0,
+    itemsAddedToCart: 0,
   };
+}
+
+function parseItemRow(raw: RawGa4Row): Omit<Ga4Row, "key"> {
+  const m = raw.metricValues ?? [];
+  return {
+    users: 0,
+    sessions: 0,
+    pageViews: 0,
+    revenue: parseFloat(m[3]?.value ?? "0") || 0,
+    purchases: parseFloat(m[2]?.value ?? "0") || 0,
+    engagementRate: 0,
+    bounceRate: 0,
+    averageSessionDuration: 0,
+    itemsViewed: parseFloat(m[0]?.value ?? "0") || 0,
+    itemsAddedToCart: parseFloat(m[1]?.value ?? "0") || 0,
+  };
+}
+
+function parseSummary(raw: RawGa4Row | undefined): Ga4Summary {
+  const m = raw?.metricValues ?? [];
+  return {
+    totalUsers: parseFloat(m[0]?.value ?? "0") || 0,
+    newUsers: parseFloat(m[1]?.value ?? "0") || 0,
+    totalSessions: parseFloat(m[2]?.value ?? "0") || 0,
+    totalPageViews: parseFloat(m[3]?.value ?? "0") || 0,
+    totalRevenue: parseFloat(m[4]?.value ?? "0") || 0,
+    totalPurchases: parseFloat(m[5]?.value ?? "0") || 0,
+    engagementRate: parseFloat(m[6]?.value ?? "0") || 0,
+    bounceRate: parseFloat(m[7]?.value ?? "0") || 0,
+    averageSessionDuration: parseFloat(m[8]?.value ?? "0") || 0,
+  };
+}
+
+function mergeWeightedRate(
+  existingRate: number,
+  existingWeight: number,
+  nextRate: number,
+  nextWeight: number,
+): number {
+  const totalWeight = existingWeight + nextWeight;
+  if (totalWeight <= 0) return 0;
+  return (existingRate * existingWeight + nextRate * nextWeight) / totalWeight;
 }
 
 function parseCampaignAttributionRow(raw: RawGa4Row): Ga4CampaignAttributionRow {
@@ -226,24 +311,26 @@ export async function queryGa4SummaryAndTimeSeries(
   endDate: string;
 }> {
   const { startDate, endDate } = buildDateRange(days);
-  const result = await runReport(accessToken, propertyId, {
-    dateRanges: [{ startDate, endDate }],
-    dimensions: [{ name: "date" }],
-    metrics: REPORT_METRICS,
-    orderBys: [{ dimension: { dimensionName: "date" }, desc: false }],
-  });
+  const dateRanges = [{ startDate, endDate }];
+  const [totalsResult, seriesResult] = await Promise.all([
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      metrics: SUMMARY_METRICS,
+    }),
+    runReport(accessToken, propertyId, {
+      dateRanges,
+      dimensions: [{ name: "date" }],
+      metrics: REPORT_METRICS,
+      orderBys: [{ dimension: { dimensionName: "date" }, desc: false }],
+    }),
+  ]);
 
-  const timeSeries: Ga4Row[] = (result.rows ?? []).map((r) => ({
+  const timeSeries: Ga4Row[] = (seriesResult.rows ?? []).map((r) => ({
     key: normalizeGa4Date(r.dimensionValues?.[0]?.value ?? ""),
     ...parseRow(r),
   }));
 
-  const summary: Ga4Summary = {
-    totalUsers: timeSeries.reduce((s, r) => s + r.users, 0),
-    totalSessions: timeSeries.reduce((s, r) => s + r.sessions, 0),
-    totalPageViews: timeSeries.reduce((s, r) => s + r.pageViews, 0),
-    totalRevenue: timeSeries.reduce((s, r) => s + r.revenue, 0),
-  };
+  const summary = parseSummary(totalsResult.totals?.[0]);
 
   return { summary, timeSeries, startDate, endDate };
 }
@@ -263,12 +350,30 @@ export async function queryGa4ByDimension(
     return { rows: timeSeries, startDate, endDate };
   }
 
+  if (dimension === "itemName") {
+    const result = await runReport(accessToken, propertyId, {
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: "itemName" }],
+      metrics: ITEM_REPORT_METRICS,
+      limit: rowLimit,
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
+    });
+    const rows: Ga4Row[] = (result.rows ?? []).map((r) => ({
+      key: r.dimensionValues?.[0]?.value ?? "",
+      ...parseItemRow(r),
+    }));
+    return { rows, startDate, endDate };
+  }
+
+  const orderMetric =
+    dimension === "sessionGoogleAdsCampaignName" ? "sessions" : "activeUsers";
+
   const result = await runReport(accessToken, propertyId, {
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: dimension }],
     metrics: REPORT_METRICS,
     limit: rowLimit,
-    orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+    orderBys: [{ metric: { metricName: orderMetric }, desc: true }],
   });
 
   const rows: Ga4Row[] = (result.rows ?? []).map((r) => ({
@@ -282,15 +387,59 @@ export async function queryGa4ByDimension(
 // ─── Multi-property merge ────────────────────────────────────────────────────────
 
 export function mergeGa4Summaries(summaries: Ga4Summary[]): Ga4Summary {
-  return summaries.reduce(
+  if (summaries.length === 0) {
+    return {
+      totalUsers: 0,
+      newUsers: 0,
+      totalSessions: 0,
+      totalPageViews: 0,
+      totalRevenue: 0,
+      totalPurchases: 0,
+      engagementRate: 0,
+      bounceRate: 0,
+      averageSessionDuration: 0,
+    };
+  }
+
+  const totals = summaries.reduce(
     (acc, summary) => ({
       totalUsers: acc.totalUsers + summary.totalUsers,
+      newUsers: acc.newUsers + summary.newUsers,
       totalSessions: acc.totalSessions + summary.totalSessions,
       totalPageViews: acc.totalPageViews + summary.totalPageViews,
       totalRevenue: acc.totalRevenue + summary.totalRevenue,
+      totalPurchases: acc.totalPurchases + summary.totalPurchases,
+      weightedEngagement: acc.weightedEngagement + summary.engagementRate * summary.totalSessions,
+      weightedBounce: acc.weightedBounce + summary.bounceRate * summary.totalSessions,
+      weightedDuration:
+        acc.weightedDuration + summary.averageSessionDuration * summary.totalSessions,
     }),
-    { totalUsers: 0, totalSessions: 0, totalPageViews: 0, totalRevenue: 0 },
+    {
+      totalUsers: 0,
+      newUsers: 0,
+      totalSessions: 0,
+      totalPageViews: 0,
+      totalRevenue: 0,
+      totalPurchases: 0,
+      weightedEngagement: 0,
+      weightedBounce: 0,
+      weightedDuration: 0,
+    },
   );
+
+  return {
+    totalUsers: totals.totalUsers,
+    newUsers: totals.newUsers,
+    totalSessions: totals.totalSessions,
+    totalPageViews: totals.totalPageViews,
+    totalRevenue: totals.totalRevenue,
+    totalPurchases: totals.totalPurchases,
+    engagementRate:
+      totals.totalSessions > 0 ? totals.weightedEngagement / totals.totalSessions : 0,
+    bounceRate: totals.totalSessions > 0 ? totals.weightedBounce / totals.totalSessions : 0,
+    averageSessionDuration:
+      totals.totalSessions > 0 ? totals.weightedDuration / totals.totalSessions : 0,
+  };
 }
 
 export function mergeGa4Rows(rowsList: Ga4Row[][]): Ga4Row[] {
@@ -299,12 +448,34 @@ export function mergeGa4Rows(rowsList: Ga4Row[][]): Ga4Row[] {
     for (const row of rows) {
       const existing = map.get(row.key);
       if (existing) {
+        const sessions = existing.sessions + row.sessions;
         map.set(row.key, {
           key: row.key,
           users: existing.users + row.users,
-          sessions: existing.sessions + row.sessions,
+          sessions,
           pageViews: existing.pageViews + row.pageViews,
           revenue: existing.revenue + row.revenue,
+          purchases: existing.purchases + row.purchases,
+          engagementRate: mergeWeightedRate(
+            existing.engagementRate,
+            existing.sessions,
+            row.engagementRate,
+            row.sessions,
+          ),
+          bounceRate: mergeWeightedRate(
+            existing.bounceRate,
+            existing.sessions,
+            row.bounceRate,
+            row.sessions,
+          ),
+          averageSessionDuration: mergeWeightedRate(
+            existing.averageSessionDuration,
+            existing.sessions,
+            row.averageSessionDuration,
+            row.sessions,
+          ),
+          itemsViewed: existing.itemsViewed + row.itemsViewed,
+          itemsAddedToCart: existing.itemsAddedToCart + row.itemsAddedToCart,
         });
       } else {
         map.set(row.key, { ...row });
@@ -411,6 +582,10 @@ export async function queryGa4MergedByDimension(
   let rows = mergeGa4Rows(results.map((result) => result.rows));
   if (dimension === "date") {
     rows = rows.sort((a, b) => a.key.localeCompare(b.key));
+  } else if (dimension === "itemName") {
+    rows = rows.sort((a, b) => b.revenue - a.revenue).slice(0, rowLimit);
+  } else if (dimension === "sessionGoogleAdsCampaignName") {
+    rows = rows.sort((a, b) => b.sessions - a.sessions).slice(0, rowLimit);
   } else {
     rows = rows.sort((a, b) => b.users - a.users).slice(0, rowLimit);
   }
