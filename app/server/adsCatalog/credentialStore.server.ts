@@ -249,6 +249,8 @@ export type GoogleAdsCredential = {
   customerId: string;
   /** MCC 场景下访问子账户所需的经理账户 ID；直连账户与 customerId 相同。 */
   loginCustomerId?: string;
+  /** OAuth 时可切换的全部广告账户（持久化，便于已连接后切换）。 */
+  availableAccounts?: PendingOAuthAccount[];
   remarketing?: GoogleRemarketingConfig;
   updatedAt: string;
 };
@@ -333,6 +335,9 @@ export async function getGoogleAdsCredential(
       typeof record.data.loginCustomerId === "string"
         ? record.data.loginCustomerId
         : undefined,
+    availableAccounts: Array.isArray(record.data.availableAccounts)
+      ? (record.data.availableAccounts as PendingOAuthAccount[])
+      : undefined,
     remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
   };
@@ -342,7 +347,7 @@ export async function setGoogleAdsCredential(
   shop: string,
   payload: Pick<
     GoogleAdsCredential,
-    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId"
+    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId" | "availableAccounts"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -352,6 +357,11 @@ export async function setGoogleAdsCredential(
   }
   // Merge with any existing manual config fields so we don't drop them.
   const existing = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
+  const availableAccounts =
+    payload.availableAccounts ??
+    (Array.isArray(existing?.data.availableAccounts)
+      ? (existing.data.availableAccounts as PendingOAuthAccount[])
+      : []);
   await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
     ...(existing?.data ?? {}),
     accessToken,
@@ -362,6 +372,7 @@ export async function setGoogleAdsCredential(
       (typeof existing?.data.loginCustomerId === "string"
         ? existing.data.loginCustomerId
         : null),
+    availableAccounts,
   });
 }
 

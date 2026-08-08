@@ -140,6 +140,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           metafieldSyncError: ads?.remarketing?.metafieldSync?.error ?? "",
         },
         pendingAccounts: adsPending?.accounts ?? [],
+        availableAccounts:
+          ads?.availableAccounts?.map((a) => ({
+            id: a.id,
+            name: a.name,
+            formatted: a.formatted,
+          })) ?? [],
       },
       tiktok: {
         connected: Boolean(tiktok),

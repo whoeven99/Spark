@@ -130,6 +130,15 @@ async function bindGmcSide(params: {
   return "select";
 }
 
+function buildAdsAccountOptions(customers: AdsCustomer[]) {
+  return customers.map((c) => ({
+    id: c.customerId,
+    formatted: c.formatted,
+    name: c.descriptiveName,
+    loginCustomerId: c.loginCustomerId,
+  }));
+}
+
 async function bindAdsSide(params: {
   shop: string;
   tokens: OAuthTokens;
@@ -160,6 +169,7 @@ async function bindAdsSide(params: {
       refreshToken: tokens.refreshToken,
       customerId,
       loginCustomerId,
+      availableAccounts: buildAdsAccountOptions(customers),
     });
     return "success";
   }

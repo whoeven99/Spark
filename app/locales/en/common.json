@@ -1726,6 +1726,8 @@
     "adsConnectHint": "After authorization, bind an Ads account here for Shopping and remarketing.",
     "adsConnectSideHint": "Google Ads is not bound yet. Use Connect Google below to finish setup.",
     "adsSelectAccount": "Multiple ad accounts were found. Choose the one to bind:",
+    "adsSwitchAccount": "Switch ad account",
+    "adsCurrentAccount": "Current",
     "confirmSelection": "Confirm selection",
     "googleRemarketing": {
       "title": "Google dynamic remarketing",

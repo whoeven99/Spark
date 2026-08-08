@@ -1726,6 +1726,8 @@
     "adsConnectHint": "授权后可在此绑定 Ads 账户，用于 Shopping 投放与再营销。",
     "adsConnectSideHint": "尚未绑定 Google Ads。点击下方按钮重新进行 Google 授权以补齐。",
     "adsSelectAccount": "检测到多个广告账户，请选择要绑定的账户：",
+    "adsSwitchAccount": "切换广告账户",
+    "adsCurrentAccount": "当前",
     "confirmSelection": "确认选择",
     "googleRemarketing": {
       "title": "Google 动态再营销",

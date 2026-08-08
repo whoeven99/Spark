@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
@@ -54,6 +54,17 @@ const secondaryBtn = {
   cursor: "pointer",
 };
 
+const activeAccountBtn = {
+  ...secondaryBtn,
+  border: `1px solid #0f7a52`,
+  background: "#f4fbf7",
+  color: "#0f7a52",
+  cursor: "default",
+  textAlign: "left" as const,
+};
+
+type AdsAccountOption = { id: string; name?: string; formatted?: string };
+
 export function GoogleConnectPanels({
   credentials,
   adsLink,
@@ -67,11 +78,51 @@ export function GoogleConnectPanels({
 
   const gmc = credentials.googleMerchant;
   const ads = credentials.googleAds;
+  const [adsAccounts, setAdsAccounts] = useState<AdsAccountOption[]>(() =>
+    ads.pendingAccounts.length > 0 ? ads.pendingAccounts : ads.availableAccounts,
+  );
   const showPrimaryConnect =
     !gmc.connected &&
     !ads.connected &&
     gmc.pendingAccounts.length === 0 &&
     ads.pendingAccounts.length === 0;
+
+  useEffect(() => {
+    if (ads.pendingAccounts.length > 0) {
+      setAdsAccounts(ads.pendingAccounts);
+      return;
+    }
+    if (ads.availableAccounts.length > 0) {
+      setAdsAccounts(ads.availableAccounts);
+      return;
+    }
+    if (!ads.connected) {
+      setAdsAccounts([]);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(`/api/ads-catalog/google-ads-accounts${locationSearch}`)
+      .then((resp) => resp.json())
+      .then((data: { ok?: boolean; accounts?: AdsAccountOption[] }) => {
+        if (!cancelled && data.ok && Array.isArray(data.accounts)) {
+          setAdsAccounts(data.accounts);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [ads.availableAccounts, ads.connected, ads.pendingAccounts, locationSearch]);
+
+  async function selectAdsAccount(customerId: string) {
+    if (ads.connected && customerId === ads.customerId) return;
+    await post("/api/ads-catalog/google-ads-accounts", { customerId });
+  }
+
+  const selectingInitialAds = !ads.connected && ads.pendingAccounts.length > 0;
+  const showAdsAccountPicker =
+    selectingInitialAds || (ads.connected && adsAccounts.length > 0) || ads.pendingAccounts.length > 0;
 
   function openCombinedOAuth(reauth = false) {
     const reauthSuffix = reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
@@ -205,28 +256,48 @@ export function GoogleConnectPanels({
           {t("adsCatalog.adsPanelTitle")}
         </h3>
 
-        {ads.pendingAccounts.length > 0 ? (
-          <AccountSelect
-            label={t("adsCatalog.adsSelectAccount")}
-            accounts={ads.pendingAccounts.map((a) => ({
-              id: a.id,
-              label: a.name ? `${a.name} (${a.formatted || a.id})` : a.formatted || a.id,
-            }))}
-            busy={busy}
-            onSelect={(id) =>
-              void post("/api/ads-catalog/google-ads-accounts", { customerId: id })
-            }
-          />
-        ) : ads.connected ? (
+        {showAdsAccountPicker ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {selectingInitialAds
+                ? t("adsCatalog.adsSelectAccount")
+                : t("adsCatalog.adsSwitchAccount")}
+            </div>
+            {adsAccounts.map((a) => {
+              const isActive = ads.connected && a.id === ads.customerId;
+              const label = a.name
+                ? `${a.name} (${a.formatted || a.id})`
+                : a.formatted || a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={busy || isActive}
+                  style={isActive ? activeAccountBtn : { ...secondaryBtn, textAlign: "left" as const }}
+                  onClick={() => void selectAdsAccount(a.id)}
+                >
+                  {label}
+                  {isActive ? ` · ${t("adsCatalog.adsCurrentAccount")}` : ""}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {ads.connected ? (
           <>
-            <div style={{ fontSize: 13 }}>
-              <div style={{ color: "#0f7a52", fontWeight: 600 }}>{t("adsCatalog.adsBound")}</div>
-              <div>
-                {t("adsCatalog.adsCustomerId", {
-                  id: ads.customerIdFormatted || ads.customerId,
-                })}
+            {adsAccounts.length === 0 ? (
+              <div style={{ fontSize: 13 }}>
+                <div style={{ color: "#0f7a52", fontWeight: 600 }}>{t("adsCatalog.adsBound")}</div>
+                <div>
+                  {t("adsCatalog.adsCustomerId", {
+                    id: ads.customerIdFormatted || ads.customerId,
+                  })}
+                </div>
               </div>
-              <div style={{ marginTop: 4 }}>
+            ) : null}
+            <div style={{ fontSize: 13 }}>
+              <div style={{ marginTop: adsAccounts.length > 0 ? 0 : 4 }}>
                 {adsLink?.state === "linked" ? (
                   <span style={{ color: "#0f7a52" }}>{t("adsCatalog.adsLinked")}</span>
                 ) : adsLink?.state === "pending" ? (
@@ -256,7 +327,7 @@ export function GoogleConnectPanels({
                 disabled={busy || googleOAuth.redirecting}
                 onClick={() => openCombinedOAuth(true)}
               >
-                {t("adsCatalog.adsChange")}
+                {t("adsCatalog.gmcReauth")}
               </button>
               <button
                 type="button"
@@ -268,7 +339,7 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
-        ) : showPrimaryConnect ? (
+        ) : selectingInitialAds ? null : showPrimaryConnect ? (
           <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectHint")}</p>
         ) : (
           <>

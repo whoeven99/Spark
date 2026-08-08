@@ -112,6 +112,7 @@ export interface CredentialsView {
       metafieldSyncError: string;
     };
     pendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+    availableAccounts: Array<{ id: string; name?: string; formatted?: string }>;
   };
   tiktok: {
     connected: boolean;
