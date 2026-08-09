@@ -2,6 +2,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { checkMetaCatalogStatusesForShop } from "../server/adsCatalog/metaCatalogStatusChecker.server";
+import { summarizeProductStatusGroups } from "../server/adsCatalog/productStatusSummary.server";
+
+/** 明细列表的分页上限；summary 不受它影响。 */
+const DETAIL_LIMIT = 250;
 
 interface StatusRow {
   offerId: string;
@@ -16,11 +20,19 @@ async function readCachedStatuses(shop: string): Promise<{
   products: StatusRow[];
   lastCheckedAt: string | null;
 }> {
-  const rows = await prisma.metaProductStatus.findMany({
-    where: { shop },
-    orderBy: { checkedAt: "desc" },
-    take: 250,
-  });
+  // 明细分页取样，计数走全量 groupBy：商品多于分页上限时不能用样本行数当总数。
+  const [rows, groups] = await Promise.all([
+    prisma.metaProductStatus.findMany({
+      where: { shop },
+      orderBy: { checkedAt: "desc" },
+      take: DETAIL_LIMIT,
+    }),
+    prisma.metaProductStatus.groupBy({
+      by: ["status"],
+      where: { shop },
+      _count: { _all: true },
+    }),
+  ]);
   const products = rows.map((r) => ({
     offerId: r.retailerId,
     title: r.title,
@@ -28,13 +40,9 @@ async function readCachedStatuses(shop: string): Promise<{
     issues: r.issues,
     checkedAt: r.checkedAt.toISOString(),
   }));
+  const { total, approved, disapproved, pending } = summarizeProductStatusGroups(groups);
   return {
-    summary: {
-      total: products.length,
-      approved: products.filter((p) => p.status === "approved").length,
-      disapproved: products.filter((p) => p.status === "disapproved").length,
-      pending: products.filter((p) => p.status === "pending").length,
-    },
+    summary: { total, approved, disapproved, pending },
     products,
     lastCheckedAt: rows[0]?.checkedAt.toISOString() ?? null,
   };
