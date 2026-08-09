@@ -34,20 +34,18 @@ export default function AppInsights() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ paddingTop: "0.5rem" }}>
-        <SegmentedPageTabs
-          activeTab={activeTab}
-          items={items}
-          ariaLabel={t("nav.insights")}
-          onTabChange={(tab) =>
-            navigate(
-              tab === "overview"
-                ? `/app/insights${location.search}`
-                : `/app/insights/${tab}${location.search}`,
-            )
-          }
-        />
-      </div>
+      <SegmentedPageTabs
+        activeTab={activeTab}
+        items={items}
+        ariaLabel={t("nav.insights")}
+        onTabChange={(tab) =>
+          navigate(
+            tab === "overview"
+              ? `/app/insights${location.search}`
+              : `/app/insights/${tab}${location.search}`,
+          )
+        }
+      />
       <Outlet />
     </div>
   );

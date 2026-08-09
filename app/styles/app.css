@@ -64,9 +64,8 @@ code {
   display: flex;
   gap: 8px;
   width: max-content;
-  max-width: calc(100% - 32px);
+  max-width: 100%;
   min-width: min(100%, max-content);
-  margin: 16px 16px 0;
   padding: 4px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -226,8 +225,7 @@ code {
 
 @media (max-width: 768px) {
   .spark-segmented-tabs {
-    max-width: calc(100% - 24px);
-    margin: 12px 12px 0;
+    max-width: 100%;
     border-radius: 12px;
     padding: 4px;
     gap: 4px;
@@ -240,8 +238,8 @@ code {
   }
 
   .spark-segmented-tabs.is-mobile-full {
-    width: calc(100% - 24px);
-    min-width: calc(100% - 24px);
+    width: 100%;
+    min-width: 100%;
   }
 
   .spark-segmented-tabs.is-mobile-full .spark-segmented-tabs__item {

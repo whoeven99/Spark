@@ -301,7 +301,7 @@ export function ProductImprovePage() {
   ] as const;
 
   return (
-    <s-page heading={t("generate.pageTitle")}>
+    <>
       <div style={pageContentStyle}>
         {billing.billingRequired && !billing.hasAccess ? (
           <s-banner tone="warning">
@@ -533,6 +533,6 @@ export function ProductImprovePage() {
         defaultTargetLanguage={shopLocales?.defaultTargetLanguage ?? "zh-CN"}
         onClose={() => setBatchPanelOpen(false)}
       />
-    </s-page>
+    </>
   );
 }

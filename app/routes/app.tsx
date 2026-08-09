@@ -28,6 +28,11 @@ import {
 } from "../config/appEntry.server";
 import { SupportChatWidget } from "./component/SupportChatWidget";
 import {
+  appShellContentMobileStyle,
+  appShellContentStyle,
+} from "./page/pageUiStyles";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import {
   appendEmbeddedSearchToPath,
   resolveEmbeddedLocationSearch,
 } from "../lib/embeddedLocationSearch";
@@ -146,10 +151,29 @@ export default function App() {
     <AppI18nProvider locale={locale}>
       <AppProvider embedded apiKey={apiKey}>
         <AppNav nav={nav} />
-        <Outlet />
+        <AppShellContent />
         <SupportChatWidget />
       </AppProvider>
     </AppI18nProvider>
+  );
+}
+
+/**
+ * 页面留白的唯一来源。工作台首页是整屏两栏布局，自带内边距，因此不套这层容器。
+ */
+function AppShellContent() {
+  const location = useLocation();
+  const { isMobile } = useResponsiveLayout();
+  const isWorkspace = location.pathname.replace(/\/+$/, "") === "/app";
+
+  if (isWorkspace) {
+    return <Outlet />;
+  }
+
+  return (
+    <div style={isMobile ? appShellContentMobileStyle : appShellContentStyle}>
+      <Outlet />
+    </div>
   );
 }
 

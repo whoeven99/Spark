@@ -1458,112 +1458,102 @@ export default function DailyOperationsPage() {
   }, [detailSection, searchParams]);
 
   return (
-    <s-page
-      heading={
-        detailSection
-          ? t(`dailyOps.detailTitle.${detailSection}` as const)
-          : t("dailyOps.pageTitle")
-      }
-    >
-      <div
-        style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}
-      >
-        <PageHeaderNav
-          title={
-            detailSection
-              ? t(`dailyOps.detailTitle.${detailSection}` as const)
-              : t("dailyOps.pageTitle")
-          }
-          backLabel={
-            detailSection
-              ? t("dailyOps.backToOverview")
-              : t("common.backToPrevious", { defaultValue: "返回工作台" })
-          }
-          {...(detailSection
-            ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
-            : { workspaceOnly: true })}
-          rightAction={
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <s-button
-                type="button"
-                variant="secondary"
-                onClick={submitRefresh}
-                {...(busy ? { disabled: true } : {})}
-              >
-                {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
-              </s-button>
-            </div>
-          }
-        />
+    <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
+      <PageHeaderNav
+        title={
+          detailSection
+            ? t(`dailyOps.detailTitle.${detailSection}` as const)
+            : t("dailyOps.pageTitle")
+        }
+        backLabel={
+          detailSection
+            ? t("dailyOps.backToOverview")
+            : t("common.backToPrevious", { defaultValue: "返回工作台" })
+        }
+        {...(detailSection
+          ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
+          : { workspaceOnly: true })}
+        rightAction={
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <s-button
+              type="button"
+              variant="secondary"
+              onClick={submitRefresh}
+              {...(busy ? { disabled: true } : {})}
+            >
+              {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
+            </s-button>
+          </div>
+        }
+      />
 
-        {!data.ok ? (
-          <div style={pageEmptyStateStyle}>
-            <span>{data.error}</span>
-          </div>
-        ) : !data.result.hasData ? (
-          <div style={pageEmptyStateStyle}>
-            <span>{t("dailyOps.emptyState")}</span>
-          </div>
-        ) : (
-          <>
-            {detailSection ? (
-              <DailyOperationsDetail
-                key={detailSection}
-                detailSection={detailSection}
-                result={data.result}
-                value={data.value}
-                isMobile={isMobile}
-                locale={i18n.language}
-                statusText={statusText}
-                taskStatusText={taskStatusText}
-                dueWindowText={dueWindowText}
-                selectedTaskId={selectedTaskId}
-                selectedEnvironmentKey={selectedEnvironmentKey}
-                selectedInsightKey={selectedInsightKey}
-                initialRiskTab={riskTabParam}
-                onOpenDetail={openDetail}
-                onSubmitTaskAction={submitTaskAction}
-                busy={busy}
-              />
-            ) : (
-              <DailyOperationsBody
-                result={data.result}
-                insightsView={insightsView}
-                onChangeInsightsView={setInsightsView}
-                isMobile={isMobile}
-                locale={i18n.language}
-                statusText={statusText}
-                taskStatusText={taskStatusText}
-                onSendTaskToAi={(task, presentation) => {
-                  const params = new URLSearchParams(
-                    typeof window !== "undefined"
-                      ? window.location.search.startsWith("?")
-                        ? window.location.search.slice(1)
-                        : window.location.search
-                      : "",
-                  );
-                  params.set("panel", "chat");
-                  params.set(
-                    "prefillTaskPrompt",
-                    buildTaskPrompt(
-                      task,
-                      presentation,
-                      taskStatusText(task.status),
-                      dueWindowText(task.dueWindow),
-                      t,
-                    ),
-                  );
-                  navigate(`/app?${params.toString()}`);
-                }}
-                onOpenDetail={openDetail}
-                onSubmitTaskAction={submitTaskAction}
-                busy={busy}
-              />
-            )}
-          </>
-        )}
-      </div>
-    </s-page>
+      {!data.ok ? (
+        <div style={pageEmptyStateStyle}>
+          <span>{data.error}</span>
+        </div>
+      ) : !data.result.hasData ? (
+        <div style={pageEmptyStateStyle}>
+          <span>{t("dailyOps.emptyState")}</span>
+        </div>
+      ) : (
+        <>
+          {detailSection ? (
+            <DailyOperationsDetail
+              key={detailSection}
+              detailSection={detailSection}
+              result={data.result}
+              value={data.value}
+              isMobile={isMobile}
+              locale={i18n.language}
+              statusText={statusText}
+              taskStatusText={taskStatusText}
+              dueWindowText={dueWindowText}
+              selectedTaskId={selectedTaskId}
+              selectedEnvironmentKey={selectedEnvironmentKey}
+              selectedInsightKey={selectedInsightKey}
+              initialRiskTab={riskTabParam}
+              onOpenDetail={openDetail}
+              onSubmitTaskAction={submitTaskAction}
+              busy={busy}
+            />
+          ) : (
+            <DailyOperationsBody
+              result={data.result}
+              insightsView={insightsView}
+              onChangeInsightsView={setInsightsView}
+              isMobile={isMobile}
+              locale={i18n.language}
+              statusText={statusText}
+              taskStatusText={taskStatusText}
+              onSendTaskToAi={(task, presentation) => {
+                const params = new URLSearchParams(
+                  typeof window !== "undefined"
+                    ? window.location.search.startsWith("?")
+                      ? window.location.search.slice(1)
+                      : window.location.search
+                    : "",
+                );
+                params.set("panel", "chat");
+                params.set(
+                  "prefillTaskPrompt",
+                  buildTaskPrompt(
+                    task,
+                    presentation,
+                    taskStatusText(task.status),
+                    dueWindowText(task.dueWindow),
+                    t,
+                  ),
+                );
+                navigate(`/app?${params.toString()}`);
+              }}
+              onOpenDetail={openDetail}
+              onSubmitTaskAction={submitTaskAction}
+              busy={busy}
+            />
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

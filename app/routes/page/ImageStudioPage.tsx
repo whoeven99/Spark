@@ -179,7 +179,7 @@ function ImageStudioPageInner({
   }
 
   return (
-    <s-page heading={t("imageStudio.pageTitle")}>
+    <>
       <div style={pageContentStyle}>
         <PageHeaderNav
           workspaceOnly
@@ -467,7 +467,7 @@ function ImageStudioPageInner({
         onClose={() => setBatchPanelOpen(false)}
         onBatchCreated={() => setNavTab("tasks")}
       />
-    </s-page>
+    </>
   );
 }
 

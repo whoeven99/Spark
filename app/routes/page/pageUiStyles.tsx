@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { TitleBar } from "@shopify/app-bridge-react";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
 /**
@@ -76,6 +77,20 @@ export const stickyAsideColumnStyle: CSSProperties = {
   alignSelf: "flex-start",
 };
 
+/**
+ * 应用外壳内容区：所有 /app 子页面共用的唯一留白来源（工作台首页自带整屏布局，不套这层）。
+ * 与工作台 `page/workspace/styles.ts` 的 contentStyle 同值。
+ */
+export const appShellContentStyle: CSSProperties = {
+  padding: "24px 28px 36px",
+  minWidth: 0,
+};
+
+export const appShellContentMobileStyle: CSSProperties = {
+  padding: "14px 14px 24px",
+  minWidth: 0,
+};
+
 export const pageContentStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -83,7 +98,12 @@ export const pageContentStyle: CSSProperties = {
   maxWidth: "1120px",
 };
 
+/**
+ * 移动端变体。部分调用方写成 `isMobile ? mobile : desktop` 的整体替换，
+ * 因此这里必须自带 flex 布局，不能只放差异字段。
+ */
 export const mobilePageContentStyle: CSSProperties = {
+  ...pageContentStyle,
   gap: "1rem",
   width: "100%",
 };
@@ -564,6 +584,8 @@ export function PageHeaderNav({
 
   return (
     <div style={isMobile ? pageHeaderNavMobileStyle : pageHeaderNavStyle}>
+      {/* 同步 Shopify Admin 顶部标题栏，避免切换页面后残留上一页标题 */}
+      <TitleBar title={title} />
       <div style={pageHeaderNavMainStyle}>
         <PageBackButton
           label={backLabel}
