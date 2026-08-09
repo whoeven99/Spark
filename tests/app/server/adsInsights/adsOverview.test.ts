@@ -6,6 +6,8 @@ const findManyAdInsightsSync = vi.fn();
 const groupByGmc = vi.fn();
 const groupByMeta = vi.fn();
 const findManyCredential = vi.fn();
+// 健康检查经 credentialStore 逐个 findUnique 读凭证，与连接矩阵的 findMany 是两条路径。
+const findUniqueCredential = vi.fn();
 
 vi.mock("~/db.server", () => ({
   default: {
@@ -14,7 +16,10 @@ vi.mock("~/db.server", () => ({
     adInsightsSync: { findMany: findManyAdInsightsSync },
     gmcProductStatus: { groupBy: groupByGmc },
     metaProductStatus: { groupBy: groupByMeta },
-    adPlatformCredential: { findMany: findManyCredential },
+    adPlatformCredential: {
+      findMany: findManyCredential,
+      findUnique: findUniqueCredential,
+    },
   },
 }));
 
@@ -45,6 +50,7 @@ beforeEach(() => {
   groupByGmc.mockReset().mockResolvedValue([]);
   groupByMeta.mockReset().mockResolvedValue([]);
   findManyCredential.mockReset().mockResolvedValue([]);
+  findUniqueCredential.mockReset().mockResolvedValue(null);
 });
 
 describe("summarizeProductStatusGroups", () => {
@@ -210,10 +216,34 @@ describe("buildAdsOverview", () => {
     expect(metaReview.lastCheckedAt).toBeNull();
   });
 
-  it("never selects the credentials payload", async () => {
+  it("never selects the credentials payload for the connection matrix", async () => {
     await buildAdsOverview({ shop: "s.myshopify.com", rangeDays: 7, now: NOW });
     const select = findManyCredential.mock.calls[0]?.[0]?.select ?? {};
     expect(Object.keys(select).sort()).toEqual(["externalAccountId", "platform", "updatedAt"]);
     expect(select).not.toHaveProperty("credentials");
+  });
+
+  it("includes the integration health checks", async () => {
+    findUniqueCredential.mockImplementation(async ({ where }) =>
+      where.shop_platform.platform === "meta_ads"
+        ? {
+            credentials: {
+              accessToken: "SECRET_TOKEN",
+              adAccountId: "act_1",
+              adAccountName: "Main",
+            },
+            updatedAt: new Date("2026-08-01"),
+          }
+        : null,
+    );
+
+    const overview = await buildAdsOverview({ shop: "s.myshopify.com", rangeDays: 7, now: NOW });
+
+    expect(overview.health).toHaveLength(9);
+    expect(overview.health.find((item) => item.key === "metaAds")).toMatchObject({
+      state: "ok",
+      reference: "Main",
+    });
+    expect(JSON.stringify(overview)).not.toContain("SECRET_TOKEN");
   });
 });

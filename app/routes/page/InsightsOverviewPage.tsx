@@ -4,8 +4,15 @@
  * 布局：区间工具条 → 合并 KPI → 平台明细卡 → 商品审核 → 连接与凭证。
  * 全页只读：任何写操作都通过链接跳回 Ads Catalog / 投放明细，不在这里发起。
  */
-import type { CSSProperties } from "react";
-import { useLoaderData, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { useEffect, type CSSProperties } from "react";
+import {
+  useFetcher,
+  useLoaderData,
+  useLocation,
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+} from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
@@ -28,6 +35,7 @@ import type {
   AdsOverviewReview,
   AdsOverviewSnapshot,
 } from "../../server/adsInsights/overview.server";
+import type { AdsHealthCheck, AdsHealthState } from "../../server/adsCatalog/adsHealth.server";
 import type { InsightsOverviewLoaderData } from "../app.insights._index";
 
 const PLATFORM_LABEL: Record<AdsOverviewPlatform["platform"], string> = {
@@ -234,6 +242,8 @@ function OverviewBody({
         </div>
       </section>
 
+      <HealthSection checks={overview.health} onOpenCatalog={onOpenCatalog} />
+
       <section>
         <PageSectionHeader
           title={t("insights.reviewSectionTitle")}
@@ -349,6 +359,125 @@ function CardMetric({ label, value }: { label: string; value: string }) {
       <dt style={cardMetricLabelStyle}>{label}</dt>
       <dd style={cardMetricValueStyle}>{value}</dd>
     </div>
+  );
+}
+
+type LinkProbeResponse = {
+  ok: boolean;
+  state: "not_linked" | "pending" | "linked" | "failed" | null;
+  invitationStatus?: string | null;
+  message?: string;
+};
+
+/**
+ * GMC↔Ads 关联状态只存在于 Google Ads 侧，loader 拿不到，
+ * 这里把异步探测结果合并回那一行；探测未回来时保持「探测中」。
+ */
+function applyLinkProbe(
+  check: AdsHealthCheck,
+  probe: LinkProbeResponse | undefined,
+): AdsHealthCheck {
+  if (check.key !== "gmcAdsLink" || check.state !== "unknown") return check;
+  if (!probe) return check;
+  if (!probe.ok || probe.state === null) {
+    return { ...check, detailCode: "linkProbeFailed" };
+  }
+  switch (probe.state) {
+    case "linked":
+      return { ...check, state: "ok", detailCode: "linkLinked" };
+    case "pending":
+      return { ...check, state: "warning", detailCode: "linkPending" };
+    case "not_linked":
+      return { ...check, state: "warning", detailCode: "linkNotLinked" };
+    case "failed":
+      return { ...check, state: "warning", detailCode: "linkFailed" };
+    default: {
+      const exhaustive: never = probe.state;
+      return exhaustive;
+    }
+  }
+}
+
+function HealthSection({
+  checks,
+  onOpenCatalog,
+}: {
+  checks: AdsHealthCheck[];
+  onOpenCatalog: () => void;
+}) {
+  const { t } = useTranslation();
+  const linkFetcher = useFetcher<LinkProbeResponse>();
+  const needsProbe = checks.some(
+    (check) => check.key === "gmcAdsLink" && check.state === "unknown",
+  );
+
+  useEffect(() => {
+    if (!needsProbe) return;
+    if (linkFetcher.state !== "idle" || linkFetcher.data) return;
+    linkFetcher.load("/api/ads-overview/link-status");
+  }, [needsProbe, linkFetcher]);
+
+  const resolved = checks.map((check) => applyLinkProbe(check, linkFetcher.data));
+  const pendingCount = resolved.filter((check) => check.state === "warning").length;
+
+  return (
+    <section>
+      <PageSectionHeader
+        title={t("insights.health.sectionTitle")}
+        subtitle={t("insights.health.sectionSubtitle")}
+        badge={
+          <span style={healthBadgeStyle(pendingCount > 0)}>
+            {pendingCount > 0
+              ? t("insights.health.pendingBadge", { count: pendingCount })
+              : t("insights.health.allGood")}
+          </span>
+        }
+      />
+      <div style={tableWrapStyle}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>{t("insights.health.colPlatform")}</th>
+              <th style={thStyle}>{t("insights.health.colItem")}</th>
+              <th style={thStyle}>{t("insights.health.colState")}</th>
+              <th style={thStyle}>{t("insights.health.colDetail")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {resolved.map((check, index) => {
+              // 同平台只在首行显示平台名，读起来像分组而不是重复列。
+              const isGroupStart = index === 0 || resolved[index - 1]!.platform !== check.platform;
+              return (
+                <tr key={check.key}>
+                  <td style={{ ...tdStyle, fontWeight: isGroupStart ? 700 : 400 }}>
+                    {isGroupStart ? PLATFORM_LABEL[check.platform] : ""}
+                  </td>
+                  <td style={tdStyle}>{t(`insights.health.item.${check.key}`)}</td>
+                  <td style={tdStyle}>
+                    <span style={healthStatePillStyle(check.state)}>
+                      {t(`insights.health.state.${check.state}`)}
+                    </span>
+                  </td>
+                  <td style={tdMetaStyle}>
+                    {t(`insights.health.detail.${check.detailCode}`)}
+                    {check.reference ? ` · ${check.reference}` : ""}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {pendingCount > 0 ? (
+        <button
+          type="button"
+          style={{ ...secondaryButtonStyle, marginTop: "0.75rem" }}
+          onClick={onOpenCatalog}
+        >
+          {t("insights.health.fixCta")}
+        </button>
+      ) : null}
+    </section>
   );
 }
 
@@ -526,6 +655,57 @@ const statusPillStyle = (connected: boolean): CSSProperties => ({
   color: connected ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
   background: connected ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
   border: `1px solid ${connected ? "rgba(0, 166, 124, 0.28)" : pageColorTokens.borderSubtle}`,
+});
+
+const healthStateTokens: Record<
+  AdsHealthState,
+  { color: string; background: string; border: string }
+> = {
+  ok: {
+    color: pageColorTokens.brandGreenDark,
+    background: pageColorTokens.brandGreenLight,
+    border: "rgba(0, 166, 124, 0.28)",
+  },
+  warning: {
+    color: "#8a5a00",
+    background: "#fff7e0",
+    border: "rgba(185, 137, 0, 0.3)",
+  },
+  missing: {
+    color: pageColorTokens.textSecondary,
+    background: pageColorTokens.surfaceMuted,
+    border: pageColorTokens.borderSubtle,
+  },
+  unknown: {
+    color: pageColorTokens.textSecondary,
+    background: pageColorTokens.surfaceMuted,
+    border: pageColorTokens.borderSubtle,
+  },
+};
+
+const healthStatePillStyle = (state: AdsHealthState): CSSProperties => {
+  const token = healthStateTokens[state];
+  return {
+    display: "inline-block",
+    padding: "0.12rem 0.45rem",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    color: token.color,
+    background: token.background,
+    border: `1px solid ${token.border}`,
+  };
+};
+
+const healthBadgeStyle = (pending: boolean): CSSProperties => ({
+  padding: "0.2rem 0.55rem",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  color: pending ? "#8a5a00" : pageColorTokens.brandGreenDark,
+  background: pending ? "#fff7e0" : pageColorTokens.brandGreenLight,
+  border: `1px solid ${pending ? "rgba(185, 137, 0, 0.3)" : "rgba(0, 166, 124, 0.28)"}`,
 });
 
 const tableWrapStyle: CSSProperties = {

@@ -10,6 +10,7 @@
  */
 
 import prisma from "../../db.server";
+import { buildAdsHealthChecks, type AdsHealthCheck } from "../adsCatalog/adsHealth.server";
 import { summarizeProductStatusGroups } from "../adsCatalog/productStatusSummary.server";
 import { resolveDateWindow } from "./dateRange.server";
 import { isSnapshotFresh } from "./store.server";
@@ -101,6 +102,8 @@ export type AdsOverviewSnapshot = {
   platforms: AdsOverviewPlatform[];
   reviews: AdsOverviewReview[];
   connections: AdsOverviewConnection[];
+  /** 接入链路健康；`gmcAdsLink` 为 `unknown` 时需要前端异步探测 */
+  health: AdsHealthCheck[];
   generatedAt: string;
 };
 
@@ -170,7 +173,7 @@ export async function buildAdsOverview(params: {
   const now = params.now ?? new Date();
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays, now);
 
-  const [metricGroups, entityGroups, syncRows, gmcGroups, metaGroups, credentialRows] =
+  const [metricGroups, entityGroups, syncRows, gmcGroups, metaGroups, credentialRows, health] =
     await Promise.all([
       prisma.adMetricDaily.groupBy({
         by: ["platform"],
@@ -206,6 +209,7 @@ export async function buildAdsOverview(params: {
         where: { shop, platform: { in: [...CONNECTION_PLATFORM_KEYS] } },
         select: { platform: true, externalAccountId: true, updatedAt: true },
       }),
+      buildAdsHealthChecks(shop),
     ]);
 
   const sumsByPlatform = new Map<string, MetricSums>();
@@ -290,6 +294,7 @@ export async function buildAdsOverview(params: {
     platforms,
     reviews: [buildReview("gmc", gmcGroups), buildReview("meta", metaGroups)],
     connections,
+    health,
     generatedAt: now.toISOString(),
   };
 }
