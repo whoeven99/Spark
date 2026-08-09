@@ -63,8 +63,7 @@ export default function TodayOverview() {
       <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
         <DestinationPage
           title="经营"
-          subtitle="先看今日结果，再进入诊断、订单风险或任务中心处理具体对象。"
-          eyebrow={t("nav.today")}
+          subtitle="聚焦今日经营结果与待处理事项。"
           titleBarTitle={t("nav.today")}
           backLabel="返回首页"
           fallbackPath="/app"

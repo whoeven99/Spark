@@ -21,8 +21,7 @@ export default function AppTasks() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title="任务中心"
-        subtitle="所有后台任务统一进入这里：文案、图片、批处理和后续审核结果都按状态归档。"
-        eyebrow={t("nav.tasks")}
+        subtitle="统一查看并处理文案、图片与批处理任务。"
         titleBarTitle={t("nav.tasks")}
         backLabel="返回首页"
         fallbackPath="/app"

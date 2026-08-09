@@ -82,7 +82,6 @@ export default function SettingsIndex() {
       <DestinationPage
         title={t("settingsShell.title")}
         subtitle={t("settingsShell.subtitle")}
-        eyebrow={t("nav.settings")}
         titleBarTitle={t("nav.settings")}
         backLabel={t("settingsShell.back")}
         fallbackPath="/app"

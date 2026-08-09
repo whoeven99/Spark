@@ -104,7 +104,7 @@
   },
   "insights": {
     "title": "洞察",
-    "subtitle": "已接入广告平台的投放、商品审核与连接状态汇总，数据只读。",
+    "subtitle": "聚合广告投放与连接状态，数据只读。",
     "back": "返回工作台",
     "tabOverview": "总览",
     "tabPerformance": "投放表现",
@@ -216,7 +216,7 @@
   },
   "settingsShell": {
     "title": "设置",
-    "subtitle": "计费、广告 Catalog、物流集成与数据工具",
+    "subtitle": "管理计费、集成连接与数据工具。",
     "back": "返回工作台",
     "navBilling": "套餐与额度",
     "navLogistics": "物流集成",
@@ -526,7 +526,7 @@
   "imageStudio": {
     "pageTitle": "图片生成与翻译",
     "sectionTitle": "图片生成与翻译",
-    "pageSubtitle": "在同一页面生成商品图或翻译图片文字，历史记录统一保存",
+    "pageSubtitle": "在一个流程里完成图片生成、翻译与任务跟进。",
     "tabListLabel": "选择功能",
     "tabGenerate": "生成图片",
     "tabTranslate": "图片翻译",
@@ -1435,7 +1435,7 @@
     "statusScored": "已评分"
   },
   "productImproveStage1": {
-    "subtitle": "在配置页面开始任务，然后在任务列表中审核并应用结果。",
+    "subtitle": "先配置任务，再到任务列表审核并应用结果。",
     "tabsConfig": "配置",
     "tabsTasks": "任务列表",
     "tasksBadge": "{{count}} 个任务",
