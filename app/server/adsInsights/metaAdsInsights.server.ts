@@ -9,7 +9,7 @@ import {
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
 import { resolveDateWindow } from "./dateRange.server";
-import { nestFlatAdRows } from "./nest.server";
+import { collapseDailyRows, nestFlatAdRows, toDailyRows } from "./nest.server";
 import {
   type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
@@ -24,6 +24,8 @@ type MetaAction = { action_type?: string; value?: string };
 type MetaRoas = { action_type?: string; value?: string };
 
 type MetaInsightRow = {
+  /** time_increment=1 时每行的日期（YYYY-MM-DD）。 */
+  date_start?: string;
   campaign_id?: string;
   campaign_name?: string;
   adset_id?: string;
@@ -36,8 +38,6 @@ type MetaInsightRow = {
   ctr?: string;
   cpc?: string;
   cpm?: string;
-  reach?: string;
-  frequency?: string;
   actions?: MetaAction[];
   action_values?: MetaAction[];
   outbound_clicks?: MetaAction[];
@@ -188,8 +188,6 @@ async function fetchAllInsights(params: {
     "ctr",
     "cpc",
     "cpm",
-    "reach",
-    "frequency",
     "actions",
     "action_values",
     "outbound_clicks",
@@ -205,6 +203,8 @@ async function fetchAllInsights(params: {
       level: "ad",
       fields,
       time_range: JSON.stringify({ since: params.dateStart, until: params.dateEnd }),
+      // 按天拆分：日指标要落库，区间总量无法反推每一天。
+      time_increment: "1",
       limit: "500",
     },
     maxPages: 40,
@@ -253,6 +253,7 @@ function mapInsightRow(
   const adId = String(row.ad_id ?? "").trim();
 
   return {
+    date: row.date_start ?? "",
     campaignId,
     campaignName: row.campaign_name?.trim() || campaignId,
     campaignStatus: statuses.campaigns.get(campaignId) ?? "UNKNOWN",
@@ -275,8 +276,9 @@ function mapInsightRow(
       purchaseValue,
       addToCart,
       landingPageViews,
-      reach: toNumber(row.reach) || null,
-      frequency: toNumber(row.frequency) || null,
+      // reach / frequency 是去重指标，按天拉取后无法还原区间值，不再请求也不落库。
+      reach: null,
+      frequency: null,
       outboundClicks: sumActionValues(row.outbound_clicks) || null,
       videoViews: sumActionValues(row.video_play_actions) || null,
       thruplay: sumActionValues(row.video_thruplay_watched_actions) || null,
@@ -324,9 +326,11 @@ export async function fetchMetaAdsInsightsWithCredential(params: {
     throw e;
   }
 
-  const flat = rows
+  const daily = rows
     .map((row) => mapInsightRow(row, statuses))
-    .filter((r) => r.campaignId && r.adSetId && r.adId);
+    .filter((r) => r.campaignId && r.adSetId && r.adId && r.date);
+  // 素材视图按广告展示，日粒度先折叠回每广告一行。
+  const flat = collapseDailyRows(daily);
 
   const wantCreatives = Boolean(params.options?.includeCreatives);
   const campaigns = wantCreatives ? [] : nestFlatAdRows(flat);
@@ -350,7 +354,7 @@ export async function fetchMetaAdsInsightsWithCredential(params: {
     : [];
 
   console.info(
-    `${LOG_PREFIX} step=done shop=${shop} campaigns=${campaigns.length} ads=${flat.length}`,
+    `${LOG_PREFIX} step=done shop=${shop} campaigns=${campaigns.length} ads=${flat.length} dailyRows=${daily.length}`,
   );
 
   return {
@@ -366,6 +370,7 @@ export async function fetchMetaAdsInsightsWithCredential(params: {
     keywords: [],
     searchTerms: [],
     creatives,
+    daily: toDailyRows(daily),
   };
 }
 

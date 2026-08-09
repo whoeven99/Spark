@@ -50,13 +50,15 @@ describe("Google Merchant credential merge", () => {
 
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: {
+        update: expect.objectContaining({
           credentials: expect.objectContaining({
             accessToken: "new-token",
             subscriptionName: "accounts/123/notificationsubscriptions/456",
             dataSourceName: "accounts/123/dataSources/789",
           }),
-        },
+          // merchantId 同步进索引列，供 GMC 通知反查店铺。
+          externalAccountId: "123",
+        }),
       }),
     );
   });
@@ -112,12 +114,13 @@ describe("Google Merchant credential merge", () => {
 
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: {
+        update: expect.objectContaining({
           credentials: expect.objectContaining({
             accessToken: "new-token",
             remarketing: expect.objectContaining({ tagId: "AW-123456789" }),
           }),
-        },
+          externalAccountId: "123",
+        }),
       }),
     );
   });

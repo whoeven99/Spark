@@ -1,4 +1,4 @@
-import prisma from "../../db.server";
+import { findShopByMetaCatalogId } from "./credentialStore.server";
 import { checkMetaCatalogStatusesForShop } from "./metaCatalogStatusChecker.server";
 
 const LOG_PREFIX = "[Webhook][MetaCatalog]";
@@ -89,14 +89,10 @@ export function collectMetaCatalogIds(body: unknown): string[] {
   return [...ids];
 }
 
-/** 反查哪个店铺绑定了该 catalog（与 GMC 通知同一套 json_extract 方式）。 */
+/** 反查哪个店铺绑定了该 catalog；查库失败不能让 webhook 返回非 200。 */
 async function findShopByCatalogId(catalogId: string): Promise<string | null> {
   try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ shop: string }>>(
-      `SELECT shop FROM "AdPlatformCredential" WHERE platform = 'meta_catalog' AND json_extract(credentials, '$.catalogId') = ? LIMIT 1`,
-      catalogId,
-    );
-    return rows[0]?.shop ?? null;
+    return await findShopByMetaCatalogId(catalogId);
   } catch (e) {
     console.warn(
       `${LOG_PREFIX} findShopByCatalogId failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -108,7 +104,7 @@ async function findShopByCatalogId(catalogId: string): Promise<string | null> {
 /**
  * 合并窗口内的事件后刷新审核状态。
  *
- * 刷新是一次全量拉取（最多 250 条），所以不能放在 webhook 响应链路里：
+ * 刷新是一次全量拉取，所以不能放在 webhook 响应链路里：
  * Meta 对非 200 会重试，必须先快速 200 再后台刷新。窗口很短，
  * 进程重启丢失的代价可接受，下一次事件或手动刷新会补上。
  */

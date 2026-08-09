@@ -67,21 +67,72 @@ async function readPlatformCredential(
   return { data: row.credentials, updatedAt: row.updatedAt };
 }
 
+/**
+ * 各平台凭证 JSON 里代表平台侧账户/目录的字段名。
+ * `writePlatformCredential` 据此派生 `externalAccountId` 索引列，
+ * 这样索引列不会和 JSON 漂移；未列出的平台（pending 中转记录）不建索引。
+ */
+const EXTERNAL_ACCOUNT_ID_FIELD: Record<string, string> = {
+  [META_CATALOG_PLATFORM]: "catalogId",
+  [META_ADS_PLATFORM]: "adAccountId",
+  [GOOGLE_MERCHANT_PLATFORM]: "merchantId",
+  [GOOGLE_ADS_PLATFORM]: "customerId",
+  [TIKTOK_CATALOG_PLATFORM]: "catalogId",
+};
+
+function deriveExternalAccountId(
+  platform: string,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const field = EXTERNAL_ACCOUNT_ID_FIELD[platform];
+  if (!field) return undefined;
+  const raw = payload[field];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
 async function writePlatformCredential(
   shop: string,
   platform: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  // 派生不到时不写该列：部分写入场景（只补订阅名）应保留已存值。
+  const external = deriveExternalAccountId(platform, payload);
   await prisma.adPlatformCredential.upsert({
     where: { shop_platform: { shop, platform } },
-    update: { credentials: payload as Prisma.InputJsonValue },
+    update: {
+      credentials: payload as Prisma.InputJsonValue,
+      ...(external ? { externalAccountId: external } : {}),
+    },
     create: {
       shop,
       platform,
       credentials: payload as Prisma.InputJsonValue,
+      externalAccountId: external ?? null,
     },
   });
 }
+
+/** 按平台侧账户标识反查绑定店铺；webhook 只带平台 ID 时使用。 */
+async function findShopByExternalAccountId(
+  platform: string,
+  externalAccountId: string,
+): Promise<string | null> {
+  const id = externalAccountId.trim();
+  if (!id) return null;
+  const row = await prisma.adPlatformCredential.findFirst({
+    where: { platform, externalAccountId: id },
+    select: { shop: true },
+  });
+  return row?.shop ?? null;
+}
+
+/** Meta Catalog webhook 反查：哪个店铺绑定了该 catalog。 */
+export const findShopByMetaCatalogId = (catalogId: string) =>
+  findShopByExternalAccountId(META_CATALOG_PLATFORM, catalogId);
+
+/** GMC 通知反查：哪个店铺绑定了该 merchant。 */
+export const findShopByGmcMerchantId = (merchantId: string) =>
+  findShopByExternalAccountId(GOOGLE_MERCHANT_PLATFORM, merchantId);
 
 // ─── Facebook catalog ───────────────────────────────────────────────────────
 

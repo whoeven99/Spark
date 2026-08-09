@@ -195,6 +195,9 @@ function logCriticalEnvStatus(): void {
     ["COSMOS_AGENT_RUNS_CONTAINER", process.env.COSMOS_AGENT_RUNS_CONTAINER, "agent_runs"],
   ]);
 
+  // 主应用专用 Render KV：`SPARK_KV`（测试实例 spark-kv-test）。
+  // 兼容旧 `REDIS_URL` / host+password 写法，便于本地与历史环境。
+  const sparkKv = process.env.SPARK_KV?.trim();
   const redisUrl = process.env.REDIS_URL?.trim();
   const redisHost =
     process.env.REDIS_HOSTNAME?.trim() ||
@@ -202,13 +205,17 @@ function logCriticalEnvStatus(): void {
     process.env.REDISCACHEHOSTNAME?.trim();
   const redisPassword =
     process.env.REDIS_PASSWORD?.trim() || process.env.REDISCACHEKEY?.trim();
-  logEnvCheck("Redis", Boolean(redisUrl || (redisHost && redisPassword)), redisUrl
-    ? [["REDIS_URL", redisUrl]]
-    : [
-        ["REDIS_HOSTNAME", process.env.REDIS_HOSTNAME],
-        ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
-        ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
-      ]);
+  const redisOk = Boolean(sparkKv || redisUrl || (redisHost && redisPassword));
+  const redisFields: Array<[string, string | undefined, string?]> = sparkKv
+    ? [["SPARK_KV", sparkKv]]
+    : redisUrl
+      ? [["REDIS_URL", redisUrl]]
+      : [
+          ["REDIS_HOSTNAME", process.env.REDIS_HOSTNAME],
+          ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
+          ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
+        ];
+  logEnvCheck("Redis", redisOk, redisFields);
 
   const blobConn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   logEnvCheck("Blob", Boolean(blobConn), [

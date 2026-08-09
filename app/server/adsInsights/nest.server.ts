@@ -2,12 +2,13 @@ import {
   type AdsInsightsAd,
   type AdsInsightsAdSet,
   type AdsInsightsCampaign,
+  type AdsInsightsDailyRow,
   type AdsInsightsMetrics,
   emptyMetrics,
   finalizeMetrics,
 } from "./types.server";
 
-type FlatAdRow = {
+export type FlatAdRow = {
   campaignId: string;
   campaignName: string;
   campaignStatus: string;
@@ -18,6 +19,12 @@ type FlatAdRow = {
   adName: string;
   adStatus: string;
   metrics: AdsInsightsMetrics;
+};
+
+/** 平台按天拉取时的扁平行。 */
+export type FlatAdDailyRow = FlatAdRow & {
+  /** UTC 日历日，YYYY-MM-DD */
+  date: string;
 };
 
 function sumNullable(a: number | null, b: number | null): number | null {
@@ -70,6 +77,61 @@ export function mergeMetrics(
     initiateCheckout: sumNullable(a.initiateCheckout, b.initiateCheckout),
     allConversions: sumNullable(a.allConversions, b.allConversions),
   });
+}
+
+/**
+ * 把按天拉取的行折叠成每广告一行，供既有嵌套逻辑消费。
+ *
+ * reach / frequency 是去重指标，日粒度相加会虚高，折叠后一律清空，
+ * 与落库口径保持一致（详见 `AdMetricDaily`）。
+ */
+export function collapseDailyRows(rows: FlatAdDailyRow[]): FlatAdRow[] {
+  const byAdId = new Map<string, FlatAdRow>();
+  for (const row of rows) {
+    const existing = byAdId.get(row.adId);
+    if (existing) {
+      existing.metrics = mergeMetrics(existing.metrics, row.metrics);
+      continue;
+    }
+    byAdId.set(row.adId, {
+      campaignId: row.campaignId,
+      campaignName: row.campaignName,
+      campaignStatus: row.campaignStatus,
+      adSetId: row.adSetId,
+      adSetName: row.adSetName,
+      adSetStatus: row.adSetStatus,
+      adId: row.adId,
+      adName: row.adName,
+      adStatus: row.adStatus,
+      metrics: row.metrics,
+    });
+  }
+  for (const row of byAdId.values()) {
+    row.metrics = { ...row.metrics, reach: null, frequency: null };
+  }
+  return [...byAdId.values()];
+}
+
+/** 扁平按天行 → 落库用的日指标行；同一广告同一天的多行先合并。 */
+export function toDailyRows(rows: FlatAdDailyRow[]): AdsInsightsDailyRow[] {
+  const byAdDate = new Map<string, AdsInsightsDailyRow>();
+  for (const row of rows) {
+    if (!row.adId || !row.date) continue;
+    const key = `${row.adId}|${row.date}`;
+    const existing = byAdDate.get(key);
+    if (existing) {
+      existing.metrics = mergeMetrics(existing.metrics, row.metrics);
+      continue;
+    }
+    byAdDate.set(key, {
+      adId: row.adId,
+      campaignId: row.campaignId,
+      adSetId: row.adSetId,
+      date: row.date,
+      metrics: row.metrics,
+    });
+  }
+  return [...byAdDate.values()];
 }
 
 /**

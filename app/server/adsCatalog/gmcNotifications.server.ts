@@ -5,6 +5,7 @@ import {
   refreshGoogleAccessToken,
 } from "./clients/googleMerchantClient.server";
 import {
+  findShopByGmcMerchantId,
   getGoogleMerchantCredential,
   setGoogleMerchantCredential,
   setGmcSubscriptionName,
@@ -212,14 +213,10 @@ function statusFromChanges(
   return "unknown";
 }
 
-/** Look up which shop owns the given merchantId via SQLite JSON extract. */
+/** Look up which shop owns the given merchantId; failures must not 5xx the callback. */
 async function findShopByMerchantId(merchantId: string): Promise<string | null> {
   try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ shop: string }>>(
-      `SELECT shop FROM "AdPlatformCredential" WHERE platform = 'google_merchant' AND json_extract(credentials, '$.merchantId') = ? LIMIT 1`,
-      merchantId,
-    );
-    return rows[0]?.shop ?? null;
+    return await findShopByGmcMerchantId(merchantId);
   } catch (e) {
     console.warn(
       `${LOG_PREFIX} findShopByMerchantId failed: ${e instanceof Error ? e.message : String(e)}`,

@@ -21,9 +21,12 @@ export function resolveDateWindow(
   };
 }
 
-/** Google Ads GAQL `segments.date DURING ...` 预置区间。 */
-export function googleDuringClause(rangeDays: AdsInsightsRangeDays): string {
-  if (rangeDays === 14) return "LAST_14_DAYS";
-  if (rangeDays === 30) return "LAST_30_DAYS";
-  return "LAST_7_DAYS";
+/**
+ * Google Ads GAQL 日期过滤子句。
+ *
+ * 用显式区间而不是 `LAST_N_DAYS` 预置：预置区间不含当天，会和
+ * `resolveDateWindow` 报出的窗口差一天，落库后按日期切窗口就会缺当天。
+ */
+export function googleDateClause(dateStart: string, dateEnd: string): string {
+  return `segments.date BETWEEN '${dateStart}' AND '${dateEnd}'`;
 }
