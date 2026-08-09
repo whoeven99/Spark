@@ -38,6 +38,7 @@ export default function AppInsights() {
         activeTab={activeTab}
         items={items}
         ariaLabel={t("nav.insights")}
+        density="compact"
         onTabChange={(tab) =>
           navigate(
             tab === "overview"

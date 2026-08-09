@@ -930,8 +930,8 @@ export default function OrderMonitorPage() {
       <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
         <PageHeaderNav
           title={t("orderMonitor.pageTitle")}
-          backLabel={t("common.backToPrevious", { defaultValue: "返回工作台" })}
-          workspaceOnly
+          backLabel={t("common.backToPrevious")}
+          fallbackPath="/app/today"
         />
         {!data.hasData ? (
           <div style={pageEmptyStateStyle}>

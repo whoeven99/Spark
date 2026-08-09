@@ -114,7 +114,7 @@ function ImageStudioPageInner({
 }: InnerProps) {
   const shopify = useAppBridge();
   const { isMobile } = useResponsiveLayout();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const pictureTranslate = usePictureTranslateContext();
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [translateConfirmOpen, setTranslateConfirmOpen] = useState(false);
@@ -182,10 +182,8 @@ function ImageStudioPageInner({
     <>
       <div style={pageContentStyle}>
         <PageHeaderNav
-          workspaceOnly
-          backLabel={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
-          })}
+          backLabel={t("common.backToPrevious")}
+          fallbackPath="/app/studio"
           title={t("imageStudio.sectionTitle")}
           subtitle={t("imageStudio.pageSubtitle")}
         />

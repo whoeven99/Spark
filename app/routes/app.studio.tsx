@@ -37,6 +37,7 @@ export default function AppStudio() {
         activeTab={activeTab}
         items={items}
         ariaLabel={t("nav.studio")}
+        density="compact"
         onTabChange={(tab) => navigate(`/app/studio/${tab}${location.search}`)}
       />
       <Outlet />

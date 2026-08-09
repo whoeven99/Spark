@@ -62,16 +62,16 @@ code {
 
 .spark-segmented-tabs {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   width: max-content;
   max-width: 100%;
   min-width: min(100%, max-content);
-  padding: 4px;
+  padding: 3px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  border: 1px solid #e1e3e5;
-  border-radius: 12px;
-  background: #f1f2f3;
+  border: 1px solid #ebedf0;
+  border-radius: 10px;
+  background: #f6f6f7;
   scroll-snap-type: x proximity;
 }
 
@@ -86,12 +86,12 @@ code {
 
 .spark-segmented-tabs__item {
   flex: 0 0 auto;
-  padding: 8px 14px;
+  padding: 7px 12px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   color: #61666c;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.2;
   text-decoration: none;
   white-space: nowrap;
@@ -106,18 +106,18 @@ code {
 .spark-segmented-tabs.is-compact {
   gap: 4px;
   padding: 3px;
-  border-radius: 10px;
+  border-radius: 9px;
 }
 
 .spark-segmented-tabs.is-compact .spark-segmented-tabs__item {
-  padding: 6px 10px;
+  padding: 5px 9px;
   border-radius: 7px;
   font-size: 12px;
 }
 
 .spark-segmented-tabs__item:hover {
   color: #1f2124;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 /* Workspace shell — Shopify Admin alignment */
@@ -203,7 +203,7 @@ code {
 
 .spark-segmented-tabs__item.is-active {
   color: #1f2124;
-  border-color: #e1e3e5;
+  border-color: #d6d9dc;
   background: #ffffff;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }

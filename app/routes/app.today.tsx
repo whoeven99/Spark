@@ -41,6 +41,7 @@ export default function AppToday() {
         activeTab={activeTab}
         items={items}
         ariaLabel={t("nav.today")}
+        density="compact"
         onTabChange={(tab) =>
           navigate(tab === "overview" ? `/app/today${location.search}` : `/app/today/${tab}${location.search}`)
         }

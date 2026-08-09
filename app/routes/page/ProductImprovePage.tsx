@@ -64,7 +64,7 @@ function buildSearchWithoutTab(search: string): string {
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<typeof loader>();
   const location = useLocation();
@@ -311,10 +311,8 @@ export function ProductImprovePage() {
         ) : null}
 
         <PageHeaderNav
-          workspaceOnly
-          backLabel={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
-          })}
+          backLabel={t("common.backToPrevious")}
+          fallbackPath="/app/studio"
           title={t("generate.sectionTitle")}
           subtitle={t("productImproveStage1.subtitle")}
         />

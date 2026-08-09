@@ -20,7 +20,8 @@
     "paginationSummary": "{{count}} tasks total, page {{page}} of {{totalPages}}",
     "paginationPrev": "Previous",
     "paginationPage": "Page {{page}} of {{totalPages}}",
-    "paginationNext": "Next"
+    "paginationNext": "Next",
+    "backToPrevious": "Back"
   },
   "language": {
     "auto": "Auto detect",

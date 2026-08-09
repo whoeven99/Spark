@@ -113,20 +113,20 @@ export const pageBackButtonStyle: CSSProperties = {
   alignItems: "center",
   gap: "0.45rem",
   width: "fit-content",
-  padding: "0.55rem 0.85rem",
+  padding: "0.48rem 0.8rem",
   borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surface,
-  color: pageColorTokens.textBody,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textPrimary,
   fontSize: "0.8125rem",
-  fontWeight: 600,
+  fontWeight: 650,
   cursor: "pointer",
-  boxShadow: pageColorTokens.shadowCard,
+  boxShadow: "none",
 };
 
 export const pageBackButtonMobileStyle: CSSProperties = {
   ...pageBackButtonStyle,
-  minHeight: 40,
+  minHeight: 38,
   padding: "0.5rem 0.75rem",
   fontSize: "0.75rem",
 };
@@ -135,7 +135,7 @@ export const pageHeaderNavStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "1rem",
+  gap: "0.9rem",
   flexWrap: "wrap",
 };
 
@@ -150,13 +150,13 @@ export const pageHeaderNavMainStyle: CSSProperties = {
   minWidth: 0,
   display: "flex",
   flexDirection: "column",
-  gap: "0.25rem",
+  gap: "0.5rem",
 };
 
 export const pageHeaderNavTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: "1.375rem",
-  fontWeight: 700,
+  fontSize: "1.42rem",
+  fontWeight: 740,
   color: pageColorTokens.textPrimary,
   lineHeight: 1.2,
 };
@@ -167,7 +167,7 @@ export const pageHeaderNavTitleMobileStyle: CSSProperties = {
 };
 
 export const pageHeaderNavSubtitleStyle: CSSProperties = {
-  margin: 0,
+  margin: "0.1rem 0 0",
   fontSize: "0.875rem",
   lineHeight: 1.55,
   color: pageColorTokens.textSecondary,

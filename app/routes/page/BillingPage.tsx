@@ -1103,7 +1103,7 @@ export function BillingPage() {
       <PageHeaderNav
         title={t("billing.pageTitle")}
         backLabel={backLabel}
-        workspaceOnly
+        fallbackPath="/app/settings"
       />
 
       {!billing.hasAccess && billing.billingRequired ? (

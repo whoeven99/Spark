@@ -1468,11 +1468,11 @@ export default function DailyOperationsPage() {
         backLabel={
           detailSection
             ? t("dailyOps.backToOverview")
-            : t("common.backToPrevious", { defaultValue: "返回工作台" })
+            : t("common.backToPrevious")
         }
         {...(detailSection
           ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
-          : { workspaceOnly: true })}
+          : { fallbackPath: "/app/today" })}
         rightAction={
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <s-button
