@@ -7,7 +7,10 @@ import {
   getGoogleAdsCredential,
   setGoogleAdsCredential,
 } from "../adsCatalog/credentialStore.server";
-import { maybeRefreshGoogleAdsToken } from "../adsCatalog/googleAdsToken.server";
+import {
+  maybeRefreshGoogleAdsToken,
+  resolveVerifiedLoginCustomerId,
+} from "../adsCatalog/googleAdsToken.server";
 import {
   getGoogleAdsDeveloperToken,
 } from "../adsCatalog/googleOAuth.server";
@@ -361,26 +364,14 @@ export async function fetchGoogleAdsInsights(
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
   const during = googleDuringClause(rangeDays);
   const accessToken = (await maybeRefreshGoogleAdsToken(shop)) ?? cred.accessToken;
-  // 始终重新解析 login-customer-id：旧凭证常把子账户自身写成 login，导致 USER_PERMISSION_DENIED。
-  const loginCustomerId = await resolveLoginCustomerId({
+  // 只信任带校验戳且未过期的 login-customer-id；其余情况重新探测。
+  // 下方 GAQL 权限失败时还会强制重解析一次，作为权限变更的即时兜底。
+  const loginCustomerId = await resolveVerifiedLoginCustomerId({
+    shop,
+    cred,
     accessToken,
     developerToken,
-    customerId: cred.customerId,
-    accessibleCustomerIds: cred.loginCustomerId
-      ? [cred.loginCustomerId, cred.customerId]
-      : [cred.customerId],
   });
-  if (loginCustomerId !== (cred.loginCustomerId?.trim() || "")) {
-    await setGoogleAdsCredential(shop, {
-      accessToken,
-      refreshToken: cred.refreshToken,
-      customerId: cred.customerId,
-      loginCustomerId,
-    });
-    console.info(
-      `${LOG_PREFIX} step=update_login_customer_id shop=${shop} customerId=${normalizeCustomerId(cred.customerId)} loginCustomerId=${loginCustomerId}`,
-    );
-  }
 
   const queryParams: QueryParams = {
     accessToken,
@@ -448,6 +439,7 @@ export async function fetchGoogleAdsInsights(
             refreshToken: cred.refreshToken,
             customerId: cred.customerId,
             loginCustomerId: retriedLogin,
+            loginCustomerIdVerifiedAt: new Date().toISOString(),
           });
           rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
         } else {

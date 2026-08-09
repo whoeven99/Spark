@@ -246,9 +246,20 @@ export async function setGmcSubscriptionName(
 export type GoogleAdsCredential = {
   accessToken: string;
   refreshToken?: string;
+  /**
+   * accessToken 的过期时刻（ISO）。仅在刷新流程拿到 `expires_in` 时写入，
+   * 用于跳过没必要的 token 刷新。缺失表示过期时刻未知，调用方应按需刷新。
+   */
+  accessTokenExpiresAt?: string;
   customerId: string;
   /** MCC 场景下访问子账户所需的经理账户 ID；直连账户与 customerId 相同。 */
   loginCustomerId?: string;
+  /**
+   * `loginCustomerId` 最近一次被探测验证的时刻（ISO）。
+   * 只有带这个戳的值才可信：历史凭证常把子账户自身写成 login，会触发
+   * USER_PERMISSION_DENIED，因此无戳的值必须重新探测。
+   */
+  loginCustomerIdVerifiedAt?: string;
   remarketing?: GoogleRemarketingConfig;
   updatedAt: string;
 };
@@ -315,10 +326,18 @@ export async function getGoogleAdsCredential(
     accessToken,
     refreshToken:
       typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
+    accessTokenExpiresAt:
+      typeof record.data.accessTokenExpiresAt === "string"
+        ? record.data.accessTokenExpiresAt
+        : undefined,
     customerId,
     loginCustomerId:
       typeof record.data.loginCustomerId === "string"
         ? record.data.loginCustomerId
+        : undefined,
+    loginCustomerIdVerifiedAt:
+      typeof record.data.loginCustomerIdVerifiedAt === "string"
+        ? record.data.loginCustomerIdVerifiedAt
         : undefined,
     remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
@@ -329,7 +348,12 @@ export async function setGoogleAdsCredential(
   shop: string,
   payload: Pick<
     GoogleAdsCredential,
-    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId"
+    | "accessToken"
+    | "refreshToken"
+    | "accessTokenExpiresAt"
+    | "customerId"
+    | "loginCustomerId"
+    | "loginCustomerIdVerifiedAt"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -339,15 +363,32 @@ export async function setGoogleAdsCredential(
   }
   // Merge with any existing manual config fields so we don't drop them.
   const existing = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
+  const loginCustomerId =
+    payload.loginCustomerId?.trim() ||
+    (typeof existing?.data.loginCustomerId === "string"
+      ? existing.data.loginCustomerId
+      : null);
+
+  // 两个校验戳只有在对应值没变、或调用方显式给出新戳时才保留。
+  // 否则必须清空：拿旧戳去判断新 token / 新 login 会直接产生错误的跳过。
+  const keepExpiresAt = accessToken === existing?.data.accessToken;
+  const keepLoginVerifiedAt = loginCustomerId === (existing?.data.loginCustomerId ?? null);
+
   await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
     ...(existing?.data ?? {}),
     accessToken,
     refreshToken: payload.refreshToken?.trim() || existing?.data.refreshToken || null,
+    accessTokenExpiresAt:
+      payload.accessTokenExpiresAt ??
+      (keepExpiresAt && typeof existing?.data.accessTokenExpiresAt === "string"
+        ? existing.data.accessTokenExpiresAt
+        : null),
     customerId,
-    loginCustomerId:
-      payload.loginCustomerId?.trim() ||
-      (typeof existing?.data.loginCustomerId === "string"
-        ? existing.data.loginCustomerId
+    loginCustomerId,
+    loginCustomerIdVerifiedAt:
+      payload.loginCustomerIdVerifiedAt ??
+      (keepLoginVerifiedAt && typeof existing?.data.loginCustomerIdVerifiedAt === "string"
+        ? existing.data.loginCustomerIdVerifiedAt
         : null),
   });
 }

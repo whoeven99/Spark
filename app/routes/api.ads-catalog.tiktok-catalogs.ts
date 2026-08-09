@@ -5,9 +5,18 @@ import {
   getTiktokCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
 import {
+  createEnumerationCache,
+  parseRefreshFlag,
+} from "../server/adsCatalog/enumerationCache.server";
+import {
   bindTiktokCatalogForShop,
   listTiktokCatalogsForShop,
+  type TiktokCatalogListItem,
 } from "../server/adsCatalog/tiktokListCatalogs.server";
+
+// 这个列表会为每个 Catalog 再打一次 catalog/get 补齐币种与地区，扇出较大。
+// 只缓存展示用的读路径；bindTiktokCatalogForShop 仍走实时列表做校验。
+const catalogsCache = createEnumerationCache<TiktokCatalogListItem[]>();
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -22,8 +31,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
+  const refresh = parseRefreshFlag(new URL(request.url).searchParams.get("refresh"));
+
   try {
-    const catalogs = await listTiktokCatalogsForShop(shop);
+    const catalogs = await catalogsCache.get(shop, () => listTiktokCatalogsForShop(shop), {
+      refresh,
+    });
     return Response.json({
       ok: true,
       catalogs,
@@ -60,6 +73,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const result = await bindTiktokCatalogForShop(shop, catalogId);
+    catalogsCache.invalidate(shop);
     return Response.json({
       ok: true,
       catalogId: result.catalogId,
