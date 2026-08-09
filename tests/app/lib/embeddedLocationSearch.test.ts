@@ -1,3 +1,6 @@
+// resolveEmbeddedLocationSearch 读写 sessionStorage，需要 DOM 环境。
+// Vitest 4 已移除 environmentMatchGlobs，按文件声明是唯一的按需开法。
+// @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   appendEmbeddedSearchToPath,

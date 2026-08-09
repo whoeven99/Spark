@@ -46,6 +46,9 @@ type SeedFetcherData =
       adId?: string | null;
       keywordId?: string | null;
       campaignName: string;
+      // 仅 Meta sandbox 的 seed 结果带策略标识（见 metaSandboxSeed.server.ts）。
+      strategy?: string | null;
+      strategyLabel?: string | null;
       warnings: string[];
       readback?: {
         campaign: TiktokSandboxObjectDetailFE | null;

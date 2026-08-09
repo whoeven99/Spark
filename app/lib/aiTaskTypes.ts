@@ -132,13 +132,15 @@ export interface ProductImproveTaskConfig {
   originalText: string;
 }
 
-export interface ProductImproveTaskResult {
+// 用 type 而非 interface：任务 store 的 result 形参是 Record<string, unknown>，
+// 只有类型别名会被 TS 推导出隐式索引签名。
+export type ProductImproveTaskResult = {
   title: string;
   description: string;
   reviewScore?: number;
   reviewNote?: string;
   optimizationComment?: string;
-}
+};
 
 export type AdsCatalogPlatform = "facebook" | "google" | "tiktok";
 

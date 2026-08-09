@@ -5,6 +5,18 @@ const mocks = vi.hoisted(() => ({
   executePictureTranslatePipeline: vi.fn(),
   fetchSourceImageBytes: vi.fn(),
   logDetailedError: vi.fn(),
+  buildPictureTranslateBillingItem: vi.fn(() => ({
+    feature: "picture_translate" as const,
+    modelKey: "volc-translate",
+    usage: { totalTokens: 0 },
+  })),
+  recordVisualToolTokenUsage: vi.fn(),
+}));
+
+// 不 mock 计费会走到 prisma.tokenBillingRule.findMany，即真实 Turso 查询。
+vi.mock("~/server/tokenUsage/index.server", () => ({
+  buildPictureTranslateBillingItem: mocks.buildPictureTranslateBillingItem,
+  recordVisualToolTokenUsage: mocks.recordVisualToolTokenUsage,
 }));
 
 vi.mock("~/server/pictureTranslate/pictureTranslateExecutor.server", () => ({

@@ -17,13 +17,14 @@ import type { CreditAccountChange } from "./types";
 import prisma from "../../db.server";
 
 const LOG = "[MerchantEmail]";
-const APP_NAME = "spark";
 
 /** 从 offline session 读取缓存的 shopName（API 失败时的降级来源）。 */
 async function loadCachedShopName(shop: string): Promise<string | null> {
   try {
     const row = await prisma.session.findFirst({
-      where: { shop, appName: APP_NAME, isOnline: false },
+      // Session 表没有 appName 列，带上它会让整个查询抛校验错并被下方 catch 吞掉，
+      // 导致店名降级读取永久失效。
+      where: { shop, isOnline: false },
       select: { shopName: true },
     });
     return row?.shopName ?? null;

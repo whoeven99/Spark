@@ -14,7 +14,6 @@ export function initI18n(locale: SupportedLocale): I18nInstance {
     ns: ["common"],
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
-    initImmediate: false,
   });
   return i18nInstance;
 }

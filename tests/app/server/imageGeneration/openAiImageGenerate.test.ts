@@ -58,7 +58,7 @@ describe("openAiImageGenerate config", () => {
     const result = await openAiGenerateImageToBytes({ prompt: "test prompt ok" });
     expect(result.ok).toBe(true);
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(
       "https://example.cognitiveservices.azure.com/openai/deployments/gpt-image-2/images/generations?api-version=2024-02-01",
     );

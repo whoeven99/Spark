@@ -5,7 +5,9 @@ import {
   updateSessionScope,
 } from "../../../../app/server/session/sessionManager.server";
 
-vi.mock("../../../../app/db.server");
+// 显式 factory：automock 依赖枚举真实 PrismaClient 的 model 键，而测试环境下
+// db.server 导出的是禁止真实查询的守卫对象，枚举不出 model。
+vi.mock("../../../../app/db.server", () => ({ default: { session: {} } }));
 
 describe("sessionManager.server", () => {
   beforeEach(() => {

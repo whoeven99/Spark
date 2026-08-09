@@ -1,5 +1,7 @@
 {
   "include": ["env.d.ts", "**/*.ts", "**/*.tsx", ".react-router/types/**/*"],
+  // admin/ 是独立项目，有自己的 tsconfig 与 build（见 AGENTS.md §9）。
+  "exclude": ["node_modules", "admin", "build", "coverage"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "strict": true,
@@ -16,6 +18,8 @@
     "moduleResolution": "Bundler",
     "target": "ES2022",
     "baseUrl": ".",
+    // 与 vitest.config.ts 的 resolve.alias 保持一致，否则测试里的 ~/ 导入无法被 tsc 解析。
+    "paths": { "~/*": ["./app/*"] },
     "types": ["@react-router/node", "vite/client", "@shopify/polaris-types"],
     "rootDirs": [".", "./.react-router/types"]
   }
