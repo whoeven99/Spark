@@ -20,7 +20,8 @@
     "paginationSummary": "{{count}} tasks total, page {{page}} of {{totalPages}}",
     "paginationPrev": "Previous",
     "paginationPage": "Page {{page}} of {{totalPages}}",
-    "paginationNext": "Next"
+    "paginationNext": "Next",
+    "backToPrevious": "Back"
   },
   "language": {
     "auto": "Auto detect",
@@ -103,7 +104,7 @@
   },
   "insights": {
     "title": "Insights",
-    "subtitle": "A read-only roll-up of spend, product review status and connections across your ad platforms.",
+    "subtitle": "Read-only overview of ad performance and connection health.",
     "back": "Back to workspace",
     "tabOverview": "Overview",
     "tabPerformance": "Performance",
@@ -215,7 +216,7 @@
   },
   "settingsShell": {
     "title": "Settings",
-    "subtitle": "Billing, ads catalog, logistics and data tools",
+    "subtitle": "Manage billing, integrations, and data tools.",
     "back": "Back to workspace",
     "navBilling": "Plans & credits",
     "navLogistics": "Logistics",
@@ -525,7 +526,7 @@
   "imageStudio": {
     "pageTitle": "Image generation and translation",
     "sectionTitle": "Image generation and translation",
-    "pageSubtitle": "Generate product images or translate picture text on one page; history is saved together",
+    "pageSubtitle": "Generate, translate, and follow up tasks in one flow.",
     "tabListLabel": "Choose a tool",
     "tabGenerate": "Generate image",
     "tabTranslate": "Translate image",
@@ -1434,7 +1435,7 @@
     "statusScored": "Scored"
   },
   "productImproveStage1": {
-    "subtitle": "Start on the configuration page, then review and apply results in the task list.",
+    "subtitle": "Configure first, then review and apply results from the task list.",
     "tabsConfig": "Configuration",
     "tabsTasks": "Task List",
     "tasksBadge": "{{count}} tasks",

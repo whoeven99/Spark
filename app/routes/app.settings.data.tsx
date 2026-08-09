@@ -1,6 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import {
+  PageHeaderNav,
+  mobilePageContentStyle,
+  pageContentStyle,
+} from "./page/pageUiStyles";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { backfillOrders } from "../server/shopify/sync/backfill.server";
@@ -70,13 +75,21 @@ export default function BackfillPage() {
     checkpoints.find((c) => c.resource === resource);
 
   return (
-    <div style={{ maxWidth: 640, margin: "40px auto", fontFamily: "sans-serif", padding: isMobile ? "0 14px" : "0 20px" }}>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>历史数据回补</h1>
-      <p style={{ color: "#666", marginBottom: 24, fontSize: 14 }}>
-        Shop: <code>{shop}</code>
-      </p>
+    <div
+      style={{
+        ...pageContentStyle,
+        ...(isMobile ? mobilePageContentStyle : null),
+        maxWidth: 720,
+      }}
+    >
+      <PageHeaderNav
+        title="历史数据回补"
+        subtitle={`把 Shopify 历史订单补齐到本地镜像。当前店铺：${shop}`}
+        backLabel="返回设置"
+        fallbackPath="/app/settings"
+      />
 
-      <section style={{ marginBottom: 32 }}>
+      <section>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>当前同步状态</h2>
         <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
@@ -117,7 +130,7 @@ export default function BackfillPage() {
         </div>
       </section>
 
-      <section style={{ marginBottom: 32 }}>
+      <section>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>触发回补</h2>
         <Form method="post">
           <input type="hidden" name="resource" value="orders" />

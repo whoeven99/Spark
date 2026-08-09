@@ -10,6 +10,7 @@ import {
 } from "../server/billing/buildBillingReturnUrl.server";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { TitleBar } from "@shopify/app-bridge-react";
 import { listConversations } from "../server/conversation/conversationStore.server";
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
 import {
@@ -84,6 +85,8 @@ export default function Index() {
   useFeatureView("chat");
   return (
     <ClientMount>
+      {/* 工作台不用 PageHeaderNav，这里单独重置标题栏，避免残留子页面标题 */}
+      <TitleBar title="Spark" />
       <Suspense fallback={<RoutePageFallback />}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}

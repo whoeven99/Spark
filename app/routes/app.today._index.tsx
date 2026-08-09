@@ -21,6 +21,7 @@ import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 import { DestinationPage } from "./component/shared/DestinationPage";
+import { useTranslation } from "react-i18next";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
 
@@ -51,6 +52,7 @@ function ClientMount({ children }: { children: ReactNode }) {
 }
 
 export default function TodayOverview() {
+  const { t } = useTranslation();
   const { dashboardSnapshot } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { isMobile } = useResponsiveLayout();
@@ -61,7 +63,8 @@ export default function TodayOverview() {
       <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
         <DestinationPage
           title="经营"
-          subtitle="先看今日结果，再进入诊断、订单风险或任务中心处理具体对象。"
+          subtitle="聚焦今日经营结果与待处理事项。"
+          titleBarTitle={t("nav.today")}
           backLabel="返回首页"
           fallbackPath="/app"
           isMobile={isMobile}

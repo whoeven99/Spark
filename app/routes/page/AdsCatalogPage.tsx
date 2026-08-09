@@ -637,10 +637,8 @@ export function AdsCatalogPage() {
   return (
     <PageSurface>
       <PageHeaderNav
-        workspaceOnly
-        backLabel={t("common.backToPrevious", {
-          defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
-        })}
+        backLabel={t("common.backToPrevious")}
+        fallbackPath="/app/settings"
         title={t("adsCatalog.pageTitle")}
         subtitle={t("adsCatalog.pageSubtitle")}
       />

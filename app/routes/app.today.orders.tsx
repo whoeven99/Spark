@@ -920,7 +920,7 @@ export default function OrderMonitorPage() {
   };
 
   return (
-    <s-page heading={t("orderMonitor.pageTitle")}>
+    <>
       <div
         style={pageIntroBannerStyle({ marginBottom: "1.5rem" })}
       >
@@ -930,8 +930,8 @@ export default function OrderMonitorPage() {
       <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
         <PageHeaderNav
           title={t("orderMonitor.pageTitle")}
-          backLabel={t("common.backToPrevious", { defaultValue: "返回工作台" })}
-          workspaceOnly
+          backLabel={t("common.backToPrevious")}
+          fallbackPath="/app/today"
         />
         {!data.hasData ? (
           <div style={pageEmptyStateStyle}>
@@ -1260,10 +1260,8 @@ export default function OrderMonitorPage() {
             ))}
           </s-unordered-list>
         </PageSurface>
-      </div>
 
-      <s-section slot="aside" heading={t("orderMonitor.syncStatus")}>
-        <PageSurface>
+        <PageSurface title={t("orderMonitor.syncStatus")}>
           <div
             style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
           >
@@ -1278,8 +1276,8 @@ export default function OrderMonitorPage() {
             </p>
           </div>
         </PageSurface>
-      </s-section>
-    </s-page>
+      </div>
+    </>
   );
 }
 

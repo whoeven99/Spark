@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type {
   BillingHistoryItem,
@@ -898,7 +898,8 @@ export function BillingPage() {
 
   if (showAccountDetailPage) {
     return (
-      <s-page heading={t("billing.accountDetailPageTitle")}>
+      <>
+        <TitleBar title={t("billing.accountDetailPageTitle")} />
         <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
           <section className={styles.accountDetailPage}>
             <div className={styles.accountDetailHeader}>
@@ -1086,359 +1087,357 @@ export function BillingPage() {
             </div>
           </section>
         </div>
-      </s-page>
+      </>
     );
   }
 
   return (
-    <s-page heading={t("billing.pageTitle")}>
-      <div
-        style={{
-          ...pageContentStyle,
-          overflow: "visible",
-          height: "auto",
-          minHeight: "auto",
-        }}
-      >
-        <PageHeaderNav
-          title={t("billing.pageTitle")}
-          backLabel={backLabel}
-          workspaceOnly
-        />
+    <div
+      style={{
+        ...pageContentStyle,
+        overflow: "visible",
+        height: "auto",
+        minHeight: "auto",
+      }}
+    >
+      <PageHeaderNav
+        title={t("billing.pageTitle")}
+        backLabel={backLabel}
+        fallbackPath="/app/settings"
+      />
 
-        {!billing.hasAccess && billing.billingRequired ? (
-          <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
-        ) : null}
-        {subscriptionTrialBannerCopy ? (
-          <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
-        ) : null}
+      {!billing.hasAccess && billing.billingRequired ? (
+        <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
+      ) : null}
+      {subscriptionTrialBannerCopy ? (
+        <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
+      ) : null}
 
-        <section className={styles.quotaSection}>
-          <div className={styles.usageHeader}>
-            <div className={styles.usageHeaderMain}>
-              <div className={styles.usageTitleRow}>
-                <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
-                <span className={styles.planBadge}>{currentPlanTagLabel}</span>
-                {isSubscriptionTrialActive ? (
-                  <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
-                ) : null}
-                <button
-                  type="button"
-                  className={styles.secondaryEntryButton}
-                  onClick={() => setShowAccountDetailPage(true)}
-                >
-                  {t("billing.openAccountDetailPage")}
-                </button>
-              </div>
-              {quotaMetaDescription ? (
-                <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
+      <section className={styles.quotaSection}>
+        <div className={styles.usageHeader}>
+          <div className={styles.usageHeaderMain}>
+            <div className={styles.usageTitleRow}>
+              <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
+              <span className={styles.planBadge}>{currentPlanTagLabel}</span>
+              {isSubscriptionTrialActive ? (
+                <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
               ) : null}
+              <button
+                type="button"
+                className={styles.secondaryEntryButton}
+                onClick={() => setShowAccountDetailPage(true)}
+              >
+                {t("billing.openAccountDetailPage")}
+              </button>
             </div>
+            {quotaMetaDescription ? (
+              <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
+            ) : null}
           </div>
-          <div className={styles.usageCard}>
-            <div className={styles.usageMain}>
-              <div className={styles.usageStatsRow}>
-                <p
-                  className={styles.quotaRatio}
-                  aria-label={t("billing.quotaUsageAria", {
-                    used: billing.usedTokens.toLocaleString(),
-                    available: billing.availableTokens.toLocaleString(),
-                  })}
-                >
-                  <span className={styles.quotaRatioLabel}>
-                    {t("billing.usedTokens")} / {t("billing.availableTokens")}
-                  </span>
-                  <span className={styles.quotaRatioValue}>
-                    {billing.usedTokens.toLocaleString()}
-                    <span className={styles.quotaRatioSep}> / </span>
-                    {billing.availableTokens.toLocaleString()}
-                  </span>
-                  <span className={styles.quotaRatioUnit}>{t("billing.tokenUnit")}</span>
-                </p>
-                <span
-                  className={`${styles.usagePercentBadge} ${usageLow ? styles.usagePercentBadgeLow : ""}`}
-                >
-                  {t("billing.usagePercentUsed", { percent: usagePercentDisplay })}
-                </span>
-              </div>
-              <div
-                className={styles.progressTrack}
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={usagePercentForBar}
-                aria-label={t("billing.quotaProgressAria", {
-                  percent: usagePercentDisplay,
+        </div>
+        <div className={styles.usageCard}>
+          <div className={styles.usageMain}>
+            <div className={styles.usageStatsRow}>
+              <p
+                className={styles.quotaRatio}
+                aria-label={t("billing.quotaUsageAria", {
+                  used: billing.usedTokens.toLocaleString(),
+                  available: billing.availableTokens.toLocaleString(),
                 })}
               >
-                <div
-                  className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
-                  style={{ width: `${usagePercentForBar}%` }}
-                />
-              </div>
+                <span className={styles.quotaRatioLabel}>
+                  {t("billing.usedTokens")} / {t("billing.availableTokens")}
+                </span>
+                <span className={styles.quotaRatioValue}>
+                  {billing.usedTokens.toLocaleString()}
+                  <span className={styles.quotaRatioSep}> / </span>
+                  {billing.availableTokens.toLocaleString()}
+                </span>
+                <span className={styles.quotaRatioUnit}>{t("billing.tokenUnit")}</span>
+              </p>
+              <span
+                className={`${styles.usagePercentBadge} ${usageLow ? styles.usagePercentBadgeLow : ""}`}
+              >
+                {t("billing.usagePercentUsed", { percent: usagePercentDisplay })}
+              </span>
+            </div>
+            <div
+              className={styles.progressTrack}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={usagePercentForBar}
+              aria-label={t("billing.quotaProgressAria", {
+                percent: usagePercentDisplay,
+              })}
+            >
+              <div
+                className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
+                style={{ width: `${usagePercentForBar}%` }}
+              />
             </div>
           </div>
-          <div className={styles.quotaFooter}>
-            {showDevCancelSubscription ? (
-              <div className={styles.devCancelBar}>
-                <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
-                <p className={styles.devCancelHint}>{t("billing.devCancelHint")}</p>
-                <Form method="post" className={styles.devCancelForm}>
-                  <input type="hidden" name="intent" value="cancel_subscription" />
-                  <button
-                    type="submit"
-                    className={styles.devCancelButton}
-                    disabled={isCancelling}
-                  >
-                    {isCancelling
-                      ? t("billing.cancelSubscriptionPending")
-                      : t("billing.cancelSubscription")}
-                  </button>
-                </Form>
+        </div>
+        <div className={styles.quotaFooter}>
+          {showDevCancelSubscription ? (
+            <div className={styles.devCancelBar}>
+              <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
+              <p className={styles.devCancelHint}>{t("billing.devCancelHint")}</p>
+              <Form method="post" className={styles.devCancelForm}>
+                <input type="hidden" name="intent" value="cancel_subscription" />
+                <button
+                  type="submit"
+                  className={styles.devCancelButton}
+                  disabled={isCancelling}
+                >
+                  {isCancelling
+                    ? t("billing.cancelSubscriptionPending")
+                    : t("billing.cancelSubscription")}
+                </button>
+              </Form>
+            </div>
+          ) : (
+            <span className={styles.quotaFooterSpacer} aria-hidden />
+          )}
+        </div>
+      </section>
+
+      {subscriptionPlans.length > 0 ? (
+        <section className={styles.plansSection}>
+          <div className={styles.plansSectionHead}>
+            <div className={styles.plansSectionHeadMain}>
+              <h2 className={styles.plansTitle}>{t("billing.choosePlanTitle")}</h2>
+              <p className={styles.plansSubtitle}>{t("billing.choosePlanSubtitle")}</p>
+            </div>
+            {hasIntervalToggle ? (
+              <div
+                className={styles.intervalSegmented}
+                role="group"
+                aria-label={t("billing.toggleAnnual")}
+              >
+                <button
+                  type="button"
+                  className={`${styles.intervalOption} ${
+                    interval === "MONTHLY" ? styles.intervalOptionActive : ""
+                  }`}
+                  aria-pressed={interval === "MONTHLY"}
+                  onClick={() => setInterval("MONTHLY")}
+                >
+                  {t("billing.intervalMonthly")}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.intervalOption} ${
+                    interval === "ANNUAL" ? styles.intervalOptionActive : ""
+                  }`}
+                  aria-pressed={interval === "ANNUAL"}
+                  onClick={() => setInterval("ANNUAL")}
+                >
+                  {t("billing.intervalAnnual")}
+                  {headerAnnualDiscount != null ? (
+                    <span className={styles.discountPill}>
+                      {t("billing.annualDiscountBadge", {
+                        percent: headerAnnualDiscount,
+                      })}
+                    </span>
+                  ) : null}
+                </button>
               </div>
-            ) : (
-              <span className={styles.quotaFooterSpacer} aria-hidden />
-            )}
+            ) : null}
+          </div>
+
+          <div className={styles.planGrid}>
+            {paidPlansToShow.map((plan) => {
+              const tier = planTierFromPlanKey(plan.planKey);
+              const isRecommended = tier === recommendedTier;
+              return (
+                <PaidPlanCard
+                  key={plan.planKey}
+                  plan={plan}
+                  interval={interval}
+                  isRecommended={isRecommended}
+                  isCurrent={isActiveSubscriptionPlan(plan.planKey, sub)}
+                  isTrialCurrent={
+                    isActiveSubscriptionPlan(plan.planKey, sub) &&
+                    isSubscriptionTrialActive
+                  }
+                  isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
+                  isSubmitting={subscribingPlanKey === plan.planKey}
+                  submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}
+                  mockOnly={isMockVisualPlan(plan)}
+                  locale={locale}
+                  t={t}
+                  paidFeatures={paidFeatures}
+                />
+              );
+            })}
           </div>
         </section>
+      ) : null}
 
-        {subscriptionPlans.length > 0 ? (
-          <section className={styles.plansSection}>
-            <div className={styles.plansSectionHead}>
-              <div className={styles.plansSectionHeadMain}>
-                <h2 className={styles.plansTitle}>{t("billing.choosePlanTitle")}</h2>
-                <p className={styles.plansSubtitle}>{t("billing.choosePlanSubtitle")}</p>
-              </div>
-              {hasIntervalToggle ? (
-                <div
-                  className={styles.intervalSegmented}
-                  role="group"
-                  aria-label={t("billing.toggleAnnual")}
-                >
-                  <button
-                    type="button"
-                    className={`${styles.intervalOption} ${
-                      interval === "MONTHLY" ? styles.intervalOptionActive : ""
-                    }`}
-                    aria-pressed={interval === "MONTHLY"}
-                    onClick={() => setInterval("MONTHLY")}
-                  >
-                    {t("billing.intervalMonthly")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.intervalOption} ${
-                      interval === "ANNUAL" ? styles.intervalOptionActive : ""
-                    }`}
-                    aria-pressed={interval === "ANNUAL"}
-                    onClick={() => setInterval("ANNUAL")}
-                  >
-                    {t("billing.intervalAnnual")}
-                    {headerAnnualDiscount != null ? (
-                      <span className={styles.discountPill}>
-                        {t("billing.annualDiscountBadge", {
-                          percent: headerAnnualDiscount,
-                        })}
-                      </span>
-                    ) : null}
-                  </button>
-                </div>
-              ) : null}
+      {tokenPacks.length > 0 ? (
+        <section className={styles.packSection}>
+          <div className={styles.packCard}>
+            <div className={styles.packCardHeader}>
+              <h2 className={styles.packTitle}>{t("billing.sectionPacks")}</h2>
+              <p className={styles.packHint}>{t("billing.sectionPacksHint")}</p>
             </div>
-
-            <div className={styles.planGrid}>
-              {paidPlansToShow.map((plan) => {
-                const tier = planTierFromPlanKey(plan.planKey);
-                const isRecommended = tier === recommendedTier;
+            <div
+              className={styles.packOptions}
+              style={
+                {
+                  ["--pack-columns" as string]: String(
+                    Math.min(tokenPacks.length, 4),
+                  ),
+                } as CSSProperties
+              }
+              role="radiogroup"
+              aria-label={t("billing.sectionPacks")}
+            >
+              {tokenPacks.map((pack) => {
+                const selected = pack.planKey === selectedPack?.planKey;
                 return (
-                  <PaidPlanCard
-                    key={plan.planKey}
-                    plan={plan}
-                    interval={interval}
-                    isRecommended={isRecommended}
-                    isCurrent={isActiveSubscriptionPlan(plan.planKey, sub)}
-                    isTrialCurrent={
-                      isActiveSubscriptionPlan(plan.planKey, sub) &&
-                      isSubscriptionTrialActive
-                    }
-                    isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
-                    isSubmitting={subscribingPlanKey === plan.planKey}
-                    submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}
-                    mockOnly={isMockVisualPlan(plan)}
-                    locale={locale}
-                    t={t}
-                    paidFeatures={paidFeatures}
-                  />
+                  <button
+                    key={pack.planKey}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`${styles.packOption} ${selected ? styles.packOptionSelected : ""}`}
+                    onClick={() => setSelectedPackKey(pack.planKey)}
+                  >
+                    <span className={styles.packOptionTokens}>
+                      {pack.tokens.toLocaleString()}
+                    </span>
+                    <span className={styles.packOptionTokensUnit}>
+                      {t("billing.tokenUnit")}
+                    </span>
+                    <span className={styles.packOptionPrice}>
+                      {formatPlanPrice(
+                        pack.priceAmount,
+                        pack.currencyCode,
+                        locale,
+                      )}
+                    </span>
+                  </button>
                 );
               })}
             </div>
-          </section>
-        ) : null}
-
-        {tokenPacks.length > 0 ? (
-          <section className={styles.packSection}>
-            <div className={styles.packCard}>
-              <div className={styles.packCardHeader}>
-                <h2 className={styles.packTitle}>{t("billing.sectionPacks")}</h2>
-                <p className={styles.packHint}>{t("billing.sectionPacksHint")}</p>
-              </div>
-              <div
-                className={styles.packOptions}
-                style={
-                  {
-                    ["--pack-columns" as string]: String(
-                      Math.min(tokenPacks.length, 4),
+            {selectedPack ? (
+              <div className={styles.packCheckoutBar}>
+                <p className={styles.packSelectionSummary}>
+                  {t("billing.packSelectedSummary", {
+                    tokens: selectedPack.tokens.toLocaleString(),
+                    price: formatPlanPrice(
+                      selectedPack.priceAmount,
+                      selectedPack.currencyCode,
+                      locale,
                     ),
-                  } as CSSProperties
-                }
-                role="radiogroup"
-                aria-label={t("billing.sectionPacks")}
-              >
-                {tokenPacks.map((pack) => {
-                  const selected = pack.planKey === selectedPack?.planKey;
-                  return (
-                    <button
-                      key={pack.planKey}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      className={`${styles.packOption} ${selected ? styles.packOptionSelected : ""}`}
-                      onClick={() => setSelectedPackKey(pack.planKey)}
-                    >
-                      <span className={styles.packOptionTokens}>
-                        {pack.tokens.toLocaleString()}
-                      </span>
-                      <span className={styles.packOptionTokensUnit}>
-                        {t("billing.tokenUnit")}
-                      </span>
-                      <span className={styles.packOptionPrice}>
-                        {formatPlanPrice(
-                          pack.priceAmount,
-                          pack.currencyCode,
-                          locale,
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedPack ? (
-                <div className={styles.packCheckoutBar}>
-                  <p className={styles.packSelectionSummary}>
-                    {t("billing.packSelectedSummary", {
-                      tokens: selectedPack.tokens.toLocaleString(),
-                      price: formatPlanPrice(
-                        selectedPack.priceAmount,
-                        selectedPack.currencyCode,
-                        locale,
-                      ),
-                    })}
-                  </p>
-                  <Form method="post" className={styles.packCtaInline}>
-                    <input type="hidden" name="intent" value="buy_pack" />
-                    <input type="hidden" name="planKey" value={selectedPack.planKey} />
-                    <button
-                      type="submit"
-                      className={styles.packBuyButton}
-                      disabled={Boolean(buyingPackKey)}
-                    >
-                      {buyingPackKey
-                        ? t("billing.redirectingToCheckout")
-                        : t("billing.purchaseCredits")}
-                    </button>
-                  </Form>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        {paidPlansToShow.length > 0 ? (
-          <section className={styles.compareSection}>
-            <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
-            {isMobile ? (
-              <div className={styles.compareCards}>
-                {comparePlanCards.map((plan) => (
-                  <article
-                    key={plan.key}
-                    className={`${styles.compareCard} ${plan.highlighted ? styles.compareCardHighlight : ""}`}
+                  })}
+                </p>
+                <Form method="post" className={styles.packCtaInline}>
+                  <input type="hidden" name="intent" value="buy_pack" />
+                  <input type="hidden" name="planKey" value={selectedPack.planKey} />
+                  <button
+                    type="submit"
+                    className={styles.packBuyButton}
+                    disabled={Boolean(buyingPackKey)}
                   >
-                    <div className={styles.compareCardTitleRow}>
-                      <h3 className={styles.compareCardTitle}>{plan.title}</h3>
-                      {plan.highlighted ? (
-                        <span className={styles.compareCardBadge}>
-                          {locale.toLowerCase().startsWith("zh") ? "当前推荐" : "Highlighted"}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className={styles.compareList}>
-                      {plan.values.map((item) => (
-                        <div key={`${plan.key}-${item.label}`} className={styles.compareListItem}>
-                          <span className={styles.compareListLabel}>{item.label}</span>
-                          <span className={styles.compareListValue}>{item.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
+                    {buyingPackKey
+                      ? t("billing.redirectingToCheckout")
+                      : t("billing.purchaseCredits")}
+                  </button>
+                </Form>
               </div>
-            ) : (
-              <table className={styles.compareTable}>
-                <thead>
-                  <tr>
-                    <th>{t("billing.compareFeatureCol")}</th>
-                    {paidPlansToShow.map((plan) => {
-                      const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {paidPlansToShow.length > 0 ? (
+        <section className={styles.compareSection}>
+          <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
+          {isMobile ? (
+            <div className={styles.compareCards}>
+              {comparePlanCards.map((plan) => (
+                <article
+                  key={plan.key}
+                  className={`${styles.compareCard} ${plan.highlighted ? styles.compareCardHighlight : ""}`}
+                >
+                  <div className={styles.compareCardTitleRow}>
+                    <h3 className={styles.compareCardTitle}>{plan.title}</h3>
+                    {plan.highlighted ? (
+                      <span className={styles.compareCardBadge}>
+                        {locale.toLowerCase().startsWith("zh") ? "当前推荐" : "Highlighted"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className={styles.compareList}>
+                    {plan.values.map((item) => (
+                      <div key={`${plan.key}-${item.label}`} className={styles.compareListItem}>
+                        <span className={styles.compareListLabel}>{item.label}</span>
+                        <span className={styles.compareListValue}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <table className={styles.compareTable}>
+              <thead>
+                <tr>
+                  <th>{t("billing.compareFeatureCol")}</th>
+                  {paidPlansToShow.map((plan) => {
+                    const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
+                    return (
+                      <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
+                        {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {compareRows.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    {row.values.map((value, index) => {
+                      const key =
+                        planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
+                        paidPlansToShow[index]?.planKey ??
+                        String(index);
                       return (
-                        <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
-                          {normalizePlanDisplayName(plan.displayName, plan.planKey)}
-                        </th>
+                        <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
+                          {value}
+                        </td>
                       );
                     })}
                   </tr>
-                </thead>
-                <tbody>
-                  {compareRows.map((row) => (
-                    <tr key={row.label}>
-                      <td>{row.label}</td>
-                      {row.values.map((value, index) => {
-                        const key =
-                          planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
-                          paidPlansToShow[index]?.planKey ??
-                          String(index);
-                        return (
-                          <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
-                            {value}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        ) : null}
-
-        <section className={styles.faqSection}>
-          <div className={styles.sectionHead}>
-            <div className={styles.sectionHeadMain}>
-              <h2 className={styles.sectionTitle}>{t("billing.faqTitle")}</h2>
-              <p className={styles.sectionSubtitle}>{t("billing.faqSubtitle")}</p>
-            </div>
-          </div>
-          <div className={styles.faqList}>
-            {faqItems.map((item) => (
-              <article key={item.question} className={styles.faqItem}>
-                <h3 className={styles.faqQuestion}>{item.question}</h3>
-                <p className={styles.faqAnswer}>{item.answer}</p>
-              </article>
-            ))}
-          </div>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
+      ) : null}
 
-        <p className={styles.trustCheckout}>{t("billing.trustCheckout")}</p>
-      </div>
-    </s-page>
+      <section className={styles.faqSection}>
+        <div className={styles.sectionHead}>
+          <div className={styles.sectionHeadMain}>
+            <h2 className={styles.sectionTitle}>{t("billing.faqTitle")}</h2>
+            <p className={styles.sectionSubtitle}>{t("billing.faqSubtitle")}</p>
+          </div>
+        </div>
+        <div className={styles.faqList}>
+          {faqItems.map((item) => (
+            <article key={item.question} className={styles.faqItem}>
+              <h3 className={styles.faqQuestion}>{item.question}</h3>
+              <p className={styles.faqAnswer}>{item.answer}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <p className={styles.trustCheckout}>{t("billing.trustCheckout")}</p>
+    </div>
   );
 }

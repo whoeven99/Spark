@@ -301,6 +301,20 @@ Brand typography is not final. Until it is defined:
 
 This file defines the visual treatment of layout, not the product flow itself.
 
+### Page padding has exactly one owner
+
+`app/routes/app.tsx` wraps `<Outlet />` in `appShellContentStyle` (`24px 28px 36px`, mobile
+`14px 14px 24px`, same values as the workspace `contentStyle`). Every `/app` page inherits its
+outer padding from there.
+
+- Do not add page-level padding or `margin: … auto` inside a route or `page/` component; the shell
+  already provides it and the two will stack.
+- Do not wrap embedded pages in Polaris `<s-page>`. It ships its own page layout and padding, which
+  is what made destinations diverge before. Use `<TitleBar>` from `@shopify/app-bridge-react` when a
+  page needs to set the Shopify admin title bar — `PageHeaderNav` already does this from its `title`.
+- The workspace homepage (`/app`) is the only exception: it is a full-height two-column shell and
+  supplies its own padding.
+
 ### Default page rhythm
 
 - page header
