@@ -27,7 +27,7 @@ import type {
   AdsInsightsRangeDays,
   AdsInsightsView,
 } from "../component/adsInsights/types";
-import type { AdsInsightsPageLoaderData } from "../app.settings.ads-insights";
+import type { AdsInsightsPageLoaderData } from "../app.insights.performance";
 
 type InsightsFetcherData = AdsInsightsApiOk | AdsInsightsApiError;
 type TiktokSandboxObjectDetailFE = {
