@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
+import {
+  PageSectionHeader,
+  pageColorTokens,
+  pageEmptyStateStyle,
+} from "../../page/pageUiStyles";
 import {
   DestinationFilterBar,
   destinationSurfaceStyle,
@@ -328,19 +332,11 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         ...destinationSurfaceStyle,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-            任务收件箱
-          </div>
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 2 }}>
-            统一查看文案、图片和批处理任务
-          </div>
-        </div>
-        <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-          当前结果 {totalCount} 条
-        </div>
-      </div>
+      <PageSectionHeader
+        title="任务收件箱"
+        subtitle="统一查看文案、图片和批处理任务"
+        badge={<div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>当前结果 {totalCount} 条</div>}
+      />
 
       <DestinationFilterBar
         label="任务类型"

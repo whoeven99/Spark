@@ -182,6 +182,8 @@ function ImageStudioPageInner({
     <>
       <div style={pageContentStyle}>
         <PageHeaderNav
+          eyebrow={t("nav.studio")}
+          titleBarTitle={t("nav.studio")}
           backLabel={t("common.backToPrevious")}
           fallbackPath="/app/studio"
           title={t("imageStudio.sectionTitle")}

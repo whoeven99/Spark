@@ -113,20 +113,21 @@ export const pageBackButtonStyle: CSSProperties = {
   alignItems: "center",
   gap: "0.45rem",
   width: "fit-content",
-  padding: "0.48rem 0.8rem",
+  padding: "0.44rem 0.78rem",
   borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
-  color: pageColorTokens.textPrimary,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textSecondary,
   fontSize: "0.8125rem",
-  fontWeight: 650,
+  fontWeight: 620,
   cursor: "pointer",
   boxShadow: "none",
+  transition: "border-color 120ms ease, color 120ms ease, background 120ms ease",
 };
 
 export const pageBackButtonMobileStyle: CSSProperties = {
   ...pageBackButtonStyle,
-  minHeight: 38,
+  minHeight: 36,
   padding: "0.5rem 0.75rem",
   fontSize: "0.75rem",
 };
@@ -135,14 +136,20 @@ export const pageHeaderNavStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "0.9rem",
+  gap: "0.95rem",
   flexWrap: "wrap",
+  padding: "0.95rem 1rem",
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  boxShadow: pageColorTokens.shadowCard,
 };
 
 export const pageHeaderNavMobileStyle: CSSProperties = {
   ...pageHeaderNavStyle,
   gap: "0.75rem",
   flexDirection: "column",
+  padding: "0.85rem 0.85rem",
 };
 
 export const pageHeaderNavMainStyle: CSSProperties = {
@@ -150,15 +157,29 @@ export const pageHeaderNavMainStyle: CSSProperties = {
   minWidth: 0,
   display: "flex",
   flexDirection: "column",
-  gap: "0.5rem",
+  gap: "0.58rem",
+};
+
+export const pageHeaderNavHeadingStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.2rem",
+};
+
+export const pageHeaderNavEyebrowStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: pageColorTokens.textFootnote,
 };
 
 export const pageHeaderNavTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: "1.42rem",
-  fontWeight: 740,
+  fontSize: "1.48rem",
+  fontWeight: 760,
   color: pageColorTokens.textPrimary,
-  lineHeight: 1.2,
+  lineHeight: 1.18,
 };
 
 export const pageHeaderNavTitleMobileStyle: CSSProperties = {
@@ -167,16 +188,22 @@ export const pageHeaderNavTitleMobileStyle: CSSProperties = {
 };
 
 export const pageHeaderNavSubtitleStyle: CSSProperties = {
-  margin: "0.1rem 0 0",
-  fontSize: "0.875rem",
-  lineHeight: 1.55,
+  margin: "0.2rem 0 0",
+  fontSize: "0.84rem",
+  lineHeight: 1.5,
   color: pageColorTokens.textSecondary,
-  maxWidth: "44rem",
+  maxWidth: "52rem",
 };
 
 export const pageHeaderNavSubtitleMobileStyle: CSSProperties = {
   ...pageHeaderNavSubtitleStyle,
-  fontSize: "0.8125rem",
+  fontSize: "0.8rem",
+  marginTop: "0.15rem",
+};
+
+export const pageHeaderNavActionStyle: CSSProperties = {
+  flexShrink: 0,
+  alignSelf: "center",
 };
 
 export const pageSurfaceStyle: CSSProperties = {
@@ -302,15 +329,15 @@ export const pageSectionTitleStyle: CSSProperties = {
 
 export const pageBlockTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: "1.125rem",
-  fontWeight: 700,
+  fontSize: "1.05rem",
+  fontWeight: 760,
   color: pageColorTokens.textPrimary,
 };
 
 export const pageSectionSubtitleStyle: CSSProperties = {
-  margin: "0.25rem 0 0",
-  fontSize: "0.8125rem",
-  lineHeight: 1.5,
+  margin: "0.3rem 0 0",
+  fontSize: "0.8rem",
+  lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
   maxWidth: "36rem",
 };
@@ -347,11 +374,18 @@ export const pageSectionMajorTitleStyle: CSSProperties = {
 
 export const pageSectionHeaderRowStyle: CSSProperties = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-end",
   justifyContent: "space-between",
-  gap: "1rem",
+  gap: "0.9rem",
   flexWrap: "wrap",
-  marginBottom: "0.75rem",
+  marginBottom: "0.9rem",
+  paddingBottom: "0.55rem",
+  borderBottom: `1px solid ${pageColorTokens.divider}`,
+};
+
+export const pageSectionHeaderTextStyle: CSSProperties = {
+  flex: "1 1 14rem",
+  minWidth: 0,
 };
 
 export const pageAccentBadgeStyle: CSSProperties = {
@@ -477,7 +511,7 @@ type PageSectionHeaderProps = {
 export function PageSectionHeader({ title, subtitle, badge }: PageSectionHeaderProps) {
   return (
     <div style={pageSectionHeaderRowStyle}>
-      <div style={{ flex: "1 1 14rem", minWidth: 0 }}>
+      <div style={pageSectionHeaderTextStyle}>
         <h2 style={pageBlockTitleStyle}>{title}</h2>
         {subtitle ? <p style={pageSectionSubtitleStyle}>{subtitle}</p> : null}
       </div>
@@ -562,6 +596,8 @@ export function PageBackButton({
 type PageHeaderNavProps = {
   title: string;
   subtitle?: string;
+  eyebrow?: string;
+  titleBarTitle?: string;
   backLabel: string;
   fallbackPath?: string;
   preserveSearch?: boolean;
@@ -573,6 +609,8 @@ type PageHeaderNavProps = {
 export function PageHeaderNav({
   title,
   subtitle,
+  eyebrow,
+  titleBarTitle,
   backLabel,
   fallbackPath,
   preserveSearch,
@@ -585,7 +623,7 @@ export function PageHeaderNav({
   return (
     <div style={isMobile ? pageHeaderNavMobileStyle : pageHeaderNavStyle}>
       {/* 同步 Shopify Admin 顶部标题栏，避免切换页面后残留上一页标题 */}
-      <TitleBar title={title} />
+      <TitleBar title={titleBarTitle ?? title} />
       <div style={pageHeaderNavMainStyle}>
         <PageBackButton
           label={backLabel}
@@ -594,7 +632,8 @@ export function PageHeaderNav({
           workspaceOnly={workspaceOnly}
           returnTo={returnTo}
         />
-        <div>
+        <div style={pageHeaderNavHeadingStyle}>
+          {eyebrow ? <p style={pageHeaderNavEyebrowStyle}>{eyebrow}</p> : null}
           <h1 style={isMobile ? pageHeaderNavTitleMobileStyle : pageHeaderNavTitleStyle}>
             {title}
           </h1>
@@ -605,7 +644,7 @@ export function PageHeaderNav({
           ) : null}
         </div>
       </div>
-      {rightAction ?? null}
+      {rightAction ? <div style={pageHeaderNavActionStyle}>{rightAction}</div> : null}
     </div>
   );
 }

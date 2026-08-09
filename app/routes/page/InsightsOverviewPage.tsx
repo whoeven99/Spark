@@ -99,6 +99,8 @@ export function InsightsOverviewPage() {
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <PageHeaderNav
+        eyebrow={t("nav.insights")}
+        titleBarTitle={t("nav.insights")}
         title={t("insights.title")}
         subtitle={t("insights.subtitle")}
         backLabel={t("insights.back")}

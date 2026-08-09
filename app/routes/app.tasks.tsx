@@ -6,6 +6,7 @@ import { UnifiedTaskListPage } from "./component/unifiedTaskList/UnifiedTaskList
 import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { DestinationPage } from "./component/shared/DestinationPage";
+import { useTranslation } from "react-i18next";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -13,6 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function AppTasks() {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   useFeatureView("tasks");
   return (
@@ -20,6 +22,8 @@ export default function AppTasks() {
       <DestinationPage
         title="任务中心"
         subtitle="所有后台任务统一进入这里：文案、图片、批处理和后续审核结果都按状态归档。"
+        eyebrow={t("nav.tasks")}
+        titleBarTitle={t("nav.tasks")}
         backLabel="返回首页"
         fallbackPath="/app"
         isMobile={isMobile}

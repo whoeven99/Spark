@@ -311,6 +311,8 @@ export function ProductImprovePage() {
         ) : null}
 
         <PageHeaderNav
+          eyebrow={t("nav.studio")}
+          titleBarTitle={t("nav.studio")}
           backLabel={t("common.backToPrevious")}
           fallbackPath="/app/studio"
           title={t("generate.sectionTitle")}
