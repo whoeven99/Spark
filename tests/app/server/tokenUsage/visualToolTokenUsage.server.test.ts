@@ -4,6 +4,15 @@ vi.mock("../../../../app/db.server", () => ({
   default: {
     account: {
       upsert: vi.fn(),
+      // findUnique 返回 null 让试用日限额逻辑短路，本用例只关心计费乘数。
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+    },
+    appSubscription: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    toolTokenUsageLog: {
+      createMany: vi.fn(),
     },
   },
 }));

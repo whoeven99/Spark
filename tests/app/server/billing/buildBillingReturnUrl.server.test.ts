@@ -39,7 +39,7 @@ describe("buildBillingReturnUrl", () => {
     );
 
     expect(returnUrl).toBe(
-      "https://admin.shopify.com/store/ciwishop/apps/desc-test-1/app/billing?billing_return=1",
+      `https://admin.shopify.com/store/ciwishop/apps/desc-test-1${BILLING_PAGE_PATH}?billing_return=1`,
     );
     expect(returnUrl.length).toBeLessThanOrEqual(
       SHOPIFY_BILLING_RETURN_URL_MAX_LENGTH,
@@ -60,7 +60,7 @@ describe("buildBillingReturnUrl", () => {
     );
 
     expect(returnUrl).toBe(
-      "https://admin.shopify.com/store/ciwishop/apps/aiassistant-test/app/billing?billing_return=1",
+      `https://admin.shopify.com/store/ciwishop/apps/aiassistant-test${BILLING_PAGE_PATH}?billing_return=1`,
     );
   });
 
@@ -81,7 +81,7 @@ describe("buildBillingReturnUrl", () => {
       SHOPIFY_BILLING_RETURN_URL_MAX_LENGTH,
     );
     expect(returnUrl).toBe(
-      "https://app.example.com/app/billing?shop=store.myshopify.com&billing_return=1&embedded=1&host=encoded-host",
+      `https://app.example.com${BILLING_PAGE_PATH}?shop=store.myshopify.com&billing_return=1&embedded=1&host=encoded-host`,
     );
     expect(returnUrl).not.toContain("id_token");
     expect(returnUrl).not.toContain("session=");
@@ -99,7 +99,7 @@ describe("buildBillingReturnUrl", () => {
       "store.myshopify.com",
     );
     expect(returnUrl).toBe(
-      `https://app.example.com/app/billing?shop=store.myshopify.com&billing_return=1&embedded=1&host=${encodeURIComponent(host)}`,
+      `https://app.example.com${BILLING_PAGE_PATH}?shop=store.myshopify.com&billing_return=1&embedded=1&host=${encodeURIComponent(host)}`,
     );
   });
 });

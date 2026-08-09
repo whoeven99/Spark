@@ -16,6 +16,7 @@ import {
   updateOperationTaskStatus,
   type DailyOperationsResult,
   type DailyOperationsEnvironment,
+  type DailyOperationsEnvironmentKey,
   type DailyOperationsInsight,
   type OperationTaskAction,
   type OperationTaskView,
@@ -452,7 +453,8 @@ type InsightEffect = "revenue" | "conversion" | "efficiency" | "retention";
 type DetailSection = "performance" | "risk" | "value" | "task";
 
 type RiskEnvironmentCard = {
-  key: string;
+  // 卡片与 environments 一一对应，收窄后才能和 insight.environmentKeys 直接比对。
+  key: DailyOperationsEnvironmentKey;
   title: string;
   status: "healthy" | "watch" | "risk";
   source: DataSource;
@@ -2851,7 +2853,7 @@ function DailyOperationsDetail({
                     improved: reviewImprovedCount,
                     worsened: reviewWorsenedCount,
                   })
-                : t("dailyOps.reviewResolved", { count: result.review?.resolvedTaskCount ?? 0 }),
+                : t("dailyOps.reviewResolved", { count: 0 }),
             },
           ]}
         />
@@ -3067,7 +3069,7 @@ function DailyOperationsDetail({
                       ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
                       ...(card.key === selectedEnvironmentKey
                         ? {
-                            borderColor: pageColorTokens.borderStrong,
+                            borderColor: pageColorTokens.brandBlue,
                             boxShadow: "0 0 0 1px rgba(44, 110, 203, 0.08)",
                           }
                         : null),
@@ -3213,7 +3215,7 @@ function DailyOperationsDetail({
                         ...insightCardStyle,
                         ...(item.key === selectedInsightKey
                           ? {
-                              borderColor: pageColorTokens.borderStrong,
+                              borderColor: pageColorTokens.brandBlue,
                               boxShadow: "0 0 0 1px rgba(44, 110, 203, 0.08)",
                             }
                           : null),

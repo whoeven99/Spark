@@ -1,4 +1,3 @@
-import type { Prisma } from "../../../generated/prisma";
 import prisma from "../../../db.server";
 import { applyTokenPackPurchase } from "../purchase/applyTokenPack.server";
 import { applyActiveSubscription } from "../subscription/activateSubscription.server";
@@ -87,6 +86,6 @@ export async function noopActivatePendingSubscription(shop: string): Promise<voi
       currentPeriodStart: new Date(),
       currentPeriodEnd: periodEnd,
     },
-    rawPayload: { noop: true, activatedFromPending: true } as Prisma.InputJsonValue,
+    rawPayload: { noop: true, activatedFromPending: true },
   });
 }

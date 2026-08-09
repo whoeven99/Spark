@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { Prisma } from "../../generated/prisma";
 
 const GA4_PLATFORM = "google_analytics";
 const GA4_PENDING_PLATFORM = "google_analytics_pending";
@@ -51,8 +52,8 @@ async function writePlatformCredential(
 ): Promise<void> {
   await prisma.adPlatformCredential.upsert({
     where: { shop_platform: { shop, platform } },
-    update: { credentials: payload },
-    create: { shop, platform, credentials: payload },
+    update: { credentials: payload as Prisma.InputJsonValue },
+    create: { shop, platform, credentials: payload as Prisma.InputJsonValue },
   });
 }
 

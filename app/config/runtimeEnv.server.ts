@@ -20,6 +20,14 @@ export function normalizeEnvValue(value: string | undefined): string {
 
 let runtimeEnvLoaded = false;
 
+/**
+ * Vitest 下不加载仓库 `.env`：否则单测会拿到真实 Turso/Cosmos/Blob 凭证并打线上，
+ * 表现为并行跑时的间歇超时。显式 `ENV_FILE` 仍然生效，供环境加载自身的用例使用。
+ */
+function isVitestRuntime(): boolean {
+  return Boolean(process.env.VITEST);
+}
+
 /** 仓库根目录（含 package.json），不依赖 process.cwd() */
 export function getProjectRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -126,6 +134,9 @@ function candidateEnvFiles(projectRoot: string): string[] {
 
   const cwdEnv = path.join(process.cwd(), ".env");
 
+  // 测试只允许显式指定的文件，隔离掉真实凭证来源。
+  if (isVitestRuntime()) return [...new Set(fromEnv)];
+
   // 去重，保持顺序：仓库 .env 优先
   const ordered = [rootEnv, ...fromEnv, cwdEnv, ...secretPaths];
   return [...new Set(ordered)];
@@ -225,9 +236,11 @@ export function ensureRuntimeEnv(): void {
   if (runtimeEnvLoaded) return;
   runtimeEnvLoaded = true;
 
-  console.info(
-    `${ENV_LOG} NODE_ENV=${process.env.NODE_ENV}, RENDER=${process.env.RENDER}, cwd=${process.cwd()}`,
-  );
+  if (!isVitestRuntime()) {
+    console.info(
+      `${ENV_LOG} NODE_ENV=${process.env.NODE_ENV}, RENDER=${process.env.RENDER}, cwd=${process.cwd()}`,
+    );
+  }
 
   const projectRoot = getProjectRoot();
   const files = candidateEnvFiles(projectRoot);
@@ -243,7 +256,7 @@ export function ensureRuntimeEnv(): void {
     }
   }
 
-  logCriticalEnvStatus();
+  if (!isVitestRuntime()) logCriticalEnvStatus();
 
   if (
     process.env.RENDER &&

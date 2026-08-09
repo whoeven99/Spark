@@ -115,7 +115,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 图片翻译 | `app/server/pictureTranslate/`、`app/server/imageMapping/`（原图 → Blob 映射，供 Image Switcher 替换） |
 | 视觉模型凭证（火山引擎） | `app/server/volcengine/volcCredentials.server.ts`，被图片生成与图片翻译调用 |
 | 视觉工具页聚合 | `app/server/visualTools/` |
-| 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`app/server/adsCreate/`、`app/server/adsEdit/`、`app/server/adsInsights/` |
+| 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`app/server/adsCreate/`、`app/server/adsEdit/`、`app/server/adsInsights/`。下拉选项类只读列表（Meta Page、TikTok Pixel / Catalog、广告主）走 `adsCatalog/enumerationCache.server.ts` 的进程内 TTL 缓存，路由支持 `?refresh=1` 强刷；绑定校验、同步预检、上传确认等需要实时状态的路径禁止接缓存。Google Ads 凭证按 `accessTokenExpiresAt` 判断是否刷新、按 `loginCustomerIdVerifiedAt` 判断是否重新探测 login-customer-id，两个戳在对应值变化时必须失效 |
 | Google Analytics 4 | `app/server/googleAnalytics/`（`ga4Api.server.ts` 读数、`ga4Credentials.server.ts` OAuth 凭证） |
 | Google Search Console | `app/server/googleSearchConsole/`（`gscApi.server.ts`、`gscCredentials.server.ts`） |
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |

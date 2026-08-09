@@ -1,7 +1,7 @@
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import { extractMessageText } from "./ai/utils/langchainMessageText";
-import { getShopChatModel } from "./ai/core/shopChatGraph.server";
+import { getShopSummaryModel } from "./ai/core/shopChatGraph.server";
 
 /** 单次请求最多带入的上屏消息条数（含欢迎语与当前输入）。 */
 export const MAX_CHAT_HISTORY_MESSAGES = 36;
@@ -84,9 +84,7 @@ async function summarizeOlderMessages(
     );
     if (!plainText.trim()) return null;
 
-    const model = getShopChatModel();
-    // 使用较小的 maxTokens 来加速摘要生成
-    const summaryModel = model.bind({ maxTokens: 512 });
+    const summaryModel = getShopSummaryModel();
     const result = await Promise.race([
       summaryModel.invoke([
         new SystemMessage(

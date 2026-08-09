@@ -1,15 +1,30 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { listTiktokPixels } from "../server/adsCatalog/clients/tiktokCatalogClient.server";
+import {
+  listTiktokPixels,
+  type TiktokPixelListItem,
+} from "../server/adsCatalog/clients/tiktokCatalogClient.server";
 import {
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
-import { listAuthorizedAdvertisers } from "../server/adsCatalog/tiktokOAuth.server";
+import {
+  createEnumerationCache,
+  parseRefreshFlag,
+} from "../server/adsCatalog/enumerationCache.server";
+import {
+  listAuthorizedAdvertisers,
+  type TiktokAuthorizedAdvertiser,
+} from "../server/adsCatalog/tiktokOAuth.server";
+
+// 广告主与 Pixel 都是下拉选项，打开面板就现拉没必要。
+// Pixel 按 shop + advertiserId 分键，切换广告主不会串数据。
+const advertisersCache = createEnumerationCache<TiktokAuthorizedAdvertiser[]>();
+const pixelsCache = createEnumerationCache<TiktokPixelListItem[]>();
 
 /**
  * 列出当前授权下的广告主，以及指定广告主下的 TikTok Pixel。
- * Query: advertiserId（可选；默认用已绑定凭证中的广告主）。
+ * Query: advertiserId（可选；默认用已绑定凭证中的广告主）、refresh=0|1。
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -29,9 +44,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const url = new URL(request.url);
   const requestedAdvertiserId = url.searchParams.get("advertiserId")?.trim() || "";
+  const refresh = parseRefreshFlag(url.searchParams.get("refresh"));
 
   try {
-    let advertisers = await listAuthorizedAdvertisers({ accessToken }).catch(() => []);
+    let advertisers = await advertisersCache
+      .get(shop, () => listAuthorizedAdvertisers({ accessToken }), { refresh })
+      .catch(() => []);
     if (advertisers.length === 0 && boundAdvertiserId) {
       advertisers = [{ advertiserId: boundAdvertiserId, advertiserName: boundAdvertiserId }];
     }
@@ -50,10 +68,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
 
-    const pixels = await listTiktokPixels({
-      accessToken,
-      advertiserId,
-    });
+    const pixels = await pixelsCache.get(
+      `${shop}:${advertiserId}`,
+      () => listTiktokPixels({ accessToken, advertiserId }),
+      { refresh },
+    );
     return Response.json({
       ok: true,
       advertisers,
