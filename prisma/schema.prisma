@@ -56,10 +56,14 @@ model AdPlatformCredential {
   shop        String
   platform    String
   credentials Json
+  /// 平台侧账户/目录标识（GMC merchantId、Meta catalogId、广告账户 ID 等）。
+  /// webhook 只带平台 ID，靠这一列反查店铺，避免扫全表解 JSON。
+  externalAccountId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@unique([shop, platform])
+  @@index([platform, externalAccountId])
 }
 
 /// GMC 商品审核状态缓存（同步后即时查 / 30 分钟延迟查 / 每日 cron 写入）。
@@ -98,6 +102,90 @@ model MetaProductStatus {
   @@unique([shop, retailerId])
   @@index([shop, status])
   @@index([shop, catalogId])
+}
+
+/// 广告实体层级（系列 / 广告组 / 广告）。只存展示属性，指标在 AdMetricDaily。
+model AdEntity {
+  id         String   @id @default(cuid())
+  shop       String
+  /// meta | google | tiktok
+  platform   String
+  /// 平台侧账户 ID；账户切换后旧实体会被整批替换
+  accountId  String
+  /// campaign | adSet | ad
+  level      String
+  /// 平台侧实体 ID
+  externalId String
+  name       String
+  status     String
+  /// 上级实体的平台侧 ID；campaign 层为 null
+  parentId   String?
+  syncedAt   DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([shop, platform, level, externalId])
+  @@index([shop, platform])
+}
+
+/// 广告级每日指标。
+///
+/// 只存可加指标：更高层级和更长区间都用 SUM 上卷，派生指标（CTR/CPC/ROAS）查询时算。
+/// reach / frequency 是去重指标，跨天无法还原，故不入库（上卷后返回空）。
+model AdMetricDaily {
+  id               String   @id @default(cuid())
+  shop             String
+  /// meta | google | tiktok
+  platform         String
+  /// 平台侧账户 ID
+  accountId        String
+  /// 平台侧广告 ID，对应 AdEntity.externalId（level = ad）
+  adId             String
+  /// UTC 日历日，YYYY-MM-DD
+  date             String
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  spend            Float    @default(0)
+  /// 平台会返回小数转化数（归因拆分），故用 Float
+  conversions      Float    @default(0)
+  conversionsValue Float    @default(0)
+  /// 以下为平台特有指标；平台不返回时保持 null，不要落成 0
+  purchases        Float?
+  purchaseValue    Float?
+  addToCart        Float?
+  landingPageViews Float?
+  outboundClicks   Float?
+  videoViews       Float?
+  thruplay         Float?
+  leads            Float?
+  viewContent      Float?
+  initiateCheckout Float?
+  allConversions   Float?
+  fetchedAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shop, platform, adId, date])
+  @@index([shop, platform, date])
+}
+
+/// 广告洞察回源状态（每 shop × platform 一条），用于判断快照是否过期。
+model AdInsightsSync {
+  id           String   @id @default(cuid())
+  shop         String
+  /// meta | google | tiktok
+  platform     String
+  accountId    String
+  accountName  String?
+  currencyCode String?
+  /// 最近一次成功回源覆盖的日期窗口（UTC 日历日）
+  dateStart    String
+  dateEnd      String
+  fetchedAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([shop, platform])
 }
 
 /// 店铺账户（token 分池 + 用量）。

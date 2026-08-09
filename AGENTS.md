@@ -115,7 +115,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 图片翻译 | `app/server/pictureTranslate/`、`app/server/imageMapping/`（原图 → Blob 映射，供 Image Switcher 替换） |
 | 视觉模型凭证（火山引擎） | `app/server/volcengine/volcCredentials.server.ts`，被图片生成与图片翻译调用 |
 | 视觉工具页聚合 | `app/server/visualTools/` |
-| 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`app/server/adsCreate/`、`app/server/adsEdit/`、`app/server/adsInsights/`。下拉选项类只读列表（Meta Page、TikTok Pixel / Catalog、广告主）走 `adsCatalog/enumerationCache.server.ts` 的进程内 TTL 缓存，路由支持 `?refresh=1` 强刷；绑定校验、同步预检、上传确认等需要实时状态的路径禁止接缓存。Google Ads 凭证按 `accessTokenExpiresAt` 判断是否刷新、按 `loginCustomerIdVerifiedAt` 判断是否重新探测 login-customer-id，两个戳在对应值变化时必须失效 |
+| 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`app/server/adsCreate/`、`app/server/adsEdit/`、`app/server/adsInsights/`。下拉选项类只读列表（Meta Page、TikTok Pixel / Catalog、广告主）走 `adsCatalog/enumerationCache.server.ts` 的进程内 TTL 缓存，路由支持 `?refresh=1` 强刷；绑定校验、同步预检、上传确认等需要实时状态的路径禁止接缓存。Google Ads 凭证按 `accessTokenExpiresAt` 判断是否刷新、按 `loginCustomerIdVerifiedAt` 判断是否重新探测 login-customer-id，两个戳在对应值变化时必须失效。广告洞察 `structure` 视图默认读库（`adsInsights/store.server.ts`）：命中新鲜快照直接返回，过期才回源，回源固定拉 30 天再按请求区间切窗口，`?refresh=1` 强刷，回源失败用过期快照兜底；`keywords` / `searchTerms` / `creatives` 深层级明细和沙盒模式仍实时拉、不落库 |
 | Google Analytics 4 | `app/server/googleAnalytics/`（`ga4Api.server.ts` 读数、`ga4Credentials.server.ts` OAuth 凭证） |
 | Google Search Console | `app/server/googleSearchConsole/`（`gscApi.server.ts`、`gscCredentials.server.ts`） |
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
@@ -139,10 +139,13 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 
 ## 5. 数据与外部系统边界
 
-- **Turso / libSQL + Prisma**：业务主数据。模型在 `prisma/schema.prisma`，包括 Session、Account/订阅/计费、AITask、订单/退款/客户/库存/履约镜像、WorkspaceFile、Conversation/Message、运营诊断、成本/ROI、支持会话、广告平台凭证（AdPlatformCredential）等。
+- **Turso / libSQL + Prisma**：业务主数据。模型在 `prisma/schema.prisma`，包括 Session、Account/订阅/计费、AITask、订单/退款/客户/库存/履约镜像、WorkspaceFile、Conversation/Message、运营诊断、成本/ROI、支持会话、广告平台凭证（AdPlatformCredential）、广告实体与日指标（AdEntity / AdMetricDaily / AdInsightsSync）、商品审核状态（GmcProductStatus / MetaProductStatus）等。广告与审核状态相关的约定：
+  - `AdPlatformCredential.externalAccountId` 是索引列，由 `credentialStore.server.ts` 按平台从凭证 JSON 派生（GMC merchantId、Meta/TikTok catalogId、广告账户 ID），webhook 靠它反查店铺；不要再用 `json_extract` 扫全表。
+  - `AdMetricDaily` 只存广告级可加指标。更高层级和更长区间一律 SUM 上卷，CTR / CPC / ROAS 等派生指标查询时算，不落库。`reach` / `frequency` 是去重指标，跨天无法还原，因此不入库、上卷后返回 null；新增指标前先判断它是否可加。
+  - 审核状态与广告实体都是「全量重建」写法：`$transaction` 里 `deleteMany` + 分批 `createMany`，不要退回逐条 upsert。因此拉取必须翻完分页，截断会把没拉到的商品当成已下架。
 - **Azure Cosmos DB**：Agent 运行摘要和 Playbook Case 等事件/结果型数据；入口集中在 `app/server/cosmos/`、`agentRunLog/`、`playbookCase/`。默认不应假设容器会自动创建。
 - **Azure Blob Storage**：上传文件、图片生成、图片翻译及兼容翻译内容。写入前确认容器、SAS 生命周期和清理策略。
-- **Redis**：仅 Admin 翻译运维读取/补 hint（优先 `RENDER_KV`，与 TSF 同名；兼容 `REDIS_URL`）。主应用不连 Redis。不要未经确认把新的核心业务对象只存 Redis。
+- **Redis / Render KV**：主应用专用 KV 环境变量为 `SPARK_KV`（Render 测试实例名 `spark-kv-test`，本地 `.env` 与 Render 测试环境已配）；后续主应用缓存/锁等场景统一读 `SPARK_KV`，不要用 Admin 的 `RENDER_KV`。Admin 翻译运维仍优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。主应用业务代码目前尚未接入 Redis 客户端；接入时须可缺省降级，且不要未经确认把新的核心业务对象只存 Redis。
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。
 - **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。

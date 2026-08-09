@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
+import { googleDateClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
 import { mergeEntityAdsWithFlatMetrics, nestEntityHierarchy, nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
 import { emptyMetrics, finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
 import {
@@ -30,10 +30,11 @@ describe("adsInsights dateRange", () => {
     expect(parseRangeDays(null)).toBe(7);
   });
 
-  it("maps Google DURING clauses", () => {
-    expect(googleDuringClause(7)).toBe("LAST_7_DAYS");
-    expect(googleDuringClause(14)).toBe("LAST_14_DAYS");
-    expect(googleDuringClause(30)).toBe("LAST_30_DAYS");
+  it("builds explicit Google date clauses", () => {
+    // 用显式区间而非 LAST_N_DAYS：预置区间不含当天，落库后切窗口会缺当天。
+    expect(googleDateClause("2026-07-08", "2026-07-14")).toBe(
+      "segments.date BETWEEN '2026-07-08' AND '2026-07-14'",
+    );
   });
 
   it("resolves inclusive UTC windows", () => {
