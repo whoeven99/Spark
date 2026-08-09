@@ -154,24 +154,17 @@ const QUADRANTS: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 const MATRIX_ORDER: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 
 const quadrantAccentColors: Record<TaskQuadrant, string> = {
-  q1: "#dc2626",
-  q2: "#ea580c",
-  q3: "#4070f4",
-  q4: "#6b7280",
-};
-
-const quadrantTintColors: Record<TaskQuadrant, string> = {
-  q1: "rgba(220, 38, 38, 0.04)",
-  q2: "rgba(234, 88, 12, 0.04)",
-  q3: "rgba(64, 112, 244, 0.04)",
-  q4: "rgba(107, 114, 128, 0.04)",
+  q1: pageColorTokens.critical,
+  q2: pageColorTokens.progress,
+  q3: pageColorTokens.brandBlue,
+  q4: pageColorTokens.neutralStatus,
 };
 
 const quadrantCellStyle = (quadrant: TaskQuadrant): CSSProperties => ({
   border: `1px solid ${pageColorTokens.border}`,
-  borderTop: `4px solid ${quadrantAccentColors[quadrant]}`,
+  borderTop: `3px solid ${quadrantAccentColors[quadrant]}`,
   borderRadius: pageColorTokens.radiusCard,
-  background: `linear-gradient(180deg, ${quadrantTintColors[quadrant]} 0%, #ffffff 60%)`,
+  background: pageColorTokens.surface,
   padding: "0.9rem 1rem",
   display: "flex",
   flexDirection: "column",
@@ -619,7 +612,11 @@ const listRowActionsStyle: CSSProperties = {
 const riskCardStyle = (status: "healthy" | "watch" | "risk"): CSSProperties => ({
   border: `1px solid ${pageColorTokens.border}`,
   borderTop: `3px solid ${
-    status === "healthy" ? "#15803d" : status === "watch" ? "#d97706" : "#dc2626"
+    status === "healthy"
+      ? pageColorTokens.brandGreen
+      : status === "watch"
+        ? pageColorTokens.warning
+        : pageColorTokens.critical
   }`,
   borderRadius: pageColorTokens.radiusCard,
   background: pageColorTokens.surface,
@@ -3858,19 +3855,19 @@ function LayerLegend() {
   const { t } = useTranslation();
   const layers: Array<{ accent: string; title: string; desc: string; source: DataSource }> = [
     {
-      accent: "#007a5a",
+      accent: pageColorTokens.brandGreen,
       title: t("dailyOps.layerRevenue"),
       desc: t("dailyOps.layerRevenueDesc"),
       source: "real",
     },
     {
-      accent: "#ea580c",
+      accent: pageColorTokens.progress,
       title: t("dailyOps.layerProfit"),
       desc: t("dailyOps.layerProfitDesc"),
       source: "estimated",
     },
     {
-      accent: "#6b7280",
+      accent: pageColorTokens.neutralStatus,
       title: t("dailyOps.layerInvestment"),
       desc: t("dailyOps.layerInvestmentDesc"),
       source: "pending",
@@ -4078,7 +4075,9 @@ function ValueLayerSections({
                         style={{
                           ...valueTdStyle,
                           color:
-                            channel.contributionProfit >= 0 ? "#007a5a" : "#dc2626",
+                            channel.contributionProfit >= 0
+                              ? pageColorTokens.brandGreen
+                              : pageColorTokens.critical,
                           fontWeight: 700,
                         }}
                       >

@@ -1,6 +1,8 @@
 import "./styles/app.css";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
+import { ConfigProvider } from "antd";
 import { DEFAULT_LOCALE } from "./i18n/config";
+import { antdTheme } from "./styles/antdTheme";
 
 export default function App() {
   const matches = useMatches();
@@ -29,7 +31,9 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <Outlet />
+        <ConfigProvider theme={antdTheme}>
+          <Outlet />
+        </ConfigProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

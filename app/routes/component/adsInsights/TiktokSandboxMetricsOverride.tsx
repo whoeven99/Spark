@@ -223,7 +223,7 @@ export function TiktokSandboxMetricsOverridePanel({ value, onChange, hasData }: 
       <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
         {t("adsInsights.tiktokSandboxMetricsOverrideHint")}
         {!hasData && (
-          <span style={{ color: "#d97706", marginLeft: 4 }}>
+          <span style={{ color: pageColorTokens.warning, marginLeft: 4 }}>
             {t("adsInsights.tiktokSandboxMetricsNoData")}
           </span>
         )}

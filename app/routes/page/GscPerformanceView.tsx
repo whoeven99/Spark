@@ -249,7 +249,7 @@ function GscLineChart({
           y={bottom + 16}
           textAnchor="middle"
           fontSize="10"
-          fill="#6b7280"
+          fill={pageColorTokens.textSecondary}
         >
           {fmtDateAxis(timeSeries[idx].key)}
         </text>
@@ -704,7 +704,7 @@ export function GscPerformanceView() {
         <MetricCard
           label={t("gsc.metricCtr")}
           value={summary ? fmtPercent(summary.avgCtr) : "—"}
-          color="#00a67c"
+          color={pageColorTokens.brandGreen}
           active={false}
           toggleable={false}
         />

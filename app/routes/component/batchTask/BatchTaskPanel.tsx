@@ -160,17 +160,15 @@ function DoneSummary({
           padding: "0.75rem 1rem",
           borderRadius: pageColorTokens.radiusControl,
           background:
-            created > 0
-              ? "rgba(0, 166, 124, 0.06)"
-              : pageColorTokens.surfaceMuted,
-          border: `1px solid ${created > 0 ? "#00a67c40" : pageColorTokens.borderSubtle}`,
+            created > 0 ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
+          border: `1px solid ${created > 0 ? pageColorTokens.brandGreenGlow : pageColorTokens.borderSubtle}`,
         }}
       >
         <span
           style={{
             fontSize: 15,
             fontWeight: 700,
-            color: created > 0 ? "#00a67c" : pageColorTokens.textPrimary,
+            color: created > 0 ? pageColorTokens.brandGreenDeep : pageColorTokens.textPrimary,
           }}
         >
           {created > 0

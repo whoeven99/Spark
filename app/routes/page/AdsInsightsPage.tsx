@@ -815,7 +815,10 @@ function TiktokSandboxReadbackPanel({ readback }: { readback: ReadbackData }) {
     if (!detail) {
       return (
         <div>
-          {label}: <span style={{ color: "#d97706" }}>{t("adsInsights.tiktokSandboxReadbackNotFound")}</span>
+          {label}:{" "}
+          <span style={{ color: pageColorTokens.warning }}>
+            {t("adsInsights.tiktokSandboxReadbackNotFound")}
+          </span>
         </div>
       );
     }
@@ -846,7 +849,7 @@ function TiktokSandboxReadbackPanel({ readback }: { readback: ReadbackData }) {
       {renderRow("Campaign", readback.campaign)}
       {renderRow("AdGroup", readback.adgroup)}
       {renderRow("Ad", readback.ad)}
-      <div style={{ color: "#6b7280", marginTop: 2 }}>
+      <div style={{ color: pageColorTokens.textSecondary, marginTop: 2 }}>
         {t("adsInsights.tiktokSandboxReadbackAt", { time: formatTime(readback.queriedAt) })}
       </div>
     </div>

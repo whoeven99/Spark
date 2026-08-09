@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { elapsedSecondsSince } from "../aiTask/LogViewer";
+import { getTaskProgressBackground } from "../aiTask/taskStatusTone";
 import {
   AITaskCardShell,
   type CardAction,
@@ -49,22 +50,6 @@ function getProgressPercent(status: AITaskStatus, hasRunningElapsed: boolean): n
       return 24;
     default:
       return 0;
-  }
-}
-
-function getProgressBackground(status: AITaskStatus): string {
-  switch (status) {
-    case "running":
-      return "linear-gradient(90deg, #d97706 0%, #f59e0b 100%)";
-    case "succeeded":
-    case "applied":
-    case "pending_review":
-    case "scored":
-      return "linear-gradient(90deg, #00a67c 0%, #34caa1 100%)";
-    case "failed":
-      return "linear-gradient(90deg, #dc2626 0%, #ef4444 100%)";
-    default:
-      return "linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%)";
   }
 }
 
@@ -235,7 +220,7 @@ export function PictureTranslateTaskCard({
       primaryCopy={primaryCopy}
       secondaryCopy={secondaryCopy}
       progressPercent={getProgressPercent(localStatus, Boolean(runningElapsed))}
-      progressBackground={getProgressBackground(localStatus)}
+      progressBackground={getTaskProgressBackground(localStatus)}
       actions={actions}
       showLogViewer={localStatus === "running"}
       onStatusChange={(status, nextResult) => {

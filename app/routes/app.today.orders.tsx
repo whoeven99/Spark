@@ -922,9 +922,7 @@ export default function OrderMonitorPage() {
   return (
     <s-page heading={t("orderMonitor.pageTitle")}>
       <div
-        style={pageIntroBannerStyle("order-monitor", {
-          marginBottom: "1.5rem",
-        })}
+        style={pageIntroBannerStyle({ marginBottom: "1.5rem" })}
       >
         {t("orderMonitor.pageIntro")}
       </div>

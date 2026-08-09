@@ -209,7 +209,7 @@ function ConnectedBar({
             width: 8,
             height: 8,
             borderRadius: "50%",
-            background: "#00a67c",
+            background: pageColorTokens.brandGreen,
             flexShrink: 0,
           }}
         />
@@ -221,8 +221,8 @@ function ConnectedBar({
         <span
           style={{
             fontSize: "0.78rem",
-            color: "#00a67c",
-            background: "#edfaf5",
+            color: pageColorTokens.brandGreenDeep,
+            background: pageColorTokens.brandGreenLight,
             borderRadius: 4,
             padding: "1px 6px",
           }}
