@@ -237,7 +237,7 @@ export function ImageGenerationTaskDetailPage({
         style={{
           border: `1px solid ${pageColorTokens.borderSubtle}`,
           borderRadius: pageColorTokens.radiusCard,
-          background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 100%)",
+          background: pageColorTokens.surface,
           boxShadow: pageColorTokens.shadowCard,
           padding: "1rem",
           display: "flex",

@@ -413,9 +413,7 @@ export function LogViewer({
               height: "100%",
               borderRadius: 999,
               width: `${progressPct}%`,
-              background: isDone
-                ? pageColorTokens.brandGreen
-                : `linear-gradient(90deg, ${pageColorTokens.brandGreen}, ${pageColorTokens.brandBlue})`,
+              background: isDone ? pageColorTokens.brandGreen : pageColorTokens.progress,
               transition: isDone ? "width 0.4s ease" : "width 1s linear",
             }}
           />

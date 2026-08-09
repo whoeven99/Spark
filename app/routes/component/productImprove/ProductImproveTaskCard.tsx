@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { elapsedSecondsSince } from "../aiTask/LogViewer";
+import { getTaskStatusTone } from "../aiTask/taskStatusTone";
 import {
   AITaskCardShell,
   type CardAction,
@@ -103,34 +104,6 @@ function getProgressPercent(
       return 24;
     default:
       return 0;
-  }
-}
-
-function getProgressTone(status: AITaskStatus) {
-  switch (status) {
-    case "running":
-      return {
-        background: "linear-gradient(90deg, #00a67c 0%, #35b486 55%, #7ad9a8 100%)",
-        text: pageColorTokens.textPrimary,
-      };
-    case "pending_review":
-    case "succeeded":
-    case "scored":
-    case "applied":
-      return {
-        background: "linear-gradient(90deg, #00a67c 0%, #00a67c 100%)",
-        text: pageColorTokens.textPrimary,
-      };
-    case "failed":
-      return {
-        background: "linear-gradient(90deg, #d97706 0%, #f59e0b 100%)",
-        text: pageColorTokens.criticalText,
-      };
-    default:
-      return {
-        background: "linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%)",
-        text: pageColorTokens.textPrimary,
-      };
   }
 }
 
@@ -397,7 +370,7 @@ export function ProductImproveTaskCard({
         )
       : null;
   const elapsedLabel = runningElapsed ?? actualElapsed ?? unknownText;
-  const progressTone = getProgressTone(localStatus);
+  const progressTone = getTaskStatusTone(localStatus);
   const primaryCopy = getPrimaryStatusCopy({
     status: localStatus,
     creditInsufficient,
@@ -488,10 +461,12 @@ export function ProductImproveTaskCard({
       metaLine={metaLine}
       extraBadges={extraBadges}
       primaryCopy={primaryCopy}
-      primaryCopyColor={progressTone.text}
+      primaryCopyColor={
+        localStatus === "failed" ? pageColorTokens.criticalText : pageColorTokens.textPrimary
+      }
       secondaryCopy={secondaryCopy}
       progressPercent={progressPercent}
-      progressBackground={progressTone.background}
+      progressBackground={progressTone.accent}
       actions={actions}
       showLogViewer={localStatus === "running"}
       onStatusChange={(status, result) => {

@@ -18,6 +18,11 @@ implementation:
     - this file
     - shared tokens
     - shared primitives
+  token_implementation:
+    - app/routes/page/pageUiStyles.tsx (pageColorTokens)
+    - app/routes/page/workspace/styles.ts (shopifyUi)
+    - app/styles/app.css (@theme custom properties)
+    - app/styles/antdTheme.ts (Ant Design ConfigProvider)
 principles:
   shopify_first: true
   saas_secondary: true
@@ -27,14 +32,14 @@ principles:
 colors:
   text:
     primary: "#1f2124"
-    secondary: "#5c6066"
-    tertiary: "#7a7f87"
+    secondary: "#61666c"
+    tertiary: "#8c9196"
     inverse: "#ffffff"
   surface:
     page: "#f6f6f7"
     primary: "#ffffff"
     secondary: "#fafbfb"
-    subtle: "#f3f4f6"
+    subtle: "#f6f6f7"
   border:
     default: "#e1e3e5"
     subtle: "#ebedf0"
@@ -42,7 +47,7 @@ colors:
   state:
     success: "#008060"
     success-surface: "#e9f7ef"
-    info: "#2c6ecb"
+    info: "#005bd3"
     info-surface: "#eef4ff"
     warning: "#b98900"
     warning-surface: "#fff7e0"
@@ -51,7 +56,7 @@ colors:
     critical: "#d82c0d"
     critical-surface: "#fff0ee"
   focus:
-    ring: "#2c6ecb"
+    ring: "#005bd3"
 typography:
   font_family: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
   note: "Brand type scale is not final. Use Shopify-compatible defaults until brand typography is defined."
@@ -82,8 +87,9 @@ spacing:
   compact_padding: "12px"
   grid_gap: "16px"
 shadow:
-  card: "0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04)"
-  overlay: "0 12px 32px rgba(0, 0, 0, 0.14)"
+  card: "0 1px 0 rgba(0, 0, 0, 0.05)"
+  card-raised: "0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05)"
+  overlay: "0 24px 56px rgba(15, 23, 42, 0.16)"
 components:
   page_shell:
     base: "Shopify App frame with neutral page background"
@@ -506,6 +512,8 @@ Near-term implications:
 - `ProductImprovePage` should be judged against the task-oriented tool template, not against billing.
 - Existing billing visuals should be treated as billing-specific exceptions.
 - Shared page primitives should gradually replace page-level visual inventions.
+- `pageColorTokens` and the workspace `shopifyUi` palette are now the same values. Tool pages and the workspace must not drift apart again; change both together or move the shared value into one of them.
+- Task status color is owned by `app/routes/component/aiTask/taskStatusTone.ts`. Status badges and task-card progress bars read from it instead of defining per-card palettes.
 
 ## Maintenance
 

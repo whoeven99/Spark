@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import { getTaskStatusTone } from "./taskStatusTone";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type StatDef = {
@@ -8,18 +9,22 @@ type StatDef = {
   activeColor: string;
 };
 
+function statDef(status: AITaskStatus, label: string): StatDef {
+  return { status, label, activeColor: getTaskStatusTone(status).accent };
+}
+
 const IMAGE_STATS: StatDef[] = [
-  { status: "running", label: "执行中", activeColor: pageColorTokens.brandBlue },
-  { status: "succeeded", label: "已完成", activeColor: pageColorTokens.brandGreenDark },
-  { status: "failed", label: "失败", activeColor: pageColorTokens.critical },
+  statDef("running", "执行中"),
+  statDef("succeeded", "已完成"),
+  statDef("failed", "失败"),
 ];
 
 const PRODUCT_IMPROVE_STATS: StatDef[] = [
-  { status: "running", label: "执行中", activeColor: pageColorTokens.brandBlue },
-  { status: "pending_review", label: "待审查", activeColor: "#d97706" },
-  { status: "applied", label: "已应用", activeColor: pageColorTokens.brandGreenDark },
-  { status: "scored", label: "评分完成", activeColor: "#7c3aed" },
-  { status: "failed", label: "失败", activeColor: pageColorTokens.critical },
+  statDef("running", "执行中"),
+  statDef("pending_review", "待审查"),
+  statDef("applied", "已应用"),
+  statDef("scored", "评分完成"),
+  statDef("failed", "失败"),
 ];
 
 type Props = {

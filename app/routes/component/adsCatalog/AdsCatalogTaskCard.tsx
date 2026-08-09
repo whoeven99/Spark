@@ -8,6 +8,7 @@ import {
   formatActualElapsed,
 } from "../aiTask/AITaskCardShell";
 import { elapsedSecondsSince } from "../aiTask/LogViewer";
+import { getTaskProgressBackground } from "../aiTask/taskStatusTone";
 import type {
   AdsCatalogPlatform,
   AdsCatalogSyncTaskResult,
@@ -161,19 +162,6 @@ function getProgressPercent(task: AITaskItem, status: AITaskStatus): number {
       return 30;
     default:
       return 18;
-  }
-}
-
-function getProgressBackground(status: AITaskStatus): string {
-  switch (status) {
-    case "running":
-      return "linear-gradient(90deg, #4070f4 0%, #6f8df9 55%, #a3b8fb 100%)";
-    case "succeeded":
-      return "linear-gradient(90deg, #00a67c 0%, #00a67c 100%)";
-    case "failed":
-      return "linear-gradient(90deg, #d97706 0%, #f59e0b 100%)";
-    default:
-      return "linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%)";
   }
 }
 
@@ -351,7 +339,7 @@ export function AdsCatalogTaskCard({
       primaryCopy={primaryCopy}
       secondaryCopy={secondaryCopy}
       progressPercent={getProgressPercent(task, effectiveStatus)}
-      progressBackground={getProgressBackground(effectiveStatus)}
+      progressBackground={getTaskProgressBackground(effectiveStatus)}
       actions={actions}
       showLogViewer={effectiveStatus === "running"}
       onStatusChange={(status, nextResult) => {

@@ -194,7 +194,7 @@ function Ga4LineChart({
       <line x1={pL} y1={bottom} x2={W - pR} y2={bottom} stroke="#e8eaed" strokeWidth="1" />
 
       {xIndices.map((idx) => (
-        <text key={idx} x={getX(idx)} y={bottom + 16} textAnchor="middle" fontSize="10" fill="#6b7280">
+        <text key={idx} x={getX(idx)} y={bottom + 16} textAnchor="middle" fontSize="10" fill={pageColorTokens.textSecondary}>
           {fmtDateAxis(timeSeries[idx].key)}
         </text>
       ))}

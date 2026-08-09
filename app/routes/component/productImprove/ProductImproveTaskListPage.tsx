@@ -331,8 +331,6 @@ export function ProductImproveTaskListPage({
               ...pageEmptyStateStyle,
               minHeight: EMPTY_STATE_MIN_HEIGHT,
               padding: "2.75rem 1.5rem",
-              background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
-              border: `1px dashed ${pageColorTokens.borderSubtle}`,
             }}
           >
             <span style={{ fontSize: 28, lineHeight: 1 }}>⏳</span>
@@ -407,8 +405,6 @@ export function ProductImproveTaskListPage({
               ...pageEmptyStateStyle,
               minHeight: EMPTY_STATE_MIN_HEIGHT,
               padding: "2.75rem 1.5rem",
-              background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
-              border: `1px dashed ${pageColorTokens.borderSubtle}`,
             }}
           >
             <span style={{ fontSize: 28, lineHeight: 1 }}>📋</span>

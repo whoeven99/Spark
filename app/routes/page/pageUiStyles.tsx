@@ -2,44 +2,51 @@ import type { CSSProperties, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
+/**
+ * 与工作台 `page/workspace/styles.ts` 的 `shopifyUi` 同源，保证工作台与工具页视觉一致。
+ * 取值遵循 docs/DESIGN.md：中性表面为主，语义色只用于状态。
+ */
 export const pageColorTokens = {
-  textPrimary: "#1a1d1f",
-  textBody: "#2c2f32",
-  textSecondary: "#6b7280",
-  textFootnote: "#9ca3af",
-  textMuted: "#4b5563",
-  border: "#e2e5e9",
-  borderInput: "#c8cdd3",
-  borderSubtle: "#dde1e6",
-  divider: "#f0f2f4",
-  // Brand — slightly more vivid than legacy #008060 / #2c6ecb
-  brandGreen: "#00a67c",
-  brandGreenDark: "#007a5a",
-  brandGreenDeep: "#005c46",
-  brandGreenLight: "#edfaf5",
-  brandGreenGlow: "rgba(0, 166, 124, 0.18)",
-  brandBlue: "#4070f4",
-  brandBlueDark: "#2952d8",
-  brandBlueLight: "#eef2ff",
-  brandBlueGlow: "rgba(64, 112, 244, 0.18)",
+  textPrimary: "#1f2124",
+  textBody: "#42474c",
+  textSecondary: "#61666c",
+  textFootnote: "#8c9196",
+  textMuted: "#4a4f55",
+  border: "#e1e3e5",
+  borderInput: "#c9cdd2",
+  borderSubtle: "#ebedf0",
+  divider: "#f1f2f3",
+  // Brand — Shopify Admin 标准绿与链接蓝
+  brandGreen: "#008060",
+  brandGreenDark: "#006e52",
+  brandGreenDeep: "#004c3f",
+  brandGreenLight: "#e9f7ef",
+  brandGreenGlow: "rgba(0, 128, 96, 0.16)",
+  brandBlue: "#005bd3",
+  brandBlueDark: "#00449e",
+  brandBlueLight: "#eef4ff",
+  brandBlueGlow: "rgba(0, 91, 211, 0.16)",
   // Surfaces
   surface: "#ffffff",
-  surfaceGlass: "linear-gradient(160deg, #ffffff 0%, #f7f9ff 100%)",
-  surfaceMuted: "#f5f6f8",
-  surfaceEvenRow: "#f9fafb",
-  surfaceSubtle: "#fafafa",
+  surfaceMuted: "#f6f6f7",
+  surfaceEvenRow: "#fafbfb",
+  surfaceSubtle: "#fafbfb",
   // Feedback
-  critical: "#dc2626",
-  criticalBg: "rgba(220, 38, 38, 0.07)",
-  criticalText: "#991b1b",
-  // Elevation
-  shadowCard: "0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
-  shadowCardStrong: "0 8px 28px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06)",
-  shadowModal: "0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08)",
-  progressTrackGradient: "linear-gradient(90deg, #e8eaef 0%, #dfe3ea 100%)",
+  critical: "#d82c0d",
+  criticalBg: "#fff0ee",
+  criticalText: "#8e1f0b",
+  warning: "#b98900",
+  warningBg: "#fff7e0",
+  progress: "#c05717",
+  progressBg: "#fff1e8",
+  neutralStatus: "#61666c",
+  // Elevation — 优先靠边框分层，阴影保持克制
+  shadowCard: "0 1px 0 rgba(0, 0, 0, 0.05)",
+  shadowCardStrong: "0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05)",
+  shadowModal: "0 24px 56px rgba(15, 23, 42, 0.16)",
   radiusCard: "14px",
-  radiusControl: "9px",
-  mutedBg: "rgba(107, 114, 128, 0.08)",
+  radiusControl: "10px",
+  mutedBg: "rgba(97, 102, 108, 0.08)",
 } as const;
 
 /** §3.2 双栏布局 */
@@ -153,7 +160,7 @@ export const pageHeaderNavSubtitleMobileStyle: CSSProperties = {
 };
 
 export const pageSurfaceStyle: CSSProperties = {
-  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+  background: pageColorTokens.surface,
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: "1.25rem",
@@ -218,9 +225,8 @@ export const languageSelectorBarStyle: CSSProperties = {
   marginTop: "0.5rem",
   padding: "0.65rem 0.85rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
+  background: pageColorTokens.surfaceMuted,
   border: `1px solid ${pageColorTokens.border}`,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
 };
 
 export const languageSelectorLabelStyle: CSSProperties = {
@@ -294,18 +300,18 @@ export const pageStatusBadgeStyle: CSSProperties = {
   padding: "0.3rem 0.8rem",
   borderRadius: "999px",
   fontSize: "0.8125rem",
-  fontWeight: 700,
-  color: "#006e52",
-  background: "linear-gradient(135deg, #edfaf5 0%, #d4f5e9 100%)",
-  border: "1px solid rgba(0, 166, 124, 0.3)",
-  boxShadow: "0 1px 4px rgba(0, 166, 124, 0.12)",
+  fontWeight: 600,
+  color: pageColorTokens.brandGreenDeep,
+  background: pageColorTokens.brandGreenLight,
+  border: `1px solid ${pageColorTokens.brandGreenGlow}`,
 };
 
 export const pageTrustFootnoteStyle: CSSProperties = {
   margin: 0,
   padding: "0.85rem 1rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
   fontSize: "0.75rem",
   lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
@@ -337,78 +343,31 @@ export const pageAccentBadgeStyle: CSSProperties = {
 export const pageMetaTextStyle: CSSProperties = {
   margin: 0,
   padding: "0.65rem 0.75rem",
-  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusControl,
   fontSize: "0.8125rem",
   color: pageColorTokens.textBody,
 };
 
-export type PageIntroTone =
-  | "render"
-  | "picture"
-  | "translation"
-  | "chat"
-  | "billing"
-  | "diagnosis"
-  | "order-monitor";
-
-const introToneTokens: Record<
-  PageIntroTone,
-  { gradient: string; borderColor: string }
-> = {
-  render: {
-    gradient: "linear-gradient(135deg, rgba(109, 40, 217, 0.08) 0%, rgba(236, 72, 153, 0.06) 100%)",
-    borderColor: "#7c3aed",
-  },
-  picture: {
-    gradient: "linear-gradient(135deg, rgba(139, 5, 255, 0.09) 0%, rgba(0, 166, 124, 0.07) 100%)",
-    borderColor: "#8a05ff",
-  },
-  translation: {
-    gradient: "linear-gradient(135deg, rgba(0, 166, 124, 0.09) 0%, rgba(64, 112, 244, 0.07) 100%)",
-    borderColor: "#00a67c",
-  },
-  chat: {
-    gradient: "linear-gradient(135deg, rgba(64, 112, 244, 0.09) 0%, rgba(0, 166, 124, 0.07) 100%)",
-    borderColor: "#4070f4",
-  },
-  billing: {
-    gradient: "linear-gradient(135deg, rgba(0, 166, 124, 0.08) 0%, rgba(139, 5, 255, 0.05) 100%)",
-    borderColor: "#00a67c",
-  },
-  diagnosis: {
-    gradient: "linear-gradient(135deg, rgba(64, 112, 244, 0.08) 0%, rgba(107, 114, 128, 0.07) 100%)",
-    borderColor: "#4070f4",
-  },
-  "order-monitor": {
-    gradient: "linear-gradient(135deg, rgba(234, 88, 12, 0.08) 0%, rgba(0, 166, 124, 0.07) 100%)",
-    borderColor: "#ea580c",
-  },
-};
-
-export function pageIntroBannerStyle(
-  tone: PageIntroTone,
-  options?: { marginBottom?: string },
-): CSSProperties {
-  const token = introToneTokens[tone];
+export function pageIntroBannerStyle(options?: { marginBottom?: string }): CSSProperties {
   return {
     fontSize: "0.875rem",
-    color: pageColorTokens.textBody,
+    color: pageColorTokens.textSecondary,
     lineHeight: 1.55,
-    padding: "0.9rem 1.25rem",
-    background: token.gradient,
-    borderLeft: `4px solid ${token.borderColor}`,
-    borderRadius: `0 ${pageColorTokens.radiusControl} ${pageColorTokens.radiusControl} 0`,
+    padding: "0.9rem 1.1rem",
+    background: pageColorTokens.surfaceMuted,
+    border: `1px solid ${pageColorTokens.border}`,
+    borderRadius: pageColorTokens.radiusControl,
     marginBottom: options?.marginBottom ?? "1rem",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
   };
 }
 
 export const pageEmptyStateStyle: CSSProperties = {
   padding: "2.5rem 1.5rem",
   borderRadius: pageColorTokens.radiusCard,
-  background: "linear-gradient(160deg, #f7f9ff 0%, #f0f2f7 100%)",
-  border: `1.5px dashed ${pageColorTokens.borderInput}`,
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px dashed ${pageColorTokens.borderInput}`,
   color: pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   lineHeight: 1.5,
@@ -422,15 +381,15 @@ export const pageEmptyStateStyle: CSSProperties = {
 export const formErrorBoxStyle: CSSProperties = {
   padding: "0.55rem 0.75rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, rgba(220,38,38,0.07) 0%, rgba(220,38,38,0.04) 100%)",
-  border: "1px solid rgba(220,38,38,0.2)",
+  background: pageColorTokens.criticalBg,
+  border: "1px solid #f2b8ae",
   color: pageColorTokens.criticalText,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
 };
 
 export const pageMetricCardStyle: CSSProperties = {
-  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+  background: pageColorTokens.surface,
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   overflow: "hidden",
@@ -438,12 +397,13 @@ export const pageMetricCardStyle: CSSProperties = {
 };
 
 export const pageMetricCardAccentStyle: CSSProperties = {
-  background: "linear-gradient(135deg, #005c46 0%, #007a5a 50%, #00c48c 100%)",
-  color: "#ffffff",
+  background: pageColorTokens.surfaceMuted,
+  borderBottom: `1px solid ${pageColorTokens.border}`,
+  color: pageColorTokens.textSecondary,
   padding: "0.7rem 1rem",
   fontSize: "0.8125rem",
+  fontWeight: 600,
   lineHeight: 1.45,
-  letterSpacing: "0.01em",
 };
 
 export const pageMetricTileStyle: CSSProperties = {
@@ -484,7 +444,7 @@ export const pageStatusCardStyle: CSSProperties = {
   padding: "0.85rem 1rem",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
-  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+  background: pageColorTokens.surface,
   boxShadow: pageColorTokens.shadowCard,
 };
 
@@ -671,8 +631,7 @@ export function PagePanel({ children, padding = "base", highlighted = false }: P
         ...(highlighted
           ? {
               borderColor: pageColorTokens.brandGreen,
-              boxShadow: `0 0 0 1px ${pageColorTokens.brandGreen}, 0 4px 20px ${pageColorTokens.brandGreenGlow}`,
-              background: `linear-gradient(160deg, ${pageColorTokens.brandGreenLight} 0%, #ffffff 32%)`,
+              boxShadow: `0 0 0 1px ${pageColorTokens.brandGreen}`,
             }
           : {}),
       }}
