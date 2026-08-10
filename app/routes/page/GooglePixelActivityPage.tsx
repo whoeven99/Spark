@@ -12,9 +12,11 @@ import {
   DailyActivityChart,
   FunnelChart,
   MetricCards,
+  ReferralPanel,
   type ActivityCounts,
   type ActivityDailyPoint,
   type ActivityFunnelStep,
+  type ActivityReferralSummary,
 } from "../component/googlePixel/GooglePixelActivityCharts";
 import {
   PageHeaderNav,
@@ -41,6 +43,7 @@ type SummaryResponse = {
   counts?: ActivityCounts;
   daily?: ActivityDailyPoint[];
   funnel?: ActivityFunnelStep[];
+  referral?: ActivityReferralSummary;
 };
 
 type EventRow = {
@@ -223,6 +226,13 @@ export function GooglePixelActivityPage() {
   });
   const [daily, setDaily] = useState<ActivityDailyPoint[]>([]);
   const [funnel, setFunnel] = useState<ActivityFunnelStep[]>([]);
+  const [referral, setReferral] = useState<ActivityReferralSummary>({
+    paidCount: 0,
+    organicCount: 0,
+    directCount: 0,
+    paidPct: 0,
+    topReferrers: [],
+  });
   const [logs, setLogs] = useState<EventRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -247,6 +257,15 @@ export function GooglePixelActivityPage() {
       if (json.counts) setCounts(json.counts);
       setDaily(json.daily ?? []);
       setFunnel(json.funnel ?? []);
+      setReferral(
+        json.referral ?? {
+          paidCount: 0,
+          organicCount: 0,
+          directCount: 0,
+          paidPct: 0,
+          topReferrers: [],
+        },
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("googlePixelActivity.loadFailed"));
     } finally {
@@ -348,15 +367,17 @@ export function GooglePixelActivityPage() {
       ) : (
         <>
           <MetricCards counts={counts} />
+          <DailyActivityChart daily={daily} />
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 280px)",
               gap: 12,
+              alignItems: "stretch",
             }}
           >
-            <DailyActivityChart daily={daily} />
             <FunnelChart funnel={funnel} />
+            <ReferralPanel referral={referral} />
           </div>
         </>
       )}

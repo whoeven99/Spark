@@ -38,6 +38,14 @@ export type GooglePixelActivityDailyPoint = {
   counts: Partial<Record<GooglePixelActivityEvent, number>>;
 };
 
+export type GooglePixelActivityReferralSummary = {
+  paidCount: number;
+  organicCount: number;
+  directCount: number;
+  paidPct: number;
+  topReferrers: Array<{ label: string; count: number }>;
+};
+
 export type GooglePixelActivitySummary = {
   configured: boolean;
   range: GooglePixelActivityRange;
@@ -46,6 +54,7 @@ export type GooglePixelActivitySummary = {
   counts: GooglePixelActivityCounts;
   daily: GooglePixelActivityDailyPoint[];
   funnel: GooglePixelActivityFunnelStep[];
+  referral: GooglePixelActivityReferralSummary;
 };
 
 export type GooglePixelActivityEventRow = {
@@ -210,6 +219,63 @@ export function buildActivityFunnel(
   return steps;
 }
 
+function emptyReferralSummary(): GooglePixelActivityReferralSummary {
+  return {
+    paidCount: 0,
+    organicCount: 0,
+    directCount: 0,
+    paidPct: 0,
+    topReferrers: [],
+  };
+}
+
+function normalizeReferrerLabel(referrer: string): string {
+  const trimmed = referrer.trim();
+  if (!trimmed) return "Direct";
+  try {
+    return new URL(trimmed).hostname.replace(/^www\./i, "");
+  } catch {
+    return trimmed.length > 48 ? `${trimmed.slice(0, 45)}…` : trimmed;
+  }
+}
+
+/** 由 page_view 原始行聚合流量来源与 Top Referrers。**纯函数**。 */
+export function parseActivityTrafficRows(
+  rows: Array<Record<string, string>>,
+): GooglePixelActivityReferralSummary {
+  let paidCount = 0;
+  let organicCount = 0;
+  let directCount = 0;
+  const referrers = new Map<string, number>();
+
+  for (const row of rows) {
+    const payload = parsePayload(row.payload ?? "");
+    const trafficSource = readString(payload, "trafficSource").toLowerCase();
+    const referrer = readString(payload, "referrer");
+
+    if (trafficSource === "paid") paidCount += 1;
+    else if (trafficSource === "organic") organicCount += 1;
+    else directCount += 1;
+
+    const label = normalizeReferrerLabel(referrer);
+    referrers.set(label, (referrers.get(label) ?? 0) + 1);
+  }
+
+  const total = paidCount + organicCount + directCount;
+  const topReferrers = [...referrers.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 5)
+    .map(([label, count]) => ({ label, count }));
+
+  return {
+    paidCount,
+    organicCount,
+    directCount,
+    paidPct: total > 0 ? Math.round((paidCount / total) * 1000) / 10 : 0,
+    topReferrers,
+  };
+}
+
 function normalizeHistograms(raw: unknown): { total: number; complete: boolean } {
   if (Array.isArray(raw)) {
     const buckets = raw as Array<{ count?: number; progress?: string }>;
@@ -357,6 +423,7 @@ export async function loadGooglePixelActivitySummary(params: {
     counts: emptyCounts(),
     daily: [],
     funnel: buildActivityFunnel(emptyCounts()),
+    referral: emptyReferralSummary(),
   };
 
   if (!isValidShopName(shop)) return empty;
@@ -365,7 +432,8 @@ export async function loadGooglePixelActivitySummary(params: {
   if (!cfg || !client) return empty;
 
   try {
-    const [countRows, dailyRows] = await Promise.all([
+    const pageViewQuery = `${buildGooglePixelBaseQuery(shop)} and event: spark:google:page_view`;
+    const [countRows, dailyRows, trafficRows] = await Promise.all([
       client.getLogs(
         cfg.project,
         cfg.logstore,
@@ -382,6 +450,14 @@ export async function loadGooglePixelActivitySummary(params: {
         { query: buildGooglePixelDailyQuery(shop), line: 1000 },
         SLS_REQUEST_OPTIONS,
       ),
+      client.getLogs(
+        cfg.project,
+        cfg.logstore,
+        from,
+        to,
+        { query: pageViewQuery, line: 3000 },
+        SLS_REQUEST_OPTIONS,
+      ),
     ]);
     const counts = parseActivityCountRows(
       Array.isArray(countRows) ? countRows : [],
@@ -394,6 +470,7 @@ export async function loadGooglePixelActivitySummary(params: {
       counts,
       daily: parseActivityDailyRows(Array.isArray(dailyRows) ? dailyRows : []),
       funnel: buildActivityFunnel(counts),
+      referral: parseActivityTrafficRows(Array.isArray(trafficRows) ? trafficRows : []),
     };
   } catch (err) {
     console.warn(`[googlePixelActivity] summary failed shop=${shop}:`, err);

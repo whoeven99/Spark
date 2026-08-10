@@ -5,6 +5,7 @@ import {
   buildGooglePixelCountQuery,
   parseActivityCountRows,
   parseActivityDailyRows,
+  parseActivityTrafficRows,
 } from "../../../../app/server/aliyunLog/googlePixelActivity.server";
 
 describe("buildGooglePixelBaseQuery", () => {
@@ -70,6 +71,36 @@ describe("buildActivityFunnel", () => {
       { event: "begin_checkout", count: 1, rateFromPrev: 20 },
       { event: "add_payment_info", count: 1, rateFromPrev: 100 },
       { event: "purchase", count: 1, rateFromPrev: 100 },
+    ]);
+  });
+});
+
+describe("parseActivityTrafficRows", () => {
+  it("aggregates paid/organic/direct and top referrers", () => {
+    const referral = parseActivityTrafficRows([
+      {
+        payload: JSON.stringify({ trafficSource: "paid", referrer: "" }),
+      },
+      {
+        payload: JSON.stringify({
+          trafficSource: "organic",
+          referrer: "https://www.google.com/search?q=shop",
+        }),
+      },
+      {
+        payload: JSON.stringify({
+          trafficSource: "direct",
+          referrer: "",
+        }),
+      },
+    ]);
+    expect(referral.paidCount).toBe(1);
+    expect(referral.organicCount).toBe(1);
+    expect(referral.directCount).toBe(1);
+    expect(referral.paidPct).toBe(33.3);
+    expect(referral.topReferrers).toEqual([
+      { label: "Direct", count: 2 },
+      { label: "google.com", count: 1 },
     ]);
   });
 });
