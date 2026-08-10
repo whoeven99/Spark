@@ -3,11 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
+import { MetaPixelConfigPanel } from "./MetaPixelConfigPanel";
 
 type Props = {
   credentials: CredentialsView;
   locationSearch: string;
   languageCode: string;
+  shopDomain: string;
+  shopifyApiKey: string;
   onChanged: () => void;
 };
 
@@ -47,6 +50,8 @@ export function MetaConnectPanels({
   credentials,
   locationSearch,
   languageCode,
+  shopDomain,
+  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
@@ -109,6 +114,19 @@ export function MetaConnectPanels({
               {t("adsCatalog.metaUpdatedAt", { time: fmtDate(meta.updatedAt) })}
             </div>
           </div>
+          <MetaPixelConfigPanel
+            locationSearch={locationSearch}
+            shopDomain={shopDomain}
+            shopifyApiKey={shopifyApiKey}
+            pixelId={meta.pixelId}
+            hasCapiAccessToken={meta.hasCapiAccessToken}
+            testEventCode={meta.testEventCode}
+            capiEnabled={meta.capiEnabled}
+            enabledEvents={meta.enabledEvents}
+            busy={busy}
+            setBusy={setBusy}
+            onChanged={onChanged}
+          />
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} onClick={openOAuth}>
               {t("adsCatalog.metaReauth")}

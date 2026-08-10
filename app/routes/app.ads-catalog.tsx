@@ -31,6 +31,10 @@ import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
 } from "../lib/tiktokPixelEvents";
+import {
+  normalizeMetaEnabledEvents,
+  META_PIXEL_DEFAULT_EVENTS,
+} from "../lib/metaPixelEvents";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
@@ -113,6 +117,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         catalogId: fb?.catalogId ?? "",
         businessId: fb?.businessId ?? "",
         updatedAt: fb?.updatedAt ?? null,
+        pixelId: fb?.pixelId ?? "",
+        hasCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
+        testEventCode: fb?.testEventCode?.trim() ?? "",
+        capiEnabled:
+          typeof fb?.capiEnabled === "boolean" ? fb.capiEnabled : true,
+        enabledEvents: fb?.enabledEvents?.length
+          ? normalizeMetaEnabledEvents(fb.enabledEvents)
+          : [...META_PIXEL_DEFAULT_EVENTS],
         pendingCatalogs:
           metaPending?.accounts.map((a) => ({
             id: a.id,

@@ -1,0 +1,185 @@
+{% comment %}
+  Spark Meta Pixel — Theme App Embed
+  Reads shop.metafields.spark_meta.pixel_config (JSON) written by Ads Catalog.
+{% endcomment %}
+{% if block.settings.enable_meta_pixel %}
+  {% assign cfg = shop.metafields.spark_meta.pixel_config.value %}
+  {% if cfg == blank %}
+    {% assign cfg = shop.metafields.spark_meta.pixel_config %}
+  {% endif %}
+  {% if cfg != blank and cfg.pixelId != blank %}
+    {% assign pixel_id = cfg.pixelId %}
+    {% assign enabled = cfg.enabledEvents %}
+    {% assign metafield_test_code = cfg.testEventCode %}
+    {% assign storefront_track_url = cfg.storefrontTrackUrl %}
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+    </script>
+    <script>
+      (function () {
+        var enabled = {{ enabled | json }};
+        if (!Array.isArray(enabled)) enabled = [];
+        var pixelId = {{ pixel_id | json }};
+        var shopDomain = {{ shop.permanent_domain | json }};
+        var trackUrl = {{ storefront_track_url | json }};
+        if (typeof trackUrl !== "string") trackUrl = "";
+        trackUrl = String(trackUrl || "").trim();
+        var TEST_QUERY = "spark_meta_test_code";
+        var TEST_STORAGE = "spark_meta_test_event_code";
+        var metafieldTestCode = {{ metafield_test_code | json }};
+        if (typeof metafieldTestCode !== "string") metafieldTestCode = "";
+        metafieldTestCode = String(metafieldTestCode || "").trim();
+        var testEventCode = "";
+        try {
+          var params = new URLSearchParams(window.location.search || "");
+          if (params.has(TEST_QUERY)) {
+            var fromUrl = String(params.get(TEST_QUERY) || "").trim();
+            if (fromUrl) {
+              sessionStorage.setItem(TEST_STORAGE, fromUrl);
+              testEventCode = fromUrl;
+            } else {
+              sessionStorage.removeItem(TEST_STORAGE);
+              testEventCode = "";
+            }
+          } else {
+            testEventCode = String(sessionStorage.getItem(TEST_STORAGE) || "").trim();
+          }
+        } catch (e) {
+          testEventCode = "";
+        }
+        if (!testEventCode && metafieldTestCode) testEventCode = metafieldTestCode;
+
+        var initOpts = {};
+        if (testEventCode) initOpts.test_event_code = testEventCode;
+        try {
+          if (window.fbq) window.fbq("init", pixelId, {}, initOpts);
+        } catch (e) {}
+
+        function on(name) { return enabled.indexOf(name) !== -1; }
+        function eid() {
+          try {
+            if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+          } catch (e) {}
+          return "spark-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+        }
+        function sendServerTest(name, props, eventId) {
+          if (!testEventCode || !trackUrl || !shopDomain) return;
+          try {
+            fetch(trackUrl, {
+              method: "POST",
+              headers: { "Content-Type": "text/plain" },
+              body: JSON.stringify({
+                shop: shopDomain,
+                event: name,
+                eventId: eventId,
+                properties: props || {},
+                pageUrl: String(window.location.href || "")
+              }),
+              keepalive: true,
+              mode: "cors"
+            }).catch(function () {});
+          } catch (e) {}
+        }
+        function track(name, props) {
+          if (!on(name) || !window.fbq) return;
+          var eventId = eid();
+          try {
+            var opts = { eventID: eventId };
+            window.fbq("track", name, props || {}, opts);
+          } catch (e) {}
+          sendServerTest(name, props, eventId);
+        }
+
+        if (on("PageView")) {
+          track("PageView");
+        }
+
+        {% if request.page_type == "product" and product %}
+          if (on("ViewContent")) {
+            track("ViewContent", {
+              content_ids: [String({{ product.selected_or_first_available_variant.id | json }})],
+              content_type: "product",
+              content_name: {{ product.title | json }},
+              value: {{ product.selected_or_first_available_variant.price | divided_by: 100.0 | json }},
+              currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+            });
+          }
+        {% endif %}
+
+        {% if request.page_type == "collection" and collection %}
+          if (on("ViewContent")) {
+            track("ViewContent", {
+              content_ids: [String({{ collection.id | json }})],
+              content_type: "product_group",
+              content_name: {{ collection.title | json }},
+              currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+            });
+          }
+        {% endif %}
+
+        {% if request.page_type == "cart" %}
+          if (on("ViewContent")) {
+            track("ViewContent", {
+              content_type: "product",
+              value: {{ cart.total_price | divided_by: 100.0 | json }},
+              currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+            });
+          }
+        {% endif %}
+
+        {% if request.page_type == "search" %}
+          if (on("Search")) {
+            track("Search", {
+              search_string: {{ search.terms | json }}
+            });
+          }
+        {% endif %}
+
+        document.addEventListener("DOMContentLoaded", function () {
+          document.addEventListener("click", function (ev) {
+            var el = ev.target && ev.target.closest
+              ? ev.target.closest('button[name="add"], form[action*="/cart/add"] button[type="submit"], [name="add"]')
+              : null;
+            if (el && on("AddToCart")) {
+              track("AddToCart", {
+                content_type: "product",
+                currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+              });
+            }
+            var checkout = ev.target && ev.target.closest
+              ? ev.target.closest('button[name="checkout"], [href*="/checkout"], form[action*="/checkout"] button')
+              : null;
+            if (checkout && on("InitiateCheckout")) {
+              track("InitiateCheckout", {
+                value: {{ cart.total_price | divided_by: 100.0 | json }},
+                currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+              });
+            }
+          }, true);
+        });
+      })();
+    </script>
+  {% endif %}
+{% endif %}
+
+{% schema %}
+{
+  "name": "Spark Meta Pixel",
+  "target": "body",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enable_meta_pixel",
+      "label": "Enable Meta Pixel tracking",
+      "default": true
+    }
+  ]
+}
+{% endschema %}

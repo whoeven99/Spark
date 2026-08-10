@@ -85,6 +85,11 @@ export interface CredentialsView {
     catalogId: string;
     businessId: string;
     updatedAt: string | null;
+    pixelId: string;
+    hasCapiAccessToken: boolean;
+    testEventCode: string;
+    capiEnabled: boolean;
+    enabledEvents: string[];
     pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
   };
   googleMerchant: {

@@ -6,6 +6,7 @@ import {
   returnWebhookOk,
 } from "../server/webhook/webhookDebugLog.server";
 import { maybeTrackTiktokCompletePayment } from "../server/adsCatalog/tiktokPixelConfig.server";
+import { maybeTrackMetaPurchase } from "../server/adsCatalog/metaPixelConfig.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, topic, payload } = await authenticateWebhookLogged(request);
@@ -29,6 +30,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   } catch (error) {
     console.warn(`[Webhook] orders/paid TikTok CompletePayment failed shop=${shop}:`, error);
+  }
+
+  try {
+    const value = Number.parseFloat(String(order.total_price ?? ""));
+    await maybeTrackMetaPurchase({
+      shop,
+      orderId: String(order.id),
+      orderName: order.order_number != null ? String(order.order_number) : undefined,
+      value: Number.isFinite(value) ? value : undefined,
+      currency: order.currency,
+      email: order.email ?? order.customer?.email ?? undefined,
+    });
+  } catch (error) {
+    console.warn(`[Webhook] orders/paid Meta Purchase failed shop=${shop}:`, error);
   }
 
   return returnWebhookOk({ shop, topic });

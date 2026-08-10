@@ -32,6 +32,16 @@ export type FacebookCatalogCredential = {
   catalogId: string;
   businessId?: string;
   apiVersion?: string;
+  /** Meta Pixel / Dataset ID（数字字符串）。 */
+  pixelId?: string;
+  /** Events Manager 生成的 Conversions API Access Token。 */
+  capiAccessToken?: string;
+  /** Conversions API 开关。 */
+  capiEnabled?: boolean;
+  /** Events Manager Test Event Code。 */
+  testEventCode?: string;
+  /** 勾选上报的 Meta 标准事件名。 */
+  enabledEvents?: string[];
   updatedAt: string;
 };
 
@@ -151,24 +161,88 @@ export async function getFacebookCatalogCredential(
       typeof record.data.businessId === "string" ? record.data.businessId : undefined,
     apiVersion:
       typeof record.data.apiVersion === "string" ? record.data.apiVersion : undefined,
+    pixelId:
+      typeof record.data.pixelId === "string" && record.data.pixelId.trim()
+        ? record.data.pixelId.trim()
+        : undefined,
+    capiAccessToken:
+      typeof record.data.capiAccessToken === "string" && record.data.capiAccessToken.trim()
+        ? record.data.capiAccessToken.trim()
+        : undefined,
+    capiEnabled:
+      typeof record.data.capiEnabled === "boolean" ? record.data.capiEnabled : undefined,
+    testEventCode:
+      typeof record.data.testEventCode === "string" && record.data.testEventCode.trim()
+        ? record.data.testEventCode.trim()
+        : undefined,
+    enabledEvents: Array.isArray(record.data.enabledEvents)
+      ? record.data.enabledEvents
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
 
 export async function setFacebookCatalogCredential(
   shop: string,
-  payload: Pick<FacebookCatalogCredential, "accessToken" | "catalogId" | "businessId" | "apiVersion">,
+  payload: Pick<
+    FacebookCatalogCredential,
+    "accessToken" | "catalogId" | "businessId" | "apiVersion"
+  > & {
+    pixelId?: string;
+    capiAccessToken?: string;
+    capiEnabled?: boolean;
+    testEventCode?: string;
+    enabledEvents?: string[];
+  },
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
   const catalogId = payload.catalogId.trim();
   if (!accessToken || !catalogId) {
     throw new Error("Facebook catalog accessToken and catalogId are required");
   }
+  const existing = await readPlatformCredential(shop, META_CATALOG_PLATFORM);
+  const pixelId =
+    payload.pixelId !== undefined
+      ? payload.pixelId.trim() || null
+      : typeof existing?.data.pixelId === "string" && existing.data.pixelId.trim()
+        ? existing.data.pixelId.trim()
+        : null;
+  const capiAccessToken =
+    payload.capiAccessToken !== undefined
+      ? payload.capiAccessToken.trim() || null
+      : typeof existing?.data.capiAccessToken === "string" && existing.data.capiAccessToken.trim()
+        ? existing.data.capiAccessToken.trim()
+        : null;
+  const capiEnabled =
+    payload.capiEnabled !== undefined
+      ? payload.capiEnabled
+      : typeof existing?.data.capiEnabled === "boolean"
+        ? existing.data.capiEnabled
+        : true;
+  const testEventCode =
+    payload.testEventCode !== undefined
+      ? payload.testEventCode.trim() || null
+      : typeof existing?.data.testEventCode === "string" && existing.data.testEventCode.trim()
+        ? existing.data.testEventCode.trim()
+        : null;
+  const enabledEvents =
+    payload.enabledEvents !== undefined
+      ? payload.enabledEvents
+      : Array.isArray(existing?.data.enabledEvents)
+        ? existing.data.enabledEvents
+        : null;
   await writePlatformCredential(shop, META_CATALOG_PLATFORM, {
     accessToken,
     catalogId,
     businessId: payload.businessId?.trim() || null,
     apiVersion: payload.apiVersion?.trim() || null,
+    pixelId,
+    capiAccessToken,
+    capiEnabled,
+    testEventCode,
+    enabledEvents,
   });
 }
 

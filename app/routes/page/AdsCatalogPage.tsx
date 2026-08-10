@@ -920,6 +920,8 @@ export function AdsCatalogPage() {
               credentials={credentials}
               locationSearch={locationSearch}
               languageCode={i18n.language}
+              shopDomain={loaderData.shopDomain}
+              shopifyApiKey={loaderData.shopifyApiKey}
               onChanged={() => {
                 revalidator.revalidate();
                 metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
