@@ -49,11 +49,28 @@ type EventRow = {
   event: string;
   googleEvent: string;
   value: string;
+  currency: string;
   pagePath: string;
+  pageUrl: string;
   consent: string;
   sentToGoogle: boolean | null;
   source: string;
   clientId: string;
+  productId: string;
+  schemaVersion: string;
+  referrer: string;
+  trafficSource: string;
+  gclid: string;
+  utmSource: string;
+  utmMedium: string;
+  pixelId: string;
+  conversionLabel: string;
+  transactionId: string;
+  enhancedConversions: string;
+  itemsSummary: string;
+  deviceBrowser: string;
+  deviceOs: string;
+  deviceScreen: string;
   payload: Record<string, unknown> | null;
 };
 
@@ -96,13 +113,56 @@ const rangeBtn = (active: boolean) => ({
 
 function formatTime(ms: number): string {
   if (!ms) return "—";
-  return new Date(ms).toLocaleTimeString(undefined, {
+  return new Date(ms).toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
   });
 }
+
+function cellText(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim();
+  return trimmed || "—";
+}
+
+function SentToGooglePill({ sent }: { sent: boolean | null }) {
+  const { t } = useTranslation();
+  if (sent === null) return <span>—</span>;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 600,
+        background: sent ? pageColorTokens.brandGreenLight : "#fff7e0",
+        color: sent ? pageColorTokens.brandGreenDeep : "#8a6d00",
+      }}
+    >
+      {sent ? t("googlePixelActivity.yes") : t("googlePixelActivity.no")}
+    </span>
+  );
+}
+
+const thStyle = {
+  padding: "8px 6px",
+  whiteSpace: "nowrap" as const,
+  fontSize: 12,
+};
+
+const tdStyle = {
+  padding: "10px 6px",
+  maxWidth: 180,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap" as const,
+  verticalAlign: "top" as const,
+};
 
 function ConsentPill({ consent }: { consent: string }) {
   const { t } = useTranslation();
@@ -363,34 +423,84 @@ export function GooglePixelActivityPage() {
           <p style={{ ...pageHintTextStyle, margin: 0 }}>{t("googlePixelActivity.eventsEmpty")}</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1400 }}>
               <thead>
                 <tr style={{ textAlign: "left", color: pageColorTokens.textSecondary }}>
-                  <th style={{ padding: "8px 6px" }}>{t("googlePixelActivity.colTime")}</th>
-                  <th style={{ padding: "8px 6px" }}>{t("googlePixelActivity.colType")}</th>
-                  <th style={{ padding: "8px 6px" }}>{t("googlePixelActivity.colValue")}</th>
-                  <th style={{ padding: "8px 6px" }}>{t("googlePixelActivity.colPage")}</th>
-                  <th style={{ padding: "8px 6px" }}>{t("googlePixelActivity.colConsent")}</th>
-                  <th style={{ padding: "8px 6px" }}>{t("googlePixelActivity.colActions")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colTime")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colType")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colValue")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colCurrency")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colItems")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colTransactionId")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colPage")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colPageUrl")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colSource")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colClientId")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colProductId")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colConsent")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.sentToGoogle")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.trafficSource")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.referrer")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colGclid")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colUtmSource")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colUtmMedium")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.pixelId")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.conversionLabel")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.enhancedConversions")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.browser")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.os")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.screen")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colSchemaVersion")}</th>
+                  <th style={thStyle}>{t("googlePixelActivity.colActions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((row) => (
                   <tr key={row.id} style={{ borderTop: `1px solid ${pageColorTokens.divider}` }}>
-                    <td style={{ padding: "10px 6px", whiteSpace: "nowrap" }}>
+                    <td style={{ ...tdStyle, maxWidth: 160 }} title={formatTime(row.time)}>
                       {formatTime(row.time)}
                     </td>
-                    <td style={{ padding: "10px 6px" }}>
+                    <td style={tdStyle}>
                       {t(`googlePixelActivity.events.${row.googleEvent as GooglePixelActivityEvent}`, {
                         defaultValue: row.googleEvent,
                       })}
                     </td>
-                    <td style={{ padding: "10px 6px" }}>{row.value || "—"}</td>
-                    <td style={{ padding: "10px 6px" }}>{row.pagePath || "—"}</td>
-                    <td style={{ padding: "10px 6px" }}>
+                    <td style={tdStyle}>{cellText(row.value)}</td>
+                    <td style={tdStyle}>{cellText(row.currency)}</td>
+                    <td style={tdStyle} title={row.itemsSummary}>{cellText(row.itemsSummary)}</td>
+                    <td style={tdStyle} title={row.transactionId}>{cellText(row.transactionId)}</td>
+                    <td style={tdStyle} title={row.pagePath}>{cellText(row.pagePath)}</td>
+                    <td style={tdStyle} title={row.pageUrl}>
+                      {row.pageUrl ? (
+                        <a href={row.pageUrl} target="_blank" rel="noreferrer" style={{ color: pageColorTokens.brandGreenDeep }}>
+                          {row.pageUrl}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td style={tdStyle} title={row.source}>{cellText(row.source)}</td>
+                    <td style={tdStyle} title={row.clientId}>{cellText(row.clientId)}</td>
+                    <td style={tdStyle} title={row.productId}>{cellText(row.productId)}</td>
+                    <td style={tdStyle}>
                       <ConsentPill consent={row.consent} />
                     </td>
-                    <td style={{ padding: "10px 6px" }}>
+                    <td style={tdStyle}>
+                      <SentToGooglePill sent={row.sentToGoogle} />
+                    </td>
+                    <td style={tdStyle}>{cellText(row.trafficSource)}</td>
+                    <td style={tdStyle} title={row.referrer}>{cellText(row.referrer)}</td>
+                    <td style={tdStyle} title={row.gclid}>{cellText(row.gclid)}</td>
+                    <td style={tdStyle}>{cellText(row.utmSource)}</td>
+                    <td style={tdStyle}>{cellText(row.utmMedium)}</td>
+                    <td style={tdStyle} title={row.pixelId}>{cellText(row.pixelId)}</td>
+                    <td style={tdStyle} title={row.conversionLabel}>{cellText(row.conversionLabel)}</td>
+                    <td style={tdStyle}>{cellText(row.enhancedConversions)}</td>
+                    <td style={tdStyle}>{cellText(row.deviceBrowser)}</td>
+                    <td style={tdStyle}>{cellText(row.deviceOs)}</td>
+                    <td style={tdStyle}>{cellText(row.deviceScreen)}</td>
+                    <td style={tdStyle}>{cellText(row.schemaVersion)}</td>
+                    <td style={{ ...tdStyle, maxWidth: 96 }}>
                       <button type="button" style={secondaryBtn} onClick={() => setSelected(row)}>
                         {t("googlePixelActivity.view")}
                       </button>
@@ -458,37 +568,75 @@ export function GooglePixelActivityPage() {
             <DetailRow label={t("googlePixelActivity.colTime")}>
               {new Date(selected.time).toLocaleString()}
             </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colValue")}>
+              {cellText(selected.value)}
+              {selected.currency ? ` ${selected.currency}` : ""}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colItems")}>
+              {cellText(selected.itemsSummary)}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colTransactionId")}>
+              {cellText(selected.transactionId)}
+            </DetailRow>
             <DetailRow label={t("googlePixelActivity.colPage")}>
               {selected.pagePath || "—"}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colPageUrl")}>
+              {selected.pageUrl ? (
+                <a href={selected.pageUrl} target="_blank" rel="noreferrer">
+                  {selected.pageUrl}
+                </a>
+              ) : (
+                "—"
+              )}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colSource")}>
+              {cellText(selected.source)}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colClientId")}>
+              {cellText(selected.clientId)}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colProductId")}>
+              {cellText(selected.productId)}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colSchemaVersion")}>
+              {cellText(selected.schemaVersion)}
             </DetailRow>
 
             <h4 style={{ margin: "16px 0 8px", fontSize: 13 }}>
               {t("googlePixelActivity.sectionTracking")}
             </h4>
             <DetailRow label={t("googlePixelActivity.pixelId")}>
-              {String(payload?.pixelId ?? "—")}
+              {cellText(selected.pixelId || String(payload?.pixelId ?? ""))}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.conversionLabel")}>
-              {String(payload?.conversionLabel || "—")}
+              {cellText(selected.conversionLabel || String(payload?.conversionLabel ?? ""))}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.account")}>
               {String(payload?.account ?? payload?.pixelId ?? "—")}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.trafficSource")}>
-              {String(payload?.trafficSource ?? "—")}
+              {cellText(selected.trafficSource || String(payload?.trafficSource ?? ""))}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.referrer")}>
-              {String(payload?.referrer || "—")}
+              {cellText(selected.referrer || String(payload?.referrer ?? ""))}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colGclid")}>
+              {cellText(selected.gclid || String(payload?.gclid ?? ""))}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colUtmSource")}>
+              {cellText(selected.utmSource || String(payload?.utmSource ?? ""))}
+            </DetailRow>
+            <DetailRow label={t("googlePixelActivity.colUtmMedium")}>
+              {cellText(selected.utmMedium || String(payload?.utmMedium ?? ""))}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.enhancedConversions")}>
-              {String(payload?.enhancedConversions ?? "n/a")}
+              {cellText(
+                selected.enhancedConversions || String(payload?.enhancedConversions ?? "n/a"),
+              )}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.sentToGoogle")}>
-              {selected.sentToGoogle === true
-                ? t("googlePixelActivity.yes")
-                : selected.sentToGoogle === false
-                  ? t("googlePixelActivity.no")
-                  : "—"}
+              <SentToGooglePill sent={selected.sentToGoogle} />
             </DetailRow>
 
             <h4 style={{ margin: "16px 0 8px", fontSize: 13 }}>
@@ -509,14 +657,35 @@ export function GooglePixelActivityPage() {
               {t("googlePixelActivity.sectionDevice")}
             </h4>
             <DetailRow label={t("googlePixelActivity.browser")}>
-              {String(deviceObj?.browser ?? "—")}
+              {cellText(selected.deviceBrowser || String(deviceObj?.browser ?? ""))}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.os")}>
-              {String(deviceObj?.os ?? "—")}
+              {cellText(selected.deviceOs || String(deviceObj?.os ?? ""))}
             </DetailRow>
             <DetailRow label={t("googlePixelActivity.screen")}>
-              {String(deviceObj?.screen ?? "—")}
+              {cellText(selected.deviceScreen || String(deviceObj?.screen ?? ""))}
             </DetailRow>
+
+            {payload?.items && Array.isArray(payload.items) && payload.items.length > 0 ? (
+              <>
+                <h4 style={{ margin: "16px 0 8px", fontSize: 13 }}>
+                  {t("googlePixelActivity.sectionItems")}
+                </h4>
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: 12,
+                    borderRadius: 8,
+                    background: pageColorTokens.surfaceMuted,
+                    fontSize: 12,
+                    overflow: "auto",
+                    maxHeight: 200,
+                  }}
+                >
+                  {JSON.stringify(payload.items, null, 2)}
+                </pre>
+              </>
+            ) : null}
           </div>
         ) : null}
       </DialogShell>

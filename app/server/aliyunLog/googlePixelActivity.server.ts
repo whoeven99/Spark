@@ -54,11 +54,28 @@ export type GooglePixelActivityEventRow = {
   event: string;
   googleEvent: string;
   value: string;
+  currency: string;
   pagePath: string;
+  pageUrl: string;
   consent: string;
   sentToGoogle: boolean | null;
   source: string;
   clientId: string;
+  productId: string;
+  schemaVersion: string;
+  referrer: string;
+  trafficSource: string;
+  gclid: string;
+  utmSource: string;
+  utmMedium: string;
+  pixelId: string;
+  conversionLabel: string;
+  transactionId: string;
+  enhancedConversions: string;
+  itemsSummary: string;
+  deviceBrowser: string;
+  deviceOs: string;
+  deviceScreen: string;
   payload: Record<string, unknown> | null;
   payloadRaw: string;
 };
@@ -239,6 +256,23 @@ function readString(payload: Record<string, unknown> | null, key: string): strin
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
+function summarizeItems(payload: Record<string, unknown> | null): string {
+  const items = payload?.items;
+  if (!Array.isArray(items) || items.length === 0) return "";
+  const first = items[0];
+  const firstName =
+    first && typeof first === "object" && first
+      ? String(
+          (first as Record<string, unknown>).item_name ||
+            (first as Record<string, unknown>).title ||
+            (first as Record<string, unknown>).id ||
+            "",
+        ).trim()
+      : "";
+  if (items.length === 1) return firstName || "1 item";
+  return firstName ? `${items.length} items · ${firstName}` : `${items.length} items`;
+}
+
 function mapLogRow(
   record: Record<string, string>,
   index: number,
@@ -264,6 +298,10 @@ function mapLogRow(
       : "";
   const sent =
     typeof payload?.sentToGoogle === "boolean" ? payload.sentToGoogle : null;
+  const deviceObj =
+    payload && typeof payload.device === "object" && payload.device
+      ? (payload.device as Record<string, unknown>)
+      : null;
 
   return {
     id: `${record.__time__ ?? ""}-${(page - 1) * pageSize + index}`,
@@ -271,11 +309,28 @@ function mapLogRow(
     event,
     googleEvent,
     value,
+    currency: readString(payload, "currency"),
     pagePath: readString(payload, "pagePath"),
+    pageUrl: readString(payload, "pageUrl"),
     consent,
     sentToGoogle: sent,
     source: record.source ?? "",
     clientId: record.clientId ?? "",
+    productId: (record.productId ?? "").trim(),
+    schemaVersion: (record.schemaVersion ?? "").trim(),
+    referrer: readString(payload, "referrer"),
+    trafficSource: readString(payload, "trafficSource"),
+    gclid: readString(payload, "gclid"),
+    utmSource: readString(payload, "utmSource"),
+    utmMedium: readString(payload, "utmMedium"),
+    pixelId: readString(payload, "pixelId"),
+    conversionLabel: readString(payload, "conversionLabel"),
+    transactionId: readString(payload, "transaction_id"),
+    enhancedConversions: readString(payload, "enhancedConversions"),
+    itemsSummary: summarizeItems(payload),
+    deviceBrowser: readString(deviceObj, "browser"),
+    deviceOs: readString(deviceObj, "os"),
+    deviceScreen: readString(deviceObj, "screen"),
     payload,
     payloadRaw,
   };
