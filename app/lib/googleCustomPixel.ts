@@ -39,6 +39,8 @@ const SPARK_CONFIG = ${JSON.stringify({
     ingestEndpoint,
   })};
 const completedTransactions = new Set();
+const checkoutStartedTokens = new Set();
+const paymentInfoTokens = new Set();
 let marketingAllowed = Boolean(init.customerPrivacy && init.customerPrivacy.marketingAllowed);
 let loaded = false;
 window.dataLayer = window.dataLayer || [];
@@ -89,7 +91,31 @@ function resolveTrafficSource(event) {
     return 'unknown';
   }
 }
-function mirrorPurchase(event, payload, sentToGoogle) {
+function buildCheckoutPayload(checkout, ecommPageType) {
+  const lines = Array.isArray(checkout.lineItems) ? checkout.lineItems : [];
+  const items = lines.map((line) => {
+    const id = offerId(line);
+    const item = {id, item_id:id, google_business_vertical:'retail'};
+    if (SPARK_CONFIG.fieldGroups.includes('product')) {
+      item.item_name = line.title || (line.variant && line.variant.title) || undefined;
+      item.price = Number(line.finalLinePrice && line.finalLinePrice.amount || line.price && line.price.amount || 0);
+      item.quantity = Number(line.quantity || 1);
+    }
+    return item;
+  });
+  const total = checkout.totalPrice || {};
+  const payload = {value:Number(total.amount || 0), currency:total.currencyCode, items};
+  if (SPARK_CONFIG.fieldGroups.includes('legacy_ecomm')) {
+    payload.ecomm_prodid = items.map((item) => item.id);
+    payload.ecomm_pagetype = ecommPageType || 'checkout';
+    payload.ecomm_totalvalue = payload.value;
+  }
+  return payload;
+}
+function checkoutToken(checkout, event) {
+  return String((checkout.order && checkout.order.id) || checkout.token || (event && event.id) || '');
+}
+function mirrorGoogleEvent(googleEvent, event, payload, sentToGoogle) {
   if (!SPARK_CONFIG.ingestEndpoint || !SPARK_CONFIG.shopName) return;
   resolveClientId().then((clientId) => {
     let pagePath = '';
@@ -113,14 +139,14 @@ function mirrorPurchase(event, payload, sentToGoogle) {
     const productId = payload.items && payload.items[0] ? String(payload.items[0].id || '') : '';
     const envelope = {
       ts: Date.now(),
-      event: 'spark:google:purchase',
+      event: 'spark:google:' + googleEvent,
       schemaVersion: 1,
       shopName: SPARK_CONFIG.shopName,
       clientId: clientId,
-      source: 'custom-pixel:google-purchase',
+      source: 'custom-pixel:google-checkout',
       productId: productId || undefined,
       payload: {
-        googleEvent: 'purchase',
+        googleEvent: googleEvent,
         sentToGoogle: !!sentToGoogle,
         pixelId: SPARK_CONFIG.tagId,
         conversionLabel: SPARK_CONFIG.conversionLabel || '',
@@ -135,7 +161,7 @@ function mirrorPurchase(event, payload, sentToGoogle) {
         value: payload.value,
         currency: payload.currency,
         items: payload.items,
-        transaction_id: payload.transaction_id,
+        transaction_id: payload.transaction_id || undefined,
         enhancedConversions: !!SPARK_CONFIG.enhancedConversions,
         consent: { marketing: marketingAllowed ? 'granted' : 'denied' },
       },
@@ -161,29 +187,38 @@ if (api && api.customerPrivacy && typeof api.customerPrivacy.subscribe === 'func
   });
 }
 loadTag();
+function sendCheckoutGoogleEvent(googleEvent, event, gtagName) {
+  const checkout = event.data && event.data.checkout ? event.data.checkout : {};
+  const payload = buildCheckoutPayload(checkout, googleEvent === 'purchase' ? 'purchase' : 'checkout');
+  let sentToGoogle = false;
+  if (marketingAllowed) {
+    loadTag();
+    gtag('event', gtagName, payload);
+    sentToGoogle = true;
+  }
+  mirrorGoogleEvent(googleEvent, event, payload, sentToGoogle);
+}
+analytics.subscribe('checkout_started', (event) => {
+  const checkout = event.data && event.data.checkout ? event.data.checkout : {};
+  const token = checkoutToken(checkout, event);
+  if (!token || checkoutStartedTokens.has(token)) return;
+  checkoutStartedTokens.add(token);
+  sendCheckoutGoogleEvent('begin_checkout', event, 'begin_checkout');
+});
+analytics.subscribe('payment_info_submitted', (event) => {
+  const checkout = event.data && event.data.checkout ? event.data.checkout : {};
+  const token = checkoutToken(checkout, event);
+  if (!token || paymentInfoTokens.has(token)) return;
+  paymentInfoTokens.add(token);
+  sendCheckoutGoogleEvent('add_payment_info', event, 'add_payment_info');
+});
 analytics.subscribe('checkout_completed', (event) => {
   const checkout = event.data && event.data.checkout ? event.data.checkout : {};
-  const transactionId = String((checkout.order && checkout.order.id) || checkout.token || event.id || '');
+  const transactionId = checkoutToken(checkout, event);
   if (!transactionId || completedTransactions.has(transactionId)) return;
   completedTransactions.add(transactionId);
-  const lines = Array.isArray(checkout.lineItems) ? checkout.lineItems : [];
-  const items = lines.map((line) => {
-    const id = offerId(line);
-    const item = {id, item_id:id, google_business_vertical:'retail'};
-    if (SPARK_CONFIG.fieldGroups.includes('product')) {
-      item.item_name = line.title || (line.variant && line.variant.title) || undefined;
-      item.price = Number(line.finalLinePrice && line.finalLinePrice.amount || line.price && line.price.amount || 0);
-      item.quantity = Number(line.quantity || 1);
-    }
-    return item;
-  });
-  const total = checkout.totalPrice || {};
-  const payload = {transaction_id:transactionId, value:Number(total.amount || 0), currency:total.currencyCode, items};
-  if (SPARK_CONFIG.fieldGroups.includes('legacy_ecomm')) {
-    payload.ecomm_prodid = items.map((item) => item.id);
-    payload.ecomm_pagetype = 'purchase';
-    payload.ecomm_totalvalue = payload.value;
-  }
+  const payload = buildCheckoutPayload(checkout, 'purchase');
+  payload.transaction_id = transactionId;
   let sentToGoogle = false;
   if (marketingAllowed) {
     loadTag();
@@ -217,6 +252,6 @@ analytics.subscribe('checkout_completed', (event) => {
     sentToGoogle = true;
   }
   // SLS 双写不带 Enhanced Conversions PII；consent denied 时仍记一条 purchase 尝试。
-  mirrorPurchase(event, payload, sentToGoogle);
+  mirrorGoogleEvent('purchase', event, payload, sentToGoogle);
 });`;
 }

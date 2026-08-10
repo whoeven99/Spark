@@ -60,18 +60,21 @@ describe("再营销默认配置", () => {
 });
 
 describe("实验性 purchase Custom Pixel", () => {
-  it("只订阅 checkout_completed 并包含去重与隐私门禁", () => {
+  it("订阅 checkout 漏斗事件并包含去重与隐私门禁", () => {
     const script = generateGooglePurchaseCustomPixel({
       tagId: "AW-123456789",
       enabledFieldGroups: ["product", "transaction"],
     });
 
     expect(script).toContain("analytics.subscribe('checkout_completed'");
+    expect(script).toContain("analytics.subscribe('checkout_started'");
+    expect(script).toContain("analytics.subscribe('payment_info_submitted'");
     expect(script).toContain("api.customerPrivacy.subscribe('visitorConsentCollected'");
     expect(script).not.toMatch(/(?<!api\.)customerPrivacy\.subscribe/);
     expect(script).toContain("completedTransactions");
+    expect(script).toContain("checkoutStartedTokens");
+    expect(script).toContain("paymentInfoTokens");
     expect(script).toContain("marketingAllowed");
-    expect(script).not.toContain("checkout_started");
     for (const fixture of GOOGLE_OFFER_ID_FIXTURES) {
       expect(fixture.expected).toBeTruthy();
     }

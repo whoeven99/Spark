@@ -10,10 +10,15 @@ describe("generateGooglePurchaseCustomPixel", () => {
       shopName: "demo.myshopify.com",
       ingestEndpoint: "https://app.example.com/api/pixel-ingest",
     });
-    expect(script).toContain("spark:google:purchase");
+    expect(script).toContain("'spark:google:' + googleEvent");
+    expect(script).toContain("sendCheckoutGoogleEvent('begin_checkout'");
+    expect(script).toContain("sendCheckoutGoogleEvent('add_payment_info'");
+    expect(script).toContain("mirrorGoogleEvent('purchase'");
     expect(script).toContain("https://app.example.com/api/pixel-ingest");
     expect(script).toContain("demo.myshopify.com");
-    expect(script).toContain("mirrorPurchase");
+    expect(script).toContain("mirrorGoogleEvent");
+    expect(script).toContain("checkout_started");
+    expect(script).toContain("payment_info_submitted");
     expect(script).toContain("sentToGoogle");
     expect(script).toContain("enhancedConversions: !!SPARK_CONFIG.enhancedConversions");
     expect(script).not.toContain("not_sent");
