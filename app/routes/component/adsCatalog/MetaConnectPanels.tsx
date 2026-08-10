@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
@@ -130,6 +131,14 @@ export function MetaConnectPanels({
             setBusy={setBusy}
             onChanged={onChanged}
           />
+          {meta.pixelId ? (
+            <Link
+              to={`/app/ads/meta-pixel/data${locationSearch}`}
+              style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
+            >
+              {t("adsCatalog.metaPixelViewData")}
+            </Link>
+          ) : null}
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} onClick={openOAuth}>
               {t("adsCatalog.metaReauth")}

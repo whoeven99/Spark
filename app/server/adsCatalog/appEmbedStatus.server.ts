@@ -1,5 +1,6 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { GOOGLE_REMARKETING_APP_EMBED_HANDLE } from "../../lib/googleRemarketing";
+import { META_PIXEL_APP_EMBED_HANDLE } from "../../lib/metaPixelEvents";
 
 /**
  * Theme GraphQL `files` 返回的 `settings_data.json` 常带 Shopify 自动注入的
@@ -106,23 +107,34 @@ export interface AppEmbedStatus {
   unavailable?: boolean;
 }
 
-/** 检测 Spark Google Remarketing App Embed 是否已在当前主题启用。 */
-export async function getGoogleAppEmbedStatus(
+async function readAppEmbedStatus(
   admin: ShopifyAdminGraphqlClient,
+  handle: string,
 ): Promise<AppEmbedStatus> {
   const checkedAt = new Date().toISOString();
   try {
     const settings = await readMainThemeSettings(admin);
     if (!settings) return { enabled: false, checkedAt, unavailable: true };
     return {
-      enabled: parseAppEmbedEnabled(
-        settings,
-        GOOGLE_REMARKETING_APP_EMBED_HANDLE,
-      ),
+      enabled: parseAppEmbedEnabled(settings, handle),
       checkedAt,
     };
   } catch {
     // 缺少 read_themes 授权或接口异常时，降级为不可用，让 UI 提示手动确认。
     return { enabled: false, checkedAt, unavailable: true };
   }
+}
+
+/** 检测 Spark Google Remarketing App Embed 是否已在当前主题启用。 */
+export async function getGoogleAppEmbedStatus(
+  admin: ShopifyAdminGraphqlClient,
+): Promise<AppEmbedStatus> {
+  return readAppEmbedStatus(admin, GOOGLE_REMARKETING_APP_EMBED_HANDLE);
+}
+
+/** 检测 Spark Meta Pixel App Embed 是否已在当前主题启用。 */
+export async function getMetaAppEmbedStatus(
+  admin: ShopifyAdminGraphqlClient,
+): Promise<AppEmbedStatus> {
+  return readAppEmbedStatus(admin, META_PIXEL_APP_EMBED_HANDLE);
 }
