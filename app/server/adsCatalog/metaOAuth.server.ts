@@ -22,8 +22,9 @@ export const META_ADS_SCOPE =
 
 export const META_CATALOG_CALLBACK_PATH = "/ads/meta-catalog/callback";
 export const META_ADS_CALLBACK_PATH = "/ads/meta-ads/callback";
+export const META_PIXEL_DATA_CALLBACK_PATH = "/ads/meta-pixel-data/callback";
 
-export type MetaOAuthFlow = "meta_catalog" | "meta_ads";
+export type MetaOAuthFlow = "meta_catalog" | "meta_ads" | "meta_pixel_data";
 
 export interface MetaOAuthClient {
   appId: string;
@@ -162,7 +163,9 @@ export function verifyMetaOAuthState(
     };
     if (!payload.shop) return null;
     const flow = payload.flow as MetaOAuthFlow | undefined;
-    if (flow !== "meta_catalog" && flow !== "meta_ads") return null;
+    if (flow !== "meta_catalog" && flow !== "meta_ads" && flow !== "meta_pixel_data") {
+      return null;
+    }
     if (expectedFlow && flow !== expectedFlow) return null;
     if (typeof payload.ts !== "number" || Date.now() - payload.ts > maxAgeMs) return null;
     return {
@@ -223,6 +226,68 @@ export async function buildMetaOAuthStartUrl(params: {
     scope: META_CATALOG_SCOPE,
   });
   return { ok: true, authUrl };
+}
+
+/** Meta Pixel 数据页手动拉数测试 OAuth（独立凭证，回跳数据页）。 */
+export async function buildMetaPixelDataOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  popup?: boolean;
+}): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  const client = resolveMetaOAuthClient();
+  if (!client) {
+    return {
+      ok: false,
+      error: "缺少 Meta App 凭证：请配置 META_APP_ID / META_APP_SECRET 环境变量",
+    };
+  }
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createMetaOAuthState(
+    params.shop,
+    params.host ?? "",
+    appOrigin,
+    "meta_pixel_data",
+    params.popup,
+  );
+  const authUrl = buildMetaAuthUrl({
+    appId: client.appId,
+    state,
+    redirectUri: getMetaRedirectUri(META_PIXEL_DATA_CALLBACK_PATH, params.requestOrigin),
+    scope: META_ADS_SCOPE,
+  });
+  return { ok: true, authUrl };
+}
+
+/** Meta Pixel 数据页手动 OAuth 完成后跳回数据页。 */
+export function buildMetaPixelDataOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/ads/meta-pixel/data",
+    shop: params.shop,
+    request: params.request,
+    query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("META_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL("/app/ads/meta-pixel/data", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
 }
 
 /** Meta Ads（Marketing API）独立授权入口。 */

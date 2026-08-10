@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import {
   getFacebookCatalogCredential,
   getMetaAdsCredential,
+  getMetaPixelDataManualCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { getMetaAppEmbedStatus } from "../server/adsCatalog/appEmbedStatus.server";
 import { hasMetaCapiAccessAvailable } from "../server/adsCatalog/metaPixelConfig.server";
@@ -18,6 +19,8 @@ export type MetaPixelDataLoaderData = {
   credentialUpdatedAt: string | null;
   metaAdsConnected: boolean;
   metaAdsAdAccountId: string;
+  manualAuthConnected: boolean;
+  manualAuthUpdatedAt: string | null;
   config: {
     pixelId: string;
     capiEnabled: boolean;
@@ -35,11 +38,12 @@ export type MetaPixelDataLoaderData = {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
-  const [catalog, metaAds, embed, capiAvailable] = await Promise.all([
+  const [catalog, metaAds, embed, capiAvailable, manualCredential] = await Promise.all([
     getFacebookCatalogCredential(shop),
     getMetaAdsCredential(shop),
     getMetaAppEmbedStatus(admin),
     hasMetaCapiAccessAvailable(shop),
+    getMetaPixelDataManualCredential(shop),
   ]);
 
   const pixelId = catalog?.pixelId?.trim() ?? "";
@@ -56,6 +60,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     credentialUpdatedAt: catalog?.updatedAt ?? null,
     metaAdsConnected: Boolean(metaAds),
     metaAdsAdAccountId: metaAds?.adAccountId ?? "",
+    manualAuthConnected: Boolean(manualCredential?.accessToken),
+    manualAuthUpdatedAt: manualCredential?.updatedAt ?? null,
     config: pixelId
       ? {
           pixelId,

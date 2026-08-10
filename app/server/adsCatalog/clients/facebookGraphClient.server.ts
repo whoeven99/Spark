@@ -375,10 +375,10 @@ export async function getMetaAdsPixelStats(params: {
   url.searchParams.set("aggregation", params.aggregation);
   url.searchParams.set("access_token", accessToken);
   if (typeof params.startTime === "number" && params.startTime > 0) {
-    url.searchParams.set("start_time", String(params.startTime));
+    url.searchParams.set("start_time", String(Math.floor(params.startTime / 1000)));
   }
   if (typeof params.endTime === "number" && params.endTime > 0) {
-    url.searchParams.set("end_time", String(params.endTime));
+    url.searchParams.set("end_time", String(Math.floor(params.endTime / 1000)));
   }
   if (params.eventSource) {
     url.searchParams.set("event_source", params.eventSource);

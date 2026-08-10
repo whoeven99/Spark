@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import {
@@ -132,6 +132,7 @@ const META_EVENT_I18N: Record<MetaPixelEventName, string> = {
 export function MetaPixelDataPage() {
   const { t, i18n } = useTranslation();
   const data = useLoaderData<MetaPixelDataLoaderData>();
+  const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -236,7 +237,13 @@ export function MetaPixelDataPage() {
         </Link>
       </div>
 
-      <MetaPixelStatsPanel locationSearch={locationSearch} enabled={Boolean(config.pixelId)} />
+      <MetaPixelStatsPanel
+        locationSearch={locationSearch}
+        enabled={Boolean(config.pixelId)}
+        manualAuthConnected={data.manualAuthConnected}
+        manualAuthUpdatedAt={data.manualAuthUpdatedAt}
+        onManualAuthChanged={() => revalidator.revalidate()}
+      />
 
       <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("metaPixelData.sectionOverview")}</h3>

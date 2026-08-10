@@ -24,6 +24,8 @@ const GOOGLE_ADS_SANDBOX_PENDING_PLATFORM = "google_ads_sandbox_pending";
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
 // Transient record for Meta Ads ad-account selection.
 const META_ADS_PENDING_PLATFORM = "meta_ads_pending";
+/** Meta Pixel 数据页手动拉数测试 OAuth（与 Catalog / Ads 凭证隔离，后续可能删除）。 */
+const META_PIXEL_DATA_MANUAL_PLATFORM = "meta_pixel_data_manual";
 // Transient record for TikTok catalog selection.
 const TIKTOK_CATALOG_PENDING_PLATFORM = "tiktok_catalog_pending";
 
@@ -810,6 +812,40 @@ export const getMetaAdsPending = (shop: string) =>
   getPending(shop, META_ADS_PENDING_PLATFORM);
 export const clearMetaAdsPending = (shop: string) =>
   clearPending(shop, META_ADS_PENDING_PLATFORM);
+
+// ─── Meta Pixel 数据页手动 OAuth（测试）────────────────────────────────────
+
+export type MetaPixelDataManualCredential = {
+  accessToken: string;
+  updatedAt: string;
+};
+
+export async function getMetaPixelDataManualCredential(
+  shop: string,
+): Promise<MetaPixelDataManualCredential | null> {
+  const record = await readPlatformCredential(shop, META_PIXEL_DATA_MANUAL_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "").trim();
+  if (!accessToken) return null;
+  return {
+    accessToken,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function setMetaPixelDataManualCredential(
+  shop: string,
+  payload: { accessToken: string },
+): Promise<void> {
+  const accessToken = payload.accessToken.trim();
+  if (!accessToken) {
+    throw new Error("Meta Pixel manual accessToken is required");
+  }
+  await writePlatformCredential(shop, META_PIXEL_DATA_MANUAL_PLATFORM, { accessToken });
+}
+
+export const deleteMetaPixelDataManualCredential = (shop: string) =>
+  clearPending(shop, META_PIXEL_DATA_MANUAL_PLATFORM);
 
 // ─── TikTok Catalog ──────────────────────────────────────────────────────────
 

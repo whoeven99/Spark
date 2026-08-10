@@ -8,6 +8,8 @@ import { loadMetaPixelDataStats } from "../server/adsCatalog/metaPixelData.serve
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const stats = await loadMetaPixelDataStats({ shop: session.shop });
-  return Response.json({ ok: true, ...stats });
+  const url = new URL(request.url);
+  const mode = url.searchParams.get("mode") === "manual" ? "manual" : "auto";
+  const stats = await loadMetaPixelDataStats({ shop: session.shop, mode });
+  return Response.json({ ok: true, mode, ...stats });
 };

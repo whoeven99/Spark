@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getFacebookCatalogCredential = vi.hoisted(() => vi.fn());
 const getMetaAdsCredential = vi.hoisted(() => vi.fn());
+const getMetaPixelDataManualCredential = vi.hoisted(() => vi.fn());
 const getMetaAdsPixelMetadata = vi.hoisted(() => vi.fn());
 const getMetaAdsPixelStats = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   getFacebookCatalogCredential: (...args: unknown[]) => getFacebookCatalogCredential(...args),
   getMetaAdsCredential: (...args: unknown[]) => getMetaAdsCredential(...args),
+  getMetaPixelDataManualCredential: (...args: unknown[]) => getMetaPixelDataManualCredential(...args),
 }));
 
 vi.mock("../../../../app/server/adsCatalog/clients/facebookGraphClient.server", () => ({
@@ -47,6 +49,8 @@ describe("loadMetaPixelDataStats", () => {
   beforeEach(() => {
     getFacebookCatalogCredential.mockReset();
     getMetaAdsCredential.mockReset();
+    getMetaPixelDataManualCredential.mockReset();
+    getMetaPixelDataManualCredential.mockResolvedValue(null);
     getMetaAdsPixelMetadata.mockReset();
     getMetaAdsPixelStats.mockReset();
   });
@@ -124,5 +128,43 @@ describe("loadMetaPixelDataStats", () => {
     const result = await loadMetaPixelDataStats({ shop: "s.myshopify.com" });
     expect(result.permissionError).toContain("ads_read");
     expect(result.needsMetaAdsConnect).toBe(true);
+  });
+
+  it("uses manual credential in manual mode", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "catalog",
+      catalogId: "cat",
+      pixelId: "123",
+    });
+    getMetaPixelDataManualCredential.mockResolvedValue({
+      accessToken: "manual-token",
+      updatedAt: "2026-08-10T00:00:00.000Z",
+    });
+    getMetaAdsPixelMetadata.mockResolvedValue({
+      pixelId: "123",
+      name: "Manual Pixel",
+      lastFiredTime: null,
+      isUnavailable: false,
+      eventTimeMin: null,
+      eventTimeMax: null,
+      creationTime: null,
+    });
+    getMetaAdsPixelStats.mockResolvedValue([]);
+
+    const result = await loadMetaPixelDataStats({ shop: "s.myshopify.com", mode: "manual" });
+    expect(result.tokenSource).toBe("manual_oauth");
+    expect(getMetaAdsPixelMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: "manual-token" }),
+    );
+  });
+
+  it("returns manual_not_connected without manual token", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "catalog",
+      catalogId: "cat",
+      pixelId: "123",
+    });
+    const result = await loadMetaPixelDataStats({ shop: "s.myshopify.com", mode: "manual" });
+    expect(result.permissionError).toBe("manual_not_connected");
   });
 });

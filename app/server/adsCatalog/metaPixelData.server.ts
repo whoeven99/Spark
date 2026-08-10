@@ -11,6 +11,7 @@ import {
 import {
   getFacebookCatalogCredential,
   getMetaAdsCredential,
+  getMetaPixelDataManualCredential,
   type FacebookCatalogCredential,
 } from "./credentialStore.server";
 
@@ -18,7 +19,12 @@ const LOG_PREFIX = "[AdsCatalog][MetaPixelData]";
 const WINDOW_DAYS = 7;
 const WINDOW_MS = WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-export type MetaPixelStatsTokenSource = "meta_ads_oauth" | "catalog_oauth";
+export type MetaPixelStatsMode = "auto" | "manual";
+
+export type MetaPixelStatsTokenSource =
+  | "meta_ads_oauth"
+  | "catalog_oauth"
+  | "manual_oauth";
 
 export type MetaPixelHourlyFire = {
   hour: string;
@@ -107,8 +113,10 @@ function isPermissionError(message: string): boolean {
 
 export async function loadMetaPixelDataStats(params: {
   shop: string;
+  mode?: MetaPixelStatsMode;
 }): Promise<MetaPixelDataStats> {
   const shop = normalizeShop(params.shop);
+  const mode = params.mode === "manual" ? "manual" : "auto";
   const catalog = await getFacebookCatalogCredential(shop);
   const pixelId = catalog?.pixelId?.trim() ?? "";
   const to = Date.now();
@@ -132,11 +140,21 @@ export async function loadMetaPixelDataStats(params: {
 
   if (!pixelId) return empty;
 
-  const resolved = await resolveMetaPixelStatsAccessToken({ shop, catalog });
+  let resolved: { token: string; source: MetaPixelStatsTokenSource } | null = null;
+  if (mode === "manual") {
+    const manual = await getMetaPixelDataManualCredential(shop);
+    const manualToken = manual?.accessToken?.trim();
+    if (manualToken) {
+      resolved = { token: manualToken, source: "manual_oauth" };
+    }
+  } else {
+    resolved = await resolveMetaPixelStatsAccessToken({ shop, catalog });
+  }
+
   if (!resolved) {
     return {
       ...empty,
-      permissionError: "no_token",
+      permissionError: mode === "manual" ? "manual_not_connected" : "no_token",
     };
   }
 
