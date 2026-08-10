@@ -432,12 +432,6 @@ export function MetaPixelConfigPanel({
   });
   const onlineStoreUrl = buildMetaShopOnlineStoreUrl(shopDomain);
 
-  const oauthCapiActive =
-    mode === "select" &&
-    metaOAuthCapiAvailable &&
-    !hasStoredCapiAccessToken &&
-    !tokenInput.trim();
-
   const canSave =
     !busy &&
     Boolean((mode === "select" ? selectedPixelId : pixelIdInput).trim()) &&
@@ -571,97 +565,126 @@ export function MetaPixelConfigPanel({
         </div>
       )}
 
-      <div
-        style={{
-          border: `1px solid ${pageColorTokens.border}`,
-          borderRadius: 8,
-          padding: 12,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-          background: pageColorTokens.surfaceSubtle,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>
-            {t("adsCatalog.metaPixelServerSideTitle")}
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "#b98900",
-              background: "#fff5d6",
-              padding: "2px 6px",
-              borderRadius: 4,
-            }}
-          >
-            {t("adsCatalog.metaPixelRequiredBadge")}
-          </span>
-        </div>
-        <p style={{ ...pageHintTextStyle, margin: 0 }}>
-          {oauthCapiActive
-            ? t("adsCatalog.metaPixelOAuthCapiHint")
-            : t("adsCatalog.metaPixelServerSideHint")}
-        </p>
-        <label
+      {mode === "select" ? (
+        <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 13,
-            cursor: "pointer",
+            flexDirection: "column",
+            gap: 6,
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            background: pageColorTokens.surfaceSubtle,
           }}
         >
-          <input
-            type="checkbox"
-            checked={capiEnabled}
-            disabled={busy}
-            onChange={(e) => setCapiEnabled(e.target.checked)}
-          />
-          {t("adsCatalog.metaPixelCapiEnable")}
-        </label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div
+          <label
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
               gap: 8,
-              flexWrap: "wrap",
+              fontSize: 13,
+              cursor: "pointer",
             }}
           >
-            <label style={fieldLabelStyle}>
-              {mode === "select" && metaOAuthCapiAvailable
-                ? t("adsCatalog.metaPixelAccessTokenLabelOptional")
-                : t("adsCatalog.metaPixelAccessTokenLabel")}
-            </label>
-            <a
-              href={eventsManagerUrl}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontSize: 12, color: "#005bd3" }}
+            <input
+              type="checkbox"
+              checked={capiEnabled}
+              disabled={busy}
+              onChange={(e) => setCapiEnabled(e.target.checked)}
+            />
+            {t("adsCatalog.metaPixelCapiEnable")}
+          </label>
+          <p style={{ ...pageHintTextStyle, margin: 0 }}>
+            {metaOAuthCapiAvailable
+              ? t("adsCatalog.metaPixelSelectCapiHint")
+              : t("adsCatalog.metaPixelSelectCapiConnectHint")}
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            border: `1px solid ${pageColorTokens.border}`,
+            borderRadius: 8,
+            padding: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            background: pageColorTokens.surfaceSubtle,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>
+              {t("adsCatalog.metaPixelServerSideTitle")}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#b98900",
+                background: "#fff5d6",
+                padding: "2px 6px",
+                borderRadius: 4,
+              }}
             >
-              {t("adsCatalog.metaPixelHowToGetToken")}
-            </a>
+              {t("adsCatalog.metaPixelRequiredBadge")}
+            </span>
           </div>
-          <input
-            style={inputStyle}
-            type="password"
-            autoComplete="off"
-            value={tokenInput}
-            disabled={busy}
-            placeholder={
-              oauthCapiActive
-                ? t("adsCatalog.metaPixelAccessTokenOAuthActive")
-                : hasStoredCapiAccessToken
+          <p style={{ ...pageHintTextStyle, margin: 0 }}>
+            {t("adsCatalog.metaPixelServerSideHint")}
+          </p>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={capiEnabled}
+              disabled={busy}
+              onChange={(e) => setCapiEnabled(e.target.checked)}
+            />
+            {t("adsCatalog.metaPixelCapiEnable")}
+          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelAccessTokenLabel")}</label>
+              <a
+                href={eventsManagerUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 12, color: "#005bd3" }}
+              >
+                {t("adsCatalog.metaPixelHowToGetToken")}
+              </a>
+            </div>
+            <input
+              style={inputStyle}
+              type="password"
+              autoComplete="off"
+              value={tokenInput}
+              disabled={busy}
+              placeholder={
+                hasStoredCapiAccessToken
                   ? t("adsCatalog.metaPixelAccessTokenConfigured")
                   : t("adsCatalog.metaPixelAccessTokenPlaceholder")
-            }
-            onChange={(e) => setTokenInput(e.target.value)}
-          />
+              }
+              onChange={(e) => setTokenInput(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>{t("adsCatalog.metaPixelEventsTitle")}</div>

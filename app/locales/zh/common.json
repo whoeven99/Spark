@@ -2092,6 +2092,8 @@
     "metaPixelAccessTokenConfigured": "已保存（输入新值可替换）",
     "metaPixelAccessTokenOAuthActive": "将使用 Meta OAuth 授权 Token（可在下方选手动覆盖）",
     "metaPixelOAuthCapiHint": "Conversions API 将使用 Meta OAuth 授权 Token。仅在需要专用 Token 时，在下方粘贴 Events Manager 生成的 Token。",
+    "metaPixelSelectCapiHint": "服务端事件将自动使用 Meta OAuth 授权 Token，无需填写 Access Token。",
+    "metaPixelSelectCapiConnectHint": "请先连接上方 Meta Ads 授权，或切换到「手动输入」粘贴 CAPI Access Token。",
     "metaPixelTokenRequired": "请填写 Conversions API Access Token",
     "metaPixelHowToGetToken": "如何获取？",
     "metaPixelEventsTitle": "上报事件",
