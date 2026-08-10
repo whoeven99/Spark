@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { resolveClientIpFromHeaders } from "../server/adsCatalog/clients/metaConversionsApiClient.server";
 import { trackMetaStorefrontTestEvent } from "../server/adsCatalog/metaPixelConfig.server";
 
 /**
@@ -132,6 +133,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     eventId: typeof parsed.eventId === "string" ? parsed.eventId : undefined,
     properties,
     pageUrl: typeof parsed.pageUrl === "string" ? parsed.pageUrl : undefined,
+    clientIpAddress: resolveClientIpFromHeaders(request.headers),
+    clientUserAgent: request.headers.get("user-agent")?.trim() || undefined,
   });
 
   return jsonResponse(

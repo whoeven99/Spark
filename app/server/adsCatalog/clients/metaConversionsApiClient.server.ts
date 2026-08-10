@@ -14,9 +14,44 @@ export type TrackMetaPixelEventParams = {
   customData?: Record<string, unknown>;
   /** 明文 email，发送前会 SHA256 规范化哈希。 */
   email?: string;
+  /** CAPI user_data.client_ip_address（明文，不哈希）。 */
+  clientIpAddress?: string;
+  /** CAPI user_data.client_user_agent（明文，不哈希）。 */
+  clientUserAgent?: string;
   testEventCode?: string;
   eventSourceUrl?: string;
 };
+
+export function resolveClientIpFromHeaders(headers: Headers): string | undefined {
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  for (const key of ["cf-connecting-ip", "x-real-ip"] as const) {
+    const value = headers.get(key)?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+export function buildMetaCapiUserData(params: {
+  email?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
+}): Record<string, string | string[]> {
+  const userData: Record<string, string | string[]> = {};
+  if (params.email?.trim()) {
+    userData.em = [hashMetaEmail(params.email)];
+  }
+  if (params.clientIpAddress?.trim()) {
+    userData.client_ip_address = params.clientIpAddress.trim();
+  }
+  if (params.clientUserAgent?.trim()) {
+    userData.client_user_agent = params.clientUserAgent.trim();
+  }
+  return userData;
+}
 
 /** Meta CAPI 要求 em 等为 SHA256( lowercase trimmed )。 */
 export function hashMetaEmail(email: string): string {
@@ -41,10 +76,11 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
       ? Math.floor(params.eventTime)
       : Math.floor(Date.now() / 1000);
 
-  const userData: Record<string, string> = {};
-  if (params.email?.trim()) {
-    userData.em = hashMetaEmail(params.email);
-  }
+  const userData = buildMetaCapiUserData({
+    email: params.email,
+    clientIpAddress: params.clientIpAddress,
+    clientUserAgent: params.clientUserAgent,
+  });
 
   const eventPayload: Record<string, unknown> = {
     event_name: eventName,

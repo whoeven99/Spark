@@ -15,6 +15,7 @@ vi.mock("../../../../app/server/adsCatalog/clients/metaConversionsApiClient.serv
 
 import {
   maybeTrackMetaPurchase,
+  testMetaServerEvents,
   trackMetaStorefrontTestEvent,
 } from "../../../../app/server/adsCatalog/metaPixelConfig.server";
 
@@ -133,6 +134,45 @@ describe("trackMetaStorefrontTestEvent", () => {
         eventName: "ViewContent",
         testEventCode: "TEST123",
         eventSourceUrl: "https://s.myshopify.com/products/x",
+        email: "spark-capi-test@s.myshopify.com",
+      }),
+    );
+  });
+});
+
+describe("testMetaServerEvents", () => {
+  beforeEach(() => {
+    getFacebookCatalogCredential.mockReset();
+    trackMetaPixelEvent.mockReset();
+    trackMetaPixelEvent.mockResolvedValue(undefined);
+  });
+
+  it("sends Purchase test event with customer matching fields", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      catalogId: "cat",
+      pixelId: "123456",
+      capiAccessToken: "capi-tok",
+      enabledEvents: ["Purchase"],
+    });
+
+    await testMetaServerEvents({
+      shop: "demo.myshopify.com",
+      testEventCode: "TEST1495",
+      clientIpAddress: "203.0.113.10",
+      clientUserAgent: "Mozilla/5.0",
+    });
+
+    expect(trackMetaPixelEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pixelId: "123456",
+        capiAccessToken: "capi-tok",
+        eventName: "Purchase",
+        testEventCode: "TEST1495",
+        email: "spark-capi-test@demo.myshopify.com",
+        clientIpAddress: "203.0.113.10",
+        clientUserAgent: "Mozilla/5.0",
+        eventSourceUrl: "https://demo.myshopify.com",
       }),
     );
   });

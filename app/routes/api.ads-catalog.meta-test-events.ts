@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { resolveClientIpFromHeaders } from "../server/adsCatalog/clients/metaConversionsApiClient.server";
 import {
   clearMetaPixelTestEventMode,
   startMetaPixelTestEventMode,
@@ -79,6 +80,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       testEventCode,
       capiAccessToken,
       pixelId,
+      clientIpAddress: resolveClientIpFromHeaders(request.headers),
+      clientUserAgent: request.headers.get("user-agent")?.trim() || undefined,
     });
     return Response.json({ ok: true, action: "send" });
   } catch (e) {

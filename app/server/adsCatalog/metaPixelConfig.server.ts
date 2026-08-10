@@ -149,6 +149,8 @@ export async function trackMetaStorefrontTestEvent(params: {
   eventId?: string;
   properties?: Record<string, unknown>;
   pageUrl?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
   const shop = params.shop.trim().toLowerCase();
   if (!shop) return { sent: false, reason: "no_shop" };
@@ -191,6 +193,9 @@ export async function trackMetaStorefrontTestEvent(params: {
       eventName: event,
       eventId: params.eventId?.trim() || `spark-sf-${Date.now()}`,
       customData: Object.keys(customData).length > 0 ? customData : undefined,
+      email: buildMetaCapiTestEmail(params.shop),
+      clientIpAddress: params.clientIpAddress,
+      clientUserAgent: params.clientUserAgent,
       testEventCode,
       eventSourceUrl: params.pageUrl?.trim() || undefined,
     });
@@ -392,6 +397,8 @@ export async function testMetaServerEvents(params: {
   testEventCode: string;
   capiAccessToken?: string;
   pixelId?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }): Promise<void> {
   const credential = await getFacebookCatalogCredential(params.shop);
   if (!credential) {
@@ -405,12 +412,27 @@ export async function testMetaServerEvents(params: {
   if (!token) throw new Error("请配置 Conversions API Access Token");
   if (!testEventCode) throw new Error("请填写 Test Event Code");
 
+  const clientIpAddress =
+    params.clientIpAddress?.trim() || "1.1.1.1";
+  const clientUserAgent =
+    params.clientUserAgent?.trim() ||
+    "Mozilla/5.0 (compatible; SparkMetaCAPI/1.0)";
+
   await trackMetaPixelEvent({
     pixelId,
     capiAccessToken: token,
     eventName: "Purchase",
     eventId: `spark-test-${Date.now()}`,
     customData: { value: 1, currency: "USD" },
+    email: buildMetaCapiTestEmail(params.shop),
+    clientIpAddress,
+    clientUserAgent,
     testEventCode,
+    eventSourceUrl: `https://${params.shop.trim().toLowerCase()}`,
   });
+}
+
+function buildMetaCapiTestEmail(shop: string): string {
+  const normalized = shop.trim().toLowerCase().replace(/[^a-z0-9.-]/g, "");
+  return `spark-capi-test@${normalized || "example.com"}`;
 }
