@@ -432,7 +432,7 @@ export async function loadGooglePixelActivitySummary(params: {
   if (!cfg || !client) return empty;
 
   try {
-    const pageViewQuery = `${buildGooglePixelBaseQuery(shop)} and event: spark:google:page_view`;
+    const baseQuery = buildGooglePixelBaseQuery(shop);
     const [countRows, dailyRows, trafficRows] = await Promise.all([
       client.getLogs(
         cfg.project,
@@ -450,14 +450,24 @@ export async function loadGooglePixelActivitySummary(params: {
         { query: buildGooglePixelDailyQuery(shop), line: 1000 },
         SLS_REQUEST_OPTIONS,
       ),
-      client.getLogs(
-        cfg.project,
-        cfg.logstore,
-        from,
-        to,
-        { query: pageViewQuery, line: 3000 },
-        SLS_REQUEST_OPTIONS,
-      ),
+      // topic 精确过滤 page_view；检索子句里不能写 `event: spark:google:page_view`（冒号会触发 SLS 语法错误）。
+      client
+        .getLogs(
+          cfg.project,
+          cfg.logstore,
+          from,
+          to,
+          {
+            query: baseQuery,
+            topic: toGooglePixelSlsEvent("page_view"),
+            line: 3000,
+          },
+          SLS_REQUEST_OPTIONS,
+        )
+        .catch((err) => {
+          console.warn(`[googlePixelActivity] traffic query failed shop=${shop}:`, err);
+          return [];
+        }),
     ]);
     const counts = parseActivityCountRows(
       Array.isArray(countRows) ? countRows : [],
