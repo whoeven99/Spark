@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import {
   buildMetaEventsManagerTestUrl,
@@ -11,6 +12,17 @@ import {
   type MetaPixelEventName,
 } from "../../../lib/metaPixelEvents";
 
+type PixelListItem = {
+  pixelId: string;
+  pixelName: string;
+};
+
+type AdAccountItem = {
+  id: string;
+  name?: string;
+  formatted?: string;
+};
+
 type Props = {
   locationSearch: string;
   shopDomain: string;
@@ -20,6 +32,7 @@ type Props = {
   testEventCode: string;
   capiEnabled: boolean;
   enabledEvents: string[];
+  metaAdsConnected: boolean;
   busy: boolean;
   setBusy: (v: boolean) => void;
   onChanged: () => void;
@@ -63,6 +76,15 @@ const EVENT_LABEL_KEY: Record<string, string> = {
   Search: "metaPixelEventSearch",
 };
 
+function withAdAccountQuery(locationSearch: string, adAccountId: string): string {
+  const params = new URLSearchParams(
+    locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+  );
+  if (adAccountId) params.set("adAccountId", adAccountId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export function MetaPixelConfigPanel({
   locationSearch,
   shopDomain,
@@ -72,12 +94,22 @@ export function MetaPixelConfigPanel({
   testEventCode: savedTestEventCode,
   capiEnabled: initialCapiEnabled,
   enabledEvents: initialEnabledEvents,
+  metaAdsConnected,
   busy,
   setBusy,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
+  const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
+
+  const [mode, setMode] = useState<"select" | "manual">(pixelId ? "select" : "select");
+  const [adAccounts, setAdAccounts] = useState<AdAccountItem[]>([]);
+  const [selectedAdAccountId, setSelectedAdAccountId] = useState("");
+  const [pixels, setPixels] = useState<PixelListItem[]>([]);
+  const [pixelsLoading, setPixelsLoading] = useState(false);
+  const [needsMetaAdsConnect, setNeedsMetaAdsConnect] = useState(false);
   const [pixelIdInput, setPixelIdInput] = useState(pixelId);
+  const [selectedPixelId, setSelectedPixelId] = useState(pixelId);
   const [capiEnabled, setCapiEnabled] = useState(initialCapiEnabled);
   const [tokenInput, setTokenInput] = useState("");
   const [testEventCode, setTestEventCode] = useState(savedTestEventCode);
@@ -98,6 +130,8 @@ export function MetaPixelConfigPanel({
 
   useEffect(() => {
     setPixelIdInput(pixelId);
+    setSelectedPixelId(pixelId);
+    if (pixelId) setMode("select");
   }, [pixelId]);
 
   useEffect(() => {
@@ -114,10 +148,105 @@ export function MetaPixelConfigPanel({
     );
   }, [initialEnabledEvents]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setPixelsLoading(true);
+      try {
+        const qs = withAdAccountQuery(locationSearch, selectedAdAccountId);
+        const resp = await fetch(`/api/ads-catalog/meta-pixels${qs}`, {
+          headers: { Accept: "application/json" },
+        });
+        const data = (await resp.json().catch(() => ({}))) as {
+          ok?: boolean;
+          pixels?: PixelListItem[];
+          adAccounts?: AdAccountItem[];
+          adAccountId?: string;
+          needsMetaAdsConnect?: boolean;
+          listError?: string;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!resp.ok || !data.ok) {
+          setLocalError(data.error ?? t("adsCatalog.authError"));
+          setPixels([]);
+          setNeedsMetaAdsConnect(false);
+          return;
+        }
+        setAdAccounts(data.adAccounts ?? []);
+        if (data.adAccountId && !selectedAdAccountId) {
+          setSelectedAdAccountId(data.adAccountId);
+        }
+        const nextPixels = data.pixels ?? [];
+        setPixels(nextPixels);
+        setNeedsMetaAdsConnect(Boolean(data.needsMetaAdsConnect));
+        setLocalError(null);
+
+        if (mode === "select") {
+          const preferId = selectedPixelId || pixelId;
+          const matched = nextPixels.find((p) => p.pixelId === preferId);
+          if (matched) {
+            setSelectedPixelId(matched.pixelId);
+            setPixelIdInput(matched.pixelId);
+          } else if (
+            selectedPixelId &&
+            !nextPixels.some((p) => p.pixelId === selectedPixelId)
+          ) {
+            setSelectedPixelId("");
+          }
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+          setPixels([]);
+        }
+      } finally {
+        if (!cancelled) setPixelsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when account or mode changes
+  }, [mode, locationSearch, selectedAdAccountId, t, pixelId]);
+
   function toggleEvent(name: MetaPixelEventName) {
     setEnabledEvents((prev) =>
       prev.includes(name) ? prev.filter((e) => e !== name) : [...prev, name],
     );
+  }
+
+  function onSelectPixel(id: string) {
+    setSelectedPixelId(id);
+    setPixelIdInput(id);
+  }
+
+  function switchToSelect() {
+    setMode("select");
+    setSaveSuccess(false);
+    setLocalError(null);
+  }
+
+  function switchToManual() {
+    setMode("manual");
+    setSaveSuccess(false);
+    setLocalError(null);
+  }
+
+  function connectMetaAds() {
+    void (async () => {
+      setBusy(true);
+      try {
+        await metaAdsOAuth.startOAuth(
+          `/api/ads-insights/meta-auth-url${locationSearch}`,
+          () => onChanged(),
+        );
+      } catch (e) {
+        setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+      } finally {
+        setBusy(false);
+      }
+    })();
   }
 
   async function saveConfig() {
@@ -126,8 +255,13 @@ export function MetaPixelConfigPanel({
     setTestSuccess(false);
     setLocalError(null);
     try {
-      if (!pixelIdInput.trim()) {
-        setLocalError(t("adsCatalog.metaPixelIdRequired"));
+      const idToSave = mode === "select" ? selectedPixelId.trim() : pixelIdInput.trim();
+      if (!idToSave) {
+        setLocalError(
+          mode === "select"
+            ? t("adsCatalog.metaPixelSelectRequired")
+            : t("adsCatalog.metaPixelIdRequired"),
+        );
         return;
       }
       if (!tokenInput.trim() && !hasCapiAccessToken) {
@@ -136,7 +270,7 @@ export function MetaPixelConfigPanel({
       }
 
       const body: Record<string, unknown> = {
-        pixelId: pixelIdInput.trim(),
+        pixelId: idToSave,
         capiEnabled,
         enabledEvents,
       };
@@ -171,7 +305,8 @@ export function MetaPixelConfigPanel({
       setTestError(t("adsCatalog.metaPixelTestEventCodeRequired"));
       return;
     }
-    if (!pixelId && !pixelIdInput.trim()) {
+    const activePixelId = selectedPixelId || pixelIdInput || pixelId;
+    if (!activePixelId.trim()) {
       setTestError(t("adsCatalog.metaPixelIdRequired"));
       return;
     }
@@ -250,7 +385,8 @@ export function MetaPixelConfigPanel({
         setTestError(t("adsCatalog.metaPixelTokenRequired"));
         return;
       }
-      if (!pixelId && !pixelIdInput.trim()) {
+      const activePixelId = selectedPixelId || pixelIdInput || pixelId;
+      if (!activePixelId.trim()) {
         setTestError(t("adsCatalog.metaPixelIdRequired"));
         return;
       }
@@ -260,7 +396,7 @@ export function MetaPixelConfigPanel({
         testEventCode: testEventCode.trim(),
       };
       if (tokenInput.trim()) body.capiAccessToken = tokenInput.trim();
-      if (pixelIdInput.trim()) body.pixelId = pixelIdInput.trim();
+      body.pixelId = activePixelId.trim();
 
       const resp = await fetch(`/api/ads-catalog/meta-test-events${locationSearch}`, {
         method: "POST",
@@ -283,8 +419,9 @@ export function MetaPixelConfigPanel({
     }
   }
 
-  const eventsManagerUrl = buildMetaEventsManagerUrl(pixelIdInput || pixelId);
-  const testEventHowToUrl = buildMetaEventsManagerTestUrl(pixelIdInput || pixelId);
+  const activePixelId = selectedPixelId || pixelIdInput || pixelId;
+  const eventsManagerUrl = buildMetaEventsManagerUrl(activePixelId);
+  const testEventHowToUrl = buildMetaEventsManagerTestUrl(activePixelId);
   const themeEditorUrl = buildMetaPixelThemeEditorUrl({
     shopDomain,
     apiKey: shopifyApiKey,
@@ -293,9 +430,16 @@ export function MetaPixelConfigPanel({
 
   const canSave =
     !busy &&
-    Boolean(pixelIdInput.trim()) &&
+    Boolean((mode === "select" ? selectedPixelId : pixelIdInput).trim()) &&
     (Boolean(tokenInput.trim()) || hasCapiAccessToken) &&
     enabledEvents.length > 0;
+
+  const adAccountOptions =
+    adAccounts.length > 0
+      ? adAccounts
+      : selectedAdAccountId
+        ? [{ id: selectedAdAccountId, name: selectedAdAccountId }]
+        : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
@@ -308,19 +452,114 @@ export function MetaPixelConfigPanel({
         </div>
       ) : null}
       <p style={{ ...pageHintTextStyle, margin: 0 }}>
-        {t("adsCatalog.metaPixelConfigHint")}
+        {mode === "manual"
+          ? t("adsCatalog.metaPixelManualHint")
+          : t("adsCatalog.metaPixelSelectHint")}
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelIdFieldLabel")}</label>
-        <input
-          style={inputStyle}
-          value={pixelIdInput}
-          disabled={busy}
-          placeholder={t("adsCatalog.metaPixelIdPlaceholder")}
-          onChange={(e) => setPixelIdInput(e.target.value)}
-        />
+      {needsMetaAdsConnect && !metaAdsConnected ? (
+        <div
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            background: "#fff5d6",
+            border: "1px solid #f0d78a",
+            fontSize: 12,
+          }}
+        >
+          <p style={{ margin: "0 0 8px" }}>{t("adsCatalog.metaPixelConnectAdsHint")}</p>
+          <button type="button" style={secondaryBtn} disabled={busy} onClick={connectMetaAds}>
+            {t("adsCatalog.metaPixelConnectAds")}
+          </button>
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input
+            type="radio"
+            name="meta-pixel-mode"
+            checked={mode === "select"}
+            onChange={switchToSelect}
+            disabled={busy}
+          />
+          {t("adsCatalog.metaPixelModeSelect")}
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input
+            type="radio"
+            name="meta-pixel-mode"
+            checked={mode === "manual"}
+            onChange={switchToManual}
+            disabled={busy}
+          />
+          {t("adsCatalog.metaPixelModeManual")}
+        </label>
       </div>
+
+      {mode === "select" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {adAccountOptions.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={fieldLabelStyle}>
+                {t("adsCatalog.metaPixelAdAccountLabel")}
+              </label>
+              <select
+                style={inputStyle}
+                value={selectedAdAccountId}
+                disabled={busy || pixelsLoading}
+                onChange={(e) => {
+                  setSelectedAdAccountId(e.target.value);
+                  setSelectedPixelId("");
+                }}
+              >
+                <option value="">
+                  {pixelsLoading
+                    ? t("adsCatalog.metaPixelListLoading")
+                    : t("adsCatalog.metaPixelAdAccountPlaceholder")}
+                </option>
+                {adAccountOptions.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name && a.name !== a.id ? `${a.name} (${a.id})` : a.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelSelectLabel")}</label>
+            <select
+              style={inputStyle}
+              value={selectedPixelId}
+              disabled={busy || pixelsLoading}
+              onChange={(e) => onSelectPixel(e.target.value)}
+            >
+              <option value="">
+                {pixelsLoading
+                  ? t("adsCatalog.metaPixelListLoading")
+                  : t("adsCatalog.metaPixelSelectPlaceholder")}
+              </option>
+              {pixels.map((p) => (
+                <option key={p.pixelId} value={p.pixelId}>
+                  {p.pixelId}
+                  {p.pixelName && p.pixelName !== p.pixelId ? ` — ${p.pixelName}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelIdFieldLabel")}</label>
+          <input
+            style={inputStyle}
+            value={pixelIdInput}
+            disabled={busy}
+            placeholder={t("adsCatalog.metaPixelIdPlaceholder")}
+            onChange={(e) => setPixelIdInput(e.target.value)}
+          />
+        </div>
+      )}
 
       <div
         style={{

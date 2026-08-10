@@ -128,3 +128,101 @@ export async function verifyFacebookCatalogCredential(params: {
     };
   }
 }
+
+export type MetaPixelListItem = {
+  pixelId: string;
+  pixelName: string;
+};
+
+async function fetchMetaPixelGraphPages(params: {
+  initialUrl: string;
+  maxPages?: number;
+}): Promise<Array<{ id?: string; name?: string }>> {
+  const out: Array<{ id?: string; name?: string }> = [];
+  let nextUrl: string | null = params.initialUrl;
+  let pages = 0;
+  const maxPages = params.maxPages ?? 10;
+
+  while (nextUrl && pages < maxPages) {
+    pages += 1;
+    const response = await fetch(nextUrl);
+    const json = (await response.json().catch(() => ({}))) as {
+      data?: Array<{ id?: string; name?: string }>;
+      paging?: { next?: string };
+      error?: { message?: string };
+    };
+    if (!response.ok) {
+      throw new Error(json.error?.message || `HTTP ${response.status}`);
+    }
+    out.push(...(json.data ?? []));
+    nextUrl = json.paging?.next ?? null;
+  }
+  return out;
+}
+
+function normalizeMetaPixelRows(rows: Array<{ id?: string; name?: string }>): MetaPixelListItem[] {
+  const out: MetaPixelListItem[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const pixelId = String(row.id ?? "").trim();
+    if (!pixelId || seen.has(pixelId)) continue;
+    seen.add(pixelId);
+    const pixelName = String(row.name ?? pixelId).trim() || pixelId;
+    out.push({ pixelId, pixelName });
+  }
+  return out;
+}
+
+/**
+ * 列举广告账户下的 Meta Pixel。
+ * GET /{ad-account-id}/adspixels
+ */
+export async function listMetaAdAccountPixels(params: {
+  accessToken: string;
+  adAccountId: string;
+  apiVersion?: string;
+}): Promise<MetaPixelListItem[]> {
+  const apiVersion = params.apiVersion || DEFAULT_API_VERSION;
+  const adAccountId = params.adAccountId.trim();
+  const accessToken = params.accessToken.trim();
+  if (!adAccountId || !accessToken) {
+    throw new Error("adAccountId and accessToken are required");
+  }
+
+  const url = new URL(
+    `${FB_GRAPH_BASE}/${apiVersion}/${encodeURIComponent(adAccountId)}/adspixels`,
+  );
+  url.searchParams.set("fields", "id,name");
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("access_token", accessToken);
+
+  const rows = await fetchMetaPixelGraphPages({ initialUrl: url.toString() });
+  return normalizeMetaPixelRows(rows);
+}
+
+/**
+ * 列举 Business 拥有的 Meta Pixel。
+ * GET /{business-id}/owned_pixels
+ */
+export async function listMetaBusinessPixels(params: {
+  accessToken: string;
+  businessId: string;
+  apiVersion?: string;
+}): Promise<MetaPixelListItem[]> {
+  const apiVersion = params.apiVersion || DEFAULT_API_VERSION;
+  const businessId = params.businessId.trim();
+  const accessToken = params.accessToken.trim();
+  if (!businessId || !accessToken) {
+    throw new Error("businessId and accessToken are required");
+  }
+
+  const url = new URL(
+    `${FB_GRAPH_BASE}/${apiVersion}/${encodeURIComponent(businessId)}/owned_pixels`,
+  );
+  url.searchParams.set("fields", "id,name");
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("access_token", accessToken);
+
+  const rows = await fetchMetaPixelGraphPages({ initialUrl: url.toString() });
+  return normalizeMetaPixelRows(rows);
+}

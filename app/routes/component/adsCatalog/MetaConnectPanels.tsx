@@ -123,6 +123,7 @@ export function MetaConnectPanels({
             testEventCode={meta.testEventCode}
             capiEnabled={meta.capiEnabled}
             enabledEvents={meta.enabledEvents}
+            metaAdsConnected={meta.metaAdsConnected}
             busy={busy}
             setBusy={setBusy}
             onChanged={onChanged}

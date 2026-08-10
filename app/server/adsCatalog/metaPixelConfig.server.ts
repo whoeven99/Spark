@@ -1,7 +1,14 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { trackMetaPixelEvent } from "./clients/metaConversionsApiClient.server";
 import {
+  listMetaAdAccountPixels,
+  listMetaBusinessPixels,
+  type MetaPixelListItem,
+} from "./clients/facebookGraphClient.server";
+import { getMetaAdAccounts } from "./metaOAuth.server";
+import {
   getFacebookCatalogCredential,
+  getMetaAdsCredential,
   setFacebookCatalogCredential,
   type FacebookCatalogCredential,
 } from "./credentialStore.server";
@@ -41,6 +48,196 @@ export type SaveMetaPixelConfigResult = {
   enabledEvents: MetaPixelEventName[];
   hasCapiAccessToken: boolean;
 };
+
+export type ListMetaCatalogPixelsResult = {
+  pixels: MetaPixelListItem[];
+  adAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+  adAccountId: string;
+  boundAdAccountId: string;
+  boundPixelId: string;
+  pixelSource: "meta_ads" | "business" | "catalog_ad_accounts" | "none";
+  needsMetaAdsConnect: boolean;
+  listError?: string;
+};
+
+function mapMetaAdAccounts(
+  accounts: Awaited<ReturnType<typeof getMetaAdAccounts>>,
+): Array<{ id: string; name?: string; formatted?: string }> {
+  return accounts.map((a) => ({
+    id: a.adAccountId,
+    name: a.name,
+    formatted: a.currencyCode,
+  }));
+}
+
+/** 为 Ads Catalog Meta 面板列举可选 Pixel（优先 meta_ads 凭证）。 */
+export async function listMetaCatalogPixels(params: {
+  shop: string;
+  adAccountId?: string;
+}): Promise<ListMetaCatalogPixelsResult> {
+  const shop = params.shop.trim().toLowerCase();
+  const catalog = await getFacebookCatalogCredential(shop);
+  const metaAds = await getMetaAdsCredential(shop);
+  const boundPixelId = catalog?.pixelId?.trim() ?? "";
+
+  const empty: ListMetaCatalogPixelsResult = {
+    pixels: [],
+    adAccounts: [],
+    adAccountId: "",
+    boundAdAccountId: metaAds?.adAccountId ?? "",
+    boundPixelId,
+    pixelSource: "none",
+    needsMetaAdsConnect: false,
+  };
+
+  if (!catalog && !metaAds) {
+    return { ...empty, needsMetaAdsConnect: true, listError: "no_credential" };
+  }
+
+  if (metaAds) {
+    let adAccounts = metaAds.availableAccounts?.map((a) => ({
+      id: a.id,
+      name: a.name,
+      formatted: a.formatted,
+    })) ?? [];
+    if (adAccounts.length === 0) {
+      try {
+        adAccounts = mapMetaAdAccounts(await getMetaAdAccounts(metaAds.accessToken));
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        return {
+          ...empty,
+          boundAdAccountId: metaAds.adAccountId,
+          needsMetaAdsConnect: true,
+          listError: errMsg,
+        };
+      }
+    }
+    if (adAccounts.length === 0 && metaAds.adAccountId) {
+      adAccounts = [
+        {
+          id: metaAds.adAccountId,
+          name: metaAds.adAccountName ?? metaAds.adAccountId,
+          formatted: metaAds.currencyCode,
+        },
+      ];
+    }
+
+    const requested = params.adAccountId?.trim() || "";
+    const adAccountId =
+      requested && adAccounts.some((a) => a.id === requested)
+        ? requested
+        : adAccounts.some((a) => a.id === metaAds.adAccountId)
+          ? metaAds.adAccountId
+          : adAccounts[0]?.id ?? metaAds.adAccountId;
+
+    if (!adAccountId) {
+      return {
+        ...empty,
+        adAccounts,
+        boundAdAccountId: metaAds.adAccountId,
+        needsMetaAdsConnect: true,
+        listError: "no_ad_account",
+      };
+    }
+
+    try {
+      const pixels = await listMetaAdAccountPixels({
+        accessToken: metaAds.accessToken,
+        adAccountId,
+      });
+      return {
+        pixels,
+        adAccounts,
+        adAccountId,
+        boundAdAccountId: metaAds.adAccountId,
+        boundPixelId,
+        pixelSource: "meta_ads",
+        needsMetaAdsConnect: false,
+      };
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      return {
+        ...empty,
+        adAccounts,
+        adAccountId,
+        boundAdAccountId: metaAds.adAccountId,
+        pixelSource: "meta_ads",
+        needsMetaAdsConnect: true,
+        listError: errMsg,
+      };
+    }
+  }
+
+  if (!catalog) {
+    return { ...empty, needsMetaAdsConnect: true };
+  }
+
+  if (catalog.businessId?.trim()) {
+    try {
+      const pixels = await listMetaBusinessPixels({
+        accessToken: catalog.accessToken,
+        businessId: catalog.businessId,
+        apiVersion: catalog.apiVersion,
+      });
+      if (pixels.length > 0) {
+        return {
+          pixels,
+          adAccounts: [],
+          adAccountId: "",
+          boundAdAccountId: "",
+          boundPixelId,
+          pixelSource: "business",
+          needsMetaAdsConnect: false,
+        };
+      }
+    } catch (e) {
+      console.warn(
+        `${LOG_PREFIX} step=business_pixels_failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  try {
+    const adAccounts = mapMetaAdAccounts(await getMetaAdAccounts(catalog.accessToken));
+    const requested = params.adAccountId?.trim() || "";
+    const adAccountId =
+      requested && adAccounts.some((a) => a.id === requested)
+        ? requested
+        : adAccounts[0]?.id ?? "";
+
+    if (!adAccountId) {
+      return {
+        ...empty,
+        adAccounts,
+        needsMetaAdsConnect: true,
+        listError: "no_ad_account",
+      };
+    }
+
+    const pixels = await listMetaAdAccountPixels({
+      accessToken: catalog.accessToken,
+      adAccountId,
+      apiVersion: catalog.apiVersion,
+    });
+    return {
+      pixels,
+      adAccounts,
+      adAccountId,
+      boundAdAccountId: "",
+      boundPixelId,
+      pixelSource: "catalog_ad_accounts",
+      needsMetaAdsConnect: false,
+    };
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    return {
+      ...empty,
+      needsMetaAdsConnect: true,
+      listError: errMsg,
+    };
+  }
+}
 
 async function resolveShopGid(admin: ShopifyAdminGraphqlClient): Promise<string> {
   const response = await admin.graphql(`#graphql
@@ -222,6 +419,20 @@ export async function saveMetaPixelConfig(
   }
   if (!/^\d+$/.test(pixelId)) {
     throw new Error("Meta Pixel ID 应为数字");
+  }
+
+  try {
+    const listed = await listMetaCatalogPixels({ shop: params.shop });
+    if (
+      listed.pixels.length > 0 &&
+      !listed.pixels.some((p) => p.pixelId === pixelId)
+    ) {
+      console.warn(
+        `${LOG_PREFIX} step=select_pixel_not_in_list shop=${params.shop} pixelId=${pixelId}`,
+      );
+    }
+  } catch {
+    // 列表失败不阻断保存（手动 Pixel ID 仍可用）
   }
 
   const existingToken = credential.capiAccessToken?.trim() || "";

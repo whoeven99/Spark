@@ -14,6 +14,7 @@ import {
   getGoogleAdsPending,
   getGoogleMerchantCredential,
   getGoogleMerchantPending,
+  getMetaAdsCredential,
   getMetaCatalogPending,
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
@@ -48,7 +49,7 @@ const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot |
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, tiktok, tiktokPending, shopInfo] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaAds, tiktok, tiktokPending, shopInfo] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -61,6 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getGoogleAdsCredential(session.shop),
       getGoogleAdsPending(session.shop),
       getMetaCatalogPending(session.shop),
+      getMetaAdsCredential(session.shop),
       getTiktokCatalogCredential(session.shop),
       getTiktokCatalogPending(session.shop),
       fetchShopBasicInfo(admin),
@@ -125,6 +127,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         enabledEvents: fb?.enabledEvents?.length
           ? normalizeMetaEnabledEvents(fb.enabledEvents)
           : [...META_PIXEL_DEFAULT_EVENTS],
+        metaAdsConnected: Boolean(metaAds),
+        metaAdsAdAccountId: metaAds?.adAccountId ?? "",
         pendingCatalogs:
           metaPending?.accounts.map((a) => ({
             id: a.id,
