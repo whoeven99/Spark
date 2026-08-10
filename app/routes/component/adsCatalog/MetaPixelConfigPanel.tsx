@@ -29,6 +29,8 @@ type Props = {
   shopifyApiKey: string;
   pixelId: string;
   hasCapiAccessToken: boolean;
+  hasStoredCapiAccessToken: boolean;
+  metaOAuthCapiAvailable: boolean;
   testEventCode: string;
   capiEnabled: boolean;
   enabledEvents: string[];
@@ -91,6 +93,8 @@ export function MetaPixelConfigPanel({
   shopifyApiKey,
   pixelId,
   hasCapiAccessToken,
+  hasStoredCapiAccessToken,
+  metaOAuthCapiAvailable,
   testEventCode: savedTestEventCode,
   capiEnabled: initialCapiEnabled,
   enabledEvents: initialEnabledEvents,
@@ -428,6 +432,12 @@ export function MetaPixelConfigPanel({
   });
   const onlineStoreUrl = buildMetaShopOnlineStoreUrl(shopDomain);
 
+  const oauthCapiActive =
+    mode === "select" &&
+    metaOAuthCapiAvailable &&
+    !hasStoredCapiAccessToken &&
+    !tokenInput.trim();
+
   const canSave =
     !busy &&
     Boolean((mode === "select" ? selectedPixelId : pixelIdInput).trim()) &&
@@ -590,7 +600,9 @@ export function MetaPixelConfigPanel({
           </span>
         </div>
         <p style={{ ...pageHintTextStyle, margin: 0 }}>
-          {t("adsCatalog.metaPixelServerSideHint")}
+          {oauthCapiActive
+            ? t("adsCatalog.metaPixelOAuthCapiHint")
+            : t("adsCatalog.metaPixelServerSideHint")}
         </p>
         <label
           style={{
@@ -619,7 +631,11 @@ export function MetaPixelConfigPanel({
               flexWrap: "wrap",
             }}
           >
-            <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelAccessTokenLabel")}</label>
+            <label style={fieldLabelStyle}>
+              {mode === "select" && metaOAuthCapiAvailable
+                ? t("adsCatalog.metaPixelAccessTokenLabelOptional")
+                : t("adsCatalog.metaPixelAccessTokenLabel")}
+            </label>
             <a
               href={eventsManagerUrl}
               target="_blank"
@@ -636,9 +652,11 @@ export function MetaPixelConfigPanel({
             value={tokenInput}
             disabled={busy}
             placeholder={
-              hasCapiAccessToken
-                ? t("adsCatalog.metaPixelAccessTokenConfigured")
-                : t("adsCatalog.metaPixelAccessTokenPlaceholder")
+              oauthCapiActive
+                ? t("adsCatalog.metaPixelAccessTokenOAuthActive")
+                : hasStoredCapiAccessToken
+                  ? t("adsCatalog.metaPixelAccessTokenConfigured")
+                  : t("adsCatalog.metaPixelAccessTokenPlaceholder")
             }
             onChange={(e) => setTokenInput(e.target.value)}
           />

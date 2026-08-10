@@ -87,6 +87,8 @@ export interface CredentialsView {
     updatedAt: string | null;
     pixelId: string;
     hasCapiAccessToken: boolean;
+    hasStoredCapiAccessToken: boolean;
+    metaOAuthCapiAvailable: boolean;
     testEventCode: string;
     capiEnabled: boolean;
     enabledEvents: string[];

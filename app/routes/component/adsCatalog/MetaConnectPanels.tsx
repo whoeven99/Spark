@@ -120,6 +120,8 @@ export function MetaConnectPanels({
             shopifyApiKey={shopifyApiKey}
             pixelId={meta.pixelId}
             hasCapiAccessToken={meta.hasCapiAccessToken}
+            hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
+            metaOAuthCapiAvailable={meta.metaOAuthCapiAvailable}
             testEventCode={meta.testEventCode}
             capiEnabled={meta.capiEnabled}
             enabledEvents={meta.enabledEvents}

@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getFacebookCatalogCredential = vi.hoisted(() => vi.fn());
+const getMetaAdsCredential = vi.hoisted(() => vi.fn());
 const setFacebookCatalogCredential = vi.hoisted(() => vi.fn());
 const trackMetaPixelEvent = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   getFacebookCatalogCredential: (...args: unknown[]) => getFacebookCatalogCredential(...args),
+  getMetaAdsCredential: (...args: unknown[]) => getMetaAdsCredential(...args),
   setFacebookCatalogCredential: (...args: unknown[]) => setFacebookCatalogCredential(...args),
 }));
 
@@ -22,6 +24,8 @@ import {
 describe("maybeTrackMetaPurchase", () => {
   beforeEach(() => {
     getFacebookCatalogCredential.mockReset();
+    getMetaAdsCredential.mockReset();
+    getMetaAdsCredential.mockResolvedValue(null);
     trackMetaPixelEvent.mockReset();
     trackMetaPixelEvent.mockResolvedValue(undefined);
   });
@@ -41,7 +45,7 @@ describe("maybeTrackMetaPurchase", () => {
     });
 
     getFacebookCatalogCredential.mockResolvedValue({
-      accessToken: "oauth",
+      accessToken: "",
       catalogId: "cat",
       pixelId: "123",
       capiEnabled: true,
@@ -84,11 +88,42 @@ describe("maybeTrackMetaPurchase", () => {
       }),
     );
   });
+
+  it("uses Meta Ads OAuth token when stored CAPI token missing", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "catalog-oauth",
+      catalogId: "cat",
+      pixelId: "123456",
+      capiEnabled: true,
+      enabledEvents: ["Purchase"],
+    });
+    getMetaAdsCredential.mockResolvedValue({
+      accessToken: "meta-ads-oauth",
+      adAccountId: "act_1",
+    });
+
+    const result = await maybeTrackMetaPurchase({
+      shop: "s.myshopify.com",
+      orderId: "99",
+      orderName: "1001",
+    });
+
+    expect(result).toEqual({ sent: true });
+    expect(trackMetaPixelEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pixelId: "123456",
+        capiAccessToken: "meta-ads-oauth",
+        eventName: "Purchase",
+      }),
+    );
+  });
 });
 
 describe("trackMetaStorefrontTestEvent", () => {
   beforeEach(() => {
     getFacebookCatalogCredential.mockReset();
+    getMetaAdsCredential.mockReset();
+    getMetaAdsCredential.mockResolvedValue(null);
     trackMetaPixelEvent.mockReset();
     trackMetaPixelEvent.mockResolvedValue(undefined);
   });
@@ -143,6 +178,8 @@ describe("trackMetaStorefrontTestEvent", () => {
 describe("testMetaServerEvents", () => {
   beforeEach(() => {
     getFacebookCatalogCredential.mockReset();
+    getMetaAdsCredential.mockReset();
+    getMetaAdsCredential.mockResolvedValue(null);
     trackMetaPixelEvent.mockReset();
     trackMetaPixelEvent.mockResolvedValue(undefined);
   });

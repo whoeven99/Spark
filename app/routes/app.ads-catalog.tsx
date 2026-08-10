@@ -38,6 +38,7 @@ import {
 } from "../lib/metaPixelEvents";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
+import { hasMetaCapiAccessAvailable } from "../server/adsCatalog/metaPixelConfig.server";
 
 const AdsCatalogPage = lazy(() =>
   import("./page/AdsCatalogPage").then((m) => ({ default: m.AdsCatalogPage })),
@@ -120,7 +121,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         businessId: fb?.businessId ?? "",
         updatedAt: fb?.updatedAt ?? null,
         pixelId: fb?.pixelId ?? "",
-        hasCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
+        hasCapiAccessToken: fb
+          ? await hasMetaCapiAccessAvailable(session.shop, fb)
+          : false,
+        hasStoredCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
+        metaOAuthCapiAvailable: Boolean(
+          metaAds?.accessToken?.trim() || fb?.accessToken?.trim(),
+        ),
         testEventCode: fb?.testEventCode?.trim() ?? "",
         capiEnabled:
           typeof fb?.capiEnabled === "boolean" ? fb.capiEnabled : true,

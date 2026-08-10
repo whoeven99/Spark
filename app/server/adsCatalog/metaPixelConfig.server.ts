@@ -33,6 +33,40 @@ function credentialWriteBase(credential: FacebookCatalogCredential) {
   };
 }
 
+export type MetaCapiTokenSource = "stored" | "meta_ads_oauth" | "catalog_oauth";
+
+/** 解析 CAPI 用 access token：优先手贴/已存 token，再 Meta Ads OAuth，最后 Catalog OAuth。 */
+export async function resolveMetaCapiAccessToken(params: {
+  shop: string;
+  credential: FacebookCatalogCredential;
+  explicitToken?: string;
+}): Promise<{ token: string; source: MetaCapiTokenSource } | null> {
+  const explicit = params.explicitToken?.trim();
+  if (explicit) return { token: explicit, source: "stored" };
+
+  const stored = params.credential.capiAccessToken?.trim();
+  if (stored) return { token: stored, source: "stored" };
+
+  const metaAds = await getMetaAdsCredential(params.shop.trim().toLowerCase());
+  const metaAdsToken = metaAds?.accessToken?.trim();
+  if (metaAdsToken) return { token: metaAdsToken, source: "meta_ads_oauth" };
+
+  const catalogToken = params.credential.accessToken?.trim();
+  if (catalogToken) return { token: catalogToken, source: "catalog_oauth" };
+
+  return null;
+}
+
+export async function hasMetaCapiAccessAvailable(
+  shop: string,
+  credential?: FacebookCatalogCredential | null,
+): Promise<boolean> {
+  const fb = credential ?? await getFacebookCatalogCredential(shop.trim().toLowerCase());
+  if (!fb) return false;
+  const resolved = await resolveMetaCapiAccessToken({ shop, credential: fb });
+  return Boolean(resolved?.token);
+}
+
 export type SaveMetaPixelConfigInput = {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
@@ -359,7 +393,8 @@ export async function trackMetaStorefrontTestEvent(params: {
   if (!testEventCode) return { sent: false, reason: "test_mode_off" };
 
   const pixelId = credential.pixelId?.trim() || "";
-  const token = credential.capiAccessToken?.trim() || "";
+  const resolved = await resolveMetaCapiAccessToken({ shop, credential });
+  const token = resolved?.token ?? "";
   const enabled =
     typeof credential.capiEnabled === "boolean" ? credential.capiEnabled : true;
   if (!enabled) return { sent: false, reason: "capi_disabled" };
@@ -437,20 +472,27 @@ export async function saveMetaPixelConfig(
 
   const existingToken = credential.capiAccessToken?.trim() || "";
   const incomingToken = params.capiAccessToken?.trim() ?? "";
-  const capiAccessToken = incomingToken || existingToken;
-  if (!capiAccessToken) {
-    throw new Error("请配置 Conversions API Access Token（从 Events Manager 复制）");
-  }
-
   const capiEnabled =
     typeof params.capiEnabled === "boolean" ? params.capiEnabled : true;
+  const resolved = await resolveMetaCapiAccessToken({
+    shop: params.shop,
+    credential,
+    explicitToken: incomingToken || undefined,
+  });
+
+  if (capiEnabled && !resolved) {
+    throw new Error(
+      "请连接 Meta Ads 授权，或在 Events Manager 粘贴 Conversions API Access Token",
+    );
+  }
+
   const enabledEvents = normalizeMetaEnabledEvents(params.enabledEvents);
   const preservedTestEventCode = credential.testEventCode?.trim() || undefined;
 
   await setFacebookCatalogCredential(params.shop, {
     ...credentialWriteBase(credential),
     pixelId,
-    capiAccessToken,
+    ...(incomingToken ? { capiAccessToken: incomingToken } : {}),
     capiEnabled,
     enabledEvents,
   });
@@ -475,11 +517,15 @@ export async function saveMetaPixelConfig(
     `${LOG_PREFIX} step=saved shop=${params.shop} pixelId=${pixelId} capi=${capiEnabled} events=${enabledEvents.join(",")}`,
   );
 
+  const hasCapiAccessToken = Boolean(
+    incomingToken || existingToken || resolved?.token,
+  );
+
   return {
     pixelId,
     capiEnabled,
     enabledEvents,
-    hasCapiAccessToken: true,
+    hasCapiAccessToken,
   };
 }
 
@@ -496,7 +542,11 @@ export async function maybeTrackMetaPurchase(params: {
   if (!credential) return { sent: false, reason: "no_credential" };
 
   const pixelId = credential.pixelId?.trim() ?? "";
-  const token = credential.capiAccessToken?.trim() ?? "";
+  const resolved = await resolveMetaCapiAccessToken({
+    shop: params.shop,
+    credential,
+  });
+  const token = resolved?.token ?? "";
   const enabled =
     typeof credential.capiEnabled === "boolean" ? credential.capiEnabled : true;
   const events = normalizeMetaEnabledEvents(credential.enabledEvents);
@@ -617,10 +667,18 @@ export async function testMetaServerEvents(params: {
   }
   const pixelId = params.pixelId?.trim() || credential.pixelId?.trim() || "";
   const testEventCode = params.testEventCode.trim();
-  const token =
-    params.capiAccessToken?.trim() || credential.capiAccessToken?.trim() || "";
+  const resolved = await resolveMetaCapiAccessToken({
+    shop: params.shop,
+    credential,
+    explicitToken: params.capiAccessToken?.trim() || undefined,
+  });
+  const token = resolved?.token ?? "";
   if (!pixelId) throw new Error("请先配置 Meta Pixel ID");
-  if (!token) throw new Error("请配置 Conversions API Access Token");
+  if (!token) {
+    throw new Error(
+      "请连接 Meta Ads 授权，或在 Events Manager 粘贴 Conversions API Access Token",
+    );
+  }
   if (!testEventCode) throw new Error("请填写 Test Event Code");
 
   const clientIpAddress =
