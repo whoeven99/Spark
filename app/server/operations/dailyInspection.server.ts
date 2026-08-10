@@ -132,6 +132,14 @@ export type DailyOperationsResult = {
   review: DailyReview | null;
 };
 
+/**
+ * 概览结果：不含 `detail`。
+ * `detail`（异常订单、退款 SKU、库存风险等明细对象）只能由 `computeOperationsDiagnosis`
+ * 现算，无法从快照恢复，代价是一轮 30 天全量查询。因此只读指标/诊断项/任务的调用方
+ * 应使用本类型，避免为用不到的明细付这笔成本。
+ */
+export type DailyOperationsOverviewResult = Omit<DailyOperationsResult, "detail">;
+
 const DEFAULT_SNAPSHOT_TIMEZONE = "UTC";
 
 /** 按店铺时区生成 YYYY-MM-DD 快照键（与商户感知的「今日」一致）。 */
@@ -180,7 +188,7 @@ function toTaskView(task: {
   };
 }
 
-function toItemResult(item: {
+type DiagnosisItemRow = {
   key: string;
   name: string;
   status: string;
@@ -188,7 +196,9 @@ function toItemResult(item: {
   evidence: unknown;
   reasoning: unknown;
   formulas: unknown;
-}): DiagnosisItemResult {
+};
+
+function toItemResult(item: DiagnosisItemRow): DiagnosisItemResult {
   return {
     key: item.key as DiagnosisItemResult["key"],
     name: item.name,
@@ -612,18 +622,81 @@ async function syncTasks(
   }
 }
 
+type EnsureDailySnapshotOptions = {
+  force?: boolean;
+  now?: Date;
+  shopifyAdmin?: ShopifyAdminGraphqlClient;
+  timeZone?: string;
+};
+
+type SnapshotRow = {
+  snapshotDate: string;
+  generatedAt: Date;
+  hasData: boolean;
+  metrics: unknown;
+  items: DiagnosisItemRow[];
+};
+
+/** 用已持久化的快照拼出概览结果，只额外读任务列表与环比，不重算诊断。 */
+async function buildOverviewFromSnapshot(
+  shop: string,
+  existing: SnapshotRow,
+  now: Date,
+  timeZone: string,
+): Promise<DailyOperationsOverviewResult> {
+  const metrics = existing.metrics as OperationsSummaryMetrics;
+  const items = existing.items.map(toItemResult);
+  const [tasks, review] = await Promise.all([
+    listOperationTasks(shop),
+    buildReview(shop, metrics, now, timeZone),
+  ]);
+  return {
+    shop,
+    snapshotDate: existing.snapshotDate,
+    generatedAt: existing.generatedAt.toISOString(),
+    hasData: existing.hasData,
+    metrics,
+    overview: buildOverview(metrics, items, tasks),
+    environments: buildEnvironments(metrics, items),
+    insights: buildInsights(items, tasks),
+    items,
+    tasks,
+    review,
+  };
+}
+
 /**
- * 确保当日快照存在并返回完整结果（懒巡检入口）。
- * force=true 时重算当日快照（用于手动刷新）。
+ * 概览入口：命中当日快照时直接复用持久化指标，不重算诊断明细。
+ * 未命中（或 force）时退回 `ensureDailySnapshot` 建快照。
+ */
+export async function ensureDailySnapshotOverview(
+  shop: string,
+  options?: EnsureDailySnapshotOptions,
+): Promise<DailyOperationsOverviewResult> {
+  if (!options?.force) {
+    const now = options?.now ?? new Date();
+    const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
+    const existing = await prisma.operationDiagnosisSnapshot.findUnique({
+      where: {
+        shop_snapshotDate: { shop, snapshotDate: toDateKey(now, timeZone) },
+      },
+      include: { items: true },
+    });
+    if (existing) {
+      return buildOverviewFromSnapshot(shop, existing, now, timeZone);
+    }
+  }
+  return ensureDailySnapshot(shop, options);
+}
+
+/**
+ * 确保当日快照存在并返回完整结果（含 detail）的懒巡检入口。
+ * 即使命中快照也必须重算一次诊断来取 detail，只读概览时请用
+ * `ensureDailySnapshotOverview`。force=true 时重算当日快照（用于手动刷新）。
  */
 export async function ensureDailySnapshot(
   shop: string,
-  options?: {
-    force?: boolean;
-    now?: Date;
-    shopifyAdmin?: ShopifyAdminGraphqlClient;
-    timeZone?: string;
-  },
+  options?: EnsureDailySnapshotOptions,
 ): Promise<DailyOperationsResult> {
   const now = options?.now ?? new Date();
   const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
@@ -635,29 +708,13 @@ export async function ensureDailySnapshot(
   });
 
   if (existing && !options?.force) {
-    const [tasks, review, diagnosis] = await Promise.all([
-      listOperationTasks(shop),
-      buildReview(shop, existing.metrics as OperationsSummaryMetrics, now, timeZone),
+    const [base, diagnosis] = await Promise.all([
+      buildOverviewFromSnapshot(shop, existing, now, timeZone),
       computeOperationsDiagnosis(shop, now, {
         shopifyAdmin: options?.shopifyAdmin,
       }),
     ]);
-    const items = existing.items.map(toItemResult);
-    const metrics = existing.metrics as OperationsSummaryMetrics;
-    return {
-      shop,
-      snapshotDate: existing.snapshotDate,
-      generatedAt: existing.generatedAt.toISOString(),
-      hasData: existing.hasData,
-      metrics,
-      overview: buildOverview(metrics, items, tasks),
-      detail: diagnosis.detail,
-      environments: buildEnvironments(metrics, items),
-      insights: buildInsights(items, tasks),
-      items,
-      tasks,
-      review,
-    };
+    return { ...base, detail: diagnosis.detail };
   }
 
   const diagnosis = await computeOperationsDiagnosis(shop, now, {

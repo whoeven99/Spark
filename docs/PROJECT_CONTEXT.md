@@ -38,7 +38,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - `/api/automation-overview`：Today 和工作台自动化概览。
 - `/api/support`、`/api/external-support`：客服会话入口。
 - `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
-- 广告 Catalog / Insights OAuth：`app.ads-catalog.tsx`、`app.settings.ads-insights.tsx`、`app.ads.*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx`、`ads.meta-ads.callback.tsx`、`ads.google-*.callback.tsx`、`ads.tiktok-catalog.callback.tsx`。
+- 广告 Catalog / Insights OAuth：`app.ads-catalog.tsx`、`app.insights.performance.tsx`（旧路径 `app.settings.ads-insights.tsx` 只做重定向）、`app.ads.*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx`、`ads.meta-ads.callback.tsx`、`ads.google-*.callback.tsx`、`ads.tiktok-catalog.callback.tsx`。
 - TikTok 店面测试事件双发：`POST /api/ads-catalog/tiktok-storefront-track`（仅测试模式）。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单、退款、库存、履约 Webhook。
 
@@ -67,7 +67,9 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 
 ## 5. 数据和外部系统
 
-- Turso / libSQL + Prisma：主业务数据，schema 在 `prisma/schema.prisma`，运行时入口是 `app/db.server.ts`。广告 OAuth 凭证写入 `AdPlatformCredential`（按 `shop` + `platform` 唯一），读写见 `app/server/adsCatalog/credentialStore.server.ts`。
+- Turso / libSQL + Prisma：主业务数据，schema 在 `prisma/schema.prisma`，运行时入口是 `app/db.server.ts`。广告 OAuth 凭证写入 `AdPlatformCredential`（按 `shop` + `platform` 唯一），读写见 `app/server/adsCatalog/credentialStore.server.ts`；该表的 `externalAccountId` 是从凭证 JSON 派生的索引列，供 GMC / Meta Catalog webhook 反查店铺。
+  - 广告洞察落库：`AdEntity`（系列/广告组/广告层级）+ `AdMetricDaily`（广告级每日可加指标）+ `AdInsightsSync`（回源状态），读写见 `app/server/adsInsights/store.server.ts`。`structure` 视图默认读库，快照过期才回源，回源固定拉 30 天，`/api/ads-insights?refresh=1` 强刷。派生指标查询时算；`reach` / `frequency` 不可跨天相加，不入库。
+  - 商品审核状态：`GmcProductStatus` / `MetaProductStatus` 按店铺全量重建（`deleteMany` + 分批 `createMany`），拉取需翻完分页。
 - Azure Cosmos DB：Agent 运行摘要、Playbook Case，以及 Admin 翻译观测中读取的外部任务数据。
 - Azure Blob Storage：上传文件、图片生成、图片翻译和少量兼容翻译内容。
 - Redis：Admin 运营排查和部分历史/兼容状态读取，不作为新核心业务对象的默认存储。
@@ -124,7 +126,7 @@ npm run turso:migrate:test
 - Shopify：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`。
 - Turso：`TURSO_TARGET`、`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`、`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`、`DATABASE_URL`。
 - AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。
-- Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。
+- Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；主应用 Render KV 用 `SPARK_KV`（测试实例 `spark-kv-test`）；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。
 - 图片翻译：`HUOSHAN_*` / `VOLC_*`、`AIDGE_*`、`PICTURE_TRANSLATE_*`。
 - 图片生成：`AZURE_BLOB_GENERATED_IMAGES_CONTAINER`、`IMAGE_GEN_BLOB_SAS_TTL_MINUTES`。
 - Billing：`BILLING_GATEWAY`、`BILLING_TEST`、`BILLING_ENABLED`。
@@ -150,7 +152,7 @@ npm run turso:migrate:test
 - 改图片工具：`app/routes/app.studio.image.tsx`、`app/server/imageGeneration/`、`app/server/pictureTranslate/`。
 - 改 Today/运营诊断：`app/routes/app.today.*`、`app/server/operations/`。
 - 改订单回补/数据同步：`app/routes/app.settings.data.tsx`、`app/server/shopify/sync/`。
-- 改广告 OAuth / Catalog / Insights：`app/server/adsCatalog/**`、`app/server/adsInsights/**`、相关 `app/routes/app.ads-catalog.tsx`、`app.settings.ads-insights.tsx` 与 OAuth start/callback。
+- 改广告 OAuth / Catalog / Insights：`app/server/adsCatalog/**`、`app/server/adsInsights/**`、相关 `app/routes/app.ads-catalog.tsx`、`app.insights.*` 与 OAuth start/callback。
 - 改 TikTok Pixel / Theme App Embed：`extensions/spark-tiktok-pixel/`、`app/server/adsCatalog/`（metafield 下发与 Events API）。
 - 改计费：先读 `app/server/billing/agent.md`，再改 `app/server/billing/`、`app/server/tokenUsage/`、`app/routes/app.settings.billing.tsx` 和 Webhook。
 - 改 Admin：在 `admin/` 内修改并运行 `npm run build`。

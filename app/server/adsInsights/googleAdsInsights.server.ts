@@ -7,7 +7,10 @@ import {
   getGoogleAdsCredential,
   setGoogleAdsCredential,
 } from "../adsCatalog/credentialStore.server";
-import { maybeRefreshGoogleAdsToken } from "../adsCatalog/googleAdsToken.server";
+import {
+  maybeRefreshGoogleAdsToken,
+  resolveVerifiedLoginCustomerId,
+} from "../adsCatalog/googleAdsToken.server";
 import {
   getGoogleAdsDeveloperToken,
 } from "../adsCatalog/googleOAuth.server";
@@ -24,8 +27,13 @@ import {
   formatOutboundErrorLog,
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
-import { googleDuringClause, resolveDateWindow } from "./dateRange.server";
-import { nestFlatAdRows } from "./nest.server";
+import { googleDateClause, resolveDateWindow } from "./dateRange.server";
+import {
+  collapseDailyRows,
+  nestFlatAdRows,
+  toDailyRows,
+  type FlatAdDailyRow,
+} from "./nest.server";
 import {
   type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
@@ -52,7 +60,7 @@ interface GaqlRow {
   asset?: { id?: string; name?: string; type?: string };
   metrics?: Record<string, string | number | undefined>;
   customer?: { currency_code?: string };
-  segments?: { conversion_action_category?: string };
+  segments?: { conversion_action_category?: string; date?: string };
 }
 
 interface SearchStreamResponse {
@@ -108,12 +116,18 @@ async function executeGaqlQuery(params: QueryParams & { query: string }): Promis
 
 type ConvKey = string;
 
-function convMapKey(campaignId: string, adGroupId: string, adId: string): ConvKey {
-  return `${campaignId}|${adGroupId}|${adId}`;
+/** 转化按天分摊，键必须带日期，否则区间总量会被复制到每一天。 */
+function convMapKey(
+  campaignId: string,
+  adGroupId: string,
+  adId: string,
+  date: string,
+): ConvKey {
+  return `${campaignId}|${adGroupId}|${adId}|${date}`;
 }
 
 async function fetchConversionCategoryMap(params: QueryParams & {
-  during: string;
+  dateClause: string;
   category: "PURCHASE" | "ADD_TO_CART" | "PAGE_VIEW";
 }): Promise<Map<ConvKey, { conversions: number; value: number }>> {
   const map = new Map<ConvKey, { conversions: number; value: number }>();
@@ -122,11 +136,12 @@ async function fetchConversionCategoryMap(params: QueryParams & {
       campaign.id,
       ad_group.id,
       ad_group_ad.ad.id,
+      segments.date,
       metrics.conversions,
       metrics.conversions_value,
       segments.conversion_action_category
     FROM ad_group_ad
-    WHERE segments.date DURING ${params.during}
+    WHERE ${params.dateClause}
       AND segments.conversion_action_category = '${params.category}'
       AND campaign.status != 'REMOVED'
   `;
@@ -136,8 +151,9 @@ async function fetchConversionCategoryMap(params: QueryParams & {
       const campaignId = row.campaign?.id ?? "";
       const adGroupId = row.adGroup?.id ?? "";
       const adId = row.adGroupAd?.ad?.id ?? "";
-      if (!campaignId || !adGroupId || !adId) continue;
-      const key = convMapKey(campaignId, adGroupId, adId);
+      const date = row.segments?.date ?? "";
+      if (!campaignId || !adGroupId || !adId || !date) continue;
+      const key = convMapKey(campaignId, adGroupId, adId, date);
       const prev = map.get(key) ?? { conversions: 0, value: 0 };
       map.set(key, {
         conversions: prev.conversions + toNumber(row.metrics?.conversions),
@@ -177,7 +193,7 @@ function metricsFromGaql(row: GaqlRow) {
 }
 
 async function fetchKeywords(
-  params: QueryParams & { during: string },
+  params: QueryParams & { dateClause: string },
 ): Promise<AdsInsightsDeepRow[]> {
   const query = `
     SELECT
@@ -199,7 +215,7 @@ async function fetchKeywords(
       metrics.conversions_value,
       metrics.all_conversions
     FROM keyword_view
-    WHERE segments.date DURING ${params.during}
+    WHERE ${params.dateClause}
       AND campaign.status != 'REMOVED'
       AND ad_group.status != 'REMOVED'
     ORDER BY metrics.cost_micros DESC
@@ -234,7 +250,7 @@ async function fetchKeywords(
 }
 
 async function fetchSearchTerms(
-  params: QueryParams & { during: string },
+  params: QueryParams & { dateClause: string },
 ): Promise<AdsInsightsDeepRow[]> {
   const query = `
     SELECT
@@ -254,7 +270,7 @@ async function fetchSearchTerms(
       metrics.conversions_value,
       metrics.all_conversions
     FROM search_term_view
-    WHERE segments.date DURING ${params.during}
+    WHERE ${params.dateClause}
       AND campaign.status != 'REMOVED'
     ORDER BY metrics.cost_micros DESC
   `;
@@ -286,7 +302,7 @@ async function fetchSearchTerms(
 }
 
 async function fetchCreatives(
-  params: QueryParams & { during: string },
+  params: QueryParams & { dateClause: string },
 ): Promise<AdsInsightsDeepRow[]> {
   // ad_group_ad 已是创意载体；补充 ad type 作为素材视图
   const query = `
@@ -309,7 +325,7 @@ async function fetchCreatives(
       metrics.conversions_value,
       metrics.all_conversions
     FROM ad_group_ad
-    WHERE segments.date DURING ${params.during}
+    WHERE ${params.dateClause}
       AND campaign.status != 'REMOVED'
       AND ad_group.status != 'REMOVED'
       AND ad_group_ad.status != 'REMOVED'
@@ -359,28 +375,16 @@ export async function fetchGoogleAdsInsights(
   if (!cred) return null;
 
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
-  const during = googleDuringClause(rangeDays);
+  const dateClause = googleDateClause(dateStart, dateEnd);
   const accessToken = (await maybeRefreshGoogleAdsToken(shop)) ?? cred.accessToken;
-  // 始终重新解析 login-customer-id：旧凭证常把子账户自身写成 login，导致 USER_PERMISSION_DENIED。
-  const loginCustomerId = await resolveLoginCustomerId({
+  // 只信任带校验戳且未过期的 login-customer-id；其余情况重新探测。
+  // 下方 GAQL 权限失败时还会强制重解析一次，作为权限变更的即时兜底。
+  const loginCustomerId = await resolveVerifiedLoginCustomerId({
+    shop,
+    cred,
     accessToken,
     developerToken,
-    customerId: cred.customerId,
-    accessibleCustomerIds: cred.loginCustomerId
-      ? [cred.loginCustomerId, cred.customerId]
-      : [cred.customerId],
   });
-  if (loginCustomerId !== (cred.loginCustomerId?.trim() || "")) {
-    await setGoogleAdsCredential(shop, {
-      accessToken,
-      refreshToken: cred.refreshToken,
-      customerId: cred.customerId,
-      loginCustomerId,
-    });
-    console.info(
-      `${LOG_PREFIX} step=update_login_customer_id shop=${shop} customerId=${normalizeCustomerId(cred.customerId)} loginCustomerId=${loginCustomerId}`,
-    );
-  }
 
   const queryParams: QueryParams = {
     accessToken,
@@ -396,6 +400,7 @@ export async function fetchGoogleAdsInsights(
 
   let currencyCode: string | null = null;
   let campaigns: AdsInsightsResult["campaigns"] = [];
+  let dailyRows: FlatAdDailyRow[] = [];
 
   if (includeStructure) {
     const baseQuery = `
@@ -410,6 +415,7 @@ export async function fetchGoogleAdsInsights(
         ad_group_ad.ad.name,
         ad_group_ad.status,
         customer.currency_code,
+        segments.date,
         metrics.impressions,
         metrics.clicks,
         metrics.cost_micros,
@@ -420,7 +426,7 @@ export async function fetchGoogleAdsInsights(
         metrics.conversions_value,
         metrics.all_conversions
       FROM ad_group_ad
-      WHERE segments.date DURING ${during}
+      WHERE ${dateClause}
         AND campaign.status != 'REMOVED'
         AND ad_group.status != 'REMOVED'
         AND ad_group_ad.status != 'REMOVED'
@@ -448,6 +454,7 @@ export async function fetchGoogleAdsInsights(
             refreshToken: cred.refreshToken,
             customerId: cred.customerId,
             loginCustomerId: retriedLogin,
+            loginCustomerIdVerifiedAt: new Date().toISOString(),
           });
           rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
         } else {
@@ -461,9 +468,9 @@ export async function fetchGoogleAdsInsights(
     }
 
     const [purchaseMap, atcMap, pageViewMap] = await Promise.all([
-      fetchConversionCategoryMap({ ...queryParams, during, category: "PURCHASE" }),
-      fetchConversionCategoryMap({ ...queryParams, during, category: "ADD_TO_CART" }),
-      fetchConversionCategoryMap({ ...queryParams, during, category: "PAGE_VIEW" }),
+      fetchConversionCategoryMap({ ...queryParams, dateClause, category: "PURCHASE" }),
+      fetchConversionCategoryMap({ ...queryParams, dateClause, category: "ADD_TO_CART" }),
+      fetchConversionCategoryMap({ ...queryParams, dateClause, category: "PAGE_VIEW" }),
     ]);
 
     const flat = rows
@@ -474,18 +481,20 @@ export async function fetchGoogleAdsInsights(
         const campaignId = row.campaign?.id ?? "";
         const adGroupId = row.adGroup?.id ?? "";
         const adId = row.adGroupAd?.ad?.id ?? "";
+        const date = row.segments?.date ?? "";
         const costMicros = toNumber(row.metrics?.cost_micros);
         const spend = costMicros / 1_000_000;
         const clicks = toNumber(row.metrics?.clicks);
         const conversions = toNumber(row.metrics?.conversions);
         const conversionsValue = toNumber(row.metrics?.conversions_value);
-        const key = convMapKey(campaignId, adGroupId, adId);
+        const key = convMapKey(campaignId, adGroupId, adId, date);
         const purchase = purchaseMap.get(key);
         const atc = atcMap.get(key);
         const pageView = pageViewMap.get(key);
         const averageCpmMicros = toNumber(row.metrics?.average_cpm);
 
         return {
+          date,
           campaignId,
           campaignName: row.campaign?.name ?? campaignId,
           campaignStatus: row.campaign?.status ?? "UNKNOWN",
@@ -517,15 +526,16 @@ export async function fetchGoogleAdsInsights(
           }),
         };
       })
-      .filter((r) => r.campaignId && r.adSetId && r.adId);
+      .filter((r) => r.campaignId && r.adSetId && r.adId && r.date);
 
-    campaigns = nestFlatAdRows(flat);
+    dailyRows = flat;
+    campaigns = nestFlatAdRows(collapseDailyRows(flat));
   }
 
   const [keywords, searchTerms, creatives] = await Promise.all([
-    wantKeywords ? fetchKeywords({ ...queryParams, during }) : Promise.resolve([]),
-    wantSearchTerms ? fetchSearchTerms({ ...queryParams, during }) : Promise.resolve([]),
-    wantCreatives ? fetchCreatives({ ...queryParams, during }) : Promise.resolve([]),
+    wantKeywords ? fetchKeywords({ ...queryParams, dateClause }) : Promise.resolve([]),
+    wantSearchTerms ? fetchSearchTerms({ ...queryParams, dateClause }) : Promise.resolve([]),
+    wantCreatives ? fetchCreatives({ ...queryParams, dateClause }) : Promise.resolve([]),
   ]);
 
   return {
@@ -539,5 +549,6 @@ export async function fetchGoogleAdsInsights(
     keywords,
     searchTerms,
     creatives,
+    daily: includeStructure ? toDailyRows(dailyRows) : undefined,
   };
 }

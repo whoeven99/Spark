@@ -8,6 +8,7 @@ export default defineConfig({
     },
   },
   test: {
+    setupFiles: ["tests/setup/hermetic.ts"],
     include: ["tests/**/*.test.ts"],
     exclude: [
       "**/node_modules/**",

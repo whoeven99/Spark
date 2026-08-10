@@ -37,16 +37,15 @@ export default function AppToday() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ paddingTop: "0.5rem" }}>
-        <SegmentedPageTabs
-          activeTab={activeTab}
-          items={items}
-          ariaLabel={t("nav.today")}
-          onTabChange={(tab) =>
-            navigate(tab === "overview" ? `/app/today${location.search}` : `/app/today/${tab}${location.search}`)
-          }
-        />
-      </div>
+      <SegmentedPageTabs
+        activeTab={activeTab}
+        items={items}
+        ariaLabel={t("nav.today")}
+        density="compact"
+        onTabChange={(tab) =>
+          navigate(tab === "overview" ? `/app/today${location.search}` : `/app/today/${tab}${location.search}`)
+        }
+      />
       <Outlet />
     </div>
   );

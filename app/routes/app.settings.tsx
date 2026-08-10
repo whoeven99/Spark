@@ -1,6 +1,6 @@
 /**
  * 设置目的地（PR2）：passthrough 布局。
- * billing/backfill 等子页各自是完整页面（含 s-page / 自有页头），故父级不再叠加页头或子导航，
+ * billing/backfill 等子页各自是完整页面（自带 PageHeaderNav），故父级不再叠加页头或子导航，
  * 仅做鉴权 + Outlet；模块入口由 settings._index 的 hub 落地页提供。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";

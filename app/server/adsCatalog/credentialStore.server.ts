@@ -67,21 +67,72 @@ async function readPlatformCredential(
   return { data: row.credentials, updatedAt: row.updatedAt };
 }
 
+/**
+ * 各平台凭证 JSON 里代表平台侧账户/目录的字段名。
+ * `writePlatformCredential` 据此派生 `externalAccountId` 索引列，
+ * 这样索引列不会和 JSON 漂移；未列出的平台（pending 中转记录）不建索引。
+ */
+const EXTERNAL_ACCOUNT_ID_FIELD: Record<string, string> = {
+  [META_CATALOG_PLATFORM]: "catalogId",
+  [META_ADS_PLATFORM]: "adAccountId",
+  [GOOGLE_MERCHANT_PLATFORM]: "merchantId",
+  [GOOGLE_ADS_PLATFORM]: "customerId",
+  [TIKTOK_CATALOG_PLATFORM]: "catalogId",
+};
+
+function deriveExternalAccountId(
+  platform: string,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const field = EXTERNAL_ACCOUNT_ID_FIELD[platform];
+  if (!field) return undefined;
+  const raw = payload[field];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
 async function writePlatformCredential(
   shop: string,
   platform: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  // 派生不到时不写该列：部分写入场景（只补订阅名）应保留已存值。
+  const external = deriveExternalAccountId(platform, payload);
   await prisma.adPlatformCredential.upsert({
     where: { shop_platform: { shop, platform } },
-    update: { credentials: payload as Prisma.InputJsonValue },
+    update: {
+      credentials: payload as Prisma.InputJsonValue,
+      ...(external ? { externalAccountId: external } : {}),
+    },
     create: {
       shop,
       platform,
       credentials: payload as Prisma.InputJsonValue,
+      externalAccountId: external ?? null,
     },
   });
 }
+
+/** 按平台侧账户标识反查绑定店铺；webhook 只带平台 ID 时使用。 */
+async function findShopByExternalAccountId(
+  platform: string,
+  externalAccountId: string,
+): Promise<string | null> {
+  const id = externalAccountId.trim();
+  if (!id) return null;
+  const row = await prisma.adPlatformCredential.findFirst({
+    where: { platform, externalAccountId: id },
+    select: { shop: true },
+  });
+  return row?.shop ?? null;
+}
+
+/** Meta Catalog webhook 反查：哪个店铺绑定了该 catalog。 */
+export const findShopByMetaCatalogId = (catalogId: string) =>
+  findShopByExternalAccountId(META_CATALOG_PLATFORM, catalogId);
+
+/** GMC 通知反查：哪个店铺绑定了该 merchant。 */
+export const findShopByGmcMerchantId = (merchantId: string) =>
+  findShopByExternalAccountId(GOOGLE_MERCHANT_PLATFORM, merchantId);
 
 // ─── Facebook catalog ───────────────────────────────────────────────────────
 
@@ -246,11 +297,20 @@ export async function setGmcSubscriptionName(
 export type GoogleAdsCredential = {
   accessToken: string;
   refreshToken?: string;
+  /**
+   * accessToken 的过期时刻（ISO）。仅在刷新流程拿到 `expires_in` 时写入，
+   * 用于跳过没必要的 token 刷新。缺失表示过期时刻未知，调用方应按需刷新。
+   */
+  accessTokenExpiresAt?: string;
   customerId: string;
   /** MCC 场景下访问子账户所需的经理账户 ID；直连账户与 customerId 相同。 */
   loginCustomerId?: string;
-  /** OAuth 时可切换的全部广告账户（持久化，便于已连接后切换）。 */
-  availableAccounts?: PendingOAuthAccount[];
+  /**
+   * `loginCustomerId` 最近一次被探测验证的时刻（ISO）。
+   * 只有带这个戳的值才可信：历史凭证常把子账户自身写成 login，会触发
+   * USER_PERMISSION_DENIED，因此无戳的值必须重新探测。
+   */
+  loginCustomerIdVerifiedAt?: string;
   remarketing?: GoogleRemarketingConfig;
   updatedAt: string;
 };
@@ -330,14 +390,19 @@ export async function getGoogleAdsCredential(
     accessToken,
     refreshToken:
       typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
+    accessTokenExpiresAt:
+      typeof record.data.accessTokenExpiresAt === "string"
+        ? record.data.accessTokenExpiresAt
+        : undefined,
     customerId,
     loginCustomerId:
       typeof record.data.loginCustomerId === "string"
         ? record.data.loginCustomerId
         : undefined,
-    availableAccounts: Array.isArray(record.data.availableAccounts)
-      ? (record.data.availableAccounts as PendingOAuthAccount[])
-      : undefined,
+    loginCustomerIdVerifiedAt:
+      typeof record.data.loginCustomerIdVerifiedAt === "string"
+        ? record.data.loginCustomerIdVerifiedAt
+        : undefined,
     remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
   };
@@ -347,7 +412,12 @@ export async function setGoogleAdsCredential(
   shop: string,
   payload: Pick<
     GoogleAdsCredential,
-    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId" | "availableAccounts"
+    | "accessToken"
+    | "refreshToken"
+    | "accessTokenExpiresAt"
+    | "customerId"
+    | "loginCustomerId"
+    | "loginCustomerIdVerifiedAt"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -357,22 +427,33 @@ export async function setGoogleAdsCredential(
   }
   // Merge with any existing manual config fields so we don't drop them.
   const existing = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
-  const availableAccounts =
-    payload.availableAccounts ??
-    (Array.isArray(existing?.data.availableAccounts)
-      ? (existing.data.availableAccounts as PendingOAuthAccount[])
-      : []);
+  const loginCustomerId =
+    payload.loginCustomerId?.trim() ||
+    (typeof existing?.data.loginCustomerId === "string"
+      ? existing.data.loginCustomerId
+      : null);
+
+  // 两个校验戳只有在对应值没变、或调用方显式给出新戳时才保留。
+  // 否则必须清空：拿旧戳去判断新 token / 新 login 会直接产生错误的跳过。
+  const keepExpiresAt = accessToken === existing?.data.accessToken;
+  const keepLoginVerifiedAt = loginCustomerId === (existing?.data.loginCustomerId ?? null);
+
   await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
     ...(existing?.data ?? {}),
     accessToken,
     refreshToken: payload.refreshToken?.trim() || existing?.data.refreshToken || null,
-    customerId,
-    loginCustomerId:
-      payload.loginCustomerId?.trim() ||
-      (typeof existing?.data.loginCustomerId === "string"
-        ? existing.data.loginCustomerId
+    accessTokenExpiresAt:
+      payload.accessTokenExpiresAt ??
+      (keepExpiresAt && typeof existing?.data.accessTokenExpiresAt === "string"
+        ? existing.data.accessTokenExpiresAt
         : null),
-    availableAccounts,
+    customerId,
+    loginCustomerId,
+    loginCustomerIdVerifiedAt:
+      payload.loginCustomerIdVerifiedAt ??
+      (keepLoginVerifiedAt && typeof existing?.data.loginCustomerIdVerifiedAt === "string"
+        ? existing.data.loginCustomerIdVerifiedAt
+        : null),
   });
 }
 

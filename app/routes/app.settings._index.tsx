@@ -34,12 +34,6 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
-    to: "/app/settings/ads-insights",
-    labelKey: "settingsShell.navAdsInsights",
-    descKey: "settingsShell.descAdsInsights",
-    badgeKey: "settingsShell.groupIntegrations",
-  },
-  {
     to: "/app/settings/logistics",
     labelKey: "settingsShell.navLogistics",
     descKey: "settingsShell.descLogistics",
@@ -94,6 +88,7 @@ export default function SettingsIndex() {
       <DestinationPage
         title={t("settingsShell.title")}
         subtitle={t("settingsShell.subtitle")}
+        titleBarTitle={t("nav.settings")}
         backLabel={t("settingsShell.back")}
         fallbackPath="/app"
         isMobile={isMobile}

@@ -304,13 +304,17 @@ export async function upsertGoogleMerchantProducts(params: {
 export async function listGoogleMerchantProducts(params: {
   accessToken: string;
   merchantId: string;
-  limit?: number;
+  /** 单页条数（API 上限 1000）。 */
+  pageSize?: number;
+  /** 总条数上限；省略表示翻完所有分页。 */
+  maxProducts?: number;
 }): Promise<GoogleMerchantProductResource[]> {
   const products: GoogleMerchantProductResource[] = [];
-  const limit = Math.max(1, Math.min(params.limit ?? 250, 1000));
+  const pageSize = Math.max(1, Math.min(params.pageSize ?? 250, 1000));
+  const maxProducts = params.maxProducts && params.maxProducts > 0 ? params.maxProducts : Infinity;
   let pageToken: string | undefined;
   do {
-    const query = new URLSearchParams({ pageSize: String(limit) });
+    const query = new URLSearchParams({ pageSize: String(pageSize) });
     if (pageToken) query.set("pageToken", pageToken);
     const payload = await merchantApiRequest<{
       products?: GoogleMerchantProductResource[];
@@ -321,8 +325,8 @@ export async function listGoogleMerchantProducts(params: {
     });
     products.push(...(payload.products ?? []));
     pageToken = payload.nextPageToken;
-  } while (pageToken && products.length < limit);
-  return products.slice(0, limit);
+  } while (pageToken && products.length < maxProducts);
+  return maxProducts === Infinity ? products : products.slice(0, maxProducts);
 }
 
 export function normalizeMerchantProductId(resourceId: string): string {

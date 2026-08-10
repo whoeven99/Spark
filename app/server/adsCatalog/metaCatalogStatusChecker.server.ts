@@ -1,9 +1,13 @@
 import prisma from "../../db.server";
+import type { Prisma } from "../../generated/prisma";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 import { META_GRAPH_BASE } from "./metaOAuth.server";
 import { getFacebookCatalogCredential } from "./credentialStore.server";
 
 const LOG_PREFIX = "[AdsCatalog][MetaStatus]";
+
+/** 每页 200 条，够 2 万商品；仅作分页异常时的兜底上限。 */
+const MAX_PRODUCT_PAGES = 100;
 
 export interface MetaProductReview {
   /** retailer_id（= Shopify product/variant id 写入 catalog 的 id）。 */
@@ -150,7 +154,11 @@ async function fetchCatalogProducts(params: {
     return url.toString();
   })();
 
-  while (nextUrl) {
+  // 翻完所有分页：审核状态是全量重建的依据，截断会把没拉到的商品当成已下架。
+  // MAX_PAGES 只是防止分页异常时无限循环。
+  let pages = 0;
+  while (nextUrl && pages < MAX_PRODUCT_PAGES) {
+    pages += 1;
     const response: Response = await fetch(nextUrl);
     const json = (await response.json().catch(() => ({}))) as {
       data?: MetaProductItem[];
@@ -170,39 +178,55 @@ async function fetchCatalogProducts(params: {
       });
     }
     nextUrl = json.paging?.next ?? null;
-    if (out.length >= 250) break;
+  }
+  if (nextUrl) {
+    console.warn(
+      `${LOG_PREFIX} product pagination stopped at ${MAX_PRODUCT_PAGES} pages, products=${out.length}`,
+    );
   }
   return out;
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * 全量重建该店铺的审核状态。
+ *
+ * 一次拉取就是 catalog 侧的完整状态，所以删掉重写既能同步已移除商品，
+ * 又避免逐条 upsert 打出上千次 Turso 往返。
+ */
 async function persistStatuses(params: {
   shop: string;
   catalogId: string;
   reviews: MetaProductReview[];
 }): Promise<void> {
   const checkedAt = new Date();
+  // createMany 撞唯一键会整笔失败，先按 retailerId 去重（后者覆盖，与原 upsert 一致）。
+  const byRetailerId = new Map<string, Prisma.MetaProductStatusCreateManyInput>();
   for (const review of params.reviews) {
     if (!review.offerId) continue;
-    await prisma.metaProductStatus.upsert({
-      where: { shop_retailerId: { shop: params.shop, retailerId: review.offerId } },
-      update: {
-        catalogId: params.catalogId,
-        title: review.title,
-        status: review.status,
-        issues: review.issues as unknown as object,
-        checkedAt,
-      },
-      create: {
-        shop: params.shop,
-        catalogId: params.catalogId,
-        retailerId: review.offerId,
-        title: review.title,
-        status: review.status,
-        issues: review.issues as unknown as object,
-        checkedAt,
-      },
+    byRetailerId.set(review.offerId, {
+      shop: params.shop,
+      catalogId: params.catalogId,
+      retailerId: review.offerId,
+      title: review.title,
+      status: review.status,
+      issues: review.issues as unknown as object,
+      checkedAt,
     });
   }
+  const rows = [...byRetailerId.values()];
+
+  await prisma.$transaction([
+    prisma.metaProductStatus.deleteMany({ where: { shop: params.shop } }),
+    ...chunk(rows, 200).map((batch) =>
+      prisma.metaProductStatus.createMany({ data: batch }),
+    ),
+  ]);
 }
 
 /**

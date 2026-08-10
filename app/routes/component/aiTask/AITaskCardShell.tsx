@@ -160,7 +160,7 @@ type Props = {
  *     primaryCopy="正在生成..."
  *     secondaryCopy="已运行 1m 23s"
  *     progressPercent={62}
- *     progressBackground="linear-gradient(90deg, #00a67c, #35b486)"
+ *     progressBackground={getTaskProgressBackground(status)}
  *     actions={[{ label: "查看详情", tone: "primary", onClick: ... }]}
  *     showLogViewer
  *     onStatusChange={(s, r) => setLocalStatus(s)}

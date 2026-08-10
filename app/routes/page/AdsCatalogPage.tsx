@@ -637,10 +637,8 @@ export function AdsCatalogPage() {
   return (
     <PageSurface>
       <PageHeaderNav
-        workspaceOnly
-        backLabel={t("common.backToPrevious", {
-          defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
-        })}
+        backLabel={t("common.backToPrevious")}
+        fallbackPath="/app/settings"
         title={t("adsCatalog.pageTitle")}
         subtitle={t("adsCatalog.pageSubtitle")}
       />
@@ -900,7 +898,7 @@ export function AdsCatalogPage() {
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t("adsCatalog.insightsGuideTitle")}</div>
               <div style={pageHintTextStyle}>{t("adsCatalog.insightsGuideBody")}</div>
               <Link
-                to={`/app/settings/ads-insights${locationSearch}`}
+                to={`/app/insights/performance${locationSearch}`}
                 style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600, fontSize: 13 }}
               >
                 {t("adsCatalog.insightsGuideLink")}

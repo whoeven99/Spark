@@ -16,6 +16,7 @@ import {
   updateOperationTaskStatus,
   type DailyOperationsResult,
   type DailyOperationsEnvironment,
+  type DailyOperationsEnvironmentKey,
   type DailyOperationsInsight,
   type OperationTaskAction,
   type OperationTaskView,
@@ -153,24 +154,17 @@ const QUADRANTS: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 const MATRIX_ORDER: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 
 const quadrantAccentColors: Record<TaskQuadrant, string> = {
-  q1: "#dc2626",
-  q2: "#ea580c",
-  q3: "#4070f4",
-  q4: "#6b7280",
-};
-
-const quadrantTintColors: Record<TaskQuadrant, string> = {
-  q1: "rgba(220, 38, 38, 0.04)",
-  q2: "rgba(234, 88, 12, 0.04)",
-  q3: "rgba(64, 112, 244, 0.04)",
-  q4: "rgba(107, 114, 128, 0.04)",
+  q1: pageColorTokens.critical,
+  q2: pageColorTokens.progress,
+  q3: pageColorTokens.brandBlue,
+  q4: pageColorTokens.neutralStatus,
 };
 
 const quadrantCellStyle = (quadrant: TaskQuadrant): CSSProperties => ({
   border: `1px solid ${pageColorTokens.border}`,
-  borderTop: `4px solid ${quadrantAccentColors[quadrant]}`,
+  borderTop: `3px solid ${quadrantAccentColors[quadrant]}`,
   borderRadius: pageColorTokens.radiusCard,
-  background: `linear-gradient(180deg, ${quadrantTintColors[quadrant]} 0%, #ffffff 60%)`,
+  background: pageColorTokens.surface,
   padding: "0.9rem 1rem",
   display: "flex",
   flexDirection: "column",
@@ -452,7 +446,8 @@ type InsightEffect = "revenue" | "conversion" | "efficiency" | "retention";
 type DetailSection = "performance" | "risk" | "value" | "task";
 
 type RiskEnvironmentCard = {
-  key: string;
+  // 卡片与 environments 一一对应，收窄后才能和 insight.environmentKeys 直接比对。
+  key: DailyOperationsEnvironmentKey;
   title: string;
   status: "healthy" | "watch" | "risk";
   source: DataSource;
@@ -617,7 +612,11 @@ const listRowActionsStyle: CSSProperties = {
 const riskCardStyle = (status: "healthy" | "watch" | "risk"): CSSProperties => ({
   border: `1px solid ${pageColorTokens.border}`,
   borderTop: `3px solid ${
-    status === "healthy" ? "#15803d" : status === "watch" ? "#d97706" : "#dc2626"
+    status === "healthy"
+      ? pageColorTokens.brandGreen
+      : status === "watch"
+        ? pageColorTokens.warning
+        : pageColorTokens.critical
   }`,
   borderRadius: pageColorTokens.radiusCard,
   background: pageColorTokens.surface,
@@ -1459,112 +1458,102 @@ export default function DailyOperationsPage() {
   }, [detailSection, searchParams]);
 
   return (
-    <s-page
-      heading={
-        detailSection
-          ? t(`dailyOps.detailTitle.${detailSection}` as const)
-          : t("dailyOps.pageTitle")
-      }
-    >
-      <div
-        style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}
-      >
-        <PageHeaderNav
-          title={
-            detailSection
-              ? t(`dailyOps.detailTitle.${detailSection}` as const)
-              : t("dailyOps.pageTitle")
-          }
-          backLabel={
-            detailSection
-              ? t("dailyOps.backToOverview")
-              : t("common.backToPrevious", { defaultValue: "返回工作台" })
-          }
-          {...(detailSection
-            ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
-            : { workspaceOnly: true })}
-          rightAction={
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <s-button
-                type="button"
-                variant="secondary"
-                onClick={submitRefresh}
-                {...(busy ? { disabled: true } : {})}
-              >
-                {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
-              </s-button>
-            </div>
-          }
-        />
+    <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
+      <PageHeaderNav
+        title={
+          detailSection
+            ? t(`dailyOps.detailTitle.${detailSection}` as const)
+            : t("dailyOps.pageTitle")
+        }
+        backLabel={
+          detailSection
+            ? t("dailyOps.backToOverview")
+            : t("common.backToPrevious")
+        }
+        {...(detailSection
+          ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
+          : { fallbackPath: "/app/today" })}
+        rightAction={
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <s-button
+              type="button"
+              variant="secondary"
+              onClick={submitRefresh}
+              {...(busy ? { disabled: true } : {})}
+            >
+              {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
+            </s-button>
+          </div>
+        }
+      />
 
-        {!data.ok ? (
-          <div style={pageEmptyStateStyle}>
-            <span>{data.error}</span>
-          </div>
-        ) : !data.result.hasData ? (
-          <div style={pageEmptyStateStyle}>
-            <span>{t("dailyOps.emptyState")}</span>
-          </div>
-        ) : (
-          <>
-            {detailSection ? (
-              <DailyOperationsDetail
-                key={detailSection}
-                detailSection={detailSection}
-                result={data.result}
-                value={data.value}
-                isMobile={isMobile}
-                locale={i18n.language}
-                statusText={statusText}
-                taskStatusText={taskStatusText}
-                dueWindowText={dueWindowText}
-                selectedTaskId={selectedTaskId}
-                selectedEnvironmentKey={selectedEnvironmentKey}
-                selectedInsightKey={selectedInsightKey}
-                initialRiskTab={riskTabParam}
-                onOpenDetail={openDetail}
-                onSubmitTaskAction={submitTaskAction}
-                busy={busy}
-              />
-            ) : (
-              <DailyOperationsBody
-                result={data.result}
-                insightsView={insightsView}
-                onChangeInsightsView={setInsightsView}
-                isMobile={isMobile}
-                locale={i18n.language}
-                statusText={statusText}
-                taskStatusText={taskStatusText}
-                onSendTaskToAi={(task, presentation) => {
-                  const params = new URLSearchParams(
-                    typeof window !== "undefined"
-                      ? window.location.search.startsWith("?")
-                        ? window.location.search.slice(1)
-                        : window.location.search
-                      : "",
-                  );
-                  params.set("panel", "chat");
-                  params.set(
-                    "prefillTaskPrompt",
-                    buildTaskPrompt(
-                      task,
-                      presentation,
-                      taskStatusText(task.status),
-                      dueWindowText(task.dueWindow),
-                      t,
-                    ),
-                  );
-                  navigate(`/app?${params.toString()}`);
-                }}
-                onOpenDetail={openDetail}
-                onSubmitTaskAction={submitTaskAction}
-                busy={busy}
-              />
-            )}
-          </>
-        )}
-      </div>
-    </s-page>
+      {!data.ok ? (
+        <div style={pageEmptyStateStyle}>
+          <span>{data.error}</span>
+        </div>
+      ) : !data.result.hasData ? (
+        <div style={pageEmptyStateStyle}>
+          <span>{t("dailyOps.emptyState")}</span>
+        </div>
+      ) : (
+        <>
+          {detailSection ? (
+            <DailyOperationsDetail
+              key={detailSection}
+              detailSection={detailSection}
+              result={data.result}
+              value={data.value}
+              isMobile={isMobile}
+              locale={i18n.language}
+              statusText={statusText}
+              taskStatusText={taskStatusText}
+              dueWindowText={dueWindowText}
+              selectedTaskId={selectedTaskId}
+              selectedEnvironmentKey={selectedEnvironmentKey}
+              selectedInsightKey={selectedInsightKey}
+              initialRiskTab={riskTabParam}
+              onOpenDetail={openDetail}
+              onSubmitTaskAction={submitTaskAction}
+              busy={busy}
+            />
+          ) : (
+            <DailyOperationsBody
+              result={data.result}
+              insightsView={insightsView}
+              onChangeInsightsView={setInsightsView}
+              isMobile={isMobile}
+              locale={i18n.language}
+              statusText={statusText}
+              taskStatusText={taskStatusText}
+              onSendTaskToAi={(task, presentation) => {
+                const params = new URLSearchParams(
+                  typeof window !== "undefined"
+                    ? window.location.search.startsWith("?")
+                      ? window.location.search.slice(1)
+                      : window.location.search
+                    : "",
+                );
+                params.set("panel", "chat");
+                params.set(
+                  "prefillTaskPrompt",
+                  buildTaskPrompt(
+                    task,
+                    presentation,
+                    taskStatusText(task.status),
+                    dueWindowText(task.dueWindow),
+                    t,
+                  ),
+                );
+                navigate(`/app?${params.toString()}`);
+              }}
+              onOpenDetail={openDetail}
+              onSubmitTaskAction={submitTaskAction}
+              busy={busy}
+            />
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -2851,7 +2840,7 @@ function DailyOperationsDetail({
                     improved: reviewImprovedCount,
                     worsened: reviewWorsenedCount,
                   })
-                : t("dailyOps.reviewResolved", { count: result.review?.resolvedTaskCount ?? 0 }),
+                : t("dailyOps.reviewResolved", { count: 0 }),
             },
           ]}
         />
@@ -3067,7 +3056,7 @@ function DailyOperationsDetail({
                       ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
                       ...(card.key === selectedEnvironmentKey
                         ? {
-                            borderColor: pageColorTokens.borderStrong,
+                            borderColor: pageColorTokens.brandBlue,
                             boxShadow: "0 0 0 1px rgba(44, 110, 203, 0.08)",
                           }
                         : null),
@@ -3213,7 +3202,7 @@ function DailyOperationsDetail({
                         ...insightCardStyle,
                         ...(item.key === selectedInsightKey
                           ? {
-                              borderColor: pageColorTokens.borderStrong,
+                              borderColor: pageColorTokens.brandBlue,
                               boxShadow: "0 0 0 1px rgba(44, 110, 203, 0.08)",
                             }
                           : null),
@@ -3856,19 +3845,19 @@ function LayerLegend() {
   const { t } = useTranslation();
   const layers: Array<{ accent: string; title: string; desc: string; source: DataSource }> = [
     {
-      accent: "#007a5a",
+      accent: pageColorTokens.brandGreen,
       title: t("dailyOps.layerRevenue"),
       desc: t("dailyOps.layerRevenueDesc"),
       source: "real",
     },
     {
-      accent: "#ea580c",
+      accent: pageColorTokens.progress,
       title: t("dailyOps.layerProfit"),
       desc: t("dailyOps.layerProfitDesc"),
       source: "estimated",
     },
     {
-      accent: "#6b7280",
+      accent: pageColorTokens.neutralStatus,
       title: t("dailyOps.layerInvestment"),
       desc: t("dailyOps.layerInvestmentDesc"),
       source: "pending",
@@ -4076,7 +4065,9 @@ function ValueLayerSections({
                         style={{
                           ...valueTdStyle,
                           color:
-                            channel.contributionProfit >= 0 ? "#007a5a" : "#dc2626",
+                            channel.contributionProfit >= 0
+                              ? pageColorTokens.brandGreen
+                              : pageColorTokens.critical,
                           fontWeight: 700,
                         }}
                       >

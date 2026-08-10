@@ -17,6 +17,8 @@ export type DestinationActionCard = {
 export function DestinationPage({
   title,
   subtitle,
+  eyebrow,
+  titleBarTitle,
   backLabel = "返回首页",
   fallbackPath = "/app",
   actions,
@@ -25,6 +27,8 @@ export function DestinationPage({
 }: {
   title: string;
   subtitle: string;
+  eyebrow?: string;
+  titleBarTitle?: string;
   backLabel?: string;
   fallbackPath?: string;
   actions?: DestinationActionCard[];
@@ -36,6 +40,8 @@ export function DestinationPage({
       <PageHeaderNav
         title={title}
         subtitle={subtitle}
+        eyebrow={eyebrow}
+        titleBarTitle={titleBarTitle}
         backLabel={backLabel}
         fallbackPath={fallbackPath}
       />

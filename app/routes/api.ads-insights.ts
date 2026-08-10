@@ -15,14 +15,16 @@ function parsePlatform(raw: string | null): AdsInsightsPlatform | null {
   return null;
 }
 
-function parseSandbox(raw: string | null): boolean {
+function parseBooleanFlag(raw: string | null): boolean {
   if (!raw) return false;
   const v = raw.trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes";
 }
 
 /**
- * GET /api/ads-insights?platform=meta|google|tiktok&range=7|14|30&view=structure|keywords|searchTerms|creatives&sandbox=0|1
+ * GET /api/ads-insights?platform=meta|google|tiktok&range=7|14|30&view=structure|keywords|searchTerms|creatives&sandbox=0|1&refresh=0|1
+ *
+ * structure 视图默认读库快照，过期才回源；`refresh=1` 跳过快照强制回源。
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -30,7 +32,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const platform = parsePlatform(url.searchParams.get("platform"));
   const rangeDays = parseRangeDays(url.searchParams.get("range"));
   const view = parseAdsInsightsView(url.searchParams.get("view"));
-  const sandbox = parseSandbox(url.searchParams.get("sandbox"));
+  const sandbox = parseBooleanFlag(url.searchParams.get("sandbox"));
+  const forceRefresh = parseBooleanFlag(url.searchParams.get("refresh"));
 
   if (!platform) {
     return Response.json(
@@ -53,6 +56,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       rangeDays,
       view,
       sandbox,
+      forceRefresh,
     });
     if (!result) {
       return Response.json({

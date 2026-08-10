@@ -1,44 +1,47 @@
 @import "antd/dist/reset.css";
 @import "tailwindcss";
 
+/* 与 app/routes/page/pageUiStyles.tsx 的 pageColorTokens 保持同值 */
 @theme {
   --color-app-page: #f6f6f7;
   --color-app-card: #ffffff;
-  --color-app-subtle: #fafafa;
-  --color-app-muted: #f5f6f8;
+  --color-app-subtle: #fafbfb;
+  --color-app-muted: #f6f6f7;
   --color-app-primary: #008060;
   --color-app-primary-hover: #006e52;
-  --color-app-primary-subtle: #edfaf5;
-  --color-app-border: #e2e5e9;
-  --color-app-border-subtle: #dde1e6;
-  --color-app-divider: #f0f2f4;
-  --color-app-text-primary: #1a1d1f;
-  --color-app-text-secondary: #6b7280;
-  --color-app-text-footnote: #9ca3af;
-  --color-app-success: #00a67c;
-  --color-app-warning: #b45309;
-  --color-app-warning-subtle: #fff7ed;
-  --color-app-critical: #dc2626;
-  --color-app-critical-subtle: rgba(220, 38, 38, 0.07);
-  --color-app-info: #4070f4;
-  --radius-app-control: 9px;
+  --color-app-primary-subtle: #e9f7ef;
+  --color-app-border: #e1e3e5;
+  --color-app-border-subtle: #ebedf0;
+  --color-app-divider: #f1f2f3;
+  --color-app-text-primary: #1f2124;
+  --color-app-text-secondary: #61666c;
+  --color-app-text-footnote: #8c9196;
+  --color-app-success: #008060;
+  --color-app-warning: #b98900;
+  --color-app-warning-subtle: #fff7e0;
+  --color-app-critical: #d82c0d;
+  --color-app-critical-subtle: #fff0ee;
+  --color-app-progress: #c05717;
+  --color-app-progress-subtle: #fff1e8;
+  --color-app-info: #005bd3;
+  --radius-app-control: 10px;
   --radius-app-card: 14px;
-  --shadow-app-card: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-app-modal: 0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-app-card: 0 1px 0 rgba(0, 0, 0, 0.05);
+  --shadow-app-modal: 0 24px 56px rgba(15, 23, 42, 0.16);
 }
 
 :root {
   color-scheme: light;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #f6f6f7;
-  color: #1a1d1f;
+  color: #1f2124;
 }
 
 html,
 body {
   min-height: 100%;
   background: #f6f6f7;
-  color: #1a1d1f;
+  color: #1f2124;
 }
 
 body {
@@ -59,18 +62,16 @@ code {
 
 .spark-segmented-tabs {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   width: max-content;
-  max-width: calc(100% - 32px);
+  max-width: 100%;
   min-width: min(100%, max-content);
-  margin: 16px 16px 0;
-  padding: 8px;
+  padding: 3px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  border: 1px solid #e2e5e9;
-  border-radius: 20px;
-  background: #f3f4f6;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid #ebedf0;
+  border-radius: 10px;
+  background: #f6f6f7;
   scroll-snap-type: x proximity;
 }
 
@@ -85,12 +86,12 @@ code {
 
 .spark-segmented-tabs__item {
   flex: 0 0 auto;
-  padding: 14px 22px;
+  padding: 7px 12px;
   border: 1px solid transparent;
-  border-radius: 16px;
-  color: #5c6066;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: 7px;
+  color: #61666c;
+  font-size: 13px;
+  font-weight: 650;
   line-height: 1.2;
   text-decoration: none;
   white-space: nowrap;
@@ -103,20 +104,20 @@ code {
 }
 
 .spark-segmented-tabs.is-compact {
-  gap: 6px;
-  padding: 6px;
-  border-radius: 16px;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
 }
 
 .spark-segmented-tabs.is-compact .spark-segmented-tabs__item {
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 13px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
 }
 
 .spark-segmented-tabs__item:hover {
   color: #1f2124;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 /* Workspace shell — Shopify Admin alignment */
@@ -196,15 +197,15 @@ code {
 
 .spark-segmented-tabs__item:focus-visible {
   outline: none;
-  border-color: #2c6ecb;
-  box-shadow: 0 0 0 3px rgba(44, 110, 203, 0.16);
+  border-color: #005bd3;
+  box-shadow: 0 0 0 3px rgba(0, 91, 211, 0.16);
 }
 
 .spark-segmented-tabs__item.is-active {
   color: #1f2124;
-  border-color: #ebedf0;
+  border-color: #d6d9dc;
   background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .spark-segmented-tabs__badge {
@@ -215,7 +216,7 @@ code {
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #4070f4;
+  background: #005bd3;
   color: #ffffff;
   font-size: 11px;
   font-weight: 700;
@@ -224,22 +225,21 @@ code {
 
 @media (max-width: 768px) {
   .spark-segmented-tabs {
-    max-width: calc(100% - 24px);
-    margin: 12px 12px 0;
-    border-radius: 18px;
-    padding: 6px;
-    gap: 6px;
+    max-width: 100%;
+    border-radius: 12px;
+    padding: 4px;
+    gap: 4px;
   }
 
   .spark-segmented-tabs__item {
-    padding: 10px 14px;
-    border-radius: 13px;
+    padding: 8px 12px;
+    border-radius: 8px;
     font-size: 13px;
   }
 
   .spark-segmented-tabs.is-mobile-full {
-    width: calc(100% - 24px);
-    min-width: calc(100% - 24px);
+    width: 100%;
+    min-width: 100%;
   }
 
   .spark-segmented-tabs.is-mobile-full .spark-segmented-tabs__item {
@@ -257,13 +257,13 @@ code {
 }
 
 .spark-ant-card.ant-card {
-  border-color: #e2e5e9;
+  border-color: #e1e3e5;
   border-radius: 14px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .spark-ant-card-subtle.ant-card {
-  background: #fafafa;
+  background: #fafbfb;
 }
 
 .spark-ant-tabs .ant-tabs-nav {
@@ -279,7 +279,7 @@ code {
   padding: 10px 16px;
   border: 1px solid transparent;
   border-radius: 999px;
-  color: #6b7280;
+  color: #61666c;
   transition:
     color 0.2s ease,
     background-color 0.2s ease,
@@ -289,12 +289,12 @@ code {
 
 .spark-ant-tabs .ant-tabs-tab-active {
   background: #ffffff;
-  border-color: #dde1e6;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-color: #e1e3e5;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .spark-ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #1a1d1f;
+  color: #1f2124;
 }
 
 .spark-ant-tabs .ant-tabs-ink-bar {
@@ -302,13 +302,13 @@ code {
 }
 
 .spark-ant-modal .ant-modal-content {
-  border: 1px solid #dde1e6;
+  border: 1px solid #e1e3e5;
   border-radius: 14px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.16);
 }
 
 .spark-dialog-shell .ant-modal-close {
-  color: #6b7280;
+  color: #61666c;
 }
 
 .spark-dialog-shell__content {
@@ -320,14 +320,14 @@ code {
 .spark-dialog-shell__header,
 .spark-dialog-shell__body,
 .spark-dialog-shell__footer {
-  border: 1px solid #dde1e6;
-  border-radius: 9px;
-  background: #fafafa;
+  border: 1px solid #e1e3e5;
+  border-radius: 10px;
+  background: #fafbfb;
   padding: 16px;
 }
 
 .spark-dialog-shell__title {
-  color: #1a1d1f;
+  color: #1f2124;
   font-size: 16px;
   font-weight: 700;
   line-height: 1.35;
@@ -335,11 +335,11 @@ code {
 
 .spark-dialog-shell__description {
   margin-top: 8px;
-  color: #6b7280;
+  color: #61666c;
   font-size: 13px;
   line-height: 1.55;
 }
 
 .spark-ant-empty .ant-empty-description {
-  color: #6b7280;
+  color: #61666c;
 }

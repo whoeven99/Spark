@@ -27,7 +27,7 @@ import type {
   AdsInsightsRangeDays,
   AdsInsightsView,
 } from "../component/adsInsights/types";
-import type { AdsInsightsPageLoaderData } from "../app.settings.ads-insights";
+import type { AdsInsightsPageLoaderData } from "../app.insights.performance";
 
 type InsightsFetcherData = AdsInsightsApiOk | AdsInsightsApiError;
 type TiktokSandboxObjectDetailFE = {
@@ -46,6 +46,9 @@ type SeedFetcherData =
       adId?: string | null;
       keywordId?: string | null;
       campaignName: string;
+      // 仅 Meta sandbox 的 seed 结果带策略标识（见 metaSandboxSeed.server.ts）。
+      strategy?: string | null;
+      strategyLabel?: string | null;
       warnings: string[];
       readback?: {
         campaign: TiktokSandboxObjectDetailFE | null;
@@ -812,7 +815,10 @@ function TiktokSandboxReadbackPanel({ readback }: { readback: ReadbackData }) {
     if (!detail) {
       return (
         <div>
-          {label}: <span style={{ color: "#d97706" }}>{t("adsInsights.tiktokSandboxReadbackNotFound")}</span>
+          {label}:{" "}
+          <span style={{ color: pageColorTokens.warning }}>
+            {t("adsInsights.tiktokSandboxReadbackNotFound")}
+          </span>
         </div>
       );
     }
@@ -843,7 +849,7 @@ function TiktokSandboxReadbackPanel({ readback }: { readback: ReadbackData }) {
       {renderRow("Campaign", readback.campaign)}
       {renderRow("AdGroup", readback.adgroup)}
       {renderRow("Ad", readback.ad)}
-      <div style={{ color: "#6b7280", marginTop: 2 }}>
+      <div style={{ color: pageColorTokens.textSecondary, marginTop: 2 }}>
         {t("adsInsights.tiktokSandboxReadbackAt", { time: formatTime(readback.queriedAt) })}
       </div>
     </div>

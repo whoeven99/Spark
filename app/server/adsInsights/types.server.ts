@@ -68,6 +68,20 @@ export type AdsInsightsDeepRow = {
   detail?: string | null;
 };
 
+/**
+ * 广告级单日指标行，用于落库。
+ *
+ * 只承载可加指标：reach / frequency 是去重指标，跨天无法还原，不入库。
+ */
+export type AdsInsightsDailyRow = {
+  adId: string;
+  campaignId: string;
+  adSetId: string;
+  /** UTC 日历日，YYYY-MM-DD */
+  date: string;
+  metrics: AdsInsightsMetrics;
+};
+
 export type AdsInsightsResult = {
   platform: AdsInsightsPlatform;
   accountId: string;
@@ -83,6 +97,11 @@ export type AdsInsightsResult = {
   keywords?: AdsInsightsDeepRow[];
   searchTerms?: AdsInsightsDeepRow[];
   creatives?: AdsInsightsDeepRow[];
+  /**
+   * 按天拆分的广告级指标，仅在回源拉取时带上，供落库使用。
+   * 服务端内部字段：`fetchAdsInsights` 落库后会剥掉，不进 HTTP 响应。
+   */
+  daily?: AdsInsightsDailyRow[];
 };
 
 export function emptyMetrics(): AdsInsightsMetrics {

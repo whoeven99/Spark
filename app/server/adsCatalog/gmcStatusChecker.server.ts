@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { Prisma } from "../../generated/prisma";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 import {
   listGoogleMerchantAccountIssues,
@@ -68,7 +69,8 @@ async function fetchProductStatuses(params: {
   accessToken: string;
   merchantId: string;
 }): Promise<GmcProductReview[]> {
-  const resources = await listGoogleMerchantProducts({ ...params, limit: 250 });
+  // 不设总量上限：审核状态是全量重建的依据，截断会把没拉到的商品当成已下架。
+  const resources = await listGoogleMerchantProducts({ ...params, pageSize: 250 });
   return resources.map((resource) => ({
     offerId: resource.offerId ?? "",
     contentLanguage: resource.contentLanguage?.toLowerCase() || "und",
@@ -96,43 +98,49 @@ async function fetchAccountSuspended(params: {
   }
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * 全量重建该店铺的审核状态。
+ *
+ * 一次拉取就是 GMC 侧的完整状态，所以删掉重写既能同步下架商品，
+ * 又避免逐条 upsert 打出上千次 Turso 往返。
+ */
 async function persistStatuses(params: {
   shop: string;
   merchantId: string;
   reviews: GmcProductReview[];
 }): Promise<void> {
   const checkedAt = new Date();
+  // 同一 offerId 可能跨 channel 重复出现，唯一键却只到 feedLabel；
+  // createMany 撞唯一键会整笔失败，所以先按唯一键去重（后者覆盖，与原 upsert 一致）。
+  const byUniqueKey = new Map<string, Prisma.GmcProductStatusCreateManyInput>();
   for (const review of params.reviews) {
     if (!review.offerId) continue;
-    await prisma.gmcProductStatus.upsert({
-      where: {
-        shop_offerId_contentLanguage_feedLabel: {
-          shop: params.shop,
-          offerId: review.offerId,
-          contentLanguage: review.contentLanguage,
-          feedLabel: review.feedLabel,
-        },
-      },
-      update: {
-        merchantId: params.merchantId,
-        title: review.title,
-        status: review.status,
-        issues: review.issues as unknown as object,
-        checkedAt,
-      },
-      create: {
-        shop: params.shop,
-        merchantId: params.merchantId,
-        offerId: review.offerId,
-        contentLanguage: review.contentLanguage,
-        feedLabel: review.feedLabel,
-        title: review.title,
-        status: review.status,
-        issues: review.issues as unknown as object,
-        checkedAt,
-      },
+    byUniqueKey.set(`${review.offerId}|${review.contentLanguage}|${review.feedLabel}`, {
+      shop: params.shop,
+      merchantId: params.merchantId,
+      offerId: review.offerId,
+      contentLanguage: review.contentLanguage,
+      feedLabel: review.feedLabel,
+      title: review.title,
+      status: review.status,
+      issues: review.issues as unknown as object,
+      checkedAt,
     });
   }
+  const rows = [...byUniqueKey.values()];
+
+  await prisma.$transaction([
+    prisma.gmcProductStatus.deleteMany({ where: { shop: params.shop } }),
+    ...chunk(rows, 200).map((batch) =>
+      prisma.gmcProductStatus.createMany({ data: batch }),
+    ),
+  ]);
 }
 
 /**

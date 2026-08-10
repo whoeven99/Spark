@@ -13,6 +13,13 @@ import {
 } from "../../api";
 
 const CONTENT_PAGE_SIZE = 10;
+/** 对照表最小宽度：字段 + 翻译前/后 + 成本，避免长文本挤没「翻译后」列 */
+const CONTENT_TABLE_SCROLL_X = 1000;
+const COL = {
+  key: 96,
+  text: 320,
+  cost: 220,
+} as const;
 
 const C = {
   border: "#e6e8ec",
@@ -26,33 +33,87 @@ const C = {
 };
 
 function ContentCell({ value, fallback }: { value: string; fallback?: boolean }) {
+  if (!value) {
+    return <span style={{ color: C.faint }}>—</span>;
+  }
   return (
-    <div
+    <Typography.Paragraph
       style={{
         fontSize: 12,
         lineHeight: 1.5,
+        marginBottom: 0,
         whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        maxHeight: 180,
-        overflow: "auto",
+        wordBreak: "break-all",
+        overflowWrap: "anywhere",
         color: fallback ? C.warn : C.ink,
       }}
+      ellipsis={{ rows: 8, expandable: true, symbol: "展开" }}
     >
-      {value || <span style={{ color: C.faint }}>—</span>}
-    </div>
+      {value}
+    </Typography.Paragraph>
   );
 }
 
-function formatTokenPair(call: TranslationContentCallCost): string | null {
-  if (call.inputTokens != null || call.outputTokens != null) {
-    return `in ${call.inputTokens ?? "—"} / out ${call.outputTokens ?? "—"}`;
+type TokenBreakdown = {
+  hasCache: boolean;
+  line: string;
+  /** Merchant credit line when cache hit is excluded. */
+  billableNote?: string;
+  /** Provider ¥ estimate for DeepSeek bill reconciliation. */
+  moneyLine?: string;
+};
+
+function formatMoneyCny(n: number): string {
+  if (n >= 0.01) return `¥${n.toFixed(4)}`;
+  if (n >= 0.0001) return `¥${n.toFixed(6)}`;
+  return `¥${n.toFixed(8)}`;
+}
+
+/**
+ * Prefer DeepSeek billing buckets (cache hit / miss / out) when present.
+ * Hit is shown for ops but not charged to merchant credits (TSF billableLlmTokens).
+ * Fall back to in/out for older blobs or providers without cache breakdown.
+ */
+function formatTokenBreakdown(call: TranslationContentCallCost): TokenBreakdown | null {
+  const hasCacheBreakdown =
+    call.promptCacheHitTokens != null || call.promptCacheMissTokens != null;
+  const moneyLine =
+    call.costCny != null
+      ? `DeepSeek ${formatMoneyCny(call.costCny)}${
+          call.pricingPeakMultiplier === 2 ? " · 高峰×2" : ""
+        }`
+      : undefined;
+
+  if (hasCacheBreakdown) {
+    const hit = call.promptCacheHitTokens ?? 0;
+    const miss =
+      call.promptCacheMissTokens ??
+      (call.inputTokens != null ? Math.max(0, call.inputTokens - hit) : 0);
+    const out = call.outputTokens ?? 0;
+    const billable = miss + out;
+    return {
+      hasCache: true,
+      line: `hit ${hit.toLocaleString()}（不计积分） / miss ${miss.toLocaleString()} / out ${out.toLocaleString()}`,
+      billableNote: `用户积分按 ${billable.toLocaleString()} tokens（miss+out）`,
+      moneyLine,
+    };
   }
-  if (call.totalTokens != null) return `total ${call.totalTokens}`;
+  if (call.inputTokens != null || call.outputTokens != null) {
+    return {
+      hasCache: false,
+      line: `in ${call.inputTokens ?? "—"} / out ${call.outputTokens ?? "—"}`,
+      moneyLine,
+    };
+  }
+  if (call.totalTokens != null) {
+    return { hasCache: false, line: `total ${call.totalTokens}`, moneyLine };
+  }
+  if (moneyLine) return { hasCache: false, line: moneyLine };
   return null;
 }
 
 function CostCallLines({ call }: { call: TranslationContentCallCost }) {
-  const tokenLine = formatTokenPair(call);
+  const breakdown = formatTokenBreakdown(call);
   return (
     <div style={{ marginBottom: 4 }}>
       <div style={{ color: C.sub }}>
@@ -72,7 +133,17 @@ function CostCallLines({ call }: { call: TranslationContentCallCost }) {
           {call.requestId}
         </Typography.Text>
       ) : null}
-      {tokenLine ? <div style={{ color: C.ink }}>{tokenLine}</div> : null}
+      {breakdown ? (
+        <>
+          <div style={{ color: C.ink }}>{breakdown.line}</div>
+          {breakdown.billableNote ? (
+            <div style={{ color: C.sub, fontSize: 11 }}>{breakdown.billableNote}</div>
+          ) : null}
+          {breakdown.moneyLine && breakdown.moneyLine !== breakdown.line ? (
+            <div style={{ color: C.active, fontSize: 11 }}>{breakdown.moneyLine}</div>
+          ) : null}
+        </>
+      ) : null}
       {call.provider === "google" && call.chars != null ? (
         <div style={{ color: C.ink }}>{call.chars.toLocaleString()} chars</div>
       ) : null}
@@ -98,11 +169,29 @@ function CostCell({ cost }: { cost?: TranslationContentFieldCost }) {
         ? [cost]
         : [];
 
-  if (calls.length === 0 && (cost.inputTokens != null || cost.outputTokens != null || cost.chars != null)) {
+  if (
+    calls.length === 0 &&
+    (cost.inputTokens != null ||
+      cost.outputTokens != null ||
+      cost.promptCacheHitTokens != null ||
+      cost.promptCacheMissTokens != null ||
+      cost.chars != null)
+  ) {
+    const breakdown = formatTokenBreakdown(cost);
     return (
       <div style={{ fontSize: 11.5, lineHeight: 1.45 }}>
         {cost.provider === "mixed" ? <div style={{ color: C.sub }}>mixed</div> : null}
-        {formatTokenPair(cost) ? <div>{formatTokenPair(cost)}</div> : null}
+        {breakdown ? (
+          <>
+            <div>{breakdown.line}</div>
+            {breakdown.billableNote ? (
+              <div style={{ color: C.sub, fontSize: 11 }}>{breakdown.billableNote}</div>
+            ) : null}
+            {breakdown.moneyLine && breakdown.moneyLine !== breakdown.line ? (
+              <div style={{ color: C.active, fontSize: 11 }}>{breakdown.moneyLine}</div>
+            ) : null}
+          </>
+        ) : null}
         {cost.chars != null ? <div>{cost.chars.toLocaleString()} chars</div> : null}
       </div>
     );
@@ -280,19 +369,22 @@ export function TranslationContentViewer({ job }: { job: TranslationJob }) {
                 <Table
                   size="small"
                   pagination={false}
+                  tableLayout="fixed"
+                  scroll={{ x: CONTENT_TABLE_SCROLL_X }}
                   rowKey={(_r, i) => String(i)}
                   dataSource={res.translations}
                   columns={[
                     {
                       title: "字段",
                       dataIndex: "key",
-                      width: 110,
+                      width: COL.key,
                       render: (v: string) => (
                         <span
                           style={{
                             fontSize: 11.5,
                             fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
                             color: C.sub,
+                            wordBreak: "break-all",
                           }}
                         >
                           {v}
@@ -302,19 +394,25 @@ export function TranslationContentViewer({ job }: { job: TranslationJob }) {
                     {
                       title: "翻译前",
                       dataIndex: "originalValue",
+                      width: COL.text,
                       render: (v: string) => <ContentCell value={v} />,
                     },
                     {
                       title: "翻译后",
                       dataIndex: "translatedValue",
+                      width: COL.text,
                       render: (v: string, r: { status?: string }) => (
                         <ContentCell value={v} fallback={r.status === "fallback"} />
                       ),
                     },
                     {
-                      title: "翻译成本",
+                      title: (
+                        <span title="DeepSeek 缓存命中（hit）不计商户积分；用户积分按 miss+out">
+                          翻译成本
+                        </span>
+                      ),
                       dataIndex: "cost",
-                      width: 200,
+                      width: COL.cost,
                       render: (_: unknown, r: TranslationContentField) => <CostCell cost={r.cost} />,
                     },
                   ]}

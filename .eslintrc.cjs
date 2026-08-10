@@ -19,7 +19,9 @@ module.exports = {
     commonjs: true,
     es6: true,
   },
-  ignorePatterns: ["!**/.server", "!**/.client"],
+  // admin/dist 是构建产物，被 admin/.gitignore 忽略；但 lint 的 --ignore-path 只读
+  // 根 .gitignore，不会递归嵌套的忽略文件，所以要在这里显式排除。
+  ignorePatterns: ["!**/.server", "!**/.client", "admin/dist"],
 
   // Base config
   extends: ["eslint:recommended"],

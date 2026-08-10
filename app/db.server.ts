@@ -69,8 +69,34 @@ function createTursoPrismaClient(): PrismaClientType {
   return new PrismaClient({ adapter });
 }
 
+/**
+ * Vitest 下不连真库：任何未被 mock 的查询立刻抛出可操作的错误，
+ * 而不是打到真实 Turso 后表现为并行跑时的间歇超时。
+ */
+function createTestGuardPrismaClient(): PrismaClientType {
+  const guard = (model: string, action: string) => () => {
+    throw new Error(
+      `[db.server] 测试中触达了真实数据库（prisma.${model}.${action}）。` +
+        `请在该测试文件顶部 vi.mock("~/db.server", ...) 或 mock 调用它的模块。`,
+    );
+  };
+  return new Proxy(
+    {},
+    {
+      get(_target, model: string) {
+        if (model === "then" || model === "$connect" || model === "$disconnect") {
+          return undefined;
+        }
+        return new Proxy({}, { get: (_t, action: string) => guard(model, action) });
+      },
+    },
+  ) as PrismaClientType;
+}
+
 if (!global.prismaGlobal) {
-  global.prismaGlobal = createTursoPrismaClient();
+  global.prismaGlobal = process.env.VITEST
+    ? createTestGuardPrismaClient()
+    : createTursoPrismaClient();
 }
 
 const prisma = global.prismaGlobal;

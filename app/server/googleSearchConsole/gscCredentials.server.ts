@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { Prisma } from "../../generated/prisma";
 
 const GSC_PLATFORM = "google_search_console";
 const GSC_PENDING_PLATFORM = "google_search_console_pending";
@@ -42,8 +43,8 @@ async function writePlatformCredential(
 ): Promise<void> {
   await prisma.adPlatformCredential.upsert({
     where: { shop_platform: { shop, platform } },
-    update: { credentials: payload },
-    create: { shop, platform, credentials: payload },
+    update: { credentials: payload as Prisma.InputJsonValue },
+    create: { shop, platform, credentials: payload as Prisma.InputJsonValue },
   });
 }
 

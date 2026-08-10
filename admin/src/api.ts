@@ -297,9 +297,18 @@ export type TranslationContentCallCost = {
   provider: string;
   model?: string;
   requestId?: string;
+  /** Full prompt_tokens (includes cache hits). */
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** DeepSeek usage.prompt_cache_hit_tokens (cache-hit billed rate). */
+  promptCacheHitTokens?: number;
+  /** DeepSeek usage.prompt_cache_miss_tokens (cache-miss billed rate). */
+  promptCacheMissTokens?: number;
+  /** Estimated provider CNY (元; official 中文价目 × usage). */
+  costCny?: number;
+  pricingPeakMultiplier?: number;
+  pricingSource?: string;
   chars?: number;
   batchSize?: number;
 };
@@ -2066,6 +2075,101 @@ export function fetchTsfPacks(params?: {
   if (params?.pageSize) query.set("pageSize", String(params.pageSize));
   const qs = query.toString();
   return apiFetch(`/tsf/packs${qs ? `?${qs}` : ""}`);
+}
+
+export type TsfCreditsAccount = {
+  shop: string;
+  subscriptionCredits: number;
+  purchasedCredits: number;
+  trialCredits: number;
+  usedCredits: number;
+  totalCredits: number;
+  remainingCredits: number;
+  usagePercent: number;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  installed: boolean;
+  planKey: string | null;
+  subStatus: string | null;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
+};
+
+export type TsfCreditsPackPurchase = {
+  shop: string;
+  planKey: string | null;
+  displayName: string | null;
+  referenceId: string | null;
+  creditsDelta: number;
+  planCredits: number;
+  usedCredits: number;
+  priceAmount: number;
+  currencyCode: string;
+  createdAt: string;
+};
+
+export type TsfCreditsBillingLog = {
+  shop: string;
+  eventType: string;
+  planKey: string | null;
+  referenceId: string | null;
+  creditsDelta: number;
+  usedCredits: number;
+  createdAt: string;
+};
+
+export type TsfCreditsPeriodHistory = {
+  periodStart: string;
+  periodEnd: string;
+  usedCredits: number;
+  subscriptionCreditsAllocated: number;
+  purchasedCreditsRemaining: number;
+  trialCreditsRemaining: number;
+  planKey: string | null;
+  archivedAt: string;
+};
+
+export type TsfCreditsData = {
+  queriedShop: string;
+  account: TsfCreditsAccount | null;
+  packPurchases: TsfCreditsPackPurchase[];
+  packStats: {
+    totalPurchases: number;
+    totalCreditsGranted: number;
+  };
+  billingLogs: TsfCreditsBillingLog[];
+  periodHistory: TsfCreditsPeriodHistory[];
+};
+
+/** 按 shop 查询 TSF Turso 额度与加购积分。 */
+export function fetchTsfCredits(shop: string): Promise<TsfCreditsData> {
+  return apiFetch(`/tsf/credits?shop=${encodeURIComponent(shop)}`);
+}
+
+export type TsfPurchasedCreditsAdjustResult = {
+  shop: string;
+  action: "add" | "set";
+  before: number;
+  after: number;
+  creditsDelta: number;
+  referenceId?: string;
+  eventType?: string;
+  note?: string;
+};
+
+/** 添加或修改 Account.purchasedCredits。 */
+export function adjustTsfPurchasedCredits(params: {
+  shop: string;
+  action: "add" | "set";
+  amount: number;
+  note?: string;
+}): Promise<TsfPurchasedCreditsAdjustResult> {
+  return apiFetch("/tsf/credits/purchased", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
 }
 
 export type TsfBillingAccount = {

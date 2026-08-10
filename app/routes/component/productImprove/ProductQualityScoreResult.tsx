@@ -10,13 +10,13 @@ type Props = {
 
 function scoreColor(score: number): string {
   if (score >= 80) return pageColorTokens.brandGreen;
-  if (score >= 60) return "#d97706";
+  if (score >= 60) return pageColorTokens.warning;
   return pageColorTokens.critical;
 }
 
 function scoreBg(score: number): string {
   if (score >= 80) return pageColorTokens.brandGreenLight;
-  if (score >= 60) return "#fffbeb";
+  if (score >= 60) return pageColorTokens.warningBg;
   return pageColorTokens.criticalBg;
 }
 
@@ -130,7 +130,7 @@ export function ProductQualityScoreResult({ result, isScoring, errorText }: Prop
           gap: "1rem",
           padding: "1rem 1.1rem",
           borderRadius: pageColorTokens.radiusCard,
-          background: `linear-gradient(160deg, ${bg} 0%, #ffffff 100%)`,
+          background: bg,
           border: `1px solid ${color}35`,
           boxShadow: pageColorTokens.shadowCard,
         }}

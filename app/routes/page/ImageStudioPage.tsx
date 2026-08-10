@@ -114,7 +114,7 @@ function ImageStudioPageInner({
 }: InnerProps) {
   const shopify = useAppBridge();
   const { isMobile } = useResponsiveLayout();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const pictureTranslate = usePictureTranslateContext();
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [translateConfirmOpen, setTranslateConfirmOpen] = useState(false);
@@ -179,13 +179,12 @@ function ImageStudioPageInner({
   }
 
   return (
-    <s-page heading={t("imageStudio.pageTitle")}>
+    <>
       <div style={pageContentStyle}>
         <PageHeaderNav
-          workspaceOnly
-          backLabel={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
-          })}
+          titleBarTitle={t("nav.studio")}
+          backLabel={t("common.backToPrevious")}
+          fallbackPath="/app/studio"
           title={t("imageStudio.sectionTitle")}
           subtitle={t("imageStudio.pageSubtitle")}
         />
@@ -242,12 +241,12 @@ function ImageStudioPageInner({
                   style={{
                     padding: "0.5rem 1.1rem",
                     borderRadius: 8,
-                    border: `1px solid #c7d0e8`,
-                    background: "#fff",
+                    border: `1px solid ${pageColorTokens.borderInput}`,
+                    background: pageColorTokens.surface,
                     fontSize: 13,
                     fontWeight: 600,
                     cursor: "pointer",
-                    color: "#4070f4",
+                    color: pageColorTokens.brandBlue,
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
@@ -467,7 +466,7 @@ function ImageStudioPageInner({
         onClose={() => setBatchPanelOpen(false)}
         onBatchCreated={() => setNavTab("tasks")}
       />
-    </s-page>
+    </>
   );
 }
 

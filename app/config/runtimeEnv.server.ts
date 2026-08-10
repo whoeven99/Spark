@@ -20,6 +20,14 @@ export function normalizeEnvValue(value: string | undefined): string {
 
 let runtimeEnvLoaded = false;
 
+/**
+ * Vitest 下不加载仓库 `.env`：否则单测会拿到真实 Turso/Cosmos/Blob 凭证并打线上，
+ * 表现为并行跑时的间歇超时。显式 `ENV_FILE` 仍然生效，供环境加载自身的用例使用。
+ */
+function isVitestRuntime(): boolean {
+  return Boolean(process.env.VITEST);
+}
+
 /** 仓库根目录（含 package.json），不依赖 process.cwd() */
 export function getProjectRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -126,6 +134,9 @@ function candidateEnvFiles(projectRoot: string): string[] {
 
   const cwdEnv = path.join(process.cwd(), ".env");
 
+  // 测试只允许显式指定的文件，隔离掉真实凭证来源。
+  if (isVitestRuntime()) return [...new Set(fromEnv)];
+
   // 去重，保持顺序：仓库 .env 优先
   const ordered = [rootEnv, ...fromEnv, cwdEnv, ...secretPaths];
   return [...new Set(ordered)];
@@ -184,6 +195,9 @@ function logCriticalEnvStatus(): void {
     ["COSMOS_AGENT_RUNS_CONTAINER", process.env.COSMOS_AGENT_RUNS_CONTAINER, "agent_runs"],
   ]);
 
+  // 主应用专用 Render KV：`SPARK_KV`（测试实例 spark-kv-test）。
+  // 兼容旧 `REDIS_URL` / host+password 写法，便于本地与历史环境。
+  const sparkKv = process.env.SPARK_KV?.trim();
   const redisUrl = process.env.REDIS_URL?.trim();
   const redisHost =
     process.env.REDIS_HOSTNAME?.trim() ||
@@ -191,13 +205,17 @@ function logCriticalEnvStatus(): void {
     process.env.REDISCACHEHOSTNAME?.trim();
   const redisPassword =
     process.env.REDIS_PASSWORD?.trim() || process.env.REDISCACHEKEY?.trim();
-  logEnvCheck("Redis", Boolean(redisUrl || (redisHost && redisPassword)), redisUrl
-    ? [["REDIS_URL", redisUrl]]
-    : [
-        ["REDIS_HOSTNAME", process.env.REDIS_HOSTNAME],
-        ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
-        ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
-      ]);
+  const redisOk = Boolean(sparkKv || redisUrl || (redisHost && redisPassword));
+  const redisFields: Array<[string, string | undefined, string?]> = sparkKv
+    ? [["SPARK_KV", sparkKv]]
+    : redisUrl
+      ? [["REDIS_URL", redisUrl]]
+      : [
+          ["REDIS_HOSTNAME", process.env.REDIS_HOSTNAME],
+          ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
+          ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
+        ];
+  logEnvCheck("Redis", redisOk, redisFields);
 
   const blobConn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   logEnvCheck("Blob", Boolean(blobConn), [
@@ -225,9 +243,11 @@ export function ensureRuntimeEnv(): void {
   if (runtimeEnvLoaded) return;
   runtimeEnvLoaded = true;
 
-  console.info(
-    `${ENV_LOG} NODE_ENV=${process.env.NODE_ENV}, RENDER=${process.env.RENDER}, cwd=${process.cwd()}`,
-  );
+  if (!isVitestRuntime()) {
+    console.info(
+      `${ENV_LOG} NODE_ENV=${process.env.NODE_ENV}, RENDER=${process.env.RENDER}, cwd=${process.cwd()}`,
+    );
+  }
 
   const projectRoot = getProjectRoot();
   const files = candidateEnvFiles(projectRoot);
@@ -243,7 +263,7 @@ export function ensureRuntimeEnv(): void {
     }
   }
 
-  logCriticalEnvStatus();
+  if (!isVitestRuntime()) logCriticalEnvStatus();
 
   if (
     process.env.RENDER &&

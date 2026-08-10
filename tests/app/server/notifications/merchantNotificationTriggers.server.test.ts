@@ -382,7 +382,10 @@ describe("merchant notification triggers", () => {
         tokensPerPeriod: 500_000,
       };
       vi.mocked(prisma.appSubscription.findFirst).mockResolvedValue(sub as never);
-      vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<void>) => {
+      // $transaction 是重载签名，直接标注回调形参会和重载不兼容，走 never 断言。
+      vi.mocked(prisma.$transaction).mockImplementation((async (
+        callback: (tx: unknown) => Promise<void>,
+      ) => {
         const tx = {
           account: {
             findUnique: vi.fn().mockResolvedValue({
@@ -397,8 +400,8 @@ describe("merchant notification triggers", () => {
           accountPeriodUsage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
           appSubscription: { delete: vi.fn().mockResolvedValue({}) },
         };
-        await callback(tx as never);
-      });
+        await callback(tx);
+      }) as never);
 
       await markSubscriptionNonActive({
         shop: SHOP,

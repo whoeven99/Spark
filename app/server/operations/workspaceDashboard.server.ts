@@ -6,7 +6,7 @@ import type {
   WorkspaceDashboardSnapshot,
 } from "../../lib/workspaceDashboardTypes";
 import type { DiagnosisItemResult } from "./diagnosis.server";
-import type { DailyOperationsResult } from "./dailyInspection.server";
+import type { DailyOperationsOverviewResult } from "./dailyInspection.server";
 
 export type { WorkspaceDashboardSnapshot } from "../../lib/workspaceDashboardTypes";
 
@@ -72,7 +72,7 @@ function diagnosisAlertTone(status: DiagnosisItemResult["status"]): WorkspaceDas
   }
 }
 
-function buildAlerts(result: DailyOperationsResult): WorkspaceDashboardAlert[] {
+function buildAlerts(result: DailyOperationsOverviewResult): WorkspaceDashboardAlert[] {
   const fromDiagnosis: WorkspaceDashboardAlert[] = result.items
     .filter((item) => item.status !== "healthy")
     .map((item) => ({
@@ -101,7 +101,7 @@ function buildAlerts(result: DailyOperationsResult): WorkspaceDashboardAlert[] {
   return taskAlerts.filter((alert) => alert.detail.length > 0);
 }
 
-function buildSuggestions(result: DailyOperationsResult): string[] {
+function buildSuggestions(result: DailyOperationsOverviewResult): string[] {
   const lines: string[] = [];
 
   for (const item of result.items) {
@@ -134,7 +134,7 @@ function buildSuggestions(result: DailyOperationsResult): string[] {
   return lines.slice(0, 6);
 }
 
-function buildMetrics(result: DailyOperationsResult): WorkspaceDashboardMetric[] {
+function buildMetrics(result: DailyOperationsOverviewResult): WorkspaceDashboardMetric[] {
   const m = result.metrics;
   const orderDelta = pctChange(m.orderCount7d, m.orderCountPrev7d);
   const aovDelta = pctChange(m.aov7d, m.aovPrev7d);
@@ -218,7 +218,7 @@ export function emptyWorkspaceDashboardSnapshot(): WorkspaceDashboardSnapshot {
   };
 }
 
-function buildAutomationSummary(result: DailyOperationsResult) {
+function buildAutomationSummary(result: DailyOperationsOverviewResult) {
   const riskCount = result.items.filter((item) => item.status === "risk").length;
   const watchCount = result.items.filter((item) => item.status === "watch").length;
   const openTaskCount = result.tasks.filter(
@@ -233,7 +233,7 @@ function buildAutomationSummary(result: DailyOperationsResult) {
 }
 
 export function buildWorkspaceDashboardFromDailyOps(
-  result: DailyOperationsResult,
+  result: DailyOperationsOverviewResult,
 ): WorkspaceDashboardSnapshot {
   if (!result.hasData) {
     return emptyWorkspaceDashboardSnapshot();

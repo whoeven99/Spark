@@ -407,7 +407,7 @@ async function searchOrders(
   }
 
   const items: OrderResourceItem[] = (payload.data?.orders?.edges ?? [])
-    .map((edge) => {
+    .map((edge): OrderResourceItem | null => {
       const node = edge?.node;
       const id = node?.id?.trim();
       if (!id) return null;
@@ -458,7 +458,7 @@ async function decorateOrderSearchError(
   const lower = message.toLowerCase();
 
   if (lower.includes("access denied") || lower.includes("unauthorized")) {
-    const scopes = await queryCurrentAppScopes(admin).catch(() => []);
+    const scopes = await queryCurrentAppScopes(admin).catch((): string[] => []);
     const hasReadOrders = scopes.includes("read_orders") || scopes.includes("write_orders");
     return hasReadOrders
       ? `当前店铺会话暂时无法读取订单数据。请确认应用已重新授权，且当前店铺允许订单读取。原始错误：${message}`

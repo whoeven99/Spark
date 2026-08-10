@@ -17,7 +17,12 @@ import {
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
 import { resolveDateWindow } from "./dateRange.server";
-import { mergeEntityAdsWithFlatMetrics, nestEntityHierarchy } from "./nest.server";
+import {
+  collapseDailyRows,
+  mergeEntityAdsWithFlatMetrics,
+  nestEntityHierarchy,
+  toDailyRows,
+} from "./nest.server";
 import {
   getTiktokSandboxCredentials,
   isTiktokSandboxApiBase,
@@ -240,8 +245,6 @@ const REPORT_METRICS_EXTENDED = [
   "total_purchase_value",
   "web_event_add_to_cart",
   "landing_page_view",
-  "reach",
-  "frequency",
   "video_play_actions",
   "video_watched_2s",
   "video_views_p100",
@@ -267,9 +270,16 @@ const REPORT_ID_METRICS = ["campaign_id", "adgroup_id"] as const;
 type ReportRow = {
   dimensions?: {
     ad_id?: string | number;
+    /** 形如 "2026-08-09 00:00:00"，按天维度下返回。 */
+    stat_time_day?: string;
   };
   metrics?: Record<string, string | number | undefined>;
 };
+
+/** TikTok 的 stat_time_day 带时间部分，落库只要日历日。 */
+function parseStatDay(raw: string | undefined): string {
+  return (raw ?? "").trim().slice(0, 10);
+}
 
 async function fetchReportPages(params: {
   accessToken: string;
@@ -297,7 +307,8 @@ async function fetchReportPages(params: {
         advertiser_id: params.advertiserId,
         report_type: "BASIC",
         data_level: params.dataLevel ?? "AUCTION_AD",
-        dimensions: JSON.stringify(["ad_id"]),
+        // 加 stat_time_day 才能拿到日粒度；日指标要落库，区间总量无法反推每天。
+        dimensions: JSON.stringify(["ad_id", "stat_time_day"]),
         metrics: JSON.stringify([...REPORT_ID_METRICS, ...params.metrics]),
         start_date: params.dateStart,
         end_date: params.dateEnd,
@@ -346,8 +357,6 @@ function mapReportMetrics(m: Record<string, string | number | undefined>) {
   const purchaseValueRaw = toNumber(m.total_purchase_value);
   const atcRaw = toNumber(m.web_event_add_to_cart);
   const lpvRaw = toNumber(m.landing_page_view);
-  const reachRaw = toNumber(m.reach);
-  const frequencyRaw = toNumber(m.frequency);
   const ctrRaw = toNumber(m.ctr);
   const ctr = ctrRaw > 1 ? ctrRaw / 100 : ctrRaw;
   const cpmRaw = toNumber(m.cpm);
@@ -372,8 +381,9 @@ function mapReportMetrics(m: Record<string, string | number | undefined>) {
     purchaseValue: m.total_purchase_value !== undefined ? purchaseValueRaw : null,
     addToCart: m.web_event_add_to_cart !== undefined ? atcRaw : null,
     landingPageViews: m.landing_page_view !== undefined ? lpvRaw : null,
-    reach: m.reach !== undefined ? reachRaw : null,
-    frequency: m.frequency !== undefined ? frequencyRaw : null,
+    // reach / frequency 是去重指标，按天拉取后无法还原区间值，不再请求也不落库。
+    reach: null,
+    frequency: null,
     videoViews,
     thruplay: m.video_views_p100 !== undefined ? toNumber(m.video_views_p100) : null,
   });
@@ -479,7 +489,7 @@ export async function fetchTiktokAdsInsights(
     }
   }
 
-  const flat = reportList
+  const dailyFlat = reportList
     .map((row) => {
       const m = row.metrics ?? {};
       const campaignId = String(m.campaign_id ?? "").trim();
@@ -490,6 +500,7 @@ export async function fetchTiktokAdsInsights(
       const ad = adMeta.get(adId);
 
       return {
+        date: parseStatDay(row.dimensions?.stat_time_day),
         campaignId,
         campaignName: campaign?.name ?? campaignId,
         campaignStatus: campaign?.status ?? "UNKNOWN",
@@ -502,11 +513,11 @@ export async function fetchTiktokAdsInsights(
         metrics: mapReportMetrics(m),
       };
     })
-    .filter((r) => r.campaignId && r.adSetId && r.adId);
+    .filter((r) => r.campaignId && r.adSetId && r.adId && r.date);
 
   // 扩展指标失败时，至少保留基础字段；购买等字段保持 null 而非静默变 0。
   if (!usedExtended) {
-    for (const row of flat) {
+    for (const row of dailyFlat) {
       row.metrics = finalizeMetrics({
         ...row.metrics,
         purchases: null,
@@ -521,6 +532,9 @@ export async function fetchTiktokAdsInsights(
       });
     }
   }
+
+  // 下游按广告展示，日粒度先折叠回每广告一行。
+  const flat = collapseDailyRows(dailyFlat);
 
   const wantCreatives = Boolean(options?.includeCreatives);
   let campaigns: AdsInsightsCampaign[] = [];
@@ -593,5 +607,7 @@ export async function fetchTiktokAdsInsights(
     keywords: [],
     searchTerms: [],
     creatives,
+    // 沙盒不落库：没有真实投放，且与正式账号数据隔离。
+    daily: sandbox ? undefined : toDailyRows(dailyFlat),
   };
 }

@@ -24,7 +24,9 @@ import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server"
 import {
   fetchTiktokCatalogConf,
   resolveTiktokCatalogRegion,
+  type TiktokCatalogConfSnapshot,
 } from "../server/adsCatalog/clients/tiktokCatalogClient.server";
+import { createEnumerationCache } from "../server/adsCatalog/enumerationCache.server";
 import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
@@ -35,6 +37,9 @@ import { RoutePageFallback } from "./component/RoutePageFallback";
 const AdsCatalogPage = lazy(() =>
   import("./page/AdsCatalogPage").then((m) => ({ default: m.AdsCatalogPage })),
 );
+
+/** 已绑定 Catalog 的展示用配置快照，避免每次进页都串行等一次 TikTok 接口。 */
+const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot | null>();
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -69,11 +74,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let boundTiktokCatalogRegion = "";
   let boundTiktokCatalogChannel = "";
   if (tiktok?.catalogId && tiktok.bcId) {
-    const conf = await fetchTiktokCatalogConf({
-      accessToken: tiktok.accessToken,
-      bcId: tiktok.bcId,
-      catalogId: tiktok.catalogId,
-    });
+    const { accessToken, bcId, catalogId } = tiktok;
+    // 这里只用于展示已绑定 Catalog 的币种/地区，之前每次进页都要串行等一次 TikTok 接口。
+    // 同步预检与上传确认等需要实时状态的路径仍直接调用 fetchTiktokCatalogConf，不走缓存。
+    const conf = await boundCatalogConfCache.get(`${session.shop}:${catalogId}`, () =>
+      fetchTiktokCatalogConf({ accessToken, bcId, catalogId }),
+    );
     if (conf) {
       boundTiktokCatalogName = conf.catalogName ?? boundTiktokCatalogName;
       boundTiktokCatalogCurrency = conf.currency ?? "";
