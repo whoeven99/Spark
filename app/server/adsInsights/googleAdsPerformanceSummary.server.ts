@@ -16,7 +16,7 @@ import {
   formatOutboundErrorLog,
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
-import { googleDuringClause, resolveDateWindow } from "./dateRange.server";
+import { googleDateClause, resolveDateWindow } from "./dateRange.server";
 import { finalizeMetrics, toNumber, type AdsInsightsRangeDays } from "./types.server";
 
 const LOG_PREFIX = "[AdsInsights][GoogleSummary]";
@@ -191,7 +191,8 @@ export async function fetchGoogleAdsPerformanceSummary(
     throw e;
   }
 
-  const during = googleDuringClause(rangeDays);
+  const window = resolveDateWindow(rangeDays);
+  const dateClause = googleDateClause(window.dateStart, window.dateEnd);
   const queryParams = {
     accessToken: auth.accessToken,
     developerToken,
@@ -209,7 +210,7 @@ export async function fetchGoogleAdsPerformanceSummary(
       metrics.conversions,
       metrics.conversions_value
     FROM customer
-    WHERE segments.date DURING ${during}
+    WHERE ${dateClause}
     ORDER BY segments.date
   `;
 
@@ -220,7 +221,7 @@ export async function fetchGoogleAdsPerformanceSummary(
       metrics.conversions_value,
       segments.conversion_action_category
     FROM customer
-    WHERE segments.date DURING ${during}
+    WHERE ${dateClause}
       AND segments.conversion_action_category = 'PURCHASE'
     ORDER BY segments.date
   `;

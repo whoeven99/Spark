@@ -15,7 +15,7 @@ import {
   formatOutboundErrorLog,
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
-import { googleDuringClause } from "../adsInsights/dateRange.server";
+import { googleDateClause, resolveDateWindow } from "../adsInsights/dateRange.server";
 import { toNumber, type AdsInsightsRangeDays } from "../adsInsights/types.server";
 import type { AdsCampaignMetrics } from "./joinCampaignMetrics.server";
 
@@ -100,7 +100,8 @@ export async function fetchGoogleAdsCampaignSummary(
     return null;
   }
 
-  const during = googleDuringClause(rangeDays);
+  const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
+  const dateClause = googleDateClause(dateStart, dateEnd);
   const query = `
     SELECT
       campaign.id,
@@ -112,7 +113,7 @@ export async function fetchGoogleAdsCampaignSummary(
       metrics.conversions,
       metrics.conversions_value
     FROM campaign
-    WHERE segments.date DURING ${during}
+    WHERE ${dateClause}
       AND campaign.status != 'REMOVED'
     ORDER BY metrics.cost_micros DESC
   `;
