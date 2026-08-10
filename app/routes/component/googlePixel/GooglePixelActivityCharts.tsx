@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   GOOGLE_PIXEL_ACTIVITY_EVENTS,
@@ -57,6 +58,16 @@ function buildLinePath(points: Array<{ x: number; y: number }>): string {
     .join(" ");
 }
 
+function formatDayLabel(day: string, locale: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return day.slice(5);
+  const [, year, month, date] = match;
+  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(date)));
+  return parsed.toLocaleDateString(locale, { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+const Y_AXIS_RATIOS = [0, 0.25, 0.5, 0.75, 1] as const;
+
 function conversionPillStyle(rate: number): { background: string; color: string } {
   if (rate >= 80) {
     return { background: pageColorTokens.brandGreenLight, color: pageColorTokens.brandGreenDeep };
@@ -112,13 +123,14 @@ export function MetricCards({ counts }: { counts: ActivityCounts }) {
 }
 
 export function DailyActivityChart({ daily }: { daily: ActivityDailyPoint[] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const W = 720;
-  const H = 220;
-  const pL = 40;
+  const H = 240;
+  const pL = 44;
   const pR = 16;
   const pT = 16;
-  const pB = 32;
+  const pB = 36;
   const chartW = W - pL - pR;
   const chartH = H - pT - pB;
   const n = daily.length;
@@ -134,6 +146,7 @@ export function DailyActivityChart({ daily }: { daily: ActivityDailyPoint[] }) {
 
   const getX = (i: number) => pL + (n > 1 ? (i / (n - 1)) * chartW : chartW / 2);
   const getY = (v: number) => pT + chartH * (1 - v / maxValue);
+  const columnWidth = n > 0 ? chartW / Math.max(n, 1) : chartW;
 
   const xCount = Math.min(n, n <= 7 ? n : 6);
   const xIndices =
@@ -147,6 +160,12 @@ export function DailyActivityChart({ daily }: { daily: ActivityDailyPoint[] }) {
     GOOGLE_PIXEL_ACTIVITY_TREND_EVENTS.some((event) => (point.counts[event] ?? 0) > 0),
   );
 
+  const hoveredPoint = hoveredIndex != null ? daily[hoveredIndex] : null;
+  const tooltipX =
+    hoveredIndex != null
+      ? Math.min(Math.max(getX(hoveredIndex) - 72, pL), W - pR - 144)
+      : pL;
+
   return (
     <div style={cardStyle}>
       <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelActivity.dailyTitle")}</h3>
@@ -156,20 +175,43 @@ export function DailyActivityChart({ daily }: { daily: ActivityDailyPoint[] }) {
         </p>
       ) : null}
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", marginTop: 8 }}>
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        {Y_AXIS_RATIOS.map((ratio) => {
           const y = pT + chartH * (1 - ratio);
+          const tickValue = Math.round(maxValue * ratio);
           return (
-            <line
-              key={ratio}
-              x1={pL}
-              y1={y}
-              x2={W - pR}
-              y2={y}
-              stroke={pageColorTokens.divider}
-              strokeWidth="1"
-            />
+            <g key={ratio}>
+              <line
+                x1={pL}
+                y1={y}
+                x2={W - pR}
+                y2={y}
+                stroke={pageColorTokens.divider}
+                strokeWidth="1"
+              />
+              <text
+                x={pL - 6}
+                y={y + 3}
+                textAnchor="end"
+                fontSize="10"
+                fill={pageColorTokens.textSecondary}
+              >
+                {tickValue}
+              </text>
+            </g>
           );
         })}
+        {daily.map((point, index) => (
+          <rect
+            key={`hover-${point.day}`}
+            x={getX(index) - columnWidth / 2}
+            y={pT}
+            width={columnWidth}
+            height={chartH}
+            fill="transparent"
+            onMouseEnter={() => setHoveredIndex(index)}
+            onMouseLeave={() => setHoveredIndex(null)}
+          />
+        ))}
         {GOOGLE_PIXEL_ACTIVITY_TREND_EVENTS.map((event) => {
           const points = daily.map((point, index) => ({
             x: getX(index),
@@ -188,30 +230,71 @@ export function DailyActivityChart({ daily }: { daily: ActivityDailyPoint[] }) {
                   key={`${event}-${daily[index]?.day ?? index}`}
                   cx={point.x}
                   cy={point.y}
-                  r="3.5"
+                  r={hoveredIndex === index ? 4.5 : 3.5}
                   fill={TREND_COLORS[event]}
                   stroke="#fff"
                   strokeWidth="1.5"
+                  pointerEvents="none"
                 />
               ))}
             </g>
           );
         })}
+        {hoveredIndex != null ? (
+          <line
+            x1={getX(hoveredIndex)}
+            y1={pT}
+            x2={getX(hoveredIndex)}
+            y2={pT + chartH}
+            stroke={pageColorTokens.borderSubtle}
+            strokeWidth="1"
+            strokeDasharray="4 3"
+            pointerEvents="none"
+          />
+        ) : null}
         {xIndices.map((idx) => (
           <text
             key={daily[idx]?.day ?? idx}
             x={getX(idx)}
-            y={H - 8}
+            y={H - 10}
             textAnchor="middle"
             fontSize="10"
             fill={pageColorTokens.textSecondary}
           >
-            {(daily[idx]?.day ?? "").slice(5)}
+            {formatDayLabel(daily[idx]?.day ?? "", i18n.language)}
           </text>
         ))}
-        <text x={4} y={pT + 4} fontSize="10" fill={pageColorTokens.textSecondary}>
-          {maxValue}
-        </text>
+        {hoveredPoint ? (
+          <foreignObject x={tooltipX} y={pT + 4} width={144} height={96} pointerEvents="none">
+            <div
+              style={{
+                background: pageColorTokens.surface,
+                border: `1px solid ${pageColorTokens.border}`,
+                borderRadius: 8,
+                boxShadow: pageColorTokens.shadowCard,
+                padding: "8px 10px",
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: pageColorTokens.textPrimary,
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {formatDayLabel(hoveredPoint.day, i18n.language)}
+              </div>
+              {GOOGLE_PIXEL_ACTIVITY_TREND_EVENTS.map((event) => (
+                <div
+                  key={event}
+                  style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
+                >
+                  <span style={{ color: pageColorTokens.textSecondary }}>
+                    {t(`googlePixelActivity.events.${event}`)}
+                  </span>
+                  <span style={{ fontWeight: 600 }}>{hoveredPoint.counts[event] ?? 0}</span>
+                </div>
+              ))}
+            </div>
+          </foreignObject>
+        ) : null}
       </svg>
       <div
         style={{

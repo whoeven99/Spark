@@ -201,6 +201,41 @@ export function parseActivityDailyRows(
     .map(([day, counts]) => ({ day, counts }));
 }
 
+function utcDayKey(ms: number): string {
+  const date = new Date(ms);
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** 按查询窗口补齐无事件的 UTC 日历日，保证折线图有完整 X 轴。**纯函数**。 */
+export function fillActivityDailyRange(
+  daily: GooglePixelActivityDailyPoint[],
+  fromMs: number,
+  toMs: number,
+): GooglePixelActivityDailyPoint[] {
+  const byDay = new Map(daily.map((point) => [point.day, point.counts]));
+  const start = Date.UTC(
+    new Date(fromMs).getUTCFullYear(),
+    new Date(fromMs).getUTCMonth(),
+    new Date(fromMs).getUTCDate(),
+  );
+  const end = Date.UTC(
+    new Date(toMs).getUTCFullYear(),
+    new Date(toMs).getUTCMonth(),
+    new Date(toMs).getUTCDate(),
+  );
+  if (start > end) return [];
+
+  const filled: GooglePixelActivityDailyPoint[] = [];
+  for (let cursor = start; cursor <= end; cursor += 24 * 3600_000) {
+    const day = utcDayKey(cursor);
+    filled.push({ day, counts: byDay.get(day) ?? {} });
+  }
+  return filled;
+}
+
 /** 由卡片计数构造漏斗阶梯。**纯函数**。 */
 export function buildActivityFunnel(
   counts: GooglePixelActivityCounts,
@@ -478,7 +513,11 @@ export async function loadGooglePixelActivitySummary(params: {
       from: fromMs,
       to: toMs,
       counts,
-      daily: parseActivityDailyRows(Array.isArray(dailyRows) ? dailyRows : []),
+      daily: fillActivityDailyRange(
+        parseActivityDailyRows(Array.isArray(dailyRows) ? dailyRows : []),
+        fromMs,
+        toMs,
+      ),
       funnel: buildActivityFunnel(counts),
       referral: parseActivityTrafficRows(Array.isArray(trafficRows) ? trafficRows : []),
     };

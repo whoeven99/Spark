@@ -3,6 +3,7 @@ import {
   buildActivityFunnel,
   buildGooglePixelBaseQuery,
   buildGooglePixelCountQuery,
+  fillActivityDailyRange,
   parseActivityCountRows,
   parseActivityDailyRows,
   parseActivityTrafficRows,
@@ -53,6 +54,25 @@ describe("parseActivityDailyRows", () => {
     expect(daily).toEqual([
       { day: "2026-08-07", counts: { add_to_cart: 2 } },
       { day: "2026-08-08", counts: { add_to_cart: 5, purchase: 1 } },
+    ]);
+  });
+});
+
+describe("fillActivityDailyRange", () => {
+  it("fills missing UTC days with empty counts for chart axes", () => {
+    const fromMs = Date.UTC(2026, 7, 7, 12, 0, 0);
+    const toMs = Date.UTC(2026, 7, 9, 18, 0, 0);
+    const filled = fillActivityDailyRange(
+      [
+        { day: "2026-08-08", counts: { add_to_cart: 5, purchase: 1 } },
+      ],
+      fromMs,
+      toMs,
+    );
+    expect(filled).toEqual([
+      { day: "2026-08-07", counts: {} },
+      { day: "2026-08-08", counts: { add_to_cart: 5, purchase: 1 } },
+      { day: "2026-08-09", counts: {} },
     ]);
   });
 });
