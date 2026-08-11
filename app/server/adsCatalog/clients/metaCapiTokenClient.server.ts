@@ -4,7 +4,8 @@ import { META_GRAPH_BASE, META_GRAPH_VERSION } from "../metaOAuth.server";
 const LOG_PREFIX = "[AdsCatalog][MetaCapiToken]";
 const SYSTEM_USER_NAME = "Spark CAPI";
 const CAPI_TOKEN_SCOPES = "ads_management,business_management,pages_show_list";
-const PIXEL_ASSIGN_TASKS = ["MANAGE", "ANALYZE", "ADVERTISE", "EDIT"] as const;
+/** Meta assigned_users tasks enum — no "MANAGE"; UI "Manage" maps to EDIT (+ others). */
+const PIXEL_ASSIGN_TASKS = ["EDIT", "ANALYZE", "ADVERTISE", "UPLOAD"] as const;
 
 type MetaGraphErrorPayload = {
   error?: { message?: string; error_user_msg?: string; code?: number };

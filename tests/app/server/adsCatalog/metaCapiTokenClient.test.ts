@@ -66,5 +66,11 @@ describe("fetchMetaPixelCapiAccessToken", () => {
 
     expect(token).toBe("system-capi-token");
     expect(fetch).toHaveBeenCalledTimes(6);
+
+    const assignPixelCall = vi.mocked(fetch).mock.calls[4];
+    expect(assignPixelCall?.[0]).toContain("/123456/assigned_users");
+    const assignBody = JSON.parse(String(assignPixelCall?.[1]?.body));
+    expect(assignBody.tasks).toEqual(["EDIT", "ANALYZE", "ADVERTISE", "UPLOAD"]);
+    expect(assignBody.tasks).not.toContain("MANAGE");
   });
 });
