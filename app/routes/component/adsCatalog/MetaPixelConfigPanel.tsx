@@ -268,7 +268,12 @@ export function MetaPixelConfigPanel({
         );
         return;
       }
-      if (!tokenInput.trim() && !hasCapiAccessToken) {
+      if (
+        capiEnabled &&
+        !tokenInput.trim() &&
+        !hasCapiAccessToken &&
+        !(mode === "select" && metaOAuthCapiAvailable)
+      ) {
         setLocalError(t("adsCatalog.metaPixelTokenRequired"));
         return;
       }
@@ -435,7 +440,10 @@ export function MetaPixelConfigPanel({
   const canSave =
     !busy &&
     Boolean((mode === "select" ? selectedPixelId : pixelIdInput).trim()) &&
-    (Boolean(tokenInput.trim()) || hasCapiAccessToken) &&
+    (!capiEnabled ||
+      Boolean(tokenInput.trim()) ||
+      hasCapiAccessToken ||
+      (mode === "select" && metaOAuthCapiAvailable)) &&
     enabledEvents.length > 0;
 
   const adAccountOptions =

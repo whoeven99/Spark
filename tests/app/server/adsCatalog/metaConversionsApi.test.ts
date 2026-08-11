@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildMetaCapiUserData,
   hashMetaEmail,
+  isMetaCapiTokenAuthError,
+  MetaCapiTrackError,
   resolveClientIpFromHeaders,
 } from "../../../../app/server/adsCatalog/clients/metaConversionsApiClient.server";
 
@@ -37,5 +39,21 @@ describe("resolveClientIpFromHeaders", () => {
       "cf-connecting-ip": "198.51.100.20",
     });
     expect(resolveClientIpFromHeaders(headers)).toBe("203.0.113.10");
+  });
+});
+
+describe("isMetaCapiTokenAuthError", () => {
+  it("detects OAuth token errors from structured track errors", () => {
+    expect(
+      isMetaCapiTokenAuthError(
+        new MetaCapiTrackError("expired", { httpStatus: 400, errorCode: 190, errorType: "OAuthException" }),
+      ),
+    ).toBe(true);
+    expect(
+      isMetaCapiTokenAuthError(new MetaCapiTrackError("unauthorized", { httpStatus: 401 })),
+    ).toBe(true);
+    expect(
+      isMetaCapiTokenAuthError(new MetaCapiTrackError("other", { httpStatus: 500, errorCode: 100 })),
+    ).toBe(false);
   });
 });

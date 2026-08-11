@@ -13,9 +13,15 @@ vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   setFacebookCatalogCredential: (...args: unknown[]) => setFacebookCatalogCredential(...args),
 }));
 
-vi.mock("../../../../app/server/adsCatalog/clients/metaConversionsApiClient.server", () => ({
-  trackMetaPixelEvent: (...args: unknown[]) => trackMetaPixelEvent(...args),
-}));
+vi.mock("../../../../app/server/adsCatalog/clients/metaConversionsApiClient.server", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../../../../app/server/adsCatalog/clients/metaConversionsApiClient.server")
+  >();
+  return {
+    ...actual,
+    trackMetaPixelEvent: (...args: unknown[]) => trackMetaPixelEvent(...args),
+  };
+});
 
 vi.mock("../../../../app/server/adsCatalog/clients/metaCapiTokenClient.server", () => ({
   fetchMetaPixelCapiAccessToken: (...args: unknown[]) => fetchMetaPixelCapiAccessToken(...args),
@@ -35,6 +41,7 @@ vi.mock("../../../../app/server/adsCatalog/clients/facebookGraphClient.server", 
   listMetaBusinessPixels: vi.fn().mockResolvedValue([]),
 }));
 
+import { MetaCapiTrackError } from "../../../../app/server/adsCatalog/clients/metaConversionsApiClient.server";
 import {
   formatMetaCapiTokenForLog,
   maybeTrackMetaPurchase,
@@ -114,6 +121,66 @@ describe("maybeTrackMetaPurchase", () => {
         eventId: "1001",
         email: "buyer@example.com",
         customData: { value: 42.5, currency: "USD" },
+      }),
+    );
+  });
+
+  it("refreshes expired CAPI token and retries Purchase", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "catalog-oauth",
+      catalogId: "cat",
+      businessId: "biz_1",
+      pixelId: "123456",
+      capiEnabled: true,
+      capiAccessToken: "stale-token",
+      enabledEvents: ["Purchase"],
+    });
+    getMetaAdsCredential.mockResolvedValue({
+      accessToken: "meta-ads-oauth",
+      adAccountId: "act_1",
+    });
+    resolveMetaOAuthClient.mockReturnValue({
+      appId: "app-id",
+      appSecret: "app-secret",
+    });
+    fetchMetaPixelCapiAccessToken.mockResolvedValue("refreshed-token");
+    setFacebookCatalogCredential.mockResolvedValue(undefined);
+
+    trackMetaPixelEvent
+      .mockRejectedValueOnce(
+        new MetaCapiTrackError("expired", {
+          httpStatus: 401,
+          errorCode: 190,
+          errorType: "OAuthException",
+        }),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const result = await maybeTrackMetaPurchase({
+      shop: "s.myshopify.com",
+      orderId: "99",
+      orderName: "1001",
+      value: 10,
+      currency: "USD",
+    });
+
+    expect(result).toEqual({ sent: true });
+    expect(fetchMetaPixelCapiAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shop: "s.myshopify.com",
+        pixelId: "123456",
+        businessId: "biz_1",
+      }),
+    );
+    expect(setFacebookCatalogCredential).toHaveBeenCalledWith(
+      "s.myshopify.com",
+      expect.objectContaining({ capiAccessToken: "refreshed-token" }),
+    );
+    expect(trackMetaPixelEvent).toHaveBeenCalledTimes(2);
+    expect(trackMetaPixelEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        capiAccessToken: "refreshed-token",
+        eventName: "Purchase",
       }),
     );
   });

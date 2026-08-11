@@ -4,6 +4,42 @@ import { META_GRAPH_VERSION } from "../metaOAuth.server";
 const LOG_PREFIX = "[AdsCatalog][MetaCAPI]";
 const FB_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 
+type MetaCapiGraphError = {
+  message?: string;
+  error_user_msg?: string;
+  code?: number;
+  type?: string;
+};
+
+export class MetaCapiTrackError extends Error {
+  readonly httpStatus: number;
+  readonly errorCode?: number;
+  readonly errorType?: string;
+
+  constructor(message: string, params: { httpStatus: number; errorCode?: number; errorType?: string }) {
+    super(message);
+    this.name = "MetaCapiTrackError";
+    this.httpStatus = params.httpStatus;
+    this.errorCode = params.errorCode;
+    this.errorType = params.errorType;
+  }
+}
+
+/** Meta CAPI token 失效/过期（OAuthException 190/102 或 HTTP 401）。 */
+export function isMetaCapiTokenAuthError(error: unknown): boolean {
+  if (error instanceof MetaCapiTrackError) {
+    if (error.httpStatus === 401) return true;
+    if (error.errorCode === 190 || error.errorCode === 102) return true;
+    if (error.errorType === "OAuthException") return true;
+  }
+  if (error instanceof Error) {
+    return /invalid.*access token|session has expired|OAuthException|error validating access token/i.test(
+      error.message,
+    );
+  }
+  return false;
+}
+
 export type TrackMetaPixelEventParams = {
   pixelId: string;
   capiAccessToken: string;
@@ -114,7 +150,7 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
     body: JSON.stringify(body),
   });
   const text = await response.text();
-  let payload: { error?: { message?: string; error_user_msg?: string } } = {};
+  let payload: { error?: MetaCapiGraphError } = {};
   try {
     payload = text ? (JSON.parse(text) as typeof payload) : {};
   } catch {
@@ -126,11 +162,16 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
   );
 
   if (!response.ok || payload.error) {
+    const graphError = payload.error;
     const detail =
-      payload.error?.error_user_msg ||
-      payload.error?.message ||
+      graphError?.error_user_msg ||
+      graphError?.message ||
       text.slice(0, 200) ||
       response.statusText;
-    throw new Error(`Meta CAPI track failed: HTTP ${response.status} ${detail}`.trim());
+    throw new MetaCapiTrackError(`Meta CAPI track failed: HTTP ${response.status} ${detail}`.trim(), {
+      httpStatus: response.status,
+      errorCode: graphError?.code,
+      errorType: graphError?.type,
+    });
   }
 }

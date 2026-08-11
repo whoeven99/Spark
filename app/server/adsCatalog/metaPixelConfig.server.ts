@@ -1,5 +1,9 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
-import { trackMetaPixelEvent } from "./clients/metaConversionsApiClient.server";
+import {
+  isMetaCapiTokenAuthError,
+  trackMetaPixelEvent,
+  type TrackMetaPixelEventParams,
+} from "./clients/metaConversionsApiClient.server";
 import { fetchMetaPixelCapiAccessToken } from "./clients/metaCapiTokenClient.server";
 import {
   listMetaAdAccountPixels,
@@ -198,6 +202,123 @@ export async function hasMetaCapiAccessAvailable(
   if (!fb) return false;
   if (fb.capiAccessToken?.trim()) return true;
   return canAutoFetchMetaPixelCapiAccessToken({ shop, credential: fb });
+}
+
+function pixelConfigFieldsFromCredential(credential: FacebookCatalogCredential) {
+  const pixelId = credential.pixelId?.trim() ?? "";
+  return {
+    ...(pixelId ? { pixelId } : {}),
+    ...(credential.capiAccessToken?.trim()
+      ? { capiAccessToken: credential.capiAccessToken.trim() }
+      : {}),
+    capiEnabled:
+      typeof credential.capiEnabled === "boolean" ? credential.capiEnabled : true,
+    enabledEvents: normalizeMetaEnabledEvents(credential.enabledEvents),
+    ...(credential.testEventCode?.trim()
+      ? { testEventCode: credential.testEventCode.trim() }
+      : {}),
+  };
+}
+
+/** OAuth 可用时重新换取 CAPI token 并写回 credential。 */
+export async function refreshAndPersistMetaCapiAccessToken(params: {
+  shop: string;
+  credential: FacebookCatalogCredential;
+  pixelId: string;
+}): Promise<string | null> {
+  const shop = params.shop.trim().toLowerCase();
+  const pixelId = params.pixelId.trim();
+  if (!pixelId) return null;
+
+  const canAutoFetch = await canAutoFetchMetaPixelCapiAccessToken({
+    shop,
+    credential: params.credential,
+  });
+  if (!canAutoFetch) return null;
+
+  const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch({
+    shop,
+    credential: params.credential,
+  });
+  const businessId = params.credential.businessId?.trim() ?? "";
+  const client = resolveMetaOAuthClient();
+  if (!oauthAccessToken || !businessId || !client?.appId || !client?.appSecret) {
+    return null;
+  }
+
+  try {
+    const newToken = await fetchMetaPixelCapiAccessToken({
+      shop,
+      pixelId,
+      businessId,
+      oauthAccessToken,
+      appId: client.appId,
+      appSecret: client.appSecret,
+      apiVersion: params.credential.apiVersion,
+    });
+
+    await setFacebookCatalogCredential(shop, {
+      ...credentialWriteBase(params.credential),
+      ...pixelConfigFieldsFromCredential(params.credential),
+      pixelId,
+      capiAccessToken: newToken,
+    });
+
+    console.info(
+      `${LOG_PREFIX} step=capi_token_refreshed shop=${shop} pixelId=${pixelId} businessId=${businessId}`,
+    );
+    logMetaCapiTokenResolve({
+      shop,
+      source: "stored_capi",
+      token: newToken,
+      detail: "refreshed_after_auth_error",
+    });
+    return newToken;
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=capi_token_refresh_failed shop=${shop} pixelId=${pixelId} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+    return null;
+  }
+}
+
+async function trackMetaPixelEventWithTokenRefresh(params: {
+  shop: string;
+  credential: FacebookCatalogCredential;
+  pixelId: string;
+  capiAccessToken: string;
+  tokenSource: MetaCapiTokenSource;
+  trackParams: Omit<TrackMetaPixelEventParams, "pixelId" | "capiAccessToken">;
+}): Promise<void> {
+  const attemptTrack = (token: string) =>
+    trackMetaPixelEvent({
+      pixelId: params.pixelId,
+      capiAccessToken: token,
+      ...params.trackParams,
+    });
+
+  try {
+    await attemptTrack(params.capiAccessToken);
+    return;
+  } catch (e) {
+    if (!isMetaCapiTokenAuthError(e) || params.tokenSource === "request_explicit") {
+      throw e;
+    }
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=capi_token_refresh_attempt shop=${params.shop.trim().toLowerCase()} pixelId=${params.pixelId}`,
+  );
+  const refreshedToken = await refreshAndPersistMetaCapiAccessToken({
+    shop: params.shop,
+    credential: params.credential,
+    pixelId: params.pixelId,
+  });
+  if (!refreshedToken || refreshedToken === params.capiAccessToken) {
+    throw new Error("Meta CAPI token expired and automatic refresh failed");
+  }
+
+  await attemptTrack(refreshedToken);
 }
 
 export type SaveMetaPixelConfigInput = {
@@ -552,17 +673,22 @@ export async function trackMetaStorefrontTestEvent(params: {
   }
 
   try {
-    await trackMetaPixelEvent({
+    await trackMetaPixelEventWithTokenRefresh({
+      shop,
+      credential,
       pixelId,
       capiAccessToken: token,
-      eventName: event,
-      eventId: params.eventId?.trim() || `spark-sf-${Date.now()}`,
-      customData: Object.keys(customData).length > 0 ? customData : undefined,
-      email: buildMetaCapiTestEmail(params.shop),
-      clientIpAddress: params.clientIpAddress,
-      clientUserAgent: params.clientUserAgent,
-      testEventCode,
-      eventSourceUrl: params.pageUrl?.trim() || undefined,
+      tokenSource: resolved?.source ?? "stored_capi",
+      trackParams: {
+        eventName: event,
+        eventId: params.eventId?.trim() || `spark-sf-${Date.now()}`,
+        customData: Object.keys(customData).length > 0 ? customData : undefined,
+        email: buildMetaCapiTestEmail(params.shop),
+        clientIpAddress: params.clientIpAddress,
+        clientUserAgent: params.clientUserAgent,
+        testEventCode,
+        eventSourceUrl: params.pageUrl?.trim() || undefined,
+      },
     });
     return { sent: true };
   } catch (e) {
@@ -740,14 +866,19 @@ export async function maybeTrackMetaPurchase(params: {
   const testEventCode = credential.testEventCode?.trim() || undefined;
 
   try {
-    await trackMetaPixelEvent({
+    await trackMetaPixelEventWithTokenRefresh({
+      shop: params.shop,
+      credential,
       pixelId,
       capiAccessToken: token,
-      eventName: "Purchase",
-      eventId,
-      customData: Object.keys(customData).length > 0 ? customData : undefined,
-      email: params.email?.trim() || undefined,
-      testEventCode,
+      tokenSource: resolved?.source ?? "stored_capi",
+      trackParams: {
+        eventName: "Purchase",
+        eventId,
+        customData: Object.keys(customData).length > 0 ? customData : undefined,
+        email: params.email?.trim() || undefined,
+        testEventCode,
+      },
     });
     console.info(
       `${LOG_PREFIX} step=purchase_sent shop=${params.shop} eventId=${eventId}${testEventCode ? " test=1" : ""}`,
