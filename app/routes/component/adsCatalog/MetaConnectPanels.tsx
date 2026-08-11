@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
 import { MetaPixelConfigPanel } from "./MetaPixelConfigPanel";
+import { MetaPixelSetupWizard } from "./MetaPixelSetupWizard";
+import { buildMetaPixelThemeEditorUrl } from "../../../lib/metaPixelEvents";
 
 type Props = {
   credentials: CredentialsView;
@@ -57,15 +59,47 @@ export function MetaConnectPanels({
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const [setupRevision, setSetupRevision] = useState(0);
   const metaOAuth = useOAuthPopup("meta_catalog_oauth");
+  const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
 
   const meta = credentials.meta;
+
+  const themeEditorUrl = useMemo(
+    () =>
+      buildMetaPixelThemeEditorUrl({
+        shopDomain,
+        apiKey: shopifyApiKey,
+      }),
+    [shopDomain, shopifyApiKey],
+  );
+
+  function notifyChanged() {
+    setSetupRevision((n) => n + 1);
+    onChanged();
+  }
+
+  function connectMetaAds() {
+    void (async () => {
+      setBusy(true);
+      try {
+        await metaAdsOAuth.startOAuth(
+          `/api/ads-insights/meta-auth-url${locationSearch}`,
+          () => notifyChanged(),
+        );
+      } catch (e) {
+        alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }
 
   function openOAuth() {
     void (async () => {
       setBusy(true);
       try {
-        await metaOAuth.startOAuth(`/api/ads-catalog/meta-auth-url${locationSearch}`, () => onChanged());
+        await metaOAuth.startOAuth(`/api/ads-catalog/meta-auth-url${locationSearch}`, () => notifyChanged());
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {
@@ -83,7 +117,7 @@ export function MetaConnectPanels({
         body: JSON.stringify(body),
       });
       const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (resp.ok && data.ok) onChanged();
+      if (resp.ok && data.ok) notifyChanged();
       else if (data.error) alert(data.error);
     } finally {
       setBusy(false);
@@ -115,6 +149,19 @@ export function MetaConnectPanels({
               {t("adsCatalog.metaUpdatedAt", { time: fmtDate(meta.updatedAt) })}
             </div>
           </div>
+          <MetaPixelSetupWizard
+            metaConnected={meta.connected}
+            metaAdsConnected={meta.metaAdsConnected}
+            pixelId={meta.pixelId}
+            hasCapiAccessToken={meta.hasCapiAccessToken}
+            hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
+            capiEnabled={meta.capiEnabled}
+            locationSearch={locationSearch}
+            themeEditorUrl={themeEditorUrl}
+            onConnectMetaAds={connectMetaAds}
+            busy={busy}
+            setupRevision={setupRevision}
+          />
           <MetaPixelConfigPanel
             locationSearch={locationSearch}
             shopDomain={shopDomain}
@@ -129,7 +176,7 @@ export function MetaConnectPanels({
             metaAdsConnected={meta.metaAdsConnected}
             busy={busy}
             setBusy={setBusy}
-            onChanged={onChanged}
+            onChanged={notifyChanged}
           />
           {meta.pixelId ? (
             <Link

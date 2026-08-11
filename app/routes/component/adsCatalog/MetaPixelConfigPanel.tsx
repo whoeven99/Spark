@@ -121,6 +121,7 @@ export function MetaPixelConfigPanel({
     initialEnabledEvents.length ? initialEnabledEvents : [...META_PIXEL_DEFAULT_EVENTS],
   );
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveCapiAutoBound, setSaveCapiAutoBound] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
   const [testModeStarted, setTestModeStarted] = useState(false);
   const [testCleared, setTestCleared] = useState(false);
@@ -256,6 +257,7 @@ export function MetaPixelConfigPanel({
   async function saveConfig() {
     setBusy(true);
     setSaveSuccess(false);
+    setSaveCapiAutoBound(false);
     setTestSuccess(false);
     setLocalError(null);
     try {
@@ -293,11 +295,17 @@ export function MetaPixelConfigPanel({
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        hasCapiAccessToken?: boolean;
       };
       if (!resp.ok || !data.ok) {
         setLocalError(data.error ?? t("adsCatalog.authError"));
         return;
       }
+      const autoBound =
+        Boolean(data.hasCapiAccessToken) &&
+        !tokenInput.trim() &&
+        (metaOAuthCapiAvailable || mode === "select");
+      setSaveCapiAutoBound(autoBound);
       setTokenInput("");
       setSaveSuccess(true);
       onChanged();
@@ -735,7 +743,11 @@ export function MetaPixelConfigPanel({
           {busy ? t("adsCatalog.metaPixelSaveBusy") : t("adsCatalog.metaPixelSave")}
         </button>
         {saveSuccess && (
-          <span style={{ color: "#0f7a52", fontSize: 12 }}>{t("adsCatalog.metaPixelSaveSuccess")}</span>
+          <span style={{ color: "#0f7a52", fontSize: 12 }}>
+            {saveCapiAutoBound
+              ? t("adsCatalog.metaPixelSaveSuccessCapiAuto")
+              : t("adsCatalog.metaPixelSaveSuccess")}
+          </span>
         )}
         {localError && <span style={{ color: "#d72c0d", fontSize: 12 }}>{localError}</span>}
       </div>
