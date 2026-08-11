@@ -4,6 +4,7 @@ import {
   createEnumerationCache,
   parseRefreshFlag,
 } from "../server/adsCatalog/enumerationCache.server";
+import { getMetaAdsCredential } from "../server/adsCatalog/credentialStore.server";
 import { listMetaCatalogPixels } from "../server/adsCatalog/metaPixelConfig.server";
 import type { MetaPixelListItem } from "../server/adsCatalog/clients/facebookGraphClient.server";
 
@@ -29,10 +30,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const requestedAdAccountId = url.searchParams.get("adAccountId")?.trim() || "";
   const refresh = parseRefreshFlag(url.searchParams.get("refresh"));
+  const metaAds = await getMetaAdsCredential(shop);
+  const cacheKey = `${shop}:${requestedAdAccountId}:${metaAds?.adAccountId ?? ""}:${metaAds?.updatedAt ?? ""}`;
 
   try {
     const result = await pixelsCache.get(
-      `${shop}:${requestedAdAccountId}`,
+      cacheKey,
       () =>
         listMetaCatalogPixels({
           shop,

@@ -174,6 +174,7 @@ export function MetaConnectPanels({
             capiEnabled={meta.capiEnabled}
             enabledEvents={meta.enabledEvents}
             metaAdsConnected={meta.metaAdsConnected}
+            metaAdsAdAccountId={meta.metaAdsAdAccountId}
             busy={busy}
             setBusy={setBusy}
             onChanged={notifyChanged}

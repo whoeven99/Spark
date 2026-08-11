@@ -2179,6 +2179,7 @@
     "metaPixelSaveBusy": "Saving…",
     "metaPixelSaveSuccess": "Pixel config saved",
     "metaPixelSaveSuccessCapiAuto": "Pixel saved and CAPI Access Token was bound automatically",
+    "metaPixelBoundCurrent": "Currently bound",
     "metaPixelCapiBoundBadge": "CAPI bound",
     "metaPixelWizardTitle": "Pixel setup wizard",
     "metaPixelWizardSubtitle": "Complete Meta OAuth, Pixel selection, and CAPI binding step by step.",

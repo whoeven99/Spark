@@ -2179,6 +2179,7 @@
     "metaPixelSaveBusy": "保存中…",
     "metaPixelSaveSuccess": "Pixel 配置已保存",
     "metaPixelSaveSuccessCapiAuto": "Pixel 已保存，CAPI Access Token 已自动绑定",
+    "metaPixelBoundCurrent": "当前已绑定",
     "metaPixelCapiBoundBadge": "CAPI 已绑定",
     "metaPixelWizardTitle": "Pixel 接入向导",
     "metaPixelWizardSubtitle": "按步骤完成 Meta OAuth、Pixel 选择与 CAPI 绑定。",

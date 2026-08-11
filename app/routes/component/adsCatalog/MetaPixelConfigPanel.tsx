@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
@@ -35,6 +35,7 @@ type Props = {
   capiEnabled: boolean;
   enabledEvents: string[];
   metaAdsConnected: boolean;
+  metaAdsAdAccountId: string;
   busy: boolean;
   setBusy: (v: boolean) => void;
   onChanged: () => void;
@@ -99,6 +100,7 @@ export function MetaPixelConfigPanel({
   capiEnabled: initialCapiEnabled,
   enabledEvents: initialEnabledEvents,
   metaAdsConnected,
+  metaAdsAdAccountId,
   busy,
   setBusy,
   onChanged,
@@ -127,6 +129,11 @@ export function MetaPixelConfigPanel({
   const [testCleared, setTestCleared] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [pixelsListHint, setPixelsListHint] = useState<string | null>(null);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  const isBusy = busy || actionBusy;
 
   function openExternal(url: string | null) {
     if (!url) return;
@@ -154,12 +161,20 @@ export function MetaPixelConfigPanel({
   }, [initialEnabledEvents]);
 
   useEffect(() => {
+    if (metaAdsConnected) {
+      setListRefreshKey((key) => key + 1);
+    }
+  }, [metaAdsConnected]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
       setPixelsLoading(true);
       try {
         const qs = withAdAccountQuery(locationSearch, selectedAdAccountId);
-        const resp = await fetch(`/api/ads-catalog/meta-pixels${qs}`, {
+        const refreshSuffix =
+          listRefreshKey > 0 ? `${qs.includes("?") ? "&" : "?"}refresh=1` : "";
+        const resp = await fetch(`/api/ads-catalog/meta-pixels${qs}${refreshSuffix}`, {
           headers: { Accept: "application/json" },
         });
         const data = (await resp.json().catch(() => ({}))) as {
@@ -181,11 +196,16 @@ export function MetaPixelConfigPanel({
         setAdAccounts(data.adAccounts ?? []);
         if (data.adAccountId && !selectedAdAccountId) {
           setSelectedAdAccountId(data.adAccountId);
+        } else if (!selectedAdAccountId && metaAdsAdAccountId) {
+          setSelectedAdAccountId(metaAdsAdAccountId);
         }
         const nextPixels = data.pixels ?? [];
         setPixels(nextPixels);
         setNeedsMetaAdsConnect(Boolean(data.needsMetaAdsConnect));
         setLocalError(null);
+        setPixelsListHint(
+          data.listError && data.listError !== "no_credential" ? data.listError : null,
+        );
 
         if (mode === "select") {
           const preferId = selectedPixelId || pixelId;
@@ -194,7 +214,14 @@ export function MetaPixelConfigPanel({
             setSelectedPixelId(matched.pixelId);
             setPixelIdInput(matched.pixelId);
           } else if (
+            preferId &&
+            preferId === pixelId.trim()
+          ) {
+            setSelectedPixelId(preferId);
+            setPixelIdInput(preferId);
+          } else if (
             selectedPixelId &&
+            selectedPixelId !== pixelId.trim() &&
             !nextPixels.some((p) => p.pixelId === selectedPixelId)
           ) {
             setSelectedPixelId("");
@@ -213,7 +240,7 @@ export function MetaPixelConfigPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when account or mode changes
-  }, [mode, locationSearch, selectedAdAccountId, t, pixelId]);
+  }, [mode, locationSearch, selectedAdAccountId, listRefreshKey, t, pixelId, metaAdsAdAccountId]);
 
   function toggleEvent(name: MetaPixelEventName) {
     setEnabledEvents((prev) =>
@@ -255,7 +282,7 @@ export function MetaPixelConfigPanel({
   }
 
   async function saveConfig() {
-    setBusy(true);
+    setActionBusy(true);
     setSaveSuccess(false);
     setSaveCapiAutoBound(false);
     setTestSuccess(false);
@@ -312,7 +339,7 @@ export function MetaPixelConfigPanel({
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   }
 
@@ -328,7 +355,7 @@ export function MetaPixelConfigPanel({
       return;
     }
 
-    setBusy(true);
+    setActionBusy(true);
     setTestSuccess(false);
     setTestCleared(false);
     setTestModeStarted(false);
@@ -352,12 +379,12 @@ export function MetaPixelConfigPanel({
     } catch (e) {
       setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   }
 
   async function clearTestEventConnection() {
-    setBusy(true);
+    setActionBusy(true);
     setTestSuccess(false);
     setTestModeStarted(false);
     setTestError(null);
@@ -383,12 +410,12 @@ export function MetaPixelConfigPanel({
     } catch (e) {
       setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   }
 
   async function testServerEvents() {
-    setBusy(true);
+    setActionBusy(true);
     setTestSuccess(false);
     setTestModeStarted(false);
     setTestCleared(false);
@@ -432,7 +459,7 @@ export function MetaPixelConfigPanel({
     } catch (e) {
       setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   }
 
@@ -446,7 +473,7 @@ export function MetaPixelConfigPanel({
   const onlineStoreUrl = buildMetaShopOnlineStoreUrl(shopDomain);
 
   const canSave =
-    !busy &&
+    !isBusy &&
     Boolean((mode === "select" ? selectedPixelId : pixelIdInput).trim()) &&
     (!capiEnabled ||
       Boolean(tokenInput.trim()) ||
@@ -454,12 +481,25 @@ export function MetaPixelConfigPanel({
       (mode === "select" && metaOAuthCapiAvailable)) &&
     enabledEvents.length > 0;
 
-  const adAccountOptions =
-    adAccounts.length > 0
-      ? adAccounts
-      : selectedAdAccountId
-        ? [{ id: selectedAdAccountId, name: selectedAdAccountId }]
-        : [];
+  const adAccountOptions = useMemo(() => {
+    if (adAccounts.length > 0) return adAccounts;
+    const fallbackId = selectedAdAccountId || metaAdsAdAccountId;
+    if (fallbackId) return [{ id: fallbackId, name: fallbackId }];
+    return [];
+  }, [adAccounts, selectedAdAccountId, metaAdsAdAccountId]);
+
+  const showAdAccountSelect = metaAdsConnected || adAccountOptions.length > 0;
+
+  const pixelOptions = useMemo(() => {
+    const bound = pixelId.trim();
+    if (bound && !pixels.some((p) => p.pixelId === bound)) {
+      return [
+        { pixelId: bound, pixelName: t("adsCatalog.metaPixelBoundCurrent") },
+        ...pixels,
+      ];
+    }
+    return pixels;
+  }, [pixels, pixelId, t]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
@@ -477,6 +517,10 @@ export function MetaPixelConfigPanel({
           : t("adsCatalog.metaPixelSelectHint")}
       </p>
 
+      {pixelsListHint ? (
+        <p style={{ ...pageHintTextStyle, margin: 0, color: "#8a6d00" }}>{pixelsListHint}</p>
+      ) : null}
+
       {needsMetaAdsConnect && !metaAdsConnected ? (
         <div
           style={{
@@ -488,7 +532,7 @@ export function MetaPixelConfigPanel({
           }}
         >
           <p style={{ margin: "0 0 8px" }}>{t("adsCatalog.metaPixelConnectAdsHint")}</p>
-          <button type="button" style={secondaryBtn} disabled={busy} onClick={connectMetaAds}>
+          <button type="button" style={secondaryBtn} disabled={isBusy} onClick={connectMetaAds}>
             {t("adsCatalog.metaPixelConnectAds")}
           </button>
         </div>
@@ -501,7 +545,7 @@ export function MetaPixelConfigPanel({
             name="meta-pixel-mode"
             checked={mode === "select"}
             onChange={switchToSelect}
-            disabled={busy}
+            disabled={isBusy}
           />
           {t("adsCatalog.metaPixelModeSelect")}
         </label>
@@ -511,7 +555,7 @@ export function MetaPixelConfigPanel({
             name="meta-pixel-mode"
             checked={mode === "manual"}
             onChange={switchToManual}
-            disabled={busy}
+            disabled={isBusy}
           />
           {t("adsCatalog.metaPixelModeManual")}
         </label>
@@ -519,7 +563,7 @@ export function MetaPixelConfigPanel({
 
       {mode === "select" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {adAccountOptions.length > 0 ? (
+          {showAdAccountSelect ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <label style={fieldLabelStyle}>
                 {t("adsCatalog.metaPixelAdAccountLabel")}
@@ -527,7 +571,7 @@ export function MetaPixelConfigPanel({
               <select
                 style={inputStyle}
                 value={selectedAdAccountId}
-                disabled={busy || pixelsLoading}
+                disabled={isBusy || pixelsLoading}
                 onChange={(e) => {
                   setSelectedAdAccountId(e.target.value);
                   setSelectedPixelId("");
@@ -551,7 +595,7 @@ export function MetaPixelConfigPanel({
             <select
               style={inputStyle}
               value={selectedPixelId}
-              disabled={busy || pixelsLoading}
+              disabled={isBusy || pixelsLoading}
               onChange={(e) => onSelectPixel(e.target.value)}
             >
               <option value="">
@@ -559,7 +603,7 @@ export function MetaPixelConfigPanel({
                   ? t("adsCatalog.metaPixelListLoading")
                   : t("adsCatalog.metaPixelSelectPlaceholder")}
               </option>
-              {pixels.map((p) => (
+              {pixelOptions.map((p) => (
                 <option key={p.pixelId} value={p.pixelId}>
                   {p.pixelId}
                   {p.pixelName && p.pixelName !== p.pixelId ? ` — ${p.pixelName}` : ""}
@@ -574,7 +618,7 @@ export function MetaPixelConfigPanel({
           <input
             style={inputStyle}
             value={pixelIdInput}
-            disabled={busy}
+            disabled={isBusy}
             placeholder={t("adsCatalog.metaPixelIdPlaceholder")}
             onChange={(e) => setPixelIdInput(e.target.value)}
           />
@@ -605,7 +649,7 @@ export function MetaPixelConfigPanel({
             <input
               type="checkbox"
               checked={capiEnabled}
-              disabled={busy}
+              disabled={isBusy}
               onChange={(e) => setCapiEnabled(e.target.checked)}
             />
             {t("adsCatalog.metaPixelCapiEnable")}
@@ -660,7 +704,7 @@ export function MetaPixelConfigPanel({
             <input
               type="checkbox"
               checked={capiEnabled}
-              disabled={busy}
+              disabled={isBusy}
               onChange={(e) => setCapiEnabled(e.target.checked)}
             />
             {t("adsCatalog.metaPixelCapiEnable")}
@@ -690,7 +734,7 @@ export function MetaPixelConfigPanel({
               type="password"
               autoComplete="off"
               value={tokenInput}
-              disabled={busy}
+              disabled={isBusy}
               placeholder={
                 hasStoredCapiAccessToken
                   ? t("adsCatalog.metaPixelAccessTokenConfigured")
@@ -713,7 +757,7 @@ export function MetaPixelConfigPanel({
               <input
                 type="checkbox"
                 checked={enabledEvents.includes(name)}
-                disabled={busy}
+                disabled={isBusy}
                 onChange={() => toggleEvent(name)}
               />
               {t(`adsCatalog.${EVENT_LABEL_KEY[name]}`)}
@@ -729,7 +773,7 @@ export function MetaPixelConfigPanel({
               <input
                 type="checkbox"
                 checked={enabledEvents.includes(name)}
-                disabled={busy}
+                disabled={isBusy}
                 onChange={() => toggleEvent(name)}
               />
               {t(`adsCatalog.${EVENT_LABEL_KEY[name]}`)}
@@ -740,7 +784,7 @@ export function MetaPixelConfigPanel({
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <button type="button" style={primaryBtn} disabled={!canSave} onClick={() => void saveConfig()}>
-          {busy ? t("adsCatalog.metaPixelSaveBusy") : t("adsCatalog.metaPixelSave")}
+          {isBusy ? t("adsCatalog.metaPixelSaveBusy") : t("adsCatalog.metaPixelSave")}
         </button>
         {saveSuccess && (
           <span style={{ color: "#0f7a52", fontSize: 12 }}>
@@ -768,7 +812,7 @@ export function MetaPixelConfigPanel({
           <input
             style={{ ...inputStyle, flex: 1, minWidth: 160 }}
             value={testEventCode}
-            disabled={busy}
+            disabled={isBusy}
             placeholder={t("adsCatalog.metaPixelTestEventCodePlaceholder")}
             onChange={(e) => {
               setTestEventCode(e.target.value);
@@ -791,10 +835,10 @@ export function MetaPixelConfigPanel({
           <button
             type="button"
             style={{ ...secondaryBtn, padding: "4px 8px" }}
-            disabled={busy}
+            disabled={isBusy}
             onClick={() => void testServerEvents()}
           >
-            {busy ? t("adsCatalog.metaPixelTestServerEventsBusy") : t("adsCatalog.metaPixelTestServerEvents")}
+            {isBusy ? t("adsCatalog.metaPixelTestServerEventsBusy") : t("adsCatalog.metaPixelTestServerEvents")}
           </button>
           <button
             type="button"
@@ -804,19 +848,29 @@ export function MetaPixelConfigPanel({
               color: "#d72c0d",
               borderColor: "#f1b6ab",
             }}
-            disabled={busy}
+            disabled={isBusy}
             onClick={() => void clearTestEventConnection()}
           >
             {t("adsCatalog.metaPixelCancelTestConnection")}
           </button>
-          <button
-            type="button"
-            style={{ ...secondaryBtn, padding: "4px 8px" }}
-            disabled={!onlineStoreUrl}
-            onClick={() => openExternal(onlineStoreUrl)}
-          >
-            {t("adsCatalog.metaPixelOpenStorefront")}
-          </button>
+          {onlineStoreUrl ? (
+            <a
+              href={onlineStoreUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ ...secondaryBtn, padding: "4px 8px", textDecoration: "none" }}
+            >
+              {t("adsCatalog.metaPixelOpenStorefront")}
+            </a>
+          ) : (
+            <button
+              type="button"
+              style={{ ...secondaryBtn, padding: "4px 8px" }}
+              disabled
+            >
+              {t("adsCatalog.metaPixelOpenStorefront")}
+            </button>
+          )}
         </div>
         {testError && <span style={{ color: "#d72c0d", fontSize: 12 }}>{testError}</span>}
         {testSuccess && (
