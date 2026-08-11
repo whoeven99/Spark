@@ -15,9 +15,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return null;
 };
 
-type TodayTab = "overview" | "diagnosis" | "orders";
+type TodayTab = "overview" | "insights" | "diagnosis" | "orders";
 
 function resolveTab(pathname: string): TodayTab {
+  if (pathname.includes("/today/insights")) return "insights";
   if (pathname.includes("/today/diagnosis")) return "diagnosis";
   if (pathname.includes("/today/orders")) return "orders";
   return "overview";
@@ -31,6 +32,7 @@ export default function AppToday() {
 
   const items = [
     { key: "overview" as const, label: t("todayShell.overview") },
+    { key: "insights" as const, label: t("todayShell.insights") },
     { key: "diagnosis" as const, label: t("nav.dailyOperations") },
     { key: "orders" as const, label: t("nav.orderMonitor") },
   ];
