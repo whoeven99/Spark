@@ -368,7 +368,8 @@
     "adsCatalog": "Ads Catalog"
   },
   "todayShell": {
-    "overview": "Overview"
+    "overview": "Overview",
+    "insights": "Business Insights"
   },
   "insights": {
     "title": "Insights",
