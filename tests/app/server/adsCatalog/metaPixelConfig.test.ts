@@ -4,6 +4,8 @@ const getFacebookCatalogCredential = vi.hoisted(() => vi.fn());
 const getMetaAdsCredential = vi.hoisted(() => vi.fn());
 const setFacebookCatalogCredential = vi.hoisted(() => vi.fn());
 const trackMetaPixelEvent = vi.hoisted(() => vi.fn());
+const fetchMetaPixelCapiAccessToken = vi.hoisted(() => vi.fn());
+const resolveMetaOAuthClient = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   getFacebookCatalogCredential: (...args: unknown[]) => getFacebookCatalogCredential(...args),
@@ -15,11 +17,36 @@ vi.mock("../../../../app/server/adsCatalog/clients/metaConversionsApiClient.serv
   trackMetaPixelEvent: (...args: unknown[]) => trackMetaPixelEvent(...args),
 }));
 
+vi.mock("../../../../app/server/adsCatalog/clients/metaCapiTokenClient.server", () => ({
+  fetchMetaPixelCapiAccessToken: (...args: unknown[]) => fetchMetaPixelCapiAccessToken(...args),
+}));
+
+vi.mock("../../../../app/server/adsCatalog/metaOAuth.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../../app/server/adsCatalog/metaOAuth.server")>();
+  return {
+    ...actual,
+    resolveMetaOAuthClient: (...args: unknown[]) => resolveMetaOAuthClient(...args),
+    getMetaAdAccounts: vi.fn().mockResolvedValue([]),
+  };
+});
+
+vi.mock("../../../../app/server/adsCatalog/clients/facebookGraphClient.server", () => ({
+  listMetaAdAccountPixels: vi.fn().mockResolvedValue([]),
+  listMetaBusinessPixels: vi.fn().mockResolvedValue([]),
+}));
+
 import {
   maybeTrackMetaPurchase,
+  saveMetaPixelConfig,
   testMetaServerEvents,
   trackMetaStorefrontTestEvent,
 } from "../../../../app/server/adsCatalog/metaPixelConfig.server";
+
+const admin = {
+  graphql: vi.fn().mockResolvedValue({
+    json: async () => ({ data: { shop: { id: "gid://shopify/Shop/1" } } }),
+  }),
+};
 
 describe("maybeTrackMetaPurchase", () => {
   beforeEach(() => {
@@ -45,7 +72,7 @@ describe("maybeTrackMetaPurchase", () => {
     });
 
     getFacebookCatalogCredential.mockResolvedValue({
-      accessToken: "",
+      accessToken: "catalog-oauth",
       catalogId: "cat",
       pixelId: "123",
       capiEnabled: true,
@@ -88,34 +115,63 @@ describe("maybeTrackMetaPurchase", () => {
       }),
     );
   });
+});
 
-  it("uses Meta Ads OAuth token when stored CAPI token missing", async () => {
-    getFacebookCatalogCredential.mockResolvedValue({
-      accessToken: "catalog-oauth",
-      catalogId: "cat",
-      pixelId: "123456",
-      capiEnabled: true,
-      enabledEvents: ["Purchase"],
-    });
+describe("saveMetaPixelConfig", () => {
+  beforeEach(() => {
+    getFacebookCatalogCredential.mockReset();
+    getMetaAdsCredential.mockReset();
+    setFacebookCatalogCredential.mockReset();
+    fetchMetaPixelCapiAccessToken.mockReset();
+    resolveMetaOAuthClient.mockReset();
     getMetaAdsCredential.mockResolvedValue({
       accessToken: "meta-ads-oauth",
       adAccountId: "act_1",
     });
+    resolveMetaOAuthClient.mockReturnValue({
+      appId: "app-id",
+      appSecret: "app-secret",
+    });
+    fetchMetaPixelCapiAccessToken.mockResolvedValue("auto-capi-token");
+    setFacebookCatalogCredential.mockResolvedValue(undefined);
+  });
 
-    const result = await maybeTrackMetaPurchase({
-      shop: "s.myshopify.com",
-      orderId: "99",
-      orderName: "1001",
+  it("auto-fetches pixel CAPI token when selecting pixel with OAuth", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "catalog-oauth",
+      catalogId: "cat",
+      businessId: "biz_1",
+      pixelId: "",
+      capiEnabled: true,
+      enabledEvents: ["Purchase"],
     });
 
-    expect(result).toEqual({ sent: true });
-    expect(trackMetaPixelEvent).toHaveBeenCalledWith(
+    const result = await saveMetaPixelConfig({
+      shop: "demo.myshopify.com",
+      admin: admin as never,
+      pixelId: "1001680191617713",
+      capiEnabled: true,
+      enabledEvents: ["Purchase"],
+    });
+
+    expect(fetchMetaPixelCapiAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({
-        pixelId: "123456",
-        capiAccessToken: "meta-ads-oauth",
-        eventName: "Purchase",
+        shop: "demo.myshopify.com",
+        pixelId: "1001680191617713",
+        businessId: "biz_1",
+        oauthAccessToken: "meta-ads-oauth",
+        appId: "app-id",
+        appSecret: "app-secret",
       }),
     );
+    expect(setFacebookCatalogCredential).toHaveBeenCalledWith(
+      "demo.myshopify.com",
+      expect.objectContaining({
+        pixelId: "1001680191617713",
+        capiAccessToken: "auto-capi-token",
+      }),
+    );
+    expect(result.hasCapiAccessToken).toBe(true);
   });
 });
 

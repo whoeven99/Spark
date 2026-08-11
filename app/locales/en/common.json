@@ -2164,7 +2164,7 @@
     "metaPixelAccessTokenConfigured": "Saved (enter a new value to replace)",
     "metaPixelAccessTokenOAuthActive": "Using Meta OAuth token (optional override below)",
     "metaPixelOAuthCapiHint": "Conversions API will use your Meta OAuth authorization token. Paste an Events Manager token below only if you need a dedicated override.",
-    "metaPixelSelectCapiHint": "Server-side events use your Meta OAuth token automatically — no Access Token needed.",
+    "metaPixelSelectCapiHint": "When you save Pixel config, Spark exchanges your Meta OAuth authorization for a pixel-specific CAPI Access Token and stores it.",
     "metaPixelSelectCapiConnectHint": "Connect Meta Ads authorization above, or switch to manual input to paste a CAPI Access Token.",
     "metaPixelTokenRequired": "Please enter Conversions API Access Token",
     "metaPixelHowToGetToken": "How to get it?",
