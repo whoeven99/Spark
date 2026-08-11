@@ -35,15 +35,26 @@ function credentialWriteBase(credential: FacebookCatalogCredential) {
 }
 
 export type MetaCapiTokenSource = "request_explicit" | "stored_capi";
+export type MetaTestCapiTokenSource = "request_explicit" | "fetched_for_pixel";
 
 function maskMetaCapiTokenForLog(value: string): string {
   if (value.length <= 6) return `${value.slice(0, 1)}***`;
   return `${value.slice(0, 3)}***${value.slice(-3)}`;
 }
 
+/** 临时调试：Render 设 META_CAPI_LOG_FULL_TOKEN=1 可输出完整 token，验完务必关闭。 */
+export function shouldLogFullMetaCapiToken(): boolean {
+  const v = process.env.META_CAPI_LOG_FULL_TOKEN?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+export function formatMetaCapiTokenForLog(value: string): string {
+  return shouldLogFullMetaCapiToken() ? value : maskMetaCapiTokenForLog(value);
+}
+
 function logMetaCapiTokenResolve(params: {
   shop: string;
-  source: MetaCapiTokenSource | "none";
+  source: MetaCapiTokenSource | MetaTestCapiTokenSource | "none";
   token?: string;
   detail?: string;
 }): void {
@@ -53,7 +64,7 @@ function logMetaCapiTokenResolve(params: {
     `source=${params.source}`,
   ];
   if (params.detail) parts.push(`detail=${params.detail}`);
-  if (params.token) parts.push(`token=${maskMetaCapiTokenForLog(params.token)}`);
+  if (params.token) parts.push(`token=${formatMetaCapiTokenForLog(params.token)}`);
   console.info(parts.join(" "));
 }
 
@@ -112,6 +123,71 @@ export async function resolveMetaCapiAccessToken(params: {
 
   logMetaCapiTokenResolve({ shop, source: "none", detail: "no_stored_capi_token" });
   return null;
+}
+
+/**
+ * 测试事件专用：按当前选中 pixelId 实时换取 CAPI token，不回退 credential.capiAccessToken。
+ */
+export async function resolveMetaTestCapiAccessToken(params: {
+  shop: string;
+  credential: FacebookCatalogCredential;
+  pixelId: string;
+  explicitToken?: string;
+}): Promise<{ token: string; source: MetaTestCapiTokenSource }> {
+  const shop = params.shop.trim().toLowerCase();
+  const pixelId = params.pixelId.trim();
+  if (!pixelId) {
+    throw new Error("请先配置 Meta Pixel ID");
+  }
+
+  const explicit = params.explicitToken?.trim();
+  if (explicit) {
+    logMetaCapiTokenResolve({
+      shop,
+      source: "request_explicit",
+      token: explicit,
+      detail: "test_event_manual_token",
+    });
+    return { token: explicit, source: "request_explicit" };
+  }
+
+  const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch({
+    shop,
+    credential: params.credential,
+  });
+  const businessId = params.credential.businessId?.trim() ?? "";
+  const client = resolveMetaOAuthClient();
+  if (!oauthAccessToken || !businessId || !client?.appId || !client?.appSecret) {
+    throw new Error(
+      "测试事件需要 Meta Ads 授权与 Business ID；或在 Events Manager 粘贴 Token 后重试",
+    );
+  }
+
+  let token: string;
+  try {
+    token = await fetchMetaPixelCapiAccessToken({
+      shop,
+      pixelId,
+      businessId,
+      oauthAccessToken,
+      appId: client.appId,
+      appSecret: client.appSecret,
+      apiVersion: params.credential.apiVersion,
+    });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `无法为 Pixel ${pixelId} 获取 CAPI Access Token：${detail}。请确认授权账号对该 Pixel 有 Manage 权限，或在 Events Manager 手动粘贴 Token。`,
+    );
+  }
+
+  logMetaCapiTokenResolve({
+    shop,
+    source: "fetched_for_pixel",
+    token,
+    detail: `pixelId=${pixelId}`,
+  });
+  return { token, source: "fetched_for_pixel" };
 }
 
 export async function hasMetaCapiAccessAvailable(
@@ -763,22 +839,18 @@ export async function testMetaServerEvents(params: {
   }
   const pixelId = params.pixelId?.trim() || credential.pixelId?.trim() || "";
   const testEventCode = params.testEventCode.trim();
-  const resolved = await resolveMetaCapiAccessToken({
-    shop: params.shop,
-    credential,
-    explicitToken: params.capiAccessToken?.trim() || undefined,
-  });
-  const token = resolved?.token ?? "";
-  if (!pixelId) throw new Error("请先配置 Meta Pixel ID");
-  if (!token) {
-    throw new Error(
-      "请先保存 Pixel 配置以自动获取 CAPI Access Token，或在 Events Manager 粘贴 Token",
-    );
-  }
   if (!testEventCode) throw new Error("请填写 Test Event Code");
 
+  const resolved = await resolveMetaTestCapiAccessToken({
+    shop: params.shop,
+    credential,
+    pixelId,
+    explicitToken: params.capiAccessToken?.trim() || undefined,
+  });
+  const token = resolved.token;
+
   console.info(
-    `${LOG_PREFIX} step=test_event_token shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} tokenSource=${resolved?.source ?? "none"} storedCapiAccessToken=${Boolean(credential.capiAccessToken?.trim())} requestExplicitToken=${Boolean(params.capiAccessToken?.trim())}`,
+    `${LOG_PREFIX} step=test_event_token shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} tokenSource=${resolved.source} token=${formatMetaCapiTokenForLog(token)} requestExplicitToken=${Boolean(params.capiAccessToken?.trim())}`,
   );
 
   const clientIpAddress =

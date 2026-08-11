@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getFacebookCatalogCredential = vi.hoisted(() => vi.fn());
 const getMetaAdsCredential = vi.hoisted(() => vi.fn());
@@ -36,8 +36,10 @@ vi.mock("../../../../app/server/adsCatalog/clients/facebookGraphClient.server", 
 }));
 
 import {
+  formatMetaCapiTokenForLog,
   maybeTrackMetaPurchase,
   saveMetaPixelConfig,
+  shouldLogFullMetaCapiToken,
   testMetaServerEvents,
   trackMetaStorefrontTestEvent,
 } from "../../../../app/server/adsCatalog/metaPixelConfig.server";
@@ -235,31 +237,51 @@ describe("testMetaServerEvents", () => {
   beforeEach(() => {
     getFacebookCatalogCredential.mockReset();
     getMetaAdsCredential.mockReset();
-    getMetaAdsCredential.mockResolvedValue(null);
+    getMetaAdsCredential.mockResolvedValue({
+      accessToken: "meta-ads-oauth",
+      adAccountId: "act_1",
+    });
+    resolveMetaOAuthClient.mockReset();
+    resolveMetaOAuthClient.mockReturnValue({
+      appId: "app-id",
+      appSecret: "app-secret",
+    });
+    fetchMetaPixelCapiAccessToken.mockReset();
+    fetchMetaPixelCapiAccessToken.mockResolvedValue("fresh-token-for-pixel");
     trackMetaPixelEvent.mockReset();
     trackMetaPixelEvent.mockResolvedValue(undefined);
   });
 
-  it("sends Purchase test event with customer matching fields", async () => {
+  it("fetches CAPI token for selected pixel instead of using stored token", async () => {
     getFacebookCatalogCredential.mockResolvedValue({
       accessToken: "oauth",
       catalogId: "cat",
+      businessId: "biz_1",
       pixelId: "123456",
-      capiAccessToken: "capi-tok",
+      capiAccessToken: "stale-token",
       enabledEvents: ["Purchase"],
     });
 
     await testMetaServerEvents({
       shop: "demo.myshopify.com",
       testEventCode: "TEST1495",
+      pixelId: "999888",
       clientIpAddress: "203.0.113.10",
       clientUserAgent: "Mozilla/5.0",
     });
 
+    expect(fetchMetaPixelCapiAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shop: "demo.myshopify.com",
+        pixelId: "999888",
+        businessId: "biz_1",
+        oauthAccessToken: "meta-ads-oauth",
+      }),
+    );
     expect(trackMetaPixelEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        pixelId: "123456",
-        capiAccessToken: "capi-tok",
+        pixelId: "999888",
+        capiAccessToken: "fresh-token-for-pixel",
         eventName: "Purchase",
         testEventCode: "TEST1495",
         email: "spark-capi-test@demo.myshopify.com",
@@ -268,5 +290,72 @@ describe("testMetaServerEvents", () => {
         eventSourceUrl: "https://demo.myshopify.com",
       }),
     );
+  });
+
+  it("uses explicit manual token without fetching", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      catalogId: "cat",
+      businessId: "biz_1",
+      pixelId: "123456",
+      capiAccessToken: "stale-token",
+      enabledEvents: ["Purchase"],
+    });
+
+    await testMetaServerEvents({
+      shop: "demo.myshopify.com",
+      testEventCode: "TEST1495",
+      pixelId: "999888",
+      capiAccessToken: "manual-tok",
+    });
+
+    expect(fetchMetaPixelCapiAccessToken).not.toHaveBeenCalled();
+    expect(trackMetaPixelEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pixelId: "999888",
+        capiAccessToken: "manual-tok",
+      }),
+    );
+  });
+
+  it("surfaces fetch failures", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      catalogId: "cat",
+      businessId: "biz_1",
+      pixelId: "123456",
+      capiAccessToken: "stale-token",
+      enabledEvents: ["Purchase"],
+    });
+    fetchMetaPixelCapiAccessToken.mockRejectedValue(new Error("permission denied"));
+
+    await expect(
+      testMetaServerEvents({
+        shop: "demo.myshopify.com",
+        testEventCode: "TEST1495",
+        pixelId: "999888",
+      }),
+    ).rejects.toThrow(/无法为 Pixel 999888 获取 CAPI Access Token/);
+  });
+});
+
+describe("formatMetaCapiTokenForLog", () => {
+  const previous = process.env.META_CAPI_LOG_FULL_TOKEN;
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.META_CAPI_LOG_FULL_TOKEN;
+    else process.env.META_CAPI_LOG_FULL_TOKEN = previous;
+  });
+
+  it("masks token by default", () => {
+    delete process.env.META_CAPI_LOG_FULL_TOKEN;
+    expect(formatMetaCapiTokenForLog("EAABBBCCCDDD")).toBe("EAA***DDD");
+    expect(shouldLogFullMetaCapiToken()).toBe(false);
+  });
+
+  it("logs full token when env enabled", () => {
+    process.env.META_CAPI_LOG_FULL_TOKEN = "1";
+    expect(formatMetaCapiTokenForLog("EAABBBCCCDDD")).toBe("EAABBBCCCDDD");
+    expect(shouldLogFullMetaCapiToken()).toBe(true);
   });
 });
