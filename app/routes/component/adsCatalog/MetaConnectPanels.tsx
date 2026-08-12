@@ -169,6 +169,7 @@ export function MetaConnectPanels({
             pixelId={meta.pixelId}
             hasCapiAccessToken={meta.hasCapiAccessToken}
             hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
+            capiAccessToken={meta.capiAccessToken}
             metaOAuthCapiAvailable={meta.metaOAuthCapiAvailable}
             testEventCode={meta.testEventCode}
             capiEnabled={meta.capiEnabled}

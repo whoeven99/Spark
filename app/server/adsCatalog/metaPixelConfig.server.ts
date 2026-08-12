@@ -324,6 +324,8 @@ export type SaveMetaPixelConfigResult = {
   capiEnabled: boolean;
   enabledEvents: MetaPixelEventName[];
   hasCapiAccessToken: boolean;
+  /** 绑定/保存后回传，供 Admin UI 展示（Shopify Admin 鉴权页内）。 */
+  capiAccessToken?: string;
 };
 
 export type ListMetaCatalogPixelsResult = {
@@ -813,6 +815,7 @@ export async function saveMetaPixelConfig(
     capiEnabled,
     enabledEvents,
     hasCapiAccessToken,
+    ...(capiAccessTokenToStore ? { capiAccessToken: capiAccessTokenToStore } : {}),
   };
 }
 

@@ -30,6 +30,7 @@ type Props = {
   pixelId: string;
   hasCapiAccessToken: boolean;
   hasStoredCapiAccessToken: boolean;
+  capiAccessToken: string;
   metaOAuthCapiAvailable: boolean;
   testEventCode: string;
   capiEnabled: boolean;
@@ -95,6 +96,7 @@ export function MetaPixelConfigPanel({
   pixelId,
   hasCapiAccessToken,
   hasStoredCapiAccessToken,
+  capiAccessToken: initialCapiAccessToken,
   metaOAuthCapiAvailable,
   testEventCode: savedTestEventCode,
   capiEnabled: initialCapiEnabled,
@@ -124,6 +126,8 @@ export function MetaPixelConfigPanel({
   );
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveCapiAutoBound, setSaveCapiAutoBound] = useState(false);
+  const [bindSuccess, setBindSuccess] = useState(false);
+  const [displayCapiToken, setDisplayCapiToken] = useState(initialCapiAccessToken);
   const [testSuccess, setTestSuccess] = useState(false);
   const [testModeStarted, setTestModeStarted] = useState(false);
   const [testCleared, setTestCleared] = useState(false);
@@ -132,8 +136,9 @@ export function MetaPixelConfigPanel({
   const [pixelsListHint, setPixelsListHint] = useState<string | null>(null);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [actionBusy, setActionBusy] = useState(false);
+  const [bindBusy, setBindBusy] = useState(false);
 
-  const isBusy = busy || actionBusy;
+  const isBusy = busy || actionBusy || bindBusy;
 
   function openExternal(url: string | null) {
     if (!url) return;
@@ -159,6 +164,10 @@ export function MetaPixelConfigPanel({
       initialEnabledEvents.length ? initialEnabledEvents : [...META_PIXEL_DEFAULT_EVENTS],
     );
   }, [initialEnabledEvents]);
+
+  useEffect(() => {
+    setDisplayCapiToken(initialCapiAccessToken);
+  }, [initialCapiAccessToken]);
 
   useEffect(() => {
     if (metaAdsConnected) {
@@ -281,18 +290,75 @@ export function MetaPixelConfigPanel({
     })();
   }
 
+  async function bindPixel() {
+    setBindBusy(true);
+    setBindSuccess(false);
+    setSaveSuccess(false);
+    setLocalError(null);
+    try {
+      if (!selectedAdAccountId) {
+        setLocalError(t("adsCatalog.metaPixelAdAccountRequired"));
+        return;
+      }
+      const idToBind = selectedPixelId.trim();
+      if (!idToBind) {
+        setLocalError(t("adsCatalog.metaPixelSelectRequired"));
+        return;
+      }
+      if (
+        capiEnabled &&
+        !metaOAuthCapiAvailable
+      ) {
+        setLocalError(t("adsCatalog.metaPixelSelectCapiConnectHint"));
+        return;
+      }
+
+      const resp = await fetch(`/api/ads-catalog/meta-pixel-config${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pixelId: idToBind,
+          capiEnabled,
+          enabledEvents,
+        }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        capiAccessToken?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        setLocalError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      if (data.capiAccessToken) {
+        setDisplayCapiToken(data.capiAccessToken);
+      }
+      setBindSuccess(true);
+      onChanged();
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBindBusy(false);
+    }
+  }
+
   async function saveConfig() {
     setActionBusy(true);
     setSaveSuccess(false);
     setSaveCapiAutoBound(false);
+    setBindSuccess(false);
     setTestSuccess(false);
     setLocalError(null);
     try {
-      const idToSave = mode === "select" ? selectedPixelId.trim() : pixelIdInput.trim();
+      const idToSave =
+        mode === "select"
+          ? pixelId.trim()
+          : pixelIdInput.trim();
       if (!idToSave) {
         setLocalError(
           mode === "select"
-            ? t("adsCatalog.metaPixelSelectRequired")
+            ? t("adsCatalog.metaPixelBindRequired")
             : t("adsCatalog.metaPixelIdRequired"),
         );
         return;
@@ -323,6 +389,7 @@ export function MetaPixelConfigPanel({
         ok?: boolean;
         error?: string;
         hasCapiAccessToken?: boolean;
+        capiAccessToken?: string;
       };
       if (!resp.ok || !data.ok) {
         setLocalError(data.error ?? t("adsCatalog.authError"));
@@ -333,6 +400,9 @@ export function MetaPixelConfigPanel({
         !tokenInput.trim() &&
         (metaOAuthCapiAvailable || mode === "select");
       setSaveCapiAutoBound(autoBound);
+      if (data.capiAccessToken) {
+        setDisplayCapiToken(data.capiAccessToken);
+      }
       setTokenInput("");
       setSaveSuccess(true);
       onChanged();
@@ -472,12 +542,20 @@ export function MetaPixelConfigPanel({
   });
   const onlineStoreUrl = buildMetaShopOnlineStoreUrl(shopDomain);
 
+  const canBind =
+    !isBusy &&
+    mode === "select" &&
+    Boolean(selectedAdAccountId) &&
+    Boolean(selectedPixelId.trim()) &&
+    (!capiEnabled || metaOAuthCapiAvailable);
+
   const canSave =
     !isBusy &&
-    Boolean((mode === "select" ? selectedPixelId : pixelIdInput).trim()) &&
+    Boolean((mode === "select" ? pixelId : pixelIdInput).trim()) &&
     (!capiEnabled ||
       Boolean(tokenInput.trim()) ||
       hasCapiAccessToken ||
+      Boolean(displayCapiToken.trim()) ||
       (mode === "select" && metaOAuthCapiAvailable)) &&
     enabledEvents.length > 0;
 
@@ -611,6 +689,21 @@ export function MetaPixelConfigPanel({
               ))}
             </select>
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={primaryBtn}
+              disabled={!canBind}
+              onClick={() => void bindPixel()}
+            >
+              {bindBusy ? t("adsCatalog.metaPixelSwitchBindingBusy") : t("adsCatalog.metaPixelSwitchBinding")}
+            </button>
+            {bindSuccess ? (
+              <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                {t("adsCatalog.metaPixelSwitchBindingSuccess")}
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -659,6 +752,15 @@ export function MetaPixelConfigPanel({
               ? t("adsCatalog.metaPixelSelectCapiHint")
               : t("adsCatalog.metaPixelSelectCapiConnectHint")}
           </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelCapiTokenLabel")}</label>
+            <input
+              style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12 }}
+              readOnly
+              value={displayCapiToken}
+              placeholder={t("adsCatalog.metaPixelCapiTokenEmpty")}
+            />
+          </div>
         </div>
       ) : (
         <div

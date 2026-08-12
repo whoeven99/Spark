@@ -124,6 +124,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         hasCapiAccessToken: fb
           ? await hasMetaCapiAccessAvailable(session.shop, fb)
           : false,
+        capiAccessToken: fb?.capiAccessToken?.trim() ?? "",
         hasStoredCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
         metaOAuthCapiAvailable: fb
           ? await canAutoFetchMetaPixelCapiAccessToken({

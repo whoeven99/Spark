@@ -87,6 +87,8 @@ export interface CredentialsView {
     updatedAt: string | null;
     pixelId: string;
     hasCapiAccessToken: boolean;
+    /** 已保存的 CAPI Access Token（Shopify Admin 鉴权页内展示）。 */
+    capiAccessToken: string;
     hasStoredCapiAccessToken: boolean;
     metaOAuthCapiAvailable: boolean;
     testEventCode: string;
