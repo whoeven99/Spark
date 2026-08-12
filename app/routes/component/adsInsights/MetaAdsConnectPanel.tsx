@@ -13,6 +13,7 @@ type Props = {
   pendingAccounts: AccountOption[];
   availableAccounts: AccountOption[];
   locationSearch: string;
+  businessLoginConfigured?: boolean;
   onChanged: () => void;
 };
 
@@ -64,6 +65,7 @@ export function MetaAdsConnectPanel({
   pendingAccounts,
   availableAccounts,
   locationSearch,
+  businessLoginConfigured = false,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
@@ -72,6 +74,7 @@ export function MetaAdsConnectPanel({
   const [accounts, setAccounts] = useState<AccountOption[]>(() =>
     pendingAccounts.length > 0 ? pendingAccounts : availableAccounts,
   );
+  const metaBusinessOAuth = useOAuthPopup("meta_business_oauth");
   const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
 
   useEffect(() => {
@@ -105,7 +108,11 @@ export function MetaAdsConnectPanel({
   async function openOAuth() {
     setBusy(true);
     try {
-      await metaAdsOAuth.startOAuth(`/api/ads-insights/meta-auth-url${locationSearch}`, () => {
+      const oauth = businessLoginConfigured ? metaBusinessOAuth : metaAdsOAuth;
+      const endpoint = businessLoginConfigured
+        ? `/api/ads-catalog/meta-business-auth-url${locationSearch}`
+        : `/api/ads-insights/meta-auth-url${locationSearch}`;
+      await oauth.startOAuth(endpoint, () => {
         onChanged();
         revalidator.revalidate();
       });

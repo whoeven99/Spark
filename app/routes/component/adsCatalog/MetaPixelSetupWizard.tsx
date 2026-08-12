@@ -11,13 +11,14 @@ type EmbedState = {
 type Props = {
   metaConnected: boolean;
   metaAdsConnected: boolean;
+  metaBusinessUnified?: boolean;
   pixelId: string;
   hasCapiAccessToken: boolean;
   hasStoredCapiAccessToken: boolean;
   capiEnabled: boolean;
   locationSearch: string;
   themeEditorUrl: string | null;
-  onConnectMetaAds: () => void;
+  onConnectMeta: () => void;
   busy: boolean;
   /** Pixel 保存成功后递增，用于刷新 Embed 检测。 */
   setupRevision?: number;
@@ -94,13 +95,14 @@ function stepCircle(done: boolean, current: boolean): CSSProperties {
 export function MetaPixelSetupWizard({
   metaConnected,
   metaAdsConnected,
+  metaBusinessUnified = false,
   pixelId,
   hasCapiAccessToken,
   hasStoredCapiAccessToken,
   capiEnabled,
   locationSearch,
   themeEditorUrl,
-  onConnectMetaAds,
+  onConnectMeta,
   busy,
   setupRevision = 0,
 }: Props) {
@@ -138,7 +140,7 @@ export function MetaPixelSetupWizard({
 
   const steps = useMemo((): WizardStep[] => {
     const metaDone = metaConnected;
-    const metaAdsDone = metaAdsConnected;
+    const metaAdsDone = metaAdsConnected || metaBusinessUnified;
     const pixelDone = pixelReady;
     const embedDone = embedReady;
 
@@ -146,16 +148,18 @@ export function MetaPixelSetupWizard({
     if (!metaDone) currentId = "meta";
     else if (!pixelDone) currentId = "pixel";
     else if (!embedDone && !embed.unavailable) currentId = "embed";
-    else if (!metaAdsDone) currentId = "metaAds";
+    else if (!metaAdsDone && !metaBusinessUnified) currentId = "metaAds";
 
     const list: WizardStep[] = [
       { id: "meta", done: metaDone, current: currentId === "meta" },
-      { id: "metaAds", optional: true, done: metaAdsDone, current: currentId === "metaAds" },
+      ...(metaBusinessUnified
+        ? []
+        : [{ id: "metaAds" as const, optional: true, done: metaAdsDone, current: currentId === "metaAds" }]),
       { id: "pixel", done: pixelDone, current: currentId === "pixel" },
       { id: "embed", done: embedDone, current: currentId === "embed" },
     ];
     return list;
-  }, [metaConnected, metaAdsConnected, pixelReady, embedReady, embed.unavailable]);
+  }, [metaConnected, metaAdsConnected, metaBusinessUnified, pixelReady, embedReady, embed.unavailable]);
 
   const allRequiredDone = metaConnected && pixelReady && (embedReady || embed.unavailable);
 
@@ -250,12 +254,12 @@ export function MetaPixelSetupWizard({
         </div>
       ) : null}
 
-      {!metaAdsConnected && steps.some((s) => s.id === "metaAds" && s.current) ? (
+      {!metaAdsConnected && !metaBusinessUnified && steps.some((s) => s.id === "metaAds" && s.current) ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
             {t("adsCatalog.metaPixelConnectAdsHint")}
           </span>
-          <button type="button" style={secondaryBtn} disabled={busy} onClick={onConnectMetaAds}>
+          <button type="button" style={secondaryBtn} disabled={busy} onClick={onConnectMeta}>
             {t("adsCatalog.metaPixelConnectAds")}
           </button>
         </div>

@@ -272,6 +272,7 @@ export function AdsCatalogPage() {
       gmc?: string | null;
       ads?: string | null;
       meta?: string | null;
+      metaBusiness?: string | null;
       metaCapi?: string | null;
       tiktok?: string | null;
       reason?: string | null;
@@ -294,6 +295,7 @@ export function AdsCatalogPage() {
       gmc: params.get("gmcAuth"),
       ads: params.get("adsAuth"),
       meta: params.get("metaAuth"),
+      metaBusiness: params.get("metaBusinessAuth"),
       metaCapi: params.get("metaCapiAuth"),
       tiktok: params.get("tiktokAuth"),
       reason: params.get("reason"),
@@ -311,6 +313,7 @@ export function AdsCatalogPage() {
         gmcAuth?: string;
         adsAuth?: string;
         metaAuth?: string;
+        metaBusinessAuth?: string;
         metaCapiAuth?: string;
         tiktokAuth?: string;
         reason?: string;
@@ -334,6 +337,8 @@ export function AdsCatalogPage() {
         applyAuthResult({ ads: data.adsAuth, reason: data.reason });
       } else if (data.type === "meta_catalog_oauth") {
         applyAuthResult({ meta: data.metaAuth, reason: data.reason });
+      } else if (data.type === "meta_business_oauth") {
+        applyAuthResult({ metaBusiness: data.metaBusinessAuth, reason: data.reason });
       } else if (data.type === "meta_capi_oauth") {
         applyAuthResult({ metaCapi: data.metaCapiAuth, reason: data.reason });
       } else if (data.type === "tiktok_catalog_oauth") {

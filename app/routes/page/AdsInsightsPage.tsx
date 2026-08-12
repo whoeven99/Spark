@@ -668,6 +668,7 @@ export function AdsInsightsPage() {
             pendingAccounts={connections.meta.pendingAccounts}
             availableAccounts={connections.meta.availableAccounts}
             locationSearch={locationSearch}
+            businessLoginConfigured={connections.meta.businessLoginConfigured}
             onChanged={loadMetrics}
           />
         )}

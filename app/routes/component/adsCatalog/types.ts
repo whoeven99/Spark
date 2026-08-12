@@ -91,6 +91,7 @@ export interface CredentialsView {
     capiAccessToken: string;
     hasStoredCapiAccessToken: boolean;
     metaOAuthCapiAvailable: boolean;
+    metaBusinessLoginConfigured: boolean;
     testEventCode: string;
     capiEnabled: boolean;
     enabledEvents: string[];
@@ -98,6 +99,12 @@ export interface CredentialsView {
     metaAdsAdAccountId: string;
     metaCapiBisuConfigured: boolean;
     capiTokenType: string;
+    pendingBusiness: {
+      businessId: string;
+      catalogs: Array<{ id: string; name?: string }>;
+      adAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+      pixels: Array<{ pixelId: string; pixelName?: string }>;
+    } | null;
     pendingCapiPixels: Array<{ pixelId: string; pixelName?: string; businessId?: string }>;
     pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
   };

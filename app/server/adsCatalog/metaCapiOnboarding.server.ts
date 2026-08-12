@@ -10,11 +10,15 @@ import {
 } from "./credentialStore.server";
 import {
   META_GRAPH_BASE,
-  resolveMetaCapiLoginConfigId,
-  isMetaCapiBisuOnboardingConfigured,
+  resolveMetaBusinessLoginConfigId,
+  isMetaBusinessLoginConfigured,
 } from "./metaOAuth.server";
 
-export { isMetaCapiBisuOnboardingConfigured, resolveMetaCapiLoginConfigId };
+export {
+  isMetaBusinessLoginConfigured,
+  resolveMetaBusinessLoginConfigId as resolveMetaCapiLoginConfigId,
+};
+export { isMetaBusinessLoginConfigured as isMetaCapiBisuOnboardingConfigured };
 
 const LOG_PREFIX = "[AdsCatalog][MetaCapiOnboarding]";
 
@@ -135,7 +139,7 @@ export async function persistMetaCapiBisuOnboarding(params: {
       apiVersion: params.apiVersion ?? catalog.apiVersion,
     }));
 
-  const configId = resolveMetaCapiLoginConfigId() ?? undefined;
+  const configId = resolveMetaBusinessLoginConfigId() ?? undefined;
   const obtainedAt = new Date().toISOString();
   const explicitPixelId = params.pixelId?.trim();
 

@@ -5,6 +5,7 @@ type AuthResultInput = {
   gmc?: string | null;
   ads?: string | null;
   meta?: string | null;
+  metaBusiness?: string | null;
   metaCapi?: string | null;
   tiktok?: string | null;
   reason?: string | null;
@@ -64,13 +65,14 @@ function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | und
 }
 
 export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogAuthResult {
-  const { google, gmc, ads, meta, metaCapi, tiktok, reason, t } = input;
+  const { google, gmc, ads, meta, metaBusiness, metaCapi, tiktok, reason, t } = input;
 
   if (
     google === "select" ||
     gmc === "select" ||
     ads === "select" ||
     meta === "select" ||
+    metaBusiness === "select" ||
     metaCapi === "select" ||
     tiktok === "select"
   ) {
@@ -98,15 +100,15 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     }
   }
 
-  if (meta === "success" || metaCapi === "success" || tiktok === "success") {
+  if (meta === "success" || metaBusiness === "success" || metaCapi === "success" || tiktok === "success") {
     return {
       action: "revalidate",
       tab: "credentials",
       banner: {
         tone: "ok",
         text:
-          metaCapi === "success"
-            ? t("adsCatalog.metaCapiAuthSuccess")
+          metaBusiness === "success" || metaCapi === "success"
+            ? t("adsCatalog.metaBusinessAuthSuccess")
             : t("adsCatalog.authSuccess"),
       },
     };
@@ -120,7 +122,7 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     };
   }
 
-  if (meta === "error" || metaCapi === "error" || tiktok === "error") {
+  if (meta === "error" || metaBusiness === "error" || metaCapi === "error" || tiktok === "error") {
     return {
       action: "revalidate",
       tab: "credentials",
@@ -128,7 +130,7 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     };
   }
 
-  if (meta === "cancelled" || metaCapi === "cancelled" || tiktok === "cancelled") {
+  if (meta === "cancelled" || metaBusiness === "cancelled" || metaCapi === "cancelled" || tiktok === "cancelled") {
     return {
       action: "revalidate",
       tab: "credentials",

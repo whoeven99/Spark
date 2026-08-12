@@ -73,4 +73,16 @@ describe("resolveAdsCatalogAuthResult google combined", () => {
       banner: { tone: "ok", text: "adsCatalog.authSuccess" },
     });
   });
+
+  it("shows meta business unified success banner", () => {
+    const result = resolveAdsCatalogAuthResult({
+      metaBusiness: "success",
+      t,
+    });
+    expect(result).toEqual({
+      action: "revalidate",
+      tab: "credentials",
+      banner: { tone: "ok", text: "adsCatalog.metaBusinessAuthSuccess" },
+    });
+  });
 });

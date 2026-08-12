@@ -32,6 +32,7 @@ type Props = {
   hasStoredCapiAccessToken: boolean;
   capiAccessToken: string;
   metaOAuthCapiAvailable: boolean;
+  metaBusinessUnified: boolean;
   metaCapiBisuConfigured: boolean;
   capiTokenType: string;
   pendingCapiPixels: Array<{ pixelId: string; pixelName?: string; businessId?: string }>;
@@ -43,6 +44,7 @@ type Props = {
   busy: boolean;
   setBusy: (v: boolean) => void;
   onChanged: () => void;
+  onConnectMeta: () => void;
 };
 
 const inputStyle = {
@@ -101,6 +103,7 @@ export function MetaPixelConfigPanel({
   hasStoredCapiAccessToken,
   capiAccessToken: initialCapiAccessToken,
   metaOAuthCapiAvailable,
+  metaBusinessUnified,
   metaCapiBisuConfigured,
   capiTokenType,
   pendingCapiPixels,
@@ -112,6 +115,7 @@ export function MetaPixelConfigPanel({
   busy,
   setBusy,
   onChanged,
+  onConnectMeta,
 }: Props) {
   const { t } = useTranslation();
   const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
@@ -284,6 +288,10 @@ export function MetaPixelConfigPanel({
   }
 
   function connectMetaAds() {
+    if (metaBusinessUnified) {
+      onConnectMeta();
+      return;
+    }
     void (async () => {
       setBusy(true);
       try {
@@ -300,6 +308,10 @@ export function MetaPixelConfigPanel({
   }
 
   function connectMetaCapi() {
+    if (metaBusinessUnified) {
+      onConnectMeta();
+      return;
+    }
     void (async () => {
       setBusy(true);
       setLocalError(null);
@@ -652,7 +664,7 @@ export function MetaPixelConfigPanel({
         <p style={{ ...pageHintTextStyle, margin: 0, color: "#8a6d00" }}>{pixelsListHint}</p>
       ) : null}
 
-      {needsMetaAdsConnect && !metaAdsConnected ? (
+      {needsMetaAdsConnect && !metaAdsConnected && !metaBusinessUnified ? (
         <div
           style={{
             padding: 10,
@@ -801,13 +813,15 @@ export function MetaPixelConfigPanel({
             {t("adsCatalog.metaPixelCapiEnable")}
           </label>
           <p style={{ ...pageHintTextStyle, margin: 0 }}>
-            {capiTokenType === "bisu"
-              ? t("adsCatalog.metaPixelSelectCapiBisuHint")
-              : metaOAuthCapiAvailable
-                ? t("adsCatalog.metaPixelSelectCapiHint")
-                : t("adsCatalog.metaPixelSelectCapiConnectHint")}
+            {metaBusinessUnified
+              ? t("adsCatalog.metaPixelSelectCapiUnifiedHint")
+              : capiTokenType === "bisu"
+                ? t("adsCatalog.metaPixelSelectCapiBisuHint")
+                : metaOAuthCapiAvailable
+                  ? t("adsCatalog.metaPixelSelectCapiHint")
+                  : t("adsCatalog.metaPixelSelectCapiConnectHint")}
           </p>
-          {metaCapiBisuConfigured ? (
+          {!metaBusinessUnified && metaCapiBisuConfigured ? (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <button
                 type="button"
@@ -824,7 +838,19 @@ export function MetaPixelConfigPanel({
               ) : null}
             </div>
           ) : null}
-          {pendingCapiPixels.length > 0 ? (
+          {metaBusinessUnified && capiTokenType !== "bisu" ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                type="button"
+                style={secondaryBtn}
+                disabled={isBusy}
+                onClick={onConnectMeta}
+              >
+                {t("adsCatalog.metaBusinessConnect")}
+              </button>
+            </div>
+          ) : null}
+          {!metaBusinessUnified && pendingCapiPixels.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {t("adsCatalog.metaCapiSelectPixel")}

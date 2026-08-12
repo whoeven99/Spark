@@ -24,6 +24,8 @@ const GOOGLE_ADS_SANDBOX_PENDING_PLATFORM = "google_ads_sandbox_pending";
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
 // Transient record for Meta CAPI BISU pixel selection after Business Login.
 const META_CAPI_PENDING_PLATFORM = "meta_capi_pending";
+// Transient record for unified Meta Business Login asset selection.
+const META_BUSINESS_PENDING_PLATFORM = "meta_business_pending";
 // Transient record for Meta Ads ad-account selection.
 const META_ADS_PENDING_PLATFORM = "meta_ads_pending";
 /** Meta Pixel 数据页手动拉数测试 OAuth（与 Catalog / Ads 凭证隔离，后续可能删除）。 */
@@ -640,6 +642,15 @@ export type PendingOAuthTokens = {
   accounts: PendingOAuthAccount[];
 };
 
+/** Facebook Login for Business 统一 onboarding 待选资产。 */
+export type MetaBusinessPendingSelection = {
+  accessToken: string;
+  businessId: string;
+  catalogs: PendingOAuthAccount[];
+  adAccounts: PendingOAuthAccount[];
+  pixels: PendingOAuthAccount[];
+};
+
 async function setPending(
   shop: string,
   platform: string,
@@ -788,6 +799,45 @@ export const getMetaCapiPending = (shop: string) =>
   getPending(shop, META_CAPI_PENDING_PLATFORM);
 export const clearMetaCapiPending = (shop: string) =>
   clearPending(shop, META_CAPI_PENDING_PLATFORM);
+
+async function writeMetaBusinessPending(
+  shop: string,
+  payload: MetaBusinessPendingSelection,
+): Promise<void> {
+  await writePlatformCredential(shop, META_BUSINESS_PENDING_PLATFORM, {
+    accessToken: payload.accessToken,
+    businessId: payload.businessId,
+    catalogs: payload.catalogs,
+    adAccounts: payload.adAccounts,
+    pixels: payload.pixels,
+  });
+}
+
+export async function getMetaBusinessPending(
+  shop: string,
+): Promise<MetaBusinessPendingSelection | null> {
+  const record = await readPlatformCredential(shop, META_BUSINESS_PENDING_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "");
+  const businessId = String(record.data.businessId ?? "");
+  if (!accessToken || !businessId) return null;
+  const readAccounts = (key: string): PendingOAuthAccount[] =>
+    Array.isArray(record.data[key])
+      ? (record.data[key] as PendingOAuthAccount[])
+      : [];
+  return {
+    accessToken,
+    businessId,
+    catalogs: readAccounts("catalogs"),
+    adAccounts: readAccounts("adAccounts"),
+    pixels: readAccounts("pixels"),
+  };
+}
+
+export const setMetaBusinessPending = (shop: string, payload: MetaBusinessPendingSelection) =>
+  writeMetaBusinessPending(shop, payload);
+export const clearMetaBusinessPending = (shop: string) =>
+  clearPending(shop, META_BUSINESS_PENDING_PLATFORM);
 
 export const deleteGoogleMerchantCredential = (shop: string) =>
   clearPending(shop, GOOGLE_MERCHANT_PLATFORM);

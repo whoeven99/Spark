@@ -7,7 +7,7 @@ import {
 import { fetchMetaPixelCapiAccessToken } from "./clients/metaCapiTokenClient.server";
 import {
   hasMetaCapiBisuToken,
-  isMetaCapiBisuOnboardingConfigured,
+  isMetaBusinessLoginConfigured,
 } from "./metaCapiOnboarding.server";
 import {
   listMetaAdAccountPixels,
@@ -133,7 +133,7 @@ export async function canAutoFetchMetaPixelCapiAccessToken(params: {
   credential: FacebookCatalogCredential;
 }): Promise<boolean> {
   if (hasMetaCapiBisuToken(params.credential)) return true;
-  if (isMetaCapiBisuOnboardingConfigured()) return true;
+  if (isMetaBusinessLoginConfigured()) return true;
   const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch(params);
   const businessId = params.credential.businessId?.trim() ?? "";
   const client = resolveMetaOAuthClient();
@@ -147,9 +147,9 @@ export async function isMetaCapiAutoConnectAvailable(params: {
 }): Promise<boolean> {
   const shop = params.shop.trim().toLowerCase();
   const credential = params.credential ?? (await getFacebookCatalogCredential(shop));
-  if (!credential) return isMetaCapiBisuOnboardingConfigured();
+  if (!credential) return isMetaBusinessLoginConfigured();
   if (hasMetaCapiBisuToken(credential)) return true;
-  if (isMetaCapiBisuOnboardingConfigured()) return true;
+  if (isMetaBusinessLoginConfigured()) return true;
   return canAutoFetchMetaPixelCapiAccessToken({ shop, credential });
 }
 
@@ -470,7 +470,7 @@ export async function listMetaCatalogPixels(params: {
   if (!catalog && !metaAds) {
     return {
       ...empty,
-      needsMetaAdsConnect: !isMetaCapiBisuOnboardingConfigured(),
+      needsMetaAdsConnect: !isMetaBusinessLoginConfigured(),
       listError: "no_credential",
     };
   }
@@ -880,7 +880,7 @@ export async function saveMetaPixelConfig(
       if (params.forceFetchCapiToken === true) {
         throw new Error("请使用「连接 Facebook CAPI」重新授权以刷新 Business Integration Token。");
       }
-    } else if (isMetaCapiBisuOnboardingConfigured() && !existingToken) {
+    } else if (isMetaBusinessLoginConfigured() && !existingToken) {
       throw new Error("请先使用「连接 Facebook CAPI」完成 Business Login 授权。");
     } else {
       const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch({

@@ -24,8 +24,14 @@ export const META_CATALOG_CALLBACK_PATH = "/ads/meta-catalog/callback";
 export const META_ADS_CALLBACK_PATH = "/ads/meta-ads/callback";
 export const META_PIXEL_DATA_CALLBACK_PATH = "/ads/meta-pixel-data/callback";
 export const META_CAPI_CALLBACK_PATH = "/ads/meta-capi/callback";
+export const META_BUSINESS_CALLBACK_PATH = "/ads/meta-business/callback";
 
-export type MetaOAuthFlow = "meta_catalog" | "meta_ads" | "meta_pixel_data" | "meta_capi";
+export type MetaOAuthFlow =
+  | "meta_catalog"
+  | "meta_ads"
+  | "meta_pixel_data"
+  | "meta_capi"
+  | "meta_business";
 
 export interface MetaOAuthClient {
   appId: string;
@@ -168,7 +174,8 @@ export function verifyMetaOAuthState(
       flow !== "meta_catalog" &&
       flow !== "meta_ads" &&
       flow !== "meta_pixel_data" &&
-      flow !== "meta_capi"
+      flow !== "meta_capi" &&
+      flow !== "meta_business"
     ) {
       return null;
     }
@@ -203,21 +210,31 @@ export function buildMetaAuthUrl(params: {
   return `${META_OAUTH_DIALOG}?${query.toString()}`;
 }
 
-/** Facebook Login for Business — Conversions API Integration Configuration ID。 */
+/** Facebook Login for Business — 统一 Configuration ID（Catalog + Ads + CAPI）。 */
+export function resolveMetaBusinessLoginConfigId(): string | null {
+  const businessConfig = readEnv("META_BUSINESS_LOGIN_CONFIG_ID");
+  if (businessConfig) return businessConfig;
+  return readEnv("META_CAPI_LOGIN_CONFIG_ID") || null;
+}
+
+export function isMetaBusinessLoginConfigured(): boolean {
+  return Boolean(resolveMetaBusinessLoginConfigId());
+}
+
+/** @deprecated 使用 resolveMetaBusinessLoginConfigId */
 export function resolveMetaCapiLoginConfigId(): string | null {
-  const configId = readEnv("META_CAPI_LOGIN_CONFIG_ID");
-  return configId || null;
+  return resolveMetaBusinessLoginConfigId();
 }
 
 export function isMetaCapiBisuOnboardingConfigured(): boolean {
-  return Boolean(resolveMetaCapiLoginConfigId());
+  return isMetaBusinessLoginConfigured();
 }
 
 /**
- * Business Login for CAPI：使用 config_id，不传 scope。
+ * Business Login：使用 config_id，不传 scope。
  * @see https://developers.facebook.com/docs/facebook-login/facebook-login-for-business
  */
-export function buildMetaCapiBusinessAuthUrl(params: {
+export function buildMetaBusinessAuthUrl(params: {
   appId: string;
   state: string;
   redirectUri: string;
@@ -233,6 +250,9 @@ export function buildMetaCapiBusinessAuthUrl(params: {
   return `${META_OAUTH_DIALOG}?${query.toString()}`;
 }
 
+/** @deprecated 使用 buildMetaBusinessAuthUrl */
+export const buildMetaCapiBusinessAuthUrl = buildMetaBusinessAuthUrl;
+
 /** 在嵌入式 iframe 内通过 API 鉴权后生成 Meta Catalog 授权 URL。 */
 export async function buildMetaOAuthStartUrl(params: {
   shop: string;
@@ -240,6 +260,9 @@ export async function buildMetaOAuthStartUrl(params: {
   requestOrigin: string;
   popup?: boolean;
 }): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  if (isMetaBusinessLoginConfigured()) {
+    return buildMetaBusinessOAuthStartUrl(params);
+  }
   const client = resolveMetaOAuthClient();
   if (!client) {
     return {
@@ -333,6 +356,9 @@ export async function buildMetaAdsOAuthStartUrl(params: {
   requestOrigin: string;
   popup?: boolean;
 }): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  if (isMetaBusinessLoginConfigured()) {
+    return buildMetaBusinessOAuthStartUrl(params);
+  }
   const client = resolveMetaOAuthClient();
   if (!client) {
     return {
@@ -388,8 +414,8 @@ export function buildMetaAdsOAuthReturnUrl(params: {
   return target.toString();
 }
 
-/** Meta CAPI（Business Integration System User）OAuth 入口。 */
-export async function buildMetaCapiOAuthStartUrl(params: {
+/** Meta Business 统一 OAuth（Catalog + Ads + CAPI BISU）。 */
+export async function buildMetaBusinessOAuthStartUrl(params: {
   shop: string;
   host?: string;
   requestOrigin: string;
@@ -402,11 +428,12 @@ export async function buildMetaCapiOAuthStartUrl(params: {
       error: "缺少 Meta App 凭证：请配置 META_APP_ID / META_APP_SECRET 环境变量",
     };
   }
-  const configId = resolveMetaCapiLoginConfigId();
+  const configId = resolveMetaBusinessLoginConfigId();
   if (!configId) {
     return {
       ok: false,
-      error: "缺少 Meta CAPI Configuration：请配置 META_CAPI_LOGIN_CONFIG_ID 环境变量",
+      error:
+        "缺少 Meta Business Login Configuration：请配置 META_BUSINESS_LOGIN_CONFIG_ID 环境变量",
     };
   }
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
@@ -414,20 +441,30 @@ export async function buildMetaCapiOAuthStartUrl(params: {
     params.shop,
     params.host ?? "",
     appOrigin,
-    "meta_capi",
+    "meta_business",
     params.popup,
   );
-  const authUrl = buildMetaCapiBusinessAuthUrl({
+  const authUrl = buildMetaBusinessAuthUrl({
     appId: client.appId,
     state,
-    redirectUri: getMetaRedirectUri(META_CAPI_CALLBACK_PATH, params.requestOrigin),
+    redirectUri: getMetaRedirectUri(META_BUSINESS_CALLBACK_PATH, params.requestOrigin),
     configId,
   });
   return { ok: true, authUrl };
 }
 
-/** Meta CAPI OAuth 完成后跳回 Ads Catalog。 */
-export function buildMetaCapiOAuthReturnUrl(params: {
+/** Meta CAPI OAuth 入口（委托统一 Business Login）。 */
+export async function buildMetaCapiOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  popup?: boolean;
+}): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  return buildMetaBusinessOAuthStartUrl(params);
+}
+
+/** Meta Business / CAPI OAuth 完成后跳回 Ads Catalog。 */
+export function buildMetaBusinessOAuthReturnUrl(params: {
   shop: string;
   host?: string;
   appOrigin?: string;
@@ -456,6 +493,9 @@ export function buildMetaCapiOAuthReturnUrl(params: {
   }
   return target.toString();
 }
+
+/** @deprecated 使用 buildMetaBusinessOAuthReturnUrl */
+export const buildMetaCapiOAuthReturnUrl = buildMetaBusinessOAuthReturnUrl;
 
 /** Exchange an authorization code for a short-lived user access token. */
 export async function exchangeMetaCodeForToken(params: {

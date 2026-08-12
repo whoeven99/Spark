@@ -60,10 +60,11 @@ export function MetaConnectPanels({
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [setupRevision, setSetupRevision] = useState(0);
+  const metaBusinessOAuth = useOAuthPopup("meta_business_oauth");
   const metaOAuth = useOAuthPopup("meta_catalog_oauth");
-  const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
 
   const meta = credentials.meta;
+  const unifiedBusinessLogin = meta.metaBusinessLoginConfigured;
 
   const themeEditorUrl = useMemo(
     () =>
@@ -79,27 +80,15 @@ export function MetaConnectPanels({
     onChanged();
   }
 
-  function connectMetaAds() {
+  function openMetaOAuth() {
     void (async () => {
       setBusy(true);
       try {
-        await metaAdsOAuth.startOAuth(
-          `/api/ads-insights/meta-auth-url${locationSearch}`,
-          () => notifyChanged(),
-        );
-      } catch (e) {
-        alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }
-
-  function openOAuth() {
-    void (async () => {
-      setBusy(true);
-      try {
-        await metaOAuth.startOAuth(`/api/ads-catalog/meta-auth-url${locationSearch}`, () => notifyChanged());
+        const popup = unifiedBusinessLogin ? metaBusinessOAuth : metaOAuth;
+        const endpoint = unifiedBusinessLogin
+          ? `/api/ads-catalog/meta-business-auth-url${locationSearch}`
+          : `/api/ads-catalog/meta-auth-url${locationSearch}`;
+        await popup.startOAuth(endpoint, () => notifyChanged());
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {
@@ -145,6 +134,9 @@ export function MetaConnectPanels({
               {t("adsCatalog.metaConnected")}
             </div>
             <div>{t("adsCatalog.metaCatalogId", { id: meta.catalogId })}</div>
+            {meta.metaAdsConnected ? (
+              <div>{t("adsCatalog.metaBusinessAdAccount", { id: meta.metaAdsAdAccountId })}</div>
+            ) : null}
             <div style={pageHintTextStyle}>
               {t("adsCatalog.metaUpdatedAt", { time: fmtDate(meta.updatedAt) })}
             </div>
@@ -152,13 +144,14 @@ export function MetaConnectPanels({
           <MetaPixelSetupWizard
             metaConnected={meta.connected}
             metaAdsConnected={meta.metaAdsConnected}
+            metaBusinessUnified={unifiedBusinessLogin}
             pixelId={meta.pixelId}
             hasCapiAccessToken={meta.hasCapiAccessToken}
             hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
             capiEnabled={meta.capiEnabled}
             locationSearch={locationSearch}
             themeEditorUrl={themeEditorUrl}
-            onConnectMetaAds={connectMetaAds}
+            onConnectMeta={openMetaOAuth}
             busy={busy}
             setupRevision={setupRevision}
           />
@@ -171,6 +164,7 @@ export function MetaConnectPanels({
             hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
             capiAccessToken={meta.capiAccessToken}
             metaOAuthCapiAvailable={meta.metaOAuthCapiAvailable}
+            metaBusinessUnified={unifiedBusinessLogin}
             metaCapiBisuConfigured={meta.metaCapiBisuConfigured}
             capiTokenType={meta.capiTokenType}
             pendingCapiPixels={meta.pendingCapiPixels}
@@ -182,6 +176,7 @@ export function MetaConnectPanels({
             busy={busy}
             setBusy={setBusy}
             onChanged={notifyChanged}
+            onConnectMeta={openMetaOAuth}
           />
           {meta.pixelId ? (
             <Link
@@ -192,7 +187,7 @@ export function MetaConnectPanels({
             </Link>
           ) : null}
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" style={secondaryBtn} onClick={openOAuth}>
+            <button type="button" style={secondaryBtn} onClick={openMetaOAuth}>
               {t("adsCatalog.metaReauth")}
             </button>
             <button
@@ -205,7 +200,13 @@ export function MetaConnectPanels({
             </button>
           </div>
         </>
-      ) : meta.pendingCatalogs.length > 0 ? (
+      ) : meta.pendingBusiness ? (
+        <MetaBusinessAssetSelect
+          pending={meta.pendingBusiness}
+          busy={busy}
+          onConfirm={(body) => void post("/api/ads-catalog/meta-business-confirm", body)}
+        />
+      ) : meta.pendingCatalogs.length > 0 && !unifiedBusinessLogin ? (
         <CatalogSelect
           label={t("adsCatalog.metaSelectCatalog")}
           catalogs={meta.pendingCatalogs.map((c) => ({ id: c.id, label: c.name || c.id }))}
@@ -214,14 +215,102 @@ export function MetaConnectPanels({
         />
       ) : (
         <>
-          <p style={pageHintTextStyle}>{t("adsCatalog.metaConnectHint")}</p>
+          <p style={pageHintTextStyle}>
+            {unifiedBusinessLogin
+              ? t("adsCatalog.metaBusinessConnectHint")
+              : t("adsCatalog.metaConnectHint")}
+          </p>
           <div>
-            <button type="button" style={primaryBtn} onClick={openOAuth}>
-              {t("adsCatalog.metaConnect")}
+            <button type="button" style={primaryBtn} onClick={openMetaOAuth}>
+              {unifiedBusinessLogin
+                ? t("adsCatalog.metaBusinessConnect")
+                : t("adsCatalog.metaConnect")}
             </button>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function MetaBusinessAssetSelect({
+  pending,
+  busy,
+  onConfirm,
+}: {
+  pending: NonNullable<CredentialsView["meta"]["pendingBusiness"]>;
+  busy: boolean;
+  onConfirm: (body: { catalogId: string; adAccountId: string; pixelId?: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const [catalogId, setCatalogId] = useState(pending.catalogs[0]?.id ?? "");
+  const [adAccountId, setAdAccountId] = useState(pending.adAccounts[0]?.id ?? "");
+  const [pixelId, setPixelId] = useState(pending.pixels[0]?.pixelId ?? "");
+
+  const selectStyle = {
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: `1px solid ${pageColorTokens.borderInput}`,
+    fontSize: 13,
+    width: "100%",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontWeight: 600, fontSize: 13 }}>{t("adsCatalog.metaBusinessSelectAssets")}</div>
+      <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+        <span>{t("adsCatalog.metaSelectCatalog")}</span>
+        <select value={catalogId} onChange={(e) => setCatalogId(e.target.value)} style={selectStyle}>
+          {pending.catalogs.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name || c.id}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+        <span>{t("adsCatalog.metaPixelAdAccountLabel")}</span>
+        <select
+          value={adAccountId}
+          onChange={(e) => setAdAccountId(e.target.value)}
+          style={selectStyle}
+        >
+          {pending.adAccounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name || a.id}
+              {a.formatted ? ` (${a.formatted})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {pending.pixels.length > 0 ? (
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+          <span>{t("adsCatalog.metaPixelSelectLabel")}</span>
+          <select value={pixelId} onChange={(e) => setPixelId(e.target.value)} style={selectStyle}>
+            {pending.pixels.map((p) => (
+              <option key={p.pixelId} value={p.pixelId}>
+                {p.pixelName || p.pixelId}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <div>
+        <button
+          type="button"
+          style={primaryBtn}
+          disabled={busy || !catalogId || !adAccountId}
+          onClick={() =>
+            onConfirm({
+              catalogId,
+              adAccountId,
+              ...(pixelId ? { pixelId } : {}),
+            })
+          }
+        >
+          {t("adsCatalog.confirmSelection")}
+        </button>
+      </div>
     </div>
   );
 }

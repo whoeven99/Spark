@@ -16,6 +16,7 @@ import {
   getGoogleMerchantPending,
   getMetaAdsCredential,
   getMetaCatalogPending,
+  getMetaBusinessPending,
   getMetaCapiPending,
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
@@ -40,7 +41,7 @@ import {
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 import { hasMetaCapiAccessAvailable, isMetaCapiAutoConnectAvailable } from "../server/adsCatalog/metaPixelConfig.server";
-import { isMetaCapiBisuOnboardingConfigured } from "../server/adsCatalog/metaCapiOnboarding.server";
+import { isMetaBusinessLoginConfigured } from "../server/adsCatalog/metaBusinessOnboarding.server";
 
 const AdsCatalogPage = lazy(() =>
   import("./page/AdsCatalogPage").then((m) => ({ default: m.AdsCatalogPage })),
@@ -52,7 +53,7 @@ const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot |
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaCapiPending, metaAds, tiktok, tiktokPending, shopInfo] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaBusinessPending, metaCapiPending, metaAds, tiktok, tiktokPending, shopInfo] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -65,6 +66,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getGoogleAdsCredential(session.shop),
       getGoogleAdsPending(session.shop),
       getMetaCatalogPending(session.shop),
+      getMetaBusinessPending(session.shop),
       getMetaCapiPending(session.shop),
       getMetaAdsCredential(session.shop),
       getTiktokCatalogCredential(session.shop),
@@ -134,9 +136,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               shop: session.shop,
               credential: fb,
             })
-          : isMetaCapiBisuOnboardingConfigured(),
-        metaCapiBisuConfigured: isMetaCapiBisuOnboardingConfigured(),
+          : isMetaBusinessLoginConfigured(),
+        metaBusinessLoginConfigured: isMetaBusinessLoginConfigured(),
+        metaCapiBisuConfigured: isMetaBusinessLoginConfigured(),
         capiTokenType: fb?.capiTokenType ?? "",
+        pendingBusiness: metaBusinessPending
+          ? {
+              businessId: metaBusinessPending.businessId,
+              catalogs: metaBusinessPending.catalogs.map((c) => ({
+                id: c.id,
+                name: c.name,
+              })),
+              adAccounts: metaBusinessPending.adAccounts.map((a) => ({
+                id: a.id,
+                name: a.name,
+                formatted: a.formatted,
+              })),
+              pixels: metaBusinessPending.pixels.map((p) => ({
+                pixelId: p.id,
+                pixelName: p.name || p.id,
+              })),
+            }
+          : null,
         pendingCapiPixels:
           metaCapiPending?.accounts.map((a) => ({
             pixelId: a.id,
