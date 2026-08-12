@@ -1108,91 +1108,66 @@ export function fetchAppLogs(params: {
   return apiFetch(`/app-logs?${query}`);
 }
 
-// --- TSF manage 单字段翻译日志（Render） ---
+// --- TSF manage 单字段翻译日志（CreditUsage source=single） ---
 
-export type SingleTranslateLogEnv = "prod" | "test";
-
-export type SingleTranslateLogKind = "result" | "request" | "llm";
-
-export type SingleTranslateLogParsed = {
-  kind: SingleTranslateLogKind | "other";
-  timestampMs: number;
-  shop: string;
-  message: string;
-  payload: Record<string, unknown>;
+export type SingleTranslateCreditMeta = {
+  rawTokens?: number | null;
+  googleCredits?: number | null;
+  aiModel?: string | null;
+  target?: string | null;
+  sourceLocale?: string | null;
+  fieldKey?: string | null;
+  shopifyType?: string | null;
+  textLength?: number | null;
 };
 
-export type SingleTranslateLogRecord = {
+export type SingleTranslateCreditRecord = {
   id: string;
-  timestampMs: number;
   shop: string;
-  source: string | null;
-  target: string | null;
-  fieldKey: string | null;
-  shopifyType: string | null;
-  aiModel: string | null;
-  status: string | null;
-  usedTokens: number | null;
-  googleCredits: number | null;
-  originalPreview: string;
-  translatedPreview: string;
-  original: string;
-  translated: string;
-  customPrompt: string | null;
-  request: SingleTranslateLogParsed | null;
-  llm: SingleTranslateLogParsed | null;
-  rawMessages: string[];
+  credits: number;
+  referenceId: string;
+  createdAt: string;
+  metadata: SingleTranslateCreditMeta;
+};
+
+export type SingleTranslateLogStats = {
+  totalCount: number;
+  totalCredits: number;
+  totalRawTokens: number;
 };
 
 export type SingleTranslateLogConfig = {
-  configured: boolean;
-  mergeWindowSeconds: number;
+  source: "credit_usage";
   defaultWindowHours: number;
-  environments: { key: SingleTranslateLogEnv; label: string; serviceId: string }[];
+  maxLimit: number;
 };
 
 export function fetchSingleTranslateLogConfig(): Promise<SingleTranslateLogConfig> {
   return apiFetch("/tsf/single-translate-logs/config");
 }
 
-export type SingleTranslateParseStats = {
-  rawLines: number;
-  requestGroups: number;
-  shopMatchedGroups: number;
-  resultLines: number;
-  requestLines: number;
-  llmLines: number;
-  domainsSeen: string[];
-};
-
 export function fetchSingleTranslateLogs(params: {
   shop: string;
-  env?: SingleTranslateLogEnv;
   from?: number;
   to?: number;
-  types?: SingleTranslateLogKind[];
   keyword?: string;
   limit?: number;
   cursor?: string | null;
 }): Promise<{
   shop: string;
-  env: SingleTranslateLogEnv;
   from: number;
   to: number;
-  types: SingleTranslateLogKind[];
-  records: SingleTranslateLogRecord[];
+  keyword: string | null;
+  records: SingleTranslateCreditRecord[];
+  stats: SingleTranslateLogStats;
   hasMore: boolean;
   cursor: string | null;
-  fetchedLogLines: number;
-  parseStats?: SingleTranslateParseStats;
   note?: string;
 }> {
   const query = new URLSearchParams();
   query.set("shop", params.shop);
-  if (params.env) query.set("env", params.env);
   if (params.from) query.set("from", String(params.from));
   if (params.to) query.set("to", String(params.to));
-  if (params.types?.length) query.set("types", params.types.join(","));
   if (params.keyword) query.set("keyword", params.keyword);
   if (params.limit) query.set("limit", String(params.limit));
   if (params.cursor) query.set("cursor", params.cursor);

@@ -126,7 +126,10 @@ export default function App() {
             <Route path="tsf/roi" element={<RequireOwner><TsfRoi /></RequireOwner>} />
             <Route path="tsf/pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="tsf/credits" element={<TsfCredits />} />
-            <Route path="tsf/single-translate-logs" element={<TsfSingleTranslateLogs />} />
+            <Route
+              path="tsf/single-translate-logs"
+              element={<TsfSingleTranslateLogs />}
+            />
             <Route path="translation-ops" element={<TranslationOps />} />
             <Route path="shopify-translation" element={<ShopifyTranslationOps />} />
           </Route>

@@ -94,8 +94,11 @@ app.use("/api/tsf/usage", authMiddleware, tsfUsageRouter);
 app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
 app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
 app.use("/api/tsf/credits", authMiddleware, tsfCreditsRouter);
-// manage 单字段翻译：读 TSF Web Render 运行时日志
-app.use("/api/tsf/single-translate-logs", authMiddleware, tsfSingleTranslateLogsRouter);
+app.use(
+  "/api/tsf/single-translate-logs",
+  authMiddleware,
+  tsfSingleTranslateLogsRouter,
+);
 app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
 app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
 app.use("/api/tsf/language-coverage", authMiddleware, tsfLanguageCoverageRouter);
