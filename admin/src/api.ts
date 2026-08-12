@@ -1108,6 +1108,86 @@ export function fetchAppLogs(params: {
   return apiFetch(`/app-logs?${query}`);
 }
 
+// --- TSF manage 单字段翻译日志（Render） ---
+
+export type SingleTranslateLogEnv = "prod" | "test";
+
+export type SingleTranslateLogKind = "result" | "request" | "llm";
+
+export type SingleTranslateLogParsed = {
+  kind: SingleTranslateLogKind | "other";
+  timestampMs: number;
+  shop: string;
+  message: string;
+  payload: Record<string, unknown>;
+};
+
+export type SingleTranslateLogRecord = {
+  id: string;
+  timestampMs: number;
+  shop: string;
+  source: string | null;
+  target: string | null;
+  fieldKey: string | null;
+  shopifyType: string | null;
+  aiModel: string | null;
+  status: string | null;
+  usedTokens: number | null;
+  googleCredits: number | null;
+  originalPreview: string;
+  translatedPreview: string;
+  original: string;
+  translated: string;
+  customPrompt: string | null;
+  request: SingleTranslateLogParsed | null;
+  llm: SingleTranslateLogParsed | null;
+  rawMessages: string[];
+};
+
+export type SingleTranslateLogConfig = {
+  configured: boolean;
+  mergeWindowSeconds: number;
+  defaultWindowHours: number;
+  environments: { key: SingleTranslateLogEnv; label: string; serviceId: string }[];
+};
+
+export function fetchSingleTranslateLogConfig(): Promise<SingleTranslateLogConfig> {
+  return apiFetch("/tsf/single-translate-logs/config");
+}
+
+export function fetchSingleTranslateLogs(params: {
+  shop: string;
+  env?: SingleTranslateLogEnv;
+  from?: number;
+  to?: number;
+  types?: SingleTranslateLogKind[];
+  keyword?: string;
+  limit?: number;
+  cursor?: string | null;
+}): Promise<{
+  shop: string;
+  env: SingleTranslateLogEnv;
+  from: number;
+  to: number;
+  types: SingleTranslateLogKind[];
+  records: SingleTranslateLogRecord[];
+  hasMore: boolean;
+  cursor: string | null;
+  fetchedLogLines: number;
+  note?: string;
+}> {
+  const query = new URLSearchParams();
+  query.set("shop", params.shop);
+  if (params.env) query.set("env", params.env);
+  if (params.from) query.set("from", String(params.from));
+  if (params.to) query.set("to", String(params.to));
+  if (params.types?.length) query.set("types", params.types.join(","));
+  if (params.keyword) query.set("keyword", params.keyword);
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.cursor) query.set("cursor", params.cursor);
+  return apiFetch(`/tsf/single-translate-logs?${query}`);
+}
+
 export type ShopSizeTier = "超大商店" | "大商店" | "中等商店" | "小商店";
 
 export type ShopSizeProfile = {

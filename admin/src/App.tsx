@@ -32,6 +32,7 @@ import TsfShopProfiles from "./pages/tsf/TsfShopProfiles";
 import TsfShopProfileDetail from "./pages/tsf/TsfShopProfileDetail";
 import TsfLanguageCoverage from "./pages/tsf/TsfLanguageCoverage";
 import TsfCredits from "./pages/tsf/TsfCredits";
+import TsfSingleTranslateLogs from "./pages/tsf/TsfSingleTranslateLogs";
 import TranslationOps from "./pages/TranslationOps";
 import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
 import OpenRouterProbe from "./pages/OpenRouterProbe";
@@ -125,6 +126,7 @@ export default function App() {
             <Route path="tsf/roi" element={<RequireOwner><TsfRoi /></RequireOwner>} />
             <Route path="tsf/pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="tsf/credits" element={<TsfCredits />} />
+            <Route path="tsf/single-translate-logs" element={<TsfSingleTranslateLogs />} />
             <Route path="translation-ops" element={<TranslationOps />} />
             <Route path="shopify-translation" element={<ShopifyTranslationOps />} />
           </Route>
