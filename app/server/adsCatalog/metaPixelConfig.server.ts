@@ -38,23 +38,12 @@ function credentialWriteBase(credential: FacebookCatalogCredential) {
   };
 }
 
-export type MetaCapiTokenSource = "request_explicit" | "stored_capi";
-export type MetaTestCapiTokenSource = "request_explicit" | "fetched_for_pixel";
+import {
+  formatMetaCapiTokenForLog,
+  shouldLogFullMetaCapiToken,
+} from "./metaCapiLog.server";
 
-function maskMetaCapiTokenForLog(value: string): string {
-  if (value.length <= 6) return `${value.slice(0, 1)}***`;
-  return `${value.slice(0, 3)}***${value.slice(-3)}`;
-}
-
-/** 临时调试：Render 设 META_CAPI_LOG_FULL_TOKEN=1 可输出完整 token，验完务必关闭。 */
-export function shouldLogFullMetaCapiToken(): boolean {
-  const v = process.env.META_CAPI_LOG_FULL_TOKEN?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
-
-export function formatMetaCapiTokenForLog(value: string): string {
-  return shouldLogFullMetaCapiToken() ? value : maskMetaCapiTokenForLog(value);
-}
+export { formatMetaCapiTokenForLog, shouldLogFullMetaCapiToken };
 
 function logMetaCapiTokenResolve(params: {
   shop: string;

@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
 import { META_GRAPH_VERSION } from "../metaOAuth.server";
+import {
+  formatMetaCapiTokenForLog,
+  shouldLogFullMetaCapiErrorBody,
+} from "../metaCapiLog.server";
 
 const LOG_PREFIX = "[AdsCatalog][MetaCAPI]";
 const FB_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -140,7 +144,7 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
   }
 
   console.info(
-    `${LOG_PREFIX} step=track_request pixelId=${pixelId} event=${eventName} eventId=${params.eventId ?? ""} test=${params.testEventCode?.trim() ? "1" : "0"}`,
+    `${LOG_PREFIX} step=track_request pixelId=${pixelId} event=${eventName} eventId=${params.eventId ?? ""} test=${params.testEventCode?.trim() ? "1" : "0"} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length}`,
   );
 
   const url = `${FB_GRAPH_BASE}/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(token)}`;
@@ -157,8 +161,9 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
     payload = {};
   }
 
+  const bodyPreview = shouldLogFullMetaCapiErrorBody() ? text : text.slice(0, 500);
   console.info(
-    `${LOG_PREFIX} step=track_response http=${response.status} body=${text.slice(0, 200)}`,
+    `${LOG_PREFIX} step=track_response http=${response.status} body=${bodyPreview}`,
   );
 
   if (!response.ok || payload.error) {

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { META_GRAPH_BASE, META_GRAPH_VERSION } from "../metaOAuth.server";
+import { formatMetaCapiTokenForLog } from "../metaCapiLog.server";
 
 const LOG_PREFIX = "[AdsCatalog][MetaCapiToken]";
 const SYSTEM_USER_NAME = "Spark CAPI";
@@ -108,7 +109,7 @@ async function requestBusinessManagerAccessToken(params: {
     const token = payload.access_token?.trim();
     if (token) {
       console.info(
-        `${LOG_PREFIX} step=business_access_token_ok shop=${params.shop} businessId=${params.businessId}`,
+        `${LOG_PREFIX} step=business_access_token_ok shop=${params.shop} businessId=${params.businessId} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length}`,
       );
       return token;
     }
@@ -253,7 +254,7 @@ async function generateSystemUserAccessToken(params: {
     throw new Error("Meta 未返回 system user access token");
   }
   console.info(
-    `${LOG_PREFIX} step=system_user_token_generated systemUserId=${params.systemUserId}`,
+    `${LOG_PREFIX} step=system_user_token_generated systemUserId=${params.systemUserId} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length}`,
   );
   return token;
 }
