@@ -8,6 +8,8 @@ import {
   getMetaAdAccounts,
   getMetaRedirectUri,
   resolveMetaOAuthClient,
+  logMetaOAuthCancelled,
+  logMetaOAuthError,
   verifyMetaOAuthState,
 } from "../server/adsCatalog/metaOAuth.server";
 import {
@@ -51,6 +53,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const verified = verifyMetaOAuthState(state, 15 * 60 * 1000, "meta_ads");
   if (!verified) {
+    logMetaOAuthError({
+      flow: "meta_ads",
+      step: "invalid_state",
+      error: "Meta Ads OAuth state 无效或已过期",
+    });
     return oauthStateErrorResponse();
   }
   const { shop, host, appOrigin, popup } = verified;
@@ -61,21 +68,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
+    logMetaOAuthCancelled({ flow: "meta_ads", shop, oauthError });
     return respond({ metaAdsAuth: "cancelled" });
   }
   if (!code) {
+    const reason = "Meta 未返回授权 code";
+    logMetaOAuthError({ flow: "meta_ads", shop, step: "missing_code", error: reason });
     return respond({
       metaAdsAuth: "error",
-      reason: "Meta 未返回授权 code",
+      reason,
     });
   }
 
   try {
     const client = resolveMetaOAuthClient();
     if (!client) {
+      const reason = "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）";
+      logMetaOAuthError({ flow: "meta_ads", shop, step: "missing_client", error: reason });
       return respond({
         metaAdsAuth: "error",
-        reason: "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）",
+        reason,
       });
     }
 
@@ -88,9 +100,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const accounts = await getMetaAdAccounts(accessToken);
 
     if (accounts.length === 0) {
+      const reason = "该 Meta 账号未关联任何广告账户，请先在 Meta Business 中创建或获得访问权限";
+      logMetaOAuthError({ flow: "meta_ads", shop, step: "no_ad_accounts", error: reason });
       return respond({
         metaAdsAuth: "error",
-        reason: "该 Meta 账号未关联任何广告账户，请先在 Meta Business 中创建或获得访问权限",
+        reason,
       });
     }
 
@@ -124,6 +138,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
     return respond({ metaAdsAuth: "select" });
   } catch (e) {
+    logMetaOAuthError({ flow: "meta_ads", shop, step: "callback", error: e });
     return respond({
       metaAdsAuth: "error",
       reason: e instanceof Error ? e.message : "Meta Ads 授权失败",

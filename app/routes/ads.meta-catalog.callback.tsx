@@ -7,6 +7,8 @@ import {
   exchangeMetaCodeForToken,
   getMetaCatalogs,
   getMetaRedirectUri,
+  logMetaOAuthCancelled,
+  logMetaOAuthError,
   resolveMetaOAuthClient,
   verifyMetaOAuthState,
 } from "../server/adsCatalog/metaOAuth.server";
@@ -50,6 +52,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const verified = verifyMetaOAuthState(state, 15 * 60 * 1000, "meta_catalog");
   if (!verified) {
+    logMetaOAuthError({
+      flow: "meta_catalog",
+      step: "invalid_state",
+      error: "Meta OAuth state 无效或已过期",
+    });
     return oauthStateErrorResponse();
   }
   const { shop, host, appOrigin, popup } = verified;
@@ -60,21 +67,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
+    logMetaOAuthCancelled({ flow: "meta_catalog", shop, oauthError });
     return respond({ metaAuth: "cancelled" });
   }
   if (!code) {
+    const reason = "Meta 未返回授权 code";
+    logMetaOAuthError({ flow: "meta_catalog", shop, step: "missing_code", error: reason });
     return respond({
       metaAuth: "error",
-      reason: "Meta 未返回授权 code",
+      reason,
     });
   }
 
   try {
     const client = resolveMetaOAuthClient();
     if (!client) {
+      const reason = "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）";
+      logMetaOAuthError({ flow: "meta_catalog", shop, step: "missing_client", error: reason });
       return respond({
         metaAuth: "error",
-        reason: "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）",
+        reason,
       });
     }
 
@@ -88,9 +100,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const catalogs = await getMetaCatalogs(accessToken);
 
     if (catalogs.length === 0) {
+      const reason = "该 Meta 账号未关联任何商品 Catalog，请先在 Meta Commerce/Business 中创建";
+      logMetaOAuthError({ flow: "meta_catalog", shop, step: "no_catalogs", error: reason });
       return respond({
         metaAuth: "error",
-        reason: "该 Meta 账号未关联任何商品 Catalog，请先在 Meta Commerce/Business 中创建",
+        reason,
       });
     }
 
@@ -117,6 +131,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
     return respond({ metaAuth: "select" });
   } catch (e) {
+    logMetaOAuthError({ flow: "meta_catalog", shop, step: "callback", error: e });
     return respond({
       metaAuth: "error",
       reason: e instanceof Error ? e.message : "Meta 授权失败",

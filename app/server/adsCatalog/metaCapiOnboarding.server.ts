@@ -39,13 +39,20 @@ export async function fetchMetaBisuClientBusinessId(params: {
   const response = await fetch(url.toString());
   const json = (await response.json().catch(() => ({}))) as {
     client_business_id?: string;
-    error?: { message?: string };
+    error?: { message?: string; code?: number; type?: string };
   };
   if (!response.ok) {
-    throw new Error(json.error?.message || `HTTP ${response.status}`);
+    const errMsg = json.error?.message || `HTTP ${response.status}`;
+    console.error(
+      `${LOG_PREFIX} step=fetch_client_business_id http=${response.status} code=${json.error?.code ?? ""} type=${json.error?.type ?? ""} err=${errMsg}`,
+    );
+    throw new Error(errMsg);
   }
   const businessId = json.client_business_id?.trim();
   if (!businessId) {
+    console.error(
+      `${LOG_PREFIX} step=fetch_client_business_id http=${response.status} err=missing client_business_id`,
+    );
     throw new Error("Meta 未返回 client_business_id，请确认使用了 Business Integration System User Token");
   }
   return businessId;

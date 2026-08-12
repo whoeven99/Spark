@@ -5,6 +5,8 @@ import {
   buildMetaCapiOAuthReturnUrl,
   exchangeMetaCodeForToken,
   getMetaRedirectUri,
+  logMetaOAuthCancelled,
+  logMetaOAuthError,
   resolveMetaOAuthClient,
   verifyMetaOAuthState,
 } from "../server/adsCatalog/metaOAuth.server";
@@ -53,6 +55,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const verified = verifyMetaOAuthState(state, 15 * 60 * 1000, "meta_capi");
   if (!verified) {
+    logMetaOAuthError({
+      flow: "meta_capi",
+      step: "invalid_state",
+      error: "Meta CAPI OAuth state 无效或已过期",
+    });
     return oauthStateErrorResponse();
   }
   const { shop, host, appOrigin, popup } = verified;
@@ -63,29 +70,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : appRedirect(request, shop, host, appOrigin, params);
 
   if (oauthError) {
+    logMetaOAuthCancelled({ flow: "meta_capi", shop, oauthError });
     return respond({ metaCapiAuth: "cancelled" });
   }
   if (!code) {
+    const reason = "Meta 未返回授权 code";
+    logMetaOAuthError({ flow: "meta_capi", shop, step: "missing_code", error: reason });
     return respond({
       metaCapiAuth: "error",
-      reason: "Meta 未返回授权 code",
+      reason,
     });
   }
 
   try {
     const client = resolveMetaOAuthClient();
     if (!client) {
+      const reason = "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）";
+      logMetaOAuthError({ flow: "meta_capi", shop, step: "missing_client", error: reason });
       return respond({
         metaCapiAuth: "error",
-        reason: "缺少 Meta App 凭证（META_APP_ID / META_APP_SECRET）",
+        reason,
       });
     }
 
     const catalog = await getFacebookCatalogCredential(shop);
     if (!catalog) {
+      const reason = "请先连接 Meta Catalog，再授权 Conversions API";
+      logMetaOAuthError({ flow: "meta_capi", shop, step: "catalog_not_connected", error: reason });
       return respond({
         metaCapiAuth: "error",
-        reason: "请先连接 Meta Catalog，再授权 Conversions API",
+        reason,
       });
     }
 
@@ -102,6 +116,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         apiVersion: catalog.apiVersion,
       });
     } catch (e) {
+      logMetaOAuthError({ flow: "meta_capi", shop, step: "fetch_client_business_id", error: e });
       return respond({
         metaCapiAuth: "error",
         reason:
@@ -137,6 +152,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
     return respond({ metaCapiAuth: "select" });
   } catch (e) {
+    logMetaOAuthError({ flow: "meta_capi", shop, step: "callback", error: e });
     return respond({
       metaCapiAuth: "error",
       reason: e instanceof Error ? e.message : "Meta CAPI 授权失败",

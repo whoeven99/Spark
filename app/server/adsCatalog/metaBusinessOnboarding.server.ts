@@ -59,10 +59,14 @@ async function fetchBusinessGraphCollection<T>(params: {
     const json = (await response.json().catch(() => ({}))) as {
       data?: T[];
       paging?: { next?: string };
-      error?: { message?: string };
+      error?: { message?: string; code?: number; type?: string };
     };
     if (!response.ok) {
-      throw new Error(json.error?.message || `HTTP ${response.status}`);
+      const errMsg = json.error?.message || `HTTP ${response.status}`;
+      console.error(
+        `${LOG_PREFIX} step=graph_collection path=${params.path} http=${response.status} code=${json.error?.code ?? ""} err=${errMsg}`,
+      );
+      throw new Error(errMsg);
     }
     out.push(...(json.data ?? []));
     nextUrl = json.paging?.next ?? null;

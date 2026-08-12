@@ -10,6 +10,33 @@ export const META_OAUTH_DIALOG = `https://www.facebook.com/${META_GRAPH_VERSION}
 export const META_TOKEN_URL = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`;
 export const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 
+const LOG_PREFIX = "[AdsCatalog][MetaOAuth]";
+
+/** Meta OAuth 回调/授权链路失败时写入服务端日志，便于排查商户可见但后台无输出的错误。 */
+export function logMetaOAuthError(params: {
+  flow: MetaOAuthFlow;
+  shop?: string;
+  step: string;
+  error: unknown;
+}): void {
+  const message = params.error instanceof Error ? params.error.message : String(params.error);
+  const shopPart = params.shop ? ` shop=${params.shop}` : "";
+  console.error(
+    `${LOG_PREFIX} flow=${params.flow}${shopPart} step=${params.step} err=${message}`,
+  );
+}
+
+/** 用户在 Meta 授权页取消或拒绝授权。 */
+export function logMetaOAuthCancelled(params: {
+  flow: MetaOAuthFlow;
+  shop: string;
+  oauthError: string;
+}): void {
+  console.warn(
+    `${LOG_PREFIX} flow=${params.flow} shop=${params.shop} step=cancelled reason=${params.oauthError}`,
+  );
+}
+
 /** Catalog 同步 + 列举 Business/Catalog 所需权限。生产环境需通过 Meta App Review。 */
 export const META_CATALOG_SCOPE = "catalog_management,business_management";
 
