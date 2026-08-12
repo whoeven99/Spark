@@ -23,8 +23,9 @@ export const META_ADS_SCOPE =
 export const META_CATALOG_CALLBACK_PATH = "/ads/meta-catalog/callback";
 export const META_ADS_CALLBACK_PATH = "/ads/meta-ads/callback";
 export const META_PIXEL_DATA_CALLBACK_PATH = "/ads/meta-pixel-data/callback";
+export const META_CAPI_CALLBACK_PATH = "/ads/meta-capi/callback";
 
-export type MetaOAuthFlow = "meta_catalog" | "meta_ads" | "meta_pixel_data";
+export type MetaOAuthFlow = "meta_catalog" | "meta_ads" | "meta_pixel_data" | "meta_capi";
 
 export interface MetaOAuthClient {
   appId: string;
@@ -163,7 +164,12 @@ export function verifyMetaOAuthState(
     };
     if (!payload.shop) return null;
     const flow = payload.flow as MetaOAuthFlow | undefined;
-    if (flow !== "meta_catalog" && flow !== "meta_ads" && flow !== "meta_pixel_data") {
+    if (
+      flow !== "meta_catalog" &&
+      flow !== "meta_ads" &&
+      flow !== "meta_pixel_data" &&
+      flow !== "meta_capi"
+    ) {
       return null;
     }
     if (expectedFlow && flow !== expectedFlow) return null;
@@ -193,6 +199,36 @@ export function buildMetaAuthUrl(params: {
     response_type: "code",
     scope: params.scope ?? META_CATALOG_SCOPE,
     state: params.state,
+  });
+  return `${META_OAUTH_DIALOG}?${query.toString()}`;
+}
+
+/** Facebook Login for Business — Conversions API Integration Configuration ID。 */
+export function resolveMetaCapiLoginConfigId(): string | null {
+  const configId = readEnv("META_CAPI_LOGIN_CONFIG_ID");
+  return configId || null;
+}
+
+export function isMetaCapiBisuOnboardingConfigured(): boolean {
+  return Boolean(resolveMetaCapiLoginConfigId());
+}
+
+/**
+ * Business Login for CAPI：使用 config_id，不传 scope。
+ * @see https://developers.facebook.com/docs/facebook-login/facebook-login-for-business
+ */
+export function buildMetaCapiBusinessAuthUrl(params: {
+  appId: string;
+  state: string;
+  redirectUri: string;
+  configId: string;
+}): string {
+  const query = new URLSearchParams({
+    client_id: params.appId,
+    redirect_uri: params.redirectUri,
+    response_type: "code",
+    state: params.state,
+    config_id: params.configId,
   });
   return `${META_OAUTH_DIALOG}?${query.toString()}`;
 }
@@ -343,6 +379,75 @@ export function buildMetaAdsOAuthReturnUrl(params: {
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
   const target = new URL("/app/insights/performance", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
+}
+
+/** Meta CAPI（Business Integration System User）OAuth 入口。 */
+export async function buildMetaCapiOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  popup?: boolean;
+}): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  const client = resolveMetaOAuthClient();
+  if (!client) {
+    return {
+      ok: false,
+      error: "缺少 Meta App 凭证：请配置 META_APP_ID / META_APP_SECRET 环境变量",
+    };
+  }
+  const configId = resolveMetaCapiLoginConfigId();
+  if (!configId) {
+    return {
+      ok: false,
+      error: "缺少 Meta CAPI Configuration：请配置 META_CAPI_LOGIN_CONFIG_ID 环境变量",
+    };
+  }
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createMetaOAuthState(
+    params.shop,
+    params.host ?? "",
+    appOrigin,
+    "meta_capi",
+    params.popup,
+  );
+  const authUrl = buildMetaCapiBusinessAuthUrl({
+    appId: client.appId,
+    state,
+    redirectUri: getMetaRedirectUri(META_CAPI_CALLBACK_PATH, params.requestOrigin),
+    configId,
+  });
+  return { ok: true, authUrl };
+}
+
+/** Meta CAPI OAuth 完成后跳回 Ads Catalog。 */
+export function buildMetaCapiOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/ads-catalog",
+    shop: params.shop,
+    request: params.request,
+    query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("META_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));

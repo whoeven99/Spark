@@ -6,6 +6,10 @@ import {
 } from "./clients/metaConversionsApiClient.server";
 import { fetchMetaPixelCapiAccessToken } from "./clients/metaCapiTokenClient.server";
 import {
+  hasMetaCapiBisuToken,
+  isMetaCapiBisuOnboardingConfigured,
+} from "./metaCapiOnboarding.server";
+import {
   listMetaAdAccountPixels,
   listMetaBusinessPixels,
   type MetaPixelListItem,
@@ -28,6 +32,9 @@ import {
 } from "../../lib/metaPixelEvents";
 
 const LOG_PREFIX = "[AdsCatalog][MetaPixelConfig]";
+
+export type MetaCapiTokenSource = "request_explicit" | "stored_capi" | "fetched_for_pixel";
+export type MetaTestCapiTokenSource = "request_explicit" | "stored_capi" | "fetched_for_pixel";
 
 function credentialWriteBase(credential: FacebookCatalogCredential) {
   return {
@@ -125,10 +132,25 @@ export async function canAutoFetchMetaPixelCapiAccessToken(params: {
   shop: string;
   credential: FacebookCatalogCredential;
 }): Promise<boolean> {
+  if (hasMetaCapiBisuToken(params.credential)) return true;
+  if (isMetaCapiBisuOnboardingConfigured()) return true;
   const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch(params);
   const businessId = params.credential.businessId?.trim() ?? "";
   const client = resolveMetaOAuthClient();
   return Boolean(oauthAccessToken && businessId && client?.appId && client?.appSecret);
+}
+
+/** UI：是否可不手动粘贴 Token 完成 CAPI 连接（BISU onboarding 或旧 FBE 自动换取）。 */
+export async function isMetaCapiAutoConnectAvailable(params: {
+  shop: string;
+  credential?: FacebookCatalogCredential | null;
+}): Promise<boolean> {
+  const shop = params.shop.trim().toLowerCase();
+  const credential = params.credential ?? (await getFacebookCatalogCredential(shop));
+  if (!credential) return isMetaCapiBisuOnboardingConfigured();
+  if (hasMetaCapiBisuToken(credential)) return true;
+  if (isMetaCapiBisuOnboardingConfigured()) return true;
+  return canAutoFetchMetaPixelCapiAccessToken({ shop, credential });
 }
 
 /**
@@ -193,6 +215,17 @@ export async function resolveMetaTestCapiAccessToken(params: {
     return { token: explicit, source: "request_explicit" };
   }
 
+  const stored = params.credential.capiAccessToken?.trim();
+  if (stored) {
+    logMetaCapiTokenResolve({
+      shop,
+      source: "stored_capi",
+      token: stored,
+      detail: `test_event_pixelId=${pixelId}`,
+    });
+    return { token: stored, source: "stored_capi" };
+  }
+
   const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch({
     shop,
     credential: params.credential,
@@ -201,7 +234,7 @@ export async function resolveMetaTestCapiAccessToken(params: {
   const client = resolveMetaOAuthClient();
   if (!oauthAccessToken || !businessId || !client?.appId || !client?.appSecret) {
     throw new Error(
-      "测试事件需要 Meta Ads 授权与 Business ID；或在 Events Manager 粘贴 Token 后重试",
+      "测试事件需要连接 Facebook CAPI，或 Meta Ads 授权与 Business ID；或在 Events Manager 粘贴 Token 后重试",
     );
   }
 
@@ -264,7 +297,7 @@ function pixelConfigFieldsFromCredential(credential: FacebookCatalogCredential) 
   };
 }
 
-/** OAuth 可用时重新换取 CAPI token 并写回 credential。 */
+/** OAuth 可用时重新换取 CAPI token 并写回 credential。BISU token 需重新 Business Login。 */
 export async function refreshAndPersistMetaCapiAccessToken(params: {
   shop: string;
   credential: FacebookCatalogCredential;
@@ -273,6 +306,13 @@ export async function refreshAndPersistMetaCapiAccessToken(params: {
   const shop = params.shop.trim().toLowerCase();
   const pixelId = params.pixelId.trim();
   if (!pixelId) return null;
+
+  if (hasMetaCapiBisuToken(params.credential)) {
+    console.info(
+      `${LOG_PREFIX} step=capi_token_refresh_skipped shop=${shop} reason=bisu_requires_reauth`,
+    );
+    return null;
+  }
 
   const canAutoFetch = await canAutoFetchMetaPixelCapiAccessToken({
     shop,
@@ -306,6 +346,7 @@ export async function refreshAndPersistMetaCapiAccessToken(params: {
       ...pixelConfigFieldsFromCredential(params.credential),
       pixelId,
       capiAccessToken: newToken,
+      capiTokenType: "legacy_fbe",
     });
 
     console.info(
@@ -427,15 +468,45 @@ export async function listMetaCatalogPixels(params: {
   };
 
   if (!catalog && !metaAds) {
-    return { ...empty, needsMetaAdsConnect: true, listError: "no_credential" };
+    return {
+      ...empty,
+      needsMetaAdsConnect: !isMetaCapiBisuOnboardingConfigured(),
+      listError: "no_credential",
+    };
+  }
+
+  if (catalog?.capiAccessToken?.trim() && hasMetaCapiBisuToken(catalog) && catalog.businessId?.trim()) {
+    try {
+      const pixels = await listMetaBusinessPixels({
+        accessToken: catalog.capiAccessToken,
+        businessId: catalog.businessId,
+        apiVersion: catalog.apiVersion,
+      });
+      if (pixels.length > 0) {
+        return {
+          pixels,
+          adAccounts: [],
+          adAccountId: "",
+          boundAdAccountId: metaAds?.adAccountId ?? "",
+          boundPixelId,
+          pixelSource: "business",
+          needsMetaAdsConnect: false,
+        };
+      }
+    } catch (e) {
+      console.warn(
+        `${LOG_PREFIX} step=bisu_pixels_failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   if (metaAds) {
-    let adAccounts = metaAds.availableAccounts?.map((a) => ({
-      id: a.id,
-      name: a.name,
-      formatted: a.formatted,
-    })) ?? [];
+    let adAccounts: Array<{ id: string; name?: string; formatted?: string }> =
+      metaAds.availableAccounts?.map((a) => ({
+        id: a.id,
+        name: a.name,
+        formatted: a.formatted,
+      })) ?? [];
     if (adAccounts.length === 0) {
       try {
         adAccounts = mapMetaAdAccounts(await getMetaAdAccounts(metaAds.accessToken));
@@ -799,47 +870,60 @@ export async function saveMetaPixelConfig(
     (params.forceFetchCapiToken === true || pixelChanged || !existingToken);
 
   let capiAccessTokenToStore = incomingToken || existingToken;
+  let capiTokenTypeToStore = credential.capiTokenType;
+  if (incomingToken) {
+    capiTokenTypeToStore = "manual";
+  }
 
   if (shouldAutoFetchCapiToken) {
-    const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch({
-      shop: params.shop,
-      credential,
-    });
-    const businessId = credential.businessId?.trim() ?? "";
-    const client = resolveMetaOAuthClient();
-    if (!oauthAccessToken) {
-      throw new Error("请连接 Meta Ads 授权后再选择 Pixel。");
-    }
-    if (!businessId) {
-      throw new Error("缺少 Meta Business ID，请重新完成 Meta Catalog 授权。");
-    }
-    if (!client) {
-      throw new Error("Meta App 未配置，无法自动获取 CAPI Access Token。");
-    }
-    console.info(
-      `${LOG_PREFIX} step=capi_token_fetch_start shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} businessId=${businessId} adAccountId=${(await getMetaAdsCredential(params.shop.trim().toLowerCase()))?.adAccountId ?? ""} oauthToken=${formatMetaCapiTokenForLog(oauthAccessToken)} oauthTokenLen=${oauthAccessToken.length} appId=${client.appId} apiVersion=${credential.apiVersion?.trim() ?? ""}`,
-    );
-    try {
-      capiAccessTokenToStore = await fetchMetaPixelCapiAccessToken({
+    if (hasMetaCapiBisuToken(credential) && existingToken) {
+      if (params.forceFetchCapiToken === true) {
+        throw new Error("请使用「连接 Facebook CAPI」重新授权以刷新 Business Integration Token。");
+      }
+    } else if (isMetaCapiBisuOnboardingConfigured() && !existingToken) {
+      throw new Error("请先使用「连接 Facebook CAPI」完成 Business Login 授权。");
+    } else {
+      const oauthAccessToken = await resolveMetaOAuthAccessTokenForCapiFetch({
         shop: params.shop,
-        pixelId,
-        businessId,
-        oauthAccessToken,
-        appId: client.appId,
-        appSecret: client.appSecret,
-        apiVersion: credential.apiVersion,
+        credential,
       });
+      const businessId = credential.businessId?.trim() ?? "";
+      const client = resolveMetaOAuthClient();
+      if (!oauthAccessToken) {
+        throw new Error("请连接 Facebook CAPI，或连接 Meta Ads 授权后再选择 Pixel。");
+      }
+      if (!businessId) {
+        throw new Error("缺少 Meta Business ID，请重新完成 Meta Catalog 授权。");
+      }
+      if (!client) {
+        throw new Error("Meta App 未配置，无法自动获取 CAPI Access Token。");
+      }
       console.info(
-        `${LOG_PREFIX} step=capi_token_fetched shop=${params.shop} pixelId=${pixelId} businessId=${businessId} token=${formatMetaCapiTokenForLog(capiAccessTokenToStore)} tokenLen=${capiAccessTokenToStore.length}`,
+        `${LOG_PREFIX} step=capi_token_fetch_start shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} businessId=${businessId} adAccountId=${(await getMetaAdsCredential(params.shop.trim().toLowerCase()))?.adAccountId ?? ""} oauthToken=${formatMetaCapiTokenForLog(oauthAccessToken)} oauthTokenLen=${oauthAccessToken.length} appId=${client.appId} apiVersion=${credential.apiVersion?.trim() ?? ""}`,
       );
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      console.error(
-        `${LOG_PREFIX} step=capi_token_fetch_failed shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} businessId=${businessId} err=${detail}`,
-      );
-      throw new Error(
-        `无法自动获取 Pixel CAPI Access Token：${detail}。请确认授权账号对该 Pixel 有 Manage 权限，或在 Events Manager 手动粘贴 Token。`,
-      );
+      try {
+        capiAccessTokenToStore = await fetchMetaPixelCapiAccessToken({
+          shop: params.shop,
+          pixelId,
+          businessId,
+          oauthAccessToken,
+          appId: client.appId,
+          appSecret: client.appSecret,
+          apiVersion: credential.apiVersion,
+        });
+        capiTokenTypeToStore = "legacy_fbe";
+        console.info(
+          `${LOG_PREFIX} step=capi_token_fetched shop=${params.shop} pixelId=${pixelId} businessId=${businessId} token=${formatMetaCapiTokenForLog(capiAccessTokenToStore)} tokenLen=${capiAccessTokenToStore.length}`,
+        );
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        console.error(
+          `${LOG_PREFIX} step=capi_token_fetch_failed shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} businessId=${businessId} err=${detail}`,
+        );
+        throw new Error(
+          `无法自动获取 Pixel CAPI Access Token：${detail}。请使用「连接 Facebook CAPI」授权，或在 Events Manager 手动粘贴 Token。`,
+        );
+      }
     }
   } else if (capiEnabled && !capiAccessTokenToStore) {
     const canAutoFetch = await canAutoFetchMetaPixelCapiAccessToken({
@@ -848,7 +932,7 @@ export async function saveMetaPixelConfig(
     });
     if (!canAutoFetch) {
       throw new Error(
-        "请连接 Meta Ads 授权，或在 Events Manager 粘贴 Conversions API Access Token",
+        "请连接 Facebook CAPI，连接 Meta Ads 授权，或在 Events Manager 粘贴 Conversions API Access Token",
       );
     }
   }
@@ -860,6 +944,7 @@ export async function saveMetaPixelConfig(
     ...credentialWriteBase(credential),
     pixelId,
     ...(capiAccessTokenToStore ? { capiAccessToken: capiAccessTokenToStore } : {}),
+    ...(capiTokenTypeToStore ? { capiTokenType: capiTokenTypeToStore } : {}),
     capiEnabled,
     enabledEvents,
   });

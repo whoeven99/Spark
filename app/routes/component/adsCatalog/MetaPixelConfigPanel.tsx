@@ -32,6 +32,9 @@ type Props = {
   hasStoredCapiAccessToken: boolean;
   capiAccessToken: string;
   metaOAuthCapiAvailable: boolean;
+  metaCapiBisuConfigured: boolean;
+  capiTokenType: string;
+  pendingCapiPixels: Array<{ pixelId: string; pixelName?: string; businessId?: string }>;
   testEventCode: string;
   capiEnabled: boolean;
   enabledEvents: string[];
@@ -98,6 +101,9 @@ export function MetaPixelConfigPanel({
   hasStoredCapiAccessToken,
   capiAccessToken: initialCapiAccessToken,
   metaOAuthCapiAvailable,
+  metaCapiBisuConfigured,
+  capiTokenType,
+  pendingCapiPixels,
   testEventCode: savedTestEventCode,
   capiEnabled: initialCapiEnabled,
   enabledEvents: initialEnabledEvents,
@@ -109,6 +115,7 @@ export function MetaPixelConfigPanel({
 }: Props) {
   const { t } = useTranslation();
   const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
+  const metaCapiOAuth = useOAuthPopup("meta_capi_oauth");
 
   const [mode, setMode] = useState<"select" | "manual">(pixelId ? "select" : "select");
   const [adAccounts, setAdAccounts] = useState<AdAccountItem[]>([]);
@@ -290,6 +297,45 @@ export function MetaPixelConfigPanel({
         setBusy(false);
       }
     })();
+  }
+
+  function connectMetaCapi() {
+    void (async () => {
+      setBusy(true);
+      setLocalError(null);
+      try {
+        await metaCapiOAuth.startOAuth(
+          `/api/ads-catalog/meta-capi-auth-url${locationSearch}`,
+          () => onChanged(),
+        );
+      } catch (e) {
+        setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }
+
+  async function confirmPendingCapiPixel(pixelId: string) {
+    setBindBusy(true);
+    setLocalError(null);
+    try {
+      const resp = await fetch(`/api/ads-catalog/meta-capi-pixels${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pixelId }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !data.ok) {
+        setLocalError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      onChanged();
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBindBusy(false);
+    }
   }
 
   async function bindPixel() {
@@ -755,10 +801,47 @@ export function MetaPixelConfigPanel({
             {t("adsCatalog.metaPixelCapiEnable")}
           </label>
           <p style={{ ...pageHintTextStyle, margin: 0 }}>
-            {metaOAuthCapiAvailable
-              ? t("adsCatalog.metaPixelSelectCapiHint")
-              : t("adsCatalog.metaPixelSelectCapiConnectHint")}
+            {capiTokenType === "bisu"
+              ? t("adsCatalog.metaPixelSelectCapiBisuHint")
+              : metaOAuthCapiAvailable
+                ? t("adsCatalog.metaPixelSelectCapiHint")
+                : t("adsCatalog.metaPixelSelectCapiConnectHint")}
           </p>
+          {metaCapiBisuConfigured ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                type="button"
+                style={secondaryBtn}
+                disabled={isBusy}
+                onClick={connectMetaCapi}
+              >
+                {t("adsCatalog.metaCapiConnect")}
+              </button>
+              {capiTokenType === "bisu" ? (
+                <span style={{ fontSize: 12, color: "#0f7a52", fontWeight: 600 }}>
+                  {t("adsCatalog.metaPixelCapiBisuBadge")}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {pendingCapiPixels.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                {t("adsCatalog.metaCapiSelectPixel")}
+              </span>
+              {pendingCapiPixels.map((pixel) => (
+                <button
+                  key={pixel.pixelId}
+                  type="button"
+                  style={secondaryBtn}
+                  disabled={bindBusy}
+                  onClick={() => void confirmPendingCapiPixel(pixel.pixelId)}
+                >
+                  {pixel.pixelName || pixel.pixelId}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label style={fieldLabelStyle}>{t("adsCatalog.metaPixelCapiTokenLabel")}</label>
             <input

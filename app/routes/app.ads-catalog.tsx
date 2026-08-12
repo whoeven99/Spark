@@ -16,6 +16,7 @@ import {
   getGoogleMerchantPending,
   getMetaAdsCredential,
   getMetaCatalogPending,
+  getMetaCapiPending,
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
   maskTokenTail,
@@ -38,7 +39,8 @@ import {
 } from "../lib/metaPixelEvents";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
-import { hasMetaCapiAccessAvailable, canAutoFetchMetaPixelCapiAccessToken } from "../server/adsCatalog/metaPixelConfig.server";
+import { hasMetaCapiAccessAvailable, isMetaCapiAutoConnectAvailable } from "../server/adsCatalog/metaPixelConfig.server";
+import { isMetaCapiBisuOnboardingConfigured } from "../server/adsCatalog/metaCapiOnboarding.server";
 
 const AdsCatalogPage = lazy(() =>
   import("./page/AdsCatalogPage").then((m) => ({ default: m.AdsCatalogPage })),
@@ -50,7 +52,7 @@ const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot |
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaAds, tiktok, tiktokPending, shopInfo] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaCapiPending, metaAds, tiktok, tiktokPending, shopInfo] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -63,6 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getGoogleAdsCredential(session.shop),
       getGoogleAdsPending(session.shop),
       getMetaCatalogPending(session.shop),
+      getMetaCapiPending(session.shop),
       getMetaAdsCredential(session.shop),
       getTiktokCatalogCredential(session.shop),
       getTiktokCatalogPending(session.shop),
@@ -127,11 +130,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         capiAccessToken: fb?.capiAccessToken?.trim() ?? "",
         hasStoredCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
         metaOAuthCapiAvailable: fb
-          ? await canAutoFetchMetaPixelCapiAccessToken({
+          ? await isMetaCapiAutoConnectAvailable({
               shop: session.shop,
               credential: fb,
             })
-          : false,
+          : isMetaCapiBisuOnboardingConfigured(),
+        metaCapiBisuConfigured: isMetaCapiBisuOnboardingConfigured(),
+        capiTokenType: fb?.capiTokenType ?? "",
+        pendingCapiPixels:
+          metaCapiPending?.accounts.map((a) => ({
+            pixelId: a.id,
+            pixelName: a.name || a.id,
+            businessId: a.businessId,
+          })) ?? [],
         testEventCode: fb?.testEventCode?.trim() ?? "",
         capiEnabled:
           typeof fb?.capiEnabled === "boolean" ? fb.capiEnabled : true,

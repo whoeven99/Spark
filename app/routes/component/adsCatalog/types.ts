@@ -96,6 +96,9 @@ export interface CredentialsView {
     enabledEvents: string[];
     metaAdsConnected: boolean;
     metaAdsAdAccountId: string;
+    metaCapiBisuConfigured: boolean;
+    capiTokenType: string;
+    pendingCapiPixels: Array<{ pixelId: string; pixelName?: string; businessId?: string }>;
     pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
   };
   googleMerchant: {

@@ -343,7 +343,7 @@ describe("testMetaServerEvents", () => {
     trackMetaPixelEvent.mockResolvedValue(undefined);
   });
 
-  it("fetches CAPI token for selected pixel instead of using stored token", async () => {
+  it("uses stored capi token for test events when available", async () => {
     getFacebookCatalogCredential.mockResolvedValue({
       accessToken: "oauth",
       catalogId: "cat",
@@ -361,18 +361,11 @@ describe("testMetaServerEvents", () => {
       clientUserAgent: "Mozilla/5.0",
     });
 
-    expect(fetchMetaPixelCapiAccessToken).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shop: "demo.myshopify.com",
-        pixelId: "999888",
-        businessId: "biz_1",
-        oauthAccessToken: "meta-ads-oauth",
-      }),
-    );
+    expect(fetchMetaPixelCapiAccessToken).not.toHaveBeenCalled();
     expect(trackMetaPixelEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         pixelId: "999888",
-        capiAccessToken: "fresh-token-for-pixel",
+        capiAccessToken: "stale-token",
         eventName: "Purchase",
         testEventCode: "TEST1495",
         email: "spark-capi-test@demo.myshopify.com",
@@ -409,13 +402,12 @@ describe("testMetaServerEvents", () => {
     );
   });
 
-  it("surfaces fetch failures", async () => {
+  it("surfaces fetch failures when no stored token exists", async () => {
     getFacebookCatalogCredential.mockResolvedValue({
       accessToken: "oauth",
       catalogId: "cat",
       businessId: "biz_1",
       pixelId: "123456",
-      capiAccessToken: "stale-token",
       enabledEvents: ["Purchase"],
     });
     fetchMetaPixelCapiAccessToken.mockRejectedValue(new Error("permission denied"));

@@ -36,41 +36,24 @@ describe("fetchMetaPixelCapiAccessToken", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to system user token generation", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: { message: "fbe unavailable" } }), {
-          status: 400,
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ data: [] }), { status: 200 }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: "su_1" }), { status: 200 }),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ access_token: "system-capi-token" }), { status: 200 }),
-      );
+  it("throws when FBE path fails (system user fallback removed)", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: "fbe unavailable" } }), {
+        status: 400,
+      }),
+    );
 
-    const token = await fetchMetaPixelCapiAccessToken({
-      shop: "demo.myshopify.com",
-      pixelId: "123456",
-      businessId: "biz_1",
-      oauthAccessToken: "oauth-token",
-      appId: "app-id",
-      appSecret: "app-secret",
-    });
+    await expect(
+      fetchMetaPixelCapiAccessToken({
+        shop: "demo.myshopify.com",
+        pixelId: "123456",
+        businessId: "biz_1",
+        oauthAccessToken: "oauth-token",
+        appId: "app-id",
+        appSecret: "app-secret",
+      }),
+    ).rejects.toThrow(/连接 Facebook CAPI/);
 
-    expect(token).toBe("system-capi-token");
-    expect(fetch).toHaveBeenCalledTimes(6);
-
-    const assignPixelCall = vi.mocked(fetch).mock.calls[4];
-    expect(assignPixelCall?.[0]).toContain("/123456/assigned_users");
-    const assignBody = JSON.parse(String(assignPixelCall?.[1]?.body));
-    expect(assignBody.tasks).toEqual(["EDIT", "ANALYZE", "ADVERTISE", "UPLOAD"]);
-    expect(assignBody.tasks).not.toContain("MANAGE");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
