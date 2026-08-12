@@ -1155,6 +1155,16 @@ export function fetchSingleTranslateLogConfig(): Promise<SingleTranslateLogConfi
   return apiFetch("/tsf/single-translate-logs/config");
 }
 
+export type SingleTranslateParseStats = {
+  rawLines: number;
+  stitchedBlocks: number;
+  parsedLines: number;
+  resultLines: number;
+  requestLines: number;
+  llmLines: number;
+  shopMatchedLines: number;
+};
+
 export function fetchSingleTranslateLogs(params: {
   shop: string;
   env?: SingleTranslateLogEnv;
@@ -1174,6 +1184,7 @@ export function fetchSingleTranslateLogs(params: {
   hasMore: boolean;
   cursor: string | null;
   fetchedLogLines: number;
+  parseStats?: SingleTranslateParseStats;
   note?: string;
 }> {
   const query = new URLSearchParams();

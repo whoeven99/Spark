@@ -121,7 +121,8 @@ async function renderFetch(
 
 export type FetchTsfWebLogsParams = {
   serviceId: string;
-  shop: string;
+  /** Render `text` 过滤；单字段日志用 `[single]`，避免 shop 拼写/多行导致漏行。 */
+  text: string;
   startTime: string;
   endTime: string;
   cursor?: RenderLogsCursor | null;
@@ -135,7 +136,7 @@ export type FetchTsfWebLogsResult = {
   cursor: RenderLogsCursor | null;
 };
 
-/** 按 shop 关键字拉 TSF Web app 日志（backward 分页）。 */
+/** 按 Render `text` 关键字拉 TSF Web app 日志（backward 分页）。 */
 export async function fetchTsfWebLogs(
   params: FetchTsfWebLogsParams,
 ): Promise<FetchTsfWebLogsResult> {
@@ -163,7 +164,7 @@ export async function fetchTsfWebLogs(
       limit: pageLimit,
       startTime,
       endTime,
-      text: params.shop,
+      text: params.text,
     });
 
     const batch = data.logs ?? [];

@@ -92,19 +92,29 @@ tsfSingleTranslateLogsRouter.get("/", async (req, res) => {
   try {
     const { entries, hasMore, cursor: nextCursor } = await fetchTsfWebLogs({
       serviceId,
-      shop,
+      text: "[single]",
       startTime: new Date(fromMs).toISOString(),
       endTime: new Date(toMs).toISOString(),
       cursor,
     });
 
-    const records: SingleTranslateLogRecord[] = aggregateSingleTranslateLogs({
+    const { records, stats } = aggregateSingleTranslateLogs({
       entries,
       shop,
       types,
       keyword,
       limit,
     });
+
+    let note: string | undefined;
+    if (entries.length === 0) {
+      note =
+        "该时间窗内未找到 [single] 日志；请缩小时间范围或确认 TSF Web PROD 已有单字段翻译。";
+    } else if (records.length === 0) {
+      note =
+        `已扫描 ${stats.rawLines} 行原始日志（${stats.resultLines} 条 result / ${stats.requestLines} 条 request），` +
+        `但没有匹配 shop「${shop}」。请核对域名拼写是否与日志内 myshopify.com 完全一致。`;
+    }
 
     res.json({
       shop,
@@ -116,10 +126,8 @@ tsfSingleTranslateLogsRouter.get("/", async (req, res) => {
       hasMore,
       cursor: nextCursor ? encodeRenderLogsCursor(nextCursor) : null,
       fetchedLogLines: entries.length,
-      note:
-        entries.length === 0
-          ? "该时间窗内未找到匹配日志；单字段翻译仅写入 TSF Web 容器，且 Render 保留期有限。"
-          : undefined,
+      parseStats: stats,
+      note,
     });
   } catch (err) {
     console.error("[tsf/single-translate-logs]", err);

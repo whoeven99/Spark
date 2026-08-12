@@ -11,6 +11,7 @@ export type ParsedSingleLog = {
   shop: string;
   message: string;
   payload: Record<string, unknown>;
+  requestId: string | null;
 };
 
 export type SingleTranslateLogRecord = {
@@ -27,7 +28,6 @@ export type SingleTranslateLogRecord = {
   googleCredits: number | null;
   originalPreview: string;
   translatedPreview: string;
-  /** 完整原文/译文（来自 result payload）。 */
   original: string;
   translated: string;
   customPrompt: string | null;
@@ -36,13 +36,25 @@ export type SingleTranslateLogRecord = {
   rawMessages: string[];
 };
 
-const MERGE_WINDOW_MS = 60_000;
+export type SingleTranslateParseStats = {
+  rawLines: number;
+  stitchedBlocks: number;
+  parsedLines: number;
+  resultLines: number;
+  requestLines: number;
+  llmLines: number;
+  shopMatchedLines: number;
+};
 
-/** Remix/Render 常在 message 前加 request id，如 `[onj9q] [single] result`。 */
+const MERGE_WINDOW_MS = 60_000;
+const MYSHOPIFY_DOMAIN_RE = /[a-z0-9][a-z0-9-]{0,61}\.myshopify\.com/gi;
+
+/** Remix/Render 常在 message 前加 request id，如 `[cnj9q] [single] result`。 */
 const RE_RESULT = /\[single\]\s+result\b/;
 const RE_REQUEST = /\[single\]\s+request\b/;
 const RE_LLM = /\[single-llm\]\s+return\b/;
 const RE_SINGLE_ANY = /\[single(?:-llm)?\]/;
+const RE_LEADING_REQUEST_ID = /^\[([a-z0-9]{4,12})\]/i;
 
 function readShop(payload: Record<string, unknown>): string {
   const shop = payload.shop ?? payload.shopName;
@@ -62,6 +74,72 @@ function readNumber(payload: Record<string, unknown>, key: string): number | nul
     return Number(v);
   }
   return null;
+}
+
+export function extractMyshopifyDomains(text: string): string[] {
+  const matches = text.match(MYSHOPIFY_DOMAIN_RE) ?? [];
+  return [...new Set(matches.map((d) => d.toLowerCase()))];
+}
+
+export function extractLeadingRequestId(message: string): string | null {
+  const m = message.trim().match(RE_LEADING_REQUEST_ID);
+  return m?.[1]?.toLowerCase() ?? null;
+}
+
+/** 行/message 是否属于目标店（支持从正文里抓 *.myshopify.com）。 */
+export function messageMatchesShop(message: string, shop: string): boolean {
+  const normalized = shop.trim().toLowerCase();
+  if (!normalized) return true;
+  const lower = message.toLowerCase();
+  if (lower.includes(normalized)) return true;
+  return extractMyshopifyDomains(message).includes(normalized);
+}
+
+/** 把同一 Render request id 下、同一秒附近的碎片行拼成块（Node inspect 多行）。 */
+export function stitchRenderLogEntries(entries: RenderLogEntry[]): RenderLogEntry[] {
+  if (entries.length === 0) return [];
+
+  const sorted = [...entries].sort(
+    (a, b) => parseLogTimestamp(a) - parseLogTimestamp(b),
+  );
+
+  const blocks: RenderLogEntry[] = [];
+  let current: RenderLogEntry | null = null;
+
+  for (const entry of sorted) {
+    const msg = entry.message ?? "";
+    const ts = parseLogTimestamp(entry);
+    const rid = extractLeadingRequestId(msg);
+    const hasSingleTag = RE_SINGLE_ANY.test(msg);
+
+    const startNew =
+      !current ||
+      hasSingleTag ||
+      (rid &&
+        current &&
+        rid !== extractLeadingRequestId(current.message ?? "")) ||
+      (current && Math.abs(ts - parseLogTimestamp(current)) > 3_000);
+
+    if (startNew) {
+      if (current) blocks.push(current);
+      current = { ...entry, message: msg };
+      continue;
+    }
+
+    if (!current) {
+      current = { ...entry, message: msg };
+      continue;
+    }
+
+    current = {
+      ...current,
+      message: `${current.message ?? ""}\n${msg}`,
+      timestamp: entry.timestamp ?? current.timestamp,
+    };
+  }
+
+  if (current) blocks.push(current);
+  return blocks;
 }
 
 /** 从 console.log 行尾尝试解析 JSON；失败则回退浅层 key: value 提取。 */
@@ -111,7 +189,9 @@ export function parseSingleLogEntry(entry: RenderLogEntry): ParsedSingleLog | nu
   if (kind === "other" && !RE_SINGLE_ANY.test(message)) return null;
 
   const payload = extractPayloadObject(message);
-  const shop = readShop(payload);
+  const shopFromPayload = readShop(payload);
+  const domains = extractMyshopifyDomains(message);
+  const shop = shopFromPayload || domains[0] || "";
   const timestampMs = parseLogTimestamp(entry);
 
   return {
@@ -120,12 +200,19 @@ export function parseSingleLogEntry(entry: RenderLogEntry): ParsedSingleLog | nu
     shop,
     message,
     payload,
+    requestId: extractLeadingRequestId(message),
   };
 }
 
 function previewText(value: string | null | undefined, max = 120): string {
   if (!value) return "";
   return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function rowMatchesShop(row: ParsedSingleLog, shop: string): boolean {
+  if (!shop) return true;
+  if (row.shop === shop) return true;
+  return messageMatchesShop(row.message, shop);
 }
 
 function recordMatchesKeyword(record: SingleTranslateLogRecord, keyword: string): boolean {
@@ -147,37 +234,47 @@ function recordMatchesKeyword(record: SingleTranslateLogRecord, keyword: string)
   return haystack.includes(q);
 }
 
-function buildRecordFromResult(
-  result: ParsedSingleLog,
+function buildRecordFromAnchor(
+  anchor: ParsedSingleLog,
   related: ParsedSingleLog[],
 ): SingleTranslateLogRecord {
-  const p = result.payload;
+  const result = anchor.kind === "result" ? anchor : related.find((r) => r.kind === "result") ?? null;
   const request =
-    related.find((r) => r.kind === "request") ??
-    null;
+    anchor.kind === "request" ? anchor : related.find((r) => r.kind === "request") ?? null;
   const llm = related.find((r) => r.kind === "llm") ?? null;
 
+  const p = (result ?? request ?? anchor).payload;
   const original =
     readString(p, "original") ??
     readString(request?.payload ?? {}, "original");
-  const translated = readString(p, "translated");
+  const translated = readString(result?.payload ?? {}, "translated");
   const customPrompt =
     readString(p, "prompt") ??
     readString(p, "customPrompt") ??
     readString(request?.payload ?? {}, "customPrompt");
 
+  const shop =
+    readShop(p) ||
+    anchor.shop ||
+    request?.shop ||
+    result?.shop ||
+    extractMyshopifyDomains(anchor.message)[0] ||
+    "";
+
   return {
-    id: `${result.timestampMs}:${readString(p, "fieldKey") ?? "value"}`,
-    timestampMs: result.timestampMs,
-    shop: result.shop || readShop(p),
+    id: `${anchor.timestampMs}:${readString(p, "fieldKey") ?? "value"}:${anchor.requestId ?? "x"}`,
+    timestampMs: anchor.timestampMs,
+    shop,
     source: readString(p, "source"),
     target: readString(p, "target"),
     fieldKey: readString(p, "fieldKey"),
     shopifyType: readString(p, "shopifyType"),
     aiModel: readString(p, "aiModel"),
-    status: readString(p, "status"),
-    usedTokens: readNumber(p, "usedTokens"),
-    googleCredits: readNumber(p, "googleCredits"),
+    status: readString(result?.payload ?? {}, "status"),
+    usedTokens:
+      readNumber(result?.payload ?? {}, "usedTokens") ??
+      readNumber(p, "usedTokens"),
+    googleCredits: readNumber(result?.payload ?? {}, "googleCredits"),
     originalPreview: previewText(original, 200),
     translatedPreview: previewText(translated, 200),
     original: original ?? "",
@@ -185,9 +282,8 @@ function buildRecordFromResult(
     customPrompt,
     request,
     llm,
-    rawMessages: [result.message, request?.message, llm?.message].filter(
-      (m): m is string => Boolean(m),
-    ),
+    rawMessages: [anchor.message, request?.message, result?.message, llm?.message]
+      .filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i),
   };
 }
 
@@ -200,50 +296,64 @@ export type AggregateSingleTranslateLogsParams = {
   limit?: number;
 };
 
-/** 以 `[single] result` 为主记录，±窗口内挂 request / llm。 */
+/** 预处理：拼接多行 inspect，再按 result（无则 request）聚合。 */
 export function aggregateSingleTranslateLogs(
   params: AggregateSingleTranslateLogsParams,
-): SingleTranslateLogRecord[] {
+): { records: SingleTranslateLogRecord[]; stats: SingleTranslateParseStats } {
   const shop = params.shop.trim().toLowerCase();
   const mergeWindowMs = params.mergeWindowMs ?? MERGE_WINDOW_MS;
   const typeSet = new Set(
     (params.types?.length ? params.types : (["result", "request", "llm"] as SingleLogKind[])),
   );
 
-  const parsed = params.entries
+  const stitched = stitchRenderLogEntries(params.entries);
+  const parsedAll = stitched
     .map(parseSingleLogEntry)
-    .filter((row): row is ParsedSingleLog => row !== null)
-    .filter((row) => {
-      if (!shop) return true;
-      if (row.shop === shop) return true;
-      if (row.message.toLowerCase().includes(shop)) return true;
-      // Render text=shop 已预过滤；多行 inspect 首行可能只有 `[rid] [single] result {`
-      if (row.kind === "result" || row.kind === "request" || row.kind === "llm") {
-        return true;
-      }
-      return false;
-    })
+    .filter((row): row is ParsedSingleLog => row !== null);
+
+  const parsed = parsedAll
+    .filter((row) => rowMatchesShop(row, shop))
     .filter((row) => row.kind === "other" || typeSet.has(row.kind))
     .sort((a, b) => b.timestampMs - a.timestampMs);
 
-  const results = parsed.filter((row) => row.kind === "result");
-  const records: SingleTranslateLogRecord[] = [];
+  const stats: SingleTranslateParseStats = {
+    rawLines: params.entries.length,
+    stitchedBlocks: stitched.length,
+    parsedLines: parsedAll.length,
+    resultLines: parsedAll.filter((r) => r.kind === "result").length,
+    requestLines: parsedAll.filter((r) => r.kind === "request").length,
+    llmLines: parsedAll.filter((r) => r.kind === "llm").length,
+    shopMatchedLines: parsed.length,
+  };
 
-  for (const result of results) {
+  let anchors = parsed.filter((row) => row.kind === "result");
+  if (anchors.length === 0) {
+    anchors = parsed.filter((row) => row.kind === "request");
+  }
+
+  const records: SingleTranslateLogRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const anchor of anchors) {
     const related = parsed.filter((row) => {
-      if (row === result) return false;
-      if (Math.abs(row.timestampMs - result.timestampMs) > mergeWindowMs) {
+      if (row === anchor) return false;
+      if (anchor.requestId && row.requestId && anchor.requestId === row.requestId) {
+        return true;
+      }
+      if (Math.abs(row.timestampMs - anchor.timestampMs) > mergeWindowMs) {
         return false;
       }
       if (shop && row.shop && row.shop !== shop) return false;
-      return row.kind === "request" || row.kind === "llm";
+      return row.kind === "request" || row.kind === "llm" || row.kind === "result";
     });
 
-    const record = buildRecordFromResult(result, related);
+    const record = buildRecordFromAnchor(anchor, related);
     if (!recordMatchesKeyword(record, params.keyword ?? "")) continue;
+    if (seen.has(record.id)) continue;
+    seen.add(record.id);
     records.push(record);
   }
 
   const limit = params.limit ?? 100;
-  return records.slice(0, limit);
+  return { records: records.slice(0, limit), stats };
 }
