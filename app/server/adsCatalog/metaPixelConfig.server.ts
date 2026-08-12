@@ -57,7 +57,56 @@ function logMetaCapiTokenResolve(params: {
     `source=${params.source}`,
   ];
   if (params.detail) parts.push(`detail=${params.detail}`);
-  if (params.token) parts.push(`token=${formatMetaCapiTokenForLog(params.token)}`);
+  if (params.token) {
+    parts.push(`token=${formatMetaCapiTokenForLog(params.token)}`);
+    parts.push(`tokenLen=${params.token.length}`);
+  }
+  console.info(parts.join(" "));
+}
+
+async function logMetaPixelOperationContext(params: {
+  shop: string;
+  operation: "switch_binding" | "test_event";
+  credential: FacebookCatalogCredential;
+  pixelId?: string;
+  testEventCode?: string;
+  forceFetchCapiToken?: boolean;
+  requestCapiToken?: string;
+}): Promise<void> {
+  const shop = params.shop.trim().toLowerCase();
+  const metaAds = await getMetaAdsCredential(shop);
+  const oauthToken = await resolveMetaOAuthAccessTokenForCapiFetch({
+    shop,
+    credential: params.credential,
+  });
+  const client = resolveMetaOAuthClient();
+  const parts = [
+    `${LOG_PREFIX} step=${params.operation}_context`,
+    `shop=${shop}`,
+    `operation=${params.operation}`,
+    `catalogId=${params.credential.catalogId?.trim() ?? ""}`,
+    `businessId=${params.credential.businessId?.trim() ?? ""}`,
+    `boundPixelId=${params.credential.pixelId?.trim() ?? ""}`,
+    `requestPixelId=${params.pixelId?.trim() ?? ""}`,
+    `adAccountId=${metaAds?.adAccountId?.trim() ?? ""}`,
+    `adAccountName=${metaAds?.adAccountName?.trim() ?? ""}`,
+    `metaAdsConnected=${Boolean(metaAds)}`,
+    `oauthTokenSource=${metaAds?.accessToken?.trim() ? "meta_ads" : "catalog"}`,
+    `oauthToken=${oauthToken ? formatMetaCapiTokenForLog(oauthToken) : ""}`,
+    `oauthTokenLen=${oauthToken?.length ?? 0}`,
+    `storedCapiToken=${params.credential.capiAccessToken?.trim() ? formatMetaCapiTokenForLog(params.credential.capiAccessToken.trim()) : ""}`,
+    `requestCapiToken=${params.requestCapiToken?.trim() ? formatMetaCapiTokenForLog(params.requestCapiToken.trim()) : ""}`,
+    `capiEnabled=${typeof params.credential.capiEnabled === "boolean" ? params.credential.capiEnabled : true}`,
+    `apiVersion=${params.credential.apiVersion?.trim() ?? ""}`,
+    `metaAppConfigured=${Boolean(client?.appId && client?.appSecret)}`,
+    `metaAppId=${client?.appId?.trim() ?? ""}`,
+  ];
+  if (params.forceFetchCapiToken !== undefined) {
+    parts.push(`forceFetchCapiToken=${params.forceFetchCapiToken}`);
+  }
+  if (params.testEventCode?.trim()) {
+    parts.push(`testEventCode=${params.testEventCode.trim()}`);
+  }
   console.info(parts.join(" "));
 }
 
@@ -158,6 +207,9 @@ export async function resolveMetaTestCapiAccessToken(params: {
 
   let token: string;
   try {
+    console.info(
+      `${LOG_PREFIX} step=test_event_fetch_token_start shop=${shop} pixelId=${pixelId} businessId=${businessId} oauthToken=${formatMetaCapiTokenForLog(oauthAccessToken)} oauthTokenLen=${oauthAccessToken.length} appId=${client.appId}`,
+    );
     token = await fetchMetaPixelCapiAccessToken({
       shop,
       pixelId,
@@ -169,6 +221,9 @@ export async function resolveMetaTestCapiAccessToken(params: {
     });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
+    console.error(
+      `${LOG_PREFIX} step=test_event_fetch_token_failed shop=${shop} pixelId=${pixelId} businessId=${businessId} err=${detail}`,
+    );
     throw new Error(
       `无法为 Pixel ${pixelId} 获取 CAPI Access Token：${detail}。请确认授权账号对该 Pixel 有 Manage 权限，或在 Events Manager 手动粘贴 Token。`,
     );
@@ -708,6 +763,17 @@ export async function saveMetaPixelConfig(
     throw new Error("Meta Pixel ID 应为数字");
   }
 
+  if (params.forceFetchCapiToken) {
+    await logMetaPixelOperationContext({
+      shop: params.shop,
+      operation: "switch_binding",
+      credential,
+      pixelId,
+      forceFetchCapiToken: true,
+      requestCapiToken: params.capiAccessToken,
+    });
+  }
+
   try {
     const listed = await listMetaCatalogPixels({ shop: params.shop });
     if (
@@ -750,6 +816,9 @@ export async function saveMetaPixelConfig(
     if (!client) {
       throw new Error("Meta App 未配置，无法自动获取 CAPI Access Token。");
     }
+    console.info(
+      `${LOG_PREFIX} step=capi_token_fetch_start shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} businessId=${businessId} adAccountId=${(await getMetaAdsCredential(params.shop.trim().toLowerCase()))?.adAccountId ?? ""} oauthToken=${formatMetaCapiTokenForLog(oauthAccessToken)} oauthTokenLen=${oauthAccessToken.length} appId=${client.appId} apiVersion=${credential.apiVersion?.trim() ?? ""}`,
+    );
     try {
       capiAccessTokenToStore = await fetchMetaPixelCapiAccessToken({
         shop: params.shop,
@@ -761,10 +830,13 @@ export async function saveMetaPixelConfig(
         apiVersion: credential.apiVersion,
       });
       console.info(
-        `${LOG_PREFIX} step=capi_token_fetched shop=${params.shop} pixelId=${pixelId} businessId=${businessId}`,
+        `${LOG_PREFIX} step=capi_token_fetched shop=${params.shop} pixelId=${pixelId} businessId=${businessId} token=${formatMetaCapiTokenForLog(capiAccessTokenToStore)} tokenLen=${capiAccessTokenToStore.length}`,
       );
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
+      console.error(
+        `${LOG_PREFIX} step=capi_token_fetch_failed shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} businessId=${businessId} err=${detail}`,
+      );
       throw new Error(
         `无法自动获取 Pixel CAPI Access Token：${detail}。请确认授权账号对该 Pixel 有 Manage 权限，或在 Events Manager 手动粘贴 Token。`,
       );
@@ -968,6 +1040,15 @@ export async function testMetaServerEvents(params: {
   const testEventCode = params.testEventCode.trim();
   if (!testEventCode) throw new Error("请填写 Test Event Code");
 
+  await logMetaPixelOperationContext({
+    shop: params.shop,
+    operation: "test_event",
+    credential,
+    pixelId,
+    testEventCode,
+    requestCapiToken: params.capiAccessToken,
+  });
+
   const resolved = await resolveMetaTestCapiAccessToken({
     shop: params.shop,
     credential,
@@ -977,7 +1058,7 @@ export async function testMetaServerEvents(params: {
   const token = resolved.token;
 
   console.info(
-    `${LOG_PREFIX} step=test_event_token shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} tokenSource=${resolved.source} token=${formatMetaCapiTokenForLog(token)} requestExplicitToken=${Boolean(params.capiAccessToken?.trim())}`,
+    `${LOG_PREFIX} step=test_event_token shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} testEventCode=${testEventCode} tokenSource=${resolved.source} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length} requestExplicitToken=${Boolean(params.capiAccessToken?.trim())} clientIp=${params.clientIpAddress?.trim() ?? ""} userAgent=${params.clientUserAgent?.trim() ?? ""}`,
   );
 
   const clientIpAddress =
@@ -986,18 +1067,29 @@ export async function testMetaServerEvents(params: {
     params.clientUserAgent?.trim() ||
     "Mozilla/5.0 (compatible; SparkMetaCAPI/1.0)";
 
-  await trackMetaPixelEvent({
-    pixelId,
-    capiAccessToken: token,
-    eventName: "Purchase",
-    eventId: `spark-test-${Date.now()}`,
-    customData: { value: 1, currency: "USD" },
-    email: buildMetaCapiTestEmail(params.shop),
-    clientIpAddress,
-    clientUserAgent,
-    testEventCode,
-    eventSourceUrl: `https://${params.shop.trim().toLowerCase()}`,
-  });
+  try {
+    await trackMetaPixelEvent({
+      pixelId,
+      capiAccessToken: token,
+      eventName: "Purchase",
+      eventId: `spark-test-${Date.now()}`,
+      customData: { value: 1, currency: "USD" },
+      email: buildMetaCapiTestEmail(params.shop),
+      clientIpAddress,
+      clientUserAgent,
+      testEventCode,
+      eventSourceUrl: `https://${params.shop.trim().toLowerCase()}`,
+    });
+    console.info(
+      `${LOG_PREFIX} step=test_event_sent shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} testEventCode=${testEventCode}`,
+    );
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error(
+      `${LOG_PREFIX} step=test_event_failed shop=${params.shop.trim().toLowerCase()} pixelId=${pixelId} testEventCode=${testEventCode} tokenSource=${resolved.source} token=${formatMetaCapiTokenForLog(token)} err=${detail}`,
+    );
+    throw e;
+  }
 }
 
 function buildMetaCapiTestEmail(shop: string): string {

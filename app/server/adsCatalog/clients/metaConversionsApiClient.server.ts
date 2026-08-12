@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import { META_GRAPH_VERSION } from "../metaOAuth.server";
 import {
+  formatFieldsForLog,
   formatMetaCapiTokenForLog,
+  formatUrlForLog,
   shouldLogFullMetaCapiErrorBody,
 } from "../metaCapiLog.server";
 
@@ -144,10 +146,13 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
   }
 
   console.info(
-    `${LOG_PREFIX} step=track_request pixelId=${pixelId} event=${eventName} eventId=${params.eventId ?? ""} test=${params.testEventCode?.trim() ? "1" : "0"} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length}`,
+    `${LOG_PREFIX} step=track_request pixelId=${pixelId} event=${eventName} eventId=${params.eventId ?? ""} test=${params.testEventCode?.trim() ? "1" : "0"} testEventCode=${params.testEventCode?.trim() ?? ""} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length} body=${formatFieldsForLog(body)}`,
   );
 
   const url = `${FB_GRAPH_BASE}/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(token)}`;
+  console.info(
+    `${LOG_PREFIX} step=track_http method=POST url=${formatUrlForLog(url)}`,
+  );
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

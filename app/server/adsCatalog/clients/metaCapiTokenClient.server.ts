@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 import { META_GRAPH_BASE, META_GRAPH_VERSION } from "../metaOAuth.server";
-import { formatMetaCapiTokenForLog } from "../metaCapiLog.server";
+import {
+  formatFieldsForLog,
+  formatMetaCapiTokenForLog,
+  formatUrlForLog,
+  shouldLogFullMetaCapiErrorBody,
+} from "../metaCapiLog.server";
 
 const LOG_PREFIX = "[AdsCatalog][MetaCapiToken]";
 const SYSTEM_USER_NAME = "Spark CAPI";
@@ -54,8 +59,17 @@ async function postGraphForm(params: {
 }): Promise<MetaGraphErrorPayload> {
   const url = `${graphBase(params.apiVersion)}/${params.path.replace(/^\//, "")}`;
   const body = new URLSearchParams({ ...params.fields, access_token: params.accessToken });
+  console.info(
+    `${LOG_PREFIX} step=graph_request method=POST url=${formatUrlForLog(url)} body=${formatFieldsForLog({ ...params.fields, access_token: params.accessToken })}`,
+  );
   const response = await fetch(url, { method: "POST", body });
   const parsed = await parseGraphResponse(response);
+  const bodyPreview = shouldLogFullMetaCapiErrorBody()
+    ? parsed.text
+    : parsed.text.slice(0, 800);
+  console.info(
+    `${LOG_PREFIX} step=graph_response method=POST http=${response.status} ok=${parsed.ok} body=${bodyPreview}`,
+  );
   if (!parsed.ok) {
     throw new Error(
       readGraphError(parsed.payload, parsed.text.slice(0, 200) || response.statusText),
@@ -75,8 +89,17 @@ async function getGraphJson(params: {
   for (const [key, value] of Object.entries(params.searchParams ?? {})) {
     url.searchParams.set(key, value);
   }
+  console.info(
+    `${LOG_PREFIX} step=graph_request method=GET url=${formatUrlForLog(url.toString())}`,
+  );
   const response = await fetch(url.toString());
   const parsed = await parseGraphResponse(response);
+  const bodyPreview = shouldLogFullMetaCapiErrorBody()
+    ? parsed.text
+    : parsed.text.slice(0, 800);
+  console.info(
+    `${LOG_PREFIX} step=graph_response method=GET http=${response.status} ok=${parsed.ok} body=${bodyPreview}`,
+  );
   if (!parsed.ok) {
     throw new Error(
       readGraphError(parsed.payload, parsed.text.slice(0, 200) || response.statusText),
@@ -207,15 +230,25 @@ async function assignPixelToSystemUser(params: {
   url.searchParams.set("access_token", params.oauthAccessToken);
   url.searchParams.set("business", params.businessId);
 
+  const assignBody = {
+    user: params.systemUserId,
+    tasks: [...PIXEL_ASSIGN_TASKS],
+  };
+  console.info(
+    `${LOG_PREFIX} step=graph_request method=POST url=${formatUrlForLog(url.toString())} body=${formatFieldsForLog(assignBody)} pixelId=${params.pixelId} businessId=${params.businessId} systemUserId=${params.systemUserId}`,
+  );
   const response = await fetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      user: params.systemUserId,
-      tasks: [...PIXEL_ASSIGN_TASKS],
-    }),
+    body: JSON.stringify(assignBody),
   });
   const parsed = await parseGraphResponse(response);
+  const bodyPreview = shouldLogFullMetaCapiErrorBody()
+    ? parsed.text
+    : parsed.text.slice(0, 800);
+  console.info(
+    `${LOG_PREFIX} step=graph_response method=POST http=${response.status} ok=${parsed.ok} body=${bodyPreview}`,
+  );
   if (!parsed.ok) {
     const errMsg = readGraphError(parsed.payload, parsed.text.slice(0, 200));
     if (/already|assigned|duplicate/i.test(errMsg)) {
@@ -284,7 +317,7 @@ export async function fetchMetaPixelCapiAccessToken(params: {
   }
 
   console.info(
-    `${LOG_PREFIX} step=fetch_start shop=${shop} pixelId=${pixelId} businessId=${businessId}`,
+    `${LOG_PREFIX} step=fetch_start shop=${shop} pixelId=${pixelId} businessId=${businessId} oauthToken=${formatMetaCapiTokenForLog(oauthAccessToken)} oauthTokenLen=${oauthAccessToken.length} appId=${appId} apiVersion=${params.apiVersion?.trim() ?? ""}`,
   );
 
   const businessToken = await requestBusinessManagerAccessToken({

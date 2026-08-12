@@ -6,6 +6,9 @@ import {
   startMetaPixelTestEventMode,
   testMetaServerEvents,
 } from "../server/adsCatalog/metaPixelConfig.server";
+import { formatMetaCapiTokenForLog } from "../server/adsCatalog/metaCapiLog.server";
+
+const LOG_PREFIX = "[AdsCatalog][MetaTestEventsAPI]";
 
 type TestEventAction = "send" | "start" | "clear";
 
@@ -53,6 +56,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     actionKind = "send";
   }
 
+  console.info(
+    `${LOG_PREFIX} step=request shop=${session.shop} action=${actionKind} testEventCode=${testEventCode} pixelId=${pixelId ?? ""} capiAccessToken=${capiAccessToken ? formatMetaCapiTokenForLog(capiAccessToken) : ""} clientIp=${resolveClientIpFromHeaders(request.headers) ?? ""}`,
+  );
+
   try {
     if (actionKind === "clear") {
       await clearMetaPixelTestEventMode({ shop: session.shop, admin });
@@ -83,9 +90,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       clientIpAddress: resolveClientIpFromHeaders(request.headers),
       clientUserAgent: request.headers.get("user-agent")?.trim() || undefined,
     });
+    console.info(
+      `${LOG_PREFIX} step=success shop=${session.shop} action=send testEventCode=${testEventCode} pixelId=${pixelId ?? ""}`,
+    );
     return Response.json({ ok: true, action: "send" });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "测试事件操作失败";
+    console.error(
+      `${LOG_PREFIX} step=failed shop=${session.shop} action=${actionKind} testEventCode=${testEventCode} pixelId=${pixelId ?? ""} err=${errMsg}`,
+    );
     const status = errMsg.includes("请") || errMsg.includes("尚未") ? 400 : 500;
     return Response.json({ ok: false, error: errMsg }, { status });
   }
