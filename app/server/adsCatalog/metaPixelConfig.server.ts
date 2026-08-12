@@ -317,6 +317,8 @@ export type SaveMetaPixelConfigInput = {
   capiAccessToken?: string;
   capiEnabled?: boolean;
   enabledEvents?: unknown;
+  /** 「切换绑定」时强制向 Meta 换取 CAPI Token，即使 Pixel / Token 未变化。 */
+  forceFetchCapiToken?: boolean;
 };
 
 export type SaveMetaPixelConfigResult = {
@@ -726,7 +728,9 @@ export async function saveMetaPixelConfig(
     typeof params.capiEnabled === "boolean" ? params.capiEnabled : true;
   const pixelChanged = pixelId !== (credential.pixelId?.trim() ?? "");
   const shouldAutoFetchCapiToken =
-    capiEnabled && !incomingToken && (pixelChanged || !existingToken);
+    capiEnabled &&
+    !incomingToken &&
+    (params.forceFetchCapiToken === true || pixelChanged || !existingToken);
 
   let capiAccessTokenToStore = incomingToken || existingToken;
 

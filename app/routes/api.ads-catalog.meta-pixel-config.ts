@@ -17,6 +17,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     capiAccessToken?: unknown;
     capiEnabled?: unknown;
     enabledEvents?: unknown;
+    forceFetchCapiToken?: unknown;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -33,6 +34,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         typeof body.capiAccessToken === "string" ? body.capiAccessToken : undefined,
       capiEnabled: typeof body.capiEnabled === "boolean" ? body.capiEnabled : undefined,
       enabledEvents: body.enabledEvents,
+      forceFetchCapiToken: body.forceFetchCapiToken === true,
     });
     return Response.json({ ok: true, ...result });
   } catch (e) {

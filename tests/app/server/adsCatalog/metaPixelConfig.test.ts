@@ -242,6 +242,30 @@ describe("saveMetaPixelConfig", () => {
     );
     expect(result.hasCapiAccessToken).toBe(true);
   });
+
+  it("force-fetches CAPI token on switch binding even when pixel and token unchanged", async () => {
+    getFacebookCatalogCredential.mockResolvedValue({
+      accessToken: "catalog-oauth",
+      catalogId: "cat",
+      businessId: "biz_1",
+      pixelId: "1001680191617713",
+      capiAccessToken: "stale-token",
+      capiEnabled: true,
+      enabledEvents: ["Purchase"],
+    });
+
+    const result = await saveMetaPixelConfig({
+      shop: "demo.myshopify.com",
+      admin: admin as never,
+      pixelId: "1001680191617713",
+      capiEnabled: true,
+      enabledEvents: ["Purchase"],
+      forceFetchCapiToken: true,
+    });
+
+    expect(fetchMetaPixelCapiAccessToken).toHaveBeenCalled();
+    expect(result.capiAccessToken).toBe("auto-capi-token");
+  });
 });
 
 describe("trackMetaStorefrontTestEvent", () => {

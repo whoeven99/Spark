@@ -166,7 +166,9 @@ export function MetaPixelConfigPanel({
   }, [initialEnabledEvents]);
 
   useEffect(() => {
-    setDisplayCapiToken(initialCapiAccessToken);
+    if (initialCapiAccessToken.trim()) {
+      setDisplayCapiToken(initialCapiAccessToken);
+    }
   }, [initialCapiAccessToken]);
 
   useEffect(() => {
@@ -320,12 +322,14 @@ export function MetaPixelConfigPanel({
           pixelId: idToBind,
           capiEnabled,
           enabledEvents,
+          forceFetchCapiToken: true,
         }),
       });
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
         capiAccessToken?: string;
+        hasCapiAccessToken?: boolean;
       };
       if (!resp.ok || !data.ok) {
         setLocalError(data.error ?? t("adsCatalog.authError"));
@@ -333,6 +337,9 @@ export function MetaPixelConfigPanel({
       }
       if (data.capiAccessToken) {
         setDisplayCapiToken(data.capiAccessToken);
+      } else if (capiEnabled) {
+        setLocalError(t("adsCatalog.metaPixelCapiTokenFetchFailed"));
+        return;
       }
       setBindSuccess(true);
       onChanged();
