@@ -38,23 +38,23 @@ export type SingleTranslateLogRecord = {
 
 export type SingleTranslateParseStats = {
   rawLines: number;
-  stitchedBlocks: number;
-  parsedLines: number;
+  requestGroups: number;
+  shopMatchedGroups: number;
   resultLines: number;
   requestLines: number;
   llmLines: number;
-  shopMatchedLines: number;
+  domainsSeen: string[];
 };
 
-const MERGE_WINDOW_MS = 60_000;
 const MYSHOPIFY_DOMAIN_RE = /[a-z0-9][a-z0-9-]{0,61}\.myshopify\.com/gi;
 
-/** Remix/Render 常在 message 前加 request id，如 `[cnj9q] [single] result`。 */
 const RE_RESULT = /\[single\]\s+result\b/;
 const RE_REQUEST = /\[single\]\s+request\b/;
 const RE_LLM = /\[single-llm\]\s+return\b/;
 const RE_SINGLE_ANY = /\[single(?:-llm)?\]/;
 const RE_LEADING_REQUEST_ID = /^\[([a-z0-9]{4,12})\]/i;
+const RE_SINGLE_SEGMENT =
+  /(\[[a-z0-9]+\]\s*)?(?:\[single-llm\]\s+return|\[single\]\s+(?:result|request|pipeline|cache|prompt))\b/gi;
 
 function readShop(payload: Record<string, unknown>): string {
   const shop = payload.shop ?? payload.shopName;
@@ -86,63 +86,59 @@ export function extractLeadingRequestId(message: string): string | null {
   return m?.[1]?.toLowerCase() ?? null;
 }
 
-/** 行/message 是否属于目标店（支持从正文里抓 *.myshopify.com）。 */
 export function messageMatchesShop(message: string, shop: string): boolean {
   const normalized = shop.trim().toLowerCase();
   if (!normalized) return true;
   const lower = message.toLowerCase();
   if (lower.includes(normalized)) return true;
+  const host = normalized.replace(/\.myshopify\.com$/, "");
+  if (host.length >= 4 && lower.includes(host)) return true;
   return extractMyshopifyDomains(message).includes(normalized);
 }
 
-/** 把同一 Render request id 下、同一秒附近的碎片行拼成块（Node inspect 多行）。 */
-export function stitchRenderLogEntries(entries: RenderLogEntry[]): RenderLogEntry[] {
+/** 同一 HTTP 请求（[cnj9q]）下的日志行归组。 */
+export function groupEntriesByRequestId(
+  entries: RenderLogEntry[],
+): RenderLogEntry[][] {
   if (entries.length === 0) return [];
 
   const sorted = [...entries].sort(
     (a, b) => parseLogTimestamp(a) - parseLogTimestamp(b),
   );
 
-  const blocks: RenderLogEntry[] = [];
-  let current: RenderLogEntry | null = null;
+  const groups: RenderLogEntry[][] = [];
+  let current: RenderLogEntry[] = [];
+  let currentRid: string | null = null;
+  let lastTs = 0;
 
   for (const entry of sorted) {
     const msg = entry.message ?? "";
     const ts = parseLogTimestamp(entry);
     const rid = extractLeadingRequestId(msg);
-    const hasSingleTag = RE_SINGLE_ANY.test(msg);
+    const hasSingle = RE_SINGLE_ANY.test(msg);
 
-    const startNew =
-      !current ||
-      hasSingleTag ||
-      (rid &&
-        current &&
-        rid !== extractLeadingRequestId(current.message ?? "")) ||
-      (current && Math.abs(ts - parseLogTimestamp(current)) > 3_000);
+    const breakGroup =
+      current.length > 0 &&
+      rid != null &&
+      currentRid != null &&
+      rid !== currentRid &&
+      (hasSingle || Math.abs(ts - lastTs) > 120_000);
 
-    if (startNew) {
-      if (current) blocks.push(current);
-      current = { ...entry, message: msg };
-      continue;
+    if (breakGroup) {
+      groups.push(current);
+      current = [];
+      currentRid = null;
     }
 
-    if (!current) {
-      current = { ...entry, message: msg };
-      continue;
-    }
-
-    current = {
-      ...current,
-      message: `${current.message ?? ""}\n${msg}`,
-      timestamp: entry.timestamp ?? current.timestamp,
-    };
+    if (rid) currentRid = rid;
+    current.push(entry);
+    lastTs = ts;
   }
 
-  if (current) blocks.push(current);
-  return blocks;
+  if (current.length > 0) groups.push(current);
+  return groups;
 }
 
-/** 从 console.log 行尾尝试解析 JSON；失败则回退浅层 key: value 提取。 */
 export function extractPayloadObject(message: string): Record<string, unknown> {
   const braceIdx = message.indexOf("{");
   if (braceIdx < 0) return {};
@@ -192,11 +188,10 @@ export function parseSingleLogEntry(entry: RenderLogEntry): ParsedSingleLog | nu
   const shopFromPayload = readShop(payload);
   const domains = extractMyshopifyDomains(message);
   const shop = shopFromPayload || domains[0] || "";
-  const timestampMs = parseLogTimestamp(entry);
 
   return {
     kind,
-    timestampMs,
+    timestampMs: parseLogTimestamp(entry),
     shop,
     message,
     payload,
@@ -204,15 +199,56 @@ export function parseSingleLogEntry(entry: RenderLogEntry): ParsedSingleLog | nu
   };
 }
 
+function parseSingleLogsFromGroup(group: RenderLogEntry[]): ParsedSingleLog[] {
+  const combined = group.map((e) => e.message ?? "").join("\n");
+  if (!RE_SINGLE_ANY.test(combined)) return [];
+
+  const ts = parseLogTimestamp(group[0] ?? {});
+  const rid = extractLeadingRequestId(combined);
+  const out: ParsedSingleLog[] = [];
+  const seen = new Set<string>();
+
+  const pushParsed = (segment: string) => {
+    const kind = classifySingleLogMessage(segment);
+    if (kind === "other") return;
+    const payload = extractPayloadObject(segment);
+    const key = `${kind}:${readString(payload, "fieldKey") ?? ""}:${readString(payload, "target") ?? ""}:${segment.length}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      kind,
+      timestampMs: ts,
+      shop: readShop(payload) || extractMyshopifyDomains(segment)[0] || "",
+      message: segment.trim(),
+      payload,
+      requestId: rid,
+    });
+  };
+
+  RE_SINGLE_SEGMENT.lastIndex = 0;
+  const indices: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = RE_SINGLE_SEGMENT.exec(combined)) !== null) {
+    indices.push(m.index);
+  }
+
+  if (indices.length === 0) {
+    pushParsed(combined);
+    return out;
+  }
+
+  for (let i = 0; i < indices.length; i++) {
+    const start = indices[i]!;
+    const end = indices[i + 1] ?? combined.length;
+    pushParsed(combined.slice(start, end));
+  }
+
+  return out;
+}
+
 function previewText(value: string | null | undefined, max = 120): string {
   if (!value) return "";
   return value.length > max ? `${value.slice(0, max)}…` : value;
-}
-
-function rowMatchesShop(row: ParsedSingleLog, shop: string): boolean {
-  if (!shop) return true;
-  if (row.shop === shop) return true;
-  return messageMatchesShop(row.message, shop);
 }
 
 function recordMatchesKeyword(record: SingleTranslateLogRecord, keyword: string): boolean {
@@ -238,7 +274,8 @@ function buildRecordFromAnchor(
   anchor: ParsedSingleLog,
   related: ParsedSingleLog[],
 ): SingleTranslateLogRecord {
-  const result = anchor.kind === "result" ? anchor : related.find((r) => r.kind === "result") ?? null;
+  const result =
+    anchor.kind === "result" ? anchor : related.find((r) => r.kind === "result") ?? null;
   const request =
     anchor.kind === "request" ? anchor : related.find((r) => r.kind === "request") ?? null;
   const llm = related.find((r) => r.kind === "llm") ?? null;
@@ -282,8 +319,9 @@ function buildRecordFromAnchor(
     customPrompt,
     request,
     llm,
-    rawMessages: [anchor.message, request?.message, result?.message, llm?.message]
-      .filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i),
+    rawMessages: [anchor.message, request?.message, result?.message, llm?.message].filter(
+      (msg, i, arr): msg is string => Boolean(msg) && arr.indexOf(msg) === i,
+    ),
   };
 }
 
@@ -296,63 +334,67 @@ export type AggregateSingleTranslateLogsParams = {
   limit?: number;
 };
 
-/** 预处理：拼接多行 inspect，再按 result（无则 request）聚合。 */
 export function aggregateSingleTranslateLogs(
   params: AggregateSingleTranslateLogsParams,
 ): { records: SingleTranslateLogRecord[]; stats: SingleTranslateParseStats } {
   const shop = params.shop.trim().toLowerCase();
-  const mergeWindowMs = params.mergeWindowMs ?? MERGE_WINDOW_MS;
   const typeSet = new Set(
     (params.types?.length ? params.types : (["result", "request", "llm"] as SingleLogKind[])),
   );
 
-  const stitched = stitchRenderLogEntries(params.entries);
-  const parsedAll = stitched
-    .map(parseSingleLogEntry)
-    .filter((row): row is ParsedSingleLog => row !== null);
-
-  const parsed = parsedAll
-    .filter((row) => rowMatchesShop(row, shop))
-    .filter((row) => row.kind === "other" || typeSet.has(row.kind))
-    .sort((a, b) => b.timestampMs - a.timestampMs);
-
-  const stats: SingleTranslateParseStats = {
-    rawLines: params.entries.length,
-    stitchedBlocks: stitched.length,
-    parsedLines: parsedAll.length,
-    resultLines: parsedAll.filter((r) => r.kind === "result").length,
-    requestLines: parsedAll.filter((r) => r.kind === "request").length,
-    llmLines: parsedAll.filter((r) => r.kind === "llm").length,
-    shopMatchedLines: parsed.length,
-  };
-
-  let anchors = parsed.filter((row) => row.kind === "result");
-  if (anchors.length === 0) {
-    anchors = parsed.filter((row) => row.kind === "request");
-  }
+  const groups = groupEntriesByRequestId(params.entries);
+  const allDomains = new Set<string>();
+  let resultLines = 0;
+  let requestLines = 0;
+  let llmLines = 0;
+  let shopMatchedGroups = 0;
 
   const records: SingleTranslateLogRecord[] = [];
   const seen = new Set<string>();
 
-  for (const anchor of anchors) {
-    const related = parsed.filter((row) => {
-      if (row === anchor) return false;
-      if (anchor.requestId && row.requestId && anchor.requestId === row.requestId) {
-        return true;
-      }
-      if (Math.abs(row.timestampMs - anchor.timestampMs) > mergeWindowMs) {
-        return false;
-      }
-      if (shop && row.shop && row.shop !== shop) return false;
-      return row.kind === "request" || row.kind === "llm" || row.kind === "result";
-    });
+  for (const group of groups) {
+    const combined = group.map((e) => e.message ?? "").join("\n");
+    for (const d of extractMyshopifyDomains(combined)) allDomains.add(d);
 
-    const record = buildRecordFromAnchor(anchor, related);
-    if (!recordMatchesKeyword(record, params.keyword ?? "")) continue;
-    if (seen.has(record.id)) continue;
-    seen.add(record.id);
-    records.push(record);
+    if (!messageMatchesShop(combined, shop)) continue;
+    shopMatchedGroups++;
+
+    const parsed = parseSingleLogsFromGroup(group).filter(
+      (row) => row.kind === "other" || typeSet.has(row.kind),
+    );
+
+    for (const row of parsed) {
+      if (row.kind === "result") resultLines++;
+      else if (row.kind === "request") requestLines++;
+      else if (row.kind === "llm") llmLines++;
+    }
+
+    let anchors = parsed.filter((row) => row.kind === "result");
+    if (anchors.length === 0) {
+      anchors = parsed.filter((row) => row.kind === "request");
+    }
+
+    for (const anchor of anchors) {
+      const related = parsed.filter((row) => row !== anchor);
+      const record = buildRecordFromAnchor(anchor, related);
+      if (!recordMatchesKeyword(record, params.keyword ?? "")) continue;
+      if (seen.has(record.id)) continue;
+      seen.add(record.id);
+      records.push(record);
+    }
   }
+
+  records.sort((a, b) => b.timestampMs - a.timestampMs);
+
+  const stats: SingleTranslateParseStats = {
+    rawLines: params.entries.length,
+    requestGroups: groups.length,
+    shopMatchedGroups,
+    resultLines,
+    requestLines,
+    llmLines,
+    domainsSeen: [...allDomains].sort().slice(0, 8),
+  };
 
   const limit = params.limit ?? 100;
   return { records: records.slice(0, limit), stats };

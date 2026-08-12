@@ -189,6 +189,55 @@ export async function fetchTsfWebLogs(
   return { entries, hasMore, cursor: hasMore ? nextCursor : null };
 }
 
+function dedupeLogEntries(entries: RenderLogEntry[]): RenderLogEntry[] {
+  const seen = new Set<string>();
+  const out: RenderLogEntry[] = [];
+  for (const entry of entries) {
+    const key = `${entry.timestamp ?? ""}|${entry.message ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(entry);
+  }
+  return out;
+}
+
+/** 同时按 shop 域名 + `[single]` 拉日志并合并（单路会漏行）。 */
+export async function fetchSingleTranslateLogEntries(params: {
+  serviceId: string;
+  shop: string;
+  startTime: string;
+  endTime: string;
+  cursor?: RenderLogsCursor | null;
+  maxPages?: number;
+}): Promise<FetchTsfWebLogsResult> {
+  const base = {
+    serviceId: params.serviceId,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    maxPages: params.maxPages ?? 5,
+  };
+
+  const [byShop, bySingle] = await Promise.all([
+    fetchTsfWebLogs({
+      ...base,
+      text: params.shop,
+      cursor: params.cursor,
+    }),
+    fetchTsfWebLogs({
+      ...base,
+      text: "[single]",
+      cursor: params.cursor,
+    }),
+  ]);
+
+  const entries = dedupeLogEntries([...byShop.entries, ...bySingle.entries]);
+  return {
+    entries,
+    hasMore: byShop.hasMore || bySingle.hasMore,
+    cursor: byShop.cursor ?? bySingle.cursor,
+  };
+}
+
 export function parseLogTimestamp(entry: RenderLogEntry): number {
   const raw = entry.timestamp?.trim();
   if (!raw) return 0;

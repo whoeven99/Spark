@@ -1157,12 +1157,12 @@ export function fetchSingleTranslateLogConfig(): Promise<SingleTranslateLogConfi
 
 export type SingleTranslateParseStats = {
   rawLines: number;
-  stitchedBlocks: number;
-  parsedLines: number;
+  requestGroups: number;
+  shopMatchedGroups: number;
   resultLines: number;
   requestLines: number;
   llmLines: number;
-  shopMatchedLines: number;
+  domainsSeen: string[];
 };
 
 export function fetchSingleTranslateLogs(params: {

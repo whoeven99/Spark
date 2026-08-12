@@ -3,7 +3,7 @@ import { normalizeShopName } from "../lib/shopSession.js";
 import {
   decodeRenderLogsCursor,
   encodeRenderLogsCursor,
-  fetchTsfWebLogs,
+  fetchSingleTranslateLogEntries,
   isRenderLogsConfigured,
   resolveTsfWebServiceId,
   TSF_WEB_RENDER_SERVICES,
@@ -11,7 +11,6 @@ import {
 import {
   aggregateSingleTranslateLogs,
   type SingleLogKind,
-  type SingleTranslateLogRecord,
 } from "../lib/singleTranslateLogParse.js";
 
 export const tsfSingleTranslateLogsRouter = Router();
@@ -90,13 +89,14 @@ tsfSingleTranslateLogsRouter.get("/", async (req, res) => {
   const cursor = decodeRenderLogsCursor(req.query.cursor as string | undefined);
 
   try {
-    const { entries, hasMore, cursor: nextCursor } = await fetchTsfWebLogs({
-      serviceId,
-      text: "[single]",
-      startTime: new Date(fromMs).toISOString(),
-      endTime: new Date(toMs).toISOString(),
-      cursor,
-    });
+    const { entries, hasMore, cursor: nextCursor } =
+      await fetchSingleTranslateLogEntries({
+        serviceId,
+        shop,
+        startTime: new Date(fromMs).toISOString(),
+        endTime: new Date(toMs).toISOString(),
+        cursor,
+      });
 
     const { records, stats } = aggregateSingleTranslateLogs({
       entries,
@@ -111,9 +111,13 @@ tsfSingleTranslateLogsRouter.get("/", async (req, res) => {
       note =
         "该时间窗内未找到 [single] 日志；请缩小时间范围或确认 TSF Web PROD 已有单字段翻译。";
     } else if (records.length === 0) {
+      const domainHint =
+        stats.domainsSeen.length > 0
+          ? `日志里出现的域名：${stats.domainsSeen.join("、")}。`
+          : "";
       note =
-        `已扫描 ${stats.rawLines} 行原始日志（${stats.resultLines} 条 result / ${stats.requestLines} 条 request），` +
-        `但没有匹配 shop「${shop}」。请核对域名拼写是否与日志内 myshopify.com 完全一致。`;
+        `已扫描 ${stats.rawLines} 行、${stats.requestGroups} 个请求组（${stats.resultLines} 条 result / ${stats.requestLines} 条 request），` +
+        `但没有匹配 shop「${shop}」。${domainHint}请核对域名拼写。`;
     }
 
     res.json({
