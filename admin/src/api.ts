@@ -1771,6 +1771,14 @@ export function fetchTsfShopProfiles(params?: {
 
 export type CoverageBucket = "all" | "low" | "mid" | "high" | "missing";
 export type AutoTranslateFilter = "all" | "on" | "off";
+export type CoverageSourceKind = "finalize" | "refresh" | "shop_scan";
+
+export type CoverageDistribution = {
+  high: number;
+  mid: number;
+  low: number;
+  missing: number;
+};
 
 export type TsfLocaleCoverage = {
   locale: string;
@@ -1780,6 +1788,7 @@ export type TsfLocaleCoverage = {
   updatedAt: string | null;
   cacheMissing: boolean;
   autoTranslate: boolean;
+  coverageSource: CoverageSourceKind | null;
 };
 
 export type TsfShopLanguageCoverageRow = {
@@ -1794,6 +1803,8 @@ export type TsfShopLanguageCoverageRow = {
   lowestLocale: { locale: string; percent: number } | null;
   updatedAt: string | null;
   updatedAtLabel: string;
+  coverageSourceSummary: CoverageSourceKind | "mixed" | null;
+  isStale: boolean;
   locales: TsfLocaleCoverage[];
 };
 
@@ -1805,7 +1816,10 @@ export type TsfLanguageCoverageData = {
     autoTranslateShops: number;
     avgOverallPercent: number | null;
     lowCoverageShops: number;
+    staleShops: number;
+    distribution: CoverageDistribution;
     redisKeyCount: number;
+    tursoLocaleCount: number;
     snapshotAt: string | null;
   };
   shops: TsfShopLanguageCoverageRow[];
@@ -1850,6 +1864,7 @@ export type ShopLocaleCoverageRow = {
   updatedAt: string | null;
   cacheMissing: boolean;
   autoTranslate: boolean;
+  coverageSource?: CoverageSourceKind | null;
 };
 
 export function fetchShopLocaleCoverage(
