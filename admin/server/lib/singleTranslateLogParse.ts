@@ -38,9 +38,11 @@ export type SingleTranslateLogRecord = {
 
 const MERGE_WINDOW_MS = 60_000;
 
-const PREFIX_RESULT = "[single] result";
-const PREFIX_REQUEST = "[single] request";
-const PREFIX_LLM = "[single-llm] return";
+/** Remix/Render 常在 message 前加 request id，如 `[onj9q] [single] result`。 */
+const RE_RESULT = /\[single\]\s+result\b/;
+const RE_REQUEST = /\[single\]\s+request\b/;
+const RE_LLM = /\[single-llm\]\s+return\b/;
+const RE_SINGLE_ANY = /\[single(?:-llm)?\]/;
 
 function readShop(payload: Record<string, unknown>): string {
   const shop = payload.shop ?? payload.shopName;
@@ -94,12 +96,10 @@ function parseShallowInspectObject(text: string): Record<string, unknown> {
 
 export function classifySingleLogMessage(message: string): SingleLogKind {
   const trimmed = message.trim();
-  if (trimmed.startsWith(PREFIX_RESULT)) return "result";
-  if (trimmed.startsWith(PREFIX_REQUEST)) return "request";
-  if (trimmed.startsWith(PREFIX_LLM)) return "llm";
-  if (trimmed.includes("[single]") || trimmed.includes("[single-llm]")) {
-    return "other";
-  }
+  if (RE_RESULT.test(trimmed)) return "result";
+  if (RE_REQUEST.test(trimmed)) return "request";
+  if (RE_LLM.test(trimmed)) return "llm";
+  if (RE_SINGLE_ANY.test(trimmed)) return "other";
   return "other";
 }
 
@@ -108,7 +108,7 @@ export function parseSingleLogEntry(entry: RenderLogEntry): ParsedSingleLog | nu
   if (!message) return null;
 
   const kind = classifySingleLogMessage(message);
-  if (kind === "other" && !message.includes("[single")) return null;
+  if (kind === "other" && !RE_SINGLE_ANY.test(message)) return null;
 
   const payload = extractPayloadObject(message);
   const shop = readShop(payload);
@@ -215,8 +215,13 @@ export function aggregateSingleTranslateLogs(
     .filter((row): row is ParsedSingleLog => row !== null)
     .filter((row) => {
       if (!shop) return true;
-      if (!row.shop) return row.message.toLowerCase().includes(shop);
-      return row.shop === shop;
+      if (row.shop === shop) return true;
+      if (row.message.toLowerCase().includes(shop)) return true;
+      // Render text=shop 已预过滤；多行 inspect 首行可能只有 `[rid] [single] result {`
+      if (row.kind === "result" || row.kind === "request" || row.kind === "llm") {
+        return true;
+      }
+      return false;
     })
     .filter((row) => row.kind === "other" || typeSet.has(row.kind))
     .sort((a, b) => b.timestampMs - a.timestampMs);
