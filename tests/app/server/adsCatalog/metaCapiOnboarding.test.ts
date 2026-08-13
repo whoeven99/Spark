@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildMetaCapiBusinessAuthUrl,
   buildMetaUnifiedOAuthStartUrl,
+  createMetaOAuthState,
   resolveMetaCapiLoginConfigId,
+  verifyMetaOAuthState,
 } from "../../../../app/server/adsCatalog/metaOAuth.server";
 import { hasMetaCapiBisuToken } from "../../../../app/server/adsCatalog/metaCapiOnboarding.server";
 
@@ -60,6 +62,28 @@ describe("meta CAPI Business Login", () => {
     else process.env.META_APP_SECRET = previousAppSecret;
     if (previousConfigId === undefined) delete process.env.META_CAPI_LOGIN_CONFIG_ID;
     else process.env.META_CAPI_LOGIN_CONFIG_ID = previousConfigId;
+  });
+
+  it("accepts the unified OAuth flow in the signed state", () => {
+    const previousSecret = process.env.SHOPIFY_API_SECRET;
+    process.env.SHOPIFY_API_SECRET = "test-meta-oauth-secret";
+
+    const state = createMetaOAuthState(
+      "shop.myshopify.com",
+      "host",
+      "https://app.example.com",
+      "meta_unified",
+      true,
+    );
+
+    expect(verifyMetaOAuthState(state, 15 * 60 * 1000, "meta_unified")).toMatchObject({
+      shop: "shop.myshopify.com",
+      flow: "meta_unified",
+      popup: true,
+    });
+
+    if (previousSecret === undefined) delete process.env.SHOPIFY_API_SECRET;
+    else process.env.SHOPIFY_API_SECRET = previousSecret;
   });
 
   it("hasMetaCapiBisuToken detects bisu credential", () => {

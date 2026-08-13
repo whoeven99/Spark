@@ -174,7 +174,8 @@ export function verifyMetaOAuthState(
       flow !== "meta_catalog" &&
       flow !== "meta_ads" &&
       flow !== "meta_pixel_data" &&
-      flow !== "meta_capi"
+      flow !== "meta_capi" &&
+      flow !== "meta_unified"
     ) {
       return null;
     }
