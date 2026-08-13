@@ -14,6 +14,7 @@ import {
   clearMetaCapiPending,
   getFacebookCatalogCredential,
   getMetaAdsCredential,
+  setMetaCapiPending,
   setMetaAdsCredential,
   setFacebookCatalogCredential,
   type PendingOAuthAccount,
@@ -89,10 +90,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       apiVersion: catalog.apiVersion,
       pixelId: catalog.pixelId,
     });
-    if (capiResult.status !== "saved") {
-      throw new Error(`统一授权发现 ${capiResult.pixels.length} 个 Pixel，请先保留一个已绑定 Pixel`);
+    if (capiResult.status === "select") {
+      await setMetaCapiPending(shop, {
+        accessToken: token,
+        accounts: capiResult.pixels.map((pixel) => ({
+          id: pixel.pixelId,
+          name: pixel.pixelName,
+          businessId: capiResult.businessId,
+        })),
+      });
+      console.info(
+        `[AdsCatalog][MetaUnified] step=pixel_select_required shop=${shop} businessId=${capiResult.businessId} pixelCount=${capiResult.pixels.length} pixelIds=${capiResult.pixels.map((pixel) => pixel.pixelId).join(",")}`,
+      );
+    } else {
+      await clearMetaCapiPending(shop);
     }
-    await clearMetaCapiPending(shop);
 
     const existingAds = await getMetaAdsCredential(shop);
     let adAccounts: Awaited<ReturnType<typeof getMetaAdAccounts>> = [];
@@ -126,9 +138,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     console.info(
-      `[AdsCatalog][MetaUnified] step=success shop=${shop} catalogId=${selectedCatalog.catalogId} pixelId=${capiResult.pixelId} adsBound=${Boolean(selectedAds)}`,
+      `[AdsCatalog][MetaUnified] step=success shop=${shop} catalogId=${selectedCatalog.catalogId} pixelId=${capiResult.status === "saved" ? capiResult.pixelId : ""} pixelSelectionRequired=${capiResult.status === "select"} adsBound=${Boolean(selectedAds)}`,
     );
-    return respond({ metaUnifiedAuth: "success", pixelId: capiResult.pixelId });
+    return respond(
+      capiResult.status === "select"
+        ? {
+            metaUnifiedAuth: "select",
+            pixelCount: String(capiResult.pixels.length),
+          }
+        : { metaUnifiedAuth: "success", pixelId: capiResult.pixelId },
+    );
   } catch (e) {
     console.error(
       `[AdsCatalog][MetaUnified] step=failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
