@@ -111,26 +111,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop,
     });
 
-    let businessId = "";
-    try {
-      businessId = await fetchMetaBisuClientBusinessId({
-        accessToken: capiAccessToken,
-        apiVersion: catalog.apiVersion,
-      });
+    let businessId = catalog.businessId?.trim() ?? "";
+    if (businessId) {
       console.info(
-        `[AdsCatalog][MetaCapiCallback] step=business_id_success shop=${shop} businessId=${businessId}`,
+        `[AdsCatalog][MetaCapiCallback] step=business_id_reused source=catalog_credential shop=${shop} businessId=${businessId}`,
       );
-    } catch (e) {
-      console.error(
-        `[AdsCatalog][MetaCapiCallback] step=business_id_failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
-      );
-      return respond({
-        metaCapiAuth: "error",
-        reason:
-          e instanceof Error
-            ? e.message
-            : "无法解析 Business Integration Token，请确认 Meta Configuration 类型正确",
-      });
+    } else {
+      try {
+        businessId = await fetchMetaBisuClientBusinessId({
+          accessToken: capiAccessToken,
+          apiVersion: catalog.apiVersion,
+        });
+        console.info(
+          `[AdsCatalog][MetaCapiCallback] step=business_id_success source=business_login shop=${shop} businessId=${businessId}`,
+        );
+      } catch (e) {
+        console.error(
+          `[AdsCatalog][MetaCapiCallback] step=business_id_failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
+        );
+        return respond({
+          metaCapiAuth: "error",
+          reason:
+            e instanceof Error
+              ? e.message
+              : "无法解析 Business Integration Token，请确认 Meta Configuration 类型正确",
+        });
+      }
     }
 
     let result: Awaited<ReturnType<typeof persistMetaCapiBisuOnboarding>>;
