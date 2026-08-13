@@ -11,6 +11,7 @@ import {
   Modal,
   Progress,
   Row,
+  Select,
   Space,
   Spin,
   Statistic,
@@ -29,10 +30,12 @@ import {
 import {
   adjustTsfPurchasedCredits,
   fetchTsfCredits,
+  type TsfCreditsAdjustMetadata,
   type TsfCreditsBillingLog,
   type TsfCreditsData,
   type TsfCreditsPackPurchase,
   type TsfCreditsPeriodHistory,
+  type TsfTursoEnv,
 } from "../../api";
 
 function usageColor(pct: number): string {
@@ -47,9 +50,31 @@ function fmtDate(value: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString("zh-CN");
 }
 
+function fmtAdjustDetail(metadata: TsfCreditsAdjustMetadata | null): string {
+  if (!metadata) return "-";
+  const parts: string[] = [];
+  if (typeof metadata.before === "number" && typeof metadata.after === "number") {
+    parts.push(`${metadata.before.toLocaleString()} → ${metadata.after.toLocaleString()}`);
+  }
+  if (metadata.action) {
+    parts.push(metadata.action === "add" ? "添加" : "修改");
+  }
+  if (metadata.note) {
+    parts.push(`备注：${metadata.note}`);
+  }
+  if (metadata.operatorRole) {
+    parts.push(`操作者：${metadata.operatorRole}`);
+  }
+  if (metadata.tsfEnv) {
+    parts.push(`环境：${metadata.tsfEnv.toUpperCase()}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "-";
+}
+
 type AdjustMode = "add" | "set";
 
 export default function TsfCredits() {
+  const [env, setEnv] = useState<TsfTursoEnv>("prod");
   const [shopInput, setShopInput] = useState("");
   const [data, setData] = useState<TsfCreditsData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,23 +87,26 @@ export default function TsfCredits() {
   const [adjustNote, setAdjustNote] = useState("");
   const [adjusting, setAdjusting] = useState(false);
 
-  const load = useCallback((shop: string) => {
-    const trimmed = shop.trim();
-    if (!trimmed) {
-      setError("请输入商店域名");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    setSearched(true);
-    fetchTsfCredits(trimmed)
-      .then(setData)
-      .catch((e) => {
-        setData(null);
-        setError(String(e));
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const load = useCallback(
+    (shop: string, targetEnv: TsfTursoEnv = env) => {
+      const trimmed = shop.trim();
+      if (!trimmed) {
+        setError("请输入商店域名");
+        return;
+      }
+      setLoading(true);
+      setError("");
+      setSearched(true);
+      fetchTsfCredits(trimmed, targetEnv)
+        .then(setData)
+        .catch((e) => {
+          setData(null);
+          setError(String(e));
+        })
+        .finally(() => setLoading(false));
+    },
+    [env],
+  );
 
   const account = data?.account ?? null;
   const canAdjust = Boolean(account);
@@ -123,14 +151,16 @@ export default function TsfCredits() {
         action: adjustMode,
         amount: adjustAmount,
         note: adjustNote.trim() || undefined,
+        env,
       });
       message.success(
-        `加购额度已更新：${result.before.toLocaleString()} → ${result.after.toLocaleString()}（${
+        `加购额度已更新（${result.env.toUpperCase()}）：${result.before.toLocaleString()} → ${result.after.toLocaleString()}（${
           result.creditsDelta >= 0 ? "+" : ""
-        }${result.creditsDelta.toLocaleString()}）`,
+        }${result.creditsDelta.toLocaleString()}）` +
+          (result.referenceId ? ` · 对账单号 ${result.referenceId}` : ""),
       );
       setAdjustOpen(false);
-      load(account.shop);
+      load(account.shop, env);
     } catch (e) {
       message.error(String(e));
     } finally {
@@ -194,12 +224,87 @@ export default function TsfCredits() {
     },
   ];
 
+  const adminAdjustColumns = [
+    {
+      title: "操作",
+      dataIndex: "metadata",
+      key: "action",
+      render: (metadata: TsfCreditsAdjustMetadata | null) => {
+        const action = metadata?.action;
+        if (action === "add") return <Tag color="green">添加</Tag>;
+        if (action === "set") return <Tag color="blue">修改</Tag>;
+        return <Tag>运维调整</Tag>;
+      },
+    },
+    {
+      title: "额度变动",
+      dataIndex: "creditsDelta",
+      key: "creditsDelta",
+      render: (v: number) => (
+        <Typography.Text type={v >= 0 ? "success" : "danger"}>
+          {v >= 0 ? "+" : ""}
+          {v.toLocaleString()}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "调整前后",
+      dataIndex: "metadata",
+      key: "beforeAfter",
+      render: (metadata: TsfCreditsAdjustMetadata | null) => {
+        if (typeof metadata?.before !== "number" || typeof metadata?.after !== "number") {
+          return "-";
+        }
+        return (
+          <Typography.Text>
+            {metadata.before.toLocaleString()} → {metadata.after.toLocaleString()}
+          </Typography.Text>
+        );
+      },
+    },
+    {
+      title: "对账详情",
+      dataIndex: "metadata",
+      key: "detail",
+      render: (metadata: TsfCreditsAdjustMetadata | null) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {fmtAdjustDetail(metadata)}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "参考单号",
+      dataIndex: "referenceId",
+      key: "referenceId",
+      render: (v: string | null) =>
+        v ? (
+          <Typography.Text copyable style={{ fontSize: 12 }}>
+            {v}
+          </Typography.Text>
+        ) : (
+          "-"
+        ),
+    },
+    {
+      title: "时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      render: (v: string) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {fmtDate(v)}
+        </Typography.Text>
+      ),
+    },
+  ];
+
   const billingColumns = [
     {
       title: "事件",
       dataIndex: "eventType",
       key: "eventType",
-      render: (v: string) => <Tag>{v}</Tag>,
+      render: (v: string) => (
+        <Tag color={v === "ADMIN_PURCHASED_CREDITS_ADJUSTED" ? "purple" : undefined}>{v}</Tag>
+      ),
     },
     {
       title: "套餐",
@@ -217,6 +322,19 @@ export default function TsfCredits() {
           {v.toLocaleString()}
         </Typography.Text>
       ),
+    },
+    {
+      title: "对账详情",
+      dataIndex: "metadata",
+      key: "metadata",
+      render: (metadata: TsfCreditsAdjustMetadata | null, r: TsfCreditsBillingLog) =>
+        r.eventType === "ADMIN_PURCHASED_CREDITS_ADJUSTED" ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {fmtAdjustDetail(metadata)}
+          </Typography.Text>
+        ) : (
+          "-"
+        ),
     },
     {
       title: "当时已用",
@@ -296,8 +414,18 @@ export default function TsfCredits() {
         用户额度查询
       </Typography.Title>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        按商店域名查询 TSF Turso 中的当前额度、加购积分与计费流水。
+        按商店域名查询 TSF Turso 中的当前额度、加购积分与计费流水；可切换 Test / Prod 环境进行查询与额度调整。
       </Typography.Paragraph>
+
+      {env === "prod" && (
+        <Alert
+          type="warning"
+          showIcon
+          message="当前为 Prod 环境"
+          description="修改加购额度将直接写入生产 TSF Turso 账本，请谨慎操作。"
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {error && (
         <Alert
@@ -310,23 +438,39 @@ export default function TsfCredits() {
       )}
 
       <Space style={{ marginBottom: 16 }} wrap>
+        <span>环境：</span>
+        <Select<TsfTursoEnv>
+          value={env}
+          style={{ width: 120 }}
+          disabled={loading || adjusting}
+          options={[
+            { value: "prod", label: "Prod" },
+            { value: "test", label: "Test" },
+          ]}
+          onChange={(nextEnv) => {
+            setEnv(nextEnv);
+            if (shopInput.trim()) {
+              load(shopInput, nextEnv);
+            }
+          }}
+        />
         <Input
           prefix={<SearchOutlined />}
           placeholder="商店域名，如 example 或 example.myshopify.com"
           value={shopInput}
           onChange={(e) => setShopInput(e.target.value)}
-          onPressEnter={() => load(shopInput)}
+          onPressEnter={() => load(shopInput, env)}
           allowClear
           style={{ width: 360 }}
         />
-        <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => load(shopInput)}>
+        <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => load(shopInput, env)}>
           查询
         </Button>
         <Button
           icon={<ReloadOutlined />}
           disabled={!shopInput.trim()}
           loading={loading}
-          onClick={() => load(shopInput)}
+          onClick={() => load(shopInput, env)}
         >
           刷新
         </Button>
@@ -360,6 +504,11 @@ export default function TsfCredits() {
           <>
             <Card size="small" style={{ marginBottom: 16 }}>
               <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+                <Descriptions.Item label="环境">
+                  <Tag color={data?.env === "prod" ? "red" : "blue"}>
+                    {(data?.env ?? env).toUpperCase()}
+                  </Tag>
+                </Descriptions.Item>
                 <Descriptions.Item label="商店">
                   <Typography.Text copyable>{account.shop}</Typography.Text>
                 </Descriptions.Item>
@@ -459,6 +608,26 @@ export default function TsfCredits() {
               />
             </Card>
 
+            <Card
+              title="运维调整记录（对账）"
+              size="small"
+              style={{ marginBottom: 16 }}
+              extra={
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  共 {data?.adminAdjustments.length ?? 0} 条 · 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED
+                </Typography.Text>
+              }
+            >
+              <Table<TsfCreditsBillingLog>
+                dataSource={data?.adminAdjustments ?? []}
+                columns={adminAdjustColumns}
+                rowKey={(r, i) => `${r.referenceId ?? r.createdAt}-${i}`}
+                size="small"
+                pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
+                locale={{ emptyText: "暂无运维调整记录" }}
+              />
+            </Card>
+
             <Card title="计费流水（最近 100 条）" size="small" style={{ marginBottom: 16 }}>
               <Table<TsfCreditsBillingLog>
                 dataSource={data?.billingLogs ?? []}
@@ -499,7 +668,7 @@ export default function TsfCredits() {
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Typography.Text type="secondary">
-            商店：{account?.shop ?? "-"} · 当前加购额度：
+            商店：{account?.shop ?? "-"} · 环境：{env.toUpperCase()} · 当前加购额度：
             {(account?.purchasedCredits ?? 0).toLocaleString()}
           </Typography.Text>
           <div>
@@ -536,7 +705,7 @@ export default function TsfCredits() {
             />
           </div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            将写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED，不会计入加购收入统计。
+            成功后写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED（含调整前后、操作者、环境），不会计入加购收入统计。
           </Typography.Text>
         </Space>
       </Modal>
