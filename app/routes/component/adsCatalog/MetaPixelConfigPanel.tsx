@@ -306,7 +306,18 @@ export function MetaPixelConfigPanel({
       try {
         await metaCapiOAuth.startOAuth(
           `/api/ads-catalog/meta-capi-auth-url${locationSearch}`,
-          () => onChanged(),
+          (data) => {
+            const authStatus = data.metaCapiAuth;
+            if (authStatus === "error") {
+              setLocalError(data.reason ?? t("adsCatalog.authError"));
+              return;
+            }
+            if (authStatus === "cancelled") {
+              setLocalError(t("adsCatalog.authError"));
+              return;
+            }
+            onChanged();
+          },
         );
       } catch (e) {
         setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));

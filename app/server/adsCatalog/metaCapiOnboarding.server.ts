@@ -32,11 +32,19 @@ export async function fetchMetaBisuClientBusinessId(params: {
   url.searchParams.set("fields", "client_business_id,id");
   url.searchParams.set("access_token", params.accessToken.trim());
 
+  console.info(
+    `${LOG_PREFIX} step=business_id_request method=GET fields=client_business_id,id apiVersion=${params.apiVersion ?? ""} tokenLen=${params.accessToken.trim().length}`,
+  );
+
   const response = await fetch(url.toString());
   const json = (await response.json().catch(() => ({}))) as {
+    id?: string;
     client_business_id?: string;
     error?: { message?: string };
   };
+  console.info(
+    `${LOG_PREFIX} step=business_id_response http=${response.status} ok=${response.ok} metaUserId=${json.id ?? ""} clientBusinessId=${json.client_business_id ?? ""} error=${json.error?.message ?? ""}`,
+  );
   if (!response.ok) {
     throw new Error(json.error?.message || `HTTP ${response.status}`);
   }
@@ -58,14 +66,25 @@ export async function listMetaPixelsForBisuToken(params: {
     throw new Error("businessId and accessToken are required");
   }
 
+  console.info(
+    `${LOG_PREFIX} step=pixel_list_start businessId=${businessId} apiVersion=${params.apiVersion ?? ""} tokenLen=${accessToken.length}`,
+  );
+
   const owned = await listMetaBusinessPixels({
     accessToken,
     businessId,
     apiVersion: params.apiVersion,
   });
   if (owned.length > 0) {
+    console.info(
+      `${LOG_PREFIX} step=pixel_list_success source=owned_pixels pixelCount=${owned.length} pixelIds=${owned.map((pixel) => pixel.pixelId).join(",")}`,
+    );
     return owned;
   }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_list_owned_empty fallback=ad_accounts`,
+  );
 
   const adAccountsUrl = new URL(`${META_GRAPH_BASE}/me/adaccounts`);
   adAccountsUrl.searchParams.set("fields", "id");
@@ -77,6 +96,9 @@ export async function listMetaPixelsForBisuToken(params: {
     error?: { message?: string };
   };
   if (!adAccountsResponse.ok) {
+    console.error(
+      `${LOG_PREFIX} step=ad_accounts_failed http=${adAccountsResponse.status} error=${adAccountsJson.error?.message ?? ""}`,
+    );
     throw new Error(adAccountsJson.error?.message || `HTTP ${adAccountsResponse.status}`);
   }
 
@@ -102,6 +124,9 @@ export async function listMetaPixelsForBisuToken(params: {
       );
     }
   }
+  console.info(
+    `${LOG_PREFIX} step=pixel_list_success source=ad_accounts pixelCount=${pixels.length} pixelIds=${pixels.map((pixel) => pixel.pixelId).join(",")}`,
+  );
   return pixels;
 }
 
@@ -123,8 +148,13 @@ export async function persistMetaCapiBisuOnboarding(params: {
     throw new Error("CAPI access token is required");
   }
 
+  console.info(
+    `${LOG_PREFIX} step=persist_start shop=${shop} businessId=${params.businessId?.trim() ?? ""} requestedPixelId=${params.pixelId?.trim() ?? ""} tokenLen=${capiAccessToken.length}`,
+  );
+
   const catalog = await getFacebookCatalogCredential(shop);
   if (!catalog) {
+    console.error(`${LOG_PREFIX} step=persist_failed shop=${shop} reason=catalog_credential_missing`);
     throw new Error("Meta Catalog 尚未连接，请先完成 Catalog 授权后再连接 CAPI");
   }
 
@@ -134,6 +164,10 @@ export async function persistMetaCapiBisuOnboarding(params: {
       accessToken: capiAccessToken,
       apiVersion: params.apiVersion ?? catalog.apiVersion,
     }));
+
+  console.info(
+    `${LOG_PREFIX} step=business_id_ready shop=${shop} businessId=${businessId} catalogPixelId=${catalog.pixelId ?? ""}`,
+  );
 
   const configId = resolveMetaCapiLoginConfigId() ?? undefined;
   const obtainedAt = new Date().toISOString();

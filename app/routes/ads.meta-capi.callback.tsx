@@ -58,6 +58,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   const { shop, host, appOrigin, popup } = verified;
 
+  console.info(
+    `[AdsCatalog][MetaCapiCallback] step=start shop=${shop} popup=${popup} hasCode=${Boolean(code)} hasOAuthError=${Boolean(oauthError)}`,
+  );
+
   const respond = (params: Record<string, string>): Response =>
     popup
       ? popupClose(params)
@@ -84,6 +88,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const catalog = await getFacebookCatalogCredential(shop);
     if (!catalog) {
+      console.error(
+        `[AdsCatalog][MetaCapiCallback] step=catalog_missing shop=${shop}`,
+      );
       return respond({
         metaCapiAuth: "error",
         reason: "请先连接 Meta Catalog，再授权 Conversions API",
@@ -95,6 +102,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       redirectUri: getMetaRedirectUri(META_CAPI_CALLBACK_PATH, incoming.origin),
       client,
     });
+    console.info(
+      `[AdsCatalog][MetaCapiCallback] step=token_exchange_success shop=${shop} tokenLen=${capiAccessToken.trim().length}`,
+    );
     logFullMetaCapiAccessToken({
       token: capiAccessToken,
       source: "bisu_oauth_code_exchange",
@@ -107,7 +117,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         accessToken: capiAccessToken,
         apiVersion: catalog.apiVersion,
       });
+      console.info(
+        `[AdsCatalog][MetaCapiCallback] step=business_id_success shop=${shop} businessId=${businessId}`,
+      );
     } catch (e) {
+      console.error(
+        `[AdsCatalog][MetaCapiCallback] step=business_id_failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
+      );
       return respond({
         metaCapiAuth: "error",
         reason:
@@ -117,12 +133,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
     }
 
-    const result = await persistMetaCapiBisuOnboarding({
-      shop,
-      capiAccessToken,
-      businessId,
-      apiVersion: catalog.apiVersion,
-    });
+    let result: Awaited<ReturnType<typeof persistMetaCapiBisuOnboarding>>;
+    try {
+      result = await persistMetaCapiBisuOnboarding({
+        shop,
+        capiAccessToken,
+        businessId,
+        apiVersion: catalog.apiVersion,
+      });
+      console.info(
+        `[AdsCatalog][MetaCapiCallback] step=persist_result shop=${shop} status=${result.status} pixelId=${result.status === "saved" ? result.pixelId : ""} pixelCount=${result.status === "select" ? result.pixels.length : 0}`,
+      );
+    } catch (e) {
+      console.error(
+        `[AdsCatalog][MetaCapiCallback] step=persist_failed shop=${shop} businessId=${businessId} err=${e instanceof Error ? e.message : String(e)}`,
+      );
+      throw e;
+    }
 
     if (result.status === "saved") {
       await clearMetaCapiPending(shop);
@@ -143,6 +170,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
     return respond({ metaCapiAuth: "select" });
   } catch (e) {
+    console.error(
+      `[AdsCatalog][MetaCapiCallback] step=failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
+    );
     return respond({
       metaCapiAuth: "error",
       reason: e instanceof Error ? e.message : "Meta CAPI 授权失败",
