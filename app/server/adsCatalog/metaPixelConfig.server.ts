@@ -47,6 +47,7 @@ function credentialWriteBase(credential: FacebookCatalogCredential) {
 
 import {
   formatMetaCapiTokenForLog,
+  logFullMetaCapiAccessToken,
   shouldLogFullMetaCapiToken,
 } from "./metaCapiLog.server";
 
@@ -422,8 +423,6 @@ export type SaveMetaPixelConfigResult = {
   capiEnabled: boolean;
   enabledEvents: MetaPixelEventName[];
   hasCapiAccessToken: boolean;
-  /** 绑定/保存后回传，供 Admin UI 展示（Shopify Admin 鉴权页内）。 */
-  capiAccessToken?: string;
 };
 
 export type ListMetaCatalogPixelsResult = {
@@ -971,12 +970,22 @@ export async function saveMetaPixelConfig(
 
   const hasCapiAccessToken = Boolean(capiAccessTokenToStore);
 
+  if (capiAccessTokenToStore) {
+    logFullMetaCapiAccessToken({
+      token: capiAccessTokenToStore,
+      source: incomingToken
+        ? "meta_pixel_config_manual_input"
+        : "meta_pixel_config_saved",
+      shop: params.shop,
+      pixelId,
+    });
+  }
+
   return {
     pixelId,
     capiEnabled,
     enabledEvents,
     hasCapiAccessToken,
-    ...(capiAccessTokenToStore ? { capiAccessToken: capiAccessTokenToStore } : {}),
   };
 }
 

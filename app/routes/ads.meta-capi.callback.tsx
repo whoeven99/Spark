@@ -17,6 +17,7 @@ import {
   fetchMetaBisuClientBusinessId,
   persistMetaCapiBisuOnboarding,
 } from "../server/adsCatalog/metaCapiOnboarding.server";
+import { logFullMetaCapiAccessToken } from "../server/adsCatalog/metaCapiLog.server";
 import { buildOAuthPopupCloseHtml } from "../server/adsCatalog/googleOAuth.server";
 
 function appRedirect(
@@ -93,6 +94,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       code,
       redirectUri: getMetaRedirectUri(META_CAPI_CALLBACK_PATH, incoming.origin),
       client,
+    });
+    logFullMetaCapiAccessToken({
+      token: capiAccessToken,
+      source: "bisu_oauth_code_exchange",
+      shop,
     });
 
     let businessId = "";

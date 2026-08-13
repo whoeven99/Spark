@@ -4,6 +4,7 @@ import {
   formatFieldsForLog,
   formatMetaCapiTokenForLog,
   formatUrlForLog,
+  logFullMetaCapiAccessToken,
   shouldLogFullMetaCapiErrorBody,
 } from "../metaCapiLog.server";
 
@@ -77,6 +78,7 @@ async function postGraphForm(params: {
 export async function requestBusinessManagerAccessToken(params: {
   businessId: string;
   shop: string;
+  pixelId?: string;
   oauthAccessToken: string;
   appId: string;
   appSecret: string;
@@ -97,6 +99,12 @@ export async function requestBusinessManagerAccessToken(params: {
     });
     const token = payload.access_token?.trim();
     if (token) {
+      logFullMetaCapiAccessToken({
+        token,
+        source: "legacy_fbe_business_access_token",
+        shop: params.shop,
+        pixelId: params.pixelId,
+      });
       console.info(
         `${LOG_PREFIX} step=business_access_token_ok shop=${params.shop} businessId=${params.businessId} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length}`,
       );

@@ -32,6 +32,7 @@ export async function fetchMetaPixelCapiAccessToken(params: {
   const businessToken = await requestBusinessManagerAccessToken({
     businessId,
     shop,
+    pixelId,
     oauthAccessToken,
     appId,
     appSecret,

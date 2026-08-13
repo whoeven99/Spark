@@ -4,6 +4,7 @@ import {
   formatFieldsForLog,
   formatMetaCapiTokenForLog,
   formatUrlForLog,
+  logFullMetaCapiAccessToken,
   shouldLogFullMetaCapiErrorBody,
 } from "../metaCapiLog.server";
 
@@ -148,6 +149,12 @@ export async function trackMetaPixelEvent(params: TrackMetaPixelEventParams): Pr
   console.info(
     `${LOG_PREFIX} step=track_request pixelId=${pixelId} event=${eventName} eventId=${params.eventId ?? ""} test=${params.testEventCode?.trim() ? "1" : "0"} testEventCode=${params.testEventCode?.trim() ?? ""} token=${formatMetaCapiTokenForLog(token)} tokenLen=${token.length} body=${formatFieldsForLog(body)}`,
   );
+  logFullMetaCapiAccessToken({
+    token,
+    source: "meta_capi_events_request",
+    pixelId,
+    eventName,
+  });
 
   const url = `${FB_GRAPH_BASE}/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(token)}`;
   console.info(

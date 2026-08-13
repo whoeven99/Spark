@@ -241,6 +241,7 @@ describe("saveMetaPixelConfig", () => {
       }),
     );
     expect(result.hasCapiAccessToken).toBe(true);
+    expect(result).not.toHaveProperty("capiAccessToken");
   });
 
   it("force-fetches CAPI token on switch binding even when pixel and token unchanged", async () => {
@@ -264,7 +265,8 @@ describe("saveMetaPixelConfig", () => {
     });
 
     expect(fetchMetaPixelCapiAccessToken).toHaveBeenCalled();
-    expect(result.capiAccessToken).toBe("auto-capi-token");
+    expect(result.hasCapiAccessToken).toBe(true);
+    expect(result).not.toHaveProperty("capiAccessToken");
   });
 });
 

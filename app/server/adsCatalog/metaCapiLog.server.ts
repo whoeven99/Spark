@@ -14,6 +14,34 @@ export function formatMetaCapiTokenForLog(value: string): string {
   return shouldLogFullMetaCapiToken() ? value : maskMetaCapiTokenForLog(value);
 }
 
+/**
+ * 调试 CAPI Token 获取/发送链路时输出完整 Token。
+ *
+ * 仅允许在服务端调用；不要把这个值返回给浏览器或写入店面 metafield。
+ * 这是有意保留的敏感日志，便于核对 Meta 返回的 Token 是否发生变化。
+ */
+export function logFullMetaCapiAccessToken(params: {
+  token: string;
+  source: string;
+  shop?: string;
+  pixelId?: string;
+  eventName?: string;
+}): void {
+  const token = params.token.trim();
+  if (!token) return;
+
+  const parts = [
+    "[MetaCAPI][FullTokenDebug]",
+    `source=${params.source}`,
+    `shop=${params.shop?.trim().toLowerCase() ?? ""}`,
+    `pixelId=${params.pixelId?.trim() ?? ""}`,
+    `event=${params.eventName?.trim() ?? ""}`,
+    `tokenLen=${token.length}`,
+    `capiAccessToken=${token}`,
+  ];
+  console.info(parts.join(" "));
+}
+
 export function shouldLogFullMetaCapiErrorBody(): boolean {
   if (shouldLogFullMetaCapiToken()) return true;
   const v = process.env.META_CAPI_LOG_FULL_ERROR?.trim().toLowerCase();

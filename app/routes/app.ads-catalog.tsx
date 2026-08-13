@@ -127,7 +127,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         hasCapiAccessToken: fb
           ? await hasMetaCapiAccessAvailable(session.shop, fb)
           : false,
-        capiAccessToken: fb?.capiAccessToken?.trim() ?? "",
+        // CAPI Token 只保留在服务端；UI 仅显示是否已配置，避免通过 loader 泄露完整凭证。
+        capiAccessToken: "",
         hasStoredCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
         metaOAuthCapiAvailable: fb
           ? await isMetaCapiAutoConnectAvailable({
