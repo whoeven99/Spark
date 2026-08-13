@@ -24,8 +24,14 @@ export const META_CATALOG_CALLBACK_PATH = "/ads/meta-catalog/callback";
 export const META_ADS_CALLBACK_PATH = "/ads/meta-ads/callback";
 export const META_PIXEL_DATA_CALLBACK_PATH = "/ads/meta-pixel-data/callback";
 export const META_CAPI_CALLBACK_PATH = "/ads/meta-capi/callback";
+export const META_UNIFIED_CALLBACK_PATH = "/ads/meta-unified/callback";
 
-export type MetaOAuthFlow = "meta_catalog" | "meta_ads" | "meta_pixel_data" | "meta_capi";
+export type MetaOAuthFlow =
+  | "meta_catalog"
+  | "meta_ads"
+  | "meta_pixel_data"
+  | "meta_capi"
+  | "meta_unified";
 
 export interface MetaOAuthClient {
   appId: string;
@@ -426,6 +432,44 @@ export async function buildMetaCapiOAuthStartUrl(params: {
   return { ok: true, authUrl };
 }
 
+/** Meta 统一授权入口：一次 Business Login 同时用于 Catalog、Ads 和 CAPI。 */
+export async function buildMetaUnifiedOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  popup?: boolean;
+}): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  const client = resolveMetaOAuthClient();
+  if (!client) {
+    return {
+      ok: false,
+      error: "缺少 Meta App 凭证：请配置 META_APP_ID / META_APP_SECRET 环境变量",
+    };
+  }
+  const configId = resolveMetaCapiLoginConfigId();
+  if (!configId) {
+    return {
+      ok: false,
+      error: "缺少 Meta CAPI Configuration：请配置 META_CAPI_LOGIN_CONFIG_ID 环境变量",
+    };
+  }
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createMetaOAuthState(
+    params.shop,
+    params.host ?? "",
+    appOrigin,
+    "meta_unified",
+    params.popup,
+  );
+  const authUrl = buildMetaCapiBusinessAuthUrl({
+    appId: client.appId,
+    state,
+    redirectUri: getMetaRedirectUri(META_UNIFIED_CALLBACK_PATH, params.requestOrigin),
+    configId,
+  });
+  return { ok: true, authUrl };
+}
+
 /** Meta CAPI OAuth 完成后跳回 Ads Catalog。 */
 export function buildMetaCapiOAuthReturnUrl(params: {
   shop: string;
@@ -439,6 +483,36 @@ export function buildMetaCapiOAuthReturnUrl(params: {
     shop: params.shop,
     request: params.request,
     query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("META_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
+}
+
+export function buildMetaUnifiedOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/ads-catalog",
+    shop: params.shop,
+    query: params.query,
+    request: params.request,
   });
   if (adminUrl) return adminUrl;
 

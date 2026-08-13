@@ -818,7 +818,7 @@ export function MetaPixelConfigPanel({
                 ? t("adsCatalog.metaPixelSelectCapiHint")
                 : t("adsCatalog.metaPixelSelectCapiConnectHint")}
           </p>
-          {metaCapiBisuConfigured ? (
+          {metaCapiBisuConfigured && capiTokenType !== "bisu" ? (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <button
                 type="button"
@@ -826,7 +826,9 @@ export function MetaPixelConfigPanel({
                 disabled={isBusy}
                 onClick={connectMetaCapi}
               >
-                {t("adsCatalog.metaCapiConnect")}
+                {capiTokenType === "bisu"
+                  ? t("adsCatalog.metaCapiReconnectLegacy")
+                  : t("adsCatalog.metaCapiConnect")}
               </button>
               {capiTokenType === "bisu" ? (
                 <span style={{ fontSize: 12, color: "#0f7a52", fontWeight: 600 }}>

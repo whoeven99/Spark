@@ -60,8 +60,7 @@ export function MetaConnectPanels({
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [setupRevision, setSetupRevision] = useState(0);
-  const metaOAuth = useOAuthPopup("meta_catalog_oauth");
-  const metaAdsOAuth = useOAuthPopup("meta_ads_oauth");
+  const metaUnifiedOAuth = useOAuthPopup("meta_unified_oauth");
 
   const meta = credentials.meta;
 
@@ -79,27 +78,21 @@ export function MetaConnectPanels({
     onChanged();
   }
 
-  function connectMetaAds() {
+  function connectMetaUnified() {
     void (async () => {
       setBusy(true);
       try {
-        await metaAdsOAuth.startOAuth(
-          `/api/ads-insights/meta-auth-url${locationSearch}`,
-          () => notifyChanged(),
+        await metaUnifiedOAuth.startOAuth(
+          `/api/ads-catalog/meta-unified-auth-url${locationSearch}`,
+          (data) => {
+            if (data.metaUnifiedAuth === "error") {
+              alert(data.reason ?? t("adsCatalog.authError"));
+              return;
+            }
+            if (data.metaUnifiedAuth === "cancelled") return;
+            notifyChanged();
+          },
         );
-      } catch (e) {
-        alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }
-
-  function openOAuth() {
-    void (async () => {
-      setBusy(true);
-      try {
-        await metaOAuth.startOAuth(`/api/ads-catalog/meta-auth-url${locationSearch}`, () => notifyChanged());
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {
@@ -149,6 +142,27 @@ export function MetaConnectPanels({
               {t("adsCatalog.metaUpdatedAt", { time: fmtDate(meta.updatedAt) })}
             </div>
           </div>
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: pageColorTokens.surfaceSubtle,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {t("adsCatalog.metaUnifiedAuthTitle")}
+            </div>
+            <div style={pageHintTextStyle}>{t("adsCatalog.metaUnifiedAuthHint")}</div>
+            <button
+              type="button"
+              style={{ ...primaryBtn, marginTop: 8 }}
+              disabled={busy}
+              onClick={connectMetaUnified}
+            >
+              {t("adsCatalog.metaUnifiedAuthButton")}
+            </button>
+          </div>
           <MetaPixelSetupWizard
             metaConnected={meta.connected}
             metaAdsConnected={meta.metaAdsConnected}
@@ -158,7 +172,7 @@ export function MetaConnectPanels({
             capiEnabled={meta.capiEnabled}
             locationSearch={locationSearch}
             themeEditorUrl={themeEditorUrl}
-            onConnectMetaAds={connectMetaAds}
+            onConnectMetaAds={connectMetaUnified}
             busy={busy}
             setupRevision={setupRevision}
           />
@@ -192,7 +206,7 @@ export function MetaConnectPanels({
             </Link>
           ) : null}
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" style={secondaryBtn} onClick={openOAuth}>
+            <button type="button" style={secondaryBtn} onClick={connectMetaUnified} disabled={busy}>
               {t("adsCatalog.metaReauth")}
             </button>
             <button
@@ -216,8 +230,8 @@ export function MetaConnectPanels({
         <>
           <p style={pageHintTextStyle}>{t("adsCatalog.metaConnectHint")}</p>
           <div>
-            <button type="button" style={primaryBtn} onClick={openOAuth}>
-              {t("adsCatalog.metaConnect")}
+            <button type="button" style={primaryBtn} onClick={connectMetaUnified} disabled={busy}>
+              {t("adsCatalog.metaUnifiedAuthButton")}
             </button>
           </div>
         </>
