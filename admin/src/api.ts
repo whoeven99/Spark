@@ -2110,8 +2110,6 @@ export type TsfCreditsPackPurchase = {
   createdAt: string;
 };
 
-export type TsfTursoEnv = "prod" | "test";
-
 export type TsfCreditsAdjustMetadata = {
   source?: string;
   action?: "add" | "set";
@@ -2121,7 +2119,6 @@ export type TsfCreditsAdjustMetadata = {
   note?: string | null;
   adjustedAt?: string;
   operatorRole?: string;
-  tsfEnv?: TsfTursoEnv;
 };
 
 export type TsfCreditsBillingLog = {
@@ -2147,7 +2144,6 @@ export type TsfCreditsPeriodHistory = {
 };
 
 export type TsfCreditsData = {
-  env: TsfTursoEnv;
   queriedShop: string;
   account: TsfCreditsAccount | null;
   packPurchases: TsfCreditsPackPurchase[];
@@ -2161,13 +2157,11 @@ export type TsfCreditsData = {
 };
 
 /** 按 shop 查询 TSF Turso 额度与加购积分。 */
-export function fetchTsfCredits(shop: string, env: TsfTursoEnv = "prod"): Promise<TsfCreditsData> {
-  const query = new URLSearchParams({ shop, env });
-  return apiFetch(`/tsf/credits?${query.toString()}`);
+export function fetchTsfCredits(shop: string): Promise<TsfCreditsData> {
+  return apiFetch(`/tsf/credits?shop=${encodeURIComponent(shop)}`);
 }
 
 export type TsfPurchasedCreditsAdjustResult = {
-  env: TsfTursoEnv;
   shop: string;
   action: "add" | "set";
   before: number;
@@ -2185,7 +2179,6 @@ export function adjustTsfPurchasedCredits(params: {
   action: "add" | "set";
   amount: number;
   note?: string;
-  env?: TsfTursoEnv;
 }): Promise<TsfPurchasedCreditsAdjustResult> {
   return apiFetch("/tsf/credits/purchased", {
     method: "POST",

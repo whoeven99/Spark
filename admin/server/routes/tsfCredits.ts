@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { AdminRole } from "../middleware/auth.js";
-import { resolveTsfDbForRequest } from "../lib/tsfDb.js";
+import { getTsfDb } from "../lib/tsfDb.js";
 import { normalizeShopName } from "../lib/shopSession.js";
 
 export const tsfCreditsRouter = Router();
@@ -48,7 +48,7 @@ function parseBillingMetadata(raw: unknown): Record<string, unknown> | null {
 
 /**
  * 按 shop 查询 TSF Turso 额度与加购积分。
- * GET /api/tsf/credits?shop=&env=test|prod
+ * GET /api/tsf/credits?shop=
  */
 tsfCreditsRouter.get("/", async (req, res) => {
   const rawShop = (req.query.shop as string | undefined)?.trim() ?? "";
@@ -63,9 +63,8 @@ tsfCreditsRouter.get("/", async (req, res) => {
     return;
   }
 
-  const { db, env } = resolveTsfDbForRequest(req.query.env);
-
   try {
+    const db = getTsfDb();
     const [accountResult, packResult, billingResult, historyResult] = await Promise.all([
       db.execute({
         sql: `
@@ -204,7 +203,6 @@ tsfCreditsRouter.get("/", async (req, res) => {
     }));
 
     res.json({
-      env,
       queriedShop: shop,
       account,
       packPurchases,
@@ -222,7 +220,7 @@ tsfCreditsRouter.get("/", async (req, res) => {
 /**
  * 调整 Account.purchasedCredits。
  * POST /api/tsf/credits/purchased
- * body: { shop, action: "add" | "set", amount, note?, env?: "test" | "prod" }
+ * body: { shop, action: "add" | "set", amount, note? }
  */
 tsfCreditsRouter.post("/purchased", async (req, res) => {
   const shop = resolveShopQuery(String(req.body?.shop ?? ""));
@@ -254,9 +252,8 @@ tsfCreditsRouter.post("/purchased", async (req, res) => {
     return;
   }
 
-  const { db, env } = resolveTsfDbForRequest(req.body?.env);
-
   try {
+    const db = getTsfDb();
     const accountResult = await db.execute({
       sql: `
         SELECT shop, purchasedCredits, usedCredits, updatedAt
@@ -285,7 +282,6 @@ tsfCreditsRouter.post("/purchased", async (req, res) => {
     const creditsDelta = after - before;
     if (creditsDelta === 0) {
       res.json({
-        env,
         shop,
         action,
         before,
@@ -308,7 +304,6 @@ tsfCreditsRouter.post("/purchased", async (req, res) => {
       note: note || null,
       adjustedAt: now,
       operatorRole,
-      tsfEnv: env,
     });
 
     await db.batch(
@@ -343,13 +338,12 @@ tsfCreditsRouter.post("/purchased", async (req, res) => {
     );
 
     console.info(
-      `[tsf/credits/purchased] env=${env} shop=${shop} action=${action} ` +
+      `[tsf/credits/purchased] shop=${shop} action=${action} ` +
         `before=${before} after=${after} delta=${creditsDelta} ` +
         `operator=${operatorRole} ref=${referenceId}`,
     );
 
     res.json({
-      env,
       shop,
       action,
       before,

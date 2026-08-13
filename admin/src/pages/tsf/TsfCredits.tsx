@@ -11,7 +11,6 @@ import {
   Modal,
   Progress,
   Row,
-  Select,
   Space,
   Spin,
   Statistic,
@@ -35,7 +34,6 @@ import {
   type TsfCreditsData,
   type TsfCreditsPackPurchase,
   type TsfCreditsPeriodHistory,
-  type TsfTursoEnv,
 } from "../../api";
 
 function usageColor(pct: number): string {
@@ -65,16 +63,12 @@ function fmtAdjustDetail(metadata: TsfCreditsAdjustMetadata | null): string {
   if (metadata.operatorRole) {
     parts.push(`操作者：${metadata.operatorRole}`);
   }
-  if (metadata.tsfEnv) {
-    parts.push(`环境：${metadata.tsfEnv.toUpperCase()}`);
-  }
   return parts.length > 0 ? parts.join(" · ") : "-";
 }
 
 type AdjustMode = "add" | "set";
 
 export default function TsfCredits() {
-  const [env, setEnv] = useState<TsfTursoEnv>("prod");
   const [shopInput, setShopInput] = useState("");
   const [data, setData] = useState<TsfCreditsData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,26 +81,23 @@ export default function TsfCredits() {
   const [adjustNote, setAdjustNote] = useState("");
   const [adjusting, setAdjusting] = useState(false);
 
-  const load = useCallback(
-    (shop: string, targetEnv: TsfTursoEnv = env) => {
-      const trimmed = shop.trim();
-      if (!trimmed) {
-        setError("请输入商店域名");
-        return;
-      }
-      setLoading(true);
-      setError("");
-      setSearched(true);
-      fetchTsfCredits(trimmed, targetEnv)
-        .then(setData)
-        .catch((e) => {
-          setData(null);
-          setError(String(e));
-        })
-        .finally(() => setLoading(false));
-    },
-    [env],
-  );
+  const load = useCallback((shop: string) => {
+    const trimmed = shop.trim();
+    if (!trimmed) {
+      setError("请输入商店域名");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setSearched(true);
+    fetchTsfCredits(trimmed)
+      .then(setData)
+      .catch((e) => {
+        setData(null);
+        setError(String(e));
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const account = data?.account ?? null;
   const canAdjust = Boolean(account);
@@ -151,16 +142,15 @@ export default function TsfCredits() {
         action: adjustMode,
         amount: adjustAmount,
         note: adjustNote.trim() || undefined,
-        env,
       });
       message.success(
-        `加购额度已更新（${result.env.toUpperCase()}）：${result.before.toLocaleString()} → ${result.after.toLocaleString()}（${
+        `加购额度已更新：${result.before.toLocaleString()} → ${result.after.toLocaleString()}（${
           result.creditsDelta >= 0 ? "+" : ""
         }${result.creditsDelta.toLocaleString()}）` +
           (result.referenceId ? ` · 对账单号 ${result.referenceId}` : ""),
       );
       setAdjustOpen(false);
-      load(account.shop, env);
+      load(account.shop);
     } catch (e) {
       message.error(String(e));
     } finally {
@@ -414,18 +404,8 @@ export default function TsfCredits() {
         用户额度查询
       </Typography.Title>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        按商店域名查询 TSF Turso 中的当前额度、加购积分与计费流水；可切换 Test / Prod 环境进行查询与额度调整。
+        按商店域名查询 TSF Turso 中的当前额度、加购积分与计费流水。
       </Typography.Paragraph>
-
-      {env === "prod" && (
-        <Alert
-          type="warning"
-          showIcon
-          message="当前为 Prod 环境"
-          description="修改加购额度将直接写入生产 TSF Turso 账本，请谨慎操作。"
-          style={{ marginBottom: 16 }}
-        />
-      )}
 
       {error && (
         <Alert
@@ -438,39 +418,23 @@ export default function TsfCredits() {
       )}
 
       <Space style={{ marginBottom: 16 }} wrap>
-        <span>环境：</span>
-        <Select<TsfTursoEnv>
-          value={env}
-          style={{ width: 120 }}
-          disabled={loading || adjusting}
-          options={[
-            { value: "prod", label: "Prod" },
-            { value: "test", label: "Test" },
-          ]}
-          onChange={(nextEnv) => {
-            setEnv(nextEnv);
-            if (shopInput.trim()) {
-              load(shopInput, nextEnv);
-            }
-          }}
-        />
         <Input
           prefix={<SearchOutlined />}
           placeholder="商店域名，如 example 或 example.myshopify.com"
           value={shopInput}
           onChange={(e) => setShopInput(e.target.value)}
-          onPressEnter={() => load(shopInput, env)}
+          onPressEnter={() => load(shopInput)}
           allowClear
           style={{ width: 360 }}
         />
-        <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => load(shopInput, env)}>
+        <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => load(shopInput)}>
           查询
         </Button>
         <Button
           icon={<ReloadOutlined />}
           disabled={!shopInput.trim()}
           loading={loading}
-          onClick={() => load(shopInput, env)}
+          onClick={() => load(shopInput)}
         >
           刷新
         </Button>
@@ -504,11 +468,6 @@ export default function TsfCredits() {
           <>
             <Card size="small" style={{ marginBottom: 16 }}>
               <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-                <Descriptions.Item label="环境">
-                  <Tag color={data?.env === "prod" ? "red" : "blue"}>
-                    {(data?.env ?? env).toUpperCase()}
-                  </Tag>
-                </Descriptions.Item>
                 <Descriptions.Item label="商店">
                   <Typography.Text copyable>{account.shop}</Typography.Text>
                 </Descriptions.Item>
@@ -668,7 +627,7 @@ export default function TsfCredits() {
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Typography.Text type="secondary">
-            商店：{account?.shop ?? "-"} · 环境：{env.toUpperCase()} · 当前加购额度：
+            商店：{account?.shop ?? "-"} · 当前加购额度：
             {(account?.purchasedCredits ?? 0).toLocaleString()}
           </Typography.Text>
           <div>
@@ -705,7 +664,7 @@ export default function TsfCredits() {
             />
           </div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            成功后写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED（含调整前后、操作者、环境），不会计入加购收入统计。
+            成功后写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED（含调整前后、操作者），不会计入加购收入统计。
           </Typography.Text>
         </Space>
       </Modal>

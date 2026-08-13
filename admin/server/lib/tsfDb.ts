@@ -8,18 +8,9 @@ import { isProductionNodeEnv } from "./nodeEnv.js";
  * 供「翻译」Tab 下的 TSF 用户统计与翻译 v4 客服使用。
  */
 
-export type TsfTursoEnv = "prod" | "test";
+let _client: Client | null = null;
 
-const _clients = new Map<TsfTursoEnv, Client>();
-
-export function parseTsfTursoEnv(raw: unknown): TsfTursoEnv | undefined {
-  const v = String(raw ?? "").trim().toLowerCase();
-  if (v === "test" || v === "testing") return "test";
-  if (v === "prod" || v === "production") return "prod";
-  return undefined;
-}
-
-function resolveTsfTursoTarget(): TsfTursoEnv {
+function resolveTsfTursoTarget(): "prod" | "test" {
   const explicit = getEnv("TSF_TURSO_TARGET").toLowerCase();
   if (explicit === "prod" || explicit === "production") return "prod";
   if (explicit === "test" || explicit === "testing") return "test";
@@ -32,7 +23,10 @@ function resolveTsfTursoTarget(): TsfTursoEnv {
   return isProductionNodeEnv() ? "prod" : "test";
 }
 
-function createTsfClient(target: TsfTursoEnv): Client {
+export function getTsfDb(): Client {
+  if (_client) return _client;
+
+  const target = resolveTsfTursoTarget();
   const url =
     target === "prod"
       ? requireEnv("TSF_TURSO_PROD_DATABASE_URL")
@@ -43,23 +37,8 @@ function createTsfClient(target: TsfTursoEnv): Client {
       : requireEnv("TSF_TURSO_TEST_AUTH_TOKEN");
 
   console.info(`[admin/tsfDb] Connecting to TSF Turso ${target}: ${url.slice(0, 40)}…`);
-  return createClient({ url, authToken });
-}
-
-export function getTsfDb(env?: TsfTursoEnv): Client {
-  const target = env ?? resolveTsfTursoTarget();
-  let client = _clients.get(target);
-  if (!client) {
-    client = createTsfClient(target);
-    _clients.set(target, client);
-  }
-  return client;
-}
-
-/** 按请求参数解析 TSF Turso 环境；未指定时回退到服务端默认。 */
-export function resolveTsfDbForRequest(rawEnv: unknown): { db: Client; env: TsfTursoEnv } {
-  const env = parseTsfTursoEnv(rawEnv) ?? resolveTsfTursoTarget();
-  return { db: getTsfDb(env), env };
+  _client = createClient({ url, authToken });
+  return _client;
 }
 
 export function isTsfDbConfigured(): boolean {
