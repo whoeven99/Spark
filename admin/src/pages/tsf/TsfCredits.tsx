@@ -29,6 +29,7 @@ import {
 import {
   adjustTsfPurchasedCredits,
   fetchTsfCredits,
+  type TsfCreditsAdjustMetadata,
   type TsfCreditsBillingLog,
   type TsfCreditsData,
   type TsfCreditsPackPurchase,
@@ -45,6 +46,24 @@ function fmtDate(value: string | null | undefined): string {
   if (!value) return "-";
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString("zh-CN");
+}
+
+function fmtAdjustDetail(metadata: TsfCreditsAdjustMetadata | null): string {
+  if (!metadata) return "-";
+  const parts: string[] = [];
+  if (typeof metadata.before === "number" && typeof metadata.after === "number") {
+    parts.push(`${metadata.before.toLocaleString()} → ${metadata.after.toLocaleString()}`);
+  }
+  if (metadata.action) {
+    parts.push(metadata.action === "add" ? "添加" : "修改");
+  }
+  if (metadata.note) {
+    parts.push(`备注：${metadata.note}`);
+  }
+  if (metadata.operatorRole) {
+    parts.push(`操作者：${metadata.operatorRole}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "-";
 }
 
 type AdjustMode = "add" | "set";
@@ -127,7 +146,8 @@ export default function TsfCredits() {
       message.success(
         `加购额度已更新：${result.before.toLocaleString()} → ${result.after.toLocaleString()}（${
           result.creditsDelta >= 0 ? "+" : ""
-        }${result.creditsDelta.toLocaleString()}）`,
+        }${result.creditsDelta.toLocaleString()}）` +
+          (result.referenceId ? ` · 对账单号 ${result.referenceId}` : ""),
       );
       setAdjustOpen(false);
       load(account.shop);
@@ -194,12 +214,87 @@ export default function TsfCredits() {
     },
   ];
 
+  const adminAdjustColumns = [
+    {
+      title: "操作",
+      dataIndex: "metadata",
+      key: "action",
+      render: (metadata: TsfCreditsAdjustMetadata | null) => {
+        const action = metadata?.action;
+        if (action === "add") return <Tag color="green">添加</Tag>;
+        if (action === "set") return <Tag color="blue">修改</Tag>;
+        return <Tag>运维调整</Tag>;
+      },
+    },
+    {
+      title: "额度变动",
+      dataIndex: "creditsDelta",
+      key: "creditsDelta",
+      render: (v: number) => (
+        <Typography.Text type={v >= 0 ? "success" : "danger"}>
+          {v >= 0 ? "+" : ""}
+          {v.toLocaleString()}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "调整前后",
+      dataIndex: "metadata",
+      key: "beforeAfter",
+      render: (metadata: TsfCreditsAdjustMetadata | null) => {
+        if (typeof metadata?.before !== "number" || typeof metadata?.after !== "number") {
+          return "-";
+        }
+        return (
+          <Typography.Text>
+            {metadata.before.toLocaleString()} → {metadata.after.toLocaleString()}
+          </Typography.Text>
+        );
+      },
+    },
+    {
+      title: "对账详情",
+      dataIndex: "metadata",
+      key: "detail",
+      render: (metadata: TsfCreditsAdjustMetadata | null) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {fmtAdjustDetail(metadata)}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "参考单号",
+      dataIndex: "referenceId",
+      key: "referenceId",
+      render: (v: string | null) =>
+        v ? (
+          <Typography.Text copyable style={{ fontSize: 12 }}>
+            {v}
+          </Typography.Text>
+        ) : (
+          "-"
+        ),
+    },
+    {
+      title: "时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      render: (v: string) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {fmtDate(v)}
+        </Typography.Text>
+      ),
+    },
+  ];
+
   const billingColumns = [
     {
       title: "事件",
       dataIndex: "eventType",
       key: "eventType",
-      render: (v: string) => <Tag>{v}</Tag>,
+      render: (v: string) => (
+        <Tag color={v === "ADMIN_PURCHASED_CREDITS_ADJUSTED" ? "purple" : undefined}>{v}</Tag>
+      ),
     },
     {
       title: "套餐",
@@ -217,6 +312,19 @@ export default function TsfCredits() {
           {v.toLocaleString()}
         </Typography.Text>
       ),
+    },
+    {
+      title: "对账详情",
+      dataIndex: "metadata",
+      key: "metadata",
+      render: (metadata: TsfCreditsAdjustMetadata | null, r: TsfCreditsBillingLog) =>
+        r.eventType === "ADMIN_PURCHASED_CREDITS_ADJUSTED" ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {fmtAdjustDetail(metadata)}
+          </Typography.Text>
+        ) : (
+          "-"
+        ),
     },
     {
       title: "当时已用",
@@ -459,6 +567,26 @@ export default function TsfCredits() {
               />
             </Card>
 
+            <Card
+              title="运维调整记录（对账）"
+              size="small"
+              style={{ marginBottom: 16 }}
+              extra={
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  共 {data?.adminAdjustments.length ?? 0} 条 · 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED
+                </Typography.Text>
+              }
+            >
+              <Table<TsfCreditsBillingLog>
+                dataSource={data?.adminAdjustments ?? []}
+                columns={adminAdjustColumns}
+                rowKey={(r, i) => `${r.referenceId ?? r.createdAt}-${i}`}
+                size="small"
+                pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
+                locale={{ emptyText: "暂无运维调整记录" }}
+              />
+            </Card>
+
             <Card title="计费流水（最近 100 条）" size="small" style={{ marginBottom: 16 }}>
               <Table<TsfCreditsBillingLog>
                 dataSource={data?.billingLogs ?? []}
@@ -536,7 +664,7 @@ export default function TsfCredits() {
             />
           </div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            将写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED，不会计入加购收入统计。
+            成功后写入 BillingLog 事件 ADMIN_PURCHASED_CREDITS_ADJUSTED（含调整前后、操作者），不会计入加购收入统计。
           </Typography.Text>
         </Space>
       </Modal>

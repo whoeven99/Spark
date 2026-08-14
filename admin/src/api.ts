@@ -2110,6 +2110,17 @@ export type TsfCreditsPackPurchase = {
   createdAt: string;
 };
 
+export type TsfCreditsAdjustMetadata = {
+  source?: string;
+  action?: "add" | "set";
+  before?: number;
+  after?: number;
+  amount?: number;
+  note?: string | null;
+  adjustedAt?: string;
+  operatorRole?: string;
+};
+
 export type TsfCreditsBillingLog = {
   shop: string;
   eventType: string;
@@ -2117,6 +2128,7 @@ export type TsfCreditsBillingLog = {
   referenceId: string | null;
   creditsDelta: number;
   usedCredits: number;
+  metadata: TsfCreditsAdjustMetadata | null;
   createdAt: string;
 };
 
@@ -2140,6 +2152,7 @@ export type TsfCreditsData = {
     totalCreditsGranted: number;
   };
   billingLogs: TsfCreditsBillingLog[];
+  adminAdjustments: TsfCreditsBillingLog[];
   periodHistory: TsfCreditsPeriodHistory[];
 };
 
@@ -2156,6 +2169,7 @@ export type TsfPurchasedCreditsAdjustResult = {
   creditsDelta: number;
   referenceId?: string;
   eventType?: string;
+  logId?: string;
   note?: string;
 };
 
