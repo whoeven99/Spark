@@ -1,0 +1,126 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildActivityFunnel,
+  buildGooglePixelBaseQuery,
+  buildGooglePixelCountQuery,
+  fillActivityDailyRange,
+  parseActivityCountRows,
+  parseActivityDailyRows,
+  parseActivityTrafficRows,
+} from "../../../../app/server/aliyunLog/googlePixelActivity.server";
+
+describe("buildGooglePixelBaseQuery", () => {
+  it("scopes shop and google topic tokens without illegal colon in value", () => {
+    expect(buildGooglePixelBaseQuery("MyShop.myshopify.com")).toBe(
+      'shopName: "myshop.myshopify.com" and event: spark and event: google',
+    );
+  });
+});
+
+describe("buildGooglePixelCountQuery", () => {
+  it("wraps aggregation SQL", () => {
+    const query = buildGooglePixelCountQuery("demo.myshopify.com");
+    expect(query).toContain('shopName: "demo.myshopify.com"');
+    expect(query).toContain("SELECT event, COUNT(*) AS cnt GROUP BY event");
+  });
+});
+
+describe("parseActivityCountRows", () => {
+  it("maps spark:google topics to activity cards", () => {
+    const counts = parseActivityCountRows([
+      { event: "spark:google:page_view", cnt: "32" },
+      { event: "spark:google:add_to_cart", cnt: "5" },
+      { event: "spark:shopify:page_viewed", cnt: "999" },
+      { event: "spark:google:purchase", cnt: "1" },
+    ]);
+    expect(counts).toEqual({
+      page_view: 32,
+      add_to_cart: 5,
+      begin_checkout: 0,
+      add_payment_info: 0,
+      purchase: 1,
+    });
+  });
+});
+
+describe("parseActivityDailyRows", () => {
+  it("groups trend events by day and ignores page_view", () => {
+    const daily = parseActivityDailyRows([
+      { day: "2026-08-07", event: "spark:google:add_to_cart", cnt: "2" },
+      { day: "2026-08-08", event: "spark:google:add_to_cart", cnt: "5" },
+      { day: "2026-08-08", event: "spark:google:purchase", cnt: "1" },
+      { day: "2026-08-08", event: "spark:google:page_view", cnt: "20" },
+    ]);
+    expect(daily).toEqual([
+      { day: "2026-08-07", counts: { add_to_cart: 2 } },
+      { day: "2026-08-08", counts: { add_to_cart: 5, purchase: 1 } },
+    ]);
+  });
+});
+
+describe("fillActivityDailyRange", () => {
+  it("fills missing UTC days with empty counts for chart axes", () => {
+    const fromMs = Date.UTC(2026, 7, 7, 12, 0, 0);
+    const toMs = Date.UTC(2026, 7, 9, 18, 0, 0);
+    const filled = fillActivityDailyRange(
+      [
+        { day: "2026-08-08", counts: { add_to_cart: 5, purchase: 1 } },
+      ],
+      fromMs,
+      toMs,
+    );
+    expect(filled).toEqual([
+      { day: "2026-08-07", counts: {} },
+      { day: "2026-08-08", counts: { add_to_cart: 5, purchase: 1 } },
+      { day: "2026-08-09", counts: {} },
+    ]);
+  });
+});
+
+describe("buildActivityFunnel", () => {
+  it("computes step rates from previous stage", () => {
+    const funnel = buildActivityFunnel({
+      page_view: 32,
+      add_to_cart: 5,
+      begin_checkout: 1,
+      add_payment_info: 1,
+      purchase: 1,
+    });
+    expect(funnel).toEqual([
+      { event: "add_to_cart", count: 5, rateFromPrev: null },
+      { event: "begin_checkout", count: 1, rateFromPrev: 20 },
+      { event: "add_payment_info", count: 1, rateFromPrev: 100 },
+      { event: "purchase", count: 1, rateFromPrev: 100 },
+    ]);
+  });
+});
+
+describe("parseActivityTrafficRows", () => {
+  it("aggregates paid/organic/direct and top referrers", () => {
+    const referral = parseActivityTrafficRows([
+      {
+        payload: JSON.stringify({ trafficSource: "paid", referrer: "" }),
+      },
+      {
+        payload: JSON.stringify({
+          trafficSource: "organic",
+          referrer: "https://www.google.com/search?q=shop",
+        }),
+      },
+      {
+        payload: JSON.stringify({
+          trafficSource: "direct",
+          referrer: "",
+        }),
+      },
+    ]);
+    expect(referral.paidCount).toBe(1);
+    expect(referral.organicCount).toBe(1);
+    expect(referral.directCount).toBe(1);
+    expect(referral.paidPct).toBe(33.3);
+    expect(referral.topReferrers).toEqual([
+      { label: "Direct", count: 2 },
+      { label: "google.com", count: 1 },
+    ]);
+  });
+});

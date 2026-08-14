@@ -48,9 +48,12 @@ function parseDays(raw: string | null): number {
 const VALID_DIMENSIONS: Ga4Dimension[] = [
   "date",
   "sessionDefaultChannelGroup",
+  "sessionSourceMedium",
+  "sessionGoogleAdsCampaignName",
   "country",
   "deviceCategory",
   "landingPage",
+  "itemName",
 ];
 
 function parseDimension(raw: string | null): Ga4Dimension {

@@ -85,6 +85,20 @@ export interface CredentialsView {
     catalogId: string;
     businessId: string;
     updatedAt: string | null;
+    pixelId: string;
+    hasCapiAccessToken: boolean;
+    /** 已保存的 CAPI Access Token（Shopify Admin 鉴权页内展示）。 */
+    capiAccessToken: string;
+    hasStoredCapiAccessToken: boolean;
+    metaOAuthCapiAvailable: boolean;
+    testEventCode: string;
+    capiEnabled: boolean;
+    enabledEvents: string[];
+    metaAdsConnected: boolean;
+    metaAdsAdAccountId: string;
+    metaCapiBisuConfigured: boolean;
+    capiTokenType: string;
+    pendingCapiPixels: Array<{ pixelId: string; pixelName?: string; businessId?: string }>;
     pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
   };
   googleMerchant: {
@@ -104,11 +118,15 @@ export interface CredentialsView {
       confirmedAt: string | null;
       enabledEvents: string[];
       enabledFieldGroups: string[];
+      pixelName: string;
+      conversionLabel: string;
+      enhancedConversions: boolean;
       customPixelConfirmedAt: string | null;
       metafieldSyncStatus: "synced" | "failed" | "";
       metafieldSyncError: string;
     };
     pendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+    availableAccounts: Array<{ id: string; name?: string; formatted?: string }>;
   };
   tiktok: {
     connected: boolean;

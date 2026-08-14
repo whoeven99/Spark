@@ -5,6 +5,7 @@ type AuthResultInput = {
   gmc?: string | null;
   ads?: string | null;
   meta?: string | null;
+  metaCapi?: string | null;
   tiktok?: string | null;
   reason?: string | null;
   gmcReason?: string | null;
@@ -63,13 +64,14 @@ function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | und
 }
 
 export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogAuthResult {
-  const { google, gmc, ads, meta, tiktok, reason, t } = input;
+  const { google, gmc, ads, meta, metaCapi, tiktok, reason, t } = input;
 
   if (
     google === "select" ||
     gmc === "select" ||
     ads === "select" ||
     meta === "select" ||
+    metaCapi === "select" ||
     tiktok === "select"
   ) {
     return { action: "revalidate", tab: "credentials" };
@@ -96,11 +98,17 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     }
   }
 
-  if (meta === "success" || tiktok === "success") {
+  if (meta === "success" || metaCapi === "success" || tiktok === "success") {
     return {
       action: "revalidate",
       tab: "credentials",
-      banner: { tone: "ok", text: t("adsCatalog.authSuccess") },
+      banner: {
+        tone: "ok",
+        text:
+          metaCapi === "success"
+            ? t("adsCatalog.metaCapiAuthSuccess")
+            : t("adsCatalog.authSuccess"),
+      },
     };
   }
 
@@ -112,7 +120,7 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     };
   }
 
-  if (meta === "error" || tiktok === "error") {
+  if (meta === "error" || metaCapi === "error" || tiktok === "error") {
     return {
       action: "revalidate",
       tab: "credentials",
@@ -120,7 +128,7 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     };
   }
 
-  if (meta === "cancelled" || tiktok === "cancelled") {
+  if (meta === "cancelled" || metaCapi === "cancelled" || tiktok === "cancelled") {
     return {
       action: "revalidate",
       tab: "credentials",

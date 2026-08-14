@@ -8,9 +8,12 @@ type Days = 7 | 28 | 90;
 type Ga4Dimension =
   | "date"
   | "sessionDefaultChannelGroup"
+  | "sessionSourceMedium"
+  | "sessionGoogleAdsCampaignName"
   | "country"
   | "deviceCategory"
-  | "landingPage";
+  | "landingPage"
+  | "itemName";
 type ActiveMetrics = { users: boolean; sessions: boolean };
 
 type DataRow = {
@@ -19,6 +22,12 @@ type DataRow = {
   sessions: number;
   pageViews: number;
   revenue: number;
+  purchases: number;
+  engagementRate: number;
+  bounceRate: number;
+  averageSessionDuration: number;
+  itemsViewed: number;
+  itemsAddedToCart: number;
 };
 
 // ─── Formatting ────────────────────────────────────────────────────────────────
@@ -40,6 +49,24 @@ function fmtCurrency(v: number): string {
   return `$${v.toFixed(2)}`;
 }
 
+function fmtPercent(v: number): string {
+  if (v === 0) return "—";
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function fmtDuration(seconds: number): string {
+  if (seconds === 0) return "—";
+  const total = Math.round(seconds);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return `${hours}h ${remMins}m`;
+  }
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
 function fmtDateAxis(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -55,7 +82,14 @@ function fmtDateRange(start: string, end: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-function formatDimensionKey(key: string, dimension: Ga4Dimension): string {
+function formatDimensionKey(
+  key: string,
+  dimension: Ga4Dimension,
+  notSetLabel: string,
+): string {
+  if (!key || key === "(not set)") {
+    return notSetLabel;
+  }
   if (dimension === "deviceCategory") {
     const map: Record<string, string> = {
       desktop: "Desktop",
@@ -261,6 +295,9 @@ function MetricCard({
 
 const DIMENSION_LIST: Array<{ key: Ga4Dimension; i18nKey: string }> = [
   { key: "sessionDefaultChannelGroup", i18nKey: "ga4.tabChannels" },
+  { key: "sessionSourceMedium", i18nKey: "ga4.tabSourceMedium" },
+  { key: "sessionGoogleAdsCampaignName", i18nKey: "ga4.tabCampaigns" },
+  { key: "itemName", i18nKey: "ga4.tabProducts" },
   { key: "country", i18nKey: "ga4.tabCountries" },
   { key: "deviceCategory", i18nKey: "ga4.tabDevices" },
   { key: "landingPage", i18nKey: "ga4.tabLandingPages" },
@@ -313,13 +350,26 @@ function DimensionTabs({
 
 const DIMENSION_COL_KEY: Record<Ga4Dimension, string> = {
   sessionDefaultChannelGroup: "ga4.colChannel",
+  sessionSourceMedium: "ga4.colSourceMedium",
+  sessionGoogleAdsCampaignName: "ga4.colCampaign",
+  itemName: "ga4.colProduct",
   country: "ga4.colCountry",
   deviceCategory: "ga4.colDevice",
   landingPage: "ga4.colLandingPage",
   date: "ga4.colDate",
 };
 
-type SortKey = "users" | "sessions" | "pageViews" | "revenue";
+type SortKey =
+  | "users"
+  | "sessions"
+  | "pageViews"
+  | "revenue"
+  | "purchases"
+  | "engagementRate"
+  | "bounceRate"
+  | "averageSessionDuration"
+  | "itemsViewed"
+  | "itemsAddedToCart";
 type SortDir = "asc" | "desc";
 
 function SortArrow({ dir, active }: { dir: SortDir; active: boolean }) {
@@ -399,12 +449,32 @@ function DimensionTable({
     );
   }
 
-  const numCols: Array<{ key: SortKey; label: string }> = [
-    { key: "users", label: t("ga4.colUsers") },
-    { key: "sessions", label: t("ga4.colSessions") },
-    { key: "pageViews", label: t("ga4.colPageViews") },
-    { key: "revenue", label: t("ga4.colRevenue") },
-  ];
+  const numCols: Array<{ key: SortKey; label: string }> =
+    dimension === "itemName"
+      ? [
+          { key: "itemsViewed", label: t("ga4.colItemsViewed") },
+          { key: "itemsAddedToCart", label: t("ga4.colItemsAddedToCart") },
+          { key: "purchases", label: t("ga4.colPurchases") },
+          { key: "revenue", label: t("ga4.colRevenue") },
+        ]
+      : [
+          { key: "users", label: t("ga4.colUsers") },
+          { key: "sessions", label: t("ga4.colSessions") },
+          { key: "pageViews", label: t("ga4.colPageViews") },
+          { key: "purchases", label: t("ga4.colPurchases") },
+          { key: "revenue", label: t("ga4.colRevenue") },
+          { key: "engagementRate", label: t("ga4.colEngagementRate") },
+          { key: "bounceRate", label: t("ga4.colBounceRate") },
+          { key: "averageSessionDuration", label: t("ga4.colAvgSessionDuration") },
+        ];
+
+  const formatCell = (row: DataRow, key: SortKey): string => {
+    const value = row[key];
+    if (key === "revenue") return fmtCurrency(value);
+    if (key === "engagementRate" || key === "bounceRate") return fmtPercent(value);
+    if (key === "averageSessionDuration") return fmtDuration(value);
+    return value.toLocaleString();
+  };
 
   return (
     <div style={{ overflowX: "auto" }}>
@@ -424,12 +494,13 @@ function DimensionTable({
           {sortedRows.map((row, i) => (
             <tr key={i} style={{ background: i % 2 === 1 ? pageColorTokens.surfaceEvenRow : undefined }}>
               <td style={tdStyle} title={row.key}>
-                {formatDimensionKey(row.key, dimension)}
+                {formatDimensionKey(row.key, dimension, t("ga4.notSet"))}
               </td>
-              <td style={tdNum}>{row.users.toLocaleString()}</td>
-              <td style={tdNum}>{row.sessions.toLocaleString()}</td>
-              <td style={tdNum}>{row.pageViews.toLocaleString()}</td>
-              <td style={tdNum}>{fmtCurrency(row.revenue)}</td>
+              {numCols.map(({ key }) => (
+                <td key={key} style={tdNum}>
+                  {formatCell(row, key)}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -610,13 +681,73 @@ export function Ga4PerformanceView({ propertyId }: { propertyId: string }) {
           toggleable={false}
         />
         <MetricCard
+          label={t("ga4.metricNewUsers")}
+          value={summary ? fmtLargeNum(summary.newUsers) : "—"}
+          color="#9334e6"
+          active={false}
+          toggleable={false}
+        />
+        <MetricCard
+          label={t("ga4.metricPurchases")}
+          value={summary ? fmtLargeNum(summary.totalPurchases) : "—"}
+          color="#ff6d01"
+          active={false}
+          toggleable={false}
+        />
+        <MetricCard
           label={t("ga4.metricRevenue")}
           value={summary ? fmtCurrency(summary.totalRevenue) : "—"}
           color="#ea4335"
           active={false}
           toggleable={false}
         />
+        <MetricCard
+          label={t("ga4.metricEngagementRate")}
+          value={summary ? fmtPercent(summary.engagementRate) : "—"}
+          color="#1a73e8"
+          active={false}
+          toggleable={false}
+        />
+        <MetricCard
+          label={t("ga4.metricBounceRate")}
+          value={summary ? fmtPercent(summary.bounceRate) : "—"}
+          color="#9aa0a6"
+          active={false}
+          toggleable={false}
+        />
+        <MetricCard
+          label={t("ga4.metricAvgSessionDuration")}
+          value={summary ? fmtDuration(summary.averageSessionDuration) : "—"}
+          color="#0d652d"
+          active={false}
+          toggleable={false}
+        />
+        <MetricCard
+          label={t("ga4.metricConversionRate")}
+          value={
+            summary && summary.totalSessions > 0
+              ? fmtPercent(summary.totalPurchases / summary.totalSessions)
+              : "—"
+          }
+          color="#8430ce"
+          active={false}
+          toggleable={false}
+        />
       </div>
+
+      {dimension === "sessionGoogleAdsCampaignName" && (
+        <div
+          style={{
+            padding: "10px 20px",
+            fontSize: "0.78rem",
+            color: pageColorTokens.textSecondary,
+            borderBottom: `1px solid ${pageColorTokens.border}`,
+            background: pageColorTokens.surfaceMuted,
+          }}
+        >
+          {t("ga4.campaignLinkingHint")}
+        </div>
+      )}
 
       {/* Line chart */}
       <div style={{ padding: "16px 20px 8px" }}>

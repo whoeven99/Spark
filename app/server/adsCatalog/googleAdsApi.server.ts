@@ -12,6 +12,12 @@ const LOG_PREFIX = "[AdsCatalog][GoogleAdsApi]";
 /** Google Ads REST API 主版本（v17 已于 2025-06-04 下线，请求会返回 404）。 */
 export const GOOGLE_ADS_API_VERSION = "v24";
 
+/** login-customer-id 探测上限，避免多次串行请求拖垮页面加载。 */
+export const MAX_LOGIN_CUSTOMER_PROBE_ATTEMPTS = 3;
+
+/** 单次探测请求超时（毫秒）。 */
+export const GOOGLE_ADS_PROBE_TIMEOUT_MS = 10_000;
+
 export function googleAdsApiUrl(path: string): string {
   return `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}${path}`;
 }
@@ -153,6 +159,7 @@ export async function probeCustomerAccess(params: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query: "SELECT customer.id FROM customer LIMIT 1" }),
+      signal: AbortSignal.timeout(GOOGLE_ADS_PROBE_TIMEOUT_MS),
     });
   } catch (e) {
     console.warn(
@@ -209,38 +216,58 @@ export async function resolveLoginCustomerId(params: {
   accessibleCustomerIds?: string[];
 }): Promise<string> {
   const targetId = normalizeCustomerId(params.customerId);
+  const provided = (params.accessibleCustomerIds ?? [])
+    .map(normalizeCustomerId)
+    .filter(Boolean);
 
-  if (
-    await probeCustomerAccess({
-      accessToken: params.accessToken,
-      developerToken: params.developerToken,
-      customerId: targetId,
-      loginCustomerId: targetId,
-    })
-  ) {
-    return targetId;
-  }
+  const orderedLoginCandidates: string[] = [];
+  const seen = new Set<string>();
+  const pushCandidate = (id: string) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    orderedLoginCandidates.push(id);
+  };
+  pushCandidate(targetId);
+  for (const id of provided) pushCandidate(id);
 
-  // 候选顺序：调用方偏好（展开 MCC 时的经理账户）→ 显式传入 → listAccessibleCustomers。
-  const provided = params.accessibleCustomerIds?.map(normalizeCustomerId) ?? [];
-  const listed = await listAccessibleCustomerIds(params.accessToken, params.developerToken);
-  const candidates = [...new Set([...provided, ...listed])];
-
-  for (const managerId of candidates) {
-    if (managerId === targetId) continue;
+  let attempts = 0;
+  for (const loginCustomerId of orderedLoginCandidates) {
+    if (attempts >= MAX_LOGIN_CUSTOMER_PROBE_ATTEMPTS) break;
+    attempts++;
     if (
       await probeCustomerAccess({
         accessToken: params.accessToken,
         developerToken: params.developerToken,
         customerId: targetId,
-        loginCustomerId: managerId,
+        loginCustomerId,
       })
     ) {
-      return managerId;
+      return loginCustomerId;
     }
   }
 
-  return targetId;
+  if (attempts < MAX_LOGIN_CUSTOMER_PROBE_ATTEMPTS) {
+    const listed = await listAccessibleCustomerIds(params.accessToken, params.developerToken);
+    for (const managerId of listed) {
+      if (attempts >= MAX_LOGIN_CUSTOMER_PROBE_ATTEMPTS) break;
+      if (seen.has(managerId)) continue;
+      seen.add(managerId);
+      attempts++;
+      if (
+        await probeCustomerAccess({
+          accessToken: params.accessToken,
+          developerToken: params.developerToken,
+          customerId: targetId,
+          loginCustomerId: managerId,
+        })
+      ) {
+        return managerId;
+      }
+    }
+  }
+
+  const storedLogin = provided.find((id) => id !== targetId);
+  return storedLogin ?? targetId;
 }
 
 interface CustomerGaqlRow {

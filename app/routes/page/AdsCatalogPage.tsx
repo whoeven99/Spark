@@ -272,6 +272,7 @@ export function AdsCatalogPage() {
       gmc?: string | null;
       ads?: string | null;
       meta?: string | null;
+      metaCapi?: string | null;
       tiktok?: string | null;
       reason?: string | null;
       gmcReason?: string | null;
@@ -293,6 +294,7 @@ export function AdsCatalogPage() {
       gmc: params.get("gmcAuth"),
       ads: params.get("adsAuth"),
       meta: params.get("metaAuth"),
+      metaCapi: params.get("metaCapiAuth"),
       tiktok: params.get("tiktokAuth"),
       reason: params.get("reason"),
       gmcReason: params.get("gmcReason"),
@@ -309,6 +311,7 @@ export function AdsCatalogPage() {
         gmcAuth?: string;
         adsAuth?: string;
         metaAuth?: string;
+        metaCapiAuth?: string;
         tiktokAuth?: string;
         reason?: string;
         gmcReason?: string;
@@ -331,6 +334,8 @@ export function AdsCatalogPage() {
         applyAuthResult({ ads: data.adsAuth, reason: data.reason });
       } else if (data.type === "meta_catalog_oauth") {
         applyAuthResult({ meta: data.metaAuth, reason: data.reason });
+      } else if (data.type === "meta_capi_oauth") {
+        applyAuthResult({ metaCapi: data.metaCapiAuth, reason: data.reason });
       } else if (data.type === "tiktok_catalog_oauth") {
         applyAuthResult({ tiktok: data.tiktokAuth, reason: data.reason });
       }
@@ -920,6 +925,8 @@ export function AdsCatalogPage() {
               credentials={credentials}
               locationSearch={locationSearch}
               languageCode={i18n.language}
+              shopDomain={loaderData.shopDomain}
+              shopifyApiKey={loaderData.shopifyApiKey}
               onChanged={() => {
                 revalidator.revalidate();
                 metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);

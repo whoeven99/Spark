@@ -1,8 +1,8 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
+import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { useFeatureView } from "../lib/featureTrack";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
@@ -64,6 +64,12 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
+    to: "/app/ads/google-attribution",
+    labelKey: "settingsShell.navGoogleAttribution",
+    descKey: "settingsShell.descGoogleAttribution",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
     to: "/app/settings/feedback",
     labelKey: "settingsShell.navFeedback",
     descKey: "settingsShell.descFeedback",
@@ -74,7 +80,7 @@ const SETTINGS_MODULES: SettingsModule[] = [
 export default function SettingsIndex() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
-  const navigate = useNavigate();
+  const navigate = useEmbeddedNavigate();
   useFeatureView("settings");
 
   return (

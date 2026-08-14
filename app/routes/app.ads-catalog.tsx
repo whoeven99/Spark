@@ -14,7 +14,9 @@ import {
   getGoogleAdsPending,
   getGoogleMerchantCredential,
   getGoogleMerchantPending,
+  getMetaAdsCredential,
   getMetaCatalogPending,
+  getMetaCapiPending,
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
   maskTokenTail,
@@ -31,8 +33,14 @@ import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
 } from "../lib/tiktokPixelEvents";
+import {
+  normalizeMetaEnabledEvents,
+  META_PIXEL_DEFAULT_EVENTS,
+} from "../lib/metaPixelEvents";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
+import { hasMetaCapiAccessAvailable, isMetaCapiAutoConnectAvailable } from "../server/adsCatalog/metaPixelConfig.server";
+import { isMetaCapiBisuOnboardingConfigured } from "../server/adsCatalog/metaCapiOnboarding.server";
 
 const AdsCatalogPage = lazy(() =>
   import("./page/AdsCatalogPage").then((m) => ({ default: m.AdsCatalogPage })),
@@ -44,7 +52,7 @@ const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot |
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, tiktok, tiktokPending, shopInfo] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaCapiPending, metaAds, tiktok, tiktokPending, shopInfo] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -57,6 +65,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getGoogleAdsCredential(session.shop),
       getGoogleAdsPending(session.shop),
       getMetaCatalogPending(session.shop),
+      getMetaCapiPending(session.shop),
+      getMetaAdsCredential(session.shop),
       getTiktokCatalogCredential(session.shop),
       getTiktokCatalogPending(session.shop),
       fetchShopBasicInfo(admin),
@@ -113,6 +123,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         catalogId: fb?.catalogId ?? "",
         businessId: fb?.businessId ?? "",
         updatedAt: fb?.updatedAt ?? null,
+        pixelId: fb?.pixelId ?? "",
+        hasCapiAccessToken: fb
+          ? await hasMetaCapiAccessAvailable(session.shop, fb)
+          : false,
+        // CAPI Token 只保留在服务端；UI 仅显示是否已配置，避免通过 loader 泄露完整凭证。
+        capiAccessToken: "",
+        hasStoredCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
+        metaOAuthCapiAvailable: fb
+          ? await isMetaCapiAutoConnectAvailable({
+              shop: session.shop,
+              credential: fb,
+            })
+          : isMetaCapiBisuOnboardingConfigured(),
+        metaCapiBisuConfigured: isMetaCapiBisuOnboardingConfigured(),
+        capiTokenType: fb?.capiTokenType ?? "",
+        pendingCapiPixels:
+          metaCapiPending?.accounts.map((a) => ({
+            pixelId: a.id,
+            pixelName: a.name || a.id,
+            businessId: a.businessId,
+          })) ?? [],
+        testEventCode: fb?.testEventCode?.trim() ?? "",
+        capiEnabled:
+          typeof fb?.capiEnabled === "boolean" ? fb.capiEnabled : true,
+        enabledEvents: fb?.enabledEvents?.length
+          ? normalizeMetaEnabledEvents(fb.enabledEvents)
+          : [...META_PIXEL_DEFAULT_EVENTS],
+        metaAdsConnected: Boolean(metaAds),
+        metaAdsAdAccountId: metaAds?.adAccountId ?? "",
         pendingCatalogs:
           metaPending?.accounts.map((a) => ({
             id: a.id,
@@ -137,12 +176,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           confirmedAt: ads?.remarketing?.confirmedAt ?? null,
           enabledEvents: ads?.remarketing?.enabledEvents ?? [],
           enabledFieldGroups: ads?.remarketing?.enabledFieldGroups ?? [],
+          pixelName: ads?.remarketing?.pixelName ?? "",
+          conversionLabel: ads?.remarketing?.conversionLabel ?? "",
+          enhancedConversions: ads?.remarketing?.enhancedConversions ?? false,
           customPixelConfirmedAt:
             ads?.remarketing?.customPixelConfirmedAt ?? null,
           metafieldSyncStatus: ads?.remarketing?.metafieldSync?.status ?? "",
           metafieldSyncError: ads?.remarketing?.metafieldSync?.error ?? "",
         },
         pendingAccounts: adsPending?.accounts ?? [],
+        availableAccounts:
+          ads?.availableAccounts?.map((a) => ({
+            id: a.id,
+            name: a.name,
+            formatted: a.formatted,
+          })) ?? [],
       },
       tiktok: {
         connected: Boolean(tiktok),

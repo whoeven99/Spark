@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
+import { MetaPixelConfigPanel } from "./MetaPixelConfigPanel";
+import { MetaPixelSetupWizard } from "./MetaPixelSetupWizard";
+import { buildMetaPixelThemeEditorUrl } from "../../../lib/metaPixelEvents";
 
 type Props = {
   credentials: CredentialsView;
   locationSearch: string;
   languageCode: string;
+  shopDomain: string;
+  shopifyApiKey: string;
   onChanged: () => void;
 };
 
@@ -47,19 +53,46 @@ export function MetaConnectPanels({
   credentials,
   locationSearch,
   languageCode,
+  shopDomain,
+  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const metaOAuth = useOAuthPopup("meta_catalog_oauth");
+  const [setupRevision, setSetupRevision] = useState(0);
+  const metaUnifiedOAuth = useOAuthPopup("meta_unified_oauth");
 
   const meta = credentials.meta;
 
-  function openOAuth() {
+  const themeEditorUrl = useMemo(
+    () =>
+      buildMetaPixelThemeEditorUrl({
+        shopDomain,
+        apiKey: shopifyApiKey,
+      }),
+    [shopDomain, shopifyApiKey],
+  );
+
+  function notifyChanged() {
+    setSetupRevision((n) => n + 1);
+    onChanged();
+  }
+
+  function connectMetaUnified() {
     void (async () => {
       setBusy(true);
       try {
-        await metaOAuth.startOAuth(`/api/ads-catalog/meta-auth-url${locationSearch}`, () => onChanged());
+        await metaUnifiedOAuth.startOAuth(
+          `/api/ads-catalog/meta-unified-auth-url${locationSearch}`,
+          (data) => {
+            if (data.metaUnifiedAuth === "error") {
+              alert(data.reason ?? t("adsCatalog.authError"));
+              return;
+            }
+            if (data.metaUnifiedAuth === "cancelled") return;
+            notifyChanged();
+          },
+        );
       } catch (e) {
         alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {
@@ -77,7 +110,7 @@ export function MetaConnectPanels({
         body: JSON.stringify(body),
       });
       const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (resp.ok && data.ok) onChanged();
+      if (resp.ok && data.ok) notifyChanged();
       else if (data.error) alert(data.error);
     } finally {
       setBusy(false);
@@ -109,8 +142,71 @@ export function MetaConnectPanels({
               {t("adsCatalog.metaUpdatedAt", { time: fmtDate(meta.updatedAt) })}
             </div>
           </div>
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: pageColorTokens.surfaceSubtle,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {t("adsCatalog.metaUnifiedAuthTitle")}
+            </div>
+            <div style={pageHintTextStyle}>{t("adsCatalog.metaUnifiedAuthHint")}</div>
+            <button
+              type="button"
+              style={{ ...primaryBtn, marginTop: 8 }}
+              disabled={busy}
+              onClick={connectMetaUnified}
+            >
+              {t("adsCatalog.metaUnifiedAuthButton")}
+            </button>
+          </div>
+          <MetaPixelSetupWizard
+            metaConnected={meta.connected}
+            metaAdsConnected={meta.metaAdsConnected}
+            pixelId={meta.pixelId}
+            hasCapiAccessToken={meta.hasCapiAccessToken}
+            hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
+            capiEnabled={meta.capiEnabled}
+            locationSearch={locationSearch}
+            themeEditorUrl={themeEditorUrl}
+            onConnectMetaAds={connectMetaUnified}
+            busy={busy}
+            setupRevision={setupRevision}
+          />
+          <MetaPixelConfigPanel
+            locationSearch={locationSearch}
+            shopDomain={shopDomain}
+            shopifyApiKey={shopifyApiKey}
+            pixelId={meta.pixelId}
+            hasCapiAccessToken={meta.hasCapiAccessToken}
+            hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
+            capiAccessToken={meta.capiAccessToken}
+            metaOAuthCapiAvailable={meta.metaOAuthCapiAvailable}
+            metaCapiBisuConfigured={meta.metaCapiBisuConfigured}
+            capiTokenType={meta.capiTokenType}
+            pendingCapiPixels={meta.pendingCapiPixels}
+            testEventCode={meta.testEventCode}
+            capiEnabled={meta.capiEnabled}
+            enabledEvents={meta.enabledEvents}
+            metaAdsConnected={meta.metaAdsConnected}
+            metaAdsAdAccountId={meta.metaAdsAdAccountId}
+            busy={busy}
+            setBusy={setBusy}
+            onChanged={notifyChanged}
+          />
+          {meta.pixelId ? (
+            <Link
+              to={`/app/ads/meta-pixel/data${locationSearch}`}
+              style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
+            >
+              {t("adsCatalog.metaPixelViewData")}
+            </Link>
+          ) : null}
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" style={secondaryBtn} onClick={openOAuth}>
+            <button type="button" style={secondaryBtn} onClick={connectMetaUnified} disabled={busy}>
               {t("adsCatalog.metaReauth")}
             </button>
             <button
@@ -134,8 +230,8 @@ export function MetaConnectPanels({
         <>
           <p style={pageHintTextStyle}>{t("adsCatalog.metaConnectHint")}</p>
           <div>
-            <button type="button" style={primaryBtn} onClick={openOAuth}>
-              {t("adsCatalog.metaConnect")}
+            <button type="button" style={primaryBtn} onClick={connectMetaUnified} disabled={busy}>
+              {t("adsCatalog.metaUnifiedAuthButton")}
             </button>
           </div>
         </>

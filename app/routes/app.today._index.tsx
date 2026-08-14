@@ -4,7 +4,7 @@
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { useLoaderData, useNavigate } from "react-router";
+import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
@@ -19,6 +19,7 @@ import { DashboardPanel } from "./page/workspace/DashboardPanel";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import type { WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { useTranslation } from "react-i18next";
@@ -54,7 +55,7 @@ function ClientMount({ children }: { children: ReactNode }) {
 export default function TodayOverview() {
   const { t } = useTranslation();
   const { dashboardSnapshot } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
+  const navigate = useEmbeddedNavigate();
   const { isMobile } = useResponsiveLayout();
   useFeatureView("today");
 

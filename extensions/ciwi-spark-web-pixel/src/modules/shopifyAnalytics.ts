@@ -1,5 +1,4 @@
 import type { PixelModule } from "../core/moduleRegistry";
-import { buildEnvelope } from "../core/schema";
 
 /**
  * 订阅 Shopify Web Pixels 的**全部标准事件**（`all_standard_events`），
@@ -25,9 +24,6 @@ import { buildEnvelope } from "../core/schema";
 /** 与后端 EVENT_REGEX 对齐：事件名仅允许小写字母数字与 `_.-`。 */
 const EVENT_NAME_REGEX = /^[a-z0-9][a-z0-9_.-]*$/;
 
-/** 留余量对齐后端 PIXEL_INGEST_LIMITS.payloadBytes（224KB），客户端按 200KB 截断。 */
-const MAX_PAYLOAD_BYTES = 200 * 1024;
-
 type StandardEvent = {
   id?: string;
   name?: string;
@@ -36,6 +32,29 @@ type StandardEvent = {
   context?: Record<string, unknown>;
   data?: Record<string, unknown>;
 };
+
+/** 留余量对齐后端 PIXEL_INGEST_LIMITS.payloadBytes（224KB），客户端按 200KB 截断。 */
+const MAX_PAYLOAD_BYTES = 200 * 1024;
+
+/**
+ * 同一 Pixel 会话内 Shopify `event.id` 去重（模块级 Set，跨多次 subscribe 共享）。
+ * 防重复 subscribe / 平台重复投递导致同 eventId 双写 SLS。
+ */
+const SEEN_EVENT_ID_MAX = 2048;
+const seenShopifyEventIds = new Set<string>();
+
+function shouldSendShopifyEvent(evt: StandardEvent): boolean {
+  const rawId = evt.id;
+  if (typeof rawId !== "string" || !rawId.trim()) return true;
+  const id = rawId.trim();
+  if (seenShopifyEventIds.has(id)) return false;
+  seenShopifyEventIds.add(id);
+  if (seenShopifyEventIds.size > SEEN_EVENT_ID_MAX) {
+    const oldest = seenShopifyEventIds.values().next().value;
+    if (oldest !== undefined) seenShopifyEventIds.delete(oldest);
+  }
+  return true;
+}
 
 function pick(obj: unknown, path: string[]): unknown {
   let cur: unknown = obj;
@@ -113,6 +132,10 @@ export const shopifyAnalyticsModule: PixelModule = {
       const evt = (raw ?? {}) as StandardEvent;
       const name = typeof evt.name === "string" ? evt.name.trim().toLowerCase() : "";
       if (!name || !EVENT_NAME_REGEX.test(name)) return;
+      if (!shouldSendShopifyEvent(evt)) {
+        log("shopifyAnalytics: skip duplicate eventId", evt.id);
+        return;
+      }
 
       void sink.send({
         ts: Date.now(),

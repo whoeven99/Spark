@@ -22,16 +22,38 @@ const GOOGLE_ADS_SANDBOX_PENDING_PLATFORM = "google_ads_sandbox_pending";
 // Transient record holding a freshly-exchanged Meta long-lived token while the
 // merchant picks which catalog to connect (multi-catalog selection flow).
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
+// Transient record for Meta CAPI BISU pixel selection after Business Login.
+const META_CAPI_PENDING_PLATFORM = "meta_capi_pending";
 // Transient record for Meta Ads ad-account selection.
 const META_ADS_PENDING_PLATFORM = "meta_ads_pending";
+/** Meta Pixel 数据页手动拉数测试 OAuth（与 Catalog / Ads 凭证隔离，后续可能删除）。 */
+const META_PIXEL_DATA_MANUAL_PLATFORM = "meta_pixel_data_manual";
 // Transient record for TikTok catalog selection.
 const TIKTOK_CATALOG_PENDING_PLATFORM = "tiktok_catalog_pending";
+
+export type MetaCapiTokenType = "manual" | "bisu" | "legacy_fbe";
 
 export type FacebookCatalogCredential = {
   accessToken: string;
   catalogId: string;
   businessId?: string;
   apiVersion?: string;
+  /** Meta Pixel / Dataset ID（数字字符串）。 */
+  pixelId?: string;
+  /** Events Manager 生成的 Conversions API Access Token。 */
+  capiAccessToken?: string;
+  /** CAPI token 来源：手动 / Business Login BISU / 旧 FBE 路径。 */
+  capiTokenType?: MetaCapiTokenType;
+  /** Facebook Login for Business Configuration ID（BISU onboarding）。 */
+  capiConfigId?: string;
+  /** BISU / 自动换取 token 的写入时间（ISO）。 */
+  capiTokenObtainedAt?: string;
+  /** Conversions API 开关。 */
+  capiEnabled?: boolean;
+  /** Events Manager Test Event Code。 */
+  testEventCode?: string;
+  /** 勾选上报的 Meta 标准事件名。 */
+  enabledEvents?: string[];
   updatedAt: string;
 };
 
@@ -151,24 +173,130 @@ export async function getFacebookCatalogCredential(
       typeof record.data.businessId === "string" ? record.data.businessId : undefined,
     apiVersion:
       typeof record.data.apiVersion === "string" ? record.data.apiVersion : undefined,
+    pixelId:
+      typeof record.data.pixelId === "string" && record.data.pixelId.trim()
+        ? record.data.pixelId.trim()
+        : undefined,
+    capiAccessToken:
+      typeof record.data.capiAccessToken === "string" && record.data.capiAccessToken.trim()
+        ? record.data.capiAccessToken.trim()
+        : undefined,
+    capiEnabled:
+      typeof record.data.capiEnabled === "boolean" ? record.data.capiEnabled : undefined,
+    testEventCode:
+      typeof record.data.testEventCode === "string" && record.data.testEventCode.trim()
+        ? record.data.testEventCode.trim()
+        : undefined,
+    enabledEvents: Array.isArray(record.data.enabledEvents)
+      ? record.data.enabledEvents
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      : undefined,
+    capiTokenType:
+      record.data.capiTokenType === "manual" ||
+      record.data.capiTokenType === "bisu" ||
+      record.data.capiTokenType === "legacy_fbe"
+        ? record.data.capiTokenType
+        : undefined,
+    capiConfigId:
+      typeof record.data.capiConfigId === "string" && record.data.capiConfigId.trim()
+        ? record.data.capiConfigId.trim()
+        : undefined,
+    capiTokenObtainedAt:
+      typeof record.data.capiTokenObtainedAt === "string" &&
+      record.data.capiTokenObtainedAt.trim()
+        ? record.data.capiTokenObtainedAt.trim()
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
 
 export async function setFacebookCatalogCredential(
   shop: string,
-  payload: Pick<FacebookCatalogCredential, "accessToken" | "catalogId" | "businessId" | "apiVersion">,
+  payload: Pick<
+    FacebookCatalogCredential,
+    "accessToken" | "catalogId" | "businessId" | "apiVersion"
+  > & {
+    pixelId?: string;
+    capiAccessToken?: string;
+    capiTokenType?: MetaCapiTokenType;
+    capiConfigId?: string;
+    capiTokenObtainedAt?: string;
+    capiEnabled?: boolean;
+    testEventCode?: string;
+    enabledEvents?: string[];
+  },
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
   const catalogId = payload.catalogId.trim();
   if (!accessToken || !catalogId) {
     throw new Error("Facebook catalog accessToken and catalogId are required");
   }
+  const existing = await readPlatformCredential(shop, META_CATALOG_PLATFORM);
+  const pixelId =
+    payload.pixelId !== undefined
+      ? payload.pixelId.trim() || null
+      : typeof existing?.data.pixelId === "string" && existing.data.pixelId.trim()
+        ? existing.data.pixelId.trim()
+        : null;
+  const capiAccessToken =
+    payload.capiAccessToken !== undefined
+      ? payload.capiAccessToken.trim() || null
+      : typeof existing?.data.capiAccessToken === "string" && existing.data.capiAccessToken.trim()
+        ? existing.data.capiAccessToken.trim()
+        : null;
+  const capiEnabled =
+    payload.capiEnabled !== undefined
+      ? payload.capiEnabled
+      : typeof existing?.data.capiEnabled === "boolean"
+        ? existing.data.capiEnabled
+        : true;
+  const testEventCode =
+    payload.testEventCode !== undefined
+      ? payload.testEventCode.trim() || null
+      : typeof existing?.data.testEventCode === "string" && existing.data.testEventCode.trim()
+        ? existing.data.testEventCode.trim()
+        : null;
+  const enabledEvents =
+    payload.enabledEvents !== undefined
+      ? payload.enabledEvents
+      : Array.isArray(existing?.data.enabledEvents)
+        ? existing.data.enabledEvents
+        : null;
+  const capiTokenType =
+    payload.capiTokenType !== undefined
+      ? payload.capiTokenType
+      : existing?.data.capiTokenType === "manual" ||
+          existing?.data.capiTokenType === "bisu" ||
+          existing?.data.capiTokenType === "legacy_fbe"
+        ? existing.data.capiTokenType
+        : null;
+  const capiConfigId =
+    payload.capiConfigId !== undefined
+      ? payload.capiConfigId.trim() || null
+      : typeof existing?.data.capiConfigId === "string" && existing.data.capiConfigId.trim()
+        ? existing.data.capiConfigId.trim()
+        : null;
+  const capiTokenObtainedAt =
+    payload.capiTokenObtainedAt !== undefined
+      ? payload.capiTokenObtainedAt.trim() || null
+      : typeof existing?.data.capiTokenObtainedAt === "string" &&
+          existing.data.capiTokenObtainedAt.trim()
+        ? existing.data.capiTokenObtainedAt.trim()
+        : null;
   await writePlatformCredential(shop, META_CATALOG_PLATFORM, {
     accessToken,
     catalogId,
     businessId: payload.businessId?.trim() || null,
     apiVersion: payload.apiVersion?.trim() || null,
+    pixelId,
+    capiAccessToken,
+    capiTokenType,
+    capiConfigId,
+    capiTokenObtainedAt,
+    capiEnabled,
+    testEventCode,
+    enabledEvents,
   });
 }
 
@@ -321,6 +449,12 @@ export type GoogleRemarketingConfig = {
   confirmedAt: string;
   enabledEvents: string[];
   enabledFieldGroups: string[];
+  /** 展示用像素名称（Nabu 风格 Pixel Name），仅用于 UI 标识。 */
+  pixelName?: string;
+  /** Google Ads 转化标签（Conversion Label），配合 tagId 组成 send_to。 */
+  conversionLabel?: string;
+  /** 是否启用 Enhanced Conversions（哈希用户数据）。 */
+  enhancedConversions?: boolean;
   customPixelConfirmedAt?: string;
   metafieldSync?: {
     status: "synced" | "failed";
@@ -345,6 +479,13 @@ function parseGoogleRemarketingConfig(value: unknown): GoogleRemarketingConfig |
     enabledFieldGroups: Array.isArray(value.enabledFieldGroups)
       ? value.enabledFieldGroups.filter((item): item is string => typeof item === "string")
       : [],
+    pixelName: typeof value.pixelName === "string" ? value.pixelName : undefined,
+    conversionLabel:
+      typeof value.conversionLabel === "string" ? value.conversionLabel : undefined,
+    enhancedConversions:
+      typeof value.enhancedConversions === "boolean"
+        ? value.enhancedConversions
+        : undefined,
     customPixelConfirmedAt:
       typeof value.customPixelConfirmedAt === "string"
         ? value.customPixelConfirmedAt
@@ -641,6 +782,13 @@ export const getMetaCatalogPending = (shop: string) =>
 export const clearMetaCatalogPending = (shop: string) =>
   clearPending(shop, META_CATALOG_PENDING_PLATFORM);
 
+export const setMetaCapiPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, META_CAPI_PENDING_PLATFORM, payload);
+export const getMetaCapiPending = (shop: string) =>
+  getPending(shop, META_CAPI_PENDING_PLATFORM);
+export const clearMetaCapiPending = (shop: string) =>
+  clearPending(shop, META_CAPI_PENDING_PLATFORM);
+
 export const deleteGoogleMerchantCredential = (shop: string) =>
   clearPending(shop, GOOGLE_MERCHANT_PLATFORM);
 export const deleteGoogleAdsCredential = (shop: string) =>
@@ -723,6 +871,40 @@ export const getMetaAdsPending = (shop: string) =>
   getPending(shop, META_ADS_PENDING_PLATFORM);
 export const clearMetaAdsPending = (shop: string) =>
   clearPending(shop, META_ADS_PENDING_PLATFORM);
+
+// ─── Meta Pixel 数据页手动 OAuth（测试）────────────────────────────────────
+
+export type MetaPixelDataManualCredential = {
+  accessToken: string;
+  updatedAt: string;
+};
+
+export async function getMetaPixelDataManualCredential(
+  shop: string,
+): Promise<MetaPixelDataManualCredential | null> {
+  const record = await readPlatformCredential(shop, META_PIXEL_DATA_MANUAL_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "").trim();
+  if (!accessToken) return null;
+  return {
+    accessToken,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function setMetaPixelDataManualCredential(
+  shop: string,
+  payload: { accessToken: string },
+): Promise<void> {
+  const accessToken = payload.accessToken.trim();
+  if (!accessToken) {
+    throw new Error("Meta Pixel manual accessToken is required");
+  }
+  await writePlatformCredential(shop, META_PIXEL_DATA_MANUAL_PLATFORM, { accessToken });
+}
+
+export const deleteMetaPixelDataManualCredential = (shop: string) =>
+  clearPending(shop, META_PIXEL_DATA_MANUAL_PLATFORM);
 
 // ─── TikTok Catalog ──────────────────────────────────────────────────────────
 
