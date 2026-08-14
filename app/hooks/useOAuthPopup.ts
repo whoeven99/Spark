@@ -40,11 +40,17 @@ export function useOAuthPopup(messageType: string) {
         clearInterval(timer);
         popupRef.current = null;
         setRedirecting(false);
+        // Some OAuth providers can sever window.opener during navigation. In
+        // that case the callback page cannot postMessage back, but it still
+        // closes the popup after completing server-side work. Let callers
+        // re-read their server state as a fallback.
+        const onComplete = onCompleteRef.current;
         onCompleteRef.current = null;
+        onComplete?.({ type: messageType });
       }
     }, 500);
     return () => clearInterval(timer);
-  }, [redirecting]);
+  }, [messageType, redirecting]);
 
   const startOAuth = useCallback(
     async (

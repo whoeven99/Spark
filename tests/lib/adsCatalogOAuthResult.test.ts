@@ -48,6 +48,36 @@ describe("resolveAdsCatalogAuthResult google combined", () => {
     });
   });
 
+  it("shows partial banner when one side fails after combined consent", () => {
+    const result = resolveAdsCatalogAuthResult({
+      google: "partial",
+      gmc: "success",
+      ads: "error",
+      adsReason: "ads binding failed",
+      t,
+    });
+    expect(result).toEqual({
+      action: "revalidate",
+      tab: "credentials",
+      banner: { tone: "ok", text: "partial:ads binding failed" },
+    });
+  });
+
+  it("keeps the failed-side banner while the other side awaits account selection", () => {
+    const result = resolveAdsCatalogAuthResult({
+      google: "select",
+      gmc: "select",
+      ads: "error",
+      adsReason: "ads binding failed",
+      t,
+    });
+    expect(result).toEqual({
+      action: "revalidate",
+      tab: "credentials",
+      banner: { tone: "ok", text: "partial:ads binding failed" },
+    });
+  });
+
   it("shows cancelled banner", () => {
     const result = resolveAdsCatalogAuthResult({
       google: "cancelled",

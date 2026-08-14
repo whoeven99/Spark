@@ -94,6 +94,9 @@ describe("Google Merchant credential merge", () => {
         accessToken: "old-token",
         refreshToken: "refresh-token",
         customerId: "123",
+        availableAccounts: [
+          { id: "123", name: "Main account", formatted: "123-456-7890" },
+        ],
         remarketing: {
           tagId: "AW-123456789",
           source: "auto",
@@ -117,6 +120,9 @@ describe("Google Merchant credential merge", () => {
         update: expect.objectContaining({
           credentials: expect.objectContaining({
             accessToken: "new-token",
+            availableAccounts: [
+              { id: "123", name: "Main account", formatted: "123-456-7890" },
+            ],
             remarketing: expect.objectContaining({ tagId: "AW-123456789" }),
           }),
           externalAccountId: "123",

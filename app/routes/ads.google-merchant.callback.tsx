@@ -20,12 +20,10 @@ import {
   setGoogleMerchantPending,
   clearGoogleMerchantPending,
   getGoogleMerchantCredential,
-  deleteGoogleMerchantCredential,
   setGoogleAdsCredential,
   setGoogleAdsPending,
   clearGoogleAdsPending,
   getGoogleAdsCredential,
-  deleteGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { registerGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
 
@@ -121,7 +119,8 @@ async function bindGmcSide(params: {
     return "success";
   }
 
-  await deleteGoogleMerchantCredential(shop);
+  // Keep the active credential while the user is choosing a replacement.
+  // The new account becomes active only after the selection endpoint succeeds.
   await clearGoogleMerchantPending(shop);
   await setGoogleMerchantPending(
     shop,
@@ -174,7 +173,7 @@ async function bindAdsSide(params: {
     return "success";
   }
 
-  await deleteGoogleAdsCredential(shop);
+  // Keep the active credential while the user is choosing a replacement.
   await clearGoogleAdsPending(shop);
   await setGoogleAdsPending(
     shop,
@@ -183,25 +182,23 @@ async function bindAdsSide(params: {
   return "select";
 }
 
-function sideAuthStatus(
-  result: "success" | "select" | "empty",
-  emptyAsError: boolean,
-): string {
-  if (result === "empty") return emptyAsError ? "error" : "empty";
+type SideAuthResult = "success" | "select" | "empty" | "error";
+
+function sideAuthStatus(result: SideAuthResult): string {
   return result;
 }
 
 function buildCombinedRespondParams(input: {
-  gmcResult: "success" | "select" | "empty";
-  adsResult: "success" | "select" | "empty";
+  gmcResult: SideAuthResult;
+  adsResult: SideAuthResult;
   gmcEmptyReason?: string;
   adsEmptyReason?: string;
   merchantId?: string;
   customerId?: string;
 }): Record<string, string> {
   const { gmcResult, adsResult } = input;
-  const gmcOk = gmcResult !== "empty";
-  const adsOk = adsResult !== "empty";
+  const gmcOk = gmcResult !== "empty" && gmcResult !== "error";
+  const adsOk = adsResult !== "empty" && adsResult !== "error";
 
   if (!gmcOk && !adsOk) {
     return {
@@ -220,8 +217,8 @@ function buildCombinedRespondParams(input: {
   const needsSelect = gmcResult === "select" || adsResult === "select";
   const params: Record<string, string> = {
     googleAuth: needsSelect ? "select" : gmcOk && adsOk ? "success" : "partial",
-    gmcAuth: sideAuthStatus(gmcResult, false),
-    adsAuth: sideAuthStatus(adsResult, false),
+    gmcAuth: sideAuthStatus(gmcResult),
+    adsAuth: sideAuthStatus(adsResult),
   };
   if (!gmcOk && input.gmcEmptyReason) params.gmcReason = input.gmcEmptyReason;
   if (!adsOk && input.adsEmptyReason) params.adsReason = input.adsEmptyReason;
@@ -242,12 +239,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const oauthError = incoming.searchParams.get("error");
 
   const verified = verifyOAuthState(state);
-  if (!verified || (verified.flow !== "gmc" && verified.flow !== "gmc_ads")) {
+  if (
+    !verified ||
+    (verified.flow !== "gmc" && verified.flow !== "ads" && verified.flow !== "gmc_ads")
+  ) {
     return oauthStateErrorResponse();
   }
   const { shop, host, appOrigin, popup, flow } = verified;
   const isCombined = flow === "gmc_ads";
-  const messageType = isCombined ? "google_oauth" : "gmc_oauth";
+  const messageType =
+    flow === "gmc_ads"
+      ? "google_oauth"
+      : flow === "ads"
+        ? "ads_catalog_oauth"
+        : "gmc_oauth";
 
   const respond = (params: Record<string, string>): Response =>
     popup
@@ -258,7 +263,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return respond(
       isCombined
         ? { googleAuth: "cancelled", gmcAuth: "cancelled", adsAuth: "cancelled" }
-        : { gmcAuth: "cancelled" },
+        : flow === "gmc"
+          ? { gmcAuth: "cancelled" }
+          : { adsAuth: "cancelled" },
     );
   }
   if (!code) {
@@ -270,10 +277,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             adsAuth: "error",
             reason: "Google 未返回授权 code",
           }
-        : {
-            gmcAuth: "error",
-            reason: "Google 未返回授权 code",
-          },
+        : flow === "gmc"
+          ? {
+              gmcAuth: "error",
+              reason: "Google 未返回授权 code",
+            }
+          : {
+              adsAuth: "error",
+              reason: "Google 未返回授权 code",
+            },
     );
   }
 
@@ -284,7 +296,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
     const { clientId, clientSecret } = getGoogleOAuthClient();
 
-    if (!isCombined) {
+    if (flow === "gmc") {
       const accounts = await getGmcMerchantAccounts(tokens.accessToken);
       if (accounts.length === 0) {
         return respond({
@@ -306,6 +318,38 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         });
       }
       return respond({ gmcAuth: "select" });
+    }
+
+    if (flow === "ads") {
+      const developerToken = getGoogleAdsDeveloperToken();
+      if (!developerToken) {
+        return respond({
+          adsAuth: "error",
+          reason: "缺少 GOOGLE_ADS_DEVELOPER_TOKEN 环境变量",
+        });
+      }
+      const customers = await getAdsCustomers(tokens.accessToken, developerToken);
+      if (customers.length === 0) {
+        return respond({
+          adsAuth: "error",
+          reason: "该 Google 账号未关联任何 Google Ads 广告账户",
+        });
+      }
+      const adsResult = await bindAdsSide({
+        shop,
+        tokens,
+        customers,
+        clientId,
+        clientSecret,
+        developerToken,
+      });
+      if (adsResult === "success") {
+        return respond({
+          adsAuth: "success",
+          customerId: customers[0]?.formatted ?? "",
+        });
+      }
+      return respond({ adsAuth: "select" });
     }
 
     const developerToken = getGoogleAdsDeveloperToken();
@@ -363,18 +407,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       customers = adsListResult.customers;
     }
 
-    const gmcResult = gmcEmptyReason
-      ? "empty"
-      : await bindGmcSide({
+    let gmcResult: SideAuthResult = "empty";
+    if (!gmcEmptyReason) {
+      try {
+        gmcResult = await bindGmcSide({
           shop,
           tokens,
           accounts,
           clientId,
           clientSecret,
         });
-    const adsResult = adsEmptyReason
-      ? "empty"
-      : await bindAdsSide({
+      } catch (e) {
+        gmcResult = "error";
+        gmcEmptyReason = e instanceof Error ? e.message : "GMC 账户绑定失败";
+      }
+    }
+
+    let adsResult: SideAuthResult = "empty";
+    if (!adsEmptyReason) {
+      try {
+        adsResult = await bindAdsSide({
           shop,
           tokens,
           customers,
@@ -382,6 +434,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           clientSecret,
           developerToken,
         });
+      } catch (e) {
+        adsResult = "error";
+        adsEmptyReason = e instanceof Error ? e.message : "Google Ads 账户绑定失败";
+      }
+    }
 
     return respond(
       buildCombinedRespondParams({
@@ -402,10 +459,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             adsAuth: "error",
             reason: e instanceof Error ? e.message : "Google 授权失败",
           }
-        : {
-            gmcAuth: "error",
-            reason: e instanceof Error ? e.message : "GMC 授权失败",
-          },
+        : flow === "gmc"
+          ? {
+              gmcAuth: "error",
+              reason: e instanceof Error ? e.message : "GMC 授权失败",
+            }
+          : {
+              adsAuth: "error",
+              reason: e instanceof Error ? e.message : "Google Ads 授权失败",
+            },
     );
   }
 };

@@ -75,6 +75,10 @@ export function GoogleConnectPanels({
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const googleOAuth = useOAuthPopup("google_oauth");
+  const gmcOAuth = useOAuthPopup("gmc_oauth");
+  const adsOAuth = useOAuthPopup("ads_catalog_oauth");
+  const anyRedirecting =
+    googleOAuth.redirecting || gmcOAuth.redirecting || adsOAuth.redirecting;
 
   const gmc = credentials.googleMerchant;
   const ads = credentials.googleAds;
@@ -124,13 +128,20 @@ export function GoogleConnectPanels({
   const showAdsAccountPicker =
     selectingInitialAds || (ads.connected && adsAccounts.length > 0) || ads.pendingAccounts.length > 0;
 
-  function openCombinedOAuth(reauth = false) {
-    const reauthSuffix = reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
+  function reauthSuffix(reauth: boolean) {
+    return reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
+  }
+
+  function openOAuth(
+    endpoint: string,
+    oauth: ReturnType<typeof useOAuthPopup>,
+    reauth = false,
+  ) {
     void (async () => {
       setBusy(true);
       try {
-        await googleOAuth.startOAuth(
-          `/api/ads-catalog/google-auth-url${locationSearch}${reauthSuffix}`,
+        await oauth.startOAuth(
+          `${endpoint}${locationSearch}${reauthSuffix(reauth)}`,
           () => onChanged(),
         );
       } catch (e) {
@@ -139,6 +150,18 @@ export function GoogleConnectPanels({
         setBusy(false);
       }
     })();
+  }
+
+  function openCombinedOAuth(reauth = false) {
+    openOAuth("/api/ads-catalog/google-auth-url", googleOAuth, reauth);
+  }
+
+  function openGmcOAuth(reauth = false) {
+    openOAuth("/api/ads-catalog/google-merchant-auth-url", gmcOAuth, reauth);
+  }
+
+  function openAdsOAuth(reauth = false) {
+    openOAuth("/api/ads-catalog/google-ads-auth-url", adsOAuth, reauth);
   }
 
   async function post(path: string, body: Record<string, unknown>) {
@@ -177,7 +200,7 @@ export function GoogleConnectPanels({
             <button
               type="button"
               style={primaryBtn}
-              disabled={busy || googleOAuth.redirecting}
+              disabled={busy || anyRedirecting}
               onClick={() => openCombinedOAuth()}
             >
               {t("adsCatalog.googleConnect")}
@@ -216,8 +239,8 @@ export function GoogleConnectPanels({
               <button
                 type="button"
                 style={secondaryBtn}
-                disabled={busy || googleOAuth.redirecting}
-                onClick={() => openCombinedOAuth(true)}
+                disabled={busy || anyRedirecting}
+                onClick={() => openGmcOAuth(true)}
               >
                 {t("adsCatalog.gmcReauth")}
               </button>
@@ -240,10 +263,10 @@ export function GoogleConnectPanels({
               <button
                 type="button"
                 style={secondaryBtn}
-                disabled={busy || googleOAuth.redirecting}
-                onClick={() => openCombinedOAuth()}
+                disabled={busy || anyRedirecting}
+                onClick={() => openGmcOAuth()}
               >
-                {t("adsCatalog.googleConnect")}
+                {t("adsCatalog.gmcConnect")}
               </button>
             </div>
           </>
@@ -324,10 +347,10 @@ export function GoogleConnectPanels({
               <button
                 type="button"
                 style={secondaryBtn}
-                disabled={busy || googleOAuth.redirecting}
-                onClick={() => openCombinedOAuth(true)}
+                disabled={busy || anyRedirecting}
+                onClick={() => openAdsOAuth(true)}
               >
-                {t("adsCatalog.gmcReauth")}
+                {t("adsCatalog.adsReauth")}
               </button>
               <button
                 type="button"
@@ -335,7 +358,7 @@ export function GoogleConnectPanels({
                 disabled={busy}
                 onClick={() => void post("/api/ads-catalog/google-disconnect", { target: "ads" })}
               >
-                {t("adsCatalog.gmcDisconnect")}
+                {t("adsCatalog.adsDisconnect")}
               </button>
             </div>
           </>
@@ -348,10 +371,10 @@ export function GoogleConnectPanels({
               <button
                 type="button"
                 style={secondaryBtn}
-                disabled={busy || googleOAuth.redirecting}
-                onClick={() => openCombinedOAuth()}
+                disabled={busy || anyRedirecting}
+                onClick={() => openAdsOAuth()}
               >
-                {t("adsCatalog.googleConnect")}
+                {t("adsCatalog.adsConnect")}
               </button>
             </div>
           </>

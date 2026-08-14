@@ -27,11 +27,10 @@ const VALID_OAUTH_FLOWS: ReadonlySet<OAuthFlow> = new Set([
   "ga4",
 ]);
 
-/** Catalog 生产授权统一为一次 consent（content + adwords）。 */
+/** Catalog 支持一次组合授权，也支持 GMC / Ads 单独授权。 */
 export function normalizeCatalogGoogleOAuthFlow(
   flow: OAuthFlow,
-): "gmc_ads" | "ads_sandbox" | "gsc" | "ga4" {
-  if (flow === "gmc" || flow === "ads" || flow === "gmc_ads") return "gmc_ads";
+): "gmc" | "ads" | "gmc_ads" | "ads_sandbox" | "gsc" | "ga4" {
   return flow;
 }
 
@@ -230,10 +229,12 @@ export function buildGoogleOAuthStartUrl(params: {
     return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
   }
 
-  // 旧 gmc/ads 入口统一升级为一次 consent；沙盒仍走独立 Ads callback。
+  // 生产 Catalog 的组合授权与单侧授权共用 Merchant callback；沙盒仍走独立 Ads callback。
   const flow = normalizeCatalogGoogleOAuthFlow(params.flow);
   const callbackPath =
-    flow === "gmc_ads" ? "/ads/google-merchant/callback" : "/ads/google-ads/callback";
+    flow === "gmc" || flow === "ads" || flow === "gmc_ads"
+      ? "/ads/google-merchant/callback"
+      : "/ads/google-ads/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
   const state = createOAuthState(
     params.shop,

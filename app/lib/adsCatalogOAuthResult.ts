@@ -28,10 +28,6 @@ function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | und
     return { tone: "error", text: t("adsCatalog.authCancelled") };
   }
 
-  if (google === "select" || gmc === "select" || ads === "select") {
-    return undefined;
-  }
-
   if (google === "error" || (gmc === "error" && ads === "error")) {
     return { tone: "error", text: reason || t("adsCatalog.authError") };
   }
@@ -40,8 +36,18 @@ function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | und
   const adsMissing = ads === "empty" || ads === "error";
   const gmcOk = gmc === "success";
   const adsOk = ads === "success";
+  const hasSelect = google === "select" || gmc === "select" || ads === "select";
 
-  if (google === "partial" || (gmcOk && adsMissing) || (adsOk && gmcMissing)) {
+  if (hasSelect && !gmcMissing && !adsMissing) {
+    return undefined;
+  }
+
+  if (
+    google === "partial" ||
+    (gmcOk && adsMissing) ||
+    (adsOk && gmcMissing) ||
+    (hasSelect && (gmcMissing || adsMissing))
+  ) {
     const detail = gmcMissing
       ? gmcReason || reason || t("adsCatalog.googlePartialGmcMissing")
       : adsReason || reason || t("adsCatalog.googlePartialAdsMissing");
@@ -74,7 +80,8 @@ export function resolveAdsCatalogAuthResult(input: AuthResultInput): AdsCatalogA
     metaCapi === "select" ||
     tiktok === "select"
   ) {
-    return { action: "revalidate", tab: "credentials" };
+    const banner = resolveGoogleBanner(input);
+    return { action: "revalidate", tab: "credentials", ...(banner ? { banner } : {}) };
   }
 
   if (hasValue(google) || hasValue(gmc) || hasValue(ads)) {
