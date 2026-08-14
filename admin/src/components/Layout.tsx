@@ -30,6 +30,7 @@ import {
   GlobalOutlined,
   ExperimentOutlined,
   WalletOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -138,6 +139,12 @@ const translationMenuItems: MenuItemDef[] = [
     key: "/tsf/credits",
     icon: <WalletOutlined />,
     label: <Link to="/tsf/credits">用户额度查询</Link>,
+    ownerOnly: false,
+  },
+  {
+    key: "/tsf/single-translate-logs",
+    icon: <UnorderedListOutlined />,
+    label: <Link to="/tsf/single-translate-logs">单字段翻译日志</Link>,
     ownerOnly: false,
   },
 ];

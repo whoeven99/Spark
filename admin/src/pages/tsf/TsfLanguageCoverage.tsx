@@ -31,9 +31,21 @@ import {
   triggerTsfLanguageCoverageRefresh,
   type AutoTranslateFilter,
   type CoverageBucket,
+  type CoverageDistribution,
+  type CoverageSourceKind,
   type TsfLanguageCoverageData,
+  type TsfLocaleCoverage,
   type TsfShopLanguageCoverageRow,
 } from "../../api";
+
+const LOCALE_PREVIEW_COUNT = 2;
+
+const EMPTY_DISTRIBUTION: CoverageDistribution = {
+  high: 0,
+  mid: 0,
+  low: 0,
+  missing: 0,
+};
 
 const EMPTY: TsfLanguageCoverageData = {
   stats: {
@@ -43,7 +55,10 @@ const EMPTY: TsfLanguageCoverageData = {
     autoTranslateShops: 0,
     avgOverallPercent: null,
     lowCoverageShops: 0,
+    staleShops: 0,
+    distribution: EMPTY_DISTRIBUTION,
     redisKeyCount: 0,
+    tursoLocaleCount: 0,
     snapshotAt: null,
   },
   shops: [],
@@ -51,6 +66,24 @@ const EMPTY: TsfLanguageCoverageData = {
   page: 1,
   pageSize: 20,
   note: null,
+};
+
+const DISTRIBUTION_SEGMENTS: Array<{
+  bucket: Exclude<CoverageBucket, "all">;
+  label: string;
+  color: string;
+}> = [
+  { bucket: "high", label: "高 ≥90%", color: "#52c41a" },
+  { bucket: "mid", label: "中 50–90%", color: "#1677ff" },
+  { bucket: "low", label: "低 <50%", color: "#faad14" },
+  { bucket: "missing", label: "未统计", color: "#d9d9d9" },
+];
+
+const COVERAGE_SOURCE_LABEL: Record<CoverageSourceKind | "mixed", string> = {
+  finalize: "任务完成",
+  refresh: "手动刷新",
+  shop_scan: "店铺扫描",
+  mixed: "混合来源",
 };
 
 function coverageTone(percent: number | null): "success" | "warning" | "error" | "default" {
@@ -65,8 +98,149 @@ function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+function distributionCount(
+  distribution: CoverageDistribution,
+  bucket: Exclude<CoverageBucket, "all">,
+): number {
+  return distribution[bucket];
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function renderLocaleRow(locale: TsfLocaleCoverage) {
+  const percent = locale.percent ?? 0;
+  const status = locale.cacheMissing
+    ? "normal"
+    : locale.percent == null
+      ? "normal"
+      : locale.percent >= 90
+        ? "success"
+        : locale.percent >= 50
+          ? "normal"
+          : "exception";
+  return (
+    <Flex key={locale.locale} align="center" gap={8} wrap="nowrap">
+      <Tag
+        color={
+          locale.cacheMissing
+            ? undefined
+            : coverageTone(locale.percent) === "default"
+              ? undefined
+              : coverageTone(locale.percent)
+        }
+        style={{ marginInlineEnd: 0, minWidth: 64, textAlign: "center" }}
+      >
+        {locale.locale}
+      </Tag>
+      <span style={{ width: 44, flex: "0 0 auto" }}>
+        {locale.autoTranslate ? (
+          <Tag color="processing" style={{ marginInlineEnd: 0 }}>
+            自动
+          </Tag>
+        ) : null}
+      </span>
+      <Typography.Text style={{ width: 40, flex: "0 0 auto" }}>
+        {locale.cacheMissing || locale.percent == null ? "—" : `${locale.percent}%`}
+      </Typography.Text>
+      <div style={{ flex: 1, minWidth: 120, maxWidth: 240 }}>
+        <Progress
+          percent={locale.cacheMissing ? 0 : percent}
+          size="small"
+          showInfo={false}
+          status={status}
+        />
+      </div>
+      <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+        {locale.cacheMissing
+          ? "未统计"
+          : `${formatCount(locale.translated)} / ${formatCount(locale.total)}`}
+      </Typography.Text>
+    </Flex>
+  );
+}
+
+function CoverageDistributionBar({
+  distribution,
+  activeBucket,
+  onSelect,
+}: {
+  distribution: CoverageDistribution;
+  activeBucket: CoverageBucket;
+  onSelect: (bucket: CoverageBucket) => void;
+}) {
+  const total =
+    distribution.high + distribution.mid + distribution.low + distribution.missing;
+  if (total === 0) {
+    return (
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Typography.Text type="secondary">覆盖分布：暂无商店数据</Typography.Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card size="small" style={{ marginBottom: 16 }}>
+      <Typography.Text type="secondary">覆盖分布（点击筛选）</Typography.Text>
+      <Flex
+        style={{
+          marginTop: 8,
+          height: 28,
+          borderRadius: 6,
+          overflow: "hidden",
+          border: "1px solid #f0f0f0",
+        }}
+      >
+        {DISTRIBUTION_SEGMENTS.map((segment) => {
+          const count = distributionCount(distribution, segment.bucket);
+          if (count <= 0) return null;
+          const widthPct = (count / total) * 100;
+          return (
+            <button
+              key={segment.bucket}
+              type="button"
+              title={`${segment.label}：${count}`}
+              onClick={() => onSelect(segment.bucket)}
+              style={{
+                width: `${widthPct}%`,
+                minWidth: count > 0 ? 4 : 0,
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                background: segment.color,
+                opacity: activeBucket === segment.bucket ? 1 : 0.72,
+                outline: activeBucket === segment.bucket ? "2px solid #1677ff" : "none",
+                outlineOffset: -2,
+              }}
+            />
+          );
+        })}
+      </Flex>
+      <Flex gap={8} wrap="wrap" style={{ marginTop: 12 }}>
+        {DISTRIBUTION_SEGMENTS.map((segment) => {
+          const count = distributionCount(distribution, segment.bucket);
+          return (
+            <Button
+              key={segment.bucket}
+              size="small"
+              type={activeBucket === segment.bucket ? "primary" : "default"}
+              onClick={() => onSelect(segment.bucket)}
+            >
+              {segment.label} {count}
+            </Button>
+          );
+        })}
+        <Button
+          size="small"
+          type={activeBucket === "all" ? "primary" : "default"}
+          onClick={() => onSelect("all")}
+        >
+          全部 {total}
+        </Button>
+      </Flex>
+    </Card>
+  );
 }
 
 export default function TsfLanguageCoverage() {
@@ -83,6 +257,7 @@ export default function TsfLanguageCoverage() {
   const [pageSize, setPageSize] = useState(20);
   const [refreshKey, setRefreshKey] = useState(0);
   const [computingShop, setComputingShop] = useState<string | null>(null);
+  const [expandedShops, setExpandedShops] = useState<Set<string>>(() => new Set());
   const forceRefreshRef = useRef(false);
 
   const load = useCallback(() => {
@@ -117,6 +292,20 @@ export default function TsfLanguageCoverage() {
   function hardRefresh() {
     forceRefreshRef.current = true;
     setRefreshKey((key) => key + 1);
+  }
+
+  function selectBucket(next: CoverageBucket) {
+    setBucket(next);
+    setPage(1);
+  }
+
+  function toggleExpanded(shop: string) {
+    setExpandedShops((prev) => {
+      const next = new Set(prev);
+      if (next.has(shop)) next.delete(shop);
+      else next.add(shop);
+      return next;
+    });
   }
 
   async function computeCoverage(shop: string) {
@@ -160,7 +349,7 @@ export default function TsfLanguageCoverage() {
       title: "商店",
       dataIndex: "shop",
       key: "shop",
-      width: 280,
+      width: 260,
       fixed: "left" as const,
       render: (_: string, row: TsfShopLanguageCoverageRow) => (
         <Space direction="vertical" size={4}>
@@ -192,7 +381,7 @@ export default function TsfLanguageCoverage() {
       title: "整体",
       dataIndex: "overallPercent",
       key: "overallPercent",
-      width: 100,
+      width: 120,
       render: (percent: number | null, row: TsfShopLanguageCoverageRow) => {
         if (row.localeCount === 0) return <Tag>无语言</Tag>;
         if (row.cacheMissing || percent == null) return <Tag>未统计</Tag>;
@@ -203,6 +392,24 @@ export default function TsfLanguageCoverage() {
             <Tag color={tone === "default" ? undefined : tone}>
               {percent >= 90 ? "高" : percent >= 50 ? "中" : "低"}
             </Tag>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {formatCount(row.translated)} / {formatCount(row.total)}
+            </Typography.Text>
+          </Space>
+        );
+      },
+    },
+    {
+      title: "最低语言",
+      key: "lowestLocale",
+      width: 110,
+      render: (_: unknown, row: TsfShopLanguageCoverageRow) => {
+        if (!row.lowestLocale) return <Typography.Text type="secondary">—</Typography.Text>;
+        const tone = coverageTone(row.lowestLocale.percent);
+        return (
+          <Space direction="vertical" size={2}>
+            <Tag color={tone === "default" ? undefined : tone}>{row.lowestLocale.locale}</Tag>
+            <Typography.Text>{row.lowestLocale.percent}%</Typography.Text>
           </Space>
         );
       },
@@ -218,63 +425,37 @@ export default function TsfLanguageCoverage() {
             </Typography.Text>
           );
         }
+        const expanded = expandedShops.has(row.shop);
+        const visibleLocales = expanded
+          ? row.locales
+          : row.locales.slice(0, LOCALE_PREVIEW_COUNT);
+        const hiddenCount = row.locales.length - visibleLocales.length;
         return (
-          <Space direction="vertical" size={6} style={{ width: "100%", minWidth: 400 }}>
-            {row.locales.map((locale) => {
-              const percent = locale.percent ?? 0;
-              const status = locale.cacheMissing
-                ? "normal"
-                : locale.percent == null
-                  ? "normal"
-                  : locale.percent >= 90
-                    ? "success"
-                    : locale.percent >= 50
-                      ? "normal"
-                      : "exception";
-              return (
-                <Flex key={locale.locale} align="center" gap={8} wrap="nowrap">
-                  <Tag
-                    color={
-                      locale.cacheMissing
-                        ? undefined
-                        : coverageTone(locale.percent) === "default"
-                          ? undefined
-                          : coverageTone(locale.percent)
-                    }
-                    style={{ marginInlineEnd: 0, minWidth: 64, textAlign: "center" }}
-                  >
-                    {locale.locale}
-                  </Tag>
-                  <span style={{ width: 44, flex: "0 0 auto" }}>
-                    {locale.autoTranslate ? (
-                      <Tag color="processing" style={{ marginInlineEnd: 0 }}>
-                        自动
-                      </Tag>
-                    ) : null}
-                  </span>
-                  <Typography.Text style={{ width: 40, flex: "0 0 auto" }}>
-                    {locale.cacheMissing || locale.percent == null
-                      ? "—"
-                      : `${locale.percent}%`}
-                  </Typography.Text>
-                  <div style={{ flex: 1, minWidth: 120, maxWidth: 240 }}>
-                    <Progress
-                      percent={locale.cacheMissing ? 0 : percent}
-                      size="small"
-                      showInfo={false}
-                      status={status}
-                    />
-                  </div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-                    {locale.cacheMissing
-                      ? "未统计"
-                      : `${formatCount(locale.translated)} / ${formatCount(locale.total)}`}
-                  </Typography.Text>
-                </Flex>
-              );
-            })}
+          <Space direction="vertical" size={6} style={{ width: "100%", minWidth: 360 }}>
+            {visibleLocales.map((locale) => renderLocaleRow(locale))}
+            {hiddenCount > 0 ? (
+              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => toggleExpanded(row.shop)}>
+                展开 {hiddenCount} 语
+              </Button>
+            ) : null}
+            {expanded && row.locales.length > LOCALE_PREVIEW_COUNT ? (
+              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => toggleExpanded(row.shop)}>
+                收起
+              </Button>
+            ) : null}
           </Space>
         );
+      },
+    },
+    {
+      title: "来源",
+      key: "coverageSourceSummary",
+      width: 100,
+      render: (_: unknown, row: TsfShopLanguageCoverageRow) => {
+        if (!row.coverageSourceSummary) {
+          return <Typography.Text type="secondary">—</Typography.Text>;
+        }
+        return <Tag>{COVERAGE_SOURCE_LABEL[row.coverageSourceSummary]}</Tag>;
       },
     },
     {
@@ -284,9 +465,12 @@ export default function TsfLanguageCoverage() {
       align: "right" as const,
       render: (_: unknown, row: TsfShopLanguageCoverageRow) => (
         <Space direction="vertical" size={4} style={{ alignItems: "flex-end" }}>
-          <Typography.Text type="secondary">
-            {row.updatedAtLabel || "—"}
-          </Typography.Text>
+          <Space size={4}>
+            <Typography.Text type="secondary">
+              {row.updatedAtLabel || "—"}
+            </Typography.Text>
+            {row.isStale ? <Tag color="warning">过期</Tag> : null}
+          </Space>
           {owner ? (
             <Button
               size="small"
@@ -317,7 +501,7 @@ export default function TsfLanguageCoverage() {
           </Typography.Title>
           <Typography.Text type="secondary">
             商店以 Turso 在装 Account 为准；覆盖率读 ShopTargetLocale.coverage*。
-            「现算」入队 Worker 重算该店覆盖率（对齐 App「刷新统计」）。
+            超过 7 天未更新标为「过期」；「现算」入队 Worker 重算该店覆盖率。
           </Typography.Text>
         </div>
         <Button icon={<ReloadOutlined />} onClick={hardRefresh}>
@@ -346,12 +530,25 @@ export default function TsfLanguageCoverage() {
       ) : null}
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={12} lg={6}>
+        <Col xs={12} md={8} lg={4}>
           <Card size="small">
             <Statistic title="Turso 在装商店" value={data.stats.tursoShopCount} />
           </Card>
         </Col>
-        <Col xs={12} lg={6}>
+        <Col xs={12} md={8} lg={4}>
+          <Card size="small">
+            <Statistic title="目标语言总数" value={data.stats.tursoLocaleCount} />
+          </Card>
+        </Col>
+        <Col xs={12} md={8} lg={4}>
+          <Card size="small">
+            <Statistic
+              title="已统计 / 未统计"
+              value={`${data.stats.shopsWithCache} / ${data.stats.shopsWithoutCache}`}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={8} lg={4}>
           <Card size="small">
             <Statistic
               title="已开自动翻译"
@@ -360,7 +557,7 @@ export default function TsfLanguageCoverage() {
             />
           </Card>
         </Col>
-        <Col xs={12} lg={6}>
+        <Col xs={12} md={8} lg={4}>
           <Card size="small">
             <Statistic
               title="店均整体覆盖率"
@@ -369,15 +566,21 @@ export default function TsfLanguageCoverage() {
             />
           </Card>
         </Col>
-        <Col xs={12} lg={6}>
+        <Col xs={12} md={8} lg={4}>
           <Card size="small">
             <Statistic
-              title="低覆盖 / 未统计"
-              value={`${data.stats.lowCoverageShops} / ${data.stats.shopsWithoutCache}`}
+              title="低覆盖 / 过期"
+              value={`${data.stats.lowCoverageShops} / ${data.stats.staleShops}`}
             />
           </Card>
         </Col>
       </Row>
+
+      <CoverageDistributionBar
+        distribution={data.stats.distribution ?? EMPTY_DISTRIBUTION}
+        activeBucket={bucket}
+        onSelect={selectBucket}
+      />
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Flex gap={12} wrap="wrap" align="center">
@@ -434,7 +637,7 @@ export default function TsfLanguageCoverage() {
         <Table<TsfShopLanguageCoverageRow>
           rowKey="shop"
           size="small"
-          scroll={{ x: 1020 }}
+          scroll={{ x: 1180 }}
           dataSource={data.shops}
           columns={columns}
           pagination={{

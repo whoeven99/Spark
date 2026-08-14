@@ -32,6 +32,7 @@ import { tsfSubscriptionsRouter } from "./routes/tsfSubscriptions.js";
 import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
 import { tsfPacksRouter } from "./routes/tsfPacks.js";
 import { tsfCreditsRouter } from "./routes/tsfCredits.js";
+import { tsfSingleTranslateLogsRouter } from "./routes/tsfSingleTranslateLogs.js";
 import { tsfBillingRouter } from "./routes/tsfBilling.js";
 import { tsfShopProfilesRouter } from "./routes/tsfShopProfiles.js";
 import { tsfLanguageCoverageRouter } from "./routes/tsfLanguageCoverage.js";
@@ -93,6 +94,11 @@ app.use("/api/tsf/usage", authMiddleware, tsfUsageRouter);
 app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
 app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
 app.use("/api/tsf/credits", authMiddleware, tsfCreditsRouter);
+app.use(
+  "/api/tsf/single-translate-logs",
+  authMiddleware,
+  tsfSingleTranslateLogsRouter,
+);
 app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
 app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
 app.use("/api/tsf/language-coverage", authMiddleware, tsfLanguageCoverageRouter);

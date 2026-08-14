@@ -10,8 +10,17 @@ export const tsfLanguageCoverageRouter = Router();
 const SHOP_SCAN_HINT_KEY = "tsf:shop_scan:hints";
 
 const SNAPSHOT_TTL_MS = 60_000;
+const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CoverageBucket = "all" | "low" | "mid" | "high" | "missing";
+export type CoverageSourceKind = "finalize" | "refresh" | "shop_scan";
+
+export type CoverageDistribution = {
+  high: number;
+  mid: number;
+  low: number;
+  missing: number;
+};
 export type AutoTranslateFilter = "all" | "on" | "off";
 
 export type LocaleCoverage = {
@@ -22,6 +31,7 @@ export type LocaleCoverage = {
   updatedAt: string | null;
   cacheMissing: boolean;
   autoTranslate: boolean;
+  coverageSource: CoverageSourceKind | null;
 };
 
 export type ShopLanguageCoverage = {
@@ -37,6 +47,9 @@ export type ShopLanguageCoverage = {
   overallPercent: number | null;
   lowestLocale: { locale: string; percent: number } | null;
   updatedAt: string | null;
+  /** 各语言 coverageSource 汇总：单一来源或 mixed */
+  coverageSourceSummary: CoverageSourceKind | "mixed" | null;
+  isStale: boolean;
   locales: LocaleCoverage[];
 };
 
@@ -48,6 +61,7 @@ type TursoLocaleRow = {
   percent: number | null;
   updatedAt: string | null;
   cacheMissing: boolean;
+  coverageSource: CoverageSourceKind | null;
 };
 
 type TursoShopBase = {
@@ -97,6 +111,14 @@ function asBool(autoRaw: unknown): boolean {
   );
 }
 
+function parseCoverageSource(value: unknown): CoverageSourceKind | null {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "finalize" || raw === "refresh" || raw === "shop_scan") {
+    return raw;
+  }
+  return null;
+}
+
 function asIso(value: unknown): string | null {
   if (value == null) return null;
   if (value instanceof Date) return value.toISOString();
@@ -130,7 +152,28 @@ function mapLocaleRow(row: Record<string, unknown>): TursoLocaleRow | null {
     percent: percent != null && Number.isFinite(percent) ? percent : null,
     updatedAt,
     cacheMissing: updatedAt == null,
+    coverageSource: parseCoverageSource(row.coverageSource),
   };
+}
+
+function summarizeCoverageSources(
+  locales: LocaleCoverage[],
+): CoverageSourceKind | "mixed" | null {
+  const sources = new Set<CoverageSourceKind>();
+  for (const row of locales) {
+    if (row.cacheMissing || !row.coverageSource) continue;
+    sources.add(row.coverageSource);
+  }
+  if (sources.size === 0) return null;
+  if (sources.size === 1) return [...sources][0] ?? null;
+  return "mixed";
+}
+
+function isCoverageStale(updatedAt: string | null, now = Date.now()): boolean {
+  if (!updatedAt) return false;
+  const ts = Date.parse(updatedAt);
+  if (!Number.isFinite(ts)) return false;
+  return now - ts > STALE_THRESHOLD_MS;
 }
 
 async function listTursoShopsWithLocales(): Promise<TursoShopBase[]> {
@@ -144,7 +187,8 @@ async function listTursoShopsWithLocales(): Promise<TursoShopBase[]> {
     ),
     db.execute(
       `SELECT shop, locale, autoTranslate,
-              coverageTranslated, coverageTotal, coveragePercent, coverageUpdatedAt
+              coverageTranslated, coverageTotal, coveragePercent, coverageUpdatedAt,
+              coverageSource
        FROM ShopTargetLocale
        ORDER BY shop ASC, locale ASC`,
     ),
@@ -181,6 +225,7 @@ function buildShopRow(base: TursoShopBase): ShopLanguageCoverage {
         updatedAt: loc.updatedAt,
         cacheMissing: loc.cacheMissing,
         autoTranslate: loc.autoTranslate,
+        coverageSource: loc.coverageSource,
       }),
     )
     .sort((a, b) => a.locale.localeCompare(b.locale, "en"));
@@ -214,6 +259,8 @@ function buildShopRow(base: TursoShopBase): ShopLanguageCoverage {
       withCache.length === 0 ? null : ratioPercent(translated, total),
     lowestLocale,
     updatedAt,
+    coverageSourceSummary: summarizeCoverageSources(sorted),
+    isStale: isCoverageStale(updatedAt),
     locales: sorted,
   };
 }
@@ -270,6 +317,29 @@ async function loadSnapshot(force = false): Promise<Snapshot> {
   } finally {
     snapshotInflight = null;
   }
+}
+
+function classifyBucket(
+  shop: ShopLanguageCoverage,
+): Exclude<CoverageBucket, "all"> {
+  if (shop.cacheMissing || shop.localeCount === 0) return "missing";
+  if (shop.overallPercent == null) return "missing";
+  if (shop.overallPercent >= 90) return "high";
+  if (shop.overallPercent >= 50) return "mid";
+  return "low";
+}
+
+function computeDistribution(shops: ShopLanguageCoverage[]): CoverageDistribution {
+  const distribution: CoverageDistribution = {
+    high: 0,
+    mid: 0,
+    low: 0,
+    missing: 0,
+  };
+  for (const shop of shops) {
+    distribution[classifyBucket(shop)] += 1;
+  }
+  return distribution;
 }
 
 function matchesBucket(
@@ -460,7 +530,8 @@ tsfLanguageCoverageRouter.get("/shop", async (req, res) => {
     const db = getTsfDb();
     const localesResult = await db.execute({
       sql: `SELECT locale, autoTranslate,
-                   coverageTranslated, coverageTotal, coveragePercent, coverageUpdatedAt
+                   coverageTranslated, coverageTotal, coveragePercent, coverageUpdatedAt,
+                   coverageSource
             FROM ShopTargetLocale WHERE shop = ? ORDER BY locale ASC`,
       args: [shop],
     });
@@ -477,6 +548,7 @@ tsfLanguageCoverageRouter.get("/shop", async (req, res) => {
         updatedAt: mapped.updatedAt,
         cacheMissing: mapped.cacheMissing,
         autoTranslate: mapped.autoTranslate,
+        coverageSource: mapped.coverageSource,
       });
     }
 
@@ -523,6 +595,8 @@ tsfLanguageCoverageRouter.get("/", async (req, res) => {
     const lowCoverageShops = withCache.filter(
       (s) => s.overallPercent != null && s.overallPercent < 50,
     ).length;
+    const staleShops = snapshot.shops.filter((s) => s.isStale).length;
+    const distribution = computeDistribution(snapshot.shops);
     const avgOverallPercent =
       withCache.length === 0
         ? null
@@ -545,6 +619,8 @@ tsfLanguageCoverageRouter.get("/", async (req, res) => {
         autoTranslateShops,
         avgOverallPercent,
         lowCoverageShops,
+        staleShops,
+        distribution,
         redisKeyCount: snapshot.redisKeyCount,
         tursoLocaleCount: snapshot.tursoLocaleCount,
         snapshotAt: new Date(snapshot.at).toISOString(),

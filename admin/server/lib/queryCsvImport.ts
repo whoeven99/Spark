@@ -114,44 +114,72 @@ export function groupBatchesByResourceId(
   return result;
 }
 
-/** 简易 CSV 解析（支持引号字段） */
-export function parseCsvText(text: string): Record<string, string>[] {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
+function parseCsvRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let currentRecord: string[] = [];
+  let currentField = "";
+  let inQuotes = false;
 
-  const parseLine = (line: string): string[] => {
-    const fields: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (inQuotes) {
-        if (ch === '"' && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else if (ch === '"') {
-          inQuotes = false;
-        } else {
-          current += ch;
-        }
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        currentField += '"';
+        i++;
       } else if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ",") {
-        fields.push(current);
-        current = "";
+        inQuotes = false;
       } else {
-        current += ch;
+        currentField += ch;
       }
+      continue;
     }
-    fields.push(current);
-    return fields;
-  };
 
-  const headers = parseLine(lines[0]!).map((h) => h.trim());
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      currentRecord.push(currentField);
+      currentField = "";
+    } else if (ch === "\r") {
+      if (text[i + 1] === "\n") i++;
+      currentRecord.push(currentField);
+      currentField = "";
+      records.push(currentRecord);
+      currentRecord = [];
+    } else if (ch === "\n") {
+      currentRecord.push(currentField);
+      currentField = "";
+      records.push(currentRecord);
+      currentRecord = [];
+    } else {
+      currentField += ch;
+    }
+  }
+
+  if (currentField !== "" || currentRecord.length > 0) {
+    currentRecord.push(currentField);
+    records.push(currentRecord);
+  }
+
+  while (records.length > 0 && records[records.length - 1]!.every((f) => f.trim() === "")) {
+    records.pop();
+  }
+
+  return records;
+}
+
+/** RFC 4180 风格 CSV 解析（支持引号字段内换行） */
+export function parseCsvText(text: string): Record<string, string>[] {
+  const normalized = text.replace(/^\uFEFF/, "");
+  const records = parseCsvRecords(normalized);
+  if (!records.length) return [];
+
+  const headers = records[0]!.map((h) => h.trim());
   const rows: Record<string, string>[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseLine(lines[i]!);
+  for (let i = 1; i < records.length; i++) {
+    const values = records[i]!;
+    if (values.every((v) => v.trim() === "")) continue;
+
     const row: Record<string, string> = {};
     headers.forEach((h, idx) => {
       row[h] = values[idx] ?? "";

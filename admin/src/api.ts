@@ -1108,6 +1108,72 @@ export function fetchAppLogs(params: {
   return apiFetch(`/app-logs?${query}`);
 }
 
+// --- TSF manage 单字段翻译日志（CreditUsage source=single） ---
+
+export type SingleTranslateCreditMeta = {
+  rawTokens?: number | null;
+  googleCredits?: number | null;
+  aiModel?: string | null;
+  target?: string | null;
+  sourceLocale?: string | null;
+  fieldKey?: string | null;
+  shopifyType?: string | null;
+  textLength?: number | null;
+};
+
+export type SingleTranslateCreditRecord = {
+  id: string;
+  shop: string;
+  credits: number;
+  referenceId: string;
+  createdAt: string;
+  metadata: SingleTranslateCreditMeta;
+};
+
+export type SingleTranslateLogStats = {
+  totalCount: number;
+  totalCredits: number;
+  totalRawTokens: number;
+};
+
+export type SingleTranslateLogConfig = {
+  source: "credit_usage";
+  defaultWindowHours: number;
+  maxLimit: number;
+};
+
+export function fetchSingleTranslateLogConfig(): Promise<SingleTranslateLogConfig> {
+  return apiFetch("/tsf/single-translate-logs/config");
+}
+
+export function fetchSingleTranslateLogs(params: {
+  shop: string;
+  from?: number;
+  to?: number;
+  keyword?: string;
+  limit?: number;
+  cursor?: string | null;
+}): Promise<{
+  shop: string;
+  from: number;
+  to: number;
+  keyword: string | null;
+  records: SingleTranslateCreditRecord[];
+  stats: SingleTranslateLogStats;
+  hasMore: boolean;
+  cursor: string | null;
+  note?: string;
+}> {
+  const query = new URLSearchParams();
+  query.set("shop", params.shop);
+  if (params.from) query.set("from", String(params.from));
+  if (params.to) query.set("to", String(params.to));
+  if (params.keyword) query.set("keyword", params.keyword);
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.cursor) query.set("cursor", params.cursor);
+  return apiFetch(`/tsf/single-translate-logs?${query}`);
+}
+
 export type ShopSizeTier = "超大商店" | "大商店" | "中等商店" | "小商店";
 
 export type ShopSizeProfile = {
@@ -1771,6 +1837,14 @@ export function fetchTsfShopProfiles(params?: {
 
 export type CoverageBucket = "all" | "low" | "mid" | "high" | "missing";
 export type AutoTranslateFilter = "all" | "on" | "off";
+export type CoverageSourceKind = "finalize" | "refresh" | "shop_scan";
+
+export type CoverageDistribution = {
+  high: number;
+  mid: number;
+  low: number;
+  missing: number;
+};
 
 export type TsfLocaleCoverage = {
   locale: string;
@@ -1780,6 +1854,7 @@ export type TsfLocaleCoverage = {
   updatedAt: string | null;
   cacheMissing: boolean;
   autoTranslate: boolean;
+  coverageSource: CoverageSourceKind | null;
 };
 
 export type TsfShopLanguageCoverageRow = {
@@ -1794,6 +1869,8 @@ export type TsfShopLanguageCoverageRow = {
   lowestLocale: { locale: string; percent: number } | null;
   updatedAt: string | null;
   updatedAtLabel: string;
+  coverageSourceSummary: CoverageSourceKind | "mixed" | null;
+  isStale: boolean;
   locales: TsfLocaleCoverage[];
 };
 
@@ -1805,7 +1882,10 @@ export type TsfLanguageCoverageData = {
     autoTranslateShops: number;
     avgOverallPercent: number | null;
     lowCoverageShops: number;
+    staleShops: number;
+    distribution: CoverageDistribution;
     redisKeyCount: number;
+    tursoLocaleCount: number;
     snapshotAt: string | null;
   };
   shops: TsfShopLanguageCoverageRow[];
@@ -1850,6 +1930,7 @@ export type ShopLocaleCoverageRow = {
   updatedAt: string | null;
   cacheMissing: boolean;
   autoTranslate: boolean;
+  coverageSource?: CoverageSourceKind | null;
 };
 
 export function fetchShopLocaleCoverage(
