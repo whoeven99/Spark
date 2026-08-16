@@ -95,7 +95,9 @@ export const pageContentStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "1.5rem",
+  width: "100%",
   maxWidth: "1120px",
+  marginInline: "auto",
 };
 
 /**
