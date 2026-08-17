@@ -5,6 +5,9 @@ import { useOAuthPopup } from "../../hooks/useOAuthPopup";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
   PageHeaderNav,
+  PageMetricCard,
+  PageSectionHeader,
+  PageSurface,
   mobilePageContentStyle,
   pageColorTokens,
   pageContentStyle,
@@ -249,6 +252,51 @@ function ConnectedBar({
   );
 }
 
+function ConnectionStatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "connected" | "pending" | "inactive";
+}) {
+  const toneStyle =
+    tone === "connected"
+      ? {
+          color: pageColorTokens.brandGreenDeep,
+          background: pageColorTokens.brandGreenLight,
+          borderColor: pageColorTokens.brandGreenGlow,
+        }
+      : tone === "pending"
+        ? {
+            color: pageColorTokens.warning,
+            background: pageColorTokens.warningBg,
+            borderColor: "rgba(185, 137, 0, 0.18)",
+          }
+        : {
+            color: pageColorTokens.textSecondary,
+            background: pageColorTokens.surfaceMuted,
+            borderColor: pageColorTokens.border,
+          };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "0.3rem 0.75rem",
+        borderRadius: "999px",
+        fontSize: "0.8rem",
+        fontWeight: 700,
+        border: `1px solid ${toneStyle.borderColor}`,
+        color: toneStyle.color,
+        background: toneStyle.background,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function GoogleSearchConsolePage() {
@@ -401,6 +449,17 @@ export function GoogleSearchConsolePage() {
   const disconnecting = disconnectFetcher.state !== "idle";
   const selectingLoading = siteFetcher.state !== "idle";
   const connectingAuth = gscOAuth.redirecting || oauthResolving;
+  const overviewStatus = connected
+    ? t("settingsShell.statusConnected")
+    : hasPending
+      ? t("settingsShell.statusPending")
+      : t("settingsShell.statusNeedsSetup");
+  const connectionTone = connected ? "connected" : hasPending ? "pending" : "inactive";
+  const overviewFooter = connected && siteUrl
+    ? t("gsc.overviewCurrentSite", { siteUrl })
+    : hasPending
+      ? t("gsc.overviewPendingHint", { count: pendingSites.length })
+      : t("gsc.overviewNeedsSetupHint");
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -412,58 +471,92 @@ export function GoogleSearchConsolePage() {
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-        {authBanner && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background:
-                authBanner.tone === "ok"
-                  ? pageColorTokens.brandGreenLight
-                  : pageColorTokens.criticalBg,
-              border: `1px solid ${
-                authBanner.tone === "ok"
-                  ? pageColorTokens.brandGreenDeep
-                  : pageColorTokens.critical
-              }`,
-              borderRadius: 8,
-              fontSize: "0.875rem",
-              color:
-                authBanner.tone === "ok"
-                  ? pageColorTokens.brandGreenDeep
-                  : pageColorTokens.criticalText,
-              lineHeight: 1.5,
-            }}
-          >
-            {authBanner.text}
-          </div>
-        )}
-
-        {!connected && !hasPending && !connectingAuth && <NotConnectedPanel onConnect={handleConnect} />}
-
-        {hasPending && !connected && (
-          <SiteSelectPanel
-            sites={pendingSites}
-            onSelect={handleSiteSelect}
-            loading={selectingLoading}
+        <PageSurface>
+          <PageSectionHeader
+            title={t("gsc.overviewTitle")}
+            subtitle={t("gsc.overviewSubtitle")}
           />
-        )}
+          <PageMetricCard
+            metrics={[
+              { label: t("gsc.overviewStatus"), value: overviewStatus },
+              { label: t("gsc.overviewSites"), value: connected ? "1" : "0" },
+              { label: t("gsc.overviewPending"), value: String(hasPending ? pendingSites.length : 0) },
+            ]}
+            footer={<span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>{overviewFooter}</span>}
+          />
+        </PageSurface>
 
-        {connected && siteUrl && (
+        <PageSurface>
+          <PageSectionHeader
+            title={t("gsc.connectionSectionTitle")}
+            subtitle={t("gsc.connectionSectionSubtitle")}
+            badge={<ConnectionStatusBadge label={overviewStatus} tone={connectionTone} />}
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {authBanner ? (
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  background:
+                    authBanner.tone === "ok"
+                      ? pageColorTokens.brandGreenLight
+                      : pageColorTokens.criticalBg,
+                  border: `1px solid ${
+                    authBanner.tone === "ok"
+                      ? pageColorTokens.brandGreenDeep
+                      : pageColorTokens.critical
+                  }`,
+                  borderRadius: 8,
+                  fontSize: "0.875rem",
+                  color:
+                    authBanner.tone === "ok"
+                      ? pageColorTokens.brandGreenDeep
+                      : pageColorTokens.criticalText,
+                  lineHeight: 1.5,
+                }}
+              >
+                {authBanner.text}
+              </div>
+            ) : null}
+
+            {connectingAuth ? (
+              <div style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>
+                {t("gsc.redirecting")}
+              </div>
+            ) : null}
+
+            {!connected && !hasPending && !connectingAuth ? (
+              <NotConnectedPanel onConnect={handleConnect} />
+            ) : null}
+
+            {hasPending && !connected ? (
+              <SiteSelectPanel
+                sites={pendingSites}
+                onSelect={handleSiteSelect}
+                loading={selectingLoading}
+              />
+            ) : null}
+
+            {connected && siteUrl ? (
+              <ConnectedBar
+                siteUrl={siteUrl}
+                onDisconnect={handleDisconnect}
+                disconnecting={disconnecting}
+              />
+            ) : null}
+          </div>
+        </PageSurface>
+
+        {connected && siteUrl ? (
           <>
-            <ConnectedBar
-              siteUrl={siteUrl}
-              onDisconnect={handleDisconnect}
-              disconnecting={disconnecting}
+            <PageSectionHeader
+              title={t("gsc.performanceSectionTitle")}
+              subtitle={t("gsc.performanceSectionSubtitle")}
             />
             <GscPerformanceView />
           </>
-        )}
-
-        {connectingAuth && (
-          <div style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>
-            {t("gsc.redirecting")}
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

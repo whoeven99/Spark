@@ -16,10 +16,12 @@ import {
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
+  analysisPageContentStyle,
   PageHeaderNav,
+  PageMetricCard,
+  PageSurface,
   mobilePageContentStyle,
   pageColorTokens,
-  pageContentStyle,
   pageEmptyStateStyle,
   pageHintTextStyle,
   pageMetricCardStyle,
@@ -78,6 +80,10 @@ function formatTimestamp(iso: string | null): string | null {
   return iso.replace("T", " ").slice(0, 16);
 }
 
+function countAttentionIssues(checks: AdsHealthCheck[]): number {
+  return checks.filter((check) => check.state !== "ok").length;
+}
+
 export function InsightsOverviewPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -97,7 +103,7 @@ export function InsightsOverviewPage() {
   };
 
   return (
-    <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
+    <div style={isMobile ? mobilePageContentStyle : analysisPageContentStyle}>
       <PageHeaderNav
         titleBarTitle={t("nav.insights")}
         title={t("insights.title")}
@@ -179,6 +185,25 @@ function OverviewBody({
 }) {
   const { t } = useTranslation();
   const anyConnected = overview.platforms.some((item) => item.connected);
+  const connectedCount = overview.platforms.filter((item) => item.connected).length;
+  const attentionCount = countAttentionIssues(overview.health);
+  const disapprovedTotal = overview.reviews.reduce((sum, review) => sum + review.disapproved, 0);
+  const freshSnapshotCount = overview.platforms.filter(
+    (item) => item.connected && item.snapshot && !item.snapshot.stale,
+  ).length;
+  const readyConnections = overview.connections.filter((item) => item.connected).length;
+  const overviewFooter = [
+    t("insights.overviewFooterWindow", {
+      start: overview.dateStart,
+      end: overview.dateEnd,
+    }),
+    t("insights.overviewFooterGenerated", {
+      time: formatTimestamp(overview.generatedAt) ?? overview.generatedAt,
+    }),
+    overview.mixedCurrency ? t("insights.mixedCurrencyHint") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   if (!anyConnected) {
     return (
@@ -196,7 +221,48 @@ function OverviewBody({
 
   return (
     <>
-      <section>
+      <PageSurface>
+        <PageSectionHeader
+          title={t("insights.overviewTitle")}
+          subtitle={t("insights.overviewSubtitle")}
+          badge={
+            <span style={summaryBadgeStyle(attentionCount > 0)}>
+              {attentionCount > 0
+                ? t("insights.overviewAttentionBadge", { count: attentionCount })
+                : t("insights.overviewHealthyBadge")}
+            </span>
+          }
+        />
+        <PageMetricCard
+          metrics={[
+            {
+              label: t("insights.overviewConnectedPlatforms"),
+              value: t("insights.overviewConnectedPlatformsValue", {
+                connected: connectedCount,
+                total: overview.platforms.length,
+              }),
+            },
+            {
+              label: t("insights.overviewAttention"),
+              value: String(attentionCount),
+            },
+            {
+              label: t("insights.overviewDisapproved"),
+              value: formatInteger(disapprovedTotal),
+            },
+            {
+              label: t("insights.overviewSnapshots"),
+              value: t("insights.overviewSnapshotsValue", {
+                ready: freshSnapshotCount,
+                total: connectedCount,
+              }),
+            },
+          ]}
+          footer={<span style={pageHintTextStyle}>{overviewFooter}</span>}
+        />
+      </PageSurface>
+
+      <PageSurface>
         <PageSectionHeader
           title={t("insights.kpiSectionTitle")}
           subtitle={
@@ -223,12 +289,20 @@ function OverviewBody({
             value={formatInteger(overview.totals.conversions)}
           />
         </div>
-      </section>
+      </PageSurface>
 
-      <section>
+      <PageSurface>
         <PageSectionHeader
           title={t("insights.platformSectionTitle")}
           subtitle={t("insights.platformSectionSubtitle")}
+          badge={
+            <span style={sectionBadgeStyle}>
+              {t("insights.platformSectionBadge", {
+                connected: connectedCount,
+                total: overview.platforms.length,
+              })}
+            </span>
+          }
         />
         <div style={platformGridStyle(isMobile)}>
           {overview.platforms.map((item) => (
@@ -241,25 +315,40 @@ function OverviewBody({
             />
           ))}
         </div>
-      </section>
+      </PageSurface>
 
       <HealthSection checks={overview.health} onOpenCatalog={onOpenCatalog} />
 
-      <section>
+      <PageSurface>
         <PageSectionHeader
           title={t("insights.reviewSectionTitle")}
           subtitle={t("insights.reviewSectionSubtitle")}
+          badge={
+            <span style={summaryBadgeStyle(disapprovedTotal > 0)}>
+              {disapprovedTotal > 0
+                ? t("insights.reviewBadgeAttention", { count: disapprovedTotal })
+                : t("insights.reviewBadgeHealthy")}
+            </span>
+          }
         />
         <ReviewTable reviews={overview.reviews} />
-      </section>
+      </PageSurface>
 
-      <section>
+      <PageSurface>
         <PageSectionHeader
           title={t("insights.connectionSectionTitle")}
           subtitle={t("insights.connectionSectionSubtitle")}
+          badge={
+            <span style={sectionBadgeStyle}>
+              {t("insights.connectionBadge", {
+                connected: readyConnections,
+                total: overview.connections.length,
+              })}
+            </span>
+          }
         />
         <ConnectionTable connections={overview.connections} onOpenCatalog={onOpenCatalog} />
-      </section>
+      </PageSurface>
     </>
   );
 }
@@ -422,7 +511,7 @@ function HealthSection({
   const pendingCount = resolved.filter((check) => check.state === "warning").length;
 
   return (
-    <section>
+    <PageSurface>
       <PageSectionHeader
         title={t("insights.health.sectionTitle")}
         subtitle={t("insights.health.sectionSubtitle")}
@@ -478,7 +567,7 @@ function HealthSection({
           {t("insights.health.fixCta")}
         </button>
       ) : null}
-    </section>
+    </PageSurface>
   );
 }
 
@@ -656,6 +745,26 @@ const statusPillStyle = (connected: boolean): CSSProperties => ({
   color: connected ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
   background: connected ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
   border: `1px solid ${connected ? "rgba(0, 166, 124, 0.28)" : pageColorTokens.borderSubtle}`,
+});
+
+const sectionBadgeStyle: CSSProperties = {
+  padding: "0.2rem 0.55rem",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const summaryBadgeStyle = (attention: boolean): CSSProperties => ({
+  padding: "0.2rem 0.55rem",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  color: attention ? "#8a5a00" : pageColorTokens.brandGreenDark,
+  background: attention ? "#fff7e0" : pageColorTokens.brandGreenLight,
+  border: `1px solid ${attention ? "rgba(185, 137, 0, 0.3)" : "rgba(0, 166, 124, 0.28)"}`,
 });
 
 const healthStateTokens: Record<

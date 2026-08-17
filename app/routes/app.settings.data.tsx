@@ -3,7 +3,10 @@ import { Form, useActionData, useLoaderData, useNavigation } from "react-router"
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   PageHeaderNav,
+  PageSectionHeader,
+  PageSurface,
   mobilePageContentStyle,
+  pageColorTokens,
   pageContentStyle,
 } from "./page/pageUiStyles";
 import { authenticate } from "../shopify.server";
@@ -74,6 +77,31 @@ export default function BackfillPage() {
   const findCheckpoint = (resource: string) =>
     checkpoints.find((c) => c.resource === resource);
 
+  const summaryItems = [
+    {
+      label: "订单",
+      value: counts.orderCount,
+      note: findCheckpoint("orders")?.lastSyncedAt
+        ? new Date(findCheckpoint("orders")!.lastSyncedAt).toLocaleString("zh-CN")
+        : "尚未同步",
+    },
+    {
+      label: "客户",
+      value: counts.customerCount,
+      note: "随订单同步",
+    },
+    {
+      label: "库存",
+      value: counts.inventoryCount,
+      note: "实时 Webhook",
+    },
+    {
+      label: "履约",
+      value: counts.fulfillmentCount,
+      note: "随订单同步",
+    },
+  ];
+
   return (
     <div
       style={{
@@ -89,54 +117,126 @@ export default function BackfillPage() {
         fallbackPath="/app/settings"
       />
 
-      <section>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>当前同步状态</h2>
-        <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
-          <thead>
-            <tr style={{ background: "#f5f5f5", textAlign: "left" }}>
-              <th style={{ padding: "8px 12px" }}>资源</th>
-              <th style={{ padding: "8px 12px" }}>记录数</th>
-              <th style={{ padding: "8px 12px" }}>最后同步</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>orders</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>{counts.orderCount}</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>
-                {findCheckpoint("orders")?.lastSyncedAt
-                  ? new Date(findCheckpoint("orders")!.lastSyncedAt).toLocaleString("zh-CN")
-                  : "—"}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>customers</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>{counts.customerCount}</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>随订单同步</td>
-            </tr>
-            <tr>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>inventory</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>{counts.inventoryCount}</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>实时 Webhook</td>
-            </tr>
-            <tr>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>fulfillments</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>{counts.fulfillmentCount}</td>
-              <td style={{ padding: "8px 12px", borderTop: "1px solid #eee" }}>随订单同步</td>
-            </tr>
-          </tbody>
-        </table>
+      <PageSurface>
+        <PageSectionHeader
+          title="当前同步状态"
+          subtitle="先确认本地镜像里已经有哪些数据，再决定是否需要做历史回补。"
+        />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+            gap: "0.75rem",
+          }}
+        >
+          {summaryItems.map((item) => (
+            <div
+              key={item.label}
+              style={{
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
+                background: pageColorTokens.surfaceMuted,
+                padding: "0.9rem 1rem",
+                display: "grid",
+                gap: "0.2rem",
+              }}
+            >
+              <span style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary }}>
+                {item.label}
+              </span>
+              <strong style={{ fontSize: "1.15rem", color: pageColorTokens.textPrimary }}>
+                {item.value}
+              </strong>
+              <span style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary }}>
+                {item.note}
+              </span>
+            </div>
+          ))}
         </div>
-      </section>
+        <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
+            <thead>
+              <tr
+                style={{
+                  background: pageColorTokens.surfaceMuted,
+                  textAlign: "left",
+                  color: pageColorTokens.textSecondary,
+                }}
+              >
+                <th style={{ padding: "10px 12px" }}>资源</th>
+                <th style={{ padding: "10px 12px" }}>记录数</th>
+                <th style={{ padding: "10px 12px" }}>最后同步</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  orders
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  {counts.orderCount}
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  {findCheckpoint("orders")?.lastSyncedAt
+                    ? new Date(findCheckpoint("orders")!.lastSyncedAt).toLocaleString("zh-CN")
+                    : "—"}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  customers
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  {counts.customerCount}
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  随订单同步
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  inventory
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  {counts.inventoryCount}
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  实时 Webhook
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  fulfillments
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  {counts.fulfillmentCount}
+                </td>
+                <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
+                  随订单同步
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </PageSurface>
 
-      <section>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>触发回补</h2>
-        <Form method="post">
+      <PageSurface>
+        <PageSectionHeader
+          title="触发回补"
+          subtitle="适用于首次接入或历史数据缺失场景。会补齐订单，并带上客户与退款数据。"
+        />
+        <Form method="post" style={{ display: "grid", gap: "1rem" }}>
           <input type="hidden" name="resource" value="orders" />
-          <div style={{ display: "flex", gap: 12, alignItems: isMobile ? "stretch" : "center", flexDirection: isMobile ? "column" : "row", marginBottom: 16 }}>
-            <label style={{ fontSize: 13 }}>
-              回溯天数：
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 220px) 1fr",
+              gap: "0.75rem",
+              alignItems: "end",
+            }}
+          >
+            <label style={{ display: "grid", gap: "0.35rem", fontSize: 13 }}>
+              <span style={{ color: pageColorTokens.textSecondary }}>回溯天数</span>
               <input
                 name="daysBack"
                 type="number"
@@ -144,43 +244,56 @@ export default function BackfillPage() {
                 min={1}
                 max={365}
                 style={{
-                  marginLeft: 8,
-                  padding: "4px 8px",
-                  border: "1px solid #ddd",
-                  borderRadius: 4,
-                  width: isMobile ? "100%" : 80,
+                  padding: "0.65rem 0.8rem",
+                  border: `1px solid ${pageColorTokens.border}`,
+                  borderRadius: pageColorTokens.radiusControl,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  fontSize: 14,
                 }}
               />
             </label>
+            <div
+              style={{
+                fontSize: "0.82rem",
+                color: pageColorTokens.textSecondary,
+                lineHeight: 1.5,
+              }}
+            >
+              默认回补近 90 天订单；如果是首次同步老店铺，可以按需要扩展到更长时间窗口。
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            style={{
-              padding: "8px 20px",
-              background: isSubmitting ? "#999" : "#1890ff",
-              color: "#fff",
-              border: "none",
-              borderRadius: 4,
-              cursor: isSubmitting ? "not-allowed" : "pointer",
-              fontSize: 13,
-              width: isMobile ? "100%" : "auto",
-            }}
-          >
-            {isSubmitting ? "同步中..." : "回补订单（含客户/退款）"}
-          </button>
+          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                padding: "0.7rem 1.1rem",
+                background: isSubmitting ? "#9aa5b1" : pageColorTokens.brandBlue,
+                color: "#fff",
+                border: "none",
+                borderRadius: pageColorTokens.radiusControl,
+                cursor: isSubmitting ? "not-allowed" : "pointer",
+                fontSize: 13,
+                width: isMobile ? "100%" : "auto",
+                minWidth: isMobile ? "100%" : 220,
+              }}
+            >
+              {isSubmitting ? "同步中..." : "回补订单（含客户/退款）"}
+            </button>
+          </div>
         </Form>
-      </section>
+      </PageSurface>
 
       {actionData && (
-        <section>
+        <PageSurface>
           {actionData.error ? (
             <div
               style={{
                 padding: "12px 16px",
                 background: "#fff2f0",
                 border: "1px solid #ffa39e",
-                borderRadius: 4,
+                borderRadius: pageColorTokens.radiusControl,
                 fontSize: 13,
                 color: "#cf1322",
               }}
@@ -193,7 +306,7 @@ export default function BackfillPage() {
                 padding: "12px 16px",
                 background: "#f6ffed",
                 border: "1px solid #b7eb8f",
-                borderRadius: 4,
+                borderRadius: pageColorTokens.radiusControl,
                 fontSize: 13,
               }}
             >
@@ -205,7 +318,7 @@ export default function BackfillPage() {
               </ul>
             </div>
           ) : null}
-        </section>
+        </PageSurface>
       )}
     </div>
   );

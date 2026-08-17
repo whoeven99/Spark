@@ -101,6 +101,15 @@ export const pageContentStyle: CSSProperties = {
 };
 
 /**
+ * 分析页会承载更宽的筛选条、指标卡和宽表，因此单独放宽内容区上限。
+ * 仍然保持居中，避免回到左贴边体验。
+ */
+export const analysisPageContentStyle: CSSProperties = {
+  ...pageContentStyle,
+  maxWidth: "1440px",
+};
+
+/**
  * 移动端变体。部分调用方写成 `isMobile ? mobile : desktop` 的整体替换，
  * 因此这里必须自带 flex 布局，不能只放差异字段。
  */

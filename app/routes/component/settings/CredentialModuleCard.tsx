@@ -22,15 +22,21 @@ type StatusResponse = {
 
 export function CredentialModuleCard({
   title,
+  description,
   endpoint,
   fields,
   primaryMaskKey,
+  saveLabel,
+  statusSummary,
 }: {
   title: string;
+  description?: string;
   endpoint: string;
   fields: CredentialField[];
   /** GET 响应里用于展示的脱敏字段名（如 clientIdMasked） */
   primaryMaskKey?: string;
+  saveLabel?: string;
+  statusSummary?: (status: StatusResponse | null) => string | null;
 }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -91,6 +97,7 @@ export function CredentialModuleCard({
   const updatedAt = status?.updatedAt ? String(status.updatedAt) : "";
   const maskedPrimary =
     primaryMaskKey && status ? String((status[primaryMaskKey] as string) ?? "") : "";
+  const summary = statusSummary?.(status) ?? null;
 
   return (
     <div
@@ -101,30 +108,64 @@ export function CredentialModuleCard({
         padding: "1rem 1.1rem",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.75rem" }}>
-        <span style={{ fontSize: "0.95rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
-          {title}
-        </span>
-        <span
-          style={{
-            fontSize: "0.72rem",
-            padding: "0.1rem 0.5rem",
-            borderRadius: 999,
-            background: configured ? "rgba(0,128,96,0.1)" : "rgba(140,145,150,0.12)",
-            color: configured ? "#008060" : pageColorTokens.textSecondary,
-          }}
-        >
-          {configured ? t("settingsShell.credConfigured") : t("settingsShell.credNotConfigured")}
-        </span>
-        {configured && maskedPrimary ? (
-          <span style={{ fontSize: "0.78rem", color: pageColorTokens.textSecondary }}>
-            {maskedPrimary}
+      <div style={{ display: "grid", gap: "0.45rem", marginBottom: "0.9rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.95rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
+            {title}
           </span>
+          <span
+            style={{
+              fontSize: "0.72rem",
+              padding: "0.1rem 0.5rem",
+              borderRadius: 999,
+              background: configured ? "rgba(0,128,96,0.1)" : "rgba(140,145,150,0.12)",
+              color: configured ? "#008060" : pageColorTokens.textSecondary,
+            }}
+          >
+            {configured ? t("settingsShell.credConfigured") : t("settingsShell.credNotConfigured")}
+          </span>
+          {configured && updatedAt ? (
+            <span style={{ fontSize: "0.72rem", color: pageColorTokens.textSecondary, marginLeft: "auto" }}>
+              {t("settingsShell.credUpdatedAt")}：{new Date(updatedAt).toLocaleDateString()}
+            </span>
+          ) : null}
+        </div>
+        {description ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.82rem",
+              lineHeight: 1.5,
+              color: pageColorTokens.textSecondary,
+            }}
+          >
+            {description}
+          </p>
         ) : null}
-        {configured && updatedAt ? (
-          <span style={{ fontSize: "0.72rem", color: pageColorTokens.textSecondary, marginLeft: "auto" }}>
-            {t("settingsShell.credUpdatedAt")}：{new Date(updatedAt).toLocaleDateString()}
-          </span>
+        {configured && (maskedPrimary || summary) ? (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.55rem",
+              alignItems: "center",
+              fontSize: "0.78rem",
+              color: pageColorTokens.textSecondary,
+            }}
+          >
+            {maskedPrimary ? (
+              <span
+                style={{
+                  padding: "0.22rem 0.5rem",
+                  borderRadius: 999,
+                  background: pageColorTokens.surfaceMuted,
+                }}
+              >
+                {maskedPrimary}
+              </span>
+            ) : null}
+            {summary ? <span>{summary}</span> : null}
+          </div>
         ) : null}
       </div>
 
@@ -169,7 +210,7 @@ export function CredentialModuleCard({
             cursor: saving ? "not-allowed" : "pointer",
           }}
         >
-          {saving ? t("settingsShell.credSaving") : t("settingsShell.credSave")}
+          {saving ? t("settingsShell.credSaving") : saveLabel ?? t("settingsShell.credSave")}
         </button>
         {result ? (
           <span style={{ fontSize: "0.8rem", color: result.ok ? "#008060" : "#d72c0d" }}>

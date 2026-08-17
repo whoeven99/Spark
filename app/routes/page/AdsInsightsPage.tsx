@@ -3,10 +3,13 @@ import { Link, useFetcher, useLoaderData, useLocation, useSearchParams } from "r
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
+  analysisPageContentStyle,
   PageHeaderNav,
+  PageMetricCard,
+  PageSectionHeader,
+  PageSurface,
   mobilePageContentStyle,
   pageColorTokens,
-  pageContentStyle,
   pageHintTextStyle,
 } from "./pageUiStyles";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
@@ -23,11 +26,14 @@ import {
 import type {
   AdsInsightsApiError,
   AdsInsightsApiOk,
+  AdsInsightsCampaign,
+  AdsInsightsMetrics,
   AdsInsightsPlatform,
   AdsInsightsRangeDays,
   AdsInsightsView,
 } from "../component/adsInsights/types";
 import type { AdsInsightsPageLoaderData } from "../app.insights.performance";
+import { formatCurrency, formatNumber, formatRoas } from "../component/adsInsights/metricsFormat";
 
 type InsightsFetcherData = AdsInsightsApiOk | AdsInsightsApiError;
 type TiktokSandboxObjectDetailFE = {
@@ -62,6 +68,99 @@ type SeedFetcherData =
 function parseView(raw: string | null): AdsInsightsView {
   if (raw === "keywords" || raw === "searchTerms" || raw === "creatives") return raw;
   return "structure";
+}
+
+function emptySummaryMetrics(): AdsInsightsMetrics {
+  return {
+    impressions: 0,
+    clicks: 0,
+    spend: 0,
+    ctr: 0,
+    cpc: 0,
+    cpm: null,
+    conversions: 0,
+    conversionsValue: 0,
+    conversionRate: 0,
+    roas: null,
+    purchases: null,
+    purchaseValue: null,
+    addToCart: null,
+    landingPageViews: null,
+    reach: null,
+    frequency: null,
+    outboundClicks: null,
+    videoViews: null,
+    thruplay: null,
+    leads: null,
+    viewContent: null,
+    initiateCheckout: null,
+    allConversions: null,
+  };
+}
+
+function summarizeCampaigns(campaigns: AdsInsightsCampaign[]): AdsInsightsMetrics {
+  const summary = emptySummaryMetrics();
+
+  for (const campaign of campaigns) {
+    const metrics = campaign.metrics;
+    summary.impressions += metrics.impressions;
+    summary.clicks += metrics.clicks;
+    summary.spend += metrics.spend;
+    summary.conversions += metrics.conversions;
+    summary.conversionsValue += metrics.conversionsValue;
+  }
+
+  summary.ctr = summary.impressions > 0 ? summary.clicks / summary.impressions : 0;
+  summary.cpc = summary.clicks > 0 ? summary.spend / summary.clicks : 0;
+  summary.conversionRate = summary.clicks > 0 ? summary.conversions / summary.clicks : 0;
+  summary.roas = summary.spend > 0 ? summary.conversionsValue / summary.spend : null;
+
+  return summary;
+}
+
+function ConnectionStatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "connected" | "pending" | "inactive";
+}) {
+  const toneStyle =
+    tone === "connected"
+      ? {
+          color: pageColorTokens.brandGreenDeep,
+          background: pageColorTokens.brandGreenLight,
+          borderColor: pageColorTokens.brandGreenGlow,
+        }
+      : tone === "pending"
+        ? {
+            color: pageColorTokens.warning,
+            background: pageColorTokens.warningBg,
+            borderColor: "rgba(185, 137, 0, 0.18)",
+          }
+        : {
+            color: pageColorTokens.textSecondary,
+            background: pageColorTokens.surfaceMuted,
+            borderColor: pageColorTokens.border,
+          };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "0.3rem 0.75rem",
+        borderRadius: "999px",
+        fontSize: "0.8rem",
+        fontWeight: 700,
+        border: `1px solid ${toneStyle.borderColor}`,
+        color: toneStyle.color,
+        background: toneStyle.background,
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function AdsInsightsPage() {
@@ -324,9 +423,45 @@ export function AdsInsightsPage() {
     okData?.accountName && okData.accountName.trim()
       ? `${okData.accountName} (${okData.accountId})`
       : okData?.accountId ?? "";
+  const platformLabel =
+    platform === "google"
+      ? t("adsInsights.tabGoogle")
+      : platform === "tiktok"
+        ? t("adsInsights.tabTiktok")
+        : t("adsInsights.tabMeta");
+  const viewLabel =
+    view === "keywords"
+      ? t("adsInsights.viewKeywords")
+      : view === "searchTerms"
+        ? t("adsInsights.viewSearchTerms")
+        : view === "creatives"
+          ? t("adsInsights.viewCreatives")
+          : t("adsInsights.viewStructure");
+  const sandboxActive =
+    (platform === "meta" && metaSandbox) ||
+    (platform === "google" && googleSandbox) ||
+    (platform === "tiktok" && tiktokSandbox);
+  const overviewStatus = connected
+    ? t("settingsShell.statusConnected")
+    : loading
+      ? t("settingsShell.statusPending")
+      : t("settingsShell.statusNeedsSetup");
+  const overviewTone = connected ? "connected" : loading ? "pending" : "inactive";
+  const summaryMetrics = summarizeCampaigns(displayCampaigns);
+  const overviewFooter = okData
+    ? t("adsInsights.overviewFooter", {
+        mode: sandboxActive ? t("adsInsights.modeSandbox") : t("adsInsights.modeLive"),
+        account: accountLabel || t("adsInsights.overviewNoAccount"),
+        start: okData.dateStart,
+        end: okData.dateEnd,
+      })
+    : t("adsInsights.overviewWaiting", {
+        platform: platformLabel,
+        mode: sandboxActive ? t("adsInsights.modeSandbox") : t("adsInsights.modeLive"),
+      });
 
   return (
-    <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
+    <div style={isMobile ? mobilePageContentStyle : analysisPageContentStyle}>
       <PageHeaderNav
         title={t("adsInsights.pageTitle")}
         subtitle={t("adsInsights.pageSubtitle")}
@@ -334,462 +469,478 @@ export function AdsInsightsPage() {
         fallbackPath="/app/settings"
       />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
-        <SegmentedPageTabs
-          activeTab={platform}
-          items={tabs}
-          onTabChange={setPlatform}
-          ariaLabel={t("adsInsights.platformTabsAria")}
-          mobileFullWidth={isMobile}
+      <PageSurface>
+        <PageSectionHeader
+          title={t("adsInsights.overviewTitle")}
+          subtitle={t("adsInsights.overviewSubtitle")}
+          badge={<ConnectionStatusBadge label={overviewStatus} tone={overviewTone} />}
+        />
+        <PageMetricCard
+          metrics={[
+            { label: t("adsInsights.overviewStatus"), value: overviewStatus },
+            { label: t("adsInsights.overviewCampaigns"), value: formatNumber(displayCampaigns.length) },
+            { label: t("adsInsights.overviewSpend"), value: formatCurrency(summaryMetrics.spend, okData?.currencyCode ?? null) },
+            { label: t("adsInsights.overviewRoas"), value: formatRoas(summaryMetrics.roas) },
+          ]}
+          footer={<span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>{overviewFooter}</span>}
+        />
+      </PageSurface>
+
+      <PageSurface>
+        <PageSectionHeader
+          title={t("adsInsights.controlsTitle")}
+          subtitle={t("adsInsights.controlsSubtitle")}
+          badge={
+            <ConnectionStatusBadge
+              label={sandboxActive ? t("adsInsights.modeSandbox") : t("adsInsights.modeLive")}
+              tone={sandboxActive ? "pending" : "connected"}
+            />
+          }
         />
 
-        {platform === "meta" && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              background: metaSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: metaSandboxConfigured ? "pointer" : "not-allowed",
-                opacity: metaSandboxConfigured ? 1 : 0.6,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={metaSandbox}
-                disabled={!metaSandboxConfigured}
-                onChange={(e) => setMetaSandbox(e.target.checked)}
-              />
-              {t("adsInsights.metaSandboxToggle")}
-            </label>
-            <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
-              {metaSandboxConfigured
-                ? t("adsInsights.metaSandboxHint")
-                : t("adsInsights.metaSandboxNotConfigured")}
-            </div>
-            {metaSandbox && metaSandboxConfigured && (
-              <button
-                type="button"
-                disabled={seeding}
-                onClick={() => {
-                  seedFetcher.submit(
-                    {},
-                    {
-                      method: "POST",
-                      action: `/api/ads-insights/meta-sandbox-seed${locationSearch}`,
-                    },
-                  );
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  background: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: seeding ? "wait" : "pointer",
-                }}
-              >
-                {seeding ? t("adsInsights.metaSandboxSeeding") : t("adsInsights.metaSandboxSeed")}
-              </button>
-            )}
-          </div>
-        )}
-
-        {platform === "google" && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              background: googleSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={googleSandbox}
-                onChange={(e) => setGoogleSandbox(e.target.checked)}
-              />
-              {t("adsInsights.googleSandboxToggle")}
-            </label>
-            <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
-              {t("adsInsights.googleSandboxHint")}
-            </div>
-            {googleSandbox && connections.google.sandboxConnected && (
-              <button
-                type="button"
-                disabled={seeding}
-                onClick={() => {
-                  seedFetcher.submit(
-                    {},
-                    {
-                      method: "POST",
-                      action: `/api/ads-insights/google-sandbox-seed${locationSearch}`,
-                    },
-                  );
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  background: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: seeding ? "wait" : "pointer",
-                }}
-              >
-                {seeding ? t("adsInsights.googleSandboxSeeding") : t("adsInsights.googleSandboxSeed")}
-              </button>
-            )}
-          </div>
-        )}
-
-        {platform === "google" && googleSandbox && (
-          <GoogleAdsSandboxConnectPanel
-            connected={connections.google.sandboxConnected}
-            customerId={connections.google.sandboxCustomerId}
-            customerName={connections.google.sandboxCustomerName}
-            pendingAccounts={connections.google.sandboxPendingAccounts}
-            locationSearch={locationSearch}
-            onChanged={loadMetrics}
-          />
-        )}
-
-        {platform === "tiktok" && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              background: tiktokSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: sandboxConfigured ? "pointer" : "not-allowed",
-                opacity: sandboxConfigured ? 1 : 0.6,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={tiktokSandbox}
-                disabled={!sandboxConfigured}
-                onChange={(e) => setTiktokSandbox(e.target.checked)}
-              />
-              {t("adsInsights.tiktokSandboxToggle")}
-            </label>
-            <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
-              {sandboxConfigured
-                ? t("adsInsights.tiktokSandboxHint")
-                : t("adsInsights.tiktokSandboxNotConfigured")}
-            </div>
-            {tiktokSandbox && sandboxConfigured && (
-              <button
-                type="button"
-                disabled={seeding}
-                onClick={() => {
-                  seedFetcher.submit(
-                    {},
-                    {
-                      method: "POST",
-                      action: `/api/ads-insights/tiktok-sandbox-seed${locationSearch}`,
-                    },
-                  );
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  background: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: seeding ? "wait" : "pointer",
-                }}
-              >
-                {seeding ? t("adsInsights.tiktokSandboxSeeding") : t("adsInsights.tiktokSandboxSeed")}
-              </button>
-            )}
-          </div>
-        )}
-
-        {seedData && (metaSandbox || tiktokSandbox || googleSandbox) && (
-          <div
-            style={{
-              ...hintBoxStyle,
-              background: seedData.ok ? "#eefbf2" : "#fff0ee",
-              color: seedData.ok ? "#0b7a3b" : "#d82c0d",
-            }}
-          >
-            {seedData.ok ? (
-              <>
-                <div>
-                  {googleSandbox
-                    ? t("adsInsights.googleSandboxSeedOk", {
-                        campaign: seedData.campaignName,
-                        campaignId: seedData.campaignId || "—",
-                        adGroupId: seedData.adGroupId || seedData.adgroupId || "—",
-                        adId: seedData.adId || "—",
-                        keywordId: seedData.keywordId || "—",
-                      })
-                    : metaSandbox
-                      ? t("adsInsights.metaSandboxSeedOk", {
-                          campaign: seedData.campaignName,
-                          strategy: seedData.strategyLabel || seedData.strategy || "—",
-                          campaignId: seedData.campaignId || "—",
-                          adSetId: seedData.adSetId || seedData.adgroupId || seedData.adGroupId || "—",
-                          adId: seedData.adId || "—",
-                        })
-                    : t("adsInsights.tiktokSandboxSeedOk", {
-                        campaign: seedData.campaignName,
-                        campaignId: seedData.campaignId || "—",
-                        adgroupId: seedData.adgroupId || seedData.adGroupId || "—",
-                        adId: seedData.adId || "—",
-                      })}
-                </div>
-                {tiktokSandbox && seedData.readback && (
-                  <TiktokSandboxReadbackPanel readback={seedData.readback} />
-                )}
-                {seedData.warnings?.length > 0 && (
-                  <div style={{ color: pageColorTokens.textSecondary }}>
-                    {seedData.warnings.join(" · ")}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div>
-                {seedData.message ||
-                  (googleSandbox
-                    ? t("adsInsights.googleSandboxSeedError")
-                    : metaSandbox
-                      ? t("adsInsights.metaSandboxSeedError")
-                      : t("adsInsights.tiktokSandboxSeedError"))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <SegmentedPageTabs
-            activeTab={String(rangeDays) as "7" | "14" | "30"}
-            items={ranges.map((r) => ({ key: String(r.key) as "7" | "14" | "30", label: r.label }))}
-            onTabChange={(key) => setRangeDays(Number(key) as AdsInsightsRangeDays)}
-            ariaLabel={t("adsInsights.rangeTabsAria")}
-            density="compact"
+            activeTab={platform}
+            items={tabs}
+            onTabChange={setPlatform}
+            ariaLabel={t("adsInsights.platformTabsAria")}
+            mobileFullWidth={isMobile}
           />
-          <button
-            type="button"
-            onClick={loadMetrics}
-            disabled={loading || !connected}
-            style={{
-              padding: "8px 14px",
-              borderRadius: 8,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              background: "#fff",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: loading ? "wait" : "pointer",
-            }}
-          >
-            {loading ? t("adsInsights.refreshing") : t("adsInsights.refresh")}
-          </button>
-        </div>
 
-        <SegmentedPageTabs
-          activeTab={view}
-          items={viewTabs
-            .filter((item) => !item.disabled)
-            .map(({ key, label }) => ({ key, label }))}
-          onTabChange={setView}
-          ariaLabel={t("adsInsights.viewTabsAria")}
-          density="compact"
-          mobileFullWidth={isMobile}
-        />
-
-        {platform === "tiktok" && tiktokSandbox && (
-          <TiktokSandboxMetricsOverridePanel
-            value={customMetrics}
-            onChange={setCustomMetrics}
-            hasData={(okData?.campaigns?.length ?? 0) > 0}
-          />
-        )}
-
-        {platform === "meta" && !metaSandbox && (
-          <MetaAdsConnectPanel
-            connected={connections.meta.connected}
-            adAccountId={connections.meta.adAccountId}
-            adAccountName={connections.meta.adAccountName}
-            pendingAccounts={connections.meta.pendingAccounts}
-            availableAccounts={connections.meta.availableAccounts}
-            locationSearch={locationSearch}
-            onChanged={loadMetrics}
-          />
-        )}
-
-        {platform === "google" && !googleSandbox && !connections.google.connected && (
-          <div style={hintBoxStyle}>
-            <div>{t("adsInsights.googleNotConnected")}</div>
-            <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
-              {t("adsInsights.goAdsCatalog")}
-            </Link>
-          </div>
-        )}
-
-        {platform === "tiktok" && !tiktokSandbox && !connections.tiktok.connected && (
-          <div style={hintBoxStyle}>
-            <div>{t("adsInsights.tiktokNotConnected")}</div>
-            <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
-              {t("adsInsights.goAdsCatalog")}
-            </Link>
-          </div>
-        )}
-
-        {platform === "tiktok" &&
-          !tiktokSandbox &&
-          connections.tiktok.connected &&
-          connections.tiktok.awaitingCatalog && (
-            <div style={{ ...hintBoxStyle, borderColor: "#d4e8dc", background: "#f4fbf7" }}>
-              <div>{t("adsInsights.tiktokAwaitingCatalogHint")}</div>
+          {platform === "meta" && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                background: metaSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: metaSandboxConfigured ? "pointer" : "not-allowed",
+                  opacity: metaSandboxConfigured ? 1 : 0.6,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={metaSandbox}
+                  disabled={!metaSandboxConfigured}
+                  onChange={(e) => setMetaSandbox(e.target.checked)}
+                />
+                {t("adsInsights.metaSandboxToggle")}
+              </label>
+              <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
+                {metaSandboxConfigured
+                  ? t("adsInsights.metaSandboxHint")
+                  : t("adsInsights.metaSandboxNotConfigured")}
+              </div>
+              {metaSandbox && metaSandboxConfigured && (
+                <button
+                  type="button"
+                  disabled={seeding}
+                  onClick={() => {
+                    seedFetcher.submit(
+                      {},
+                      {
+                        method: "POST",
+                        action: `/api/ads-insights/meta-sandbox-seed${locationSearch}`,
+                      },
+                    );
+                  }}
+                  style={secondaryActionStyle(seeding)}
+                >
+                  {seeding ? t("adsInsights.metaSandboxSeeding") : t("adsInsights.metaSandboxSeed")}
+                </button>
+              )}
             </div>
           )}
 
-        {okData && (
-          <div
-            style={{
-              border: `1px solid ${pageColorTokens.border}`,
-              borderRadius: pageColorTokens.radiusCard,
-              background: pageColorTokens.surface,
-              overflow: "hidden",
-            }}
-          >
+          {platform === "google" && (
             <div
               style={{
-                padding: "12px 16px",
-                borderBottom: `1px solid ${pageColorTokens.border}`,
                 display: "flex",
                 flexWrap: "wrap",
-                gap: 8,
-                justifyContent: "space-between",
+                gap: 12,
                 alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                background: googleSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
               }}
             >
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>
-                  {okData.sandbox
-                    ? platform === "google"
-                      ? t("adsInsights.tableTitleGoogleSandbox", { accountId: accountLabel })
-                      : platform === "meta"
-                        ? t("adsInsights.tableTitleMetaSandbox", { accountId: accountLabel })
-                      : t("adsInsights.tableTitleSandbox", { accountId: accountLabel })
-                    : t("adsInsights.tableTitle", { accountId: accountLabel })}
-                </div>
-                <div style={pageHintTextStyle}>
-                  {okData.sandbox
-                    ? platform === "google"
-                      ? t("adsInsights.tableSubtitleGoogleSandbox", {
-                          start: okData.dateStart,
-                          end: okData.dateEnd,
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={googleSandbox}
+                  onChange={(e) => setGoogleSandbox(e.target.checked)}
+                />
+                {t("adsInsights.googleSandboxToggle")}
+              </label>
+              <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
+                {t("adsInsights.googleSandboxHint")}
+              </div>
+              {googleSandbox && connections.google.sandboxConnected && (
+                <button
+                  type="button"
+                  disabled={seeding}
+                  onClick={() => {
+                    seedFetcher.submit(
+                      {},
+                      {
+                        method: "POST",
+                        action: `/api/ads-insights/google-sandbox-seed${locationSearch}`,
+                      },
+                    );
+                  }}
+                  style={secondaryActionStyle(seeding)}
+                >
+                  {seeding ? t("adsInsights.googleSandboxSeeding") : t("adsInsights.googleSandboxSeed")}
+                </button>
+              )}
+            </div>
+          )}
+
+          {platform === "google" && googleSandbox && (
+            <GoogleAdsSandboxConnectPanel
+              connected={connections.google.sandboxConnected}
+              customerId={connections.google.sandboxCustomerId}
+              customerName={connections.google.sandboxCustomerName}
+              pendingAccounts={connections.google.sandboxPendingAccounts}
+              locationSearch={locationSearch}
+              onChanged={loadMetrics}
+            />
+          )}
+
+          {platform === "tiktok" && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                background: tiktokSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: sandboxConfigured ? "pointer" : "not-allowed",
+                  opacity: sandboxConfigured ? 1 : 0.6,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={tiktokSandbox}
+                  disabled={!sandboxConfigured}
+                  onChange={(e) => setTiktokSandbox(e.target.checked)}
+                />
+                {t("adsInsights.tiktokSandboxToggle")}
+              </label>
+              <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
+                {sandboxConfigured
+                  ? t("adsInsights.tiktokSandboxHint")
+                  : t("adsInsights.tiktokSandboxNotConfigured")}
+              </div>
+              {tiktokSandbox && sandboxConfigured && (
+                <button
+                  type="button"
+                  disabled={seeding}
+                  onClick={() => {
+                    seedFetcher.submit(
+                      {},
+                      {
+                        method: "POST",
+                        action: `/api/ads-insights/tiktok-sandbox-seed${locationSearch}`,
+                      },
+                    );
+                  }}
+                  style={secondaryActionStyle(seeding)}
+                >
+                  {seeding ? t("adsInsights.tiktokSandboxSeeding") : t("adsInsights.tiktokSandboxSeed")}
+                </button>
+              )}
+            </div>
+          )}
+
+          {seedData && (metaSandbox || tiktokSandbox || googleSandbox) && (
+            <div
+              style={{
+                ...hintBoxStyle,
+                background: seedData.ok ? "#eefbf2" : "#fff0ee",
+                color: seedData.ok ? "#0b7a3b" : "#d82c0d",
+              }}
+            >
+              {seedData.ok ? (
+                <>
+                  <div>
+                    {googleSandbox
+                      ? t("adsInsights.googleSandboxSeedOk", {
+                          campaign: seedData.campaignName,
+                          campaignId: seedData.campaignId || "—",
+                          adGroupId: seedData.adGroupId || seedData.adgroupId || "—",
+                          adId: seedData.adId || "—",
+                          keywordId: seedData.keywordId || "—",
                         })
-                      : platform === "meta"
-                        ? t("adsInsights.tableSubtitleMetaSandbox", {
+                      : metaSandbox
+                        ? t("adsInsights.metaSandboxSeedOk", {
+                            campaign: seedData.campaignName,
+                            strategy: seedData.strategyLabel || seedData.strategy || "—",
+                            campaignId: seedData.campaignId || "—",
+                            adSetId: seedData.adSetId || seedData.adgroupId || seedData.adGroupId || "—",
+                            adId: seedData.adId || "—",
+                          })
+                      : t("adsInsights.tiktokSandboxSeedOk", {
+                          campaign: seedData.campaignName,
+                          campaignId: seedData.campaignId || "—",
+                          adgroupId: seedData.adgroupId || seedData.adGroupId || "—",
+                          adId: seedData.adId || "—",
+                        })}
+                  </div>
+                  {tiktokSandbox && seedData.readback && (
+                    <TiktokSandboxReadbackPanel readback={seedData.readback} />
+                  )}
+                  {seedData.warnings?.length > 0 && (
+                    <div style={{ color: pageColorTokens.textSecondary }}>
+                      {seedData.warnings.join(" · ")}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div>
+                  {seedData.message ||
+                    (googleSandbox
+                      ? t("adsInsights.googleSandboxSeedError")
+                      : metaSandbox
+                        ? t("adsInsights.metaSandboxSeedError")
+                        : t("adsInsights.tiktokSandboxSeedError"))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <SegmentedPageTabs
+              activeTab={String(rangeDays) as "7" | "14" | "30"}
+              items={ranges.map((r) => ({ key: String(r.key) as "7" | "14" | "30", label: r.label }))}
+              onTabChange={(key) => setRangeDays(Number(key) as AdsInsightsRangeDays)}
+              ariaLabel={t("adsInsights.rangeTabsAria")}
+              density="compact"
+            />
+            <button
+              type="button"
+              onClick={loadMetrics}
+              disabled={loading || !connected}
+              style={secondaryActionStyle(loading)}
+            >
+              {loading ? t("adsInsights.refreshing") : t("adsInsights.refresh")}
+            </button>
+          </div>
+
+          <SegmentedPageTabs
+            activeTab={view}
+            items={viewTabs
+              .filter((item) => !item.disabled)
+              .map(({ key, label }) => ({ key, label }))}
+            onTabChange={setView}
+            ariaLabel={t("adsInsights.viewTabsAria")}
+            density="compact"
+            mobileFullWidth={isMobile}
+          />
+
+          {platform === "tiktok" && tiktokSandbox && (
+            <TiktokSandboxMetricsOverridePanel
+              value={customMetrics}
+              onChange={setCustomMetrics}
+              hasData={(okData?.campaigns?.length ?? 0) > 0}
+            />
+          )}
+
+          {platform === "meta" && !metaSandbox && (
+            <MetaAdsConnectPanel
+              connected={connections.meta.connected}
+              adAccountId={connections.meta.adAccountId}
+              adAccountName={connections.meta.adAccountName}
+              pendingAccounts={connections.meta.pendingAccounts}
+              availableAccounts={connections.meta.availableAccounts}
+              locationSearch={locationSearch}
+              onChanged={loadMetrics}
+            />
+          )}
+        </div>
+      </PageSurface>
+
+      <PageSurface>
+        <PageSectionHeader
+          title={t("adsInsights.resultsTitle")}
+          subtitle={
+            okData
+              ? t("adsInsights.resultsSubtitle", {
+                  platform: platformLabel,
+                  view: viewLabel,
+                  start: okData.dateStart,
+                  end: okData.dateEnd,
+                })
+              : t("adsInsights.resultsWaiting", { platform: platformLabel, view: viewLabel })
+          }
+        />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {platform === "google" && !googleSandbox && !connections.google.connected && (
+            <div style={hintBoxStyle}>
+              <div>{t("adsInsights.googleNotConnected")}</div>
+              <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
+                {t("adsInsights.goAdsCatalog")}
+              </Link>
+            </div>
+          )}
+
+          {platform === "tiktok" && !tiktokSandbox && !connections.tiktok.connected && (
+            <div style={hintBoxStyle}>
+              <div>{t("adsInsights.tiktokNotConnected")}</div>
+              <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
+                {t("adsInsights.goAdsCatalog")}
+              </Link>
+            </div>
+          )}
+
+          {platform === "tiktok" &&
+            !tiktokSandbox &&
+            connections.tiktok.connected &&
+            connections.tiktok.awaitingCatalog && (
+              <div style={{ ...hintBoxStyle, borderColor: "#d4e8dc", background: "#f4fbf7" }}>
+                <div>{t("adsInsights.tiktokAwaitingCatalogHint")}</div>
+              </div>
+            )}
+
+          {okData && (
+            <div
+              style={{
+                border: `1px solid ${pageColorTokens.border}`,
+                borderRadius: pageColorTokens.radiusCard,
+                background: pageColorTokens.surface,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderBottom: `1px solid ${pageColorTokens.border}`,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>
+                    {okData.sandbox
+                      ? platform === "google"
+                        ? t("adsInsights.tableTitleGoogleSandbox", { accountId: accountLabel })
+                        : platform === "meta"
+                          ? t("adsInsights.tableTitleMetaSandbox", { accountId: accountLabel })
+                          : t("adsInsights.tableTitleSandbox", { accountId: accountLabel })
+                      : t("adsInsights.tableTitle", { accountId: accountLabel })}
+                  </div>
+                  <div style={pageHintTextStyle}>
+                    {okData.sandbox
+                      ? platform === "google"
+                        ? t("adsInsights.tableSubtitleGoogleSandbox", {
                             start: okData.dateStart,
                             end: okData.dateEnd,
                           })
-                      : t("adsInsights.tableSubtitleSandbox", {
+                        : platform === "meta"
+                          ? t("adsInsights.tableSubtitleMetaSandbox", {
+                              start: okData.dateStart,
+                              end: okData.dateEnd,
+                            })
+                          : t("adsInsights.tableSubtitleSandbox", {
+                              start: okData.dateStart,
+                              end: okData.dateEnd,
+                            })
+                      : t("adsInsights.tableSubtitle", {
                           start: okData.dateStart,
                           end: okData.dateEnd,
-                        })
-                    : t("adsInsights.tableSubtitle", {
-                        start: okData.dateStart,
-                        end: okData.dateEnd,
-                      })}
+                        })}
+                  </div>
                 </div>
               </div>
-            </div>
-            {view === "structure" ? (
-              platform === "tiktok" ? (
-                <TiktokAdsLevelView
-                  campaigns={displayCampaigns}
-                  currencyCode={okData.currencyCode}
-                />
+              {view === "structure" ? (
+                platform === "tiktok" ? (
+                  <TiktokAdsLevelView
+                    campaigns={displayCampaigns}
+                    currencyCode={okData.currencyCode}
+                  />
+                ) : (
+                  <AdsInsightsTreeTable
+                    campaigns={displayCampaigns}
+                    currencyCode={okData.currencyCode}
+                  />
+                )
               ) : (
-                <AdsInsightsTreeTable
-                  campaigns={displayCampaigns}
+                <AdsInsightsDeepTable
+                  view={view}
+                  rows={deepRows}
                   currencyCode={okData.currencyCode}
                 />
-              )
-            ) : (
-              <AdsInsightsDeepTable
-                view={view}
-                rows={deepRows}
-                currencyCode={okData.currencyCode}
-              />
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {errData && connected && (
-          <div
-            style={{
-              ...hintBoxStyle,
-              background: "#fff0ee",
-              color: "#d82c0d",
-            }}
-          >
-            {errData.message || t("adsInsights.loadError")}
-          </div>
-        )}
+          {errData && connected && (
+            <div
+              style={{
+                ...hintBoxStyle,
+                background: "#fff0ee",
+                color: "#d82c0d",
+              }}
+            >
+              {errData.message || t("adsInsights.loadError")}
+            </div>
+          )}
 
-        {loading && !okData && connected && (
-          <div style={{ ...hintBoxStyle, textAlign: "center" }}>{t("adsInsights.loading")}</div>
-        )}
-      </div>
+          {loading && !okData && connected && (
+            <div style={{ ...hintBoxStyle, textAlign: "center" }}>{t("adsInsights.loading")}</div>
+          )}
+        </div>
+      </PageSurface>
     </div>
   );
 }
@@ -866,3 +1017,15 @@ const hintBoxStyle = {
   flexDirection: "column" as const,
   gap: 8,
 };
+
+function secondaryActionStyle(disabled: boolean) {
+  return {
+    padding: "8px 12px",
+    borderRadius: 8,
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    background: "#fff",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: disabled ? "wait" : "pointer",
+  };
+}

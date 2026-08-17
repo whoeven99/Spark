@@ -4,10 +4,12 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useTranslation } from "react-i18next";
 import {
+  analysisPageContentStyle,
   PageHeaderNav,
+  PageMetricCard,
+  PageSectionHeader,
   PageSurface,
   pageColorTokens,
-  pageContentStyle,
   pageFieldLabelStyle,
   pageHintTextStyle,
 } from "./pageUiStyles";
@@ -80,6 +82,42 @@ const buttonSecondary = {
   cursor: "pointer",
 };
 
+const sectionGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+  gap: 16,
+};
+
+const sectionTitleStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const sectionSubtitleStyle: CSSProperties = {
+  fontSize: 13,
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
+};
+
+const statusRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  alignItems: "center",
+};
+
+const statusBadgeBaseStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 10px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  lineHeight: 1,
+};
+
 const DEFAULT_FILTERS: GoogleFiltersValue = {
   tags: "",
   productTypes: "",
@@ -144,6 +182,31 @@ interface GoogleStatusData {
     state: "not_linked" | "pending" | "linked" | "failed" | null;
     error?: string;
   };
+}
+
+function ConnectionStatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "connected" | "pending" | "inactive";
+}) {
+  const styleByTone: Record<"connected" | "pending" | "inactive", CSSProperties> = {
+    connected: {
+      background: pageColorTokens.brandGreenLight,
+      color: pageColorTokens.brandGreenDeep,
+    },
+    pending: {
+      background: pageColorTokens.surfaceMuted,
+      color: pageColorTokens.textPrimary,
+    },
+    inactive: {
+      background: pageColorTokens.criticalBg,
+      color: pageColorTokens.criticalText,
+    },
+  };
+
+  return <span style={{ ...statusBadgeBaseStyle, ...styleByTone[tone] }}>{label}</span>;
 }
 
 export function AdsCatalogPage() {
@@ -257,6 +320,16 @@ export function AdsCatalogPage() {
     reviewPlatform === "facebook"
       ? metaStatus?.lastCheckedAt ?? null
       : googleStatus?.lastCheckedAt ?? null;
+  const connectedChannelCount = [
+    credentials.googleMerchant.connected,
+    credentials.meta.connected,
+    credentials.tiktok.connected,
+  ].filter(Boolean).length;
+  const issueCount =
+    (accountSuspended ? 1 : 0) +
+    (metaAccountRestricted ? 1 : 0) +
+    (disapprovedCount > 0 ? 1 : 0) +
+    (metaDisapprovedCount > 0 ? 1 : 0);
 
   // Load GMC + Meta catalog status (suspension banner, ads link, review list) on mount.
   useEffect(() => {
@@ -284,7 +357,7 @@ export function AdsCatalogPage() {
       setTab(result.tab);
       revalidator.revalidate();
     },
-    [revalidator, t],
+    [revalidator, setTab, t],
   );
 
   useEffect(() => {
@@ -476,6 +549,72 @@ export function AdsCatalogPage() {
       : platform === "tiktok"
         ? credentials.tiktok.connected
         : credentials.googleMerchant.connected;
+  const selectedProductCount = productIds.length;
+  const currentTabLabel =
+    tab === "credentials"
+      ? t("adsCatalog.tabCredentials")
+      : tab === "tasks"
+        ? t("adsCatalog.tabTasks")
+        : t("adsCatalog.tabSync");
+  const currentPlatformLabel =
+    platform === "facebook"
+      ? t("adsCatalog.platformFacebook")
+      : platform === "tiktok"
+        ? t("adsCatalog.platformTiktok")
+        : t("adsCatalog.platformGoogle");
+  const syncStatusLabel = credentialReady
+    ? t("settingsShell.statusReady")
+    : t("settingsShell.statusNeedsSetup");
+  const syncStatusTone: "connected" | "inactive" = credentialReady ? "connected" : "inactive";
+  const productScopeLabel =
+    selectedProductCount > 0
+      ? t("adsCatalog.syncScopeSelected", { count: selectedProductCount })
+      : t("adsCatalog.syncScopeAll");
+  const syncSummaryHint =
+    platform === "tiktok" && credentials.tiktok.bindingMode === "shopify_official"
+      ? t("adsCatalog.syncSectionHintTiktokOfficial")
+      : platform === "tiktok" && credentials.tiktok.bindingMode === "api_managed"
+        ? t("adsCatalog.syncSectionHintTiktokApi")
+        : t("adsCatalog.syncSectionHint");
+  const previewStatusLabel =
+    previewError
+      ? t("adsCatalog.previewStateError")
+      : platform === "google" && previewPlatform === "google" && googleReport
+        ? t("adsCatalog.previewStateGoogle", {
+            count: googleReport.totalProducts,
+            errors: googleReport.hasErrors,
+            warnings: googleReport.hasWarnings,
+          })
+        : (platform === "facebook" || platform === "tiktok") &&
+            previewPlatform === platform &&
+            fbPreview &&
+            fbPreview.length > 0
+          ? t("adsCatalog.previewStateReady", { count: fbPreview.length })
+          : t("adsCatalog.previewStateEmpty");
+  const previewReady =
+    (platform === "google" && previewPlatform === "google" && Boolean(googleReport)) ||
+    ((platform === "facebook" || platform === "tiktok") &&
+      previewPlatform === platform &&
+      Boolean(fbPreview && fbPreview.length > 0));
+  const previewTone: "connected" | "pending" | "inactive" = previewError
+    ? "inactive"
+    : previewReady
+      ? "connected"
+      : "pending";
+  const previewFooter =
+    platform === "google"
+      ? t("adsCatalog.previewFooterGoogle")
+      : platform === "tiktok"
+        ? t("adsCatalog.previewFooterTiktok")
+        : t("adsCatalog.previewFooterDefault");
+  const overviewFooter = tab === "sync"
+    ? t("adsCatalog.overviewFooterSync", {
+        platform: currentPlatformLabel,
+        status: syncStatusLabel,
+      })
+    : tab === "credentials"
+      ? t("adsCatalog.overviewFooterCredentials")
+      : t("adsCatalog.overviewFooterTasks");
 
   function buildSyncBody(): AdsCatalogSyncRequestBody {
     const body: AdsCatalogSyncRequestBody = { platform, filters: { tags: [], productTypes: [], vendors: [], inStockOnly: false } };
@@ -647,7 +786,23 @@ export function AdsCatalogPage() {
         title={t("adsCatalog.pageTitle")}
         subtitle={t("adsCatalog.pageSubtitle")}
       />
-      <div style={pageContentStyle}>
+      <div style={analysisPageContentStyle}>
+        <PageSurface>
+          <PageSectionHeader
+            title={t("adsCatalog.overviewTitle")}
+            subtitle={t("adsCatalog.overviewSubtitle")}
+          />
+          <PageMetricCard
+            metrics={[
+              { label: t("adsCatalog.overviewCurrentTab"), value: currentTabLabel },
+              { label: t("adsCatalog.overviewConnectedChannels"), value: String(connectedChannelCount) },
+              { label: t("adsCatalog.overviewRunningTasks"), value: String(runningCount) },
+              { label: t("adsCatalog.overviewIssues"), value: String(issueCount) },
+            ]}
+            footer={<span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>{overviewFooter}</span>}
+          />
+        </PageSurface>
+
         {accountSuspended && (
           <div
             style={{
@@ -738,174 +893,220 @@ export function AdsCatalogPage() {
         />
 
         {tab === "sync" && (
-          <div style={sectionStyle}>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-              {t("adsCatalog.syncSectionTitle")}
-            </h2>
-            <p style={pageHintTextStyle}>
-              {platform === "tiktok" && credentials.tiktok.bindingMode === "shopify_official"
-                ? t("adsCatalog.syncSectionHintTiktokOfficial")
-                : platform === "tiktok" && credentials.tiktok.bindingMode === "api_managed"
-                  ? t("adsCatalog.syncSectionHintTiktokApi")
-                  : t("adsCatalog.syncSectionHint")}
-            </p>
-
-            <div>
-              <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldPlatform")}</label>
-              <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => setPlatform("google")}
-                  style={platform === "google" ? buttonPrimary : buttonSecondary}
-                >
-                  {t("adsCatalog.platformGoogle")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPlatform("facebook")}
-                  style={platform === "facebook" ? buttonPrimary : buttonSecondary}
-                >
-                  {t("adsCatalog.platformFacebook")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPlatform("tiktok")}
-                  style={platform === "tiktok" ? buttonPrimary : buttonSecondary}
-                >
-                  {t("adsCatalog.platformTiktok")}
-                </button>
-              </div>
-            </div>
-
-            {platform === "tiktok" && credentials.tiktok.connected && (
-              <>
-                <TiktokBoundCatalogInfo
-                  catalogId={credentials.tiktok.catalogId}
-                  catalogName={loaderData.boundTiktokCatalogName}
-                  bindingMode={credentials.tiktok.bindingMode}
-                  currency={loaderData.boundTiktokCatalogCurrency}
-                  regionCode={loaderData.boundTiktokCatalogRegion}
-                  channel={loaderData.boundTiktokCatalogChannel}
-                  locationSearch={locationSearch}
-                  inferredTiktokRegion={inferredTiktokRegion}
-                  catalogRegionCode={credentials.tiktok.catalogRegionCode}
-                  shopLabel={loaderData.shopDomain.split(".")[0]}
-                  onChanged={() => revalidator.revalidate()}
-                />
-                <TiktokCatalogPicker
-                  variant="sync"
-                  locationSearch={locationSearch}
-                  boundCatalogId={credentials.tiktok.catalogId}
-                  boundBindingMode={credentials.tiktok.bindingMode}
-                  boundChannel={loaderData.boundTiktokCatalogChannel}
-                  onChanged={() => revalidator.revalidate()}
-                />
-              </>
-            )}
-
-            <div>
-              <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldProductIds")}</label>
-              <textarea
-                rows={2}
-                value={productIdsRaw}
-                onChange={(e) => setProductIdsRaw(e.target.value)}
-                placeholder={t("adsCatalog.fieldProductIdsPlaceholder")}
-                style={{ ...inputStyle, fontFamily: "ui-monospace, monospace", marginTop: 6 }}
-              />
-              <p style={pageHintTextStyle}>{t("adsCatalog.fieldProductIdsHint")}</p>
-            </div>
-
-            <GoogleFeedFilters
-              value={filters}
-              onChange={setFilters}
-              showGoogleFields={platform === "google"}
+          <PageSurface>
+            <PageSectionHeader
+              title={t("adsCatalog.syncSectionTitle")}
+              subtitle={syncSummaryHint}
+            />
+            <PageMetricCard
+              metrics={[
+                { label: t("adsCatalog.syncSummaryPlatform"), value: currentPlatformLabel },
+                { label: t("adsCatalog.syncSummaryStatus"), value: syncStatusLabel },
+                { label: t("adsCatalog.syncSummaryScope"), value: productScopeLabel },
+                { label: t("adsCatalog.syncSummaryPreview"), value: previewStatusLabel },
+              ]}
+              footer={
+                <span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>
+                  {previewFooter}
+                </span>
+              }
             />
 
-            {!credentialReady && (
-              <div
-                style={{
-                  background: pageColorTokens.criticalBg,
-                  color: pageColorTokens.criticalText,
-                  padding: "10px 12px",
-                  borderRadius: pageColorTokens.radiusControl,
-                  fontSize: 13,
-                }}
-              >
-                {t("adsCatalog.credentialMissing")}
-              </div>
-            )}
+            <div style={sectionGridStyle}>
+              <div style={sectionStyle}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={sectionTitleStyle}>{t("adsCatalog.destinationTitle")}</div>
+                  <div style={sectionSubtitleStyle}>{t("adsCatalog.destinationSubtitle")}</div>
+                </div>
+                <div style={statusRowStyle}>
+                  <ConnectionStatusBadge label={syncStatusLabel} tone={syncStatusTone} />
+                  <span style={pageHintTextStyle}>
+                    {t("adsCatalog.destinationBadgeCopy", {
+                      platform: currentPlatformLabel,
+                    })}
+                  </span>
+                </div>
+                <div>
+                  <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldPlatform")}</label>
+                  <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPlatform("google")}
+                      style={platform === "google" ? buttonPrimary : buttonSecondary}
+                    >
+                      {t("adsCatalog.platformGoogle")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlatform("facebook")}
+                      style={platform === "facebook" ? buttonPrimary : buttonSecondary}
+                    >
+                      {t("adsCatalog.platformFacebook")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlatform("tiktok")}
+                      style={platform === "tiktok" ? buttonPrimary : buttonSecondary}
+                    >
+                      {t("adsCatalog.platformTiktok")}
+                    </button>
+                  </div>
+                </div>
 
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={handlePreview}
-                disabled={previewFetcher.state !== "idle"}
-                style={buttonSecondary}
-              >
-                {previewFetcher.state === "submitting"
-                  ? t("adsCatalog.actionPreviewing")
-                  : t("adsCatalog.actionPreview")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSync()}
-                disabled={
-                  !credentialReady || syncFetcher.state !== "idle" || tiktokSyncBusy
-                }
-                style={{
-                  ...buttonPrimary,
-                  opacity: !credentialReady ? 0.6 : 1,
-                  cursor: !credentialReady ? "not-allowed" : "pointer",
-                }}
-              >
-                {platform === "tiktok" && tiktokSyncBusy
-                  ? t("adsCatalog.actionSyncTiktokFeedBusy")
-                  : syncFetcher.state === "submitting"
-                    ? t("adsCatalog.actionSyncing")
-                    : t("adsCatalog.actionSync")}
-              </button>
+                {platform === "tiktok" && credentials.tiktok.connected && (
+                  <>
+                    <TiktokBoundCatalogInfo
+                      catalogId={credentials.tiktok.catalogId}
+                      catalogName={loaderData.boundTiktokCatalogName}
+                      bindingMode={credentials.tiktok.bindingMode}
+                      currency={loaderData.boundTiktokCatalogCurrency}
+                      regionCode={loaderData.boundTiktokCatalogRegion}
+                      channel={loaderData.boundTiktokCatalogChannel}
+                      locationSearch={locationSearch}
+                      inferredTiktokRegion={inferredTiktokRegion}
+                      catalogRegionCode={credentials.tiktok.catalogRegionCode}
+                      shopLabel={loaderData.shopDomain.split(".")[0]}
+                      onChanged={() => revalidator.revalidate()}
+                    />
+                    <TiktokCatalogPicker
+                      variant="sync"
+                      locationSearch={locationSearch}
+                      boundCatalogId={credentials.tiktok.catalogId}
+                      boundBindingMode={credentials.tiktok.bindingMode}
+                      boundChannel={loaderData.boundTiktokCatalogChannel}
+                      onChanged={() => revalidator.revalidate()}
+                    />
+                  </>
+                )}
+              </div>
+
+              <div style={sectionStyle}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={sectionTitleStyle}>{t("adsCatalog.scopeTitle")}</div>
+                  <div style={sectionSubtitleStyle}>{t("adsCatalog.scopeSubtitle")}</div>
+                </div>
+                <div>
+                  <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldProductIds")}</label>
+                  <textarea
+                    rows={2}
+                    value={productIdsRaw}
+                    onChange={(e) => setProductIdsRaw(e.target.value)}
+                    placeholder={t("adsCatalog.fieldProductIdsPlaceholder")}
+                    style={{ ...inputStyle, fontFamily: "ui-monospace, monospace", marginTop: 6 }}
+                  />
+                  <p style={pageHintTextStyle}>{t("adsCatalog.fieldProductIdsHint")}</p>
+                </div>
+
+                <GoogleFeedFilters
+                  value={filters}
+                  onChange={setFilters}
+                  showGoogleFields={platform === "google"}
+                />
+              </div>
             </div>
-            {platform === "tiktok" && (
-              <p style={pageHintTextStyle}>{t("adsCatalog.tiktokFeedSyncHint")}</p>
-            )}
-            {platform === "tiktok" &&
-              credentials.tiktok.bindingMode === "shopify_official" && (
+
+            <div style={sectionStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={sectionTitleStyle}>{t("adsCatalog.previewAndSyncTitle")}</div>
+                <div style={sectionSubtitleStyle}>{t("adsCatalog.previewAndSyncSubtitle")}</div>
+              </div>
+
+              {!credentialReady && (
                 <div
                   style={{
-                    background: pageColorTokens.surfaceMuted,
-                    border: `1px solid ${pageColorTokens.borderSubtle}`,
-                    color: pageColorTokens.textPrimary,
+                    background: pageColorTokens.criticalBg,
+                    color: pageColorTokens.criticalText,
                     padding: "10px 12px",
                     borderRadius: pageColorTokens.radiusControl,
                     fontSize: 13,
-                    lineHeight: 1.45,
                   }}
                 >
-                  {t("adsCatalog.tiktokOfficialSyncFootnote")}
+                  {t("adsCatalog.credentialMissing")}
                 </div>
               )}
-            {tiktokSyncError && <div style={errorBoxStyle}>{tiktokSyncError}</div>}
 
-            {previewError && (
-              <div style={errorBoxStyle}>{previewError}</div>
-            )}
-            {platform === "google" && previewPlatform === "google" && googleReport && (
-              <GmcValidationReport report={googleReport} />
-            )}
-            {(platform === "facebook" || platform === "tiktok") &&
-              previewPlatform === platform &&
-              fbPreview &&
-              fbPreview.length > 0 && (
-              <pre style={previewPreStyle}>{JSON.stringify(fbPreview, null, 2)}</pre>
-            )}
-            {syncFetcher.data?.errorMsg && (
-              <div style={errorBoxStyle}>{syncFetcher.data.errorMsg}</div>
-            )}
-          </div>
+              <div style={statusRowStyle}>
+                <ConnectionStatusBadge label={previewStatusLabel} tone={previewTone} />
+                <span style={pageHintTextStyle}>{previewFooter}</span>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={previewFetcher.state !== "idle"}
+                  style={buttonSecondary}
+                >
+                  {previewFetcher.state === "submitting"
+                    ? t("adsCatalog.actionPreviewing")
+                    : t("adsCatalog.actionPreview")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSync()}
+                  disabled={
+                    !credentialReady || syncFetcher.state !== "idle" || tiktokSyncBusy
+                  }
+                  style={{
+                    ...buttonPrimary,
+                    opacity: !credentialReady ? 0.6 : 1,
+                    cursor: !credentialReady ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {platform === "tiktok" && tiktokSyncBusy
+                    ? t("adsCatalog.actionSyncTiktokFeedBusy")
+                    : syncFetcher.state === "submitting"
+                      ? t("adsCatalog.actionSyncing")
+                      : t("adsCatalog.actionSync")}
+                </button>
+              </div>
+              {platform === "tiktok" && (
+                <p style={pageHintTextStyle}>{t("adsCatalog.tiktokFeedSyncHint")}</p>
+              )}
+              {platform === "tiktok" &&
+                credentials.tiktok.bindingMode === "shopify_official" && (
+                  <div
+                    style={{
+                      background: pageColorTokens.surfaceMuted,
+                      border: `1px solid ${pageColorTokens.borderSubtle}`,
+                      color: pageColorTokens.textPrimary,
+                      padding: "10px 12px",
+                      borderRadius: pageColorTokens.radiusControl,
+                      fontSize: 13,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {t("adsCatalog.tiktokOfficialSyncFootnote")}
+                  </div>
+                )}
+              {tiktokSyncError && <div style={errorBoxStyle}>{tiktokSyncError}</div>}
+
+              {previewError && (
+                <div style={errorBoxStyle}>{previewError}</div>
+              )}
+              {platform === "google" && previewPlatform === "google" && googleReport && (
+                <GmcValidationReport report={googleReport} />
+              )}
+              {(platform === "facebook" || platform === "tiktok") &&
+                previewPlatform === platform &&
+                fbPreview &&
+                fbPreview.length > 0 && (
+                  <pre style={previewPreStyle}>{JSON.stringify(fbPreview, null, 2)}</pre>
+                )}
+              {syncFetcher.data?.errorMsg && (
+                <div style={errorBoxStyle}>{syncFetcher.data.errorMsg}</div>
+              )}
+            </div>
+          </PageSurface>
         )}
 
         {tab === "credentials" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <PageSurface>
+            <PageSectionHeader
+              title={t("adsCatalog.credentialsTitle")}
+              subtitle={t("adsCatalog.credentialsSubtitle")}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div
               style={{
                 ...sectionStyle,
@@ -956,11 +1157,17 @@ export function AdsCatalogPage() {
                 revalidator.revalidate();
               }}
             />
-          </div>
+            </div>
+          </PageSurface>
         )}
 
         {tab === "tasks" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <PageSurface>
+            <PageSectionHeader
+              title={t("adsCatalog.tasksTitle")}
+              subtitle={t("adsCatalog.tasksSubtitle")}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {disapprovedCount > 0 && (
               <div
                 style={{
@@ -1051,7 +1258,8 @@ export function AdsCatalogPage() {
                 />
               ))
             )}
-          </div>
+            </div>
+          </PageSurface>
         )}
       </div>
 

@@ -5,6 +5,9 @@ import { useOAuthPopup } from "../../hooks/useOAuthPopup";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
   PageHeaderNav,
+  PageMetricCard,
+  PageSectionHeader,
+  PageSurface,
   mobilePageContentStyle,
   pageColorTokens,
   pageContentStyle,
@@ -663,6 +666,51 @@ function AuthBannerView({ banner, onDismiss }: { banner: AuthBanner; onDismiss: 
   );
 }
 
+function ConnectionStatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "connected" | "pending" | "inactive";
+}) {
+  const toneStyle =
+    tone === "connected"
+      ? {
+          color: pageColorTokens.brandGreenDeep,
+          background: pageColorTokens.brandGreenLight,
+          borderColor: pageColorTokens.brandGreenGlow,
+        }
+      : tone === "pending"
+        ? {
+            color: pageColorTokens.warning,
+            background: pageColorTokens.warningBg,
+            borderColor: "rgba(185, 137, 0, 0.18)",
+          }
+        : {
+            color: pageColorTokens.textSecondary,
+            background: pageColorTokens.surfaceMuted,
+            borderColor: pageColorTokens.border,
+          };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "0.3rem 0.75rem",
+        borderRadius: "999px",
+        fontSize: "0.8rem",
+        fontWeight: 700,
+        border: `1px solid ${toneStyle.borderColor}`,
+        color: toneStyle.color,
+        background: toneStyle.background,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export function GoogleAnalyticsPage() {
@@ -879,6 +927,25 @@ export function GoogleAnalyticsPage() {
     allPropertiesForPanel.length > 0
       ? allPropertiesForPanel
       : properties.map((p) => ({ ...p, accountName: p.accountName ?? "" }));
+  const overviewStatus = connected
+    ? t("settingsShell.statusConnected")
+    : hasPending
+      ? t("settingsShell.statusPending")
+      : t("settingsShell.statusNeedsSetup");
+  const overviewPropertyCount = connected ? properties.length : pendingProperties.length;
+  const overviewAccountCount = new Set(
+    (connected ? selectorProperties : pendingProperties)
+      .map((property) => property.accountName || property.accountId || "")
+      .filter(Boolean),
+  ).size;
+  const activeProperty =
+    properties.find((property) => property.propertyId === activePropertyId) ?? properties[0] ?? null;
+  const connectionTone = connected ? "connected" : hasPending ? "pending" : "inactive";
+  const overviewFooter = connected && activeProperty
+    ? t("ga4.overviewCurrentProperty", { propertyName: activeProperty.propertyName })
+    : hasPending
+      ? t("ga4.overviewPendingHint", { count: pendingProperties.length })
+      : t("ga4.overviewNeedsSetupHint");
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -889,40 +956,72 @@ export function GoogleAnalyticsPage() {
         fallbackPath="/app/settings"
       />
 
-      {banner && (
-        <AuthBannerView banner={banner} onDismiss={() => setBanner(null)} />
-      )}
-
-      {(ga4OAuth.redirecting || oauthResolving) && (
-        <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>
-          {t("ga4.redirecting")}
-        </div>
-      )}
-
-      {!connected && !hasPending && !ga4OAuth.redirecting && !oauthResolving && (
-        <NotConnectedPanel onConnect={handleConnect} />
-      )}
-
-      {!connected && hasPending && (
-        <PropertySelectPanel
-          properties={pendingProperties}
-          onSelect={handlePropertySelect}
-          loading={isSelectLoading}
+      <PageSurface>
+        <PageSectionHeader
+          title={t("ga4.overviewTitle")}
+          subtitle={t("ga4.overviewSubtitle")}
         />
-      )}
+        <PageMetricCard
+          metrics={[
+            { label: t("ga4.overviewStatus"), value: overviewStatus },
+            { label: t("ga4.overviewProperties"), value: String(overviewPropertyCount) },
+            { label: t("ga4.overviewAccounts"), value: String(overviewAccountCount) },
+          ]}
+          footer={<span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>{overviewFooter}</span>}
+        />
+      </PageSurface>
+
+      <PageSurface>
+        <PageSectionHeader
+          title={t("ga4.connectionSectionTitle")}
+          subtitle={t("ga4.connectionSectionSubtitle")}
+          badge={<ConnectionStatusBadge label={overviewStatus} tone={connectionTone} />}
+        />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {banner ? <AuthBannerView banner={banner} onDismiss={() => setBanner(null)} /> : null}
+
+          {(ga4OAuth.redirecting || oauthResolving) ? (
+            <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>
+              {t("ga4.redirecting")}
+            </div>
+          ) : null}
+
+          {!connected && !hasPending && !ga4OAuth.redirecting && !oauthResolving ? (
+            <NotConnectedPanel onConnect={handleConnect} />
+          ) : null}
+
+          {!connected && hasPending ? (
+            <PropertySelectPanel
+              properties={pendingProperties}
+              onSelect={handlePropertySelect}
+              loading={isSelectLoading}
+            />
+          ) : null}
+
+          {connected && properties.length > 0 ? (
+            <>
+              <ConnectedHeader
+                onDisconnect={handleDisconnect}
+                disconnecting={isDisconnecting}
+              />
+              <PropertySwitcher
+                properties={selectorProperties}
+                activeId={activePropertyId}
+                onSelect={handlePropertySwitch}
+                loading={isSelectLoading}
+                showHeader
+              />
+            </>
+          ) : null}
+        </div>
+      </PageSurface>
 
       {connected && properties.length > 0 && (
         <>
-          <ConnectedHeader
-            onDisconnect={handleDisconnect}
-            disconnecting={isDisconnecting}
-          />
-          <PropertySwitcher
-            properties={selectorProperties}
-            activeId={activePropertyId}
-            onSelect={handlePropertySwitch}
-            loading={isSelectLoading}
-            showHeader
+          <PageSectionHeader
+            title={t("ga4.performanceSectionTitle")}
+            subtitle={t("ga4.performanceSectionSubtitle")}
           />
           <Ga4PerformanceView propertyId={activePropertyId} />
         </>
