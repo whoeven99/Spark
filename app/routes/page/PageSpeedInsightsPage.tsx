@@ -198,7 +198,15 @@ function AnalyzeForm({
             ]}
           />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: isMobile ? "100%" : "14rem" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.35rem",
+            minWidth: isMobile ? "100%" : "auto",
+            flex: isMobile ? "1 1 100%" : "0 0 auto",
+          }}
+        >
           <label
             htmlFor="page-speed-locale"
             style={{ fontSize: "0.75rem", fontWeight: 600, color: pageColorTokens.textSecondary }}
@@ -212,7 +220,12 @@ function AnalyzeForm({
             onChange={(event) => onReportLocaleChange(event.target.value as PageSpeedLocaleCode)}
             style={{
               ...pageSelectCompactStyle(analyzing),
-              minWidth: isMobile ? "100%" : "14rem",
+              flex: "none",
+              width: isMobile ? "100%" : "auto",
+              minWidth: isMobile ? "100%" : "10rem",
+              maxWidth: isMobile ? "100%" : "14rem",
+              padding: "0.55rem 0.7rem",
+              fontSize: "0.875rem",
             }}
           >
             {PAGE_SPEED_LOCALES.map((item) => (
