@@ -39,7 +39,7 @@ export type GscStatusResponse = GscStatusOk | GscStatusNotConnected | GscStatusE
 
 function parseDays(raw: string | null): number {
   const n = Number(raw);
-  if (n === 28 || n === 90) return n;
+  if (n === 14 || n === 28 || n === 30 || n === 90) return n;
   return 7;
 }
 

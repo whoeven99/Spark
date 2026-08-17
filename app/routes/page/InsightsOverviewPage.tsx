@@ -154,6 +154,8 @@ export function InsightsOverviewPage() {
             navigate(buildPerformanceHref(platform, rangeDays, location.search))
           }
           onOpenCatalog={() => navigate(`/app/ads-catalog${location.search}`)}
+          onOpenCatalogTasks={() => navigate(buildCatalogTasksHref(location.search))}
+          onOpenSettings={() => navigate("/app/settings")}
         />
       ) : null}
     </div>
@@ -172,16 +174,28 @@ function buildPerformanceHref(
   return `/app/insights/performance?${params.toString()}`;
 }
 
+function buildCatalogTasksHref(search: string): string {
+  const params = new URLSearchParams(search);
+  params.set("tab", "tasks");
+  params.delete("taskId");
+  const query = params.toString();
+  return `/app/ads-catalog${query ? `?${query}` : ""}`;
+}
+
 function OverviewBody({
   overview,
   isMobile,
   onOpenPerformance,
   onOpenCatalog,
+  onOpenCatalogTasks,
+  onOpenSettings,
 }: {
   overview: AdsOverviewSnapshot;
   isMobile: boolean;
   onOpenPerformance: (platform: AdsOverviewPlatform["platform"]) => void;
   onOpenCatalog: () => void;
+  onOpenCatalogTasks: () => void;
+  onOpenSettings: () => void;
 }) {
   const { t } = useTranslation();
   const anyConnected = overview.platforms.some((item) => item.connected);
@@ -293,6 +307,46 @@ function OverviewBody({
 
       <PageSurface>
         <PageSectionHeader
+          title={t("insights.analysisSectionTitle")}
+          subtitle={t("insights.analysisSectionSubtitle")}
+          badge={<span style={sectionBadgeStyle}>{t("insights.analysisSectionBadge")}</span>}
+        />
+        <div style={analysisGridStyle(isMobile)}>
+          <AnalysisActionCard
+            title={t("insights.analysisPerformanceTitle")}
+            body={t("insights.analysisPerformanceBody")}
+            footnote={t("insights.analysisPerformanceFootnote", {
+              connected: connectedCount,
+              total: overview.platforms.length,
+            })}
+            cta={t("insights.analysisOpenPerformance")}
+            onClick={() => onOpenPerformance("meta")}
+          />
+          <AnalysisActionCard
+            title={t("insights.analysisCatalogTitle")}
+            body={t("insights.analysisCatalogBody")}
+            footnote={t("insights.analysisCatalogFootnote", {
+              issues: disapprovedTotal,
+              pending: attentionCount,
+            })}
+            cta={t("insights.analysisOpenCatalogTasks")}
+            onClick={onOpenCatalogTasks}
+          />
+          <AnalysisActionCard
+            title={t("insights.analysisConnectionsTitle")}
+            body={t("insights.analysisConnectionsBody")}
+            footnote={t("insights.analysisConnectionsFootnote", {
+              connected: readyConnections,
+              total: overview.connections.length,
+            })}
+            cta={t("insights.analysisOpenConnections")}
+            onClick={onOpenSettings}
+          />
+        </div>
+      </PageSurface>
+
+      <PageSurface>
+        <PageSectionHeader
           title={t("insights.platformSectionTitle")}
           subtitle={t("insights.platformSectionSubtitle")}
           badge={
@@ -350,6 +404,33 @@ function OverviewBody({
         <ConnectionTable connections={overview.connections} onOpenCatalog={onOpenCatalog} />
       </PageSurface>
     </>
+  );
+}
+
+function AnalysisActionCard({
+  title,
+  body,
+  footnote,
+  cta,
+  onClick,
+}: {
+  title: string;
+  body: string;
+  footnote: string;
+  cta: string;
+  onClick: () => void;
+}) {
+  return (
+    <div style={analysisActionCardStyle}>
+      <div style={{ display: "grid", gap: "0.45rem" }}>
+        <div style={cardTitleStyle}>{title}</div>
+        <div style={analysisActionBodyStyle}>{body}</div>
+      </div>
+      <div style={cardFootnoteStyle}>{footnote}</div>
+      <button type="button" style={secondaryButtonStyle} onClick={onClick}>
+        {cta}
+      </button>
+    </div>
   );
 }
 
@@ -691,6 +772,25 @@ const platformGridStyle = (isMobile: boolean): CSSProperties => ({
   gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
   gap: "0.75rem",
 });
+
+const analysisGridStyle = (isMobile: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+  gap: "0.75rem",
+});
+
+const analysisActionCardStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.75rem",
+};
+
+const analysisActionBodyStyle: CSSProperties = {
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: pageColorTokens.textBody,
+};
 
 const cardHeadStyle: CSSProperties = {
   display: "flex",

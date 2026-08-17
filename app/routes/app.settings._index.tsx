@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useLoaderData } from "react-router";
@@ -11,9 +12,10 @@ import {
   PageSectionHeader,
   PageSurface,
   mobilePageContentStyle,
+  pageColorTokens,
   pageContentStyle,
 } from "./page/pageUiStyles";
-import { DestinationActionGrid } from "./component/shared/DestinationPage";
+import { DestinationActionGrid, destinationSurfaceStyle } from "./component/shared/DestinationPage";
 import { loadBillingContext } from "../server/billing/index.server";
 import {
   getFacebookCatalogCredential,
@@ -92,45 +94,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         availableTokens: billing.availableTokens,
         hasAccess: billing.hasAccess,
       },
-      adsCatalog: {
-        connectedCount: [metaCatalog, googleMerchant, tiktokCatalog].filter(Boolean).length,
-        totalCount: 3,
-        hasPending: Boolean(
-          metaCatalogPending?.accounts.length ||
-            googleMerchantPending?.accounts.length ||
-            tiktokCatalogPending?.accounts.length,
-        ),
-      },
-      adsCreate: {
-        connectedCount: [
-          Boolean(metaAds),
-          Boolean(googleAds) && developerTokenConfigured,
-          Boolean(tiktokAds),
-        ].filter(Boolean).length,
-        totalCount: 3,
-        hasPending: Boolean(
-          metaAdsPending?.accounts.length ||
-            googleAdsPending?.accounts.length ||
-            tiktokCatalogPending?.accounts.length,
-        ),
-        developerTokenConfigured,
-      },
-      ga4: {
-        connected: Boolean(ga4?.properties.length),
-        hasPending: Boolean(ga4Pending?.properties.length),
-        propertyCount: ga4?.properties.length ?? 0,
-      },
-      gsc: {
-        connected: Boolean(gsc),
-        hasPending: Boolean(gscPending?.sites.length),
-        siteUrl: gsc?.siteUrl ?? null,
-      },
-      googleAttribution: {
+      google: {
+        merchantConnected: Boolean(googleMerchant),
+        merchantPending: Boolean(googleMerchantPending?.accounts.length),
         adsConnected: Boolean(googleAds),
+        adsPending: Boolean(googleAdsPending?.accounts.length),
+        developerTokenConfigured,
         ga4Connected: Boolean(ga4?.properties.length),
-        propertyCount: ga4?.properties.length ?? 0,
+        ga4Pending: Boolean(ga4Pending?.properties.length),
+        ga4PropertyCount: ga4?.properties.length ?? 0,
+        gscConnected: Boolean(gsc),
+        gscPending: Boolean(gscPending?.sites.length),
+        gscSiteUrl: gsc?.siteUrl ?? null,
+      },
+      meta: {
+        catalogConnected: Boolean(metaCatalog),
+        catalogPending: Boolean(metaCatalogPending?.accounts.length),
+        adsConnected: Boolean(metaAds),
+        adsPending: Boolean(metaAdsPending?.accounts.length),
+      },
+      tiktok: {
+        catalogConnected: Boolean(tiktokCatalog),
+        catalogPending: Boolean(tiktokCatalogPending?.accounts.length),
+        adsConnected: Boolean(tiktokAds),
       },
       logistics: {
+        fedexConfigured: Boolean(fedex),
+        sfConfigured: Boolean(sf),
         configuredCount: [fedex, sf].filter(Boolean).length,
         totalCount: 2,
       },
@@ -138,16 +128,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-type SettingsModuleId =
-  | "billing"
-  | "adsCatalog"
-  | "adsCreate"
-  | "gsc"
-  | "ga4"
-  | "googleAttribution"
-  | "logistics"
-  | "data"
-  | "feedback";
+type SettingsModuleId = "billing" | "data" | "feedback";
 
 type SettingsModule = {
   id: SettingsModuleId;
@@ -172,48 +153,6 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
         to: "/app/settings/billing",
         labelKey: "settingsShell.navBilling",
         descKey: "settingsShell.descBilling",
-      },
-    ],
-  },
-  {
-    titleKey: "settingsShell.sectionIntegrationsTitle",
-    subtitleKey: "settingsShell.sectionIntegrationsSubtitle",
-    modules: [
-      {
-        id: "adsCatalog",
-        to: "/app/ads-catalog",
-        labelKey: "settingsShell.navAdsCatalog",
-        descKey: "settingsShell.descAdsCatalog",
-      },
-      {
-        id: "adsCreate",
-        to: "/app/settings/ads-create",
-        labelKey: "settingsShell.navAdsCreate",
-        descKey: "settingsShell.descAdsCreate",
-      },
-      {
-        id: "gsc",
-        to: "/app/settings/google-search-console",
-        labelKey: "settingsShell.navGsc",
-        descKey: "settingsShell.descGsc",
-      },
-      {
-        id: "ga4",
-        to: "/app/settings/google-analytics",
-        labelKey: "settingsShell.navGa4",
-        descKey: "settingsShell.descGa4",
-      },
-      {
-        id: "googleAttribution",
-        to: "/app/ads/google-attribution",
-        labelKey: "settingsShell.navGoogleAttribution",
-        descKey: "settingsShell.descGoogleAttribution",
-      },
-      {
-        id: "logistics",
-        to: "/app/settings/logistics",
-        labelKey: "settingsShell.navLogistics",
-        descKey: "settingsShell.descLogistics",
       },
     ],
   },
@@ -279,90 +218,6 @@ function buildModuleSummary(
         }),
       };
     }
-    case "adsCatalog":
-      return {
-        badge:
-          summaries.adsCatalog.connectedCount === summaries.adsCatalog.totalCount
-            ? t("settingsShell.statusReady")
-            : summaries.adsCatalog.connectedCount > 0
-              ? t("settingsShell.statusPartial")
-              : summaries.adsCatalog.hasPending
-                ? t("settingsShell.statusPending")
-                : t("settingsShell.statusNeedsSetup"),
-        meta: t("settingsShell.summaryChannelsConnected", {
-          connected: summaries.adsCatalog.connectedCount,
-          total: summaries.adsCatalog.totalCount,
-        }),
-      };
-    case "adsCreate":
-      return {
-        badge:
-          summaries.adsCreate.connectedCount === summaries.adsCreate.totalCount
-            ? t("settingsShell.statusReady")
-            : summaries.adsCreate.connectedCount > 0
-              ? t("settingsShell.statusPartial")
-              : summaries.adsCreate.hasPending
-                ? t("settingsShell.statusPending")
-                : t("settingsShell.statusNeedsSetup"),
-        meta: summaries.adsCreate.developerTokenConfigured
-          ? t("settingsShell.summaryChannelsConnected", {
-              connected: summaries.adsCreate.connectedCount,
-              total: summaries.adsCreate.totalCount,
-            })
-          : t("settingsShell.summaryAdsCreateNeedsToken"),
-      };
-    case "gsc":
-      return {
-        badge: summaries.gsc.connected
-          ? t("settingsShell.statusConnected")
-          : summaries.gsc.hasPending
-            ? t("settingsShell.statusPending")
-            : t("settingsShell.statusNeedsSetup"),
-        meta: summaries.gsc.siteUrl
-          ? t("settingsShell.summaryGscSite", { siteUrl: summaries.gsc.siteUrl })
-          : t("settingsShell.summaryNeedsConnection"),
-      };
-    case "ga4":
-      return {
-        badge: summaries.ga4.connected
-          ? t("settingsShell.statusConnected")
-          : summaries.ga4.hasPending
-            ? t("settingsShell.statusPending")
-            : t("settingsShell.statusNeedsSetup"),
-        meta: summaries.ga4.connected
-          ? t("settingsShell.summaryGa4Properties", {
-              count: summaries.ga4.propertyCount,
-            })
-          : t("settingsShell.summaryNeedsConnection"),
-      };
-    case "googleAttribution":
-      return {
-        badge:
-          summaries.googleAttribution.adsConnected && summaries.googleAttribution.ga4Connected
-            ? t("settingsShell.statusReady")
-            : summaries.googleAttribution.adsConnected || summaries.googleAttribution.ga4Connected
-              ? t("settingsShell.statusPartial")
-              : t("settingsShell.statusNeedsSetup"),
-        meta:
-          summaries.googleAttribution.adsConnected && summaries.googleAttribution.ga4Connected
-            ? t("settingsShell.summaryGoogleAttributionReady", {
-                count: summaries.googleAttribution.propertyCount,
-              })
-            : t("settingsShell.summaryGoogleAttributionPartial"),
-      };
-    case "logistics":
-      return {
-        badge:
-          summaries.logistics.configuredCount === summaries.logistics.totalCount
-            ? t("settingsShell.statusReady")
-            : summaries.logistics.configuredCount > 0
-              ? t("settingsShell.statusPartial")
-              : t("settingsShell.statusNeedsSetup"),
-        meta: t("settingsShell.summaryProvidersConfigured", {
-          configured: summaries.logistics.configuredCount,
-          total: summaries.logistics.totalCount,
-        }),
-      };
     case "data":
       return {
         badge: t("settingsShell.statusTool"),
@@ -376,12 +231,348 @@ function buildModuleSummary(
   }
 }
 
+type ConnectionCapabilityTone = "ready" | "pending" | "needs_setup" | "attention";
+
+type ConnectionCapability = {
+  label: string;
+  value: string;
+  tone: ConnectionCapabilityTone;
+};
+
+type ConnectionLink = {
+  label: string;
+  to: string;
+  tone?: "primary" | "secondary";
+};
+
+type ConnectionChannelCardProps = {
+  title: string;
+  description: string;
+  badge: string;
+  badgeTone: "ready" | "partial" | "pending" | "needs_setup";
+  meta: string;
+  capabilities: ConnectionCapability[];
+  links: ConnectionLink[];
+  onNavigate: (to: string) => void;
+};
+
+function buildGoogleSummary(
+  summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  const capabilities: ConnectionCapability[] = [
+    {
+      label: t("settingsShell.googleCapabilityMerchant"),
+      value: summaries.google.merchantConnected
+        ? t("settingsShell.statusConnected")
+        : summaries.google.merchantPending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.google.merchantConnected
+        ? "ready"
+        : summaries.google.merchantPending
+          ? "pending"
+          : "needs_setup",
+    },
+    {
+      label: t("settingsShell.googleCapabilityAds"),
+      value: summaries.google.adsConnected
+        ? summaries.google.developerTokenConfigured
+          ? t("settingsShell.statusReady")
+          : t("settingsShell.statusPartial")
+        : summaries.google.adsPending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.google.adsConnected
+        ? summaries.google.developerTokenConfigured
+          ? "ready"
+          : "attention"
+        : summaries.google.adsPending
+          ? "pending"
+          : "needs_setup",
+    },
+    {
+      label: t("settingsShell.googleCapabilityGa4"),
+      value: summaries.google.ga4Connected
+        ? t("settingsShell.summaryGa4Properties", {
+            count: summaries.google.ga4PropertyCount,
+          })
+        : summaries.google.ga4Pending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.google.ga4Connected
+        ? "ready"
+        : summaries.google.ga4Pending
+          ? "pending"
+          : "needs_setup",
+    },
+    {
+      label: t("settingsShell.googleCapabilityGsc"),
+      value: summaries.google.gscConnected
+        ? summaries.google.gscSiteUrl ?? t("settingsShell.statusConnected")
+        : summaries.google.gscPending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.google.gscConnected
+        ? "ready"
+        : summaries.google.gscPending
+          ? "pending"
+          : "needs_setup",
+    },
+  ];
+
+  const readyCount = capabilities.filter((item) => item.tone === "ready").length;
+  const hasPending = capabilities.some((item) => item.tone === "pending");
+  const hasAttention = capabilities.some((item) => item.tone === "attention");
+
+  return {
+    title: t("settingsShell.channelGoogleTitle"),
+    description: t("settingsShell.channelGoogleSubtitle"),
+    badge:
+      readyCount === capabilities.length
+        ? t("settingsShell.statusReady")
+        : readyCount > 0 || hasAttention
+          ? t("settingsShell.statusPartial")
+          : hasPending
+            ? t("settingsShell.statusPending")
+            : t("settingsShell.statusNeedsSetup"),
+    badgeTone:
+      readyCount === capabilities.length
+        ? "ready"
+        : readyCount > 0 || hasAttention
+          ? "partial"
+          : hasPending
+            ? "pending"
+            : "needs_setup",
+    meta: hasAttention
+      ? t("settingsShell.summaryAdsCreateNeedsToken")
+      : t("settingsShell.summaryChannelCoverage", {
+          connected: readyCount,
+          total: capabilities.length,
+        }),
+    capabilities,
+    links: [
+      {
+        label: t("settingsShell.googleManageAdsCatalog"),
+        to: "/app/ads-catalog?tab=credentials",
+        tone: "primary",
+      },
+      {
+        label: t("settingsShell.googleManageAnalytics"),
+        to: "/app/settings/google-analytics",
+      },
+      {
+        label: t("settingsShell.googleManageSearchConsole"),
+        to: "/app/settings/google-search-console",
+      },
+      {
+        label: t("settingsShell.openInsights"),
+        to: "/app/insights",
+      },
+    ] satisfies ConnectionLink[],
+  };
+}
+
+function buildMetaSummary(
+  summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  const capabilities: ConnectionCapability[] = [
+    {
+      label: t("settingsShell.metaCapabilityCatalog"),
+      value: summaries.meta.catalogConnected
+        ? t("settingsShell.statusConnected")
+        : summaries.meta.catalogPending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.meta.catalogConnected
+        ? "ready"
+        : summaries.meta.catalogPending
+          ? "pending"
+          : "needs_setup",
+    },
+    {
+      label: t("settingsShell.metaCapabilityAds"),
+      value: summaries.meta.adsConnected
+        ? t("settingsShell.statusConnected")
+        : summaries.meta.adsPending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.meta.adsConnected
+        ? "ready"
+        : summaries.meta.adsPending
+          ? "pending"
+          : "needs_setup",
+    },
+  ];
+  const readyCount = capabilities.filter((item) => item.tone === "ready").length;
+  const hasPending = capabilities.some((item) => item.tone === "pending");
+  return {
+    title: t("settingsShell.channelMetaTitle"),
+    description: t("settingsShell.channelMetaSubtitle"),
+    badge:
+      readyCount === capabilities.length
+        ? t("settingsShell.statusReady")
+        : readyCount > 0
+          ? t("settingsShell.statusPartial")
+          : hasPending
+            ? t("settingsShell.statusPending")
+            : t("settingsShell.statusNeedsSetup"),
+    badgeTone:
+      readyCount === capabilities.length
+        ? "ready"
+        : readyCount > 0
+          ? "partial"
+          : hasPending
+            ? "pending"
+            : "needs_setup",
+    meta: t("settingsShell.summaryChannelCoverage", {
+      connected: readyCount,
+      total: capabilities.length,
+    }),
+    capabilities,
+    links: [
+      {
+        label: t("settingsShell.metaManageCatalog"),
+        to: "/app/ads-catalog?tab=credentials",
+        tone: "primary",
+      },
+      {
+        label: t("settingsShell.openInsights"),
+        to: "/app/insights/performance?platform=meta",
+      },
+    ] satisfies ConnectionLink[],
+  };
+}
+
+function buildTiktokSummary(
+  summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  const capabilities: ConnectionCapability[] = [
+    {
+      label: t("settingsShell.tiktokCapabilityCatalog"),
+      value: summaries.tiktok.catalogConnected
+        ? t("settingsShell.statusConnected")
+        : summaries.tiktok.catalogPending
+          ? t("settingsShell.statusPending")
+          : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.tiktok.catalogConnected
+        ? "ready"
+        : summaries.tiktok.catalogPending
+          ? "pending"
+          : "needs_setup",
+    },
+    {
+      label: t("settingsShell.tiktokCapabilityAds"),
+      value: summaries.tiktok.adsConnected
+        ? t("settingsShell.statusConnected")
+        : t("settingsShell.statusNeedsSetup"),
+      tone: summaries.tiktok.adsConnected ? "ready" : "needs_setup",
+    },
+  ];
+  const readyCount = capabilities.filter((item) => item.tone === "ready").length;
+  const hasPending = capabilities.some((item) => item.tone === "pending");
+  return {
+    title: t("settingsShell.channelTiktokTitle"),
+    description: t("settingsShell.channelTiktokSubtitle"),
+    badge:
+      readyCount === capabilities.length
+        ? t("settingsShell.statusReady")
+        : readyCount > 0
+          ? t("settingsShell.statusPartial")
+          : hasPending
+            ? t("settingsShell.statusPending")
+            : t("settingsShell.statusNeedsSetup"),
+    badgeTone:
+      readyCount === capabilities.length
+        ? "ready"
+        : readyCount > 0
+          ? "partial"
+          : hasPending
+            ? "pending"
+            : "needs_setup",
+    meta: t("settingsShell.summaryChannelCoverage", {
+      connected: readyCount,
+      total: capabilities.length,
+    }),
+    capabilities,
+    links: [
+      {
+        label: t("settingsShell.tiktokManageCatalog"),
+        to: "/app/ads-catalog?tab=credentials",
+        tone: "primary",
+      },
+      {
+        label: t("settingsShell.openInsights"),
+        to: "/app/insights/performance?platform=tiktok",
+      },
+    ] satisfies ConnectionLink[],
+  };
+}
+
+function buildLogisticsSummary(
+  summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  return {
+    title: t("settingsShell.channelLogisticsTitle"),
+    description: t("settingsShell.channelLogisticsSubtitle"),
+    badge:
+      summaries.logistics.configuredCount === summaries.logistics.totalCount
+        ? t("settingsShell.statusReady")
+        : summaries.logistics.configuredCount > 0
+          ? t("settingsShell.statusPartial")
+          : t("settingsShell.statusNeedsSetup"),
+    badgeTone:
+      summaries.logistics.configuredCount === summaries.logistics.totalCount
+        ? "ready"
+        : summaries.logistics.configuredCount > 0
+          ? "partial"
+          : "needs_setup",
+    meta: t("settingsShell.summaryProvidersConfigured", {
+      configured: summaries.logistics.configuredCount,
+      total: summaries.logistics.totalCount,
+    }),
+    capabilities: [
+      {
+        label: "FedEx",
+        value: summaries.logistics.fedexConfigured
+          ? t("settingsShell.statusConnected")
+          : t("settingsShell.statusNeedsSetup"),
+        tone: summaries.logistics.fedexConfigured ? "ready" : "needs_setup",
+      },
+      {
+        label: "SF Express",
+        value: summaries.logistics.sfConfigured
+          ? t("settingsShell.statusConnected")
+          : t("settingsShell.statusNeedsSetup"),
+        tone: summaries.logistics.sfConfigured ? "ready" : "needs_setup",
+      },
+    ] satisfies ConnectionCapability[],
+    links: [
+      {
+        label: t("settingsShell.logisticsManageConnections"),
+        to: "/app/settings/logistics",
+        tone: "primary",
+      },
+    ] satisfies ConnectionLink[],
+  };
+}
+
 export default function SettingsIndex() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
   const { summaries } = useLoaderData<typeof loader>();
   useFeatureView("settings");
+
+  const connectionCards = [
+    buildGoogleSummary(summaries, t),
+    buildMetaSummary(summaries, t),
+    buildTiktokSummary(summaries, t),
+    buildLogisticsSummary(summaries, t),
+  ];
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -393,7 +584,48 @@ export default function SettingsIndex() {
         fallbackPath="/app"
       />
 
-      {SETTINGS_SECTIONS.map((section) => (
+      <PageSurface>
+        <PageSectionHeader
+          title={t("settingsShell.sectionAccountTitle")}
+          subtitle={t("settingsShell.sectionAccountSubtitle")}
+        />
+        <DestinationActionGrid
+          isMobile={isMobile}
+          actions={SETTINGS_SECTIONS[0]!.modules.map((mod) => ({
+            ...buildModuleSummary(mod.id, summaries, t),
+            key: mod.to,
+            title: t(mod.labelKey),
+            detail: t(mod.descKey),
+            onClick: () => navigate(mod.to),
+          }))}
+        />
+      </PageSurface>
+
+      <PageSurface>
+        <PageSectionHeader
+          title={t("settingsShell.sectionConnectionsHubTitle")}
+          subtitle={t("settingsShell.sectionConnectionsHubSubtitle")}
+          badge={<span style={hubBadgeStyle}>{t("settingsShell.sectionConnectionsHubBadge")}</span>}
+        />
+        <div style={hubHintStyle}>{t("settingsShell.sectionConnectionsHubFootnote")}</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+            gap: "0.85rem",
+          }}
+        >
+          {connectionCards.map((card) => (
+            <ConnectionChannelCard
+              key={card.title}
+              {...card}
+              onNavigate={navigate}
+            />
+          ))}
+        </div>
+      </PageSurface>
+
+      {SETTINGS_SECTIONS.slice(1).map((section) => (
         <PageSurface key={section.titleKey}>
           <PageSectionHeader
             title={t(section.titleKey)}
@@ -414,6 +646,179 @@ export default function SettingsIndex() {
     </div>
   );
 }
+
+function ConnectionChannelCard({
+  title,
+  description,
+  badge,
+  badgeTone,
+  meta,
+  capabilities,
+  links,
+  onNavigate,
+}: ConnectionChannelCardProps) {
+  return (
+    <div style={connectionCardStyle}>
+      <div style={connectionHeaderStyle}>
+        <div style={{ display: "grid", gap: 4 }}>
+          <div style={connectionTitleStyle}>{title}</div>
+          <div style={connectionDescriptionStyle}>{description}</div>
+        </div>
+        <span style={channelBadgeStyle(badgeTone)}>{badge}</span>
+      </div>
+      <div style={connectionMetaStyle}>{meta}</div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {capabilities.map((capability) => (
+          <div key={capability.label} style={capabilityRowStyle}>
+            <span style={capabilityLabelStyle}>{capability.label}</span>
+            <span style={capabilityValueStyle(capability.tone)}>{capability.value}</span>
+          </div>
+        ))}
+      </div>
+      <div style={connectionLinksStyle}>
+        {links.map((link) => (
+          <button
+            key={link.to}
+            type="button"
+            onClick={() => onNavigate(link.to)}
+            style={connectionLinkButtonStyle(link.tone === "primary")}
+          >
+            {link.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const hubBadgeStyle: CSSProperties = {
+  padding: "0.2rem 0.55rem",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  color: pageColorTokens.brandBlueDark,
+  background: pageColorTokens.brandBlueLight,
+  border: `1px solid ${pageColorTokens.brandBlueGlow}`,
+};
+
+const hubHintStyle: CSSProperties = {
+  marginBottom: "0.85rem",
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
+};
+
+const connectionCardStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.85rem",
+};
+
+const connectionHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "0.8rem",
+};
+
+const connectionTitleStyle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const connectionDescriptionStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: pageColorTokens.textBody,
+};
+
+const connectionMetaStyle: CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textSecondary,
+};
+
+const capabilityRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.8rem",
+  padding: "0.55rem 0.7rem",
+  borderRadius: 10,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const capabilityLabelStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: pageColorTokens.textBody,
+};
+
+const capabilityValueStyle = (tone: ConnectionCapabilityTone): CSSProperties => ({
+  fontSize: 12,
+  fontWeight: 700,
+  color:
+    tone === "ready"
+      ? pageColorTokens.brandGreenDark
+      : tone === "pending"
+        ? "#8a5a00"
+        : tone === "attention"
+          ? pageColorTokens.brandBlueDark
+          : pageColorTokens.textSecondary,
+});
+
+const connectionLinksStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.55rem",
+};
+
+const connectionLinkButtonStyle = (primary: boolean): CSSProperties => ({
+  padding: "0.52rem 0.85rem",
+  borderRadius: 999,
+  border: `1px solid ${primary ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
+  background: primary ? pageColorTokens.brandBlueLight : pageColorTokens.surface,
+  color: primary ? pageColorTokens.brandBlueDark : pageColorTokens.textPrimary,
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+});
+
+const channelBadgeStyle = (
+  tone: "ready" | "partial" | "pending" | "needs_setup",
+): CSSProperties => ({
+  flexShrink: 0,
+  padding: "0.2rem 0.5rem",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 750,
+  color:
+    tone === "ready"
+      ? pageColorTokens.brandGreenDark
+      : tone === "partial"
+        ? pageColorTokens.brandBlueDark
+        : tone === "pending"
+          ? "#8a5a00"
+          : pageColorTokens.textSecondary,
+  background:
+    tone === "ready"
+      ? pageColorTokens.brandGreenLight
+      : tone === "partial"
+        ? pageColorTokens.brandBlueLight
+        : tone === "pending"
+          ? "#fff7e0"
+          : pageColorTokens.surfaceMuted,
+  border: `1px solid ${
+    tone === "ready"
+      ? "rgba(0, 166, 124, 0.28)"
+      : tone === "partial"
+        ? pageColorTokens.brandBlueGlow
+        : tone === "pending"
+          ? "rgba(185, 137, 0, 0.3)"
+          : pageColorTokens.borderSubtle
+  }`,
+});
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

@@ -49,6 +49,15 @@ export type AdsOverviewTotals = {
   roas: number | null;
 };
 
+export type AdsOverviewSeriesPoint = {
+  date: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  conversionsValue: number;
+};
+
 export type AdsOverviewSnapshotState = {
   dateStart: string;
   dateEnd: string;
@@ -100,6 +109,8 @@ export type AdsOverviewSnapshot = {
   /** 全部平台币种一致时的币种 */
   currencyCode: string | null;
   platforms: AdsOverviewPlatform[];
+  /** 已连接广告平台的合并日序列，用于统一页趋势展示 */
+  paidSeries: AdsOverviewSeriesPoint[];
   reviews: AdsOverviewReview[];
   connections: AdsOverviewConnection[];
   /** 接入链路健康；`gmcAdsLink` 为 `unknown` 时需要前端异步探测 */
@@ -173,10 +184,30 @@ export async function buildAdsOverview(params: {
   const now = params.now ?? new Date();
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays, now);
 
-  const [metricGroups, entityGroups, syncRows, gmcGroups, metaGroups, credentialRows, health] =
+  const [
+    metricGroups,
+    dailyMetricGroups,
+    entityGroups,
+    syncRows,
+    gmcGroups,
+    metaGroups,
+    credentialRows,
+    health,
+  ] =
     await Promise.all([
       prisma.adMetricDaily.groupBy({
         by: ["platform"],
+        where: { shop, date: { gte: dateStart, lte: dateEnd } },
+        _sum: {
+          spend: true,
+          impressions: true,
+          clicks: true,
+          conversions: true,
+          conversionsValue: true,
+        },
+      }),
+      prisma.adMetricDaily.groupBy({
+        by: ["date", "platform"],
         where: { shop, date: { gte: dateStart, lte: dateEnd } },
         _sum: {
           spend: true,
@@ -284,6 +315,29 @@ export async function buildAdsOverview(params: {
     };
   });
 
+  const connectedOverviewPlatforms = new Set(
+    platforms.filter((item) => item.connected).map((item) => item.platform),
+  );
+  const paidSeriesByDate = new Map<string, AdsOverviewSeriesPoint>();
+  for (const row of dailyMetricGroups) {
+    if (!connectedOverviewPlatforms.has(row.platform as AdsInsightsPlatform)) continue;
+    const current = paidSeriesByDate.get(row.date) ?? {
+      date: row.date,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      conversionsValue: 0,
+    };
+    current.spend += row._sum.spend ?? 0;
+    current.impressions += row._sum.impressions ?? 0;
+    current.clicks += row._sum.clicks ?? 0;
+    current.conversions += row._sum.conversions ?? 0;
+    current.conversionsValue += row._sum.conversionsValue ?? 0;
+    paidSeriesByDate.set(row.date, current);
+  }
+  const paidSeries = [...paidSeriesByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     rangeDays,
     dateStart,
@@ -292,6 +346,7 @@ export async function buildAdsOverview(params: {
     mixedCurrency: currencies.size > 1,
     currencyCode: currencies.size === 1 ? [...currencies][0]! : null,
     platforms,
+    paidSeries,
     reviews: [buildReview("gmc", gmcGroups), buildReview("meta", metaGroups)],
     connections,
     health,

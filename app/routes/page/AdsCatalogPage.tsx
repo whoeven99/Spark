@@ -542,6 +542,8 @@ export function AdsCatalogPage() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
+  const settingsHubPath = "/app/settings";
+  const insightsPath = `/app/insights/performance${locationSearch}`;
 
   const credentialReady =
     platform === "facebook"
@@ -912,6 +914,29 @@ export function AdsCatalogPage() {
               }
             />
 
+            <div
+              style={{
+                ...sectionStyle,
+                padding: "14px 16px",
+                background: pageColorTokens.surfaceMuted,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                {t("adsCatalog.syncGuideTitle")}
+              </div>
+              <div style={pageHintTextStyle}>
+                {t("adsCatalog.syncGuideBody", { platform: currentPlatformLabel })}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <Link to={settingsHubPath} style={guideLinkStyle(true)}>
+                  {t("common.manageConnections")}
+                </Link>
+                <Link to={insightsPath} style={guideLinkStyle(false)}>
+                  {t("settingsShell.openInsights")}
+                </Link>
+              </div>
+            </div>
+
             <div style={sectionGridStyle}>
               <div style={sectionStyle}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1024,6 +1049,16 @@ export function AdsCatalogPage() {
                   {t("adsCatalog.credentialMissing")}
                 </div>
               )}
+              {!credentialReady && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <Link to={settingsHubPath} style={guideLinkStyle(true)}>
+                    {t("common.manageConnections")}
+                  </Link>
+                  <button type="button" onClick={() => setTab("credentials")} style={buttonSecondary}>
+                    {t("adsCatalog.openLegacyCredentials")}
+                  </button>
+                </div>
+              )}
 
               <div style={statusRowStyle}>
                 <ConnectionStatusBadge label={previewStatusLabel} tone={previewTone} />
@@ -1107,22 +1142,26 @@ export function AdsCatalogPage() {
               subtitle={t("adsCatalog.credentialsSubtitle")}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div
-              style={{
-                ...sectionStyle,
-                padding: "14px 16px",
-                background: pageColorTokens.surfaceMuted,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{t("adsCatalog.insightsGuideTitle")}</div>
-              <div style={pageHintTextStyle}>{t("adsCatalog.insightsGuideBody")}</div>
-              <Link
-                to={`/app/insights/performance${locationSearch}`}
-                style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600, fontSize: 13 }}
+              <div
+                style={{
+                  ...sectionStyle,
+                  padding: "14px 16px",
+                  background: pageColorTokens.surfaceMuted,
+                }}
               >
-                {t("adsCatalog.insightsGuideLink")}
-              </Link>
-            </div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  {t("adsCatalog.credentialsHubTitle")}
+                </div>
+                <div style={pageHintTextStyle}>{t("adsCatalog.credentialsHubBody")}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <Link to={settingsHubPath} style={guideLinkStyle(true)}>
+                    {t("common.manageConnections")}
+                  </Link>
+                  <Link to={insightsPath} style={guideLinkStyle(false)}>
+                    {t("adsCatalog.insightsGuideLink")}
+                  </Link>
+                </div>
+              </div>
             <GoogleConnectPanels
               credentials={credentials}
               adsLink={adsLink}
@@ -1294,3 +1333,17 @@ const previewPreStyle: CSSProperties = {
   maxHeight: 320,
   overflow: "auto",
 };
+
+const guideLinkStyle = (primary: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: `1px solid ${primary ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
+  background: primary ? pageColorTokens.brandBlueLight : pageColorTokens.surface,
+  color: primary ? pageColorTokens.brandBlueDark : pageColorTokens.textPrimary,
+  fontSize: 12,
+  fontWeight: 700,
+  textDecoration: "none",
+});

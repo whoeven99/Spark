@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
+import { Link, useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../hooks/useOAuthPopup";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
@@ -946,6 +946,7 @@ export function GoogleAnalyticsPage() {
     : hasPending
       ? t("ga4.overviewPendingHint", { count: pendingProperties.length })
       : t("ga4.overviewNeedsSetupHint");
+  const insightsPath = "/app/insights";
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -979,6 +980,32 @@ export function GoogleAnalyticsPage() {
         />
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: "14px 16px",
+              borderRadius: pageColorTokens.radiusCard,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              background: pageColorTokens.surfaceMuted,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+              {t("ga4.insightsGuideTitle")}
+            </div>
+            <div style={{ fontSize: "0.875rem", lineHeight: 1.5, color: pageColorTokens.textSecondary }}>
+              {t("ga4.insightsGuideBody")}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Link to={insightsPath} style={guideLinkStyle(true)}>
+                {t("settingsShell.openInsights")}
+              </Link>
+              <Link to="/app/settings" style={guideLinkStyle(false)}>
+                {t("common.manageConnections")}
+              </Link>
+            </div>
+          </div>
+
           {banner ? <AuthBannerView banner={banner} onDismiss={() => setBanner(null)} /> : null}
 
           {(ga4OAuth.redirecting || oauthResolving) ? (
@@ -1019,13 +1046,29 @@ export function GoogleAnalyticsPage() {
 
       {connected && properties.length > 0 && (
         <>
-          <PageSectionHeader
-            title={t("ga4.performanceSectionTitle")}
-            subtitle={t("ga4.performanceSectionSubtitle")}
-          />
-          <Ga4PerformanceView propertyId={activePropertyId} />
+          <PageSurface>
+            <PageSectionHeader
+              title={t("ga4.performanceSectionTitle")}
+              subtitle={t("ga4.performanceSectionSubtitle")}
+            />
+            <Ga4PerformanceView propertyId={activePropertyId} />
+          </PageSurface>
         </>
       )}
     </div>
   );
 }
+
+const guideLinkStyle = (primary: boolean) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: `1px solid ${primary ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
+  background: primary ? pageColorTokens.brandBlueLight : pageColorTokens.surface,
+  color: primary ? pageColorTokens.brandBlueDark : pageColorTokens.textPrimary,
+  fontSize: 12,
+  fontWeight: 700,
+  textDecoration: "none",
+});
