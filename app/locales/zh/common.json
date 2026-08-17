@@ -2029,6 +2029,8 @@
     "googleAuthPartial": "Google 授权已完成（部分可用）：{{detail}}",
     "googlePartialGmcMissing": "该账号未关联 Merchant Center 账户。",
     "googlePartialAdsMissing": "该账号未关联 Google Ads 广告账户。",
+    "gmcGcpRegistrationRequired": "连接 Merchant Center 前，需先在 Google Merchant Center 完成 API 开发者注册，将应用关联到您的商户账户。注册完成后请等待约 5 分钟再重新连接。",
+    "gmcGcpRegistrationGuideLink": "查看 Google 注册指南 →",
     "accountSuspendedBanner": "您的 Google Merchant Center 账户已被暂停，请登录 GMC 查看具体原因并处理。",
     "goToGmc": "前往 Google Merchant Center →",
     "gmcPanelTitle": "Google Merchant Center",

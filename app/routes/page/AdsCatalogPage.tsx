@@ -33,7 +33,7 @@ import type {
   GmcReviewProductView,
 } from "../component/adsCatalog/types";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
-import { resolveAdsCatalogAuthResult } from "../../lib/adsCatalogOAuthResult";
+import { resolveAdsCatalogAuthResult, type AdsCatalogAuthBanner } from "../../lib/adsCatalogOAuthResult";
 
 type Tab = "sync" | "credentials" | "tasks";
 type Platform = "facebook" | "google" | "tiktok";
@@ -172,7 +172,7 @@ export function AdsCatalogPage() {
   const [googleReport, setGoogleReport] = useState<FeedValidationReportView | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewPlatform, setReviewPlatform] = useState<"facebook" | "google">("google");
-  const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [authBanner, setAuthBanner] = useState<AdsCatalogAuthBanner | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
   const [tiktokSyncBusy, setTiktokSyncBusy] = useState(false);
   const [tiktokSyncError, setTiktokSyncError] = useState<string | null>(null);
@@ -706,6 +706,19 @@ export function AdsCatalogPage() {
             }}
           >
             {authBanner.text}
+            {authBanner.link && (
+              <>
+                {" "}
+                <a
+                  href={authBanner.link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}
+                >
+                  {authBanner.link.label}
+                </a>
+              </>
+            )}
           </div>
         )}
 

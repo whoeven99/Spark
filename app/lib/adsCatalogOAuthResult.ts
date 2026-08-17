@@ -1,4 +1,13 @@
-export type AdsCatalogAuthBanner = { tone: "ok" | "error"; text: string };
+import {
+  GMC_GCP_REGISTRATION_GUIDE_URL,
+  isGmcGcpRegistrationRequiredError,
+} from "./gmcOAuthErrors";
+
+export type AdsCatalogAuthBanner = {
+  tone: "ok" | "error";
+  text: string;
+  link?: { href: string; label: string };
+};
 
 type AuthResultInput = {
   google?: string | null;
@@ -21,8 +30,46 @@ function hasValue(value: string | null | undefined): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+function buildGmcGcpRegistrationBanner(
+  t: AuthResultInput["t"],
+): AdsCatalogAuthBanner {
+  return {
+    tone: "error",
+    text: t("adsCatalog.gmcGcpRegistrationRequired"),
+    link: {
+      href: GMC_GCP_REGISTRATION_GUIDE_URL,
+      label: t("adsCatalog.gmcGcpRegistrationGuideLink"),
+    },
+  };
+}
+
+function resolveGmcRegistrationBanner(
+  input: Pick<AuthResultInput, "reason" | "gmcReason" | "gmc" | "google" | "t">,
+): AdsCatalogAuthBanner | undefined {
+  const { reason, gmcReason, gmc, google, t } = input;
+  const gmcSideFailed = gmc === "error" || gmc === "empty" || google === "error";
+  if (!gmcSideFailed) return undefined;
+  if (!isGmcGcpRegistrationRequiredError(reason) && !isGmcGcpRegistrationRequiredError(gmcReason)) {
+    return undefined;
+  }
+  return buildGmcGcpRegistrationBanner(t);
+}
+
+function formatGmcAuthDetail(
+  reason: string | null | undefined,
+  t: AuthResultInput["t"],
+): string {
+  if (isGmcGcpRegistrationRequiredError(reason)) {
+    return t("adsCatalog.gmcGcpRegistrationRequired");
+  }
+  return reason || t("adsCatalog.googlePartialGmcMissing");
+}
+
 function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | undefined {
   const { google, gmc, ads, reason, gmcReason, adsReason, t } = input;
+
+  const registrationBanner = resolveGmcRegistrationBanner(input);
+  if (registrationBanner) return registrationBanner;
 
   if (google === "cancelled" || gmc === "cancelled" || ads === "cancelled") {
     return { tone: "error", text: t("adsCatalog.authCancelled") };
@@ -49,7 +96,7 @@ function resolveGoogleBanner(input: AuthResultInput): AdsCatalogAuthBanner | und
     (hasSelect && (gmcMissing || adsMissing))
   ) {
     const detail = gmcMissing
-      ? gmcReason || reason || t("adsCatalog.googlePartialGmcMissing")
+      ? formatGmcAuthDetail(gmcReason || reason, t)
       : adsReason || reason || t("adsCatalog.googlePartialAdsMissing");
     return { tone: "ok", text: t("adsCatalog.googleAuthPartial", { detail }) };
   }

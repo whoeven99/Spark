@@ -103,4 +103,56 @@ describe("resolveAdsCatalogAuthResult google combined", () => {
       banner: { tone: "ok", text: "adsCatalog.authSuccess" },
     });
   });
+
+  it("shows GMC GCP registration guidance for gmc-only auth failures", () => {
+    const result = resolveAdsCatalogAuthResult({
+      gmc: "error",
+      reason: "gcp_registration_required",
+      t: (key) =>
+        key === "adsCatalog.gmcGcpRegistrationRequired"
+          ? "register first"
+          : key === "adsCatalog.gmcGcpRegistrationGuideLink"
+            ? "guide"
+            : key,
+    });
+    expect(result).toEqual({
+      action: "revalidate",
+      tab: "credentials",
+      banner: {
+        tone: "error",
+        text: "register first",
+        link: {
+          href: "https://developers.google.com/merchant/api/guides/quickstart/direct-api-calls#step_1_register_as_a_developer",
+          label: "guide",
+        },
+      },
+    });
+  });
+
+  it("shows GMC GCP registration guidance for combined partial GMC failures", () => {
+    const result = resolveAdsCatalogAuthResult({
+      google: "partial",
+      gmc: "empty",
+      ads: "success",
+      gmcReason: "gcp_registration_required",
+      t: (key) =>
+        key === "adsCatalog.gmcGcpRegistrationRequired"
+          ? "register first"
+          : key === "adsCatalog.gmcGcpRegistrationGuideLink"
+            ? "guide"
+            : key,
+    });
+    expect(result).toEqual({
+      action: "revalidate",
+      tab: "credentials",
+      banner: {
+        tone: "error",
+        text: "register first",
+        link: {
+          href: "https://developers.google.com/merchant/api/guides/quickstart/direct-api-calls#step_1_register_as_a_developer",
+          label: "guide",
+        },
+      },
+    });
+  });
 });

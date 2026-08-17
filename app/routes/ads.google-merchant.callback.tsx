@@ -26,8 +26,14 @@ import {
   getGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { registerGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
+import { normalizeGmcOAuthError } from "../lib/gmcOAuthErrors";
 
 const CALLBACK_PATH = "/ads/google-merchant/callback";
+
+function oauthFailureReason(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback;
+  return normalizeGmcOAuthError(message);
+}
 
 function appRedirect(
   request: Request,
@@ -364,7 +370,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         } catch (e) {
           return {
             ok: false,
-            reason: e instanceof Error ? e.message : "GMC 账户列表获取失败",
+            reason: oauthFailureReason(e, "GMC 账户列表获取失败"),
           };
         }
       })(),
@@ -419,7 +425,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         });
       } catch (e) {
         gmcResult = "error";
-        gmcEmptyReason = e instanceof Error ? e.message : "GMC 账户绑定失败";
+        gmcEmptyReason = oauthFailureReason(e, "GMC 账户绑定失败");
       }
     }
 
@@ -457,12 +463,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             googleAuth: "error",
             gmcAuth: "error",
             adsAuth: "error",
-            reason: e instanceof Error ? e.message : "Google 授权失败",
+            reason: oauthFailureReason(e, "Google 授权失败"),
           }
         : flow === "gmc"
           ? {
               gmcAuth: "error",
-              reason: e instanceof Error ? e.message : "GMC 授权失败",
+              reason: oauthFailureReason(e, "GMC 授权失败"),
             }
           : {
               adsAuth: "error",

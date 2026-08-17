@@ -2029,6 +2029,8 @@
     "googleAuthPartial": "Google authorization completed (partially available): {{detail}}",
     "googlePartialGmcMissing": "This Google account has no Merchant Center accounts.",
     "googlePartialAdsMissing": "This Google account has no Google Ads accounts.",
+    "gmcGcpRegistrationRequired": "Before connecting Merchant Center, complete API developer registration in Google Merchant Center to link this app to your merchant account. Wait about 5 minutes after registration, then try connecting again.",
+    "gmcGcpRegistrationGuideLink": "View Google registration guide →",
     "accountSuspendedBanner": "Your Google Merchant Center account has been suspended. Please log in to GMC to review and resolve the issue.",
     "goToGmc": "Go to Google Merchant Center →",
     "gmcPanelTitle": "Google Merchant Center",
