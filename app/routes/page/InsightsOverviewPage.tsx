@@ -38,6 +38,7 @@ import type {
   AdsOverviewSnapshot,
 } from "../../server/adsInsights/overview.server";
 import type { AdsHealthCheck, AdsHealthState } from "../../server/adsCatalog/adsHealth.server";
+import type { GoogleAttributionOverviewResponse } from "../api.google-attribution.overview";
 import type { InsightsOverviewLoaderData } from "../app.insights._index";
 
 const PLATFORM_LABEL: Record<AdsOverviewPlatform["platform"], string> = {
@@ -47,6 +48,20 @@ const PLATFORM_LABEL: Record<AdsOverviewPlatform["platform"], string> = {
 };
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
+type TemplateStatus = "strong" | "watch" | "weak";
+type TemplateModule = {
+  key: string;
+  title: string;
+  summary: string;
+  benchmark: string;
+  evidence: string[];
+  suggestion: string;
+  status: TemplateStatus;
+};
+type NarrativeCard = {
+  title: string;
+  body: string;
+};
 
 function formatInteger(value: number): string {
   return Math.round(value).toLocaleString("en-US");
@@ -84,6 +99,17 @@ function countAttentionIssues(checks: AdsHealthCheck[]): number {
   return checks.filter((check) => check.state !== "ok").length;
 }
 
+function statusPriority(status: TemplateStatus): number {
+  if (status === "weak") return 2;
+  if (status === "watch") return 1;
+  return 0;
+}
+
+function resolveOverallStatus(modules: TemplateModule[]): TemplateStatus {
+  const max = modules.reduce((current, module) => Math.max(current, statusPriority(module.status)), 0);
+  return max === 2 ? "weak" : max === 1 ? "watch" : "strong";
+}
+
 export function InsightsOverviewPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -92,9 +118,17 @@ export function InsightsOverviewPage() {
   const revalidator = useRevalidator();
   const location = useLocation();
   const navigate = useNavigate();
+  const attributionFetcher = useFetcher<GoogleAttributionOverviewResponse>();
 
   const rangeDays = overview?.rangeDays ?? 7;
   const refreshing = revalidator.state !== "idle";
+
+  useEffect(() => {
+    if (!overview) return;
+    attributionFetcher.load(`/api/google-attribution/overview?range=${rangeDays}`);
+    // fetcher identity is stable enough here; we only want to react to overview/range changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overview, rangeDays]);
 
   const handleRangeChange = (next: string) => {
     const params = new URLSearchParams(searchParams);
@@ -150,6 +184,8 @@ export function InsightsOverviewPage() {
         <OverviewBody
           overview={overview}
           isMobile={isMobile}
+          attributionData={attributionFetcher.data}
+          attributionLoading={attributionFetcher.state !== "idle"}
           onOpenPerformance={(platform) =>
             navigate(buildPerformanceHref(platform, rangeDays, location.search))
           }
@@ -185,6 +221,8 @@ function buildCatalogTasksHref(search: string): string {
 function OverviewBody({
   overview,
   isMobile,
+  attributionData,
+  attributionLoading,
   onOpenPerformance,
   onOpenCatalog,
   onOpenCatalogTasks,
@@ -192,6 +230,8 @@ function OverviewBody({
 }: {
   overview: AdsOverviewSnapshot;
   isMobile: boolean;
+  attributionData: GoogleAttributionOverviewResponse | undefined;
+  attributionLoading: boolean;
   onOpenPerformance: (platform: AdsOverviewPlatform["platform"]) => void;
   onOpenCatalog: () => void;
   onOpenCatalogTasks: () => void;
@@ -202,10 +242,66 @@ function OverviewBody({
   const connectedCount = overview.platforms.filter((item) => item.connected).length;
   const attentionCount = countAttentionIssues(overview.health);
   const disapprovedTotal = overview.reviews.reduce((sum, review) => sum + review.disapproved, 0);
+  const reviewedTotal = overview.reviews.reduce((sum, review) => sum + review.total, 0);
   const freshSnapshotCount = overview.platforms.filter(
     (item) => item.connected && item.snapshot && !item.snapshot.stale,
   ).length;
   const readyConnections = overview.connections.filter((item) => item.connected).length;
+  const attributionOk = attributionData && attributionData.ok ? attributionData : null;
+  const linkedCampaignShare =
+    attributionOk && attributionOk.campaigns.length > 0
+      ? (attributionOk.campaigns.filter((item) => item.matchQuality === "linked").length /
+          attributionOk.campaigns.length) *
+        100
+      : null;
+  const disapprovedRate = reviewedTotal > 0 ? (disapprovedTotal / reviewedTotal) * 100 : null;
+  const templateModules: TemplateModule[] = [
+    buildEfficiencyModule({
+      t,
+      roas: overview.totals.roas,
+      conversions: overview.totals.conversions,
+      spend: overview.totals.spend,
+      value: overview.totals.conversionsValue,
+      currencyCode: overview.currencyCode,
+    }),
+    buildCoverageModule({
+      t,
+      connectedCount,
+      totalPlatforms: overview.platforms.length,
+      freshSnapshotCount,
+      attentionCount,
+      readyConnections,
+      totalConnections: overview.connections.length,
+    }),
+    buildReadinessModule({
+      t,
+      disapprovedTotal,
+      disapprovedRate,
+      attentionCount,
+      reviewedTotal,
+    }),
+    buildAttributionModule({
+      t,
+      attributionData,
+      attributionLoading,
+      linkedCampaignShare,
+    }),
+  ];
+  const overallTemplateStatus = resolveOverallStatus(templateModules);
+  const recommendationModules = templateModules.filter((module) => module.status !== "strong");
+  const primaryFocusModule =
+    recommendationModules[0] ?? templateModules.find((module) => module.key === "efficiency") ?? templateModules[0];
+  const narrativeCards = buildNarrativeCards({
+    t,
+    roas: overview.totals.roas,
+    conversions: overview.totals.conversions,
+    connectedCount,
+    totalPlatforms: overview.platforms.length,
+    attributionData,
+    attributionLoading,
+    linkedCampaignShare,
+    focusModule: primaryFocusModule,
+  });
   const overviewFooter = [
     t("insights.overviewFooterWindow", {
       start: overview.dateStart,
@@ -302,6 +398,71 @@ function OverviewBody({
             label={t("insights.kpiConversions")}
             value={formatInteger(overview.totals.conversions)}
           />
+        </div>
+      </PageSurface>
+
+      <PageSurface>
+        <PageSectionHeader
+          title={t("insights.templateSectionTitle")}
+          subtitle={t("insights.templateSectionSubtitle")}
+          badge={
+            <span style={summaryBadgeStyle(overallTemplateStatus !== "strong")}>
+              {t(`insights.templateStatus.${overallTemplateStatus}`)}
+            </span>
+          }
+        />
+        <div style={templateSummaryStyle(overallTemplateStatus)}>
+          <div style={{ display: "grid", gap: "0.35rem" }}>
+            <div style={cardTitleStyle}>{t(`insights.templateOverallTitle.${overallTemplateStatus}`)}</div>
+            <div style={analysisActionBodyStyle}>
+              {t(`insights.templateOverallBody.${overallTemplateStatus}`)}
+            </div>
+          </div>
+          <div style={templateSummaryMetaStyle}>
+            {t("insights.templateSummaryMeta", {
+              strong: templateModules.filter((module) => module.status === "strong").length,
+              watch: templateModules.filter((module) => module.status === "watch").length,
+              weak: templateModules.filter((module) => module.status === "weak").length,
+            })}
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: "0.55rem" }}>
+          <div style={cardTitleStyle}>{t("insights.templateNarrativeTitle")}</div>
+          <div style={templateNarrativeGridStyle(isMobile)}>
+            {narrativeCards.map((card) => (
+              <div key={card.title} style={templateNarrativeCardStyle}>
+                <div style={{ display: "grid", gap: "0.25rem" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+                    {card.title}
+                  </div>
+                  <div style={analysisActionBodyStyle}>{card.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={templateGridStyle(isMobile)}>
+          {templateModules.map((module) => (
+            <TemplateModuleCard key={module.key} module={module} />
+          ))}
+        </div>
+        <div style={templateRecommendationStyle}>
+          <div style={{ display: "grid", gap: "0.35rem" }}>
+            <div style={cardTitleStyle}>{t("insights.templateRecommendationTitle")}</div>
+            <div style={analysisActionBodyStyle}>{t("insights.templateRecommendationBody")}</div>
+          </div>
+          <div style={{ display: "grid", gap: "0.55rem" }}>
+            {(recommendationModules.length > 0 ? recommendationModules : templateModules.slice(0, 1)).map(
+              (module) => (
+                <div key={module.key} style={templateRecommendationItemStyle}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+                    {module.title}
+                  </div>
+                  <div style={cardMetaStyle}>{module.suggestion}</div>
+                </div>
+              ),
+            )}
+          </div>
         </div>
       </PageSurface>
 
@@ -430,6 +591,31 @@ function AnalysisActionCard({
       <button type="button" style={secondaryButtonStyle} onClick={onClick}>
         {cta}
       </button>
+    </div>
+  );
+}
+
+function TemplateModuleCard({ module }: { module: TemplateModule }) {
+  const { t } = useTranslation();
+
+  return (
+    <div style={templateModuleCardStyle(module.status)}>
+      <div style={cardHeadStyle}>
+        <span style={cardTitleStyle}>{module.title}</span>
+        <span style={templateStatusPillStyle(module.status)}>
+          {t(`insights.templateStatus.${module.status}`)}
+        </span>
+      </div>
+      <div style={analysisActionBodyStyle}>{module.summary}</div>
+      <div style={templateBenchmarkStyle}>{module.benchmark}</div>
+      <div style={{ display: "grid", gap: "0.35rem" }}>
+        {module.evidence.map((item) => (
+          <div key={item} style={templateEvidenceStyle}>
+            {item}
+          </div>
+        ))}
+      </div>
+      <div style={cardFootnoteStyle}>{module.suggestion}</div>
     </div>
   );
 }
@@ -746,6 +932,305 @@ function ConnectionTable({
   );
 }
 
+function buildEfficiencyModule(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  roas: number | null;
+  conversions: number;
+  spend: number;
+  value: number;
+  currencyCode: string | null;
+}): TemplateModule {
+  const { t, roas, conversions, spend, value, currencyCode } = params;
+  const status: TemplateStatus = roas !== null && roas >= 3 && conversions >= 20
+    ? "strong"
+    : roas !== null && roas >= 1.5 && conversions >= 5
+      ? "watch"
+      : "weak";
+
+  return {
+    key: "efficiency",
+    title: t("insights.templateEfficiencyTitle"),
+    summary:
+      status === "strong"
+        ? t("insights.templateEfficiencySummaryStrong")
+        : status === "watch"
+          ? t("insights.templateEfficiencySummaryWatch")
+          : t("insights.templateEfficiencySummaryWeak"),
+    benchmark: t("insights.templateEfficiencyBenchmark"),
+    evidence: [
+      t("insights.templateEvidenceRoas", { value: formatRatio(roas, "x") }),
+      t("insights.templateEvidenceConversions", { value: formatInteger(conversions) }),
+      t("insights.templateEvidenceSpendValue", {
+        spend: formatMoney(spend, currencyCode),
+        value: formatMoney(value, currencyCode),
+      }),
+    ],
+    suggestion:
+      status === "strong"
+        ? t("insights.templateEfficiencyActionStrong")
+        : status === "watch"
+          ? t("insights.templateEfficiencyActionWatch")
+          : t("insights.templateEfficiencyActionWeak"),
+    status,
+  };
+}
+
+function buildCoverageModule(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  connectedCount: number;
+  totalPlatforms: number;
+  freshSnapshotCount: number;
+  attentionCount: number;
+  readyConnections: number;
+  totalConnections: number;
+}): TemplateModule {
+  const {
+    t,
+    connectedCount,
+    totalPlatforms,
+    freshSnapshotCount,
+    attentionCount,
+    readyConnections,
+    totalConnections,
+  } = params;
+  const status: TemplateStatus =
+    connectedCount >= 2 && freshSnapshotCount === connectedCount && attentionCount === 0
+      ? "strong"
+      : connectedCount >= 1 && readyConnections >= Math.ceil(totalConnections / 2)
+        ? "watch"
+        : "weak";
+
+  return {
+    key: "coverage",
+    title: t("insights.templateCoverageTitle"),
+    summary:
+      status === "strong"
+        ? t("insights.templateCoverageSummaryStrong")
+        : status === "watch"
+          ? t("insights.templateCoverageSummaryWatch")
+          : t("insights.templateCoverageSummaryWeak"),
+    benchmark: t("insights.templateCoverageBenchmark"),
+    evidence: [
+      t("insights.templateEvidencePlatforms", {
+        connected: connectedCount,
+        total: totalPlatforms,
+      }),
+      t("insights.templateEvidenceSnapshots", {
+        ready: freshSnapshotCount,
+        total: connectedCount,
+      }),
+      t("insights.templateEvidenceConnections", {
+        connected: readyConnections,
+        total: totalConnections,
+      }),
+    ],
+    suggestion:
+      status === "strong"
+        ? t("insights.templateCoverageActionStrong")
+        : status === "watch"
+          ? t("insights.templateCoverageActionWatch")
+          : t("insights.templateCoverageActionWeak"),
+    status,
+  };
+}
+
+function buildReadinessModule(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  disapprovedTotal: number;
+  disapprovedRate: number | null;
+  attentionCount: number;
+  reviewedTotal: number;
+}): TemplateModule {
+  const { t, disapprovedTotal, disapprovedRate, attentionCount, reviewedTotal } = params;
+  const status: TemplateStatus =
+    disapprovedTotal === 0 && attentionCount <= 1
+      ? "strong"
+      : (disapprovedRate ?? 100) < 15 && attentionCount <= 3
+        ? "watch"
+        : "weak";
+
+  return {
+    key: "readiness",
+    title: t("insights.templateReadinessTitle"),
+    summary:
+      status === "strong"
+        ? t("insights.templateReadinessSummaryStrong")
+        : status === "watch"
+          ? t("insights.templateReadinessSummaryWatch")
+          : t("insights.templateReadinessSummaryWeak"),
+    benchmark: t("insights.templateReadinessBenchmark"),
+    evidence: [
+      t("insights.templateEvidenceDisapproved", { value: formatInteger(disapprovedTotal) }),
+      t("insights.templateEvidenceDisapprovedRate", {
+        value: reviewedTotal > 0 ? formatPercent(disapprovedRate) : "—",
+      }),
+      t("insights.templateEvidenceHealthIssues", { value: String(attentionCount) }),
+    ],
+    suggestion:
+      status === "strong"
+        ? t("insights.templateReadinessActionStrong")
+        : status === "watch"
+          ? t("insights.templateReadinessActionWatch")
+          : t("insights.templateReadinessActionWeak"),
+    status,
+  };
+}
+
+function buildAttributionModule(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  attributionData: GoogleAttributionOverviewResponse | undefined;
+  attributionLoading: boolean;
+  linkedCampaignShare: number | null;
+}): TemplateModule {
+  const { t, attributionData, attributionLoading, linkedCampaignShare } = params;
+  const attributionOk = attributionData && attributionData.ok ? attributionData : null;
+  const attributionError = attributionData && !attributionData.ok ? attributionData : null;
+  const status: TemplateStatus =
+    attributionOk && attributionOk.linked && (linkedCampaignShare ?? 0) >= 60 && attributionOk.warnings.length === 0
+      ? "strong"
+      : attributionOk && attributionOk.linked
+        ? "watch"
+        : "weak";
+
+  return {
+    key: "attribution",
+    title: t("insights.templateAttributionTitle"),
+    summary: attributionLoading
+      ? t("insights.templateAttributionSummaryLoading")
+      : attributionOk
+        ? status === "strong"
+          ? t("insights.templateAttributionSummaryStrong")
+          : status === "watch"
+            ? t("insights.templateAttributionSummaryWatch")
+            : t("insights.templateAttributionSummaryWeak")
+        : attributionError?.reason === "not_configured"
+          ? t("insights.templateAttributionSummaryMissing")
+          : t("insights.templateAttributionSummaryError"),
+    benchmark: t("insights.templateAttributionBenchmark"),
+    evidence: attributionOk
+      ? [
+          t("insights.templateEvidenceAttributedRevenue", {
+            value: formatMoney(attributionOk.totals.ga4Revenue, attributionOk.currencyCode),
+          }),
+          t("insights.templateEvidenceAttributedRoas", {
+            value: formatRatio(attributionOk.totals.roas, "x"),
+          }),
+          t("insights.templateEvidenceLinkedShare", {
+            value: linkedCampaignShare === null ? "—" : formatPercent(linkedCampaignShare),
+          }),
+        ]
+      : [
+          t("insights.templateEvidenceAttributionState", {
+            value: attributionLoading
+              ? t("insights.templateAttributionLoading")
+              : attributionError?.reason === "not_configured"
+                ? t("insights.templateAttributionNotReady")
+                : t("insights.templateAttributionUnavailable"),
+          }),
+        ],
+    suggestion: attributionLoading
+      ? t("insights.templateAttributionActionLoading")
+      : attributionOk
+        ? status === "strong"
+          ? t("insights.templateAttributionActionStrong")
+          : status === "watch"
+            ? t("insights.templateAttributionActionWatch")
+            : t("insights.templateAttributionActionWeak")
+        : t("insights.templateAttributionActionMissing"),
+    status,
+  };
+}
+
+function buildNarrativeCards(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  roas: number | null;
+  conversions: number;
+  connectedCount: number;
+  totalPlatforms: number;
+  attributionData: GoogleAttributionOverviewResponse | undefined;
+  attributionLoading: boolean;
+  linkedCampaignShare: number | null;
+  focusModule: TemplateModule;
+}): NarrativeCard[] {
+  const {
+    t,
+    roas,
+    conversions,
+    connectedCount,
+    totalPlatforms,
+    attributionData,
+    attributionLoading,
+    linkedCampaignShare,
+    focusModule,
+  } = params;
+  const efficiencyStatus: TemplateStatus =
+    roas !== null && roas >= 3 && conversions >= 20
+      ? "strong"
+      : roas !== null && roas >= 1.5 && conversions >= 5
+        ? "watch"
+        : "weak";
+  const attributionOk = attributionData && attributionData.ok ? attributionData : null;
+  const attributionError = attributionData && !attributionData.ok ? attributionData : null;
+
+  const performanceBody =
+    efficiencyStatus === "strong"
+      ? t("insights.templateNarrativePerformanceStrong", {
+          roas: formatRatio(roas, "x"),
+          conversions: formatInteger(conversions),
+          connected: connectedCount,
+          total: totalPlatforms,
+        })
+      : efficiencyStatus === "watch"
+        ? t("insights.templateNarrativePerformanceWatch", {
+            roas: formatRatio(roas, "x"),
+            conversions: formatInteger(conversions),
+            connected: connectedCount,
+            total: totalPlatforms,
+          })
+        : t("insights.templateNarrativePerformanceWeak", {
+            roas: formatRatio(roas, "x"),
+            conversions: formatInteger(conversions),
+            connected: connectedCount,
+            total: totalPlatforms,
+          });
+
+  const attributionBody = attributionLoading
+    ? t("insights.templateNarrativeAttributionLoading")
+    : attributionOk
+      ? attributionOk.linked && (linkedCampaignShare ?? 0) >= 60
+        ? t("insights.templateNarrativeAttributionStrong", {
+            revenue: formatMoney(attributionOk.totals.ga4Revenue, attributionOk.currencyCode),
+            roas: formatRatio(attributionOk.totals.roas, "x"),
+            linkedShare: linkedCampaignShare === null ? "—" : formatPercent(linkedCampaignShare),
+          })
+        : t("insights.templateNarrativeAttributionWatch", {
+            revenue: formatMoney(attributionOk.totals.ga4Revenue, attributionOk.currencyCode),
+            roas: formatRatio(attributionOk.totals.roas, "x"),
+            linkedShare: linkedCampaignShare === null ? "—" : formatPercent(linkedCampaignShare),
+          })
+      : attributionError?.reason === "not_configured"
+        ? t("insights.templateNarrativeAttributionMissing")
+        : t("insights.templateNarrativeAttributionWeak");
+
+  return [
+    {
+      title: t("insights.templateNarrativePerformanceTitle"),
+      body: performanceBody,
+    },
+    {
+      title: t("insights.templateNarrativeAttributionTitle"),
+      body: attributionBody,
+    },
+    {
+      title: t("insights.templateNarrativeActionTitle"),
+      body: t("insights.templateNarrativeActionBody", {
+        module: focusModule.title,
+        action: focusModule.suggestion,
+      }),
+    },
+  ];
+}
+
 const toolbarStyle = (isMobile: boolean): CSSProperties => ({
   display: "flex",
   flexDirection: isMobile ? "column" : "row",
@@ -779,6 +1264,18 @@ const analysisGridStyle = (isMobile: boolean): CSSProperties => ({
   gap: "0.75rem",
 });
 
+const templateGridStyle = (isMobile: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+  gap: "0.75rem",
+});
+
+const templateNarrativeGridStyle = (isMobile: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+  gap: "0.75rem",
+});
+
 const analysisActionCardStyle: CSSProperties = {
   ...destinationSurfaceStyle,
   padding: "1rem",
@@ -786,10 +1283,73 @@ const analysisActionCardStyle: CSSProperties = {
   gap: "0.75rem",
 };
 
+const templateNarrativeCardStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  padding: "0.9rem 1rem",
+  display: "grid",
+  gap: "0.5rem",
+  background: pageColorTokens.surfaceMuted,
+};
+
+const templateSummaryStyle = (attention: TemplateStatus): CSSProperties => ({
+  ...destinationSurfaceStyle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.6rem",
+  borderColor:
+    attention === "weak"
+      ? "rgba(214, 44, 13, 0.18)"
+      : attention === "watch"
+        ? "rgba(185, 137, 0, 0.24)"
+        : "rgba(0, 166, 124, 0.24)",
+  background:
+    attention === "weak"
+      ? "#fff4f2"
+      : attention === "watch"
+        ? "#fffaf0"
+        : pageColorTokens.brandGreenLight,
+});
+
+const templateSummaryMetaStyle: CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textSecondary,
+};
+
 const analysisActionBodyStyle: CSSProperties = {
   fontSize: 13,
   lineHeight: 1.5,
   color: pageColorTokens.textBody,
+};
+
+const templateBenchmarkStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+};
+
+const templateEvidenceStyle: CSSProperties = {
+  padding: "0.45rem 0.6rem",
+  borderRadius: 10,
+  fontSize: 12,
+  color: pageColorTokens.textPrimary,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const templateRecommendationStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.85rem",
+};
+
+const templateRecommendationItemStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.2rem",
+  padding: "0.65rem 0.75rem",
+  borderRadius: 12,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceMuted,
 };
 
 const cardHeadStyle: CSSProperties = {
@@ -865,6 +1425,45 @@ const summaryBadgeStyle = (attention: boolean): CSSProperties => ({
   color: attention ? "#8a5a00" : pageColorTokens.brandGreenDark,
   background: attention ? "#fff7e0" : pageColorTokens.brandGreenLight,
   border: `1px solid ${attention ? "rgba(185, 137, 0, 0.3)" : "rgba(0, 166, 124, 0.28)"}`,
+});
+
+const templateStatusPillStyle = (status: TemplateStatus): CSSProperties => ({
+  padding: "0.16rem 0.5rem",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  color:
+    status === "strong"
+      ? pageColorTokens.brandGreenDark
+      : status === "watch"
+        ? "#8a5a00"
+        : "#d82c0d",
+  background:
+    status === "strong"
+      ? pageColorTokens.brandGreenLight
+      : status === "watch"
+        ? "#fff7e0"
+        : "#fff0ee",
+  border: `1px solid ${
+    status === "strong"
+      ? "rgba(0, 166, 124, 0.28)"
+      : status === "watch"
+        ? "rgba(185, 137, 0, 0.3)"
+        : "rgba(216, 44, 13, 0.22)"
+  }`,
+});
+
+const templateModuleCardStyle = (status: TemplateStatus): CSSProperties => ({
+  ...destinationSurfaceStyle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.75rem",
+  borderColor:
+    status === "strong"
+      ? "rgba(0, 166, 124, 0.18)"
+      : status === "watch"
+        ? "rgba(185, 137, 0, 0.24)"
+        : "rgba(216, 44, 13, 0.18)",
 });
 
 const healthStateTokens: Record<
