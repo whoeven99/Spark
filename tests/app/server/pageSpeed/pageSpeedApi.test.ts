@@ -7,6 +7,7 @@ import {
 import { normalizePageSpeedUrl } from "../../../../app/server/pageSpeed/pageSpeedUrl.server";
 import {
   PageSpeedRequestError,
+  readPageSpeedProvider,
   runPageSpeedAnalysis,
 } from "../../../../app/server/pageSpeed/pageSpeedApi.server";
 
@@ -192,6 +193,11 @@ describe("runPageSpeedAnalysis", () => {
     vi.unstubAllEnvs();
   });
 
+  it("defaults to lighthouse provider", () => {
+    vi.stubEnv("PAGE_SPEED_PROVIDER", "");
+    expect(readPageSpeedProvider()).toBe("lighthouse");
+  });
+
   it("throws invalid_url without calling fetch", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -202,6 +208,7 @@ describe("runPageSpeedAnalysis", () => {
   });
 
   it("parses a successful PSI payload and omits key from the request when unset", async () => {
+    vi.stubEnv("PAGE_SPEED_PROVIDER", "google");
     vi.stubEnv("GOOGLE_PAGESPEED_API_KEY", "");
     vi.stubGlobal(
       "fetch",
@@ -226,6 +233,7 @@ describe("runPageSpeedAnalysis", () => {
   });
 
   it("maps 429 to rate_limited", async () => {
+    vi.stubEnv("PAGE_SPEED_PROVIDER", "google");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({

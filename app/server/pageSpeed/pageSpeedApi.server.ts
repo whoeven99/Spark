@@ -1,10 +1,8 @@
 import { formatOutboundNetworkError } from "../common/outboundError.server";
-import type {
-  PageSpeedErrorCode,
-  PageSpeedReport,
-  PageSpeedStrategy,
-} from "../../lib/pageSpeedTypes";
+import type { PageSpeedReport, PageSpeedStrategy } from "../../lib/pageSpeedTypes";
 import { PAGE_SPEED_CATEGORY_IDS } from "../../lib/pageSpeedTypes";
+import { PageSpeedRequestError } from "./pageSpeedErrors.server";
+import { runLighthousePageSpeedAnalysis } from "./pageSpeedLighthouse.server";
 import { parsePageSpeedResponse } from "./pageSpeedParse.server";
 import { normalizePageSpeedUrl } from "./pageSpeedUrl.server";
 
@@ -12,15 +10,13 @@ const PSI_ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed
 export const PAGE_SPEED_TIMEOUT_MS = 90_000;
 const LOG_PREFIX = "[PageSpeed]";
 
-export class PageSpeedRequestError extends Error {
-  constructor(
-    message: string,
-    readonly errorCode: PageSpeedErrorCode,
-    readonly status = 502,
-  ) {
-    super(message);
-    this.name = "PageSpeedRequestError";
-  }
+export { PageSpeedRequestError } from "./pageSpeedErrors.server";
+
+export type PageSpeedProvider = "lighthouse" | "google";
+
+export function readPageSpeedProvider(): PageSpeedProvider {
+  const raw = process.env.PAGE_SPEED_PROVIDER?.trim().toLowerCase();
+  return raw === "google" ? "google" : "lighthouse";
 }
 
 function readApiKey(): string {
@@ -64,20 +60,15 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 }
 
-export async function runPageSpeedAnalysis(params: {
+async function runGooglePageSpeedAnalysis(params: {
   url: string;
   strategy: PageSpeedStrategy;
   locale: string;
 }): Promise<PageSpeedReport> {
-  const normalized = normalizePageSpeedUrl(params.url);
-  if (!normalized) {
-    throw new PageSpeedRequestError("invalid url", "invalid_url", 400);
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PAGE_SPEED_TIMEOUT_MS);
   try {
-    const response = await fetch(buildPsiUrl(normalized, params.strategy, params.locale), {
+    const response = await fetch(buildPsiUrl(params.url, params.strategy, params.locale), {
       method: "GET",
       signal: controller.signal,
     });
@@ -99,4 +90,26 @@ export async function runPageSpeedAnalysis(params: {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function runPageSpeedAnalysis(params: {
+  url: string;
+  strategy: PageSpeedStrategy;
+  locale: string;
+}): Promise<PageSpeedReport> {
+  const normalized = normalizePageSpeedUrl(params.url);
+  if (!normalized) {
+    throw new PageSpeedRequestError("invalid url", "invalid_url", 400);
+  }
+
+  const provider = readPageSpeedProvider();
+  if (provider === "google") {
+    return runGooglePageSpeedAnalysis({ ...params, url: normalized });
+  }
+
+  return runLighthousePageSpeedAnalysis({
+    ...params,
+    url: normalized,
+    timeoutMs: PAGE_SPEED_TIMEOUT_MS,
+  });
 }

@@ -137,7 +137,7 @@ npm run turso:migrate:test
 - 邮件和飞书：`TENCENT_*`、`EMAIL_*`、`OPS_NOTIFY_EMAIL`、`FEISHU_*`。
 - Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
 - 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
-- PageSpeed Insights：`GOOGLE_PAGESPEED_API_KEY`（可选但建议配置；平台级 Key，不是商户 OAuth）。
+- PageSpeed Insights：默认本地 `lighthouse` + 本机 Chrome（`PAGE_SPEED_PROVIDER=lighthouse`）；改 `PAGE_SPEED_PROVIDER=google` 时走 PSI API，可选 `GOOGLE_PAGESPEED_API_KEY`（平台级 Key，不是商户 OAuth）。
 - TikTok Pixel（Ads Catalog）：
   - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
   - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。
