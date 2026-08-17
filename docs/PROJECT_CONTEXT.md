@@ -38,6 +38,8 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - `/api/automation-overview`：Today 和工作台自动化概览。
 - `/api/support`、`/api/external-support`：客服会话入口。
 - `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
+- `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console。
+- `POST /api/pagespeed`：PageSpeed Insights 实验室分析（不落库）。
 - 广告 Catalog / Insights OAuth：`app.ads-catalog.tsx`、`app.insights.performance.tsx`（旧路径 `app.settings.ads-insights.tsx` 只做重定向）、`app.ads.*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx`、`ads.meta-ads.callback.tsx`、`ads.google-*.callback.tsx`、`ads.tiktok-catalog.callback.tsx`。
 - TikTok 店面测试事件双发：`POST /api/ads-catalog/tiktok-storefront-track`（仅测试模式）。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单、退款、库存、履约 Webhook。
@@ -53,6 +55,8 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 | 图片生成 | `app/server/imageGeneration/`、`app/server/ai/skills/imageGeneration/` |
 | 图片翻译 | `app/server/pictureTranslate/`、`app/server/ai/skills/pictureTranslate/` |
 | 广告 Catalog / Insights | `app/server/adsCatalog/`、`app/server/adsInsights/` |
+| Google Search Console | `app/server/googleSearchConsole/` |
+| PageSpeed Insights | `app/server/pageSpeed/` |
 | AI 任务和任务估算 | `app/server/aiTask/` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | Today、诊断、ROI、自动化 | `app/server/operations/`、`app/server/automation/` |
@@ -133,6 +137,7 @@ npm run turso:migrate:test
 - 邮件和飞书：`TENCENT_*`、`EMAIL_*`、`OPS_NOTIFY_EMAIL`、`FEISHU_*`。
 - Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
 - 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
+- PageSpeed Insights：仅走 Google PSI API v5；可选平台级 `GOOGLE_PAGESPEED_API_KEY`（不是商户 OAuth）。
 - TikTok Pixel（Ads Catalog）：
   - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
   - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。

@@ -62,6 +62,7 @@
 | 广告洞察 | Meta / Google / TikTok 广告系列→广告组→广告实时指标（7/14/30 天）；TikTok 支持沙盒开关 | `/app/insights/performance` |
 | 物流集成配置 | FedEx、顺丰凭证配置 | `/app/settings/logistics` |
 | 用户反馈 | 提交建议或问题 | `/app/settings/feedback` |
+| PageSpeed Insights | 对公网 URL 跑 Google 实验室分析，展示性能/无障碍/SEO/最佳做法分数、指标与审核项 | `/app/settings/pagespeed` |
 | 邮件与通知 | 安装、卸载、订阅、购包、任务状态等邮件与飞书运营通知 | 后台服务 / Webhook |
 | Webhook 同步 | 订单、退款、库存、履约、订阅、购包、卸载、scope 更新 | `app/routes/webhooks.*` |
 | Web Pixel | 浏览、购物车、checkout 等行为采集 | `extensions/ciwi-spark-web-pixel/`、`/api/pixel-ingest` |
