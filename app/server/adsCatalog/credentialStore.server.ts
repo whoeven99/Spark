@@ -439,9 +439,28 @@ export type GoogleAdsCredential = {
    * USER_PERMISSION_DENIED，因此无戳的值必须重新探测。
    */
   loginCustomerIdVerifiedAt?: string;
+  /** OAuth 授权后发现的可用 Ads 账户，供单独选择/重试时继续使用。 */
+  availableAccounts?: PendingOAuthAccount[];
   remarketing?: GoogleRemarketingConfig;
   updatedAt: string;
 };
+
+function parseGoogleAdsAvailableAccounts(value: unknown): PendingOAuthAccount[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const accounts = value.flatMap((item) => {
+    if (!isJsonObject(item) || typeof item.id !== "string" || !item.id.trim()) return [];
+    return [
+      {
+        id: item.id.trim(),
+        name: typeof item.name === "string" ? item.name : undefined,
+        formatted: typeof item.formatted === "string" ? item.formatted : undefined,
+        loginCustomerId:
+          typeof item.loginCustomerId === "string" ? item.loginCustomerId : undefined,
+      },
+    ];
+  });
+  return accounts.length > 0 ? accounts : undefined;
+}
 
 export type GoogleRemarketingConfig = {
   tagId: string;
@@ -531,6 +550,7 @@ export async function getGoogleAdsCredential(
       typeof record.data.loginCustomerIdVerifiedAt === "string"
         ? record.data.loginCustomerIdVerifiedAt
         : undefined,
+    availableAccounts: parseGoogleAdsAvailableAccounts(record.data.availableAccounts),
     remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
   };
@@ -546,6 +566,7 @@ export async function setGoogleAdsCredential(
     | "customerId"
     | "loginCustomerId"
     | "loginCustomerIdVerifiedAt"
+    | "availableAccounts"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -581,6 +602,11 @@ export async function setGoogleAdsCredential(
       payload.loginCustomerIdVerifiedAt ??
       (keepLoginVerifiedAt && typeof existing?.data.loginCustomerIdVerifiedAt === "string"
         ? existing.data.loginCustomerIdVerifiedAt
+        : null),
+    availableAccounts:
+      payload.availableAccounts ??
+      (Array.isArray(existing?.data.availableAccounts)
+        ? existing.data.availableAccounts
         : null),
   });
 }
