@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  defaultPageSpeedLocaleFromApp,
+  isPageSpeedLocale,
+  resolvePageSpeedLocale,
+} from "../../../../app/lib/pageSpeedLocales";
+import {
   lighthouseScoreTo100,
   parsePageSpeedResponse,
   scoreToBand,
@@ -7,7 +12,6 @@ import {
 import { normalizePageSpeedUrl } from "../../../../app/server/pageSpeed/pageSpeedUrl.server";
 import {
   PageSpeedRequestError,
-  readPageSpeedProvider,
   runPageSpeedAnalysis,
 } from "../../../../app/server/pageSpeed/pageSpeedApi.server";
 
@@ -86,11 +90,13 @@ const PSI_FIXTURE = {
       "link-name": {
         id: "link-name",
         title: "Links have discernible names",
+        description: "Link text helps screen readers.",
         score: 1,
       },
       "manual-a11y": {
         id: "manual-a11y",
         title: "Interactive controls are keyboard focusable",
+        description: "Manual check required.",
         score: null,
         scoreDisplayMode: "manual",
       },
@@ -143,6 +149,22 @@ const PSI_FIXTURE = {
   },
 };
 
+describe("pageSpeedLocales", () => {
+  it("accepts supported PSI locale codes", () => {
+    expect(isPageSpeedLocale("ja")).toBe(true);
+    expect(isPageSpeedLocale("zh-CN")).toBe(true);
+    expect(isPageSpeedLocale("xx")).toBe(false);
+  });
+
+  it("normalizes common aliases and falls back to en", () => {
+    expect(resolvePageSpeedLocale("zh")).toBe("zh-CN");
+    expect(resolvePageSpeedLocale("pt")).toBe("pt-BR");
+    expect(resolvePageSpeedLocale("invalid")).toBe("en");
+    expect(defaultPageSpeedLocaleFromApp("zh-CN")).toBe("zh-CN");
+    expect(defaultPageSpeedLocaleFromApp("en-US")).toBe("en");
+  });
+});
+
 describe("pageSpeedUrl", () => {
   it("normalizes host-only input to https", () => {
     expect(normalizePageSpeedUrl("ciwi.ai")).toBe("https://ciwi.ai/");
@@ -163,9 +185,10 @@ describe("pageSpeedParse", () => {
     expect(scoreToBand(30)).toBe("poor");
   });
 
-  it("extracts category scores, metrics, opportunities and failed audits", () => {
-    const report = parsePageSpeedResponse(PSI_FIXTURE, "mobile");
+  it("extracts category scores, metrics, opportunities, failed, passed and manual audits", () => {
+    const report = parsePageSpeedResponse(PSI_FIXTURE, "mobile", "ja");
     expect(report).not.toBeNull();
+    expect(report?.locale).toBe("ja");
     expect(report?.categories.map((item) => item.score)).toEqual([75, 94, 100, 100]);
     expect(report?.metrics).toHaveLength(5);
     expect(report?.metrics[1]?.band).toBe("poor");
@@ -178,6 +201,8 @@ describe("pageSpeedParse", () => {
     );
     expect(report?.reports.performance.diagnostics).toHaveLength(1);
     expect(report?.reports.accessibility.failed[0]?.id).toBe("color-contrast");
+    expect(report?.reports.accessibility.passed.map((item) => item.id)).toEqual(["link-name"]);
+    expect(report?.reports.accessibility.manual.map((item) => item.id)).toEqual(["manual-a11y"]);
     expect(report?.reports.accessibility.passedCount).toBe(1);
     expect(report?.reports.accessibility.manualCount).toBe(1);
   });
@@ -193,28 +218,25 @@ describe("runPageSpeedAnalysis", () => {
     vi.unstubAllEnvs();
   });
 
-  it("defaults to lighthouse provider", () => {
-    vi.stubEnv("PAGE_SPEED_PROVIDER", "");
-    expect(readPageSpeedProvider()).toBe("lighthouse");
-  });
-
   it("throws invalid_url without calling fetch", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    await expect(runPageSpeedAnalysis({ url: "not a url", strategy: "mobile", locale: "zh-CN" })).rejects.toMatchObject({
+    await expect(
+      runPageSpeedAnalysis({ url: "not a url", strategy: "mobile", locale: "zh-CN" }),
+    ).rejects.toMatchObject({
       errorCode: "invalid_url",
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("parses a successful PSI payload and omits key from the request when unset", async () => {
-    vi.stubEnv("PAGE_SPEED_PROVIDER", "google");
     vi.stubEnv("GOOGLE_PAGESPEED_API_KEY", "");
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: URL) => {
         expect(input.searchParams.get("key")).toBeNull();
         expect(input.searchParams.get("strategy")).toBe("mobile");
+        expect(input.searchParams.get("locale")).toBe("zh-CN");
         expect(input.searchParams.getAll("category")).toContain("seo");
         return {
           ok: true,
@@ -229,11 +251,11 @@ describe("runPageSpeedAnalysis", () => {
       locale: "zh-CN",
     });
     expect(report.finalUrl).toBe("https://ciwi.ai/");
+    expect(report.locale).toBe("zh-CN");
     expect(report.reports.performance.score).toBe(75);
   });
 
   it("maps 429 to rate_limited", async () => {
-    vi.stubEnv("PAGE_SPEED_PROVIDER", "google");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({

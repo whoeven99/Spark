@@ -1,8 +1,8 @@
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 import type { PageSpeedReport, PageSpeedStrategy } from "../../lib/pageSpeedTypes";
 import { PAGE_SPEED_CATEGORY_IDS } from "../../lib/pageSpeedTypes";
+import { resolvePageSpeedLocale, type PageSpeedLocaleCode } from "../../lib/pageSpeedLocales";
 import { PageSpeedRequestError } from "./pageSpeedErrors.server";
-import { runLighthousePageSpeedAnalysis } from "./pageSpeedLighthouse.server";
 import { parsePageSpeedResponse } from "./pageSpeedParse.server";
 import { normalizePageSpeedUrl } from "./pageSpeedUrl.server";
 
@@ -12,26 +12,15 @@ const LOG_PREFIX = "[PageSpeed]";
 
 export { PageSpeedRequestError } from "./pageSpeedErrors.server";
 
-export type PageSpeedProvider = "lighthouse" | "google";
-
-export function readPageSpeedProvider(): PageSpeedProvider {
-  const raw = process.env.PAGE_SPEED_PROVIDER?.trim().toLowerCase();
-  return raw === "google" ? "google" : "lighthouse";
-}
-
 function readApiKey(): string {
   return process.env.GOOGLE_PAGESPEED_API_KEY?.trim() ?? "";
 }
 
-function psiLocale(locale: string): string {
-  return locale.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
-}
-
-function buildPsiUrl(url: string, strategy: PageSpeedStrategy, locale: string): URL {
+function buildPsiUrl(url: string, strategy: PageSpeedStrategy, locale: PageSpeedLocaleCode): URL {
   const endpoint = new URL(PSI_ENDPOINT);
   endpoint.searchParams.set("url", url);
   endpoint.searchParams.set("strategy", strategy);
-  endpoint.searchParams.set("locale", psiLocale(locale));
+  endpoint.searchParams.set("locale", locale);
   for (const category of PAGE_SPEED_CATEGORY_IDS) {
     endpoint.searchParams.append("category", category);
   }
@@ -60,22 +49,28 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 }
 
-async function runGooglePageSpeedAnalysis(params: {
+export async function runPageSpeedAnalysis(params: {
   url: string;
   strategy: PageSpeedStrategy;
   locale: string;
 }): Promise<PageSpeedReport> {
+  const normalized = normalizePageSpeedUrl(params.url);
+  if (!normalized) {
+    throw new PageSpeedRequestError("invalid url", "invalid_url", 400);
+  }
+
+  const locale = resolvePageSpeedLocale(params.locale);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PAGE_SPEED_TIMEOUT_MS);
   try {
-    const response = await fetch(buildPsiUrl(params.url, params.strategy, params.locale), {
+    const response = await fetch(buildPsiUrl(normalized, params.strategy, locale), {
       method: "GET",
       signal: controller.signal,
     });
     if (!response.ok) {
       throw mapHttpError(response.status, await readErrorMessage(response));
     }
-    const report = parsePageSpeedResponse(await response.json(), params.strategy);
+    const report = parsePageSpeedResponse(await response.json(), params.strategy, locale);
     if (!report) {
       throw new PageSpeedRequestError("empty lighthouse result", "upstream", 502);
     }
@@ -90,26 +85,4 @@ async function runGooglePageSpeedAnalysis(params: {
   } finally {
     clearTimeout(timer);
   }
-}
-
-export async function runPageSpeedAnalysis(params: {
-  url: string;
-  strategy: PageSpeedStrategy;
-  locale: string;
-}): Promise<PageSpeedReport> {
-  const normalized = normalizePageSpeedUrl(params.url);
-  if (!normalized) {
-    throw new PageSpeedRequestError("invalid url", "invalid_url", 400);
-  }
-
-  const provider = readPageSpeedProvider();
-  if (provider === "google") {
-    return runGooglePageSpeedAnalysis({ ...params, url: normalized });
-  }
-
-  return runLighthousePageSpeedAnalysis({
-    ...params,
-    url: normalized,
-    timeoutMs: PAGE_SPEED_TIMEOUT_MS,
-  });
 }

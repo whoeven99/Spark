@@ -37,26 +37,79 @@ function AuditSection({
       {items.length === 0 ? (
         <p style={{ ...pageSpeedMutedTextStyle, margin: 0 }}>{emptyLabel}</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-          {items.map((item) => (
-            <AuditRow key={item.id} item={item} />
-          ))}
-        </div>
+        <AuditItemList items={items} />
       )}
     </div>
   );
 }
 
-function AuditRow({ item }: { item: PageSpeedAuditItem }) {
+function CollapsibleAuditSection({
+  title,
+  items,
+}: {
+  title: string;
+  items: PageSpeedAuditItem[];
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <details style={{ margin: 0 }}>
+      <summary
+        style={{
+          cursor: "pointer",
+          fontSize: "0.95rem",
+          fontWeight: 700,
+          color: pageColorTokens.textPrimary,
+          listStyle: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.35rem",
+        }}
+      >
+        <span aria-hidden style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>
+          ▸
+        </span>
+        {title}
+      </summary>
+      <div style={{ marginTop: "0.65rem" }}>
+        <AuditItemList items={items} tone="muted" />
+      </div>
+    </details>
+  );
+}
+
+function AuditItemList({
+  items,
+  tone = "default",
+}: {
+  items: PageSpeedAuditItem[];
+  tone?: "default" | "muted";
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+      {items.map((item) => (
+        <AuditRow key={item.id} item={item} tone={tone} />
+      ))}
+    </div>
+  );
+}
+
+function AuditRow({
+  item,
+  tone = "default",
+}: {
+  item: PageSpeedAuditItem;
+  tone?: "default" | "muted";
+}) {
   const savings = savingsLabel(item);
-  const tone = item.score != null && item.score < 50 ? "poor" : "needs-improvement";
+  const savingsTone = item.score != null && item.score < 50 ? "poor" : "needs-improvement";
   return (
     <div
       style={{
         border: `1px solid ${pageColorTokens.borderSubtle}`,
         borderRadius: pageColorTokens.radiusControl,
         padding: "0.75rem 0.85rem",
-        background: pageColorTokens.surfaceSubtle,
+        background: tone === "muted" ? pageColorTokens.surface : pageColorTokens.surfaceSubtle,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
@@ -64,7 +117,9 @@ function AuditRow({ item }: { item: PageSpeedAuditItem }) {
           {item.title}
         </div>
         {savings ? (
-          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: bandColor(tone), flexShrink: 0 }}>
+          <div
+            style={{ fontSize: "0.8rem", fontWeight: 600, color: bandColor(savingsTone), flexShrink: 0 }}
+          >
             {savings}
           </div>
         ) : null}
@@ -102,12 +157,14 @@ export function PageSpeedAuditPanel({ report }: { report: PageSpeedCategoryRepor
           emptyLabel={t("pageSpeed.noFailedAudits")}
         />
       )}
-      <p style={{ ...pageSpeedMutedTextStyle, margin: 0 }}>
-        {t("pageSpeed.passedCount", { count: report.passedCount })}
-        {report.manualCount > 0
-          ? ` · ${t("pageSpeed.manualCount", { count: report.manualCount })}`
-          : ""}
-      </p>
+      <CollapsibleAuditSection
+        title={t("pageSpeed.manualAudits", { count: report.manualCount })}
+        items={report.manual}
+      />
+      <CollapsibleAuditSection
+        title={t("pageSpeed.passedAudits", { count: report.passedCount })}
+        items={report.passed}
+      />
     </div>
   );
 }

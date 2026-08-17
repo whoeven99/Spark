@@ -552,8 +552,9 @@
     "noOpportunities": "No high-priority opportunities.",
     "noDiagnostics": "No diagnostics.",
     "noFailedAudits": "No failed audits.",
-    "passedCount": "Passed audits ({{count}})",
-    "manualCount": "Needs manual check ({{count}})",
+    "passedAudits": "Passed audits ({{count}})",
+    "manualAudits": "Needs manual check ({{count}})",
+    "reportLanguage": "Report language",
     "errors": {
       "invalid_url": "Invalid URL. Enter a publicly reachable http or https address.",
       "timeout": "Analysis timed out. The page may be slow, or the environment cut the wait.",

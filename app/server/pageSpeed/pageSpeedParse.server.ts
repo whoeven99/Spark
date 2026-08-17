@@ -112,6 +112,8 @@ function emptyCategoryReport(
     opportunities: [],
     diagnostics: [],
     failed: [],
+    passed: [],
+    manual: [],
     passedCount: 0,
     manualCount: 0,
   };
@@ -130,10 +132,12 @@ function classifyCategoryAudits(
     const audit = audits[auditId];
     if (!audit) continue;
     if (isManual(audit)) {
+      report.manual.push(readAuditItem(audit, auditId));
       report.manualCount += 1;
       continue;
     }
     if (isPassed(audit)) {
+      report.passed.push(readAuditItem(audit, auditId));
       report.passedCount += 1;
       continue;
     }
@@ -168,6 +172,7 @@ function parseMetrics(audits: Record<string, LighthouseAudit>): PageSpeedMetric[
 export function parsePageSpeedResponse(
   json: unknown,
   strategy: PageSpeedStrategy,
+  locale = "en",
 ): PageSpeedReport | null {
   if (!json || typeof json !== "object") return null;
   const payload = json as PagespeedJson;
@@ -183,6 +188,7 @@ export function parsePageSpeedResponse(
     requestedUrl: lighthouse.requestedUrl?.trim() || payload.id || "",
     finalUrl: lighthouse.finalUrl?.trim() || lighthouse.requestedUrl?.trim() || payload.id || "",
     strategy,
+    locale,
     fetchTime: lighthouse.fetchTime ?? payload.analysisUTCTimestamp ?? null,
     lighthouseVersion: lighthouse.lighthouseVersion ?? null,
     categories: PAGE_SPEED_CATEGORY_IDS.map((id) => ({

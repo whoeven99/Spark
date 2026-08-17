@@ -50,6 +50,8 @@ export type PageSpeedCategoryReport = {
   opportunities: PageSpeedAuditItem[];
   diagnostics: PageSpeedAuditItem[];
   failed: PageSpeedAuditItem[];
+  passed: PageSpeedAuditItem[];
+  manual: PageSpeedAuditItem[];
   passedCount: number;
   manualCount: number;
 };
@@ -58,6 +60,7 @@ export type PageSpeedReport = {
   requestedUrl: string;
   finalUrl: string;
   strategy: PageSpeedStrategy;
+  locale: string;
   fetchTime: string | null;
   lighthouseVersion: string | null;
   categories: PageSpeedCategoryScore[];

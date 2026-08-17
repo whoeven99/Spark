@@ -4,6 +4,11 @@ import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useFeatureView } from "../../lib/featureTrack";
+import {
+  defaultPageSpeedLocaleFromApp,
+  PAGE_SPEED_LOCALES,
+  type PageSpeedLocaleCode,
+} from "../../lib/pageSpeedLocales";
 import type {
   PageSpeedCategoryId,
   PageSpeedResponse,
@@ -19,13 +24,14 @@ import {
   mobilePageContentStyle,
   pageColorTokens,
   pageContentStyle,
+  pageSelectCompactStyle,
 } from "./pageUiStyles";
 import type { PageSpeedSettingsLoaderData } from "../app.settings.pagespeed";
 
 type AnalyzeFetcherData = PageSpeedResponse;
 
 export function PageSpeedInsightsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<PageSpeedSettingsLoaderData>();
   const locationSearch = useEmbeddedLocationSearch();
@@ -34,6 +40,9 @@ export function PageSpeedInsightsPage() {
 
   const [url, setUrl] = useState(loaderData.defaultUrl);
   const [strategy, setStrategy] = useState<PageSpeedStrategy>("mobile");
+  const [reportLocale, setReportLocale] = useState<PageSpeedLocaleCode>(() =>
+    defaultPageSpeedLocaleFromApp(i18n.language),
+  );
   const [activeCategory, setActiveCategory] = useState<PageSpeedCategoryId>("performance");
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
@@ -52,7 +61,7 @@ export function PageSpeedInsightsPage() {
 
   const handleAnalyze = () => {
     setErrorCode(null);
-    fetcher.submit(JSON.stringify({ url, strategy }), {
+    fetcher.submit(JSON.stringify({ url, strategy, locale: reportLocale }), {
       method: "POST",
       action: `/api/pagespeed${locationSearch}`,
       encType: "application/json",
@@ -73,10 +82,12 @@ export function PageSpeedInsightsPage() {
         <AnalyzeForm
           url={url}
           strategy={strategy}
+          reportLocale={reportLocale}
           analyzing={analyzing}
           isMobile={isMobile}
           onUrlChange={setUrl}
           onStrategyChange={setStrategy}
+          onReportLocaleChange={setReportLocale}
           onAnalyze={handleAnalyze}
         />
         {errorCode ? <ErrorBanner message={t(`pageSpeed.errors.${errorCode}`)} /> : null}
@@ -112,18 +123,22 @@ export function PageSpeedInsightsPage() {
 function AnalyzeForm({
   url,
   strategy,
+  reportLocale,
   analyzing,
   isMobile,
   onUrlChange,
   onStrategyChange,
+  onReportLocaleChange,
   onAnalyze,
 }: {
   url: string;
   strategy: PageSpeedStrategy;
+  reportLocale: PageSpeedLocaleCode;
   analyzing: boolean;
   isMobile: boolean;
   onUrlChange: (value: string) => void;
   onStrategyChange: (value: PageSpeedStrategy) => void;
+  onReportLocaleChange: (value: PageSpeedLocaleCode) => void;
   onAnalyze: () => void;
 }) {
   const { t } = useTranslation();
@@ -163,21 +178,50 @@ function AnalyzeForm({
           display: "flex",
           flexWrap: "wrap",
           gap: "0.75rem",
-          alignItems: "center",
+          alignItems: isMobile ? "stretch" : "flex-end",
           marginTop: "0.85rem",
           flexDirection: isMobile ? "column" : "row",
         }}
       >
-        <SegmentedPageTabs
-          activeTab={strategy}
-          onTabChange={onStrategyChange}
-          ariaLabel={t("pageSpeed.strategyLabel")}
-          density="compact"
-          items={[
-            { key: "mobile", label: t("pageSpeed.strategyMobile") },
-            { key: "desktop", label: t("pageSpeed.strategyDesktop") },
-          ]}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: pageColorTokens.textSecondary }}>
+            {t("pageSpeed.strategyLabel")}
+          </span>
+          <SegmentedPageTabs
+            activeTab={strategy}
+            onTabChange={onStrategyChange}
+            ariaLabel={t("pageSpeed.strategyLabel")}
+            density="compact"
+            items={[
+              { key: "mobile", label: t("pageSpeed.strategyMobile") },
+              { key: "desktop", label: t("pageSpeed.strategyDesktop") },
+            ]}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: isMobile ? "100%" : "14rem" }}>
+          <label
+            htmlFor="page-speed-locale"
+            style={{ fontSize: "0.75rem", fontWeight: 600, color: pageColorTokens.textSecondary }}
+          >
+            {t("pageSpeed.reportLanguage")}
+          </label>
+          <select
+            id="page-speed-locale"
+            value={reportLocale}
+            disabled={analyzing}
+            onChange={(event) => onReportLocaleChange(event.target.value as PageSpeedLocaleCode)}
+            style={{
+              ...pageSelectCompactStyle(analyzing),
+              minWidth: isMobile ? "100%" : "14rem",
+            }}
+          >
+            {PAGE_SPEED_LOCALES.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.nativeLabel}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="button"
           disabled={analyzing || !url.trim()}
@@ -192,6 +236,7 @@ function AnalyzeForm({
             fontWeight: 600,
             cursor: analyzing ? "wait" : "pointer",
             opacity: analyzing || !url.trim() ? 0.7 : 1,
+            alignSelf: isMobile ? "stretch" : "flex-end",
           }}
         >
           {analyzing ? t("pageSpeed.analyzingCta") : t("pageSpeed.analyze")}

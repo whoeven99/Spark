@@ -552,8 +552,9 @@
     "noOpportunities": "没有需要优先处理的优化机会。",
     "noDiagnostics": "没有诊断项。",
     "noFailedAudits": "没有未通过的审核。",
-    "passedCount": "已通过审核 ({{count}})",
-    "manualCount": "需手动检查 ({{count}})",
+    "passedAudits": "已通过审核 ({{count}})",
+    "manualAudits": "需手动检查 ({{count}})",
+    "reportLanguage": "报告语言",
     "errors": {
       "invalid_url": "网址无效。请输入可公开访问的 http 或 https 地址。",
       "timeout": "分析超时。页面可能过慢，或当前环境限制了等待时间。",
