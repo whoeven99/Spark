@@ -1,8 +1,8 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { buildGoogleCombinedOAuthStartUrl } from "../server/adsCatalog/googleOAuth.server";
+import { buildGoogleOAuthStartUrl } from "../server/adsCatalog/googleOAuth.server";
 
-/** 兼容旧入口；统一走 GMC + Ads 一次 consent。 */
+/** GMC 单独授权入口；保留旧 URL 以兼容历史链接。 */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const source = new URL(request.url);
@@ -10,7 +10,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const reauth = source.searchParams.get("reauth") === "1";
   const popup = source.searchParams.get("popup") === "1";
 
-  const result = buildGoogleCombinedOAuthStartUrl({
+  const result = buildGoogleOAuthStartUrl({
+    flow: "gmc",
     shop: session.shop,
     host,
     requestOrigin: source.origin,

@@ -6,6 +6,8 @@ import {
   type FormEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { appendEmbeddedSearchToPath } from "../../lib/embeddedLocationSearch";
+import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 
 type SupportMessage = {
   id: string;
@@ -30,8 +32,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function fetchConversation(
   markSeen: boolean,
+  locationSearch: string,
 ): Promise<SupportConversation | null> {
-  const res = await fetch(`/api/support?markSeen=${markSeen ? "true" : "false"}`, {
+  const url = appendEmbeddedSearchToPath(
+    `/api/support?markSeen=${markSeen ? "true" : "false"}`,
+    locationSearch,
+  );
+  const res = await fetch(url, {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) return null;
@@ -39,12 +46,16 @@ async function fetchConversation(
   return data.ok && data.conversation ? data.conversation : null;
 }
 
-async function postSupport(body: Record<string, unknown>): Promise<{
+async function postSupport(
+  body: Record<string, unknown>,
+  locationSearch: string,
+): Promise<{
   ok: boolean;
   error?: string;
   message?: SupportMessage;
 }> {
-  const res = await fetch("/api/support", {
+  const url = appendEmbeddedSearchToPath("/api/support", locationSearch);
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -58,6 +69,7 @@ async function postSupport(body: Record<string, unknown>): Promise<{
 
 export function SupportChatWidget() {
   const { t } = useTranslation();
+  const locationSearch = useEmbeddedLocationSearch();
   const [open, setOpen] = useState(false);
   const [conversation, setConversation] = useState<SupportConversation | null>(null);
   const [draft, setDraft] = useState("");
@@ -73,12 +85,12 @@ export function SupportChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const refresh = useCallback(async (markSeen: boolean) => {
-    const conv = await fetchConversation(markSeen);
+    const conv = await fetchConversation(markSeen, locationSearch);
     if (!conv) return;
     setConversation(conv);
     if (markSeen) setUnread(0);
     else setUnread(conv.unreadForShop);
-  }, []);
+  }, [locationSearch]);
 
   // 打开时高频轮询；关闭时低频拉徽标。
   useEffect(() => {
@@ -107,7 +119,7 @@ export function SupportChatWidget() {
       if (!content || sending) return;
       setSending(true);
       setError(null);
-      const result = await postSupport({ intent: "send", content });
+      const result = await postSupport({ intent: "send", content }, locationSearch);
       setSending(false);
       if (!result.ok) {
         setError(t("support.sendError"));
@@ -116,7 +128,7 @@ export function SupportChatWidget() {
       setDraft("");
       await refresh(true);
     },
-    [draft, sending, refresh, t],
+    [draft, locationSearch, sending, refresh, t],
   );
 
   const handleSaveEmail = useCallback(async () => {
@@ -126,12 +138,12 @@ export function SupportChatWidget() {
       return;
     }
     setEmailError(null);
-    const result = await postSupport({ intent: "setEmail", email });
+    const result = await postSupport({ intent: "setEmail", email }, locationSearch);
     if (result.ok) {
       setEmailSaved(true);
       setConversation((prev) => (prev ? { ...prev, contactEmail: email } : prev));
     }
-  }, [emailInput, t]);
+  }, [emailInput, locationSearch, t]);
 
   const showEmailPrompt =
     open && conversation != null && !conversation.contactEmail && !emailSaved;
