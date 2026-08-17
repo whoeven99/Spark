@@ -14,15 +14,15 @@ type Props = {
 function statusBadge(status: string): { label: string; bg: string; color: string } {
   switch (status) {
     case "approved":
-      return { label: "✅ 已通过", bg: "#e7f6ef", color: "#0f7a52" };
+      return { label: "reviewApproved", bg: "#e7f6ef", color: "#0f7a52" };
     case "disapproved":
-      return { label: "❌ 已拒绝", bg: "#fdecec", color: "#c0392b" };
+      return { label: "reviewDisapproved", bg: "#fdecec", color: "#c0392b" };
     case "pending":
-      return { label: "⏳ 审核中", bg: "#fff6e6", color: "#a36a00" };
+      return { label: "reviewPending", bg: "#fff6e6", color: "#a36a00" };
     case "expiring":
-      return { label: "⌛ 即将过期", bg: "#fff6e6", color: "#a36a00" };
+      return { label: "reviewExpiring", bg: "#fff6e6", color: "#a36a00" };
     case "unknown":
-      return { label: "❓ 状态未知", bg: "#eef0f3", color: "#475569" };
+      return { label: "reviewUnknown", bg: "#eef0f3", color: "#475569" };
     default:
       return { label: status, bg: "#eef0f3", color: "#475569" };
   }
@@ -56,10 +56,8 @@ export function GmcReviewDetailModal({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
           background: "#fff",
           borderRadius: 12,
@@ -128,12 +126,14 @@ export function GmcReviewDetailModal({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {badge.label}
+                          {badge.label.startsWith("review")
+                            ? t(`adsCatalog.${badge.label}`)
+                            : badge.label}
                         </span>
                       </td>
                       <td style={{ padding: "8px 6px", color: pageColorTokens.textSecondary }}>
                         {p.issues.length > 0
-                          ? p.issues.map((i) => i.description).join("；")
+                          ? p.issues.map((i) => i.description).join("; ")
                           : "—"}
                       </td>
                     </tr>

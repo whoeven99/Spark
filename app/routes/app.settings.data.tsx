@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   PageHeaderNav,
@@ -68,6 +69,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function BackfillPage() {
+  const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const { shop, checkpoints, counts } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -77,28 +79,34 @@ export default function BackfillPage() {
   const findCheckpoint = (resource: string) =>
     checkpoints.find((c) => c.resource === resource);
 
+  const formatDateTime = (value: string) =>
+    new Intl.DateTimeFormat(i18n.language, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+
   const summaryItems = [
     {
-      label: "订单",
+      label: t("settingsData.summaryOrders"),
       value: counts.orderCount,
       note: findCheckpoint("orders")?.lastSyncedAt
-        ? new Date(findCheckpoint("orders")!.lastSyncedAt).toLocaleString("zh-CN")
-        : "尚未同步",
+        ? formatDateTime(findCheckpoint("orders")!.lastSyncedAt)
+        : t("settingsData.notSynced"),
     },
     {
-      label: "客户",
+      label: t("settingsData.summaryCustomers"),
       value: counts.customerCount,
-      note: "随订单同步",
+      note: t("settingsData.syncWithOrders"),
     },
     {
-      label: "库存",
+      label: t("settingsData.summaryInventory"),
       value: counts.inventoryCount,
-      note: "实时 Webhook",
+      note: t("settingsData.realtimeWebhook"),
     },
     {
-      label: "履约",
+      label: t("settingsData.summaryFulfillments"),
       value: counts.fulfillmentCount,
-      note: "随订单同步",
+      note: t("settingsData.syncWithOrders"),
     },
   ];
 
@@ -111,16 +119,16 @@ export default function BackfillPage() {
       }}
     >
       <PageHeaderNav
-        title="历史数据回补"
-        subtitle={`把 Shopify 历史订单补齐到本地镜像。当前店铺：${shop}`}
-        backLabel="返回设置"
+        title={t("settingsData.pageTitle")}
+        subtitle={t("settingsData.pageSubtitle", { shop })}
+        backLabel={t("settingsShell.back")}
         fallbackPath="/app/settings"
       />
 
       <PageSurface>
         <PageSectionHeader
-          title="当前同步状态"
-          subtitle="先确认本地镜像里已经有哪些数据，再决定是否需要做历史回补。"
+          title={t("settingsData.statusTitle")}
+          subtitle={t("settingsData.statusSubtitle")}
         />
         <div
           style={{
@@ -163,9 +171,9 @@ export default function BackfillPage() {
                   color: pageColorTokens.textSecondary,
                 }}
               >
-                <th style={{ padding: "10px 12px" }}>资源</th>
-                <th style={{ padding: "10px 12px" }}>记录数</th>
-                <th style={{ padding: "10px 12px" }}>最后同步</th>
+                <th style={{ padding: "10px 12px" }}>{t("settingsData.tableResource")}</th>
+                <th style={{ padding: "10px 12px" }}>{t("settingsData.tableCount")}</th>
+                <th style={{ padding: "10px 12px" }}>{t("settingsData.tableLastSynced")}</th>
               </tr>
             </thead>
             <tbody>
@@ -178,7 +186,7 @@ export default function BackfillPage() {
                 </td>
                 <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
                   {findCheckpoint("orders")?.lastSyncedAt
-                    ? new Date(findCheckpoint("orders")!.lastSyncedAt).toLocaleString("zh-CN")
+                    ? formatDateTime(findCheckpoint("orders")!.lastSyncedAt)
                     : "—"}
                 </td>
               </tr>
@@ -190,7 +198,7 @@ export default function BackfillPage() {
                   {counts.customerCount}
                 </td>
                 <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
-                  随订单同步
+                  {t("settingsData.syncWithOrders")}
                 </td>
               </tr>
               <tr>
@@ -201,7 +209,7 @@ export default function BackfillPage() {
                   {counts.inventoryCount}
                 </td>
                 <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
-                  实时 Webhook
+                  {t("settingsData.realtimeWebhook")}
                 </td>
               </tr>
               <tr>
@@ -212,7 +220,7 @@ export default function BackfillPage() {
                   {counts.fulfillmentCount}
                 </td>
                 <td style={{ padding: "10px 12px", borderTop: `1px solid ${pageColorTokens.borderSubtle}` }}>
-                  随订单同步
+                  {t("settingsData.syncWithOrders")}
                 </td>
               </tr>
             </tbody>
@@ -222,8 +230,8 @@ export default function BackfillPage() {
 
       <PageSurface>
         <PageSectionHeader
-          title="触发回补"
-          subtitle="适用于首次接入或历史数据缺失场景。会补齐订单，并带上客户与退款数据。"
+          title={t("settingsData.triggerTitle")}
+          subtitle={t("settingsData.triggerSubtitle")}
         />
         <Form method="post" style={{ display: "grid", gap: "1rem" }}>
           <input type="hidden" name="resource" value="orders" />
@@ -236,7 +244,9 @@ export default function BackfillPage() {
             }}
           >
             <label style={{ display: "grid", gap: "0.35rem", fontSize: 13 }}>
-              <span style={{ color: pageColorTokens.textSecondary }}>回溯天数</span>
+              <span style={{ color: pageColorTokens.textSecondary }}>
+                {t("settingsData.daysBackLabel")}
+              </span>
               <input
                 name="daysBack"
                 type="number"
@@ -260,7 +270,7 @@ export default function BackfillPage() {
                 lineHeight: 1.5,
               }}
             >
-              默认回补近 90 天订单；如果是首次同步老店铺，可以按需要扩展到更长时间窗口。
+              {t("settingsData.daysBackHint")}
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -279,7 +289,9 @@ export default function BackfillPage() {
                 minWidth: isMobile ? "100%" : 220,
               }}
             >
-              {isSubmitting ? "同步中..." : "回补订单（含客户/退款）"}
+              {isSubmitting
+                ? t("settingsData.submitting")
+                : t("settingsData.submitAction")}
             </button>
           </div>
         </Form>
@@ -298,7 +310,7 @@ export default function BackfillPage() {
                 color: "#cf1322",
               }}
             >
-              错误：{actionData.error}
+              {t("settingsData.errorPrefix")}: {actionData.error}
             </div>
           ) : actionData.result ? (
             <div
@@ -310,11 +322,11 @@ export default function BackfillPage() {
                 fontSize: 13,
               }}
             >
-              <strong>回补完成</strong>
+              <strong>{t("settingsData.successTitle")}</strong>
               <ul style={{ margin: "8px 0 0 0", paddingLeft: 20 }}>
-                <li>同步成功：{actionData.result.synced} 条</li>
-                <li>跳过：{actionData.result.skipped} 条</li>
-                <li>错误：{actionData.result.errors} 条</li>
+                <li>{t("settingsData.successSynced", { count: actionData.result.synced })}</li>
+                <li>{t("settingsData.successSkipped", { count: actionData.result.skipped })}</li>
+                <li>{t("settingsData.successErrors", { count: actionData.result.errors })}</li>
               </ul>
             </div>
           ) : null}

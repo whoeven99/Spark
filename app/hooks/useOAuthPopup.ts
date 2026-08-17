@@ -2,7 +2,30 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type OAuthPopupMessage = { type?: string } & Record<string, string | undefined>;
 
-const POPUP_FEATURES = "popup,width=560,height=680,resizable=yes";
+const POPUP_WIDTH = 560;
+const POPUP_HEIGHT = 680;
+
+function buildCenteredPopupFeatures() {
+  if (typeof window === "undefined") {
+    return `popup,width=${POPUP_WIDTH},height=${POPUP_HEIGHT},resizable=yes`;
+  }
+
+  const screenLeft = typeof window.screenLeft === "number" ? window.screenLeft : window.screenX;
+  const screenTop = typeof window.screenTop === "number" ? window.screenTop : window.screenY;
+  const viewportWidth = window.outerWidth || window.innerWidth || POPUP_WIDTH;
+  const viewportHeight = window.outerHeight || window.innerHeight || POPUP_HEIGHT;
+  const left = Math.max(screenLeft + Math.round((viewportWidth - POPUP_WIDTH) / 2), 0);
+  const top = Math.max(screenTop + Math.round((viewportHeight - POPUP_HEIGHT) / 2), 0);
+
+  return [
+    "popup",
+    `width=${POPUP_WIDTH}`,
+    `height=${POPUP_HEIGHT}`,
+    `left=${left}`,
+    `top=${top}`,
+    "resizable=yes",
+  ].join(",");
+}
 
 /** 在 OAuth 授权 URL 上追加 popup=1，供 callback 识别弹窗模式。 */
 export function withOAuthPopupParam(url: string): string {
@@ -62,7 +85,11 @@ export function useOAuthPopup(messageType: string) {
 
       const popup =
         typeof window !== "undefined"
-          ? window.open("about:blank", `oauth_${messageType}`, POPUP_FEATURES)
+          ? window.open(
+              "about:blank",
+              `oauth_${messageType}`,
+              buildCenteredPopupFeatures(),
+            )
           : null;
       popupRef.current = popup;
 

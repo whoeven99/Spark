@@ -72,9 +72,9 @@ const CARRIER_MODULES: Array<{
     primaryMaskKey: "customerCodeMasked",
     saveLabelKey: "settingsShell.logisticsSaveProvider",
     fields: [
-      { name: "customerCode", label: "顾客编码 Customer Code" },
-      { name: "checkWord", label: "校验码 Check Word", type: "password" },
-      { name: "monthlyAccount", label: "月结卡号 Monthly Account", optional: true },
+      { name: "customerCode", label: "settingsShell.logisticsSfFieldCustomerCode" },
+      { name: "checkWord", label: "settingsShell.logisticsSfFieldCheckWord", type: "password" },
+      { name: "monthlyAccount", label: "settingsShell.logisticsSfFieldMonthlyAccount", optional: true },
     ],
   },
 ];
@@ -197,7 +197,10 @@ export default function SettingsLogistics() {
             title={mod.title}
             description={t(mod.descriptionKey)}
             endpoint={mod.endpoint}
-            fields={mod.fields}
+            fields={mod.fields.map((field) => ({
+              ...field,
+              label: t(field.label),
+            }))}
             primaryMaskKey={mod.primaryMaskKey}
             saveLabel={t(mod.saveLabelKey, { provider: mod.title })}
             statusSummary={(status) => {
