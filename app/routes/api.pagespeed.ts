@@ -60,12 +60,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     locale?: unknown;
   };
   const url = typeof body.url === "string" ? body.url : "";
+  const strategy = parseStrategy(body.strategy);
+  const reportLocale = parseLocale(body.locale, request, session);
 
   try {
+    console.info(
+      `[PageSpeed] analyze url=${url || "(empty)"} strategy=${strategy} reportLocale=${reportLocale}`,
+    );
     const report = await runPageSpeedAnalysis({
       url,
-      strategy: parseStrategy(body.strategy),
-      locale: parseLocale(body.locale, request, session),
+      strategy,
+      locale: reportLocale,
     });
     return Response.json({ ok: true, report } satisfies PageSpeedResponse);
   } catch (error) {

@@ -6,6 +6,7 @@ import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch
 import { useFeatureView } from "../../lib/featureTrack";
 import {
   defaultPageSpeedLocaleFromApp,
+  pageSpeedLocaleNativeLabel,
   PAGE_SPEED_LOCALES,
   type PageSpeedLocaleCode,
 } from "../../lib/pageSpeedLocales";
@@ -61,12 +62,17 @@ export function PageSpeedInsightsPage() {
 
   const handleAnalyze = () => {
     setErrorCode(null);
-    fetcher.submit(JSON.stringify({ url, strategy, locale: reportLocale }), {
-      method: "POST",
-      action: `/api/pagespeed${locationSearch}`,
-      encType: "application/json",
-    });
+    fetcher.submit(
+      { url, strategy, locale: reportLocale },
+      {
+        method: "POST",
+        action: `/api/pagespeed${locationSearch}`,
+        encType: "application/json",
+      },
+    );
   };
+
+  const reportLocaleStale = Boolean(report && report.locale !== reportLocale);
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -91,6 +97,9 @@ export function PageSpeedInsightsPage() {
           onAnalyze={handleAnalyze}
         />
         {errorCode ? <ErrorBanner message={t(`pageSpeed.errors.${errorCode}`)} /> : null}
+        {reportLocaleStale ? (
+          <StatusBanner message={t("pageSpeed.reportLocaleStale")} />
+        ) : null}
         {analyzing ? <StatusBanner message={t("pageSpeed.analyzing")} /> : null}
         {!analyzing && !report && !errorCode ? (
           <StatusBanner message={t("pageSpeed.empty")} />
@@ -100,6 +109,7 @@ export function PageSpeedInsightsPage() {
             <PageSpeedScoreRow
               categories={report.categories}
               analyzedAt={report.fetchTime}
+              reportLocaleLabel={pageSpeedLocaleNativeLabel(report.locale)}
               isMobile={isMobile}
             />
             <PageSpeedMetricsRow metrics={report.metrics} isMobile={isMobile} />

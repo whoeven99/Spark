@@ -555,6 +555,8 @@
     "passedAudits": "Passed audits ({{count}})",
     "manualAudits": "Needs manual check ({{count}})",
     "reportLanguage": "Report language",
+    "reportLocaleUsed": "Report language: {{language}}",
+    "reportLocaleStale": "Report language changed. Click Analyze to refresh the report.",
     "errors": {
       "invalid_url": "Invalid URL. Enter a publicly reachable http or https address.",
       "timeout": "Analysis timed out. The page may be slow, or the environment cut the wait.",

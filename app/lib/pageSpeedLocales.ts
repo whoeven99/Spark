@@ -75,3 +75,8 @@ export function resolvePageSpeedLocale(
 export function defaultPageSpeedLocaleFromApp(appLocale: string): PageSpeedLocaleCode {
   return resolvePageSpeedLocale(appLocale, "en");
 }
+
+export function pageSpeedLocaleNativeLabel(code: string): string {
+  const match = PAGE_SPEED_LOCALES.find((item) => item.code === code);
+  return match?.nativeLabel ?? code;
+}

@@ -60,6 +60,9 @@ export async function runPageSpeedAnalysis(params: {
   }
 
   const locale = resolvePageSpeedLocale(params.locale);
+  console.info(
+    `${LOG_PREFIX} psi request locale=${locale} strategy=${params.strategy} url=${normalized}`,
+  );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PAGE_SPEED_TIMEOUT_MS);
   try {

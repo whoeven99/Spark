@@ -7,10 +7,12 @@ import { pageSpeedCardStyle, pageSpeedMutedTextStyle } from "./pageSpeedUi";
 export function PageSpeedScoreRow({
   categories,
   analyzedAt,
+  reportLocaleLabel,
   isMobile,
 }: {
   categories: PageSpeedCategoryScore[];
   analyzedAt: string | null;
+  reportLocaleLabel: string;
   isMobile: boolean;
 }) {
   const { t, i18n } = useTranslation();
@@ -37,9 +39,10 @@ export function PageSpeedScoreRow({
         ))}
       </div>
       <p style={{ ...pageSpeedMutedTextStyle, margin: "0.9rem 0 0" }}>
-        {t("pageSpeed.scoreLegend")}
+        {t("pageSpeed.reportLocaleUsed", { language: reportLocaleLabel })}
         {timeLabel ? ` · ${t("pageSpeed.analyzedAt", { value: timeLabel })}` : ""}
       </p>
+      <p style={{ ...pageSpeedMutedTextStyle, margin: "0.35rem 0 0" }}>{t("pageSpeed.scoreLegend")}</p>
       <div style={{ display: "flex", gap: "1rem", marginTop: "0.45rem", flexWrap: "wrap" }}>
         <LegendSwatch color={pageColorTokens.critical} label={t("pageSpeed.bandPoor")} />
         <LegendSwatch color={pageColorTokens.progress} label={t("pageSpeed.bandNeedsWork")} />
