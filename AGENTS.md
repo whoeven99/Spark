@@ -77,7 +77,7 @@ Spark/
 | Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
 | Insights | `/app/insights` | `app.insights.*`：`_index` 跨平台广告总览（读库聚合，见 `adsInsights/overview.server.ts`）、`performance` 投放明细；只读页面，授权与同步仍在 Ads Catalog。旧路径 `/app/settings/ads-insights` 重定向到 `performance` |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
-| Settings | `/app/settings` | `app.settings.*`：`billing` 计费、`ads-create`/`ads-edit` 广告投放、`logistics` 物流、`google-analytics` GA4、`google-search-console` GSC、`data` 历史回补、`feedback` 反馈；`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings hub 内链，不占一级导航） |
+| Settings | `/app/settings` | `app.settings.*`：`billing` 计费、`ads-create`/`ads-edit` 广告投放、`logistics` 物流、`google-analytics` GA4、`google-search-console` GSC、`pagespeed` PageSpeed Insights、`data` 历史回补、`feedback` 反馈；`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings hub 内链，不占一级导航） |
 
 Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页面：`/app/logistics/fedex/config`、`/app/logistics/sf/config`（承运商凭证表单，由 `app.settings.logistics.tsx` 内链）、`/app/feedback/suggestion`、`/app/ads/google-ads/start`、`/app/ads/google-merchant/start`（OAuth 启动页）。
 
@@ -89,6 +89,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/generate-image*`、`/api/picture-translate*`、`/api/image-proxy`：图片生成（含 `generate-image-prompt`）、图片翻译（含 `picture-translate-chat`）与图片代理读取。
 - `/api/ads-catalog*`、`/api/ads-create*`、`/api/ads-edit*`、`/api/ads-insights*`、`/api/ads-overview`（含 `link-status` GMC↔Ads 关联探测）：广告 Catalog（Meta/Google/TikTok OAuth、目录同步、TikTok Pixel/测试事件）、广告创建/编辑与广告洞察；OAuth 回调见 `ads.*.callback.tsx`（含 `google-ads`、`google-merchant`、`google-analytics`、`google-search-console`、`meta-ads`、`meta-catalog`、`tiktok-catalog`）。
 - `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console 的 auth-url、属性/站点列表、连接状态与断开。
+- `POST /api/pagespeed`：PageSpeed Insights 实验室分析（平台 API Key，不落库，同步等待）。
 - `/api/ai-capabilities`、`/api/upload-file`：AI 能力清单（由 Skill Manifest 派生）与工作台文件上传解析。
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源。
 - `/api/automation-overview`：Today/自动化概览。
@@ -119,6 +120,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`app/server/adsCreate/`、`app/server/adsEdit/`、`app/server/adsInsights/`。下拉选项类只读列表（Meta Page、TikTok Pixel / Catalog、广告主）走 `adsCatalog/enumerationCache.server.ts` 的进程内 TTL 缓存，路由支持 `?refresh=1` 强刷；绑定校验、同步预检、上传确认等需要实时状态的路径禁止接缓存。Google Ads 凭证按 `accessTokenExpiresAt` 判断是否刷新、按 `loginCustomerIdVerifiedAt` 判断是否重新探测 login-customer-id，两个戳在对应值变化时必须失效。广告洞察 `structure` 视图默认读库（`adsInsights/store.server.ts`）：命中新鲜快照直接返回，过期才回源，回源固定拉 30 天再按请求区间切窗口，`?refresh=1` 强刷，回源失败用过期快照兜底；`keywords` / `searchTerms` / `creatives` 深层级明细和沙盒模式仍实时拉、不落库。洞察总览 `adsInsights/overview.server.ts` 纯库内聚合（不回源），凭证只 select `platform` / `externalAccountId` / `updatedAt`；商品审核计数统一走 `adsCatalog/productStatusSummary.server.ts` 的 `groupBy` 全量统计，不能用分页样本行数当总数。接入链路健康 `adsCatalog/adsHealth.server.ts` 由凭证 JSON 派生且只输出可见标识（不含 token），唯一需要实时探测的 GMC↔Ads 关联走 `/api/ads-overview/link-status`，由前端异步调用、失败降级为未知 |
 | Google Analytics 4 | `app/server/googleAnalytics/`（`ga4Api.server.ts` 读数、`ga4Credentials.server.ts` OAuth 凭证） |
 | Google Search Console | `app/server/googleSearchConsole/`（`gscApi.server.ts`、`gscCredentials.server.ts`） |
+| PageSpeed Insights | `app/server/pageSpeed/`（PSI v5 `fetch`，平台级 `GOOGLE_PAGESPEED_API_KEY`，结果不落库） |
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts` |

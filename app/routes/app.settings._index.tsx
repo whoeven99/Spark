@@ -64,6 +64,12 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
+    to: "/app/settings/pagespeed",
+    labelKey: "settingsShell.navPageSpeed",
+    descKey: "settingsShell.descPageSpeed",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
     to: "/app/ads/google-attribution",
     labelKey: "settingsShell.navGoogleAttribution",
     descKey: "settingsShell.descGoogleAttribution",
