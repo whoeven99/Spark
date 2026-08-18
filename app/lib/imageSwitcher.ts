@@ -83,3 +83,17 @@ export function languagesMatch(a: string, b: string): boolean {
 
   return leftBase === rightBase;
 }
+
+/**
+ * 仅在「我们刚完成的 IP 国家跳转」落地到目标国家后，才允许跟随纠正语言。
+ * 避免访客已在该市场、又手动选了其他语言时被映射表拽回去（如 JP 市场选手动简体中文又被切回 ja）。
+ * 须与 extensions/spark-tiktok-pixel/assets/ciwi-image-switcher.js 保持一致。
+ */
+export function shouldFollowUpLanguageCorrection(
+  pendingTargetCountry: string,
+  currentCountry: string,
+): boolean {
+  const pending = pendingTargetCountry.trim().toUpperCase();
+  const current = currentCountry.trim().toUpperCase();
+  return Boolean(pending && current && pending === current);
+}

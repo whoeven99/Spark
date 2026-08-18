@@ -3,6 +3,7 @@ import {
   dedupeImageMappingsNewestFirst,
   extractImageFileName,
   languagesMatch,
+  shouldFollowUpLanguageCorrection,
 } from "../../../app/lib/imageSwitcher";
 
 describe("extractImageFileName", () => {
@@ -76,5 +77,17 @@ describe("languagesMatch", () => {
     expect(languagesMatch("ja", "ja-JP")).toBe(true);
     expect(languagesMatch("en", "en-US")).toBe(true);
     expect(languagesMatch("ja", "en")).toBe(false);
+  });
+});
+
+describe("shouldFollowUpLanguageCorrection", () => {
+  it("allows language follow-up only after our IP country redirect lands", () => {
+    expect(shouldFollowUpLanguageCorrection("JP", "JP")).toBe(true);
+    expect(shouldFollowUpLanguageCorrection("jp", "JP")).toBe(true);
+  });
+
+  it("does not override a manual language choice when we did not just switch country", () => {
+    expect(shouldFollowUpLanguageCorrection("", "JP")).toBe(false);
+    expect(shouldFollowUpLanguageCorrection("KR", "JP")).toBe(false);
   });
 });

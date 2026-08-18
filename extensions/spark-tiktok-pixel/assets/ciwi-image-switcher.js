@@ -2,7 +2,8 @@
  * Ciwi Spark Image Switcher
  * 两项功能：
  *   1. IP 地区跳转：通过 Shopify browsing_context_suggestions.json 检测访客地区，
- *      与当前 localization 不同时 POST /localization 静默切换国家/语言。
+ *      与当前 localization 不同时 POST /localization 静默切换国家；语言只在
+ *      「我们刚切完国家」后跟随纠正，不覆盖访客之后手动选择的语言。
  *   2. 图片替换：按访客语言静默替换页面 <img> 的 src/srcset，无可见 UI。
  *      数据来源：App Proxy (/a/{subpath}?shop=…&language=…)，subpath 由主题块设置注入，须与 shopify.app.*.toml 一致。
  *
@@ -42,6 +43,7 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1 小时
 // ─── IP 跳转缓存 ────────────────────────────────────────────────────────────
 const IP_REDIRECT_CACHE_KEY = "ciwi_ip_redirect_ts";
 const LANG_MARKET_DEFAULT_ATTEMPT_KEY = "ciwi_lang_market_default_attempt";
+const PENDING_LANG_CORRECTION_KEY = "ciwi_pending_lang_correction";
 const IP_REDIRECT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 天
 
 /**
@@ -241,6 +243,38 @@ function clearLanguageCorrectionMarker() {
   }
 }
 
+/** 阶段 A 提交国家跳转前打标，reload 后阶段 B 只在此标记存在时才纠正语言。 */
+function setPendingLanguageCorrection(country) {
+  try {
+    sessionStorage.setItem(
+      PENDING_LANG_CORRECTION_KEY,
+      normalizeCountryCode(country),
+    );
+  } catch {
+    // sessionStorage 不可用时静默忽略
+  }
+}
+
+function consumePendingLanguageCorrection() {
+  try {
+    const value = sessionStorage.getItem(PENDING_LANG_CORRECTION_KEY) ?? "";
+    if (value) sessionStorage.removeItem(PENDING_LANG_CORRECTION_KEY);
+    return value;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 仅在「我们刚完成的 IP 国家跳转」落地到目标国家后，才允许跟随纠正语言。
+ * 须与 app/lib/imageSwitcher.ts 的 shouldFollowUpLanguageCorrection 保持一致。
+ */
+function shouldFollowUpLanguageCorrection(pendingTargetCountry, currentCountry) {
+  const pending = normalizeCountryCode(pendingTargetCountry);
+  const current = normalizeCountryCode(currentCountry);
+  return Boolean(pending && current && pending === current);
+}
+
 /** IP 跳转关键步骤：始终打印，便于店面排查。 */
 function logRedirect(step, data) {
   if (data && Object.keys(data).length > 0) {
@@ -339,11 +373,21 @@ function submitLocalization(countryCode, languageCode, options = {}) {
 
 /**
  * 依据映射表纠正当前市场的语言（阶段 B）。
- * 不受 7 天国家跳转缓存限制；用 sessionStorage 按「国家/源语言->目标语言」组合防循环，
- * 因此跨市场场景（先切国家、reload 后语言才可用）也能收敛到目标语言。
+ * 只在阶段 A 刚切完国家（pending 标记）后运行，避免覆盖访客手动选择的语言。
+ * 用 sessionStorage 按「国家/源语言->目标语言」组合防循环。
  * @returns {boolean} 是否已触发跳转（页面即将刷新）
  */
 function runLanguageCorrection(current, marketMap) {
+  const pendingCountry = consumePendingLanguageCorrection();
+  if (!shouldFollowUpLanguageCorrection(pendingCountry, current.country)) {
+    logStep("[IP-4d] 跳过语言纠正（尊重用户已选语言）", {
+      pendingCountry: pendingCountry || "(无)",
+      country: current.country,
+      language: current.language,
+    });
+    return false;
+  }
+
   if (marketMap.size === 0) {
     logSkip("[IP-4d]", "映射表为空，无法纠正语言");
     return false;
@@ -398,7 +442,8 @@ function runLanguageCorrection(current, marketMap) {
  *   阶段 A 国家跳转：每次访问都向 GeoIP 检测国家；缓存记录「上次跳转的目标国家」，
  *     仅当「检测国家 === 上次跳转国家」且仍在 7 天 TTL 内时才跳过（同国防重复跳转）。
  *     换地区（检测到新国家）时无视 TTL，立即重新跳转。
- *   阶段 B 语言纠正：不受缓存限制，依映射表把语言对齐到目标市场绑定语言。
+ *   阶段 B 语言纠正：仅在阶段 A 刚切完国家后跟随对齐语言（pending 标记），
+ *     不覆盖访客之后手动选择的语言。
  * 跨市场时目标语言在源市场不可用，Shopify 会丢弃 language_code 只切国家；
  * 故先在阶段 A 切国家，reload 后再由阶段 B 纠正语言，两次刷新内收敛。
  * 返回 true 表示已触发跳转（页面即将刷新），调用方可提前终止后续操作。
@@ -452,9 +497,9 @@ async function runIpRedirect() {
       });
 
       if (targetCountry && targetCountry !== current.country) {
-        // 同一目标国家 7 天内已自动跳过 → 防重复跳转（如 Shopify 持续建议异国），转入阶段 B
+        // 同一目标国家 7 天内已自动跳过 → 防重复跳转（如 Shopify 持续建议异国），不覆盖语言
         if (isRedirectThrottledForCountry(targetCountry)) {
-          logSkip("[IP-4]", `7 天内已自动跳转到「${targetCountry}」，防重复，转入语言纠正`, {
+          logSkip("[IP-4]", `7 天内已自动跳转到「${targetCountry}」，防重复，不覆盖当前语言`, {
             from: current.country,
             to: targetCountry,
           });
@@ -465,8 +510,9 @@ async function runIpRedirect() {
             to: targetCountry,
             mappedLanguage: mappedLanguage || "(无映射→市场默认)",
           });
-          // 国家变化：清除语言纠正标记，确保 reload 后阶段 B 能重新对齐新市场语言
+          // 国家变化：清除语言纠正标记，并打 pending，reload 后阶段 B 仅跟随这一次
           clearLanguageCorrectionMarker();
+          setPendingLanguageCorrection(targetCountry);
           // 先写缓存再提交（form.submit 触发整页导航，之后代码不再执行）
           setIpRedirectCache(targetCountry);
           // 跨市场提交目标市场专属语言时，Shopify 可能忽略 language_code 而落到市场默认语言；
@@ -488,12 +534,12 @@ async function runIpRedirect() {
     console.warn(`${LOG} [IP-ERR] GeoIP 国家检测异常：`, e);
   }
 
-  // ── 阶段 B：语言纠正（不受 7 天缓存限制，确保国家切换后语言能被对齐） ──
+  // ── 阶段 B：仅在阶段 A 刚切完国家后跟随纠正语言，不覆盖手选语言 ──
   if (runLanguageCorrection(current, marketMap)) {
     return true;
   }
 
-  logSkip("[IP-4]", "无需跳转：国家与语言均已符合建议/映射", {
+  logSkip("[IP-4]", "无需自动跳转：国家已对齐，语言保持现状", {
     currentCountry: current.country,
     currentLanguage: current.language,
   });
@@ -845,7 +891,7 @@ function observeAndReplace(map) {
 
 async function main() {
   console.info(
-    `${LOG} 启动 v${"2026-08-18a"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
+    `${LOG} 启动 v${"2026-08-18b"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
   );
   logStep("[0] 环境", {
     shop: getShopDomain(),
