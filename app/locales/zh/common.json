@@ -3194,5 +3194,181 @@
     "loading": "加载中…",
     "noAdSets": "此广告系列下暂无广告组",
     "noAds": "此广告组下暂无广告"
+  },
+  "workspace": {
+    "shell": {
+      "panels": {
+        "home": "首页"
+      },
+      "groups": {
+        "pinned": "置顶",
+        "today": "今天",
+        "yesterday": "昨天",
+        "last7Days": "7 天内",
+        "earlier": "更早"
+      },
+      "defaultAccountName": "Spark 用户",
+      "newConversationTitle": "新对话",
+      "workspaceTitle": "工作台",
+      "recentConversations": "最近对话",
+      "searchPlaceholder": "搜索对话",
+      "noMatchingConversations": "没有匹配的对话",
+      "noConversations": "暂无对话",
+      "conversationsQuota": "对话 {{count}}/50",
+      "toast": {
+        "renameFailed": "重命名失败",
+        "deleted": "对话已删除",
+        "deleteFailed": "删除对话失败",
+        "createFailed": "创建对话失败，请稍后重试"
+      },
+      "conversation": {
+        "welcome": "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+        "prefillWelcome": "已根据经营任务生成新对话，你可以直接发送或继续补充上下文。"
+      },
+      "chat": {
+        "requestFailed": "请求失败（{{status}}），请稍后重试。",
+        "replyStopped": "回复已停止。",
+        "invalidReply": "AI Assistant 未返回有效内容，请重试。",
+        "sendFailed": "抱歉，发送失败，请稍后重试。",
+        "justNow": "刚刚"
+      },
+      "taskRun": {
+        "userText": "开始执行：{{title}}（{{count}} 个任务）",
+        "assistantText": "已创建 {{count}} 个任务，进度见下方卡片与任务列表。",
+        "assistantTextPartial": "已创建 {{count}} 个任务（{{failed}} 个对象创建失败），进度见下方卡片与任务列表。"
+      },
+      "actions": {
+        "collapseSidebar": "折叠侧栏",
+        "expandSidebar": "展开侧栏",
+        "expandSidebarAccount": "展开侧栏查看账户",
+        "openNavigation": "打开导航菜单",
+        "newChat": "新建对话",
+        "pinned": "已置顶",
+        "conversationMenuAria": "对话操作：{{title}}",
+        "moreActions": "更多操作",
+        "pin": "置顶",
+        "unpin": "取消置顶",
+        "rename": "重命名",
+        "delete": "删除"
+      },
+      "status": {
+        "runningTasksCount": "任务进行中 {{count}}",
+        "attentionItems": "今日巡检发现需关注项",
+        "online": "在线"
+      },
+      "account": {
+        "language": "语言",
+        "workspaceLabel": "Spark 工作台"
+      }
+    },
+    "dashboard": {
+      "metrics": {
+        "sales": "销售额",
+        "orders": "订单数",
+        "conversionRate": "转化率",
+        "aov": "客单价",
+        "refundRate": "退款率",
+        "riskSku": "库存风险 SKU",
+        "pendingSource": "需 Shopify 弃购或 Analytics",
+        "noPreviousData": "无上期数据",
+        "watchSku": "关注 SKU {{count}}"
+      },
+      "taskStatus": {
+        "running": "执行中",
+        "succeeded": "已完成",
+        "failed": "失败",
+        "cancelled": "已取消",
+        "pendingReview": "待审核",
+        "applied": "已应用",
+        "scored": "已评分"
+      },
+      "count": {
+        "products": "{{count}} 个商品"
+      },
+      "empty": {
+        "orders": "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。"
+      }
+    },
+    "home": {
+      "greeting": {
+        "lateNight": "夜深了",
+        "morning": "早上好",
+        "afternoon": "下午好",
+        "evening": "晚上好",
+        "title": "{{greeting}}，{{name}}"
+      },
+      "today": "今日",
+      "inspectionAt": "今日 {{time}}",
+      "alertTone": {
+        "critical": "风险",
+        "warning": "关注",
+        "info": "提示"
+      },
+      "quickPrompts": {
+        "diagnoseWeek": {
+          "label": "诊断本周经营",
+          "prompt": "帮我诊断本周经营情况，找出需要优先处理的问题，并给出 3 条可执行建议。"
+        },
+        "handleRisks": {
+          "label": "处理今日风险",
+          "prompt": "根据今日经营巡检结果，帮我按影响从高到低列出今天最该处理的 3 件事。"
+        },
+        "optimizeCopy": {
+          "label": "优化商品文案",
+          "prompt": "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。"
+        },
+        "reviewOrders": {
+          "label": "查看待处理订单",
+          "prompt": "帮我查看当前待处理、异常或高风险订单，并给出处理建议。"
+        }
+      },
+      "context": {
+        "product": "商品",
+        "order": "订单",
+        "file": "文件"
+      },
+      "status": {
+        "needsAttention": "今日巡检有需关注事项",
+        "healthy": "今日巡检正常"
+      },
+      "askSpark": "ASK SPARK",
+      "assistantTitle": "继续追问，或直接发起一个任务",
+      "composerPlaceholder": "例如：把上面的库存风险拆成可执行清单，并告诉我先处理哪 3 个 SKU…",
+      "moreContext": "更多",
+      "send": "发送",
+      "command": {
+        "eyebrow": "TODAY COMMAND CENTER",
+        "needsAttention": "今天有需要优先处理的经营风险",
+        "healthy": "今日经营状态整体正常",
+        "noData": "暂无可用经营数据",
+        "updatedAt": "数据更新于 {{time}}",
+        "snapshotDate": "快照 {{date}}",
+        "snapshotPending": "完成数据回补后会生成今日经营摘要",
+        "noUrgentRisk": "当前未发现紧急风险，可在每日经营待办中查看完整诊断与四象限任务。",
+        "noPriorityRisk": "暂无需要优先处理的风险。",
+        "noBusinessData": "暂无经营数据。"
+      },
+      "fallbackActions": {
+        "report": "帮我生成今日经营体检报告",
+        "sync": "帮我检查哪些数据还没有同步",
+        "actions": "帮我列出今天最值得处理的运营动作"
+      },
+      "links": {
+        "dashboard": "经营看板",
+        "dailyOps": "每日待办",
+        "tasks": "任务中心"
+      },
+      "pendingIntegration": "待接入",
+      "sections": {
+        "topRisks": "最重要的风险",
+        "topRisksHint": "最多展示 3 条，完整列表在每日待办里",
+        "recommendedActions": "推荐动作",
+        "recommendedActionsHint": "基于今日诊断直接进入下一步",
+        "recentTasks": "最近任务",
+        "runningTasks": "{{count}} 个任务进行中",
+        "noRunningTasks": "当前没有进行中任务",
+        "noRecentTasks": "暂无近期任务。创建文案或图片任务后会显示在这里。"
+      }
+    }
   }
 }

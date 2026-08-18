@@ -3194,5 +3194,181 @@
     "loading": "Loading…",
     "noAdSets": "No ad sets found in this campaign",
     "noAds": "No ads found in this ad group"
+  },
+  "workspace": {
+    "shell": {
+      "panels": {
+        "home": "Home"
+      },
+      "groups": {
+        "pinned": "Pinned",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "last7Days": "Last 7 days",
+        "earlier": "Earlier"
+      },
+      "defaultAccountName": "Spark User",
+      "newConversationTitle": "New chat",
+      "workspaceTitle": "Workspace",
+      "recentConversations": "Recent chats",
+      "searchPlaceholder": "Search chats",
+      "noMatchingConversations": "No matching chats",
+      "noConversations": "No chats yet",
+      "conversationsQuota": "Chats {{count}}/50",
+      "toast": {
+        "renameFailed": "Failed to rename chat",
+        "deleted": "Chat deleted",
+        "deleteFailed": "Failed to delete chat",
+        "createFailed": "Failed to create chat. Please try again."
+      },
+      "conversation": {
+        "welcome": "A new chat is ready. You can add products, orders, articles, files, or media from the toolbar below before sending your request.",
+        "prefillWelcome": "A new chat has been prepared from the operations task. You can send it directly or add more context first."
+      },
+      "chat": {
+        "requestFailed": "Request failed ({{status}}). Please try again later.",
+        "replyStopped": "Reply stopped.",
+        "invalidReply": "AI Assistant did not return valid content. Please try again.",
+        "sendFailed": "Sorry, sending failed. Please try again later.",
+        "justNow": "Just now"
+      },
+      "taskRun": {
+        "userText": "Start run: {{title}} ({{count}} tasks)",
+        "assistantText": "{{count}} tasks created. Track progress in the card below and the task list.",
+        "assistantTextPartial": "{{count}} tasks created ({{failed}} objects failed to create). Track progress in the card below and the task list."
+      },
+      "actions": {
+        "collapseSidebar": "Collapse sidebar",
+        "expandSidebar": "Expand sidebar",
+        "expandSidebarAccount": "Expand sidebar to view account",
+        "openNavigation": "Open navigation menu",
+        "newChat": "New chat",
+        "pinned": "Pinned",
+        "conversationMenuAria": "Conversation actions: {{title}}",
+        "moreActions": "More actions",
+        "pin": "Pin",
+        "unpin": "Unpin",
+        "rename": "Rename",
+        "delete": "Delete"
+      },
+      "status": {
+        "runningTasksCount": "{{count}} tasks running",
+        "attentionItems": "Today’s inspection found items that need attention",
+        "online": "Online"
+      },
+      "account": {
+        "language": "Language",
+        "workspaceLabel": "Spark Workspace"
+      }
+    },
+    "dashboard": {
+      "metrics": {
+        "sales": "Sales",
+        "orders": "Orders",
+        "conversionRate": "Conversion rate",
+        "aov": "AOV",
+        "refundRate": "Refund rate",
+        "riskSku": "At-risk SKUs",
+        "pendingSource": "Needs Shopify abandoned checkout or Analytics",
+        "noPreviousData": "No previous-period data",
+        "watchSku": "Watch SKUs {{count}}"
+      },
+      "taskStatus": {
+        "running": "Running",
+        "succeeded": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "pendingReview": "Pending review",
+        "applied": "Applied",
+        "scored": "Scored"
+      },
+      "count": {
+        "products": "{{count}} products"
+      },
+      "empty": {
+        "orders": "No order data yet, so diagnostics are unavailable. New orders sync automatically; backfill historical orders first."
+      }
+    },
+    "home": {
+      "greeting": {
+        "lateNight": "Working late",
+        "morning": "Good morning",
+        "afternoon": "Good afternoon",
+        "evening": "Good evening",
+        "title": "{{greeting}}, {{name}}"
+      },
+      "today": "Today",
+      "inspectionAt": "Today {{time}}",
+      "alertTone": {
+        "critical": "Risk",
+        "warning": "Attention",
+        "info": "Info"
+      },
+      "quickPrompts": {
+        "diagnoseWeek": {
+          "label": "Diagnose this week",
+          "prompt": "Help me diagnose this week's operations, identify the top problems to fix first, and give me 3 actionable recommendations."
+        },
+        "handleRisks": {
+          "label": "Handle today’s risks",
+          "prompt": "Based on today’s operations inspection, list the top 3 things I should handle today in order of impact."
+        },
+        "optimizeCopy": {
+          "label": "Optimize product copy",
+          "prompt": "Help me optimize a batch of product titles and descriptions with an SEO and conversion-focused style."
+        },
+        "reviewOrders": {
+          "label": "Review pending orders",
+          "prompt": "Help me review current pending, abnormal, or high-risk orders and suggest next actions."
+        }
+      },
+      "context": {
+        "product": "Product",
+        "order": "Order",
+        "file": "File"
+      },
+      "status": {
+        "needsAttention": "Today’s inspection found items that need attention",
+        "healthy": "Today’s inspection looks healthy"
+      },
+      "askSpark": "ASK SPARK",
+      "assistantTitle": "Ask a follow-up or start a task directly",
+      "composerPlaceholder": "For example: turn the inventory risks above into an action checklist and tell me which 3 SKUs to handle first…",
+      "moreContext": "More",
+      "send": "Send",
+      "command": {
+        "eyebrow": "TODAY COMMAND CENTER",
+        "needsAttention": "There are operational risks that should be handled first today",
+        "healthy": "Today’s business health looks stable overall",
+        "noData": "No business data available yet",
+        "updatedAt": "Updated {{time}}",
+        "snapshotDate": "Snapshot {{date}}",
+        "snapshotPending": "Today’s operations summary will appear after data backfill completes",
+        "noUrgentRisk": "No urgent risks were found. You can open Daily Ops for the full diagnosis and action list.",
+        "noPriorityRisk": "No priority risks right now.",
+        "noBusinessData": "No business data yet."
+      },
+      "fallbackActions": {
+        "report": "Generate today’s operations health report",
+        "sync": "Check which data is still not synced",
+        "actions": "List the most worthwhile operational actions for today"
+      },
+      "links": {
+        "dashboard": "Operations dashboard",
+        "dailyOps": "Daily ops",
+        "tasks": "Task center"
+      },
+      "pendingIntegration": "Pending",
+      "sections": {
+        "topRisks": "Top risks",
+        "topRisksHint": "Shows up to 3 items. See Daily Ops for the full list.",
+        "recommendedActions": "Recommended actions",
+        "recommendedActionsHint": "Jump straight to the next step from today’s diagnosis",
+        "recentTasks": "Recent tasks",
+        "runningTasks": "{{count}} tasks running",
+        "noRunningTasks": "No tasks are currently running",
+        "noRecentTasks": "No recent tasks yet. Copy and image tasks will appear here after you create them."
+      }
+    }
   }
 }
