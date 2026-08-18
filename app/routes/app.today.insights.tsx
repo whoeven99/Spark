@@ -1,6 +1,6 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
@@ -71,6 +71,51 @@ type BusinessModule = {
   actionHint: string;
 };
 
+type NarrativeCard = {
+  title: string;
+  body: string;
+};
+
+type ReportCardTone = "positive" | "warning" | "negative" | "neutral";
+
+type ReportSummaryCard = {
+  label: string;
+  value: string;
+  detail: string;
+  tone: ReportCardTone;
+};
+
+type InsightItemTone = "critical" | "warning" | "info";
+
+type InsightListItem = {
+  title: string;
+  confidence: "高" | "中" | "低";
+  metric: string;
+  detail: string;
+  tone: InsightItemTone;
+  targetKey?: string;
+  href?: string;
+};
+
+type DrilldownEntry = {
+  key: string;
+  title: string;
+  detail: string;
+  badge: string;
+  href: string;
+};
+
+type SnapshotReport = {
+  summary: string;
+  cards: ReportSummaryCard[];
+  insights: InsightListItem[];
+  drilldowns: DrilldownEntry[];
+  focus: string[];
+  actions: string[];
+  narratives: NarrativeCard[];
+  charts: ModuleChart[];
+};
+
 type Snapshot = {
   summary: string;
   metricAccent: string;
@@ -79,6 +124,7 @@ type Snapshot = {
   highlights: string[];
   nextSteps: string[];
   modules: BusinessModule[];
+  report: SnapshotReport;
 };
 
 type LiveSnapshotData = {
@@ -311,6 +357,87 @@ const periodItems: Array<{ key: PeriodKey; label: string }> = [
   { key: "30d", label: "近 30 天" },
 ];
 
+const mockReport7d: SnapshotReport = {
+  summary: "日报先回答三个问题：ROI 是否健康、卡在哪个环节、今天先做什么。",
+  cards: [
+    { label: "经营 ROI", value: "待接入", detail: "广告成本映射后展示真实 ROI", tone: "neutral" },
+    { label: "当前卡点", value: "站内转化", detail: "先用漏斗定位掉点位置", tone: "warning" },
+    { label: "数据可信度", value: "逐步补齐", detail: "优先接真实利润、渠道和流量来源", tone: "neutral" },
+  ],
+  insights: [
+    {
+      title: "转化下滑主要卡在站内",
+      confidence: "中",
+      metric: "整体转化率 / 支付成功率",
+      detail: "先看漏斗掉点和核心 landing page。",
+      tone: "warning",
+      targetKey: "conversion",
+      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
+    },
+    {
+      title: "退款已开始侵蚀利润",
+      confidence: "高",
+      metric: "退款率 / 退款 SKU",
+      detail: "优先排查高退款 SKU 和履约链路。",
+      tone: "critical",
+      targetKey: "afterSales",
+      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+    },
+    {
+      title: "渠道利润差异已经拉开",
+      confidence: "中",
+      metric: "渠道收入 / 渠道利润",
+      detail: "优先看最赚钱渠道和值得扩量的客群。",
+      tone: "info",
+      targetKey: "channel",
+      href: "/app/today/diagnosis?detail=value&valueTab=channels",
+    },
+  ],
+  drilldowns: [
+    { key: "refund", title: "退款详情", detail: "看异常退款订单、退款 SKU 和原因聚类", badge: "高优先", href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health" },
+    { key: "inventory", title: "库存详情", detail: "看风险 SKU、可售天数和预计损失", badge: "对象深钻", href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory" },
+    { key: "conversion", title: "流量/转化详情", detail: "看漏斗掉点、landing page 和渠道来源", badge: "定位卡点", href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health" },
+    { key: "channel", title: "渠道 ROI", detail: "看收入、利润和值得继续投的渠道", badge: "经营复盘", href: "/app/today/diagnosis?detail=value&valueTab=channels" },
+  ],
+  focus: [
+    "先用利润、退款和库存把经营结果层看清。",
+    "再把流量与渠道补到同一套口径。",
+    "最后再让 AI 基于模块摘要生成报告。",
+  ],
+  actions: [
+    "先补广告成本与渠道映射。",
+    "再补 GA4 来源和 landing page 维度。",
+    "最后接 AI 风险、机会和动作建议。",
+  ],
+  narratives: [
+    { title: "风险", body: "当前最大的风险不是没数据，而是数据还没被整理成可执行的经营阅读顺序。" },
+    { title: "机会", body: "利润、售后、客户价值和渠道层已经具备接真实数据的基础，可以先形成一版日报。" },
+    { title: "建议动作", body: "先做 ROI 总览和漏斗，再把高风险 SKU、退款 SKU 和渠道利润串成一份日报。" },
+  ],
+  charts: [
+    {
+      title: "ROI 拆解预览",
+      kind: "bars",
+      items: [
+        { label: "收入", value: 100, display: "$24.8k" },
+        { label: "货品成本", value: 38, display: "$9.4k" },
+        { label: "售后/支付/折扣", value: 14, display: "$3.5k" },
+        { label: "广告花费", value: 19, display: "$4.6k" },
+        { label: "经营利润", value: 29, display: "$7.3k" },
+      ],
+    },
+    {
+      title: "优先渠道预览",
+      kind: "table",
+      items: [
+        { label: "Google", value: 100, display: "$5.4k", note: "利润稳定 / 适合加码" },
+        { label: "Meta", value: 82, display: "$5.1k", note: "收入高 / 需继续压成本" },
+        { label: "TikTok", value: 49, display: "$2.6k", note: "新客多 / 观察 ROI" },
+      ],
+    },
+  ],
+};
+
 const mockSnapshots: Record<PeriodKey, Snapshot> = {
   "7d": {
     summary:
@@ -339,6 +466,7 @@ const mockSnapshots: Record<PeriodKey, Snapshot> = {
       "再把流量与渠道层接成统一口径。",
       "最后补 AI 风险、机会和建议动作输出。",
     ],
+    report: mockReport7d,
     modules: [
       {
         key: "traffic",
@@ -567,6 +695,15 @@ const mockSnapshots: Record<PeriodKey, Snapshot> = {
         "增加利润与客户价值的长期对比。",
         "把渠道与广告成本真正并成 ROI 视图。",
       ],
+    report: {
+      ...mockReport7d,
+      summary: "30 天更适合看 ROI 结构，而不是只看单点波动。",
+      cards: [
+        { label: "经营 ROI", value: "结构视角", detail: "优先看利润、客户价值和渠道质量", tone: "neutral" },
+        { label: "当前卡点", value: "利润结构", detail: "要看是成本压力还是售后侵蚀", tone: "warning" },
+        { label: "数据可信度", value: "逐步补齐", detail: "30 天页优先接结构层真实数据", tone: "neutral" },
+      ],
+    },
     modules: [],
   },
 };
@@ -597,6 +734,75 @@ function formatNumber(value: number | null | undefined, digits = 0): string {
 function formatPercent(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${formatNumber(value, digits)}%`;
+}
+
+function formatSignedPercent(value: number | null | undefined, digits = 1): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatNumber(value, digits)}%`;
+}
+
+function formatSignedPercentPoint(value: number | null | undefined, digits = 1): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatNumber(value, digits)}pp`;
+}
+
+function gradeBusinessRoiValue(value: number | null): { label: string; tone: ReportCardTone } {
+  if (value == null || !Number.isFinite(value)) {
+    return { label: "待接广告成本", tone: "neutral" };
+  }
+  if (value >= 0.5) return { label: "S", tone: "positive" };
+  if (value >= 0.2) return { label: "A", tone: "positive" };
+  if (value >= 0) return { label: "B", tone: "warning" };
+  if (value >= -0.2) return { label: "C", tone: "warning" };
+  return { label: "D", tone: "negative" };
+}
+
+function reportToneFromConfidence(connectedSignals: number): ReportCardTone {
+  if (connectedSignals >= 4) return "positive";
+  if (connectedSignals >= 2) return "warning";
+  return "neutral";
+}
+
+function diagnosisFocusLabel(key: string): string {
+  switch (key) {
+    case "sales_trend":
+      return "销售结果";
+    case "traffic_anomaly":
+      return "流量获取";
+    case "conversion_health":
+      return "站内转化";
+    case "product_operations":
+      return "商品基础";
+    case "fulfillment_health":
+      return "履约时效";
+    case "logistics_anomaly":
+      return "物流体验";
+    case "refund_health":
+      return "售后退款";
+    case "inventory_health":
+      return "库存供给";
+    default:
+      return "经营环节";
+  }
+}
+
+function clampChartShare(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 10;
+  return Math.max(10, Math.min(100, value));
+}
+
+function mapInsightTone(status: "healthy" | "watch" | "risk"): InsightItemTone {
+  if (status === "risk") return "critical";
+  if (status === "watch") return "warning";
+  return "info";
+}
+
+function mapInsightConfidence(evidenceCount: number, reasoningCount: number): "高" | "中" | "低" {
+  if (evidenceCount >= 2) return "高";
+  if (evidenceCount >= 1 || reasoningCount >= 1) return "中";
+  return "低";
 }
 
 function normalizeGa4Key(value: string | null | undefined, fallback = "(not set)"): string {
@@ -961,6 +1167,259 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
     channelModule,
   ];
 
+  const overallBusinessRoi =
+    totalAdsSpend > 0 ? operatingProfitAfterAds / totalAdsSpend : null;
+  const roiGrade = gradeBusinessRoiValue(overallBusinessRoi);
+  const riskItems = diagnosis.items.filter((item) => item.status === "risk");
+  const watchItems = diagnosis.items.filter((item) => item.status === "watch");
+  const primaryConcern = riskItems[0] ?? watchItems[0] ?? null;
+  const focusArea = primaryConcern
+    ? diagnosisFocusLabel(primaryConcern.key)
+    : overallBusinessRoi != null && overallBusinessRoi < 0
+      ? "投放效率"
+      : "利润扩张";
+  const connectedSignals = [
+    diagnosis.hasData,
+    diagnosis.summaryMetrics.hasPixelData,
+    Boolean(ga4?.connected),
+    Boolean(ads),
+    Boolean(channel),
+    Boolean(customer),
+  ].filter(Boolean).length;
+
+  const reportActions: string[] = [];
+  if (diagnosis.summaryMetrics.riskSkuCount > 0) {
+    reportActions.push(
+      `先处理 ${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个高风险 SKU，优先保护 ${formatCurrency(diagnosis.summaryMetrics.estimatedInventoryLoss, currency)} 的潜在缺货损失。`,
+    );
+  }
+  if (
+    diagnosis.summaryMetrics.refundRateDelta > 0 ||
+    diagnosis.summaryMetrics.carrierIssueCount > 0
+  ) {
+    const focusSku = diagnosis.detail.topRefundSkus[0]?.sku;
+    reportActions.push(
+      `复盘退款与履约链路${focusSku ? `，优先检查 ${focusSku}` : ""}，先止住退款率 ${formatSignedPercentPoint(diagnosis.summaryMetrics.refundRateDelta)} 的恶化。`,
+    );
+  }
+  if (
+    diagnosis.summaryMetrics.conversionRate7d != null &&
+    diagnosis.summaryMetrics.conversionRatePrev7d != null &&
+    diagnosis.summaryMetrics.conversionRate7d <= diagnosis.summaryMetrics.conversionRatePrev7d
+  ) {
+    reportActions.push(
+      `检查 ${ga4TopLanding ? `${normalizeGa4Key(ga4TopLanding.key, "/")} 落地页` : "核心商品页"} 的转化链路，优先提升站内转化而不是继续盲目加流量。`,
+    );
+  }
+  if (ads && topAdsPlatform) {
+    reportActions.push(
+      topAdsPlatform.roas != null && topAdsPlatform.roas < 1
+        ? `压缩 ${topAdsPlatform.platform} 的低效投放，当前平台 ROAS 只有 ${formatNumber(topAdsPlatform.roas, 2)}。`
+        : `把预算优先集中到 ${topAdsPlatform.platform} 的高质量广告组，减少低质量流量稀释经营利润。`,
+    );
+  }
+  if (reportActions.length === 0) {
+    reportActions.push("当前没有明显的紧急止损项，可以把精力放在利润扩张和高价值客户经营上。");
+  }
+
+  const reportFocus = [
+    primaryConcern
+      ? `当前最该盯的是 ${focusArea}：${primaryConcern.reasoning[0] ?? primaryConcern.evidence[0] ?? primaryConcern.name}。`
+      : overallBusinessRoi != null
+        ? `当前经营 ROI 为 ${formatSignedPercent(overallBusinessRoi * 100)}，先围绕利润扩张和预算分配做判断。`
+        : "广告成本还没有完整映射到经营渠道，因此当前 ROI 先作为方向性参考。",
+    topProfitChannel
+      ? `${topProfitChannel.label} 当前贡献利润最高，为 ${formatCurrency(topProfitChannel.contributionProfit, currency)}。`
+      : "当前还没有足够的渠道利润对比样本。",
+    customer
+      ? `高价值客户占比 ${formatPercent(customer.highValueShare)}，平均动态 LTV 为 ${formatCurrency(customer.averageDynamicLtv, currency)}。`
+      : "客户价值层还在补齐中，当前日报先以利润和漏斗为主。",
+  ];
+
+  const reportInsights: InsightListItem[] = diagnosis.items
+    .filter((item) => item.status !== "healthy")
+    .slice(0, 4)
+    .map((item) => ({
+      title: item.name,
+      confidence: mapInsightConfidence(item.evidence.length, item.reasoning.length),
+      metric: Object.keys(item.metrics).slice(0, 2).join(" / ") || "经营诊断",
+      detail: item.reasoning[0] ?? item.evidence[0] ?? "建议进入详情继续排查。",
+      tone: mapInsightTone(item.status),
+      targetKey:
+        item.key === "traffic_anomaly"
+          ? "traffic"
+          : item.key === "conversion_health"
+            ? "conversion"
+            : item.key === "refund_health"
+              ? "afterSales"
+              : item.key === "inventory_health"
+                ? "productInventory"
+                : item.key === "sales_trend"
+                  ? "profit"
+                  : item.key === "product_operations"
+                    ? "productInventory"
+                    : item.key === "fulfillment_health" || item.key === "logistics_anomaly"
+                      ? "afterSales"
+                      : undefined,
+      href:
+        item.key === "traffic_anomaly" ||
+        item.key === "conversion_health" ||
+        item.key === "refund_health" ||
+        item.key === "inventory_health" ||
+        item.key === "fulfillment_health" ||
+        item.key === "logistics_anomaly"
+          ? `/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=${item.key}`
+          : undefined,
+    }));
+
+  const reportDrilldowns: DrilldownEntry[] = [
+    {
+      key: "refund",
+      title: "退款详情",
+      detail: "看异常退款订单、退款 SKU 和退款原因聚类。",
+      badge: `${formatPercent(diagnosis.summaryMetrics.refundRate30d)} 退款率`,
+      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+    },
+    {
+      key: "inventory",
+      title: "库存详情",
+      detail: "看风险 SKU、可售天数和预计损失。",
+      badge: `${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个风险 SKU`,
+      href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory",
+    },
+    {
+      key: "fulfillment",
+      title: "履约与物流",
+      detail: "看超时未发货、物流异常和关联售后问题。",
+      badge: `${formatNumber(diagnosis.summaryMetrics.overdueOrderCount + diagnosis.summaryMetrics.carrierIssueCount)} 个异常对象`,
+      href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=fulfillment",
+    },
+    {
+      key: "channel",
+      title: "渠道 ROI",
+      detail: "看收入、利润和值得继续投的渠道。",
+      badge: topProfitChannel ? `${topProfitChannel.label} 最稳` : "经营复盘",
+      href: "/app/today/diagnosis?detail=value&valueTab=channels",
+    },
+  ];
+
+  const report: SnapshotReport = {
+    summary:
+      ads && overallBusinessRoi != null
+        ? `当前日报已经可以围绕 ROI 来读：先看经营利润，再看 ${focusArea} 是否拖累 ROI。`
+        : "当前日报已经可以围绕利润和关键环节来读，广告成本进一步映射后会升级成更完整的 ROI 口径。",
+    cards: [
+      {
+        label: "经营 ROI",
+        value:
+          overallBusinessRoi != null
+            ? `${roiGrade.label} / ${formatSignedPercent(overallBusinessRoi * 100)}`
+            : "待接广告成本",
+        detail:
+          overallBusinessRoi != null
+            ? `经营利润 ${formatCurrency(operatingProfitAfterAds, currency)}`
+            : "当前只能先读贡献利润与渠道质量",
+        tone: roiGrade.tone,
+      },
+      {
+        label: "当前卡点",
+        value: focusArea,
+        detail:
+          primaryConcern?.reasoning[0] ??
+          primaryConcern?.evidence[0] ??
+          "当前没有明显的单点故障，优先看利润结构。",
+        tone: riskItems.length > 0 ? "negative" : watchItems.length > 0 ? "warning" : "neutral",
+      },
+      {
+        label: "数据可信度",
+        value: connectedSignals >= 4 ? "高" : connectedSignals >= 2 ? "中" : "低",
+        detail: `已接入 ${connectedSignals} 个关键数据信号`,
+        tone: reportToneFromConfidence(connectedSignals),
+      },
+    ],
+    insights: reportInsights.length > 0 ? reportInsights : mockReport7d.insights,
+    drilldowns: reportDrilldowns,
+    focus: reportFocus,
+    actions: reportActions,
+    narratives: [
+      {
+        title: "风险",
+        body: primaryConcern
+          ? `${focusArea} 是当前的首要风险点。${primaryConcern.evidence[0] ?? primaryConcern.reasoning[0] ?? "建议优先处理该环节。"}`
+          : overallBusinessRoi != null && overallBusinessRoi < 0
+            ? `当前广告投入后经营利润为 ${formatCurrency(operatingProfitAfterAds, currency)}，ROI 已转负，优先控制低效投放。`
+            : "当前没有出现明显的单点爆雷，更多是结构优化问题。",
+      },
+      {
+        title: "机会",
+        body: topProfitChannel
+          ? `${topProfitChannel.label} 是当前最稳的利润来源。${customer ? `同时高价值客户占比为 ${formatPercent(customer.highValueShare)}，适合围绕复购和高质量渠道继续放大。` : "可以优先把预算和资源向这类高质量渠道倾斜。"}`
+          : ga4TopLanding
+            ? `${normalizeGa4Key(ga4TopLanding.key, "/")} 已经是当前主要 landing page，优化这条链路通常最容易先撬动整体转化。`
+            : "当前最现实的机会是先把已有真实数据整理成稳定日报，再逐步上 AI 洞察。",
+      },
+      {
+        title: "建议动作",
+        body: reportActions.slice(0, 2).join(" "),
+      },
+    ],
+    charts: [
+      {
+        title: "ROI 拆解",
+        kind: "bars",
+        items: [
+          { label: "收入", value: 100, display: formatCurrency(channel?.totalRevenue ?? diagnosis.summaryMetrics.revenue30d, currency) },
+          {
+            label: "货品成本",
+            value: clampChartShare(
+              channel?.totalRevenue ? (totalCogs / channel.totalRevenue) * 100 : null,
+            ),
+            display: formatCurrency(totalCogs, currency),
+          },
+          {
+            label: "售后/支付/折扣",
+            value: clampChartShare(
+              channel?.totalRevenue
+                ? ((totalPaymentFees + totalDiscountCost + totalRefundLoss) / channel.totalRevenue) * 100
+                : null,
+            ),
+            display: formatCurrency(totalPaymentFees + totalDiscountCost + totalRefundLoss, currency),
+          },
+          {
+            label: "广告花费",
+            value: clampChartShare(
+              channel?.totalRevenue ? (totalAdsSpend / channel.totalRevenue) * 100 : null,
+            ),
+            display: formatCurrency(totalAdsSpend, currency),
+          },
+          {
+            label: "经营利润",
+            value: clampChartShare(
+              channel?.totalRevenue
+                ? (Math.abs(operatingProfitAfterAds) / channel.totalRevenue) * 100
+                : null,
+            ),
+            display: formatCurrency(operatingProfitAfterAds, currency),
+            note: operatingProfitAfterAds >= 0 ? "扣广告后" : "已转负",
+          },
+        ],
+      },
+      {
+        title: "渠道优先级",
+        kind: "table",
+        items: (channel?.channels.slice(0, 4) ?? []).map((item) => ({
+          label: item.label,
+          value: Math.max(10, item.revenue),
+          display: formatCurrency(item.revenue, currency),
+          note:
+            item.roi.businessRoi != null
+              ? `利润 ${formatCurrency(item.contributionProfit, currency)} / ROI ${formatSignedPercent(item.roi.businessRoi * 100)}`
+              : `利润 ${formatCurrency(item.contributionProfit, currency)} / ${item.roi.confidence} 置信度`,
+        })),
+      },
+    ],
+  };
+
   return {
     "7d": {
       summary:
@@ -991,6 +1450,7 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
         "把广告 spend 进一步映射到经营渠道层。",
         "再基于这些真实模块摘要生成 AI 风险、机会和动作建议。",
       ],
+      report,
       modules: sharedModules,
     },
     "30d": {
@@ -1022,6 +1482,13 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
         "增强商品层，把销量、利润和退款统一进商品视图。",
         "最后再把 AI 洞察改成真正由模块摘要生成。",
       ],
+      report: {
+        ...report,
+        summary:
+          ads && overallBusinessRoi != null
+            ? `30 天更适合看 ROI 结构。当前经营 ROI 为 ${formatSignedPercent(overallBusinessRoi * 100)}，重点看利润被哪个环节长期侵蚀。`
+            : "30 天更适合看利润、渠道和客户价值结构，广告成本完整映射后再升级为长期 ROI 视图。",
+      },
       modules: sharedModules.map((item) =>
         item.key === "traffic" || item.key === "conversion"
           ? {
@@ -1246,6 +1713,108 @@ const pageStyles = {
     fontWeight: 700,
     color: pageColorTokens.textPrimary,
   } as CSSProperties,
+  insightList: {
+    display: "grid",
+    gap: "0.75rem",
+  } as CSSProperties,
+  insightItem: (tone: InsightItemTone): CSSProperties => ({
+    borderRadius: pageColorTokens.radiusControl,
+    border: `1px solid ${
+      tone === "critical"
+        ? "#fecaca"
+        : tone === "warning"
+          ? "#fed7aa"
+          : "#c7d2fe"
+    }`,
+    background:
+      tone === "critical"
+        ? "#fef2f2"
+        : tone === "warning"
+          ? "#fff7ed"
+          : "#eef2ff",
+    padding: "0.8rem 0.9rem",
+    display: "grid",
+    gap: "0.35rem",
+  }),
+  insightHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    flexWrap: "wrap" as const,
+  } as CSSProperties,
+  insightTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  insightMeta: {
+    display: "flex",
+    gap: "0.45rem",
+    flexWrap: "wrap" as const,
+    alignItems: "center",
+  } as CSSProperties,
+  insightBadge: (tone: InsightItemTone): CSSProperties => ({
+    borderRadius: 999,
+    padding: "0.18rem 0.5rem",
+    fontSize: 11,
+    fontWeight: 700,
+    color:
+      tone === "critical"
+        ? "#b91c1c"
+        : tone === "warning"
+          ? "#9a3412"
+          : "#3730a3",
+    background:
+      tone === "critical"
+        ? "#fee2e2"
+        : tone === "warning"
+          ? "#ffedd5"
+          : "#e0e7ff",
+  }),
+  insightMetric: {
+    fontSize: 11,
+    color: pageColorTokens.textSecondary,
+    fontWeight: 600,
+  } as CSSProperties,
+  drilldownGrid: (isMobile: boolean): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+    gap: "0.75rem",
+  }),
+  drilldownCard: {
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: "#ffffff",
+    padding: "0.9rem",
+    display: "grid",
+    gap: "0.35rem",
+    cursor: "pointer",
+  } as CSSProperties,
+  drilldownTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+  } as CSSProperties,
+  drilldownTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  drilldownBadge: {
+    borderRadius: 999,
+    padding: "0.18rem 0.5rem",
+    fontSize: 11,
+    fontWeight: 700,
+    color: pageColorTokens.brandBlueDark,
+    background: pageColorTokens.brandBlueLight,
+  } as CSSProperties,
+  drilldownDetail: {
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: pageColorTokens.textBody,
+  } as CSSProperties,
   tableList: {
     display: "grid",
     gap: "0.55rem",
@@ -1293,6 +1862,55 @@ const pageStyles = {
     display: "grid",
     gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
     gap: "0.75rem",
+  }),
+  reportCardGrid: (isMobile: boolean): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+    gap: "0.75rem",
+  }),
+  reportCard: (tone: ReportCardTone): CSSProperties => ({
+    borderRadius: pageColorTokens.radiusControl,
+    border: `1px solid ${
+      tone === "positive"
+        ? "#a7f3d0"
+        : tone === "warning"
+          ? "#fed7aa"
+          : tone === "negative"
+            ? "#fecaca"
+            : pageColorTokens.borderSubtle
+    }`,
+    background:
+      tone === "positive"
+        ? "#ecfdf5"
+        : tone === "warning"
+          ? "#fff7ed"
+          : tone === "negative"
+            ? "#fef2f2"
+            : pageColorTokens.surfaceMuted,
+    padding: "0.9rem",
+    display: "grid",
+    gap: "0.25rem",
+  }),
+  reportCardLabel: {
+    fontSize: 12,
+    color: pageColorTokens.textSecondary,
+  } as CSSProperties,
+  reportCardValue: {
+    fontSize: 22,
+    lineHeight: 1.1,
+    fontWeight: 760,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  reportCardDetail: {
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: pageColorTokens.textBody,
+  } as CSSProperties,
+  reportContentGrid: (isMobile: boolean): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
+    gap: "1rem",
+    alignItems: "start",
   }),
   aiCard: {
     border: `1px dashed ${pageColorTokens.borderInput}`,
@@ -1400,11 +2018,23 @@ function BusinessModuleCard({
   );
 }
 
+function ReportSummaryCardView({ card }: { card: ReportSummaryCard }) {
+  return (
+    <div style={pageStyles.reportCard(card.tone)}>
+      <span style={pageStyles.reportCardLabel}>{card.label}</span>
+      <span style={pageStyles.reportCardValue}>{card.value}</span>
+      <span style={pageStyles.reportCardDetail}>{card.detail}</span>
+    </div>
+  );
+}
+
 export default function TodayBusinessInsights() {
   const { liveData } = useLoaderData<typeof loader>();
   const { isMobile } = useResponsiveLayout();
-  const [period, setPeriod] = useState<PeriodKey>("7d");
-  const [moduleFilter, setModuleFilter] = useState<ModuleFilterKey>("all");
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const period = searchParams.get("period") === "30d" ? "30d" : "7d";
+  const moduleFilter = (searchParams.get("module") as ModuleFilterKey | null) ?? "all";
   const snapshots = useMemo(() => buildLiveSnapshots(liveData), [liveData]);
   const snapshot = useMemo(() => snapshots[period], [period, snapshots]);
   const filteredModules = useMemo(
@@ -1424,8 +2054,29 @@ export default function TodayBusinessInsights() {
     [snapshot.modules],
   );
 
+  const currentReturnTo = useMemo(() => {
+    const next = new URLSearchParams();
+    next.set("period", period);
+    if (moduleFilter !== "all") next.set("module", moduleFilter);
+    const query = next.toString();
+    return `/app/today/insights${query ? `?${query}` : ""}`;
+  }, [moduleFilter, period]);
+
+  const buildDetailHref = (href: string) => {
+    const [path, query = ""] = href.split("?");
+    const next = new URLSearchParams(query);
+    next.set("returnTo", currentReturnTo);
+    return `${path}?${next.toString()}`;
+  };
+
   const handleModuleChange = (nextKey: string) => {
-    setModuleFilter(nextKey);
+    const next = new URLSearchParams(searchParams);
+    if (nextKey === "all") {
+      next.delete("module");
+    } else {
+      next.set("module", nextKey);
+    }
+    setSearchParams(next, { replace: true });
     if (nextKey === "all" || typeof document === "undefined") return;
     window.requestAnimationFrame(() => {
       document.getElementById(`module-${nextKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1436,7 +2087,7 @@ export default function TodayBusinessInsights() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title="商业洞察"
-        subtitle="先把经营数据按模块清楚展示，再在同一套事实层上补 AI 洞察输出。"
+        subtitle="把经营数据整理成一份围绕 ROI 的日报，再往下展开各模块细节。"
         backLabel="返回首页"
         fallbackPath="/app"
         isMobile={isMobile}
@@ -1444,7 +2095,7 @@ export default function TodayBusinessInsights() {
         <div style={pageStyles.page}>
           <PageSurface
             title="经营总览"
-            subtitle="第一版先把顶部总览、模块分层和 AI 输出区做成可评审的前端稿。"
+            subtitle="先把经营结果、数据覆盖和 ROI 阅读入口放到同一屏里。"
           >
             <div style={pageStyles.heroGrid(isMobile)}>
               <PageMetricCard
@@ -1475,8 +2126,10 @@ export default function TodayBusinessInsights() {
                   items={periodItems}
                   active={period}
                   onChange={(next) => {
-                    setPeriod(next);
-                    setModuleFilter("all");
+                    const params = new URLSearchParams(searchParams);
+                    params.set("period", next);
+                    params.delete("module");
+                    setSearchParams(params, { replace: true });
                   }}
                 />
 
@@ -1514,6 +2167,101 @@ export default function TodayBusinessInsights() {
           </PageSurface>
 
           <PageSurface
+            title="ROI 日报"
+            subtitle="日报先回答：ROI 是否健康、卡在哪个环节、今天先做什么。"
+          >
+            <p style={{ ...pageSectionSubtitleStyle, margin: "0 0 1rem" }}>{snapshot.report.summary}</p>
+
+            <div style={pageStyles.reportCardGrid(isMobile)}>
+              {snapshot.report.cards.map((card) => (
+                <ReportSummaryCardView key={card.label} card={card} />
+              ))}
+            </div>
+
+            <div style={{ height: "1rem" }} />
+
+            <div style={pageStyles.reportContentGrid(isMobile)}>
+              <div style={pageStyles.helperList}>
+                <div style={pageFieldLabelStyle}>本次判断依据</div>
+                {snapshot.report.focus.map((item) => (
+                  <div key={item} style={pageStyles.helperItem}>
+                    <span style={pageStyles.helperDot} />
+                    <span>{item}</span>
+                  </div>
+                ))}
+
+                <div style={{ height: "0.5rem" }} />
+                <div style={pageFieldLabelStyle}>今日优先动作</div>
+                {snapshot.report.actions.map((item) => (
+                  <div key={item} style={pageStyles.helperItem}>
+                    <span style={pageStyles.helperDot} />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={pageStyles.moduleGrid}>
+                {snapshot.report.charts.map((chart) => (
+                  <ModuleChartPreview key={chart.title} chart={chart} />
+                ))}
+              </div>
+            </div>
+          </PageSurface>
+
+          <PageSurface
+            title="关键洞察"
+            subtitle="首页先看洞察列表，详情解释和对象排查再往下深钻。"
+          >
+            <div style={pageStyles.insightList}>
+              {snapshot.report.insights.map((item) => (
+                <button
+                  key={`${item.title}-${item.metric}`}
+                  type="button"
+                  style={pageStyles.insightItem(item.tone)}
+                  onClick={() => {
+                    if (item.href) {
+                      navigate(buildDetailHref(item.href));
+                      return;
+                    }
+                    if (item.targetKey) handleModuleChange(item.targetKey);
+                  }}
+                >
+                  <div style={pageStyles.insightHeader}>
+                    <span style={pageStyles.insightTitle}>{item.title}</span>
+                    <div style={pageStyles.insightMeta}>
+                      <span style={pageStyles.insightMetric}>{item.metric}</span>
+                      <span style={pageStyles.insightBadge(item.tone)}>{item.confidence}置信</span>
+                    </div>
+                  </div>
+                  <span style={pageStyles.drilldownDetail}>{item.detail}</span>
+                </button>
+              ))}
+            </div>
+          </PageSurface>
+
+          <PageSurface
+            title="深钻入口"
+            subtitle="列表负责快速判断，详情负责展开对象、原因、ROI 影响和任务。"
+          >
+            <div style={pageStyles.drilldownGrid(isMobile)}>
+              {snapshot.report.drilldowns.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  style={pageStyles.drilldownCard}
+                  onClick={() => navigate(buildDetailHref(item.href))}
+                >
+                  <div style={pageStyles.drilldownTitleRow}>
+                    <span style={pageStyles.drilldownTitle}>{item.title}</span>
+                    <span style={pageStyles.drilldownBadge}>{item.badge}</span>
+                  </div>
+                  <span style={pageStyles.drilldownDetail}>{item.detail}</span>
+                </button>
+              ))}
+            </div>
+          </PageSurface>
+
+          <PageSurface
             title="模块化数据视图"
             subtitle="先把流量、成本、转化、售后、利润等经营模块分开展示，后续 AI 只需要读取模块摘要，不直接吞原始杂乱数据。"
           >
@@ -1538,28 +2286,16 @@ export default function TodayBusinessInsights() {
           </PageSurface>
 
           <PageSurface
-            title="AI 洞察输出区"
-            subtitle="这块下一步会基于上面的模块摘要生成，不会直接从原始表拼结论。"
+            title="日报结论"
+            subtitle="这里已经开始基于上面的真实数据摘要输出风险、机会和建议动作。"
           >
             <div style={pageStyles.aiGrid(isMobile)}>
-              <div style={pageStyles.aiCard}>
-                <div style={pageStyles.aiTitle}>风险</div>
-                <div style={pageStyles.aiBody}>
-                  例如：利润下滑快于收入下滑，退款与广告成本共同侵蚀经营质量。
+              {snapshot.report.narratives.map((item) => (
+                <div key={item.title} style={pageStyles.aiCard}>
+                  <div style={pageStyles.aiTitle}>{item.title}</div>
+                  <div style={pageStyles.aiBody}>{item.body}</div>
                 </div>
-              </div>
-              <div style={pageStyles.aiCard}>
-                <div style={pageStyles.aiTitle}>机会</div>
-                <div style={pageStyles.aiBody}>
-                  例如：Google 渠道利润率更稳、Zen Diffuser 利润率更高，值得在下一版重点放大。
-                </div>
-              </div>
-              <div style={pageStyles.aiCard}>
-                <div style={pageStyles.aiTitle}>建议动作</div>
-                <div style={pageStyles.aiBody}>
-                  例如：先补库存风险 SKU，再排查高退款商品页，最后再决定广告预算调整。
-                </div>
-              </div>
+              ))}
             </div>
           </PageSurface>
 

@@ -1372,6 +1372,10 @@ export default function DailyOperationsPage() {
   const detailSection = (searchParams.get("detail") as DetailSection | null) ?? null;
   const riskTabParam =
     (searchParams.get("riskTab") as "environment" | "insights" | "health" | null) ?? null;
+  const valueTabParam =
+    (searchParams.get("valueTab") as "framework" | "customers" | "channels" | "cost" | null) ??
+    null;
+  const returnToParam = searchParams.get("returnTo");
   const selectedEnvironmentKey = searchParams.get("environmentKey");
   const selectedInsightKey = searchParams.get("insightKey");
   const selectedTaskId = searchParams.get("taskId");
@@ -1427,6 +1431,7 @@ export default function DailyOperationsPage() {
     section: DetailSection,
     extra?: Partial<{
       riskTab: "environment" | "insights" | "health";
+      valueTab: "framework" | "customers" | "channels" | "cost";
       environmentKey: string;
       insightKey: string;
       taskId: string;
@@ -1435,10 +1440,12 @@ export default function DailyOperationsPage() {
     const next = new URLSearchParams(searchParams);
     next.set("detail", section);
     next.delete("riskTab");
+    next.delete("valueTab");
     next.delete("environmentKey");
     next.delete("insightKey");
     next.delete("taskId");
     if (extra?.riskTab) next.set("riskTab", extra.riskTab);
+    if (extra?.valueTab) next.set("valueTab", extra.valueTab);
     if (extra?.environmentKey) next.set("environmentKey", extra.environmentKey);
     if (extra?.insightKey) next.set("insightKey", extra.insightKey);
     if (extra?.taskId) next.set("taskId", extra.taskId);
@@ -1447,15 +1454,17 @@ export default function DailyOperationsPage() {
 
   const detailReturnTo = useMemo(() => {
     if (!detailSection) return undefined;
+    if (returnToParam) return returnToParam;
     const next = new URLSearchParams(searchParams);
     next.delete("detail");
     next.delete("riskTab");
+    next.delete("valueTab");
     next.delete("environmentKey");
     next.delete("insightKey");
     next.delete("taskId");
     const query = next.toString();
     return `/app/today/diagnosis${query ? `?${query}` : ""}`;
-  }, [detailSection, searchParams]);
+  }, [detailSection, returnToParam, searchParams]);
 
   return (
     <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
@@ -1471,7 +1480,7 @@ export default function DailyOperationsPage() {
             : t("common.backToPrevious")
         }
         {...(detailSection
-          ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
+          ? { fallbackPath: returnToParam ?? "/app/today/diagnosis", returnTo: detailReturnTo }
           : { fallbackPath: "/app/today" })}
         rightAction={
           <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -1512,6 +1521,7 @@ export default function DailyOperationsPage() {
               selectedEnvironmentKey={selectedEnvironmentKey}
               selectedInsightKey={selectedInsightKey}
               initialRiskTab={riskTabParam}
+              initialValueTab={valueTabParam}
               onOpenDetail={openDetail}
               onSubmitTaskAction={submitTaskAction}
               busy={busy}
@@ -2243,6 +2253,7 @@ function DailyOperationsDetail({
   selectedEnvironmentKey,
   selectedInsightKey,
   initialRiskTab,
+  initialValueTab,
   onOpenDetail,
   onSubmitTaskAction,
   busy,
@@ -2259,10 +2270,12 @@ function DailyOperationsDetail({
   selectedEnvironmentKey: string | null;
   selectedInsightKey: string | null;
   initialRiskTab: "environment" | "insights" | "health" | null;
+  initialValueTab: "framework" | "customers" | "channels" | "cost" | null;
   onOpenDetail: (
     section: DetailSection,
     extra?: Partial<{
       riskTab: "environment" | "insights" | "health";
+      valueTab: "framework" | "customers" | "channels" | "cost";
       environmentKey: string;
       insightKey: string;
       taskId: string;
@@ -2289,7 +2302,7 @@ function DailyOperationsDetail({
     initialRiskTab ?? "environment",
   );
   const [valueTab, setValueTab] = useState<"framework" | "customers" | "channels" | "cost">(
-    "framework",
+    initialValueTab ?? "framework",
   );
   const selectedTask = selectedTaskId
     ? result.tasks.find((task) => task.id === selectedTaskId) ?? null
@@ -2778,25 +2791,37 @@ function DailyOperationsDetail({
       key: "framework",
       label: t("dailyOps.detailTabFramework"),
       active: valueTab === "framework",
-      onClick: () => setValueTab("framework"),
+      onClick: () => {
+        setValueTab("framework");
+        onOpenDetail("value", { valueTab: "framework" });
+      },
     },
     {
       key: "customers",
       label: t("dailyOps.detailTabCustomers"),
       active: valueTab === "customers",
-      onClick: () => setValueTab("customers"),
+      onClick: () => {
+        setValueTab("customers");
+        onOpenDetail("value", { valueTab: "customers" });
+      },
     },
     {
       key: "channels",
       label: t("dailyOps.detailTabChannels"),
       active: valueTab === "channels",
-      onClick: () => setValueTab("channels"),
+      onClick: () => {
+        setValueTab("channels");
+        onOpenDetail("value", { valueTab: "channels" });
+      },
     },
     {
       key: "cost",
       label: t("dailyOps.detailTabCost"),
       active: valueTab === "cost",
-      onClick: () => setValueTab("cost"),
+      onClick: () => {
+        setValueTab("cost");
+        onOpenDetail("value", { valueTab: "cost" });
+      },
     },
   ];
 
