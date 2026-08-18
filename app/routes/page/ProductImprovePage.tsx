@@ -422,7 +422,7 @@ export function ProductImprovePage() {
                     variant="secondary"
                     onClick={() => setBatchPanelOpen(true)}
                   >
-                    {t("productImproveStage1.batchAction")}
+                    批量生成
                   </s-button>
                 </s-stack>
               </s-stack>

@@ -253,7 +253,7 @@ function ImageStudioPageInner({
                   }}
                 >
                   <span>⚡</span>
-                  {t("imageStudio.batchTranslateAction")}
+                  批量翻译商品图片
                 </button>
               </div>
             )}
