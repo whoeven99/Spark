@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import { dedupeImageMappingsNewestFirst } from "../../lib/imageSwitcher";
 import { getPictureTranslateResultImageUrl } from "../pictureTranslate/pictureTranslateBlob.server";
 
 const LOG_PREFIX = "[ImageMapping]";
@@ -74,7 +75,7 @@ export async function listImageMappingsByShopAndLanguage(params: {
     orderBy: { createdAt: "desc" },
   });
 
-  return records.flatMap((r) => {
+  const mapped = records.flatMap((r) => {
     try {
       const targetUrl = getPictureTranslateResultImageUrl(r.targetBlobPath);
       return [{ sourceUrl: r.sourceUrl, targetUrl }];
@@ -83,4 +84,6 @@ export async function listImageMappingsByShopAndLanguage(params: {
       return [];
     }
   });
+
+  return dedupeImageMappingsNewestFirst(mapped);
 }

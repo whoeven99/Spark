@@ -77,13 +77,54 @@ function normalizeLanguageCode(code) {
   return (code || "").trim().toLowerCase();
 }
 
-/** Shopify API 可能返回 zh，Liquid 为 zh-CN，视为同一语言。 */
+/**
+ * 简体（含裸 zh）与繁体必须分开，不能只比主语言码 zh。
+ * 须与 app/lib/imageSwitcher.ts 的 chineseScript 保持一致。
+ */
+function chineseScript(code) {
+  const normalized = normalizeLanguageCode(code);
+  if (!normalized || (normalized !== "zh" && !normalized.startsWith("zh-"))) {
+    return null;
+  }
+  if (
+    normalized === "zh-tw" ||
+    normalized === "zh-hant" ||
+    normalized === "zh-hk" ||
+    normalized === "zh-mo" ||
+    normalized.includes("hant")
+  ) {
+    return "hant";
+  }
+  return "hans";
+}
+
+/**
+ * Shopify 可能返回 zh 而 Liquid 为 zh-CN，简体视为相同；zh-CN 与 zh-TW 不能相同。
+ * 须与 app/lib/imageSwitcher.ts 的 languagesMatch 保持一致。
+ */
 function languagesMatch(a, b) {
   const left = normalizeLanguageCode(a);
   const right = normalizeLanguageCode(b);
   if (!left || !right) return left === right;
   if (left === right) return true;
-  return left.split("-")[0] === right.split("-")[0];
+
+  const leftZh = chineseScript(left);
+  const rightZh = chineseScript(right);
+  if (leftZh || rightZh) {
+    if (!leftZh || !rightZh) return false;
+    return leftZh === rightZh;
+  }
+
+  const leftBase = left.split("-")[0] ?? "";
+  const rightBase = right.split("-")[0] ?? "";
+  if (leftBase === "pt" && rightBase === "pt") {
+    const leftRegion = left.split("-")[1];
+    const rightRegion = right.split("-")[1];
+    if (!leftRegion || !rightRegion) return true;
+    return leftRegion === rightRegion;
+  }
+
+  return leftBase === rightBase;
 }
 
 /** 解析「国家:语言」字符串为 Map（key 大写国家码，value 小写语言码）。 */
@@ -473,6 +514,47 @@ function getAppProxySubpath() {
   return raw || "ciwi-spark";
 }
 
+/** 各应用 toml 的已知 subpath；主题设置填错时按此探测。 */
+const KNOWN_APP_PROXY_SUBPATHS = ["ciwi-spark", "ciwi-spark-zz"];
+
+function proxySubpathCacheKey(shop) {
+  return `ciwi_proxy_subpath_${shop}`;
+}
+
+function readCachedAppProxySubpath(shop) {
+  try {
+    return localStorage.getItem(proxySubpathCacheKey(shop))?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeCachedAppProxySubpath(shop, subpath) {
+  try {
+    localStorage.setItem(proxySubpathCacheKey(shop), subpath);
+  } catch {
+    // localStorage 不可用时忽略
+  }
+}
+
+/** 探测顺序：该店缓存 → 主题设置 → 已知 subpath，去重保序。 */
+function getAppProxySubpathCandidates(shop) {
+  const configured = document.getElementById("ciwi_app_proxy_subpath")?.value?.trim() ?? "";
+  const ordered = [
+    readCachedAppProxySubpath(shop),
+    configured,
+    ...KNOWN_APP_PROXY_SUBPATHS,
+  ];
+  const seen = new Set();
+  const candidates = [];
+  for (const subpath of ordered) {
+    if (!subpath || seen.has(subpath)) continue;
+    seen.add(subpath);
+    candidates.push(subpath);
+  }
+  return candidates;
+}
+
 /** 从 URL 路径取文件名（不含 query），兼容店面 /cdn/shop/files/ 与 admin CDN。 */
 function extractFileName(url) {
   if (!url) return "";
@@ -513,12 +595,12 @@ function collectMatchKeys(sourceUrl) {
   return [...keys];
 }
 
-/** 构建 key → { sourceUrl, targetUrl } 映射 Map。 */
+/** 构建 key → { sourceUrl, targetUrl } 映射 Map。同 key 先到先得（调用方已按最新优先）。 */
 function buildMappingMap(mappings) {
   const map = new Map();
   for (const item of mappings) {
     for (const key of collectMatchKeys(item.sourceUrl)) {
-      if (key) map.set(key, item);
+      if (key && !map.has(key)) map.set(key, item);
     }
   }
   return map;
@@ -552,18 +634,12 @@ function writeCache(shop, language, data) {
   }
 }
 
-/** 向 App Proxy 拉取图片映射。 */
-async function fetchMappings(shop, language) {
-  const cached = readCache(shop, language);
-  if (cached) {
-    logStep("[IMG-2] 使用 localStorage 缓存", {
-      key: cacheKey(shop, language),
-      count: cached.length,
-    });
-    return cached;
-  }
-
-  const subpath = getAppProxySubpath();
+/**
+ * 向单个 App Proxy subpath 拉映射。
+ * HTTP/非 JSON 视为该 subpath 不可用（抛错以便换下一个）；
+ * JSON 但 ok=false 视为打对了代理、只是无数据，返回 []。
+ */
+async function fetchMappingsFromSubpath(subpath, shop, language) {
   const url = `/a/${subpath}?shop=${encodeURIComponent(shop)}&language=${encodeURIComponent(language)}`;
   logStep("[IMG-2] 请求 App Proxy", { url });
   const resp = await fetch(url, { headers: { Accept: "application/json" } });
@@ -572,6 +648,7 @@ async function fetchMappings(shop, language) {
     status: resp.status,
     statusText: resp.statusText,
     contentType,
+    subpath,
   });
 
   if (!resp.ok) {
@@ -580,6 +657,7 @@ async function fetchMappings(shop, language) {
       status: resp.status,
       contentType,
       bodyPreview,
+      subpath,
     });
     const hint =
       resp.status >= 502
@@ -590,7 +668,11 @@ async function fetchMappings(shop, language) {
 
   if (!contentType.includes("application/json")) {
     const bodyPreview = (await resp.text()).slice(0, 300);
-    console.warn(`${LOG} [IMG-3] App Proxy 非 JSON`, { contentType, bodyPreview });
+    console.warn(`${LOG} [IMG-3] App Proxy 非 JSON`, {
+      contentType,
+      bodyPreview,
+      subpath,
+    });
     throw new Error("App Proxy 未返回 JSON（tunnel 可能已断开，请重启 dev）");
   }
 
@@ -599,21 +681,56 @@ async function fetchMappings(shop, language) {
     ok: body.ok,
     mappingCount: Array.isArray(body.mappings) ? body.mappings.length : 0,
     error: body.error ?? null,
+    subpath,
   });
   logStep("[IMG-3] App Proxy JSON 详情", {
     ok: body.ok,
     mappingCount: Array.isArray(body.mappings) ? body.mappings.length : 0,
     error: body.error ?? null,
     sample: Array.isArray(body.mappings) ? body.mappings.slice(0, 2) : null,
+    subpath,
   });
 
   if (!body.ok || !Array.isArray(body.mappings)) {
-    logSkip("[IMG-4]", "响应 ok=false 或 mappings 非数组", { body });
+    logSkip("[IMG-4]", "响应 ok=false 或 mappings 非数组", { body, subpath });
     return [];
   }
 
-  writeCache(shop, language, body.mappings);
   return body.mappings;
+}
+
+/** 向 App Proxy 拉取图片映射；subpath 填错时自动探测已知路径。 */
+async function fetchMappings(shop, language) {
+  const cached = readCache(shop, language);
+  if (cached) {
+    logStep("[IMG-2] 使用 localStorage 缓存", {
+      key: cacheKey(shop, language),
+      count: cached.length,
+    });
+    return cached;
+  }
+
+  const candidates = getAppProxySubpathCandidates(shop);
+  logStep("[IMG-2] App Proxy 候选", { candidates });
+
+  /** @type {Error | null} */
+  let lastError = null;
+  for (const subpath of candidates) {
+    try {
+      const mappings = await fetchMappingsFromSubpath(subpath, shop, language);
+      writeCachedAppProxySubpath(shop, subpath);
+      writeCache(shop, language, mappings);
+      return mappings;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      logStep("[IMG-2] subpath 失败，尝试下一个", {
+        subpath,
+        error: lastError.message,
+      });
+    }
+  }
+
+  throw lastError ?? new Error("App Proxy 无可用 subpath");
 }
 
 /** 预加载译图，减少 INP 延迟。 */
@@ -626,8 +743,19 @@ function preloadImages(mappings) {
   }
 }
 
+function collectImgSources(img) {
+  return [
+    img.currentSrc,
+    img.src,
+    img.srcset,
+    img.getAttribute("data-src"),
+    img.getAttribute("data-srcset"),
+    img.getAttribute("data-original"),
+  ].filter(Boolean);
+}
+
 function imgMatchesKey(img, key) {
-  const sources = [img.currentSrc, img.src, img.srcset].filter(Boolean);
+  const sources = collectImgSources(img);
   for (const raw of sources) {
     if (raw.includes(key)) return true;
     if (extractFileName(raw) === key) return true;
@@ -635,9 +763,25 @@ function imgMatchesKey(img, key) {
   return false;
 }
 
+function imageAlreadyUsesTarget(img, targetUrl) {
+  if (!targetUrl) return false;
+  return collectImgSources(img).some((source) => source === targetUrl);
+}
+
 let replacedCount = 0;
 
+function applyTranslatedUrl(img, targetUrl) {
+  img.src = targetUrl;
+  img.srcset = targetUrl;
+  if (img.hasAttribute("data-src")) img.setAttribute("data-src", targetUrl);
+  if (img.hasAttribute("data-srcset")) img.setAttribute("data-srcset", targetUrl);
+  if (img.hasAttribute("data-original")) img.setAttribute("data-original", targetUrl);
+}
+
 function tryReplaceImage(img, map) {
+  for (const item of map.values()) {
+    if (imageAlreadyUsesTarget(img, item.targetUrl)) return true;
+  }
   for (const [key, item] of map.entries()) {
     if (!imgMatchesKey(img, key) || !item.targetUrl) continue;
     logStep("[IMG-6] 替换图片", {
@@ -645,15 +789,14 @@ function tryReplaceImage(img, map) {
       from: img.currentSrc || img.src,
       to: item.targetUrl,
     });
-    img.src = item.targetUrl;
-    img.srcset = item.targetUrl;
+    applyTranslatedUrl(img, item.targetUrl);
     replacedCount += 1;
     return true;
   }
   return false;
 }
 
-/** 用 IntersectionObserver 按需替换可见 <img>，并监听后续动态插入的图片。 */
+/** 用 IntersectionObserver 按需替换可见 <img>，并监听后续动态插入与懒加载改 src。 */
 function observeAndReplace(map) {
   if (map.size === 0) return;
 
@@ -666,7 +809,10 @@ function observeAndReplace(map) {
   });
 
   const attach = (img) => {
-    if (tryReplaceImage(img, map)) return;
+    if (tryReplaceImage(img, map)) {
+      observer.unobserve(img);
+      return;
+    }
     observer.observe(img);
   };
 
@@ -674,6 +820,13 @@ function observeAndReplace(map) {
 
   const mutationObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
+      if (
+        mutation.type === "attributes" &&
+        mutation.target instanceof HTMLImageElement
+      ) {
+        attach(mutation.target);
+        continue;
+      }
       for (const node of mutation.addedNodes) {
         if (node instanceof HTMLImageElement) attach(node);
         else if (node instanceof Element) {
@@ -682,12 +835,17 @@ function observeAndReplace(map) {
       }
     }
   });
-  mutationObserver.observe(document.body, { childList: true, subtree: true });
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["src", "srcset", "data-src", "data-srcset"],
+  });
 }
 
 async function main() {
   console.info(
-    `${LOG} 启动 v${"2026-06-15f"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
+    `${LOG} 启动 v${"2026-08-18a"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
   );
   logStep("[0] 环境", {
     shop: getShopDomain(),
