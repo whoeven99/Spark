@@ -53,13 +53,8 @@ function resolveBaseUrl(): string {
 }
 
 function resolveImagesPostUrl(): string {
-  const endpoint = process.env.OPENAI_IMAGE_ENDPOINT?.trim();
-  if (endpoint) {
-    return endpoint;
-  }
-
   const base = resolveBaseUrl();
-  // 兼容把完整 Azure 地址误填在 OPENAI_IMAGE_BASE_URL 的情况
+  // .env.test 常用完整 Azure POST 地址写在 OPENAI_IMAGE_BASE_URL
   if (base.includes("/images/generations")) {
     return base;
   }
@@ -148,12 +143,10 @@ function buildImageRequestBody(params: {
 }
 
 function buildAuthHeaders(apiKey: string, postUrl: string): Record<string, string> {
-  const style = process.env.OPENAI_IMAGE_AUTH_STYLE?.trim().toLowerCase();
+  // Azure Cognitive / OpenAI 部署用 api-key；其它（含官方 api.openai.com）用 Bearer
   const useApiKeyHeader =
-    style === "api-key" ||
-    (style !== "bearer" &&
-      (postUrl.includes(".openai.azure.com") ||
-        postUrl.includes("cognitiveservices.azure.com")));
+    postUrl.includes(".openai.azure.com") ||
+    postUrl.includes("cognitiveservices.azure.com");
 
   if (useApiKeyHeader) {
     return { "api-key": apiKey };

@@ -276,9 +276,9 @@ npm run turso:migrate:test
 
 - Node 版本要求以 `package.json` 为准：`>=20.19 <22 || >=22.12`。
 - `npm run dev` 包装 `shopify app dev`，需要 Shopify CLI 登录和应用配置；多应用配置用 `npm run dev:yw`、`npm run dev:spark-zz`（对应 `shopify.app.*.toml`）。
-- 运维/交付脚本：`npm run deploy:test`（Render 测试环境）、`npm run push:pr`（提交 + push + 建 PR）、`npm run render:digest`（Render 日志摘要）、`npm run orders:create`（生成测试订单）、`npm run turso:migrate:prod`、`npm run turso:drop-schema:test|prod`（破坏性，需明确授权）。完整清单以 `package.json` scripts 为准。
+- 运维/交付脚本：`npm run deploy:test`（Render 测试环境）、`npm run push:pr`（提交 + push + 建 PR）、`npm run orders:create`（生成测试订单）、`npm run turso:migrate:prod`。完整清单以 `package.json` scripts 为准。
 - 主应用服务端运行需要 Shopify 和 Turso 相关变量；AI、Cosmos、Blob、Redis、SES、飞书等能力按功能依赖相应变量。
-- 单元测试位于 `tests/`；`scripts/*.test.cjs` 不属于 Vitest，需按脚本单独用 `node --test` 执行（仓库已有 `npm run test:render-digest` 等包装）。
+- 单元测试位于 `tests/`（Vitest）。
 - 不读取或输出 `.env` / `.env.prod` 的值。只记录所需变量名。
 
 ## 11. 验证矩阵
