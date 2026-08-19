@@ -39,7 +39,6 @@ describe("openAiImageGenerate config", () => {
 
   it("does not double-append /images/generations when base already has full path", async () => {
     setEnv("OPENAI_IMAGE_API_KEY", "k");
-    setEnv("OPENAI_IMAGE_ENDPOINT", undefined);
     setEnv(
       "OPENAI_IMAGE_BASE_URL",
       "https://example.cognitiveservices.azure.com/openai/deployments/gpt-image-2/images/generations?api-version=2024-02-01",
@@ -67,5 +66,9 @@ describe("openAiImageGenerate config", () => {
     const sentBody = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(sentBody.response_format).toBeUndefined();
     expect(sentBody.model).toBe("gpt-image-2");
+
+    const headers = init.headers as Record<string, string>;
+    expect(headers["api-key"]).toBe("k");
+    expect(headers.Authorization).toBeUndefined();
   });
 });

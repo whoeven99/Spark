@@ -1,34 +1,11 @@
 /**
  * 列举 Meta 沙盒 token 可发现的 Facebook Page。
- * 用法：node scripts/list-meta-sandbox-pages.mjs
+ * 用法：node scripts/list-meta-sandbox-pages.mjs [--env=.env.test]
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadStackedEnv } from "./lib/loadEnv.mjs";
 
 const GRAPH = "https://graph.facebook.com/v19.0";
-
-function loadDotEnv() {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const envPath = path.join(root, ".env");
-  if (!existsSync(envPath)) return;
-  for (const rawLine of readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
 
 function env(name) {
   return (process.env[name] || "").trim();
@@ -47,7 +24,7 @@ async function graphGet(accessToken, path, query = {}) {
 }
 
 async function main() {
-  loadDotEnv();
+  loadStackedEnv();
   const accessToken = env("META_SANDBOX_ACCESS_TOKEN");
   const adAccountId = env("META_SANDBOX_AD_ACCOUNT_ID").replace(/^act_/, "");
   if (!accessToken || !adAccountId) {

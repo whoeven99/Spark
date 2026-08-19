@@ -1,28 +1,39 @@
 /**
- * 快速查询 Turso 测试数据库
- * 用法：node scripts/query-turso.mjs [table]
+ * 快速查询 Turso（默认测环境）
+ * 用法：
+ *   node scripts/query-turso.mjs
+ *   node scripts/query-turso.mjs Account
+ *   node scripts/query-turso.mjs Account --env=.env.prod
  */
 import { PrismaLibSQL } from "@prisma/adapter-libsql/web";
 import { createRequire } from "node:module";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadStackedEnv, resolveTurso } from "./lib/loadEnv.mjs";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const { env } = loadStackedEnv({ root });
+const turso = resolveTurso(env);
+
+if (!turso.url || !turso.authToken) {
+  console.error(
+    "缺少 TURSO_DATABASE_URL / TURSO_AUTH_TOKEN（默认叠 .env.test → .env）",
+  );
+  process.exit(1);
+}
 
 const require = createRequire(import.meta.url);
 const { PrismaClient } = require("../app/generated/prisma/index.js");
 
-const TURSO_URL = process.env.TURSO_DATABASE_URL;
-const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
-
-if (!TURSO_URL || !TURSO_TOKEN) {
-  console.error("请确保设置了 TURSO_DATABASE_URL 和 TURSO_AUTH_TOKEN");
-  process.exit(1);
-}
-
-const adapter = new PrismaLibSQL({ url: TURSO_URL, authToken: TURSO_TOKEN });
+const adapter = new PrismaLibSQL({
+  url: turso.url,
+  authToken: turso.authToken,
+});
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const tableArg = process.argv[2];
+  const tableArg = process.argv.slice(2).find((a) => !a.startsWith("--"));
 
-  // 获取所有表的大致行数
   const tables = [
     { name: "Account", model: prisma.account },
     { name: "Session", model: prisma.session },
@@ -42,12 +53,15 @@ async function main() {
     { name: "WorkspaceFile", model: prisma.workspaceFile },
   ];
 
+  console.log(`Turso host: ${new URL(turso.url).host} (${turso.urlKey})\n`);
+
   if (tableArg) {
-    // 查询指定表
-    const found = tables.find(t => t.name.toLowerCase() === tableArg.toLowerCase());
+    const found = tables.find(
+      (t) => t.name.toLowerCase() === tableArg.toLowerCase(),
+    );
     if (!found) {
       console.error(`未知表: ${tableArg}`);
-      console.error(`可用表: ${tables.map(t => t.name).join(", ")}`);
+      console.error(`可用表: ${tables.map((t) => t.name).join(", ")}`);
       process.exit(1);
     }
     const rows = await found.model.findMany({ take: 20 });
@@ -55,8 +69,7 @@ async function main() {
     console.log(JSON.stringify(rows, null, 2));
     console.log(`共 ${rows.length} 条（限制 20）`);
   } else {
-    // 列出所有表的行数
-    console.log("=== Turso 测试数据库 - 表概览 ===\n");
+    console.log("=== Turso 表概览 ===\n");
     for (const t of tables) {
       try {
         const count = await t.model.count();
@@ -65,7 +78,7 @@ async function main() {
         console.log(`  ${t.name.padEnd(30)} ❌ ${e.message}`);
       }
     }
-    console.log("\n提示：node scripts/query-turso.mjs <表名> 查看具体数据");
+    console.log("\n提示：node scripts/query-turso.mjs <表名> [--env=.env.prod]");
   }
 
   await prisma.$disconnect();
