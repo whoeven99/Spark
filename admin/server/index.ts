@@ -41,10 +41,13 @@ import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
 import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
+import { logAdminEnvStatus } from "./lib/logEnvStatus.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3099);
 const IS_PROD = isProductionNodeEnv();
+
+logAdminEnvStatus();
 
 const app = express();
 app.use(express.json());
