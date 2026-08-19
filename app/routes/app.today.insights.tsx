@@ -17,10 +17,10 @@ import {
   pageStatusCardStyle,
 } from "./page/pageUiStyles";
 
+import { loader } from "../server/operations/businessReportSnapshot.server";
 import {
   appendReturnTo,
   buildLiveSnapshots,
-  loader,
   periodItems,
   type BusinessModule,
   type ChartKind,
@@ -30,7 +30,7 @@ import {
   type ModuleSource,
   type ReportCardTone,
   type ReportSummaryCard,
-} from "../server/operations/businessReportSnapshot.server";
+} from "../server/operations/businessReportSnapshot.shared";
 
 export { loader };
 
