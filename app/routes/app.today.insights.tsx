@@ -2,7 +2,10 @@ import { useMemo, type CSSProperties } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import type { PageSpeedReport } from "../lib/pageSpeedTypes";
 import { authenticate } from "../shopify.server";
+import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
 import { computeOperationsDiagnosis } from "../server/operations/diagnosis.server";
 import { getShopCostConfig } from "../server/operations/roi/costConfig.server";
@@ -19,6 +22,7 @@ import {
   getGa4Credential,
   setGa4Credential,
 } from "../server/googleAnalytics/ga4Credentials.server";
+import { runPageSpeedAnalysis } from "../server/pageSpeed/pageSpeedApi.server";
 import { DestinationFilterBar, DestinationPage } from "./component/shared/DestinationPage";
 import {
   PageMetricCard,
@@ -171,6 +175,7 @@ type LiveSnapshotData = {
       sessions: number;
       pageViews: number;
       revenue: number;
+      purchases: number;
     }>;
     landingRows: Array<{
       key: string;
@@ -178,14 +183,24 @@ type LiveSnapshotData = {
       sessions: number;
       pageViews: number;
       revenue: number;
+      purchases: number;
     }>;
+    error: string | null;
+  } | null;
+  pageSpeed: {
+    url: string | null;
+    strategy: "mobile";
+    report: PageSpeedReport | null;
     error: string | null;
   } | null;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const now = new Date();
+  const requestLocale = detectRequestLocale(request, {
+    sessionLocale: readShopifySessionLocale(session),
+  });
 
   try {
     const costConfig = await getShopCostConfig(session.shop);
@@ -195,7 +210,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return null;
     });
 
-    const [customerAggregates, channelRoi, ads, ga4] = await Promise.all([
+    const [customerAggregates, channelRoi, ads, ga4, pageSpeed] = await Promise.all([
       ensureCustomerValueLayer(session.shop, costConfig.defaultGrossMarginPercent, { now }).catch((error) => {
         console.error("[today.insights] customer value layer failed:", error);
         return null;
@@ -330,6 +345,43 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           };
         }
       })(),
+      (async () => {
+        const shopInfo = await fetchShopBasicInfo(admin).catch((error) => {
+          console.error("[today.insights] shop basic info failed:", error);
+          return null;
+        });
+        const url = shopInfo?.primaryDomainUrl?.trim() || shopInfo?.url?.trim() || null;
+        if (!url) {
+          return {
+            url: null,
+            strategy: "mobile" as const,
+            report: null,
+            error: null,
+          };
+        }
+
+        try {
+          const report = await runPageSpeedAnalysis({
+            url,
+            strategy: "mobile",
+            locale: requestLocale,
+          });
+          return {
+            url,
+            strategy: "mobile" as const,
+            report,
+            error: null,
+          };
+        } catch (error) {
+          console.error("[today.insights] pagespeed failed:", error);
+          return {
+            url,
+            strategy: "mobile" as const,
+            report: null,
+            error: error instanceof Error ? error.message : "PageSpeed 分析失败",
+          };
+        }
+      })(),
     ]);
 
     return {
@@ -342,6 +394,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         channelRoi,
         ads,
         ga4,
+        pageSpeed,
       } satisfies LiveSnapshotData,
     };
   } catch (error) {
@@ -819,6 +872,135 @@ function buildDelta(current: number | null | undefined, previous: number | null 
   return `${sign}${formatNumber(change, digits)}%`;
 }
 
+function buildPageSpeedHref(
+  url: string | null,
+  strategy: "mobile" | "desktop" = "mobile",
+  label?: string,
+): string {
+  const next = new URLSearchParams();
+  if (url) next.set("url", url);
+  next.set("strategy", strategy);
+  next.set("autorun", "1");
+  next.set("source", "daily-insights");
+  if (label) next.set("label", label);
+  return `/app/settings/pagespeed?${next.toString()}`;
+}
+
+function appendReturnTo(href: string, returnTo: string): string {
+  const [path, query = ""] = href.split("?");
+  const next = new URLSearchParams(query);
+  next.set("returnTo", returnTo);
+  return `${path}?${next.toString()}`;
+}
+
+function findPageSpeedCategory(report: PageSpeedReport | null, id: PageSpeedReport["categories"][number]["id"]) {
+  return report?.categories.find((item) => item.id === id) ?? null;
+}
+
+function findPageSpeedMetric(report: PageSpeedReport | null, id: string) {
+  return report?.metrics.find((item) => item.id === id) ?? null;
+}
+
+function formatScore(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${Math.round(value)}`;
+}
+
+function normalizeScoreToChart(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 10;
+  return Math.max(10, Math.min(100, value));
+}
+
+function buildStorefrontUrl(baseUrl: string | null | undefined, path: string | null | undefined): string | null {
+  const base = baseUrl?.trim();
+  const pathname = path?.trim();
+  if (!base || !pathname) return null;
+  if (!pathname.startsWith("/")) return null;
+  try {
+    return new URL(pathname, base).toString();
+  } catch {
+    return null;
+  }
+}
+
+function computeConversionRate(purchases: number | null | undefined, sessions: number | null | undefined): number | null {
+  if (
+    purchases == null ||
+    sessions == null ||
+    !Number.isFinite(purchases) ||
+    !Number.isFinite(sessions) ||
+    sessions <= 0
+  ) {
+    return null;
+  }
+  return (purchases / sessions) * 100;
+}
+
+function formatLandingObjectNote(params: {
+  sessions: number | null | undefined;
+  revenue: number | null | undefined;
+  purchases: number | null | undefined;
+  currency: string;
+}) {
+  const parts = [
+    `${formatNumber(params.sessions)} sessions`,
+    `${formatCurrency(params.revenue, params.currency)} revenue`,
+  ];
+  const cvr = computeConversionRate(params.purchases, params.sessions);
+  if (cvr != null) {
+    parts.push(`CVR ${formatPercent(cvr)}`);
+  }
+  return parts.join(" / ");
+}
+
+function buildHomeExperiencePriorityLabel(score: number | null | undefined): string {
+  if (score == null || !Number.isFinite(score)) return "全站入口 / 待分析";
+  if (score < 50) return "全站入口 / 体验偏弱 / 先处理";
+  if (score < 90) return "全站入口 / 仍可优化";
+  return "全站入口 / 体验稳定";
+}
+
+function buildLandingExperiencePriorityLabel(params: {
+  sessions: number | null | undefined;
+  totalSessions: number | null | undefined;
+  revenue: number | null | undefined;
+  totalRevenue: number | null | undefined;
+  conversionRate: number | null | undefined;
+  baselineConversionRate: number | null | undefined;
+  hasDrilldown: boolean;
+}): string {
+  const sessionShare =
+    params.sessions != null &&
+    params.totalSessions != null &&
+    Number.isFinite(params.sessions) &&
+    Number.isFinite(params.totalSessions) &&
+    params.totalSessions > 0
+      ? params.sessions / params.totalSessions
+      : null;
+  const revenueShare =
+    params.revenue != null &&
+    params.totalRevenue != null &&
+    Number.isFinite(params.revenue) &&
+    Number.isFinite(params.totalRevenue) &&
+    params.totalRevenue > 0
+      ? params.revenue / params.totalRevenue
+      : null;
+  const highTraffic = sessionShare != null && sessionShare >= 0.2;
+  const highRevenue = revenueShare != null && revenueShare >= 0.2;
+  const lowConversion =
+    params.conversionRate != null &&
+    params.baselineConversionRate != null &&
+    params.conversionRate < params.baselineConversionRate * 0.85;
+
+  if ((highTraffic || highRevenue) && lowConversion) {
+    return params.hasDrilldown ? "高流量 / 低转化 / 待深钻" : "高流量 / 低转化";
+  }
+  if (highTraffic || highRevenue) {
+    return params.hasDrilldown ? "高流量 / 高价值 / 可深钻" : "高流量 / 高价值";
+  }
+  return params.hasDrilldown ? "主要承接页 / 待深钻" : "主要承接页";
+}
+
 function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey, Snapshot> {
   if (!liveData?.diagnosis) return mockSnapshots;
 
@@ -827,6 +1009,7 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
   const channel = liveData.channelRoi;
   const ads = liveData.ads;
   const ga4 = liveData.ga4;
+  const pageSpeed = liveData.pageSpeed;
   const currency = ads?.currencyCode || diagnosis.summaryMetrics.currency || channel?.currency || "USD";
 
   const totalContributionProfit =
@@ -850,6 +1033,73 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
   const trafficSessions = ga4?.summary?.totalSessions ?? diagnosis.summaryMetrics.sessions7d;
   const trafficUsers = ga4?.summary?.totalUsers ?? null;
   const trafficPageViews = ga4?.summary?.totalPageViews ?? null;
+  const pageSpeedReport = pageSpeed?.report ?? null;
+  const pageSpeedPerformance = findPageSpeedCategory(pageSpeedReport, "performance");
+  const pageSpeedSeo = findPageSpeedCategory(pageSpeedReport, "seo");
+  const pageSpeedLcp = findPageSpeedMetric(pageSpeedReport, "largest-contentful-paint");
+  const pageSpeedCls = findPageSpeedMetric(pageSpeedReport, "cumulative-layout-shift");
+  const pageSpeedTbt = findPageSpeedMetric(pageSpeedReport, "total-blocking-time");
+  const pageSpeedPoorMetrics = pageSpeedReport?.metrics.filter((item) => item.band === "poor") ?? [];
+  const pageSpeedWarningMetrics =
+    pageSpeedReport?.metrics.filter((item) => item.band === "needs-improvement") ?? [];
+  const pageSpeedTopOpportunity = pageSpeedReport?.reports.performance.opportunities[0] ?? null;
+  const primaryStorefrontUrl = pageSpeed?.url ?? null;
+  const topLandingPath = ga4TopLanding ? normalizeGa4Key(ga4TopLanding.key, "/") : null;
+  const topLandingPageUrl = buildStorefrontUrl(primaryStorefrontUrl, topLandingPath);
+  const pageSpeedHref = buildPageSpeedHref(
+    primaryStorefrontUrl,
+    pageSpeed?.strategy ?? "mobile",
+    "店铺首页",
+  );
+  const topLandingPageHref = topLandingPageUrl
+    ? buildPageSpeedHref(topLandingPageUrl, pageSpeed?.strategy ?? "mobile", topLandingPath ?? "主 landing page")
+    : null;
+  const overallSiteConversionRate =
+    computeConversionRate(ga4?.summary?.totalPurchases, ga4?.summary?.totalSessions) ??
+    diagnosis.summaryMetrics.conversionRate7d;
+  const topLandingConversionRate = computeConversionRate(
+    ga4TopLanding?.purchases,
+    ga4TopLanding?.sessions,
+  );
+  const siteExperienceObjects: ChartItem[] = [
+    {
+      label: "店铺首页",
+      value: pageSpeedPerformance?.score != null ? normalizeScoreToChart(pageSpeedPerformance.score) : 10,
+      display: buildHomeExperiencePriorityLabel(pageSpeedPerformance?.score),
+      note:
+        ga4?.summary
+          ? `${formatLandingObjectNote({
+              sessions: ga4.summary.totalSessions,
+              revenue: ga4.summary.totalRevenue,
+              purchases: ga4.summary.totalPurchases,
+              currency,
+            })} / 性能 ${formatScore(pageSpeedPerformance?.score)}`
+          : "首页经营量级待补",
+    },
+    ...(ga4TopLanding && topLandingPath
+      ? [
+          {
+            label: topLandingPath,
+            value: topLandingPageHref ? 72 : 18,
+            display: buildLandingExperiencePriorityLabel({
+              sessions: ga4TopLanding.sessions,
+              totalSessions: ga4?.summary?.totalSessions,
+              revenue: ga4TopLanding.revenue,
+              totalRevenue: ga4?.summary?.totalRevenue,
+              conversionRate: topLandingConversionRate,
+              baselineConversionRate: overallSiteConversionRate,
+              hasDrilldown: Boolean(topLandingPageHref),
+            }),
+            note: formatLandingObjectNote({
+              sessions: ga4TopLanding.sessions,
+              revenue: ga4TopLanding.revenue,
+              purchases: ga4TopLanding.purchases,
+              currency,
+            }),
+          } satisfies ChartItem,
+        ]
+      : []),
+  ];
 
   const trafficModule: BusinessModule = {
     key: "traffic",
@@ -1156,8 +1406,61 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
     actionHint: ads ? "下一步是把广告平台 spend 尽量映射到 Google / Facebook / Instagram / TikTok 等经营渠道键值。" : "等广告成本接入后，这个模块就能从经营渠道视图升级成完整 ROI 视图。",
   };
 
+  const siteExperienceModule: BusinessModule = {
+    key: "siteExperience",
+    title: "站点体验",
+    subtitle: "把首页速度、稳定性和 SEO 风险纳入每日经营洞察，判断它是否在拖累转化",
+    source: pageSpeedReport ? "real" : pageSpeed?.url ? "estimated" : "pending",
+    summary: pageSpeedReport
+      ? `当前已接入 ${pageSpeed.strategy} 端的 PageSpeed 实验室数据，可以直接把站点体验当成每日经营判断的一部分。`
+      : pageSpeed?.error
+        ? "已识别店铺主域名，但本次未成功拿到 PageSpeed 结果，先保留站点体验模块结构。"
+        : pageSpeed?.url
+          ? "当前已经拿到可分析的店铺主域名，后续可继续稳定接入 PageSpeed 结果。"
+          : "当前还没有可分析的店铺主域名，站点体验模块先保留占位。",
+    metrics: [
+      { label: "性能分", value: formatScore(pageSpeedPerformance?.score) },
+      { label: "LCP", value: pageSpeedLcp?.displayValue ?? "—" },
+      { label: "TBT", value: pageSpeedTbt?.displayValue ?? "—" },
+      { label: "SEO", value: formatScore(pageSpeedSeo?.score) },
+    ],
+    chart: {
+      title: "对象优先级",
+      kind: "table",
+      items: siteExperienceObjects,
+    },
+    signals: [
+      pageSpeedReport
+        ? `当前共有 ${formatNumber(pageSpeedPoorMetrics.length)} 个核心指标处于较差区间，${formatNumber(pageSpeedWarningMetrics.length)} 个指标仍有改善空间，CLS 为 ${pageSpeedCls?.displayValue ?? "—"}。`
+        : pageSpeed?.error
+          ? `PageSpeed 当前读取失败：${pageSpeed.error}`
+          : "还没有拿到可用的 PageSpeed 结果。",
+      topLandingPageUrl
+        ? `${topLandingPath} 是当前主要 landing page，可以继续深钻这个页面的体验表现。`
+        : "当前还没有可直接深钻的 landing page 页面对象。",
+      pageSpeedLcp?.displayValue
+        ? `如果首页或主 landing page 的 LCP 偏慢，广告和自然流量进来后会更容易流失。`
+        : "当前还无法判断首屏加载是否在影响访客停留。",
+      pageSpeedTbt?.displayValue
+        ? `如果脚本阻塞时间偏高，访客在点击、滚动和结账时的体验会更卡，通常会直接拖低转化。`
+        : "当前还无法判断脚本阻塞是否在影响交互体验。",
+      pageSpeedTopOpportunity
+        ? `当前最值得先修的是「${pageSpeedTopOpportunity.title}」。`
+        : "当前没有明显的高优先级体验修复项。",
+      pageSpeedReport
+        ? `分析地址为 ${pageSpeedReport.finalUrl || pageSpeedReport.requestedUrl}。`
+        : pageSpeed?.url
+          ? `默认分析地址为 ${pageSpeed.url}。`
+          : "待补店铺主域名后再做站点体验分析。",
+    ],
+    actionHint: pageSpeedReport
+      ? "建议把站点体验和转化漏斗一起看，先确认速度问题是不是在拖累站内转化。"
+      : "接入 PageSpeed 后，这个模块会成为判断‘为什么流量来了但没转化’的重要补充证据。",
+  };
+
   const sharedModules = [
     trafficModule,
+    siteExperienceModule,
     costModule,
     conversionModule,
     afterSalesModule,
@@ -1185,6 +1488,7 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
     Boolean(ads),
     Boolean(channel),
     Boolean(customer),
+    Boolean(pageSpeedReport),
   ].filter(Boolean).length;
 
   const reportActions: string[] = [];
@@ -1218,6 +1522,18 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
         : `把预算优先集中到 ${topAdsPlatform.platform} 的高质量广告组，减少低质量流量稀释经营利润。`,
     );
   }
+  if (pageSpeedPerformance?.score != null && pageSpeedPerformance.score < 90) {
+    reportActions.push(
+      pageSpeedTopOpportunity
+        ? `站点体验也在影响经营判断，先处理「${pageSpeedTopOpportunity.title}」，避免首页速度继续拖累转化。`
+        : `当前移动端性能分只有 ${formatScore(pageSpeedPerformance.score)}，建议优先复盘首页速度和阻塞资源。`,
+    );
+  }
+  if (topLandingPageUrl) {
+    reportActions.push(
+      `把 ${topLandingPath} 作为体验排查对象单独复盘，确认主要承接流量的页面是否也在拖累转化。`,
+    );
+  }
   if (reportActions.length === 0) {
     reportActions.push("当前没有明显的紧急止损项，可以把精力放在利润扩张和高价值客户经营上。");
   }
@@ -1231,6 +1547,9 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
     topProfitChannel
       ? `${topProfitChannel.label} 当前贡献利润最高，为 ${formatCurrency(topProfitChannel.contributionProfit, currency)}。`
       : "当前还没有足够的渠道利润对比样本。",
+    pageSpeedPerformance?.score != null
+      ? `站点体验当前性能分为 ${formatScore(pageSpeedPerformance.score)}，${pageSpeedPoorMetrics.length > 0 ? `其中 ${pageSpeedPoorMetrics[0]?.title ?? "核心指标"} 已经进入较差区间。` : "暂未看到明显的性能爆雷。"}`
+      : "站点体验结果暂不可用，当前日报先以利润和漏斗为主。",
     customer
       ? `高价值客户占比 ${formatPercent(customer.highValueShare)}，平均动态 LTV 为 ${formatCurrency(customer.averageDynamicLtv, currency)}。`
       : "客户价值层还在补齐中，当前日报先以利润和漏斗为主。",
@@ -1272,6 +1591,35 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
           : undefined,
     }));
 
+  if (pageSpeedPerformance?.score != null && pageSpeedPerformance.score < 90) {
+    reportInsights.unshift({
+      title:
+        pageSpeedPerformance.score < 50
+          ? "站点体验正在拖累站内转化"
+          : "站点体验还有明显优化空间",
+      confidence: pageSpeedPoorMetrics.length > 0 ? "高" : "中",
+      metric: `性能分 ${formatScore(pageSpeedPerformance.score)} / LCP ${pageSpeedLcp?.displayValue ?? "—"}`,
+      detail:
+        pageSpeedTopOpportunity?.description ??
+        "建议进入 PageSpeed 详情，先确认首页速度和阻塞资源是否在影响经营结果。",
+      tone: pageSpeedPerformance.score < 50 ? "critical" : "warning",
+      targetKey: "siteExperience",
+      href: pageSpeedHref,
+    });
+  }
+
+  if (topLandingPageHref && topLandingPath) {
+    reportInsights.unshift({
+      title: "主要 landing page 需要单独检查体验",
+      confidence: "中",
+      metric: `主 landing page ${topLandingPath}`,
+      detail: "这个页面承接了当前最多流量，建议单独用 PageSpeed 复盘其首屏和交互体验。",
+      tone: "info",
+      targetKey: "siteExperience",
+      href: topLandingPageHref,
+    });
+  }
+
   const reportDrilldowns: DrilldownEntry[] = [
     {
       key: "refund",
@@ -1301,6 +1649,29 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
       badge: topProfitChannel ? `${topProfitChannel.label} 最稳` : "经营复盘",
       href: "/app/today/diagnosis?detail=value&valueTab=channels",
     },
+    {
+      key: "pagespeed",
+      title: "站点体验 / PageSpeed",
+      detail: "看移动端性能、SEO 和最值得先修的体验问题。",
+      badge:
+        pageSpeedPerformance?.score != null
+          ? `性能 ${formatScore(pageSpeedPerformance.score)}`
+          : pageSpeed?.error
+            ? "读取异常"
+            : "待分析",
+      href: pageSpeedHref,
+    },
+    ...(topLandingPageHref && topLandingPath
+      ? [
+          {
+            key: "landing-pagespeed",
+            title: "Top Landing 体验",
+            detail: `直接检查 ${topLandingPath} 的首屏与交互体验，确认主要承接页是否在漏损流量。`,
+            badge: "对象深钻",
+            href: topLandingPageHref,
+          } satisfies DrilldownEntry,
+        ]
+      : []),
   ];
 
   const report: SnapshotReport = {
@@ -1337,7 +1708,7 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
         tone: reportToneFromConfidence(connectedSignals),
       },
     ],
-    insights: reportInsights.length > 0 ? reportInsights : mockReport7d.insights,
+    insights: reportInsights.length > 0 ? reportInsights.slice(0, 4) : mockReport7d.insights,
     drilldowns: reportDrilldowns,
     focus: reportFocus,
     actions: reportActions,
@@ -1437,15 +1808,18 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
         { label: "Pixel 漏斗", value: diagnosis.summaryMetrics.hasPixelData ? "已接入" : "未检测到", source: diagnosis.summaryMetrics.hasPixelData ? "real" : "estimated" },
         { label: "GA4 来源/页面", value: ga4?.connected ? `已接入 ${ga4.propertyCount} 个属性` : ga4?.error ? "连接异常" : "未连接", source: ga4?.connected ? "real" : "estimated" },
         { label: "广告花费", value: ads ? `已接入 ${ads.platformSummaries.length} 个平台` : "未连接", source: ads ? "real" : "estimated" },
+        { label: "站点体验 / PageSpeed", value: pageSpeedPerformance?.score != null ? `性能 ${formatScore(pageSpeedPerformance.score)}` : pageSpeed?.error ? "读取异常" : pageSpeed?.url ? "待分析" : "未识别店铺域名", source: pageSpeedReport ? "real" : pageSpeed?.url ? "estimated" : "pending" },
         { label: "客户价值层", value: customer ? "已接入" : "待生成", source: customer ? "real" : "pending" },
         { label: "渠道经营层", value: channel ? "已接入" : "待生成", source: channel ? "estimated" : "pending" },
       ],
       highlights: [
         "售后、利润、客户价值和渠道模块已经优先切到真实数据。",
         ga4?.connected ? "流量模块已经接入 GA4 的来源与 landing page 维度。" : "流量与转化目前先复用 Pixel / diagnosis 口径，来源维度还未完整。",
+        pageSpeedPerformance?.score != null ? `站点体验模块已接入移动端 PageSpeed，当前性能分 ${formatScore(pageSpeedPerformance.score)}。` : "站点体验模块已预留，后续会稳定接入 PageSpeed 结果。",
         ads ? "广告花费已经并入成本和利润判断，但渠道映射仍是近似版。" : "成本与渠道还属于半真实数据，因为广告花费暂未并入。",
       ],
       nextSteps: [
+        "把站点体验和转化漏斗联动起来，判断速度是否在拖累站内转化。",
         "继续把流量模块接到 GA4 更多维度。",
         "把广告 spend 进一步映射到经营渠道层。",
         "再基于这些真实模块摘要生成 AI 风险、机会和动作建议。",
@@ -1469,15 +1843,18 @@ function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<PeriodKey
         { label: "Pixel 漏斗", value: diagnosis.summaryMetrics.hasPixelData ? "已接入（当前仍偏 7 天）" : "未检测到", source: diagnosis.summaryMetrics.hasPixelData ? "real" : "estimated" },
         { label: "GA4 来源/页面", value: ga4?.connected ? `已接入 ${ga4.propertyCount} 个属性` : ga4?.error ? "连接异常" : "未连接", source: ga4?.connected ? "real" : "estimated" },
         { label: "广告花费", value: ads ? `已接入 ${ads.platformSummaries.length} 个平台` : "未连接", source: ads ? "real" : "estimated" },
+        { label: "站点体验 / PageSpeed", value: pageSpeedPerformance?.score != null ? `性能 ${formatScore(pageSpeedPerformance.score)}` : pageSpeed?.error ? "读取异常" : pageSpeed?.url ? "待分析" : "未识别店铺域名", source: pageSpeedReport ? "real" : pageSpeed?.url ? "estimated" : "pending" },
         { label: "客户价值层", value: customer ? "已接入" : "待生成", source: customer ? "real" : "pending" },
         { label: "渠道经营层", value: channel ? "已接入" : "待生成", source: channel ? "estimated" : "pending" },
       ],
       highlights: [
         "当前 30 天页最有价值的是真实的利润、渠道和客户价值层。",
+        pageSpeedPerformance?.score != null ? `站点体验也已进入结构判断，当前移动端性能分 ${formatScore(pageSpeedPerformance.score)}。` : "站点体验已纳入结构视图，但当前还没拿到稳定结果。",
         ads ? "广告 spend 已进入利润判断，但渠道级净利润仍需要更细的归因映射。" : ga4?.connected ? "流量模块已开始具备来源结构，但广告花费仍未完整。" : "流量来源与广告花费仍未完整，因此结构判断优先于细颗粒归因。",
         "页面已经开始摆脱纯 mock，进入真实数据 + 占位混合阶段。",
       ],
       nextSteps: [
+        "把站点体验问题和 landing page / 渠道质量做关联分析。",
         "继续补齐 GA4 更多维度与广告 spend 的渠道映射。",
         "增强商品层，把销量、利润和退款统一进商品视图。",
         "最后再把 AI 洞察改成真正由模块摘要生成。",
@@ -2063,10 +2440,7 @@ export default function TodayBusinessInsights() {
   }, [moduleFilter, period]);
 
   const buildDetailHref = (href: string) => {
-    const [path, query = ""] = href.split("?");
-    const next = new URLSearchParams(query);
-    next.set("returnTo", currentReturnTo);
-    return `${path}?${next.toString()}`;
+    return appendReturnTo(href, currentReturnTo);
   };
 
   const handleModuleChange = (nextKey: string) => {
