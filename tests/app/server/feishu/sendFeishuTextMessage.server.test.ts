@@ -15,7 +15,7 @@ describe("sendFeishuTextMessage", () => {
 
   it("skips when FEISHU_ENABLED is false", async () => {
     process.env.FEISHU_ENABLED = "false";
-    process.env.FEISHU_WEBHOOK_URL_UNINSTALL = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
 
     const result = await sendFeishuTextMessage({
       channel: "ops_uninstall",
@@ -31,7 +31,7 @@ describe("sendFeishuTextMessage", () => {
   });
 
   it("skips when webhook url is not configured", async () => {
-    delete process.env.FEISHU_WEBHOOK_URL_UNINSTALL;
+    delete process.env.FEISHU_WEBHOOK_URL_SUPPORT;
 
     const result = await sendFeishuTextMessage({
       channel: "ops_uninstall",
@@ -46,7 +46,7 @@ describe("sendFeishuTextMessage", () => {
   });
 
   it("returns ok on successful webhook response", async () => {
-    process.env.FEISHU_WEBHOOK_URL_SUBSCRIPTION = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -64,7 +64,7 @@ describe("sendFeishuTextMessage", () => {
   });
 
   it("returns ok false on non-zero feishu code", async () => {
-    process.env.FEISHU_WEBHOOK_URL_SUBSCRIPTION = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({

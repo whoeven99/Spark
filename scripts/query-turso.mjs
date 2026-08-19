@@ -8,11 +8,11 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { PrismaClient } = require("../app/generated/prisma/index.js");
 
-const TURSO_URL = process.env.TURSO_TEST_DATABASE_URL;
-const TURSO_TOKEN = process.env.TURSO_TEST_AUTH_TOKEN;
+const TURSO_URL = process.env.TURSO_DATABASE_URL;
+const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
 if (!TURSO_URL || !TURSO_TOKEN) {
-  console.error("请确保设置了 TURSO_TEST_DATABASE_URL 和 TURSO_TEST_AUTH_TOKEN");
+  console.error("请确保设置了 TURSO_DATABASE_URL 和 TURSO_AUTH_TOKEN");
   process.exit(1);
 }
 

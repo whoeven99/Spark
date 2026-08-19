@@ -172,20 +172,26 @@ async function runSeed(client, root) {
 
 async function main() {
   const root = process.cwd();
-  const envFromFile = loadDotEnv(path.join(root, ".env"));
   const target = (process.argv[2] || "test").trim().toLowerCase();
 
   if (target !== "test" && target !== "prod") {
     throw new Error('仅支持 "test" 或 "prod"');
   }
 
-  const urlKey =
-    target === "prod" ? "TURSO_PROD_DATABASE_URL" : "TURSO_TEST_DATABASE_URL";
-  const tokenKey =
-    target === "prod" ? "TURSO_PROD_AUTH_TOKEN" : "TURSO_TEST_AUTH_TOKEN";
+  // 先 .env，再 .env.test / .env.prod 覆盖；凭证统一 TURSO_DATABASE_URL / TURSO_AUTH_TOKEN
+  const base = loadDotEnv(path.join(root, ".env"));
+  const overlay = loadDotEnv(
+    path.join(root, target === "prod" ? ".env.prod" : ".env.test"),
+  );
+  const merged = { ...base, ...overlay };
+  for (const [key, value] of Object.entries(merged)) {
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
 
-  const url = process.env[urlKey] || envFromFile[urlKey];
-  const authToken = process.env[tokenKey] || envFromFile[tokenKey];
+  const urlKey = "TURSO_DATABASE_URL";
+  const tokenKey = "TURSO_AUTH_TOKEN";
+  const url = process.env[urlKey];
+  const authToken = process.env[tokenKey];
 
   if (!url?.startsWith("libsql://")) throw new Error(`无效 ${urlKey}`);
   if (!authToken || authToken === "REPLACE_ME") throw new Error(`无效 ${tokenKey}`);

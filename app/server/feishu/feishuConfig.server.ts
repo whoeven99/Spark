@@ -1,9 +1,9 @@
 import type { FeishuChannel } from "./feishuTypes.server";
 
-/** channel → 环境变量名（各场景独立 Webhook，无全局 fallback） */
+/** 所有运营通知统一走 SUPPORT Webhook；channel 仅用于日志/结果标识 */
 export const CHANNEL_ENV: Record<FeishuChannel, string> = {
-  ops_uninstall: "FEISHU_WEBHOOK_URL_UNINSTALL",
-  ops_subscription: "FEISHU_WEBHOOK_URL_SUBSCRIPTION",
+  ops_uninstall: "FEISHU_WEBHOOK_URL_SUPPORT",
+  ops_subscription: "FEISHU_WEBHOOK_URL_SUPPORT",
   ops_support: "FEISHU_WEBHOOK_URL_SUPPORT",
 };
 
@@ -19,9 +19,8 @@ export function isFeishuEnabled(): boolean {
   return parseBoolean(process.env.FEISHU_ENABLED, true);
 }
 
-export function resolveFeishuWebhookUrl(channel: FeishuChannel): string | null {
-  const envKey = CHANNEL_ENV[channel];
-  const url = process.env[envKey]?.trim();
+export function resolveFeishuWebhookUrl(_channel: FeishuChannel): string | null {
+  const url = process.env.FEISHU_WEBHOOK_URL_SUPPORT?.trim();
   return url && url.length > 0 ? url : null;
 }
 
