@@ -4,10 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import type { PrismaClient as PrismaClientType } from "./generated/prisma";
 import { ensureRuntimeEnv, describeTursoEnvKeys } from "./config/runtimeEnv.server";
-import {
-  readTursoCredentials,
-  resolveTursoTarget,
-} from "./config/tursoTarget.server";
+import { readTursoCredentials } from "./config/tursoTarget.server";
 
 // 最早执行：支持本地 .env 与 Render Secret File（/etc/secrets/.env 等）
 ensureRuntimeEnv();
@@ -40,15 +37,12 @@ function tursoUrlHost(url: string): string {
 }
 
 function createTursoPrismaClient(): PrismaClientType {
-  const target = resolveTursoTarget();
-  const { url, authToken, urlKey, tokenKey } = readTursoCredentials(target);
+  const { url, authToken, urlKey, tokenKey } = readTursoCredentials();
 
   if (!url.startsWith("libsql://")) {
-    const explicitTarget = process.env.TURSO_TARGET?.trim();
     throw new Error(
       [
         `请设置有效的 ${urlKey}，例如 "libsql://xxx.turso.io"。`,
-        `当前解析: TURSO_TARGET=${explicitTarget || "(未设置)"} → 库=${target}。`,
         describeTursoEnvKeys(),
         "Render：在 Web Service → Environment 添加变量，或使用 Secret File 挂载到 /etc/secrets/.env。",
       ].join(" "),
@@ -56,14 +50,10 @@ function createTursoPrismaClient(): PrismaClientType {
   }
 
   if (!authToken) {
-    throw new Error(
-      `请设置 ${tokenKey}（当前库=${target}）。${describeTursoEnvKeys()}`,
-    );
+    throw new Error(`请设置 ${tokenKey}。${describeTursoEnvKeys()}`);
   }
 
-  console.info(
-    `[Turso] Prisma 使用 ${target} 库 host=${tursoUrlHost(url)} (TURSO_TARGET=${process.env.TURSO_TARGET?.trim() || "未设置"})`,
-  );
+  console.info(`[Turso] Prisma host=${tursoUrlHost(url)}`);
 
   const adapter = new PrismaLibSQL({ url, authToken });
   return new PrismaClient({ adapter });

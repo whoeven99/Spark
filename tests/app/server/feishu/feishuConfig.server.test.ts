@@ -23,27 +23,30 @@ describe("feishuConfig", () => {
   });
 
   it("resolveFeishuWebhookUrl returns null when unset", () => {
-    delete process.env.FEISHU_WEBHOOK_URL_UNINSTALL;
+    delete process.env.FEISHU_WEBHOOK_URL_SUPPORT;
     expect(resolveFeishuWebhookUrl("ops_uninstall")).toBeNull();
   });
 
-  it("resolveFeishuWebhookUrl returns trimmed url", () => {
-    process.env.FEISHU_WEBHOOK_URL_SUBSCRIPTION =
+  it("resolveFeishuWebhookUrl returns trimmed url for any channel", () => {
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT =
       "  https://open.feishu.cn/open-apis/bot/v2/hook/test  ";
     expect(resolveFeishuWebhookUrl("ops_subscription")).toBe(
+      "https://open.feishu.cn/open-apis/bot/v2/hook/test",
+    );
+    expect(resolveFeishuWebhookUrl("ops_support")).toBe(
       "https://open.feishu.cn/open-apis/bot/v2/hook/test",
     );
   });
 
   it("isFeishuChannelReady is false when disabled", () => {
     process.env.FEISHU_ENABLED = "false";
-    process.env.FEISHU_WEBHOOK_URL_UNINSTALL = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
     expect(isFeishuChannelReady("ops_uninstall")).toBe(false);
   });
 
   it("isFeishuChannelReady is true when enabled and url set", () => {
     process.env.FEISHU_ENABLED = "true";
-    process.env.FEISHU_WEBHOOK_URL_UNINSTALL = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
     expect(isFeishuChannelReady("ops_uninstall")).toBe(true);
   });
 });

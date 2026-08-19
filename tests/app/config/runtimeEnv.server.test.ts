@@ -10,13 +10,13 @@ import {
 describe("ensureRuntimeEnv from file", () => {
   const tmpFile = path.join(os.tmpdir(), `spark-env-test-${Date.now()}.env`);
   const savedTarget = process.env.ENV_FILE;
-  const savedTursoUrl = process.env.TURSO_TEST_DATABASE_URL;
+  const savedTursoUrl = process.env.TURSO_DATABASE_URL;
 
   afterEach(() => {
     if (savedTarget === undefined) delete process.env.ENV_FILE;
     else process.env.ENV_FILE = savedTarget;
-    if (savedTursoUrl === undefined) delete process.env.TURSO_TEST_DATABASE_URL;
-    else process.env.TURSO_TEST_DATABASE_URL = savedTursoUrl;
+    if (savedTursoUrl === undefined) delete process.env.TURSO_DATABASE_URL;
+    else process.env.TURSO_DATABASE_URL = savedTursoUrl;
     try {
       fs.unlinkSync(tmpFile);
     } catch {
