@@ -543,7 +543,7 @@ export function AdsCatalogPage() {
     [selectedTaskId, tasks],
   );
   const settingsHubPath = "/app/settings";
-  const insightsPath = `/app/insights/performance${locationSearch}`;
+  const insightsPath = `/app/insights/charts/performance${locationSearch}`;
 
   const credentialReady =
     platform === "facebook"

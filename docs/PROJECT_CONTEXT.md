@@ -128,7 +128,7 @@ npm run turso:migrate:test
 ## 8. 关键环境变量分组
 
 - Shopify：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`。
-- Turso（主应用）：`TURSO_TARGET`、`TURSO_TEST_*` / `TURSO_PROD_*`、`DATABASE_URL`。
+- Turso（主应用）：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`（测/产各自配值）；`DATABASE_URL` 仅 Prisma CLI / 本地 SQLite。
 - Turso（Admin）：`SPARK_DATABASE_URL` / `SPARK_DATABASE_AUTH_TOKEN`（Spark 库）；
   `TSF_DATABASE_URL` / `TSF_DATABASE_AUTH_TOKEN`（翻译库）；测/产分服务配值，无 TARGET。
 - AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。

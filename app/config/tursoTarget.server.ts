@@ -1,12 +1,8 @@
 /**
- * 解析连接哪套 Turso 库。
- * - 显式 `TURSO_TARGET` 优先。
- * - `NODE_ENV=prod`（或 `production`）且两套 URL 均有效时，默认 prod。
- * - 仅占位 prod URL（your-prod-db 等）视为未配置。
- * - Render Test 同为 prod 时，请设 `TURSO_TARGET=test` 或仅配置 `TURSO_TEST_*`。
+ * Spark App Turso 凭证：直接读 TURSO_DATABASE_URL / TURSO_AUTH_TOKEN。
+ * 测/产由各部署环境各自配值，不再用 TURSO_TARGET 或 TURSO_TEST_* / TURSO_PROD_*。
  */
 
-import { isProductionNodeEnv } from "./nodeEnv.server";
 import { getRuntimeEnv, normalizeEnvValue } from "./runtimeEnv.server";
 
 export { normalizeEnvValue };
@@ -24,56 +20,23 @@ function isPlaceholderTursoUrl(url: string): boolean {
   return PLACEHOLDER_URL_MARKERS.some((marker) => lower.includes(marker));
 }
 
-function isLibsqlUrl(value: string | undefined): boolean {
+export function isLibsqlUrl(value: string | undefined): boolean {
   const v = normalizeEnvValue(value);
   if (!v.startsWith("libsql://")) return false;
   if (isPlaceholderTursoUrl(v)) return false;
   return true;
 }
 
-function normalizeTursoTarget(value: string | undefined): "test" | "prod" | undefined {
-  const v = normalizeEnvValue(value).toLowerCase();
-  if (v === "prod" || v === "production") return "prod";
-  if (v === "test" || v === "testing") return "test";
-  return undefined;
-}
-
-export function resolveTursoTarget(): "test" | "prod" {
-  const explicit = normalizeTursoTarget(getRuntimeEnv("TURSO_TARGET"));
-  if (explicit) return explicit;
-
-  const prodConfigured = isLibsqlUrl(getRuntimeEnv("TURSO_PROD_DATABASE_URL"));
-  const testConfigured = isLibsqlUrl(getRuntimeEnv("TURSO_TEST_DATABASE_URL"));
-
-  if (prodConfigured && !testConfigured) return "prod";
-  if (testConfigured && !prodConfigured) return "test";
-
-  if (prodConfigured && testConfigured) {
-    return isProductionNodeEnv() ? "prod" : "test";
-  }
-
-  // 无有效 URL：与 NODE_ENV 对齐（prod → 读 TURSO_PROD_*）
-  return isProductionNodeEnv() ? "prod" : "test";
-}
-
-export function readTursoCredentials(target: "test" | "prod"): {
+export function readTursoCredentials(): {
   url: string;
   authToken: string;
   urlKey: string;
   tokenKey: string;
 } {
-  if (target === "prod") {
-    return {
-      url: getRuntimeEnv("TURSO_PROD_DATABASE_URL"),
-      authToken: getRuntimeEnv("TURSO_PROD_AUTH_TOKEN"),
-      urlKey: "TURSO_PROD_DATABASE_URL",
-      tokenKey: "TURSO_PROD_AUTH_TOKEN",
-    };
-  }
   return {
-    url: getRuntimeEnv("TURSO_TEST_DATABASE_URL"),
-    authToken: getRuntimeEnv("TURSO_TEST_AUTH_TOKEN"),
-    urlKey: "TURSO_TEST_DATABASE_URL",
-    tokenKey: "TURSO_TEST_AUTH_TOKEN",
+    url: getRuntimeEnv("TURSO_DATABASE_URL"),
+    authToken: getRuntimeEnv("TURSO_AUTH_TOKEN"),
+    urlKey: "TURSO_DATABASE_URL",
+    tokenKey: "TURSO_AUTH_TOKEN",
   };
 }

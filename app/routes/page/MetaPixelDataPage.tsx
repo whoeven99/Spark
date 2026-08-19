@@ -232,7 +232,7 @@ export function MetaPixelDataPage() {
         <a href={eventsManagerUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("metaPixelData.openEventsManager")}
         </a>
-        <Link to={`/app/insights/performance${locationSearch}`} style={secondaryBtn}>
+        <Link to={`/app/insights/charts/performance${locationSearch}`} style={secondaryBtn}>
           {t("metaPixelData.openInsights")}
         </Link>
       </div>

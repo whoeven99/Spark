@@ -156,7 +156,7 @@ export function AdsEditPage() {
   const currentConnected = connections[platform];
 
   const connectLinks: Record<AdsEditPlatform, string> = {
-    meta: `/app/insights/performance${locationSearch}`,
+    meta: `/app/insights/charts/performance${locationSearch}`,
     tiktok: `/app/ads-catalog${locationSearch}`,
     google: `/app/ads-catalog${locationSearch}`,
   };

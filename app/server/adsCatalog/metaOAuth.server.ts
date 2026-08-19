@@ -373,7 +373,7 @@ export function buildMetaAdsOAuthReturnUrl(params: {
   request?: Request;
 }): string {
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/insights/performance",
+    path: "/app/insights/charts/performance",
     shop: params.shop,
     request: params.request,
     query: params.query,
@@ -385,7 +385,7 @@ export function buildMetaAdsOAuthReturnUrl(params: {
     readEnv("META_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/insights/performance", base.replace(/\/$/, "") || base);
+  const target = new URL("/app/insights/charts/performance", base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));

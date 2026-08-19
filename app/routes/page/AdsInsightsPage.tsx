@@ -32,7 +32,7 @@ import type {
   AdsInsightsRangeDays,
   AdsInsightsView,
 } from "../component/adsInsights/types";
-import type { AdsInsightsPageLoaderData } from "../app.insights.performance";
+import type { AdsInsightsPageLoaderData } from "../app.insights.performance.shared";
 import { formatCurrency, formatNumber, formatRoas } from "../component/adsInsights/metricsFormat";
 import type { AdsOverviewSnapshot } from "../../server/adsInsights/overview.server";
 import type { Ga4StatusResponse } from "../api.ga4.status";
@@ -849,8 +849,8 @@ export function AdsInsightsPage() {
       <PageHeaderNav
         title={t("adsInsights.pageTitle")}
         subtitle={t("adsInsights.pageSubtitle")}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        backLabel={t("insights.backToCharts")}
+        fallbackPath="/app/insights/charts"
       />
 
       <PageSurface>

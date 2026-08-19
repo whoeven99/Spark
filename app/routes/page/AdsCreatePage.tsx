@@ -139,7 +139,7 @@ function ConnectionStatus({ platform, loaderData, locationSearch, t }: Connectio
       return (
         <NotConnectedBanner
           msg={t("adsCreate.meta.notConnected")}
-          linkTo={`/app/insights/performance${locationSearch}`}
+          linkTo={`/app/insights/charts/performance${locationSearch}`}
           linkLabel={t("adsCreate.goConnectMeta")}
         />
       );

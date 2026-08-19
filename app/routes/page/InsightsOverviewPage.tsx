@@ -33,7 +33,7 @@ import {
 import { DestinationFilterBar, destinationSurfaceStyle } from "../component/shared/DestinationPage";
 import type { AdsOverviewPlatform, AdsOverviewReview, AdsOverviewSnapshot } from "../../server/adsInsights/overview.server";
 import type { GoogleAttributionOverviewResponse } from "../api.google-attribution.overview";
-import type { InsightsOverviewLoaderData } from "../app.insights._index";
+import type { InsightsOverviewLoaderData } from "../app.insights.charts._index";
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
 type TemplateStatus = "strong" | "watch" | "weak";
@@ -121,10 +121,10 @@ export function InsightsOverviewPage() {
     <div style={isMobile ? mobilePageContentStyle : analysisPageContentStyle}>
       <PageHeaderNav
         titleBarTitle={t("nav.insights")}
-        title={t("insights.title")}
-        subtitle={t("insights.subtitle")}
-        backLabel={t("insights.back")}
-        fallbackPath="/app"
+        title={t("insights.chartsTitle")}
+        subtitle={t("insights.chartsSubtitle")}
+        backLabel={t("insights.backToToday")}
+        fallbackPath="/app/today"
       />
 
       <div style={toolbarStyle(isMobile)}>
@@ -188,7 +188,7 @@ function buildPerformanceHref(
   params.set("platform", platform);
   params.set("range", String(rangeDays));
   params.delete("sandbox");
-  return `/app/insights/performance?${params.toString()}`;
+  return `/app/insights/charts/performance?${params.toString()}`;
 }
 
 function buildCatalogTasksHref(search: string): string {

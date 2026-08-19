@@ -73,9 +73,9 @@ Spark/
 | 目的地 | URL | 主要实现 |
 |---|---|---|
 | Ask | `/app` | `app._index.tsx` → `page/workspace/WorkspaceAppShellPage.tsx`，聊天与上下文工作台 |
-| Today | `/app/today` | `app.today.*`，`_index` 概览、`diagnosis` 每日诊断/ROI、`orders` 订单风险 |
+| Today | `/app/today` | `app.today.*`，`_index` 经营驾驶舱（聚合经营指标、站点健康、洞察、任务）、`diagnosis` 每日诊断/ROI、`orders` 订单风险 |
 | Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
-| Insights | `/app/insights` | `app.insights.*`：`_index` 跨平台广告总览（读库聚合，见 `adsInsights/overview.server.ts`）、`performance` 投放明细；只读页面，授权与同步仍在 Ads Catalog。旧路径 `/app/settings/ads-insights` 重定向到 `performance` |
+| Insights | `/app/insights` | `app.insights.*`：`_index` 经营报告（复用 Today 报告能力）、`charts/_index` 图表总览（当前先承接广告总览，读库聚合，见 `adsInsights/overview.server.ts`）、`charts/performance` 投放明细；只读页面，授权与同步仍在 Ads Catalog。旧路径 `/app/insights/performance` 与 `/app/settings/ads-insights` 重定向到 `charts/performance` |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
 | Settings | `/app/settings` | `app.settings.*`：`billing` 计费、`ads-create`/`ads-edit` 广告投放、`logistics` 物流、`google-analytics` GA4、`google-search-console` GSC、`pagespeed` PageSpeed Insights、`data` 历史回补、`feedback` 反馈；`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings hub 内链，不占一级导航） |
 

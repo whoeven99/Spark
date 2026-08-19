@@ -3,11 +3,9 @@
 
 interface ImportMetaEnv {
   readonly DATABASE_URL?: string;
-  readonly TURSO_TEST_DATABASE_URL?: string;
-  readonly TURSO_TEST_AUTH_TOKEN?: string;
-  readonly TURSO_PROD_DATABASE_URL?: string;
-  readonly TURSO_PROD_AUTH_TOKEN?: string;
-  readonly TURSO_TARGET?: "test" | "prod";
+  /** Spark 业务库；测/产由各部署环境各自配值 */
+  readonly TURSO_DATABASE_URL?: string;
+  readonly TURSO_AUTH_TOKEN?: string;
   /** noop | shopify（默认 shopify） */
   readonly BILLING_GATEWAY?: string;
   readonly BILLING_TEST?: string;

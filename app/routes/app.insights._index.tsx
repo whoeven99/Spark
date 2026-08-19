@@ -1,38 +1,25 @@
 /**
- * 洞察 › 总览：跨平台广告数据的只读汇总。
- * loader 直接读库聚合（不回源平台 API），区间切换走 query，刷新走 revalidate。
+ * 洞察 › Reports：经营报告入口。
+ * 直接复用 Today 已整理好的 ROI 日报能力，让洞察页聚焦“判断”而不是再造一套报表逻辑。
  */
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import type { HeadersFunction } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { parseRangeDays } from "../server/adsInsights/dateRange.server";
-import {
-  buildAdsOverview,
-  type AdsOverviewSnapshot,
-} from "../server/adsInsights/overview.server";
-import { InsightsOverviewPage } from "./page/InsightsOverviewPage";
+import { useTranslation } from "react-i18next";
+import { BusinessInsightsPage, loader } from "./app.today.insights";
 
-export type InsightsOverviewLoaderData = {
-  overview: AdsOverviewSnapshot | null;
-  failed: boolean;
-};
+export { loader };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const url = new URL(request.url);
-  const rangeDays = parseRangeDays(url.searchParams.get("range"));
+export default function AppInsightsReports() {
+  const { t } = useTranslation();
 
-  try {
-    const overview = await buildAdsOverview({ shop: session.shop, rangeDays });
-    return { overview, failed: false } satisfies InsightsOverviewLoaderData;
-  } catch (error) {
-    console.error("[insights._index] build overview failed:", error);
-    return { overview: null, failed: true } satisfies InsightsOverviewLoaderData;
-  }
-};
-
-export default function AppInsightsOverview() {
-  return <InsightsOverviewPage />;
+  return (
+    <BusinessInsightsPage
+      title={t("insights.reportsTitle")}
+      subtitle={t("insights.reportsSubtitle")}
+      backLabel={t("insights.backToToday")}
+      fallbackPath="/app/today"
+    />
+  );
 }
 
 export const headers: HeadersFunction = (headersArgs) => {
