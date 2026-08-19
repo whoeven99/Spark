@@ -301,8 +301,74 @@ function minutesSince(iso: string, baseIso: string): number {
   return Math.max(0, Math.round((Date.parse(baseIso) - Date.parse(iso)) / 60000));
 }
 
+function buildPlatformSnapshotCapability(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  overview: Awaited<ReturnType<typeof loader>>["connectionOverview"];
+  platform: AdsOverviewPlatform["platform"];
+}): ConnectionCapability | null {
+  const platform = params.overview?.platforms.find((item) => item.platform === params.platform);
+  if (!platform) return null;
+  return {
+    label: params.t("settingsShell.platformSnapshot"),
+    value: platform.snapshot
+      ? platform.snapshot.stale
+        ? params.t("settingsShell.snapshotStale")
+        : params.t("settingsShell.snapshotFresh", {
+            minutes: minutesSince(platform.snapshot.fetchedAt, params.overview!.generatedAt),
+          })
+      : params.t("settingsShell.snapshotNone"),
+    tone: platform.snapshot ? (platform.snapshot.stale ? "attention" : "ready") : "needs_setup",
+  };
+}
+
+function buildPlatformHealthCapability(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  overview: Awaited<ReturnType<typeof loader>>["connectionOverview"];
+  platform: AdsOverviewPlatform["platform"];
+}): ConnectionCapability | null {
+  const issueCount =
+    params.overview?.health.filter((item) => item.platform === params.platform && item.state !== "ok").length ?? 0;
+  return {
+    label: params.t("settingsShell.platformHealth"),
+    value:
+      issueCount > 0
+        ? params.t("settingsShell.platformHealthIssues", { count: issueCount })
+        : params.t("settingsShell.platformHealthOk"),
+    tone: issueCount > 0 ? "attention" : "ready",
+  };
+}
+
+function buildPlatformReadinessCapability(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  overview: Awaited<ReturnType<typeof loader>>["connectionOverview"];
+  channel: AdsOverviewReview["channel"];
+}): ConnectionCapability | null {
+  const review = params.overview?.reviews.find((item) => item.channel === params.channel);
+  if (!review || review.total <= 0) return null;
+  if (review.disapproved > 0) {
+    return {
+      label: params.t("settingsShell.platformReadiness"),
+      value: params.t("settingsShell.platformReadinessDisapproved", { count: review.disapproved }),
+      tone: "attention",
+    };
+  }
+  if (review.pending > 0) {
+    return {
+      label: params.t("settingsShell.platformReadiness"),
+      value: params.t("settingsShell.platformReadinessPending", { count: review.pending }),
+      tone: "pending",
+    };
+  }
+  return {
+    label: params.t("settingsShell.platformReadiness"),
+    value: params.t("settingsShell.platformReadinessHealthy"),
+    tone: "ready",
+  };
+}
+
 function buildGoogleSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
 ) {
   const capabilities: ConnectionCapability[] = [
@@ -364,7 +430,10 @@ function buildGoogleSummary(
           ? "pending"
           : "needs_setup",
     },
-  ];
+    buildPlatformSnapshotCapability({ t, overview: connectionOverview, platform: "google" }),
+    buildPlatformHealthCapability({ t, overview: connectionOverview, platform: "google" }),
+    buildPlatformReadinessCapability({ t, overview: connectionOverview, channel: "gmc" }),
+  ].filter(Boolean) as ConnectionCapability[];
 
   const readyCount = capabilities.filter((item) => item.tone === "ready").length;
   const hasPending = capabilities.some((item) => item.tone === "pending");
@@ -420,6 +489,7 @@ function buildGoogleSummary(
 
 function buildMetaSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
 ) {
   const capabilities: ConnectionCapability[] = [
@@ -449,7 +519,10 @@ function buildMetaSummary(
           ? "pending"
           : "needs_setup",
     },
-  ];
+    buildPlatformSnapshotCapability({ t, overview: connectionOverview, platform: "meta" }),
+    buildPlatformHealthCapability({ t, overview: connectionOverview, platform: "meta" }),
+    buildPlatformReadinessCapability({ t, overview: connectionOverview, channel: "meta" }),
+  ].filter(Boolean) as ConnectionCapability[];
   const readyCount = capabilities.filter((item) => item.tone === "ready").length;
   const hasPending = capabilities.some((item) => item.tone === "pending");
   return {
@@ -492,6 +565,7 @@ function buildMetaSummary(
 
 function buildTiktokSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
 ) {
   const capabilities: ConnectionCapability[] = [
@@ -515,7 +589,9 @@ function buildTiktokSummary(
         : t("settingsShell.statusNeedsSetup"),
       tone: summaries.tiktok.adsConnected ? "ready" : "needs_setup",
     },
-  ];
+    buildPlatformSnapshotCapability({ t, overview: connectionOverview, platform: "tiktok" }),
+    buildPlatformHealthCapability({ t, overview: connectionOverview, platform: "tiktok" }),
+  ].filter(Boolean) as ConnectionCapability[];
   const readyCount = capabilities.filter((item) => item.tone === "ready").length;
   const hasPending = capabilities.some((item) => item.tone === "pending");
   return {
@@ -613,9 +689,9 @@ export default function SettingsIndex() {
   useFeatureView("settings");
 
   const connectionCards = [
-    buildGoogleSummary(summaries, t),
-    buildMetaSummary(summaries, t),
-    buildTiktokSummary(summaries, t),
+    buildGoogleSummary(summaries, connectionOverview, t),
+    buildMetaSummary(summaries, connectionOverview, t),
+    buildTiktokSummary(summaries, connectionOverview, t),
     buildLogisticsSummary(summaries, t),
   ];
   const connectedPlatforms = connectionOverview?.platforms.filter((item) => item.connected).length ?? 0;
