@@ -30,6 +30,13 @@ import {
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
+import type { AdsHealthCheck, AdsHealthState } from "../server/adsCatalog/adsHealth.server";
+import {
+  buildAdsOverview,
+  type AdsOverviewConnection,
+  type AdsOverviewPlatform,
+  type AdsOverviewReview,
+} from "../server/adsInsights/overview.server";
 import { getGa4Credential, getGa4Pending } from "../server/googleAnalytics/ga4Credentials.server";
 import { getGscCredential, getGscPending } from "../server/googleSearchConsole/gscCredentials.server";
 import { getFedexCredential, getSfCredential } from "../server/logisticsCredentialStore.server";
@@ -59,6 +66,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     gscPending,
     fedex,
     sf,
+    connectionOverview,
   ] = await Promise.all([
     loadBillingContext(shop),
     getFacebookCatalogCredential(shop),
@@ -78,6 +86,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getGscPending(shop),
     getFedexCredential(shop),
     getSfCredential(shop),
+    buildAdsOverview({ shop, rangeDays: 7 }).catch((error) => {
+      console.error("[settings._index] buildAdsOverview failed:", error);
+      return null;
+    }),
   ]);
 
   const currentPlan =
@@ -125,6 +137,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         totalCount: 2,
       },
     },
+    connectionOverview,
   };
 };
 
@@ -255,6 +268,38 @@ type ConnectionChannelCardProps = {
   links: ConnectionLink[];
   onNavigate: (to: string) => void;
 };
+
+const PLATFORM_LABEL: Record<AdsOverviewPlatform["platform"], string> = {
+  meta: "Meta",
+  google: "Google",
+  tiktok: "TikTok",
+};
+
+function formatInteger(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function formatMoney(value: number, currency: string | null): string {
+  const amount = value.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  return currency ? `${currency} ${amount}` : amount;
+}
+
+function formatRatio(value: number | null, suffix: string): string {
+  if (value === null) return "—";
+  return `${value.toFixed(2)}${suffix}`;
+}
+
+function formatTimestamp(iso: string | null): string | null {
+  if (!iso) return null;
+  return iso.replace("T", " ").slice(0, 16);
+}
+
+function minutesSince(iso: string, baseIso: string): number {
+  return Math.max(0, Math.round((Date.parse(baseIso) - Date.parse(iso)) / 60000));
+}
 
 function buildGoogleSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
@@ -564,7 +609,7 @@ export default function SettingsIndex() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
-  const { summaries } = useLoaderData<typeof loader>();
+  const { summaries, connectionOverview } = useLoaderData<typeof loader>();
   useFeatureView("settings");
 
   const connectionCards = [
@@ -573,6 +618,14 @@ export default function SettingsIndex() {
     buildTiktokSummary(summaries, t),
     buildLogisticsSummary(summaries, t),
   ];
+  const connectedPlatforms = connectionOverview?.platforms.filter((item) => item.connected).length ?? 0;
+  const freshSnapshots =
+    connectionOverview?.platforms.filter((item) => item.connected && item.snapshot && !item.snapshot.stale)
+      .length ?? 0;
+  const healthAttentionCount =
+    connectionOverview?.health.filter((item) => item.state !== "ok").length ?? 0;
+  const disapprovedProducts =
+    connectionOverview?.reviews.reduce((sum, review) => sum + review.disapproved, 0) ?? 0;
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -623,6 +676,81 @@ export default function SettingsIndex() {
             />
           ))}
         </div>
+
+        {connectionOverview ? (
+          <div style={diagnosticsWrapStyle}>
+            <div style={diagnosticsHeaderStyle}>
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={diagnosticsTitleStyle}>{t("settingsShell.diagnosticsTitle")}</div>
+                <div style={diagnosticsSubtitleStyle}>{t("settingsShell.diagnosticsSubtitle")}</div>
+              </div>
+              <span style={hubBadgeStyle}>{t("settingsShell.diagnosticsBadge")}</span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
+                gap: "0.75rem",
+              }}
+            >
+              <MetricCard
+                label={t("settingsShell.metricPlatforms")}
+                value={t("settingsShell.metricPlatformsValue", {
+                  connected: connectedPlatforms,
+                  total: connectionOverview.platforms.length,
+                })}
+              />
+              <MetricCard
+                label={t("settingsShell.metricSnapshots")}
+                value={t("settingsShell.metricSnapshotsValue", {
+                  ready: freshSnapshots,
+                  total: connectedPlatforms,
+                })}
+              />
+              <MetricCard
+                label={t("settingsShell.metricHealth")}
+                value={String(healthAttentionCount)}
+              />
+              <MetricCard
+                label={t("settingsShell.metricReadiness")}
+                value={formatInteger(disapprovedProducts)}
+              />
+            </div>
+
+            <div style={diagnosticsSectionStyle}>
+              <div style={diagnosticsTitleStyle}>{t("settingsShell.byPlatformTitle")}</div>
+              <div style={platformGridStyle(isMobile)}>
+                {connectionOverview.platforms.map((platform) => (
+                  <SettingsPlatformCard
+                    key={platform.platform}
+                    item={platform}
+                    generatedAt={connectionOverview.generatedAt}
+                    onNavigate={navigate}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={diagnosticsSectionStyle}>
+              <div style={diagnosticsTitleStyle}>{t("settingsShell.integrationHealthTitle")}</div>
+              <HealthChecksTable checks={connectionOverview.health} t={t} />
+            </div>
+
+            <div style={diagnosticsSectionStyle}>
+              <div style={diagnosticsTitleStyle}>{t("settingsShell.productReadinessTitle")}</div>
+              <ReviewSnapshotTable reviews={connectionOverview.reviews} t={t} />
+            </div>
+
+            <div style={diagnosticsSectionStyle}>
+              <div style={diagnosticsTitleStyle}>{t("settingsShell.connectionSnapshotTitle")}</div>
+              <ConnectionSnapshotTable connections={connectionOverview.connections} t={t} />
+            </div>
+          </div>
+        ) : (
+          <div style={diagnosticsEmptyStyle}>{t("settingsShell.diagnosticsUnavailable")}</div>
+        )}
       </PageSurface>
 
       {SETTINGS_SECTIONS.slice(1).map((section) => (
@@ -687,6 +815,212 @@ function ConnectionChannelCard({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={diagnosticMetricCardStyle}>
+      <div style={diagnosticMetricLabelStyle}>{label}</div>
+      <div style={diagnosticMetricValueStyle}>{value}</div>
+    </div>
+  );
+}
+
+function SettingsPlatformCard({
+  item,
+  generatedAt,
+  onNavigate,
+  t,
+}: {
+  item: AdsOverviewPlatform;
+  generatedAt: string;
+  onNavigate: (to: string) => void;
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  const managePath =
+    item.platform === "google"
+      ? "/app/ads-catalog?tab=credentials"
+      : item.platform === "meta"
+        ? "/app/ads-catalog?tab=credentials"
+        : "/app/ads-catalog?tab=credentials";
+  const insightsPath = `/app/insights/performance?platform=${item.platform}`;
+
+  return (
+    <div style={connectionCardStyle}>
+      <div style={connectionHeaderStyle}>
+        <div style={{ display: "grid", gap: 4 }}>
+          <div style={connectionTitleStyle}>{PLATFORM_LABEL[item.platform]}</div>
+          <div style={connectionDescriptionStyle}>
+            {item.accountName || item.accountId || t("settingsShell.platformNoAccount")}
+          </div>
+        </div>
+        <span style={channelBadgeStyle(item.connected ? "ready" : "needs_setup")}>
+          {item.connected ? t("settingsShell.statusConnected") : t("settingsShell.statusNeedsSetup")}
+        </span>
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={capabilityRowStyle}>
+          <span style={capabilityLabelStyle}>{t("settingsShell.platformSnapshot")}</span>
+          <span style={capabilityValueStyle(item.snapshot && !item.snapshot.stale ? "ready" : "attention")}>
+            {item.snapshot
+              ? item.snapshot.stale
+                ? t("settingsShell.snapshotStale")
+                : t("settingsShell.snapshotFresh", {
+                    minutes: minutesSince(item.snapshot.fetchedAt, generatedAt),
+                  })
+              : t("settingsShell.snapshotNone")}
+          </span>
+        </div>
+        <div style={capabilityRowStyle}>
+          <span style={capabilityLabelStyle}>{t("settingsShell.platformSpend")}</span>
+          <span style={capabilityValueStyle("ready")}>
+            {item.totals ? formatMoney(item.totals.spend, item.currencyCode) : "—"}
+          </span>
+        </div>
+        <div style={capabilityRowStyle}>
+          <span style={capabilityLabelStyle}>{t("settingsShell.platformRoas")}</span>
+          <span style={capabilityValueStyle("ready")}>
+            {item.totals ? formatRatio(item.totals.roas, "x") : "—"}
+          </span>
+        </div>
+      </div>
+      <div style={connectionLinksStyle}>
+        <button type="button" onClick={() => onNavigate(managePath)} style={connectionLinkButtonStyle(true)}>
+          {t("settingsShell.manageConnection")}
+        </button>
+        <button type="button" onClick={() => onNavigate(insightsPath)} style={connectionLinkButtonStyle(false)}>
+          {t("settingsShell.openInsights")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HealthChecksTable({
+  checks,
+  t,
+}: {
+  checks: AdsHealthCheck[];
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  return (
+    <div style={tableWrapStyle}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>{t("insights.health.colPlatform")}</th>
+            <th style={thStyle}>{t("insights.health.colItem")}</th>
+            <th style={thStyle}>{t("insights.health.colState")}</th>
+            <th style={thStyle}>{t("insights.health.colDetail")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {checks.map((check, index) => {
+            const prev = checks[index - 1];
+            const isGroupStart = index === 0 || prev?.platform !== check.platform;
+            return (
+              <tr key={check.key}>
+                <td style={{ ...tdStyle, fontWeight: isGroupStart ? 700 : 400 }}>
+                  {isGroupStart ? PLATFORM_LABEL[check.platform] : ""}
+                </td>
+                <td style={tdStyle}>{t(`insights.health.item.${check.key}`)}</td>
+                <td style={tdStyle}>
+                  <span style={healthStatePillStyle(check.state)}>
+                    {t(`insights.health.state.${check.state}`)}
+                  </span>
+                </td>
+                <td style={tdMetaStyle}>
+                  {t(`insights.health.detail.${check.detailCode}`)}
+                  {check.reference ? ` · ${check.reference}` : ""}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReviewSnapshotTable({
+  reviews,
+  t,
+}: {
+  reviews: AdsOverviewReview[];
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  const hasData = reviews.some((review) => review.total > 0);
+  if (!hasData) {
+    return <div style={diagnosticsEmptyStyle}>{t("insights.reviewEmpty")}</div>;
+  }
+
+  return (
+    <div style={tableWrapStyle}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>{t("insights.reviewChannel")}</th>
+            <th style={thNumericStyle}>{t("insights.reviewTotal")}</th>
+            <th style={thNumericStyle}>{t("insights.reviewApproved")}</th>
+            <th style={thNumericStyle}>{t("insights.reviewPending")}</th>
+            <th style={thNumericStyle}>{t("insights.reviewDisapproved")}</th>
+            <th style={thStyle}>{t("insights.reviewLastChecked")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {reviews.map((review) => (
+            <tr key={review.channel}>
+              <td style={tdStyle}>
+                {review.channel === "gmc"
+                  ? t("insights.reviewChannelGmc")
+                  : t("insights.reviewChannelMeta")}
+              </td>
+              <td style={tdNumericStyle}>{formatInteger(review.total)}</td>
+              <td style={tdNumericStyle}>{formatInteger(review.approved)}</td>
+              <td style={tdNumericStyle}>{formatInteger(review.pending)}</td>
+              <td style={tdNumericStyle}>{formatInteger(review.disapproved)}</td>
+              <td style={tdMetaStyle}>{formatTimestamp(review.lastCheckedAt) ?? t("insights.reviewNever")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ConnectionSnapshotTable({
+  connections,
+  t,
+}: {
+  connections: AdsOverviewConnection[];
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  return (
+    <div style={tableWrapStyle}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>{t("insights.connectionPlatform")}</th>
+            <th style={thStyle}>{t("insights.connectionStatus")}</th>
+            <th style={thStyle}>{t("insights.connectionAccount")}</th>
+            <th style={thStyle}>{t("insights.connectionUpdatedAt")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {connections.map((connection) => (
+            <tr key={connection.platform}>
+              <td style={tdMonoStyle}>{connection.platform}</td>
+              <td style={tdStyle}>
+                {connection.connected ? t("settingsShell.statusConnected") : t("settingsShell.statusNeedsSetup")}
+              </td>
+              <td style={tdMetaStyle}>{connection.externalAccountId ?? "—"}</td>
+              <td style={tdMetaStyle}>{formatTimestamp(connection.updatedAt) ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -819,6 +1153,154 @@ const channelBadgeStyle = (
           : pageColorTokens.borderSubtle
   }`,
 });
+
+const diagnosticsWrapStyle: CSSProperties = {
+  display: "grid",
+  gap: "1rem",
+  marginTop: "1rem",
+  paddingTop: "1rem",
+  borderTop: `1px solid ${pageColorTokens.divider}`,
+};
+
+const diagnosticsHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "0.85rem",
+};
+
+const diagnosticsTitleStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const diagnosticsSubtitleStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
+};
+
+const diagnosticsSectionStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.7rem",
+};
+
+const diagnosticsEmptyStyle: CSSProperties = {
+  padding: "0.85rem 0.95rem",
+  borderRadius: 12,
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textSecondary,
+  fontSize: 12,
+};
+
+const diagnosticMetricCardStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  padding: "0.85rem 0.95rem",
+  display: "grid",
+  gap: "0.3rem",
+};
+
+const diagnosticMetricLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: pageColorTokens.textSecondary,
+};
+
+const diagnosticMetricValueStyle: CSSProperties = {
+  fontSize: 16,
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const platformGridStyle = (isMobile: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+  gap: "0.75rem",
+});
+
+const healthStateTokens: Record<AdsHealthState, { color: string; background: string; border: string }> = {
+  ok: {
+    color: pageColorTokens.brandGreenDark,
+    background: pageColorTokens.brandGreenLight,
+    border: "rgba(0, 166, 124, 0.28)",
+  },
+  warning: {
+    color: "#8a5a00",
+    background: "#fff7e0",
+    border: "rgba(185, 137, 0, 0.3)",
+  },
+  missing: {
+    color: pageColorTokens.textSecondary,
+    background: pageColorTokens.surfaceMuted,
+    border: pageColorTokens.borderSubtle,
+  },
+  unknown: {
+    color: pageColorTokens.textSecondary,
+    background: pageColorTokens.surfaceMuted,
+    border: pageColorTokens.borderSubtle,
+  },
+};
+
+const healthStatePillStyle = (state: AdsHealthState): CSSProperties => {
+  const token = healthStateTokens[state];
+  return {
+    display: "inline-block",
+    padding: "0.12rem 0.45rem",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    color: token.color,
+    background: token.background,
+    border: `1px solid ${token.border}`,
+  };
+};
+
+const tableWrapStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  overflowX: "auto",
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 13,
+};
+
+const thStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "0.6rem 0.85rem",
+  fontSize: 11,
+  fontWeight: 750,
+  letterSpacing: "0.03em",
+  textTransform: "uppercase",
+  color: pageColorTokens.textSecondary,
+  borderBottom: `1px solid ${pageColorTokens.divider}`,
+  whiteSpace: "nowrap",
+};
+
+const thNumericStyle: CSSProperties = { ...thStyle, textAlign: "right" };
+
+const tdStyle: CSSProperties = {
+  padding: "0.6rem 0.85rem",
+  color: pageColorTokens.textBody,
+  borderBottom: `1px solid ${pageColorTokens.divider}`,
+};
+
+const tdNumericStyle: CSSProperties = { ...tdStyle, textAlign: "right" };
+
+const tdMetaStyle: CSSProperties = {
+  ...tdStyle,
+  color: pageColorTokens.textSecondary,
+  fontSize: 12,
+};
+
+const tdMonoStyle: CSSProperties = {
+  ...tdStyle,
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: 12,
+};
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

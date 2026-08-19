@@ -1,24 +1,24 @@
 /**
  * 洞察 › 总览 UI。
  *
- * 布局：区间工具条 → 合并 KPI → 平台明细卡 → 商品审核 → 连接与凭证。
+ * 布局：区间工具条 → 合并 KPI → 客户分析模板 → 下一步分析路径 → 商品审核。
  * 全页只读：任何写操作都通过链接跳回 Ads Catalog / 投放明细，不在这里发起。
  */
 import { useEffect, type CSSProperties } from "react";
 import {
   useFetcher,
   useLoaderData,
-  useLocation,
   useNavigate,
   useRevalidator,
   useSearchParams,
 } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
+import { appendEmbeddedSearchToPath } from "../../lib/embeddedLocationSearch";
 import {
   analysisPageContentStyle,
   PageHeaderNav,
-  PageMetricCard,
   PageSurface,
   mobilePageContentStyle,
   pageColorTokens,
@@ -30,22 +30,10 @@ import {
   pageMetricValueStyle,
   PageSectionHeader,
 } from "./pageUiStyles";
-import { DestinationFilterBar, destinationSurfaceStyle } from "../component/shared/DestinationPage";
-import type {
-  AdsOverviewConnection,
-  AdsOverviewPlatform,
-  AdsOverviewReview,
-  AdsOverviewSnapshot,
-} from "../../server/adsInsights/overview.server";
-import type { AdsHealthCheck, AdsHealthState } from "../../server/adsCatalog/adsHealth.server";
+import { DestinationFilterBar } from "../component/shared/DestinationPage";
+import type { AdsOverviewPlatform, AdsOverviewReview, AdsOverviewSnapshot } from "../../server/adsInsights/overview.server";
 import type { GoogleAttributionOverviewResponse } from "../api.google-attribution.overview";
 import type { InsightsOverviewLoaderData } from "../app.insights._index";
-
-const PLATFORM_LABEL: Record<AdsOverviewPlatform["platform"], string> = {
-  meta: "Meta",
-  google: "Google",
-  tiktok: "TikTok",
-};
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
 type TemplateStatus = "strong" | "watch" | "weak";
@@ -85,18 +73,9 @@ function formatPercent(value: number | null): string {
   return `${value.toFixed(2)}%`;
 }
 
-/** 以服务端 generatedAt 为基准算相对时间，避免 SSR / CSR 水合不一致。 */
-function minutesSince(iso: string, baseIso: string): number {
-  return Math.max(0, Math.round((Date.parse(baseIso) - Date.parse(iso)) / 60000));
-}
-
 function formatTimestamp(iso: string | null): string | null {
   if (!iso) return null;
   return iso.replace("T", " ").slice(0, 16);
-}
-
-function countAttentionIssues(checks: AdsHealthCheck[]): number {
-  return checks.filter((check) => check.state !== "ok").length;
 }
 
 function statusPriority(status: TemplateStatus): number {
@@ -116,19 +95,21 @@ export function InsightsOverviewPage() {
   const { overview, failed } = useLoaderData<InsightsOverviewLoaderData>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
-  const location = useLocation();
   const navigate = useNavigate();
   const attributionFetcher = useFetcher<GoogleAttributionOverviewResponse>();
+  const embeddedSearch = useEmbeddedLocationSearch();
 
   const rangeDays = overview?.rangeDays ?? 7;
   const refreshing = revalidator.state !== "idle";
 
   useEffect(() => {
     if (!overview) return;
-    attributionFetcher.load(`/api/google-attribution/overview?range=${rangeDays}`);
+    attributionFetcher.load(
+      appendEmbeddedSearchToPath(`/api/google-attribution/overview?range=${rangeDays}`, embeddedSearch),
+    );
     // fetcher identity is stable enough here; we only want to react to overview/range changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overview, rangeDays]);
+  }, [overview, rangeDays, embeddedSearch]);
 
   const handleRangeChange = (next: string) => {
     const params = new URLSearchParams(searchParams);
@@ -187,11 +168,11 @@ export function InsightsOverviewPage() {
           attributionData={attributionFetcher.data}
           attributionLoading={attributionFetcher.state !== "idle"}
           onOpenPerformance={(platform) =>
-            navigate(buildPerformanceHref(platform, rangeDays, location.search))
+            navigate(buildPerformanceHref(platform, rangeDays, embeddedSearch))
           }
-          onOpenCatalog={() => navigate(`/app/ads-catalog${location.search}`)}
-          onOpenCatalogTasks={() => navigate(buildCatalogTasksHref(location.search))}
-          onOpenSettings={() => navigate("/app/settings")}
+          onOpenCatalog={() => navigate(appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch))}
+          onOpenCatalogTasks={() => navigate(buildCatalogTasksHref(embeddedSearch))}
+          onOpenSettings={() => navigate(appendEmbeddedSearchToPath("/app/settings", embeddedSearch))}
         />
       ) : null}
     </div>
@@ -240,13 +221,7 @@ function OverviewBody({
   const { t } = useTranslation();
   const anyConnected = overview.platforms.some((item) => item.connected);
   const connectedCount = overview.platforms.filter((item) => item.connected).length;
-  const attentionCount = countAttentionIssues(overview.health);
   const disapprovedTotal = overview.reviews.reduce((sum, review) => sum + review.disapproved, 0);
-  const reviewedTotal = overview.reviews.reduce((sum, review) => sum + review.total, 0);
-  const freshSnapshotCount = overview.platforms.filter(
-    (item) => item.connected && item.snapshot && !item.snapshot.stale,
-  ).length;
-  const readyConnections = overview.connections.filter((item) => item.connected).length;
   const attributionOk = attributionData && attributionData.ok ? attributionData : null;
   const linkedCampaignShare =
     attributionOk && attributionOk.campaigns.length > 0
@@ -254,7 +229,6 @@ function OverviewBody({
           attributionOk.campaigns.length) *
         100
       : null;
-  const disapprovedRate = reviewedTotal > 0 ? (disapprovedTotal / reviewedTotal) * 100 : null;
   const templateModules: TemplateModule[] = [
     buildEfficiencyModule({
       t,
@@ -263,22 +237,6 @@ function OverviewBody({
       spend: overview.totals.spend,
       value: overview.totals.conversionsValue,
       currencyCode: overview.currencyCode,
-    }),
-    buildCoverageModule({
-      t,
-      connectedCount,
-      totalPlatforms: overview.platforms.length,
-      freshSnapshotCount,
-      attentionCount,
-      readyConnections,
-      totalConnections: overview.connections.length,
-    }),
-    buildReadinessModule({
-      t,
-      disapprovedTotal,
-      disapprovedRate,
-      attentionCount,
-      reviewedTotal,
     }),
     buildAttributionModule({
       t,
@@ -302,19 +260,6 @@ function OverviewBody({
     linkedCampaignShare,
     focusModule: primaryFocusModule,
   });
-  const overviewFooter = [
-    t("insights.overviewFooterWindow", {
-      start: overview.dateStart,
-      end: overview.dateEnd,
-    }),
-    t("insights.overviewFooterGenerated", {
-      time: formatTimestamp(overview.generatedAt) ?? overview.generatedAt,
-    }),
-    overview.mixedCurrency ? t("insights.mixedCurrencyHint") : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   if (!anyConnected) {
     return (
       <div style={pageEmptyStateStyle}>
@@ -331,47 +276,6 @@ function OverviewBody({
 
   return (
     <>
-      <PageSurface>
-        <PageSectionHeader
-          title={t("insights.overviewTitle")}
-          subtitle={t("insights.overviewSubtitle")}
-          badge={
-            <span style={summaryBadgeStyle(attentionCount > 0)}>
-              {attentionCount > 0
-                ? t("insights.overviewAttentionBadge", { count: attentionCount })
-                : t("insights.overviewHealthyBadge")}
-            </span>
-          }
-        />
-        <PageMetricCard
-          metrics={[
-            {
-              label: t("insights.overviewConnectedPlatforms"),
-              value: t("insights.overviewConnectedPlatformsValue", {
-                connected: connectedCount,
-                total: overview.platforms.length,
-              }),
-            },
-            {
-              label: t("insights.overviewAttention"),
-              value: String(attentionCount),
-            },
-            {
-              label: t("insights.overviewDisapproved"),
-              value: formatInteger(disapprovedTotal),
-            },
-            {
-              label: t("insights.overviewSnapshots"),
-              value: t("insights.overviewSnapshotsValue", {
-                ready: freshSnapshotCount,
-                total: connectedCount,
-              }),
-            },
-          ]}
-          footer={<span style={pageHintTextStyle}>{overviewFooter}</span>}
-        />
-      </PageSurface>
-
       <PageSurface>
         <PageSectionHeader
           title={t("insights.kpiSectionTitle")}
@@ -488,51 +392,20 @@ function OverviewBody({
             body={t("insights.analysisCatalogBody")}
             footnote={t("insights.analysisCatalogFootnote", {
               issues: disapprovedTotal,
-              pending: attentionCount,
+              pending: disapprovedTotal,
             })}
             cta={t("insights.analysisOpenCatalogTasks")}
             onClick={onOpenCatalogTasks}
           />
           <AnalysisActionCard
-            title={t("insights.analysisConnectionsTitle")}
-            body={t("insights.analysisConnectionsBody")}
-            footnote={t("insights.analysisConnectionsFootnote", {
-              connected: readyConnections,
-              total: overview.connections.length,
-            })}
-            cta={t("insights.analysisOpenConnections")}
+            title={t("insights.analysisSettingsTitle")}
+            body={t("insights.analysisSettingsBody")}
+            footnote={t("insights.analysisSettingsFootnote")}
+            cta={t("insights.analysisOpenSettings")}
             onClick={onOpenSettings}
           />
         </div>
       </PageSurface>
-
-      <PageSurface>
-        <PageSectionHeader
-          title={t("insights.platformSectionTitle")}
-          subtitle={t("insights.platformSectionSubtitle")}
-          badge={
-            <span style={sectionBadgeStyle}>
-              {t("insights.platformSectionBadge", {
-                connected: connectedCount,
-                total: overview.platforms.length,
-              })}
-            </span>
-          }
-        />
-        <div style={platformGridStyle(isMobile)}>
-          {overview.platforms.map((item) => (
-            <PlatformCard
-              key={item.platform}
-              item={item}
-              generatedAt={overview.generatedAt}
-              onOpenPerformance={() => onOpenPerformance(item.platform)}
-              onOpenCatalog={onOpenCatalog}
-            />
-          ))}
-        </div>
-      </PageSurface>
-
-      <HealthSection checks={overview.health} onOpenCatalog={onOpenCatalog} />
 
       <PageSurface>
         <PageSectionHeader
@@ -547,22 +420,6 @@ function OverviewBody({
           }
         />
         <ReviewTable reviews={overview.reviews} />
-      </PageSurface>
-
-      <PageSurface>
-        <PageSectionHeader
-          title={t("insights.connectionSectionTitle")}
-          subtitle={t("insights.connectionSectionSubtitle")}
-          badge={
-            <span style={sectionBadgeStyle}>
-              {t("insights.connectionBadge", {
-                connected: readyConnections,
-                total: overview.connections.length,
-              })}
-            </span>
-          }
-        />
-        <ConnectionTable connections={overview.connections} onOpenCatalog={onOpenCatalog} />
       </PageSurface>
     </>
   );
@@ -631,213 +488,6 @@ function MetricTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlatformCard({
-  item,
-  generatedAt,
-  onOpenPerformance,
-  onOpenCatalog,
-}: {
-  item: AdsOverviewPlatform;
-  generatedAt: string;
-  onOpenPerformance: () => void;
-  onOpenCatalog: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <div style={{ ...destinationSurfaceStyle, padding: "1rem", display: "grid", gap: "0.7rem" }}>
-      <div style={cardHeadStyle}>
-        <span style={cardTitleStyle}>{PLATFORM_LABEL[item.platform]}</span>
-        <span style={statusPillStyle(item.connected)}>
-          {item.connected ? t("insights.connected") : t("insights.notConnected")}
-        </span>
-      </div>
-
-      {item.connected ? (
-        <>
-          <span style={cardMetaStyle}>{item.accountName || item.accountId || "—"}</span>
-          {item.totals ? (
-            <dl style={cardMetricListStyle}>
-              <CardMetric
-                label={t("insights.metricSpend")}
-                value={formatMoney(item.totals.spend, item.currencyCode)}
-              />
-              <CardMetric
-                label={t("insights.metricRoas")}
-                value={formatRatio(item.totals.roas, "x")}
-              />
-              <CardMetric
-                label={t("insights.metricConversions")}
-                value={formatInteger(item.totals.conversions)}
-              />
-              <CardMetric
-                label={t("insights.metricCtr")}
-                value={formatPercent(item.totals.ctr)}
-              />
-            </dl>
-          ) : (
-            <span style={cardMetaStyle}>{t("insights.noMetrics")}</span>
-          )}
-          <span style={cardFootnoteStyle}>
-            {t("insights.structureCounts", {
-              campaign: item.entityCounts.campaign,
-              adSet: item.entityCounts.adSet,
-              ad: item.entityCounts.ad,
-            })}
-          </span>
-          <span style={cardFootnoteStyle}>
-            {item.snapshot
-              ? item.snapshot.stale
-                ? t("insights.snapshotStale")
-                : t("insights.snapshotFresh", {
-                    minutes: minutesSince(item.snapshot.fetchedAt, generatedAt),
-                  })
-              : t("insights.snapshotNone")}
-          </span>
-          <button type="button" style={secondaryButtonStyle} onClick={onOpenPerformance}>
-            {t("insights.openPerformance")}
-          </button>
-        </>
-      ) : (
-        <>
-          <span style={cardMetaStyle}>{t("insights.notConnectedHint")}</span>
-          <button type="button" style={secondaryButtonStyle} onClick={onOpenCatalog}>
-            {t("insights.connectCta")}
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function CardMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "grid", gap: "0.15rem" }}>
-      <dt style={cardMetricLabelStyle}>{label}</dt>
-      <dd style={cardMetricValueStyle}>{value}</dd>
-    </div>
-  );
-}
-
-type LinkProbeResponse = {
-  ok: boolean;
-  state: "not_linked" | "pending" | "linked" | "failed" | null;
-  invitationStatus?: string | null;
-  message?: string;
-};
-
-/**
- * GMC↔Ads 关联状态只存在于 Google Ads 侧，loader 拿不到，
- * 这里把异步探测结果合并回那一行；探测未回来时保持「探测中」。
- */
-function applyLinkProbe(
-  check: AdsHealthCheck,
-  probe: LinkProbeResponse | undefined,
-): AdsHealthCheck {
-  if (check.key !== "gmcAdsLink" || check.state !== "unknown") return check;
-  if (!probe) return check;
-  if (!probe.ok || probe.state === null) {
-    return { ...check, detailCode: "linkProbeFailed" };
-  }
-  switch (probe.state) {
-    case "linked":
-      return { ...check, state: "ok", detailCode: "linkLinked" };
-    case "pending":
-      return { ...check, state: "warning", detailCode: "linkPending" };
-    case "not_linked":
-      return { ...check, state: "warning", detailCode: "linkNotLinked" };
-    case "failed":
-      return { ...check, state: "warning", detailCode: "linkFailed" };
-    default: {
-      const exhaustive: never = probe.state;
-      return exhaustive;
-    }
-  }
-}
-
-function HealthSection({
-  checks,
-  onOpenCatalog,
-}: {
-  checks: AdsHealthCheck[];
-  onOpenCatalog: () => void;
-}) {
-  const { t } = useTranslation();
-  const linkFetcher = useFetcher<LinkProbeResponse>();
-  const needsProbe = checks.some(
-    (check) => check.key === "gmcAdsLink" && check.state === "unknown",
-  );
-
-  useEffect(() => {
-    if (!needsProbe) return;
-    if (linkFetcher.state !== "idle" || linkFetcher.data) return;
-    linkFetcher.load("/api/ads-overview/link-status");
-  }, [needsProbe, linkFetcher]);
-
-  const resolved = checks.map((check) => applyLinkProbe(check, linkFetcher.data));
-  const pendingCount = resolved.filter((check) => check.state === "warning").length;
-
-  return (
-    <PageSurface>
-      <PageSectionHeader
-        title={t("insights.health.sectionTitle")}
-        subtitle={t("insights.health.sectionSubtitle")}
-        badge={
-          <span style={healthBadgeStyle(pendingCount > 0)}>
-            {pendingCount > 0
-              ? t("insights.health.pendingBadge", { count: pendingCount })
-              : t("insights.health.allGood")}
-          </span>
-        }
-      />
-      <div style={tableWrapStyle}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>{t("insights.health.colPlatform")}</th>
-              <th style={thStyle}>{t("insights.health.colItem")}</th>
-              <th style={thStyle}>{t("insights.health.colState")}</th>
-              <th style={thStyle}>{t("insights.health.colDetail")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {resolved.map((check, index) => {
-              // 同平台只在首行显示平台名，读起来像分组而不是重复列。
-              const isGroupStart = index === 0 || resolved[index - 1]!.platform !== check.platform;
-              return (
-                <tr key={check.key}>
-                  <td style={{ ...tdStyle, fontWeight: isGroupStart ? 700 : 400 }}>
-                    {isGroupStart ? PLATFORM_LABEL[check.platform] : ""}
-                  </td>
-                  <td style={tdStyle}>{t(`insights.health.item.${check.key}`)}</td>
-                  <td style={tdStyle}>
-                    <span style={healthStatePillStyle(check.state)}>
-                      {t(`insights.health.state.${check.state}`)}
-                    </span>
-                  </td>
-                  <td style={tdMetaStyle}>
-                    {t(`insights.health.detail.${check.detailCode}`)}
-                    {check.reference ? ` · ${check.reference}` : ""}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {pendingCount > 0 ? (
-        <button
-          type="button"
-          style={{ ...secondaryButtonStyle, marginTop: "0.75rem" }}
-          onClick={onOpenCatalog}
-        >
-          {t("insights.health.fixCta")}
-        </button>
-      ) : null}
-    </PageSurface>
-  );
-}
-
 function ReviewTable({ reviews }: { reviews: AdsOverviewReview[] }) {
   const { t } = useTranslation();
   const hasData = reviews.some((review) => review.total > 0);
@@ -890,48 +540,6 @@ function ReviewTable({ reviews }: { reviews: AdsOverviewReview[] }) {
   );
 }
 
-function ConnectionTable({
-  connections,
-  onOpenCatalog,
-}: {
-  connections: AdsOverviewConnection[];
-  onOpenCatalog: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <div style={{ display: "grid", gap: "0.75rem" }}>
-      <div style={tableWrapStyle}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>{t("insights.connectionPlatform")}</th>
-              <th style={thStyle}>{t("insights.connectionStatus")}</th>
-              <th style={thStyle}>{t("insights.connectionAccount")}</th>
-              <th style={thStyle}>{t("insights.connectionUpdatedAt")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {connections.map((connection) => (
-              <tr key={connection.platform}>
-                <td style={tdMonoStyle}>{connection.platform}</td>
-                <td style={tdStyle}>
-                  {connection.connected ? t("insights.connected") : t("insights.notConnected")}
-                </td>
-                <td style={tdMetaStyle}>{connection.externalAccountId ?? "—"}</td>
-                <td style={tdMetaStyle}>{formatTimestamp(connection.updatedAt) ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <button type="button" style={secondaryButtonStyle} onClick={onOpenCatalog}>
-        {t("insights.manageConnections")}
-      </button>
-    </div>
-  );
-}
-
 function buildEfficiencyModule(params: {
   t: ReturnType<typeof useTranslation>["t"];
   roas: number | null;
@@ -971,107 +579,6 @@ function buildEfficiencyModule(params: {
         : status === "watch"
           ? t("insights.templateEfficiencyActionWatch")
           : t("insights.templateEfficiencyActionWeak"),
-    status,
-  };
-}
-
-function buildCoverageModule(params: {
-  t: ReturnType<typeof useTranslation>["t"];
-  connectedCount: number;
-  totalPlatforms: number;
-  freshSnapshotCount: number;
-  attentionCount: number;
-  readyConnections: number;
-  totalConnections: number;
-}): TemplateModule {
-  const {
-    t,
-    connectedCount,
-    totalPlatforms,
-    freshSnapshotCount,
-    attentionCount,
-    readyConnections,
-    totalConnections,
-  } = params;
-  const status: TemplateStatus =
-    connectedCount >= 2 && freshSnapshotCount === connectedCount && attentionCount === 0
-      ? "strong"
-      : connectedCount >= 1 && readyConnections >= Math.ceil(totalConnections / 2)
-        ? "watch"
-        : "weak";
-
-  return {
-    key: "coverage",
-    title: t("insights.templateCoverageTitle"),
-    summary:
-      status === "strong"
-        ? t("insights.templateCoverageSummaryStrong")
-        : status === "watch"
-          ? t("insights.templateCoverageSummaryWatch")
-          : t("insights.templateCoverageSummaryWeak"),
-    benchmark: t("insights.templateCoverageBenchmark"),
-    evidence: [
-      t("insights.templateEvidencePlatforms", {
-        connected: connectedCount,
-        total: totalPlatforms,
-      }),
-      t("insights.templateEvidenceSnapshots", {
-        ready: freshSnapshotCount,
-        total: connectedCount,
-      }),
-      t("insights.templateEvidenceConnections", {
-        connected: readyConnections,
-        total: totalConnections,
-      }),
-    ],
-    suggestion:
-      status === "strong"
-        ? t("insights.templateCoverageActionStrong")
-        : status === "watch"
-          ? t("insights.templateCoverageActionWatch")
-          : t("insights.templateCoverageActionWeak"),
-    status,
-  };
-}
-
-function buildReadinessModule(params: {
-  t: ReturnType<typeof useTranslation>["t"];
-  disapprovedTotal: number;
-  disapprovedRate: number | null;
-  attentionCount: number;
-  reviewedTotal: number;
-}): TemplateModule {
-  const { t, disapprovedTotal, disapprovedRate, attentionCount, reviewedTotal } = params;
-  const status: TemplateStatus =
-    disapprovedTotal === 0 && attentionCount <= 1
-      ? "strong"
-      : (disapprovedRate ?? 100) < 15 && attentionCount <= 3
-        ? "watch"
-        : "weak";
-
-  return {
-    key: "readiness",
-    title: t("insights.templateReadinessTitle"),
-    summary:
-      status === "strong"
-        ? t("insights.templateReadinessSummaryStrong")
-        : status === "watch"
-          ? t("insights.templateReadinessSummaryWatch")
-          : t("insights.templateReadinessSummaryWeak"),
-    benchmark: t("insights.templateReadinessBenchmark"),
-    evidence: [
-      t("insights.templateEvidenceDisapproved", { value: formatInteger(disapprovedTotal) }),
-      t("insights.templateEvidenceDisapprovedRate", {
-        value: reviewedTotal > 0 ? formatPercent(disapprovedRate) : "—",
-      }),
-      t("insights.templateEvidenceHealthIssues", { value: String(attentionCount) }),
-    ],
-    suggestion:
-      status === "strong"
-        ? t("insights.templateReadinessActionStrong")
-        : status === "watch"
-          ? t("insights.templateReadinessActionWatch")
-          : t("insights.templateReadinessActionWeak"),
     status,
   };
 }
@@ -1252,12 +759,6 @@ const metricGridStyle = (isMobile: boolean): CSSProperties => ({
   gap: "0.75rem",
 });
 
-const platformGridStyle = (isMobile: boolean): CSSProperties => ({
-  display: "grid",
-  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-  gap: "0.75rem",
-});
-
 const analysisGridStyle = (isMobile: boolean): CSSProperties => ({
   display: "grid",
   gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
@@ -1377,36 +878,6 @@ const cardFootnoteStyle: CSSProperties = {
   color: pageColorTokens.textFootnote,
 };
 
-const cardMetricListStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "0.6rem",
-  margin: 0,
-};
-
-const cardMetricLabelStyle: CSSProperties = {
-  fontSize: 11,
-  color: pageColorTokens.textSecondary,
-};
-
-const cardMetricValueStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 15,
-  fontWeight: 700,
-  color: pageColorTokens.textPrimary,
-};
-
-const statusPillStyle = (connected: boolean): CSSProperties => ({
-  flexShrink: 0,
-  padding: "0.15rem 0.5rem",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
-  color: connected ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
-  background: connected ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
-  border: `1px solid ${connected ? "rgba(0, 166, 124, 0.28)" : pageColorTokens.borderSubtle}`,
-});
-
 const sectionBadgeStyle: CSSProperties = {
   padding: "0.2rem 0.55rem",
   borderRadius: 999,
@@ -1466,57 +937,6 @@ const templateModuleCardStyle = (status: TemplateStatus): CSSProperties => ({
         : "rgba(216, 44, 13, 0.18)",
 });
 
-const healthStateTokens: Record<
-  AdsHealthState,
-  { color: string; background: string; border: string }
-> = {
-  ok: {
-    color: pageColorTokens.brandGreenDark,
-    background: pageColorTokens.brandGreenLight,
-    border: "rgba(0, 166, 124, 0.28)",
-  },
-  warning: {
-    color: "#8a5a00",
-    background: "#fff7e0",
-    border: "rgba(185, 137, 0, 0.3)",
-  },
-  missing: {
-    color: pageColorTokens.textSecondary,
-    background: pageColorTokens.surfaceMuted,
-    border: pageColorTokens.borderSubtle,
-  },
-  unknown: {
-    color: pageColorTokens.textSecondary,
-    background: pageColorTokens.surfaceMuted,
-    border: pageColorTokens.borderSubtle,
-  },
-};
-
-const healthStatePillStyle = (state: AdsHealthState): CSSProperties => {
-  const token = healthStateTokens[state];
-  return {
-    display: "inline-block",
-    padding: "0.12rem 0.45rem",
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-    color: token.color,
-    background: token.background,
-    border: `1px solid ${token.border}`,
-  };
-};
-
-const healthBadgeStyle = (pending: boolean): CSSProperties => ({
-  padding: "0.2rem 0.55rem",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 700,
-  color: pending ? "#8a5a00" : pageColorTokens.brandGreenDark,
-  background: pending ? "#fff7e0" : pageColorTokens.brandGreenLight,
-  border: `1px solid ${pending ? "rgba(185, 137, 0, 0.3)" : "rgba(0, 166, 124, 0.28)"}`,
-});
-
 const tableWrapStyle: CSSProperties = {
   ...destinationSurfaceStyle,
   overflowX: "auto",
@@ -1553,12 +973,6 @@ const tdNumericStyle: CSSProperties = { ...tdStyle, textAlign: "right" };
 const tdMetaStyle: CSSProperties = {
   ...tdStyle,
   color: pageColorTokens.textSecondary,
-  fontSize: 12,
-};
-
-const tdMonoStyle: CSSProperties = {
-  ...tdStyle,
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   fontSize: 12,
 };
 
