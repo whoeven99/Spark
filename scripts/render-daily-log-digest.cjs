@@ -2,12 +2,12 @@
 /**
  * 拉取 Render 服务日志（默认过去 24h），归因汇总并可选发送飞书机器人。
  *
- * 环境变量:
- *   RENDER_API_KEY      — Render API Key（GitHub: RENDER_APIKEY）
+ * 环境变量（默认叠 .env.test → .env）:
+ *   RENDER_API_KEY      — Render API Key（通常在 .env）
  *   RENDER_SERVICE_ID   — Web 服务 id，如 srv-xxx
  *   RENDER_OWNER_ID     — 可选；Render Workspace id（tea-/usr- 开头）。
  *                         未设则从 GET /v1/services/:id 自动解析，一般无需配置。
- *   FEISHU_WEBHOOK_URL  — 飞书自定义机器人 Webhook（完整 URL）
+ *   FEISHU_WEBHOOK_URL  — 飞书自定义机器人 Webhook（完整 URL；在 .env）
  *   DIGEST_LOOKBACK_HOURS — 仅调试：设正整数则改为「过去 N 小时」，覆盖北京昨日日历日
  *   DIGEST_MAX_PAGES      — 每类查询最多分页数，默认 8（每页最多 100 条）
  *   DIGEST_QUERY_DELAY_MS — 两次查询之间的间隔，默认 2500
@@ -30,6 +30,36 @@ const {
 } = require("./beijing-digest-window.cjs");
 
 const RENDER_API = "https://api.render.com/v1";
+
+function loadStackedEnvCjs() {
+  const root = path.join(__dirname, "..");
+  const overlay =
+    process.argv.find((a) => a.startsWith("--env="))?.slice("--env=".length) ||
+    ".env.test";
+  const files = [path.join(root, overlay), path.join(root, ".env")];
+  for (const filePath of files) {
+    if (!fs.existsSync(filePath)) continue;
+    for (const raw of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq <= 0) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (process.env[key] == null || process.env[key] === "") {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+loadStackedEnvCjs();
 
 function env(name, fallback) {
   const v = process.env[name]?.trim();

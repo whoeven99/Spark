@@ -19,9 +19,9 @@
  *      - 直接传 token（默认按 wiki token 处理）。
  */
 
-import { readFile } from "node:fs/promises";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { loadStackedEnv } from "./lib/loadEnv.mjs";
 
 const FEISHU_BASE_URL = "https://open.feishu.cn";
 
@@ -44,30 +44,7 @@ function printUsageAndExit(message, code = 1) {
 }
 
 async function tryLoadDotEnv() {
-  const envPath = resolve(process.cwd(), ".env");
-  try {
-    const content = await readFile(envPath, "utf8");
-    const lines = content.split(/\r?\n/);
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const idx = trimmed.indexOf("=");
-      if (idx <= 0) continue;
-      const key = trimmed.slice(0, idx).trim();
-      if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) continue;
-      if (process.env[key]) continue;
-      let value = trimmed.slice(idx + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      process.env[key] = value;
-    }
-  } catch {
-    // ignore: no .env file
-  }
+  loadStackedEnv();
 }
 
 function parseArgs(argv) {

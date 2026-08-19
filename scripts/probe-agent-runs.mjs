@@ -1,3 +1,4 @@
+import { loadStackedEnv } from "./lib/loadEnv.mjs";
 import { ensureRuntimeEnv } from "../app/config/runtimeEnv.server.ts";
 import {
   ensureAgentRunsSparkOpsContainer,
@@ -7,6 +8,8 @@ import {
   SPARK_OPS_AGENT_RUNS_CONTAINER,
 } from "../app/server/cosmos/cosmosSparkOps.server.ts";
 
+// 默认测环境：.env.test → .env，再走 App runtime 加载
+loadStackedEnv();
 ensureRuntimeEnv();
 
 async function main() {

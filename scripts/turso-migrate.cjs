@@ -178,14 +178,16 @@ async function main() {
     throw new Error('仅支持 "test" 或 "prod"');
   }
 
-  // 先 .env，再 .env.test / .env.prod 覆盖；凭证统一 TURSO_DATABASE_URL / TURSO_AUTH_TOKEN
+  // .env 补缺；.env.test / .env.prod 覆盖（保证 migrate:test 打到测库）
   const base = loadDotEnv(path.join(root, ".env"));
   const overlay = loadDotEnv(
     path.join(root, target === "prod" ? ".env.prod" : ".env.test"),
   );
   const merged = { ...base, ...overlay };
   for (const [key, value] of Object.entries(merged)) {
-    if (process.env[key] === undefined) process.env[key] = value;
+    if (process.env[key] === undefined || process.env[key] === "") {
+      process.env[key] = value;
+    }
   }
 
   const urlKey = "TURSO_DATABASE_URL";

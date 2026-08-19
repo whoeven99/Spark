@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { loadStackedEnv } from "./lib/loadEnv.mjs";
 import { ensureRuntimeEnv } from "../app/config/runtimeEnv.server.ts";
 import { recordAgentRun, isAgentRunLogEnabled } from "../app/server/agentRunLog/recordAgentRun.server.ts";
 import { getExistingSparkOpsContainer, SPARK_OPS_AGENT_RUNS_CONTAINER } from "../app/server/cosmos/cosmosSparkOps.server.ts";
 
+loadStackedEnv();
 ensureRuntimeEnv();
 
 const testShop = process.argv[2]?.trim() || "probe-test.myshopify.com";
