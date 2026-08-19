@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
@@ -23,19 +23,12 @@ import {
 } from "../server/operations/dailyInspection.server";
 import type { TaskQuadrant } from "../server/operations/diagnosisRules.server";
 import {
-  getShopCostConfig,
   upsertShopCostConfig,
   type ShopCostConfigView,
 } from "../server/operations/roi/costConfig.server";
-import { ensureSkuCostsFresh } from "../server/operations/roi/skuCostSync.server";
-import {
-  ensureCustomerValueLayer,
-  type CustomerValueAggregates,
-} from "../server/operations/customerValue.server";
-import {
-  computeChannelRoi,
-  type ChannelRoiResult,
-} from "../server/operations/channelRoi.server";
+import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
+import type { ValueLayerData } from "../server/operations/valueLayer.server";
+import type { ValueLayerResponse } from "./api.today-value-layer";
 import {
   PageHeaderNav,
   PageMetricCard,
@@ -49,37 +42,24 @@ import {
   pageAccentBadgeStyle,
 } from "./page/pageUiStyles";
 
-type ValueLayerData = {
-  costConfig: ShopCostConfigView;
-  customers: CustomerValueAggregates;
-  channels: ChannelRoiResult;
-};
-
 type LoaderData =
-  | { ok: true; result: DailyOperationsResult; value: ValueLayerData | null }
+  | { ok: true; result: DailyOperationsResult }
   | { ok: false; error: string };
 
+const VALUE_LAYER_PATH = "/api/today-value-layer";
+/** 成本口径表单在 detail 树深处，用固定 key 让页面顶层能观察它的提交状态 */
+const COST_CONFIG_FETCHER_KEY = "daily-ops-cost-config";
+
+/**
+ * 价值层（SKU 成本回补 / 客户价值重建 / 渠道 ROI）不进 loader：
+ * 它的冷路径要翻 Shopify 分页并重建整表，会把首屏拖到数秒。
+ * 页面挂载后由 `/api/today-value-layer` 异步补齐。
+ */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   try {
     const result = await ensureDailySnapshot(session.shop);
-
-    // 渠道与客户价值层（A 步）：失败不影响诊断与待办主流程
-    let value: ValueLayerData | null = null;
-    try {
-      await ensureSkuCostsFresh(admin, session.shop);
-      const costConfig = await getShopCostConfig(session.shop);
-      const customers = await ensureCustomerValueLayer(
-        session.shop,
-        costConfig.defaultGrossMarginPercent,
-      );
-      const channels = await computeChannelRoi(session.shop, costConfig);
-      value = { costConfig, customers, channels };
-    } catch (error) {
-      console.error("[daily-operations] value layer failed:", error);
-    }
-
-    return Response.json({ ok: true, result, value } satisfies LoaderData);
+    return Response.json({ ok: true, result } satisfies LoaderData);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[daily-operations] loader failed:", error);
@@ -1364,6 +1344,8 @@ export default function DailyOperationsPage() {
   const { isMobile } = useResponsiveLayout();
   const data = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
+  const costConfigFetcher = useFetcher({ key: COST_CONFIG_FETCHER_KEY });
+  const valueFetcher = useFetcher<ValueLayerResponse>();
   const revalidator = useRevalidator();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1445,6 +1427,28 @@ export default function DailyOperationsPage() {
     setSearchParams(next);
   };
 
+  // 价值层只在 detail 视图消费，概览页不触发；成本口径保存或强制刷新会改口径，完成后重拉。
+  const needsValueLayer = detailSection !== null;
+  const valueMutating =
+    fetcher.state !== "idle" || costConfigFetcher.state !== "idle";
+  const valueRequestedRef = useRef(false);
+  const valueMutatingRef = useRef(false);
+  useEffect(() => {
+    const wasMutating = valueMutatingRef.current;
+    valueMutatingRef.current = valueMutating;
+    if (!needsValueLayer) return;
+    if (!valueRequestedRef.current) {
+      valueRequestedRef.current = true;
+      valueFetcher.load(VALUE_LAYER_PATH);
+    } else if (wasMutating && !valueMutating) {
+      valueFetcher.load(VALUE_LAYER_PATH);
+    }
+  }, [needsValueLayer, valueMutating, valueFetcher]);
+
+  const value = valueFetcher.data?.ok ? valueFetcher.data.value : null;
+  const valueLoading = !valueFetcher.data || valueFetcher.state !== "idle";
+  const valueFailed = valueFetcher.data?.ok === false;
+
   const detailReturnTo = useMemo(() => {
     if (!detailSection) return undefined;
     const next = new URLSearchParams(searchParams);
@@ -1502,7 +1506,9 @@ export default function DailyOperationsPage() {
               key={detailSection}
               detailSection={detailSection}
               result={data.result}
-              value={data.value}
+              value={value}
+              valueLoading={valueLoading}
+              valueFailed={valueFailed}
               isMobile={isMobile}
               locale={i18n.language}
               statusText={statusText}
@@ -2234,6 +2240,8 @@ function DailyOperationsDetail({
   detailSection,
   result,
   value,
+  valueLoading,
+  valueFailed,
   isMobile,
   locale,
   statusText,
@@ -2250,6 +2258,8 @@ function DailyOperationsDetail({
   detailSection: DetailSection;
   result: DailyOperationsResult;
   value: ValueLayerData | null;
+  valueLoading: boolean;
+  valueFailed: boolean;
   isMobile: boolean;
   locale: string;
   statusText: (status: string) => string;
@@ -2926,7 +2936,9 @@ function DailyOperationsDetail({
                 <h3 style={metricValueStyle}>
                   {value
                     ? `${value.customers.averageDynamicLtv} ${m.currency}`
-                    : t("dailyOps.metricNotConnected")}
+                    : valueLoading
+                      ? t("dailyOps.valueLoading")
+                      : t("dailyOps.metricNotConnected")}
                 </h3>
                 <p style={taskSecondaryTextStyle}>{t("dailyOps.metricLongRoiHintLine1")}</p>
                 <p style={taskMetaTextStyle}>{t("dailyOps.metricLongRoiHintLine2")}</p>
@@ -3659,7 +3671,13 @@ function DailyOperationsDetail({
     </div>
   ) : (
     <div style={pageEmptyStateStyle}>
-      <span>{t("dailyOps.valueUnavailable")}</span>
+      <span>
+        {valueLoading
+          ? t("dailyOps.valueLoading")
+          : valueFailed
+            ? t("dailyOps.valueLoadFailed")
+            : t("dailyOps.valueUnavailable")}
+      </span>
     </div>
   );
 }
@@ -4118,7 +4136,7 @@ function CostConfigCard({
   isMobile: boolean;
 }) {
   const { t } = useTranslation();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher({ key: COST_CONFIG_FETCHER_KEY });
   const saving = fetcher.state !== "idle";
 
   return (

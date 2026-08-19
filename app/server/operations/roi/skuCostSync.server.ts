@@ -1,3 +1,4 @@
+import type { Prisma } from "../../../generated/prisma";
 import prisma from "../../../db.server";
 import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 
@@ -38,12 +39,19 @@ function gidToId(gid: string | undefined | null): string | null {
   return idx >= 0 ? gid.slice(idx + 1) : gid;
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export async function syncSkuCosts(
   admin: ShopifyAdminGraphqlClient,
   shop: string,
 ): Promise<{ synced: number }> {
   let after: string | undefined;
-  let synced = 0;
+  // 唯一键是 shop+inventoryItemId，先按它去重再批量写，避免 createMany 整笔失败。
+  const byInventoryItemId = new Map<string, Prisma.ShopSkuCostCreateManyInput>();
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const response = await admin.graphql(VARIANT_UNIT_COSTS_QUERY, {
@@ -73,32 +81,37 @@ export async function syncSkuCosts(
       const inventoryItemId = gidToId(node.inventoryItem?.id);
       const amount = Number(node.inventoryItem?.unitCost?.amount);
       if (!inventoryItemId || !Number.isFinite(amount) || amount <= 0) continue;
-      await prisma.shopSkuCost.upsert({
-        where: { shop_inventoryItemId: { shop, inventoryItemId } },
-        update: {
-          unitCost: amount,
-          currency: node.inventoryItem?.unitCost?.currencyCode ?? null,
-          sku: node.sku ?? null,
-          variantId: gidToId(node.id),
-          syncedAt: new Date(),
-        },
-        create: {
-          shop,
-          inventoryItemId,
-          variantId: gidToId(node.id),
-          sku: node.sku ?? null,
-          unitCost: amount,
-          currency: node.inventoryItem?.unitCost?.currencyCode ?? null,
-        },
+      byInventoryItemId.set(inventoryItemId, {
+        shop,
+        inventoryItemId,
+        variantId: gidToId(node.id),
+        sku: node.sku ?? null,
+        unitCost: amount,
+        currency: node.inventoryItem?.unitCost?.currencyCode ?? null,
+        syncedAt: new Date(),
       });
-      synced += 1;
     }
 
     if (!variants?.pageInfo?.hasNextPage || !variants.pageInfo.endCursor) break;
     after = variants.pageInfo.endCursor;
   }
 
-  return { synced };
+  const rows = [...byInventoryItemId.values()];
+  if (rows.length === 0) return { synced: 0 };
+
+  // 只重建本次真正拉到的 inventoryItemId：MAX_PAGES 会截断，全量 deleteMany
+  // 会把没拉到的 SKU 成本误删。
+  const batches = chunk(rows, 200);
+  await prisma.$transaction([
+    ...batches.map((batch) =>
+      prisma.shopSkuCost.deleteMany({
+        where: { shop, inventoryItemId: { in: batch.map((row) => row.inventoryItemId) } },
+      }),
+    ),
+    ...batches.map((batch) => prisma.shopSkuCost.createMany({ data: batch })),
+  ]);
+
+  return { synced: rows.length };
 }
 
 /** 进程内同步尝试时间（店铺无 unitCost 数据时避免每次请求都重拉） */
