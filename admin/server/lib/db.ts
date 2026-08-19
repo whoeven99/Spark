@@ -1,38 +1,26 @@
 import { createClient, type Client } from "@libsql/client";
 import { requireEnv, getEnv } from "./env.js";
-import { isProductionNodeEnv } from "./nodeEnv.js";
 
 let _client: Client | null = null;
 
-function resolveTursoTarget(): "prod" | "test" {
-  const explicit = getEnv("TURSO_TARGET").toLowerCase();
-  if (explicit === "prod" || explicit === "production") return "prod";
-  if (explicit === "test" || explicit === "testing") return "test";
-
-  const hasProd =
-    getEnv("TURSO_PROD_DATABASE_URL").startsWith("libsql://");
-  const hasTest =
-    getEnv("TURSO_TEST_DATABASE_URL").startsWith("libsql://");
-
-  if (hasProd && !hasTest) return "prod";
-  if (hasTest && !hasProd) return "test";
-  return isProductionNodeEnv() ? "prod" : "test";
-}
-
+/** Spark 业务库（账户 / 订阅 / 会话等）。测/产由各 Admin 服务各自配值。 */
 export function getDb(): Client {
   if (_client) return _client;
 
-  const target = resolveTursoTarget();
-  const url =
-    target === "prod"
-      ? requireEnv("TURSO_PROD_DATABASE_URL")
-      : requireEnv("TURSO_TEST_DATABASE_URL");
-  const authToken =
-    target === "prod"
-      ? requireEnv("TURSO_PROD_AUTH_TOKEN")
-      : requireEnv("TURSO_TEST_AUTH_TOKEN");
+  const url = requireEnv("SPARK_DATABASE_URL");
+  const authToken = requireEnv("SPARK_DATABASE_AUTH_TOKEN");
+  if (!url.startsWith("libsql://")) {
+    throw new Error("SPARK_DATABASE_URL 须为 libsql://…");
+  }
 
-  console.info(`[admin/db] Connecting to Turso ${target}: ${url.slice(0, 40)}…`);
+  console.info(`[admin/db] Connecting to Spark Turso: ${url.slice(0, 40)}…`);
   _client = createClient({ url, authToken });
   return _client;
+}
+
+export function isSparkDbConfigured(): boolean {
+  return Boolean(
+    getEnv("SPARK_DATABASE_URL").startsWith("libsql://") &&
+      getEnv("SPARK_DATABASE_AUTH_TOKEN"),
+  );
 }
