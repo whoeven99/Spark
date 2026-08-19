@@ -4328,7 +4328,722 @@ type DiagnosisItem = {
 - `confidence`
 - `riskEnvironment`
 
-## 14. 总结
+## 14. ROI 洞察与页面承载框架
+
+本章用于将前文的每日经营诊断、ROI 口径、风险环境和 AI 任务生成，收敛为一套可复用的经营洞察框架。目标不是再追加一层“报告文案”，而是统一：
+
+- ROI 应如何分层计算与展示
+- 哪些经营因子会影响不同层级的 ROI
+- 洞察应如何按固定对象结构产出
+- Today、Reports、Charts 三种页面分别承载什么
+- 一条洞察如何从数据、规则和基准比较中稳定生成
+
+### 14.1 Today / Reports / Charts 的职责边界
+
+建议将经营分析能力拆成三个稳定工作模式：
+
+- `Today`：经营驾驶舱，只承载聚合摘要、关键判断和今日动作
+- `Reports`：经营判断中心，只承载结论、洞察、推荐动作和深钻入口
+- `Charts`：证据工作台，只承载趋势图、结构对比、漏斗、cohort 与对象排序
+
+建议遵循以下边界：
+
+#### Today 负责：
+
+- 经营状态总览
+- 核心经营指标摘要
+- ROI 三层摘要
+- 当前最影响 ROI 的 Top 因子
+- Top 洞察摘要
+- 今日待办与推荐动作
+
+#### Today 不负责：
+
+- 大量趋势图
+- 长篇报告正文
+- 技术型 PageSpeed audit 明细
+- 全量任务列表
+
+#### Reports 负责：
+
+- 经营结论
+- ROI 三层判断
+- 关键因子诊断
+- Top 洞察
+- 推荐动作
+- 深钻入口
+
+#### Charts 负责：
+
+- 趋势变化
+- 结构拆解
+- 漏斗分析
+- cohort 回收
+- 渠道 / 页面 / SKU / 客户分层对象深钻
+
+核心工作路径应固定为：
+
+`Today 看摘要 -> Reports 看判断 -> Charts 看证据 -> Tasks 去执行`
+
+### 14.2 ROI 三层定义
+
+统一要求：经营页面中不应再只展示一个孤立的 `ROI` 值，而应明确区分 `短期 ROI`、`回收期 ROI`、`长期 ROI` 三层口径。
+
+#### 14.2.1 短期 ROI
+
+短期 ROI 用于回答：
+
+`当前观察窗口内，最近的投入有没有带来已实现回报`
+
+推荐口径：
+
+- `短期收入 ROI = 观察窗口收入 / 广告花费`
+- `短期贡献 ROI = 观察窗口贡献利润 / 广告花费`
+- `短期经营 ROI = 观察窗口经营利润 / 广告花费`
+
+其中经营利润建议统一理解为：
+
+`经营利润 = 销售收入 - 货品成本 - 广告花费 - 支付手续费 - 折扣成本 - 退款损失 - 履约/物流成本（可得时纳入）`
+
+短期 ROI 的主要用途：
+
+- Today 的即时经营判断
+- 最近 7 / 14 / 30 天投放与经营是否承压
+- 是否需要立即止损或收缩预算
+
+#### 14.2.2 回收期 ROI
+
+回收期 ROI 用于回答：
+
+`某一批获客用户在获客后 N 天内的累计回收速度怎么样`
+
+推荐口径：
+
+- `D1 回收 ROI = 获客后 1 天累计贡献利润 / 获客成本`
+- `D7 回收 ROI = 获客后 7 天累计贡献利润 / 获客成本`
+- `D14 回收 ROI = 获客后 14 天累计贡献利润 / 获客成本`
+- `D30 回收 ROI = 获客后 30 天累计贡献利润 / 获客成本`
+
+回收期 ROI 不应只展示为单个数字，更适合表现为：
+
+- 回收曲线
+- 当前回本率
+- 预计回本天数
+- 渠道 / cohort 之间的回收速度对比
+
+它的主要作用是避免误判“慢热渠道”。例如：用户在广告点击后第 8 天成交，此时 7 天窗口会低估真实价值，但 D14 / D30 回收视角能正确反映这类渠道的回收节奏。
+
+#### 14.2.3 长期 ROI
+
+长期 ROI 用于回答：
+
+`买来的客户在生命周期内值不值得买`
+
+推荐口径：
+
+- `已实现长期 ROI = 已实现生命周期贡献利润 / CAC`
+- `预测长期 ROI = 预测生命周期贡献利润 / CAC`
+- `LTV / CAC`
+
+长期 ROI 主要依赖：
+
+- 复购率
+- 第二单间隔
+- 动态 LTV
+- 高价值客户占比
+- 渠道级客户生命周期价值
+
+对于长期 ROI，必须显式标注数据成熟度，不应将预测值伪装成真实值。
+
+#### 14.2.4 数据成熟度与置信度要求
+
+三层 ROI 的所有展示都应同时带上以下两个维度：
+
+- `dataQuality`
+  - `realized`
+  - `estimated`
+  - `predicted`
+- `confidence`
+  - `high`
+  - `medium`
+  - `low`
+
+例如：
+
+- 短期经营 ROI：`realized / high`
+- D30 回收 ROI：`estimated / medium`
+- 生命周期 ROI：`predicted / low`
+
+### 14.3 ROI 影响因子树
+
+经营洞察不应按系统模块散落生成，而应统一归入 ROI 影响因子树。推荐将影响 ROI 的一级因子固定为以下八类：
+
+#### 14.3.1 流量规模
+
+回答的问题：
+
+`流量够不够`
+
+典型指标：
+
+- Sessions
+- Users
+- 主要来源流量
+- 渠道流量变化率
+
+主要影响：
+
+- 短期 ROI
+
+#### 14.3.2 流量质量
+
+回答的问题：
+
+`来的人对不对`
+
+典型指标：
+
+- Revenue / Session
+- 渠道 CVR
+- 首购质量
+- 高价值客户占比
+
+主要影响：
+
+- 短期 ROI
+- 长期 ROI
+
+#### 14.3.3 转化效率
+
+回答的问题：
+
+`用户来了为什么没买`
+
+典型指标：
+
+- CVR
+- 漏斗转化率
+- Landing Page CVR
+- Payment success rate
+- PageSpeed / 站点体验
+
+主要影响：
+
+- 短期 ROI
+- 回收期 ROI
+
+#### 14.3.4 定价与客单价
+
+回答的问题：
+
+`每单赚得够不够`
+
+典型指标：
+
+- AOV
+- SKU 售价
+- 折扣率
+- SKU 毛利率
+- Revenue / Order
+
+主要影响：
+
+- 短期 ROI
+- 长期 ROI
+
+#### 14.3.5 投放效率
+
+回答的问题：
+
+`广告花得值不值`
+
+典型指标：
+
+- Spend
+- ROAS
+- CAC
+- 渠道贡献利润
+- D7 / D30 回收表现
+
+主要影响：
+
+- 短期 ROI
+- 回收期 ROI
+- 长期 ROI
+
+#### 14.3.6 商品经营质量
+
+回答的问题：
+
+`卖的东西本身是否在拖累经营`
+
+典型指标：
+
+- 商品完整度
+- SKU 转化率
+- SKU 退款率
+- SKU 库存可售天数
+- SKU 利润贡献
+
+主要影响：
+
+- 短期 ROI
+- 长期 ROI
+
+#### 14.3.7 履约与售后损耗
+
+回答的问题：
+
+`成交后有没有在漏利润`
+
+典型指标：
+
+- Refund rate
+- Refund amount
+- Overdue fulfillment
+- Carrier issue
+- 售后异常对象聚类
+
+主要影响：
+
+- 短期 ROI
+- 长期 ROI
+
+#### 14.3.8 生命周期价值
+
+回答的问题：
+
+`买来的客户以后值不值钱`
+
+典型指标：
+
+- Repeat purchase rate
+- 第二单间隔
+- Dynamic LTV
+- 高价值客户占比
+- 渠道级 LTV / CAC
+
+主要影响：
+
+- 长期 ROI
+
+### 14.4 洞察对象模型
+
+所有经营洞察应统一产出为结构化对象，不应在不同页面各自重新拼装。推荐对象结构如下：
+
+```ts
+type InsightCategory =
+  | "traffic_volume"
+  | "traffic_quality"
+  | "conversion_efficiency"
+  | "pricing_aov"
+  | "ads_efficiency"
+  | "product_quality"
+  | "operations_loss"
+  | "lifecycle_value";
+
+type RoiLayer = "short_term" | "payback" | "lifetime";
+
+type InsightStatus = "healthy" | "watch" | "risk";
+type InsightConfidence = "high" | "medium" | "low";
+type DataQuality = "realized" | "estimated" | "predicted";
+type TaskPriority = "P0" | "P1" | "P2";
+
+type InsightMetricEvidence = {
+  key: string;
+  label: string;
+  current: number | string | null;
+  baseline: number | string | null;
+  delta: number | string | null;
+  unit?: string;
+};
+
+type InsightComparison = {
+  basis: "threshold" | "historical" | "structural";
+  label: string;
+  result: "above" | "below" | "flat";
+  note: string;
+};
+
+type InsightAction = {
+  label: string;
+  intent:
+    | "open_chart"
+    | "open_report"
+    | "open_pagespeed"
+    | "open_task_center"
+    | "create_task"
+    | "open_diagnosis";
+  target?: string;
+  priority: TaskPriority;
+};
+
+type Insight = {
+  id: string;
+  title: string;
+  summary: string;
+  category: InsightCategory;
+  roiLayer: RoiLayer;
+  status: InsightStatus;
+  confidence: InsightConfidence;
+  metrics: InsightMetricEvidence[];
+  comparisons: InsightComparison[];
+  impactPath: string;
+  whyNow: string;
+  actions: InsightAction[];
+  taskPriority: TaskPriority;
+  drilldownTargets: string[];
+  dataQuality: DataQuality;
+  generatedAt: string;
+};
+```
+
+页面复用规则建议如下：
+
+- `Today`：读 `title + summary + taskPriority`
+- `Reports`：读完整洞察对象
+- `Charts`：读 `drilldownTargets`
+- `Tasks`：读 `actions`
+- `AI`：读 `summary + metrics + impactPath + actions`
+
+### 14.5 Today / Reports / Charts 页面承载结构
+
+#### 14.5.1 Today：经营驾驶舱
+
+Today 建议固定承载以下六个区块：
+
+1. 经营状态头部
+2. 核心经营指标
+3. ROI 三层摘要
+4. 关键因子 Top 3
+5. Top 洞察
+6. 任务与推荐动作
+
+Today 页面对象建议如下：
+
+```ts
+type TodayHeader = {
+  businessStatus: "healthy" | "watch" | "risk";
+  businessStatusLabel: string;
+  summary: string;
+  primaryBottleneck: string;
+  biggestOpportunity: string;
+  dataConfidence: "high" | "medium" | "low";
+  dataFreshness: string;
+};
+
+type TodayMetricCard = {
+  key:
+    | "revenue"
+    | "orders"
+    | "profit"
+    | "short_term_roi"
+    | "refund_rate"
+    | "risk_sku_count";
+  label: string;
+  value: string;
+  delta?: string;
+  tone: "positive" | "neutral" | "warning" | "negative";
+  source: "realized" | "estimated" | "predicted";
+};
+
+type TodayRoiSummary = {
+  shortTerm: {
+    status: "strong" | "stable" | "weak";
+    label: string;
+    summary: string;
+    value?: string;
+  };
+  payback: {
+    status: "fast" | "normal" | "slow";
+    label: string;
+    summary: string;
+    value?: string;
+  };
+  lifetime: {
+    status: "high" | "medium" | "low";
+    label: string;
+    summary: string;
+    value?: string;
+  };
+};
+
+type TodayFactorSummaryItem = {
+  category: InsightCategory;
+  title: string;
+  status: InsightStatus;
+  summary: string;
+  roiLayer: RoiLayer;
+  drilldownTarget: string;
+};
+
+type TodayInsightCard = {
+  id: string;
+  title: string;
+  confidence: InsightConfidence;
+  metric: string;
+  summary: string;
+  category: InsightCategory;
+  roiLayer: RoiLayer;
+  reportTarget: string;
+  chartTarget?: string;
+};
+
+type TodayTaskSummary = {
+  totalOpen: number;
+  inProgress: number;
+  p0Count: number;
+  topTasks: Array<{
+    id: string;
+    title: string;
+    priority: TaskPriority;
+    summary: string;
+    target: string;
+  }>;
+};
+
+type TodayActionCard = {
+  label: string;
+  summary: string;
+  intent:
+    | "open_report"
+    | "open_chart"
+    | "open_task"
+    | "open_pagespeed"
+    | "open_diagnosis";
+  target: string;
+  priority: TaskPriority;
+};
+```
+
+Today 的压缩原则：
+
+- 只展示结果和判断，不展开完整分析过程
+- 每个 ROI 层只保留状态与一句解释
+- 每个因子只保留一条摘要
+- Top 洞察最多保留 3 条
+- 所有摘要都必须能跳转到 Reports / Charts / Tasks
+
+#### 14.5.2 Reports：经营判断中心
+
+Reports 建议固定为七段结构：
+
+1. 报告头部
+2. 经营结论
+3. ROI 三层判断
+4. 关键因子诊断
+5. Top 洞察
+6. 推荐动作
+7. 深钻入口
+
+报告类型建议统一复用同一结构，只在时间粒度上区分：
+
+- 日报：更偏短期回报与今日止损
+- 周报：更偏回收速度与因子趋势
+- 月报：更偏长期价值与结构性问题
+
+Reports 中的“关键因子诊断卡”建议统一包含以下字段：
+
+- 因子名称
+- 当前状态
+- 影响 ROI 层级
+- 当前判断
+- 关键证据
+- 对比基准
+- 影响路径
+- 推荐动作
+- 深钻入口
+
+#### 14.5.3 Charts：证据工作台
+
+Charts 建议固定为四个一级图表域：
+
+1. `ROI`
+2. `Acquisition`
+3. `Conversion`
+4. `Merchandising & Operations`
+
+统一页面结构建议如下：
+
+```ts
+type ChartFilters = {
+  dateRange: "7d" | "14d" | "30d" | "90d";
+  compareMode: "previous_period" | "historical_baseline" | "structural";
+  channel?: string;
+  campaign?: string;
+  landingPage?: string;
+  sku?: string;
+  cohortWindow?: "d1" | "d7" | "d14" | "d30";
+};
+
+type ChartCard = {
+  id: string;
+  title: string;
+  summary: string;
+  chartType:
+    | "line"
+    | "bar"
+    | "stacked_bar"
+    | "funnel"
+    | "table"
+    | "scatter"
+    | "cohort_curve";
+  metrics: string[];
+  dimension?: string;
+  comparisonMode?: "previous_period" | "historical_baseline" | "structural";
+  insightLinks?: string[];
+  taskLinks?: string[];
+  dataQuality: DataQuality;
+};
+
+type ChartGroup = {
+  key: "roi" | "acquisition" | "conversion" | "merchandising_ops";
+  title: string;
+  summary: string;
+  charts: ChartCard[];
+};
+
+type ChartsDashboard = {
+  filters: ChartFilters;
+  groups: ChartGroup[];
+};
+```
+
+四个图表域建议承载如下：
+
+##### ROI
+
+- 短期 ROI 趋势
+- 利润拆解
+- 回收曲线
+- 长期价值
+- 渠道 ROI 对比
+
+##### Acquisition
+
+- 流量规模趋势
+- 渠道流量质量对比
+- 广告效率对比
+- 获客 cohort 质量
+
+##### Conversion
+
+- 全站漏斗
+- Landing Page 承接
+- PageSpeed / 站点体验
+- 支付链路
+- 设备 / 来源转化差异
+
+##### Merchandising & Operations
+
+- 商品表现矩阵
+- 定价与客单价
+- 库存承接
+- 履约与退款
+- 生命周期价值分层
+
+Charts 的核心限制：
+
+- 不写长段落判断
+- 不编排任务优先级
+- 不承载完整经营结论
+
+它只负责承接 Reports 的证据链。
+
+### 14.6 洞察生成与任务生成流程
+
+所有经营洞察建议统一遵循以下生成链路：
+
+`原始数据 -> 派生指标 -> 基准比较 -> 因子归类 -> ROI 影响映射 -> 洞察对象 -> 报告编排 -> 推荐动作 -> 任务生成`
+
+建议细化为以下步骤：
+
+#### 14.6.1 取数
+
+从以下来源读取原始数据：
+
+- Shopify 订单、退款、库存、履约
+- 广告 spend / 渠道数据
+- GA4 流量与 landing page
+- Pixel 漏斗数据
+- PageSpeed / 站点体验
+- 客户价值层与 LTV 相关指标
+
+#### 14.6.2 计算派生指标
+
+典型派生指标包括：
+
+- CVR
+- Revenue / Session
+- AOV
+- SKU 毛利率
+- 贡献利润
+- 短期经营 ROI
+- D7 / D14 / D30 回收率
+- 动态 LTV / CAC
+
+#### 14.6.3 跑基准比较
+
+每条洞察默认同时走三类基准：
+
+- `经验阈值`
+- `店铺历史基准`
+- `结构对比基准`
+
+推荐解释如下：
+
+- 经验阈值：例如支付成功率、PageSpeed、退款率、可售天数
+- 店铺历史基准：例如最近 30 天均值、最近 8 周中位数
+- 结构对比基准：例如某渠道 vs 全站、某 SKU vs 类目、某 landing page vs 全站
+
+置信度建议按以下逻辑产出：
+
+- 命中 2 个以上基准异常：`high`
+- 命中 1 个基准异常：`medium`
+- 只有阈值触发：`low`
+
+#### 14.6.4 归类到 ROI 因子
+
+将异常指标归入前文定义的八类一级因子，并明确它影响的是：
+
+- `short_term`
+- `payback`
+- `lifetime`
+
+#### 14.6.5 生成洞察对象
+
+根据统一对象模型生成结构化洞察。此时 AI 不应自由发挥“讲故事”，而应在结构化指标、对比结果和影响路径之上做摘要与语言优化。
+
+#### 14.6.6 映射推荐动作
+
+动作必须从因子类型稳定映射，而不应完全依赖自由生成。建议如下：
+
+- 流量规模 -> 看渠道趋势 / 补量
+- 流量质量 -> 看定向 / 搜索词 / landing page 匹配
+- 转化效率 -> 看漏斗 / 支付 / PageSpeed
+- 定价与客单价 -> 调价 / 调折扣 / 调组合
+- 投放效率 -> 压缩低效投放 / 看回收曲线
+- 商品经营质量 -> 补图补描述 / 补货 / 停投低质商品
+- 履约与售后损耗 -> 查退款对象 / 超时订单 / 物流异常
+- 生命周期价值 -> 做复购经营 / 召回 / 放大高价值渠道
+
+#### 14.6.7 转任务
+
+当一条洞察同时满足以下条件时，优先转化为任务：
+
+- 影响路径明确
+- 推荐动作可执行
+- 对 ROI 有明确影响
+- 有清晰的责任角色或对象
+
+任务优先级建议结合以下信息生成：
+
+- ROI 受损程度
+- 影响范围
+- 证据置信度
+- 是否存在立即止损价值
+
+## 15. 总结
 
 该设计的核心不是再做一份“日报”，而是把每天的经营问题、风险环境和运营动作统一组织为一套可执行的工作系统。
 

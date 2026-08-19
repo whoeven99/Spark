@@ -1635,6 +1635,8 @@
     "allInsightsDetailHint": "原始健康诊断已从当前列表拆出，避免任务页信息过载。",
     "viewHealthDetail": "查看诊断详情",
     "valueUnavailable": "当前还没有可展示的价值层数据。",
+    "valueLoading": "正在计算价值层数据…",
+    "valueLoadFailed": "价值层数据加载失败，请稍后重试。",
     "detailHeroReview": "复盘状态",
     "detailRiskCritical": "需要优先跟进的风险环境数量。",
     "detailRiskInsights": "当前可用于判断和验证的异常洞察数量。",

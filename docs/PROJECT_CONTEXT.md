@@ -128,7 +128,9 @@ npm run turso:migrate:test
 ## 8. 关键环境变量分组
 
 - Shopify：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`。
-- Turso：`TURSO_TARGET`、`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`、`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`、`DATABASE_URL`。
+- Turso（主应用）：`TURSO_TARGET`、`TURSO_TEST_*` / `TURSO_PROD_*`、`DATABASE_URL`。
+- Turso（Admin）：`SPARK_DATABASE_URL` / `SPARK_DATABASE_AUTH_TOKEN`（Spark 库）；
+  `TSF_DATABASE_URL` / `TSF_DATABASE_AUTH_TOKEN`（翻译库）；测/产分服务配值，无 TARGET。
 - AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。
 - Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；主应用 Render KV 用 `SPARK_KV`（测试实例 `spark-kv-test`）；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。
 - 图片翻译：`HUOSHAN_*` / `VOLC_*`、`AIDGE_*`、`PICTURE_TRANSLATE_*`。
