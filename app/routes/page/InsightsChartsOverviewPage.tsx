@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { resolveDateWindow } from "../../server/adsInsights/dateRange.server";
+import { resolveDateWindow } from "../../lib/adsInsightsDateRange";
 import {
   analysisPageContentStyle,
   mobilePageContentStyle,
