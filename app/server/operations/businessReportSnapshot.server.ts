@@ -19,7 +19,9 @@ import { computeOperationsDiagnosis } from "./diagnosis.server";
 import { getShopCostConfig } from "./roi/costConfig.server";
 import type { LiveSnapshotData } from "./businessReportSnapshot.shared";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+export async function loadBusinessReportLiveData(
+  request: Request,
+): Promise<{ liveData: LiveSnapshotData | null }> {
   const { admin, session } = await authenticate.admin(request);
   const now = new Date();
   const requestLocale = detectRequestLocale(request, {
@@ -229,7 +231,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[today.insights] loader failed:", error);
     return {
-      liveData: null as LiveSnapshotData | null,
+      liveData: null,
     };
   }
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  return loadBusinessReportLiveData(request);
 };

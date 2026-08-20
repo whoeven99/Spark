@@ -1492,6 +1492,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     channel?.channels.slice().sort((a, b) => b.contributionProfit - a.contributionProfit)[0] ?? null;
   const topRevenueChannel =
     channel?.channels.slice().sort((a, b) => b.revenue - a.revenue)[0] ?? null;
+  const topInventoryRisk = diagnosis.detail.inventoryRisks[0] ?? null;
+  const topRefundSku = diagnosis.detail.topRefundSkus[0] ?? null;
   const topAdsPlatform =
     ads?.platformSummaries.slice().sort((a, b) => b.spend - a.spend)[0] ?? null;
   const ga4TopSource = ga4?.channelRows[0] ?? null;
@@ -1983,6 +1985,10 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         href: buildInsightsChartsHref({
           group: "merchandising_ops",
           card: "inventory_flow",
+          extra: {
+            focusCard: "inventory_flow",
+            focusLabel: topInventoryRisk?.sku,
+          },
         }),
       }),
     );
@@ -1991,7 +1997,7 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     diagnosis.summaryMetrics.refundRateDelta > 0 ||
     diagnosis.summaryMetrics.carrierIssueCount > 0
   ) {
-    const focusSku = diagnosis.detail.topRefundSkus[0]?.sku;
+    const focusSku = topRefundSku?.sku;
     reportActions.push(
       buildRecommendedAction({
         key: "after_sales_risk",
@@ -2036,6 +2042,10 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         href: buildInsightsChartsHref({
           group: "merchandising_ops",
           card: "fulfillment_refund",
+          extra: {
+            focusCard: "fulfillment_refund",
+            focusLabel: focusSku,
+          },
         }),
       }),
     );
@@ -2200,6 +2210,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
           extra: {
             landingPage: topLandingPath,
             pageSpeedUrl: topLandingPageUrl,
+            focusCard: "landing_page",
+            focusLabel: topLandingPath,
           },
         }),
       }),
@@ -2304,10 +2316,18 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
                 ? buildInsightsChartsHref({
                     group: "merchandising_ops",
                     card: "inventory_flow",
+                    extra: {
+                      focusCard: "inventory_flow",
+                      focusLabel: topInventoryRisk?.sku,
+                    },
                   })
                 : buildInsightsChartsHref({
                     group: "merchandising_ops",
                     card: "fulfillment_refund",
+                    extra: {
+                      focusCard: "fulfillment_refund",
+                      focusLabel: topRefundSku?.sku,
+                    },
                   })
           : undefined,
     }));
@@ -2349,6 +2369,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         extra: {
           landingPage: topLandingPath,
           pageSpeedUrl: topLandingPageUrl,
+          focusCard: "landing_page",
+          focusLabel: topLandingPath,
         },
       }),
     });
@@ -2358,21 +2380,33 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     {
       key: "refund",
       title: "退款详情",
-      detail: "看异常退款订单、退款 SKU 和退款原因聚类。",
-      badge: `${formatPercent(diagnosis.summaryMetrics.refundRate30d)} 退款率`,
+      detail: topRefundSku
+        ? `先看 ${topRefundSku.sku} 的退款金额、原因聚类与关联售后异常。`
+        : "看异常退款订单、退款 SKU 和退款原因聚类。",
+      badge: topRefundSku ? `${topRefundSku.sku} / ${formatPercent(diagnosis.summaryMetrics.refundRate30d)}` : `${formatPercent(diagnosis.summaryMetrics.refundRate30d)} 退款率`,
       href: buildInsightsChartsHref({
         group: "merchandising_ops",
         card: "fulfillment_refund",
+        extra: {
+          focusCard: "fulfillment_refund",
+          focusLabel: topRefundSku?.sku,
+        },
       }),
     },
     {
       key: "inventory",
       title: "库存详情",
-      detail: "看风险 SKU、可售天数和预计损失。",
-      badge: `${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个风险 SKU`,
+      detail: topInventoryRisk
+        ? `先看 ${topInventoryRisk.sku} 的可售天数与预计损失，再判断补货或限流。`
+        : "看风险 SKU、可售天数和预计损失。",
+      badge: topInventoryRisk ? `${topInventoryRisk.sku} 优先` : `${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个风险 SKU`,
       href: buildInsightsChartsHref({
         group: "merchandising_ops",
         card: "inventory_flow",
+        extra: {
+          focusCard: "inventory_flow",
+          focusLabel: topInventoryRisk?.sku,
+        },
       }),
     },
     {
@@ -2388,9 +2422,18 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     {
       key: "channel",
       title: "渠道 ROI",
-      detail: "看收入、利润和值得继续投的渠道。",
+      detail: topProfitChannel
+        ? `优先看 ${topProfitChannel.label} 的利润表现，再决定是否继续放大。`
+        : "看收入、利润和值得继续投的渠道。",
       badge: topProfitChannel ? `${topProfitChannel.label} 最稳` : "经营复盘",
-      href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
+      href: buildInsightsChartsHref({
+        group: "roi",
+        card: "channel_roi",
+        extra: {
+          focusCard: "channel_roi",
+          focusLabel: topProfitChannel?.label,
+        },
+      }),
     },
     {
       key: "pagespeed",
@@ -2423,6 +2466,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
               extra: {
                 landingPage: topLandingPath,
                 pageSpeedUrl: topLandingPageUrl,
+                focusCard: "landing_page",
+                focusLabel: topLandingPath,
               },
             }),
           } satisfies DrilldownEntry,

@@ -32,6 +32,13 @@ import type {
   AdsOverviewReview,
   AdsOverviewSnapshot,
 } from "../../server/adsInsights/overview.server";
+import {
+  buildLiveSnapshots,
+  type BusinessModule,
+  type ModuleChart,
+  type ModuleSource,
+  type Snapshot,
+} from "../../server/operations/businessReportSnapshot.shared";
 import type { InsightsOverviewLoaderData } from "../app.insights.charts._index";
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
@@ -63,6 +70,13 @@ type DashboardCard = {
   chartType: ChartType;
   metrics: string[];
   dataQuality: ChartDataQuality;
+  source?: ModuleSource;
+  previewTitle?: string;
+  previewItems?: Array<{
+    label: string;
+    display: string;
+    note?: string;
+  }>;
   href?: string;
   actionLabel?: string;
 };
@@ -77,6 +91,8 @@ type DashboardGroup = {
 type ChartsDashboard = {
   groups: DashboardGroup[];
 };
+
+type ChartsLiveData = InsightsOverviewLoaderData["liveData"];
 
 function formatInteger(value: number): string {
   return Math.round(value).toLocaleString("en-US");
@@ -98,6 +114,171 @@ function formatRatio(value: number | null, suffix: string): string {
 function formatPercent(value: number | null): string {
   if (value === null) return "—";
   return `${value.toFixed(2)}%`;
+}
+
+function chartTypeFromModule(kind: ModuleChart["kind"]): ChartType {
+  switch (kind) {
+    case "bars":
+      return "bar";
+    case "stack":
+      return "stacked_bar";
+    case "funnel":
+      return "funnel";
+    default:
+      return "table";
+  }
+}
+
+function moduleSourceToQuality(source: ModuleSource): ChartDataQuality {
+  if (source === "real") return "high";
+  if (source === "estimated") return "medium";
+  return "pending";
+}
+
+function findModule(snapshot: Snapshot, key: string): BusinessModule | null {
+  return snapshot.modules.find((module) => module.key === key) ?? null;
+}
+
+function findMetricValue(module: BusinessModule | null, label: string): string | null {
+  return module?.metrics.find((metric) => metric.label === label)?.value ?? null;
+}
+
+function buildPreviewItems(module: BusinessModule | null, limit = 3) {
+  if (!module) return [];
+  return module.chart.items.slice(0, limit).map((item) => ({
+    label: item.label,
+    display: item.display,
+    note: item.note,
+  }));
+}
+
+function normalizePreviewKey(value: string | null | undefined, fallback = "—"): string {
+  return value?.trim() || fallback;
+}
+
+function normalizeMatchValue(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function matchesFocusLabel(label: string, focusLabel: string | null): boolean {
+  const normalizedFocus = normalizeMatchValue(focusLabel);
+  if (!normalizedFocus) return false;
+  return normalizeMatchValue(label) === normalizedFocus;
+}
+
+function prioritizeFocusedPreviewItems<
+  T extends {
+    label: string;
+    display: string;
+    note?: string;
+  },
+>(items: T[], focusLabel: string | null): T[] {
+  if (!focusLabel) return items;
+  return [...items].sort((left, right) => {
+    const leftFocused = matchesFocusLabel(left.label, focusLabel);
+    const rightFocused = matchesFocusLabel(right.label, focusLabel);
+    if (leftFocused === rightFocused) return 0;
+    return leftFocused ? -1 : 1;
+  });
+}
+
+function buildLandingPreviewItems(liveData: ChartsLiveData, limit = 3) {
+  const rows = liveData?.ga4?.landingRows ?? [];
+  return rows.slice(0, limit).map((row) => {
+    const cvr = row.sessions > 0 ? (row.purchases / row.sessions) * 100 : null;
+    return {
+      label: normalizePreviewKey(row.key, "/"),
+      display: `${row.sessions.toLocaleString("en-US")} sessions`,
+      note: `${formatMoney(row.revenue, null)} revenue / CVR ${formatPercent(cvr)}`,
+    };
+  });
+}
+
+function buildChannelQualityPreviewItems(
+  liveData: ChartsLiveData,
+  module: BusinessModule | null,
+  limit = 3,
+) {
+  const rows = liveData?.ga4?.channelRows ?? [];
+  if (rows.length > 0) {
+    return rows.slice(0, limit).map((row) => {
+      const cvr = row.sessions > 0 ? (row.purchases / row.sessions) * 100 : null;
+      return {
+        label: normalizePreviewKey(row.key),
+        display: `${row.sessions.toLocaleString("en-US")} sessions`,
+        note: `${formatMoney(row.revenue, null)} revenue / CVR ${formatPercent(cvr)}`,
+      };
+    });
+  }
+  return buildPreviewItems(module, limit);
+}
+
+function buildInventoryPreviewItems(
+  liveData: ChartsLiveData,
+  module: BusinessModule | null,
+  limit = 3,
+) {
+  const currency = liveData?.diagnosis?.summaryMetrics.currency ?? null;
+  const rows = liveData?.diagnosis?.detail.inventoryRisks ?? [];
+  if (rows.length > 0) {
+    return rows.slice(0, limit).map((row) => ({
+      label: row.sku,
+      display: formatMoney(row.estimatedLoss, currency),
+      note: `${row.title} / ${row.risk.toUpperCase()} / 可售 ${row.sellableDays ?? "∞"} 天`,
+    }));
+  }
+  return buildPreviewItems(module, limit);
+}
+
+function buildAfterSalesPreviewItems(
+  liveData: ChartsLiveData,
+  module: BusinessModule | null,
+  limit = 3,
+) {
+  const currency = liveData?.diagnosis?.summaryMetrics.currency ?? null;
+  const rows = liveData?.diagnosis?.detail.topRefundSkus ?? [];
+  if (rows.length > 0) {
+    return rows.slice(0, limit).map((row) => ({
+      label: row.sku,
+      display: formatMoney(row.amount, currency),
+      note: `${row.title} / ${row.reason} / Qty ${formatInteger(row.quantity)}`,
+    }));
+  }
+  return buildPreviewItems(module, limit);
+}
+
+function buildModuleCard(params: {
+  id: string;
+  title: string;
+  module: BusinessModule | null;
+  fallbackSummary: string;
+  href?: string;
+  actionLabel?: string;
+  metrics?: string[];
+  previewTitle?: string;
+  previewItems?: Array<{
+    label: string;
+    display: string;
+    note?: string;
+  }>;
+  chartType?: ChartType;
+}): DashboardCard {
+  const module = params.module;
+  return {
+    id: params.id,
+    title: params.title,
+    summary: module?.summary ?? params.fallbackSummary,
+    chartType: params.chartType ?? (module ? chartTypeFromModule(module.chart.kind) : "table"),
+    metrics:
+      params.metrics ??
+      (module?.metrics.slice(0, 3).map((metric) => `${metric.label} ${metric.value}`) ?? []),
+    dataQuality: module ? moduleSourceToQuality(module.source) : "pending",
+    source: module?.source,
+    previewTitle: params.previewTitle ?? module?.chart.title,
+    previewItems: params.previewItems ?? buildPreviewItems(module),
+    href: params.href,
+    actionLabel: params.actionLabel,
+  };
 }
 
 function qualityTone(quality: ChartDataQuality): CSSProperties {
@@ -162,6 +343,42 @@ function qualityLabel(
   }
 }
 
+function sourceLabel(
+  source: ModuleSource,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  switch (source) {
+    case "real":
+      return t("insights.chartSourceReal");
+    case "estimated":
+      return t("insights.chartSourceEstimated");
+    default:
+      return t("insights.chartSourcePending");
+  }
+}
+
+function sourceTone(source: ModuleSource): CSSProperties {
+  if (source === "real") {
+    return {
+      color: pageColorTokens.brandGreenDark,
+      background: pageColorTokens.brandGreenLight,
+      border: "1px solid rgba(0, 166, 124, 0.26)",
+    };
+  }
+  if (source === "estimated") {
+    return {
+      color: "#8a5a00",
+      background: "#fff7e0",
+      border: "1px solid rgba(185, 137, 0, 0.28)",
+    };
+  }
+  return {
+    color: pageColorTokens.textSecondary,
+    background: pageColorTokens.surfaceMuted,
+    border: `1px dashed ${pageColorTokens.borderInput}`,
+  };
+}
+
 function buildPerformanceHref(
   platform: AdsOverviewPlatform["platform"],
   rangeDays: number,
@@ -175,7 +392,9 @@ function buildPerformanceHref(
 }
 
 function buildChartsDashboard(params: {
-  overview: AdsOverviewSnapshot;
+  overview: AdsOverviewSnapshot | null;
+  liveData: ChartsLiveData;
+  snapshot: Snapshot;
   compareMode: CompareMode;
   embeddedSearch: string;
   pageSpeedTargetUrl: string | null;
@@ -184,13 +403,15 @@ function buildChartsDashboard(params: {
 }): ChartsDashboard {
   const {
     overview,
+    liveData,
+    snapshot,
     compareMode,
     embeddedSearch,
     pageSpeedTargetUrl,
     landingPageLabel,
     t,
   } = params;
-  const connectedPlatforms = overview.platforms.filter((item) => item.connected);
+  const connectedPlatforms = overview?.platforms.filter((item) => item.connected) ?? [];
   const connectedCount = connectedPlatforms.length;
   const freshPlatforms = connectedPlatforms.filter(
     (item) => item.snapshot && !item.snapshot.stale,
@@ -198,121 +419,130 @@ function buildChartsDashboard(params: {
   const bestPlatform = [...connectedPlatforms]
     .filter((item) => item.totals?.roas != null)
     .sort((left, right) => (right.totals?.roas ?? 0) - (left.totals?.roas ?? 0))[0] ?? null;
-  const disapprovedTotal = overview.reviews.reduce(
+  const disapprovedTotal = (overview?.reviews ?? []).reduce(
     (sum, review) => sum + review.disapproved,
     0,
   );
-  const healthAttentionCount = overview.health.filter((item) => item.state !== "ok").length;
+  const healthAttentionCount = (overview?.health ?? []).filter((item) => item.state !== "ok").length;
   const primaryPerformanceHref = buildPerformanceHref(
     bestPlatform?.platform ?? "meta",
-    overview.rangeDays,
+    overview?.rangeDays ?? 7,
     embeddedSearch,
   );
   const pageSpeedHref = pageSpeedTargetUrl
     ? `/app/settings/pagespeed?url=${encodeURIComponent(pageSpeedTargetUrl)}&strategy=mobile&autorun=1&source=insights-charts`
     : "/app/settings/pagespeed?source=insights-charts";
+  const profitModule = findModule(snapshot, "profit");
+  const costModule = findModule(snapshot, "cost");
+  const channelModule = findModule(snapshot, "channel");
+  const trafficModule = findModule(snapshot, "traffic");
+  const conversionModule = findModule(snapshot, "conversion");
+  const customerModule = findModule(snapshot, "customerValue");
+  const siteExperienceModule = findModule(snapshot, "siteExperience");
+  const inventoryModule = findModule(snapshot, "productInventory");
+  const afterSalesModule = findModule(snapshot, "afterSales");
+  const shortTermRoi = snapshot.report.roiLayers.find((item) => item.key === "short_term") ?? null;
+  const paybackRoi = snapshot.report.roiLayers.find((item) => item.key === "payback") ?? null;
+  const lifetimeRoi = snapshot.report.roiLayers.find((item) => item.key === "lifetime") ?? null;
+  const topLandingMetric = findMetricValue(trafficModule, "Top Landing");
+  const landingPreviewItems = buildLandingPreviewItems(liveData);
 
   const roiCards: DashboardCard[] = [
-    {
+    buildModuleCard({
       id: "short_term_roi",
       title: t("insights.chartCardShortTermRoiTitle"),
-      summary:
-        overview.totals.roas != null
-          ? t("insights.chartCardShortTermRoiSummaryReady", {
-              roas: formatRatio(overview.totals.roas, "x"),
-            })
-          : t("insights.chartCardShortTermRoiSummaryPending"),
-      chartType: "line",
+      module: profitModule,
+      fallbackSummary:
+        shortTermRoi?.detail ??
+        t("insights.chartCardShortTermRoiSummaryPending"),
       metrics: [
-        `${t("insights.kpiSpend")} ${formatMoney(overview.totals.spend, overview.currencyCode)}`,
-        `${t("insights.kpiValue")} ${formatMoney(
-          overview.totals.conversionsValue,
-          overview.currencyCode,
-        )}`,
-        `${t("insights.kpiRoas")} ${formatRatio(overview.totals.roas, "x")}`,
+        `${shortTermRoi?.title ?? t("insights.chartCardShortTermRoiTitle")} ${shortTermRoi?.value ?? "—"}`,
+        `${findMetricValue(profitModule, "贡献利润") ?? "贡献利润 —"}`,
+        `${findMetricValue(costModule, "广告花费") ?? "广告花费 —"}`,
       ],
-      dataQuality: connectedCount > 0 ? "high" : "pending",
+      previewTitle: profitModule?.chart.title ?? shortTermRoi?.title,
       href: primaryPerformanceHref,
       actionLabel: t("insights.chartCardOpenPerformance"),
-    },
-    {
+    }),
+    buildModuleCard({
       id: "channel_roi",
       title: t("insights.chartCardChannelRoiTitle"),
-      summary: bestPlatform
-        ? t("insights.chartCardChannelRoiSummaryReady", {
-            platform: bestPlatform.accountName || bestPlatform.platform,
-            roas: formatRatio(bestPlatform.totals?.roas ?? null, "x"),
-          })
-        : t("insights.chartCardChannelRoiSummaryPending"),
-      chartType: "bar",
+      module: channelModule,
+      fallbackSummary:
+        bestPlatform
+          ? t("insights.chartCardChannelRoiSummaryReady", {
+              platform: bestPlatform.accountName || bestPlatform.platform,
+              roas: formatRatio(bestPlatform.totals?.roas ?? null, "x"),
+            })
+          : t("insights.chartCardChannelRoiSummaryPending"),
       metrics: [
-        t("insights.chartCardConnectedPlatformsMetric", {
-          connected: connectedCount,
-          total: overview.platforms.length,
-        }),
-        t("insights.chartCardFreshSnapshotsMetric", {
-          ready: freshPlatforms,
-          total: connectedCount,
-        }),
+        `${findMetricValue(channelModule, "最高收入渠道") ?? "最高收入渠道 —"}`,
+        `${findMetricValue(channelModule, "最高利润渠道") ?? "最高利润渠道 —"}`,
+        connectedCount > 0
+          ? t("insights.chartCardConnectedPlatformsMetric", {
+              connected: connectedCount,
+              total: overview?.platforms.length ?? connectedCount,
+            })
+          : `${findMetricValue(channelModule, "Top 投放平台") ?? "Top 投放平台 —"}`,
       ],
-      dataQuality: connectedCount > 0 ? "medium" : "pending",
       href: primaryPerformanceHref,
       actionLabel: t("insights.chartCardOpenPerformance"),
-    },
-    {
+    }),
+    buildModuleCard({
       id: "payback_curve",
       title: t("insights.chartCardPaybackCurveTitle"),
-      summary: t("insights.chartCardPaybackCurveSummary"),
-      chartType: "cohort_curve",
-      metrics: [t("insights.chartCardPendingMetric")],
-      dataQuality: "pending",
-    },
+      module: conversionModule,
+      fallbackSummary: paybackRoi?.detail ?? t("insights.chartCardPaybackCurveSummary"),
+      metrics: [
+        `${paybackRoi?.title ?? t("insights.chartCardPaybackCurveTitle")} ${paybackRoi?.value ?? "—"}`,
+        `${findMetricValue(conversionModule, "整体 CVR") ?? "整体 CVR —"}`,
+        `${findMetricValue(siteExperienceModule, "性能分") ?? "性能分 —"}`,
+      ],
+      previewTitle: conversionModule?.chart.title ?? paybackRoi?.title,
+      href: "/app/insights?module=conversion",
+      actionLabel: t("insights.chartCardOpenEvidence"),
+    }),
   ];
 
   const acquisitionCards: DashboardCard[] = [
-    {
+    buildModuleCard({
       id: "traffic_scale",
       title: t("insights.chartCardTrafficScaleTitle"),
-      summary:
-        overview.totals.impressions > 0 || overview.totals.clicks > 0
-          ? t("insights.chartCardTrafficScaleSummaryReady")
-          : t("insights.chartCardTrafficScaleSummaryPending"),
-      chartType: "line",
-      metrics: [
-        `${t("insights.chartMetricImpressions")} ${formatInteger(overview.totals.impressions)}`,
-        `${t("insights.chartMetricClicks")} ${formatInteger(overview.totals.clicks)}`,
-        `${t("insights.chartMetricCtr")} ${formatPercent(overview.totals.ctr)}`,
-      ],
-      dataQuality:
-        overview.totals.impressions > 0 || overview.totals.clicks > 0 ? "high" : "pending",
-      href: primaryPerformanceHref,
-      actionLabel: t("insights.chartCardOpenPerformance"),
-    },
-    {
+      module: trafficModule,
+      fallbackSummary: t("insights.chartCardTrafficScaleSummaryPending"),
+      href: "/app/insights?module=traffic",
+      actionLabel: t("insights.chartCardOpenEvidence"),
+    }),
+    buildModuleCard({
       id: "channel_quality",
       title: t("insights.chartCardChannelQualityTitle"),
-      summary:
+      module: channelModule,
+      fallbackSummary:
         healthAttentionCount > 0
           ? t("insights.chartCardChannelQualitySummaryWatch", {
               count: healthAttentionCount,
             })
           : t("insights.chartCardChannelQualitySummaryReady"),
-      chartType: "stacked_bar",
       metrics: [
         t("insights.chartCardHealthMetric", { count: healthAttentionCount }),
-        t("insights.chartCardFreshSnapshotsMetric", {
-          ready: freshPlatforms,
-          total: connectedCount,
-        }),
+        connectedCount > 0
+          ? t("insights.chartCardFreshSnapshotsMetric", {
+              ready: freshPlatforms,
+              total: connectedCount,
+            })
+          : `${findMetricValue(channelModule, "可归因收入占比") ?? "可归因收入占比 —"}`,
+        `${findMetricValue(customerModule, "高价值客户占比") ?? "高价值客户占比 —"}`,
       ],
-      dataQuality: connectedCount > 0 ? "medium" : "pending",
+      previewTitle: t("insights.chartCardChannelQualityPreviewTitle"),
+      previewItems: buildChannelQualityPreviewItems(liveData, channelModule),
       href: appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch),
       actionLabel: t("insights.chartCardOpenCatalog"),
-    },
-    {
+    }),
+    buildModuleCard({
       id: "acquisition_cohort",
       title: t("insights.chartCardAcquisitionCohortTitle"),
-      summary: t("insights.chartCardAcquisitionCohortSummary", {
+      module: customerModule,
+      fallbackSummary: t("insights.chartCardAcquisitionCohortSummary", {
         compare:
           compareMode === "historical_baseline"
             ? t("insights.compareHistoricalBaseline")
@@ -320,49 +550,65 @@ function buildChartsDashboard(params: {
               ? t("insights.compareStructural")
               : t("insights.comparePreviousPeriod"),
       }),
-      chartType: "cohort_curve",
-      metrics: [t("insights.chartCardPendingMetric")],
-      dataQuality: "pending",
-    },
+      metrics: [
+        `${lifetimeRoi?.title ?? "长期价值"} ${lifetimeRoi?.value ?? "—"}`,
+        `${findMetricValue(customerModule, "复购率") ?? "复购率 —"}`,
+        `${findMetricValue(customerModule, "平均动态 LTV") ?? "平均动态 LTV —"}`,
+      ],
+      previewTitle: t("insights.chartCardAcquisitionCohortPreviewTitle"),
+      href: "/app/insights?module=customerValue",
+      actionLabel: t("insights.chartCardOpenEvidence"),
+    }),
   ];
 
   const conversionCards: DashboardCard[] = [
-    {
+    buildModuleCard({
       id: "funnel",
       title: t("insights.chartCardFunnelTitle"),
-      summary: t("insights.chartCardFunnelSummary"),
-      chartType: "funnel",
-      metrics: [t("insights.chartCardPendingMetric")],
-      dataQuality: "pending",
+      module: conversionModule,
+      fallbackSummary: t("insights.chartCardFunnelSummary"),
       href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
       actionLabel: t("insights.chartCardOpenDiagnosis"),
-    },
+    }),
     {
       id: "landing_page",
       title: t("insights.chartCardLandingPageTitle"),
       summary: landingPageLabel
         ? t("insights.chartCardLandingPageSummaryFocused", { page: landingPageLabel })
-        : t("insights.chartCardLandingPageSummary"),
+        : topLandingMetric
+          ? `${t("insights.chartCardLandingPageSummary")} ${topLandingMetric}`
+          : t("insights.chartCardLandingPageSummary"),
       chartType: "table",
       metrics: [
         landingPageLabel
           ? t("insights.chartCardLandingPageMetricFocused", { page: landingPageLabel })
-          : t("insights.chartCardPendingMetric"),
+          : `Top Landing ${topLandingMetric ?? "—"}`,
+        `${findMetricValue(trafficModule, "近 7 天 Sessions") ?? "近 7 天 Sessions —"}`,
+        `${findMetricValue(conversionModule, "整体 CVR") ?? "整体 CVR —"}`,
       ],
-      dataQuality: pageSpeedTargetUrl ? "medium" : "pending",
+      dataQuality:
+        trafficModule && trafficModule.source !== "pending"
+          ? moduleSourceToQuality(trafficModule.source)
+          : pageSpeedTargetUrl
+            ? "medium"
+            : "pending",
+      source: trafficModule?.source,
+      previewTitle: t("insights.chartCardLandingPagePreviewTitle"),
+      previewItems:
+        landingPreviewItems.length > 0
+          ? landingPreviewItems
+          : buildPreviewItems(trafficModule),
       href: pageSpeedHref,
       actionLabel: t("insights.chartCardOpenPageSpeed"),
     },
-    {
+    buildModuleCard({
       id: "site_experience",
       title: t("insights.chartCardSiteExperienceTitle"),
-      summary: t("insights.chartCardSiteExperienceSummary"),
-      chartType: "table",
-      metrics: [t("insights.chartMetricPageSpeedReady")],
-      dataQuality: "medium",
+      module: siteExperienceModule,
+      fallbackSummary: t("insights.chartCardSiteExperienceSummary"),
       href: pageSpeedHref,
       actionLabel: t("insights.chartCardOpenPageSpeed"),
-    },
+    }),
   ];
 
   const merchandisingOpsCards: DashboardCard[] = [
@@ -374,7 +620,7 @@ function buildChartsDashboard(params: {
           ? t("insights.chartCardProductReviewSummaryWatch", { count: disapprovedTotal })
           : t("insights.chartCardProductReviewSummaryReady"),
       chartType: "table",
-      metrics: overview.reviews.map((review) =>
+      metrics: (overview?.reviews ?? []).map((review) =>
         t("insights.chartCardProductReviewMetric", {
           channel:
             review.channel === "gmc"
@@ -383,30 +629,38 @@ function buildChartsDashboard(params: {
           count: review.disapproved,
         }),
       ),
-      dataQuality: hasReviewCoverage(overview.reviews) ? "high" : "pending",
+      dataQuality: hasReviewCoverage(overview?.reviews ?? []) ? "high" : "pending",
+      previewTitle: connectedCount > 0 ? t("insights.chartCardOpenCatalog") : undefined,
+      previewItems:
+        overview?.reviews.slice(0, 3).map((review) => ({
+          label:
+            review.channel === "gmc"
+              ? t("insights.reviewChannelGmc")
+              : t("insights.reviewChannelMeta"),
+          display: `${review.disapproved}`,
+          note: `${review.approved}/${review.total}`,
+        })) ?? [],
       href: appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch),
       actionLabel: t("insights.chartCardOpenCatalog"),
     },
-    {
+    buildModuleCard({
       id: "inventory_flow",
       title: t("insights.chartCardInventoryFlowTitle"),
-      summary: t("insights.chartCardInventoryFlowSummary"),
-      chartType: "table",
-      metrics: [t("insights.chartCardPendingMetric")],
-      dataQuality: "pending",
+      module: inventoryModule,
+      fallbackSummary: t("insights.chartCardInventoryFlowSummary"),
+      previewItems: buildInventoryPreviewItems(liveData, inventoryModule),
       href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory",
       actionLabel: t("insights.chartCardOpenDiagnosis"),
-    },
-    {
+    }),
+    buildModuleCard({
       id: "fulfillment_refund",
       title: t("insights.chartCardFulfillmentRefundTitle"),
-      summary: t("insights.chartCardFulfillmentRefundSummary"),
-      chartType: "table",
-      metrics: [t("insights.chartCardPendingMetric")],
-      dataQuality: "pending",
+      module: afterSalesModule,
+      fallbackSummary: t("insights.chartCardFulfillmentRefundSummary"),
+      previewItems: buildAfterSalesPreviewItems(liveData, afterSalesModule),
       href: "/app/today/orders",
       actionLabel: t("insights.chartCardOpenOrders"),
-    },
+    }),
   ];
 
   return {
@@ -447,12 +701,15 @@ export function InsightsChartsOverviewPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useNavigate();
-  const { overview, failed } = useLoaderData<InsightsOverviewLoaderData>();
+  const { overview, liveData, failed } = useLoaderData<InsightsOverviewLoaderData>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const embeddedSearch = useEmbeddedLocationSearch();
 
-  const rangeDays = overview?.rangeDays ?? 7;
+  const rangeDaysParam = searchParams.get("range");
+  const rangeDays =
+    rangeDaysParam === "30" ? 30 : rangeDaysParam === "14" ? 14 : overview?.rangeDays ?? 7;
+  const periodKey = rangeDays === 30 ? "30d" : "7d";
   const compareMode = (
     COMPARE_OPTIONS.includes(
       (searchParams.get("compare") as CompareMode | null) ?? "previous_period",
@@ -465,20 +722,33 @@ export function InsightsChartsOverviewPage() {
   const refreshing = revalidator.state !== "idle";
   const pageSpeedTargetUrl = searchParams.get("pageSpeedUrl");
   const landingPageLabel = searchParams.get("landingPage");
+  const focusCard = searchParams.get("focusCard");
+  const focusLabel = searchParams.get("focusLabel");
+  const snapshots = useMemo(() => buildLiveSnapshots(liveData), [liveData]);
+  const snapshot = useMemo(() => snapshots[periodKey], [periodKey, snapshots]);
 
   const dashboard = useMemo(
     () =>
-      overview
-        ? buildChartsDashboard({
-            overview,
-            compareMode,
-            embeddedSearch,
-            pageSpeedTargetUrl,
-            landingPageLabel,
-            t,
-          })
-        : null,
-    [compareMode, embeddedSearch, landingPageLabel, overview, pageSpeedTargetUrl, t],
+      buildChartsDashboard({
+        overview,
+        liveData,
+        snapshot,
+        compareMode,
+        embeddedSearch,
+        pageSpeedTargetUrl,
+        landingPageLabel,
+        t,
+      }),
+    [
+      compareMode,
+      embeddedSearch,
+      landingPageLabel,
+      liveData,
+      overview,
+      pageSpeedTargetUrl,
+      snapshot,
+      t,
+    ],
   );
 
   const handleRangeChange = (next: string) => {
@@ -494,6 +764,8 @@ export function InsightsChartsOverviewPage() {
   };
 
   const anyConnected = overview?.platforms.some((item) => item.connected) ?? false;
+  const hasBusinessEvidence = snapshot.modules.some((item) => item.source !== "pending");
+  const hasAnyEvidence = anyConnected || hasBusinessEvidence;
 
   return (
     <div style={isMobile ? mobilePageContentStyle : analysisPageContentStyle}>
@@ -539,6 +811,10 @@ export function InsightsChartsOverviewPage() {
                 end: overview.dateEnd,
               })}
             </span>
+          ) : liveData?.generatedAt ? (
+            <span style={pageHintTextStyle}>
+              {new Date(liveData.generatedAt).toLocaleString()}
+            </span>
           ) : null}
           <button
             type="button"
@@ -553,7 +829,7 @@ export function InsightsChartsOverviewPage() {
 
       {failed ? <div style={errorBoxStyle}>{t("insights.loadFailed")}</div> : null}
 
-      {!overview ? null : !anyConnected ? (
+      {!hasAnyEvidence ? (
         <div style={pageEmptyStateStyle}>
           <strong style={{ fontSize: "1rem", color: pageColorTokens.textPrimary }}>
             {t("insights.emptyTitle")}
@@ -575,29 +851,13 @@ export function InsightsChartsOverviewPage() {
               subtitle={t("insights.chartsOverviewSectionSubtitle")}
             />
             <div style={metricGridStyle(isMobile)}>
-              <MetricTile
-                label={t("insights.kpiSpend")}
-                value={formatMoney(overview.totals.spend, overview.currencyCode)}
-              />
-              <MetricTile
-                label={t("insights.kpiRoas")}
-                value={formatRatio(overview.totals.roas, "x")}
-              />
-              <MetricTile
-                label={t("insights.kpiConversions")}
-                value={formatInteger(overview.totals.conversions)}
-              />
-              <MetricTile
-                label={t("insights.overviewConnectedPlatforms")}
-                value={t("insights.overviewConnectedPlatformsValue", {
-                  connected: overview.platforms.filter((item) => item.connected).length,
-                  total: overview.platforms.length,
-                })}
-              />
+              {snapshot.topMetrics.slice(0, 4).map((metric) => (
+                <MetricTile key={metric.label} label={metric.label} value={metric.value} />
+              ))}
             </div>
           </PageSurface>
 
-          {dashboard?.groups.map((group) => (
+          {dashboard.groups.map((group) => (
             <PageSurface key={group.key} title={group.title}>
               <div style={groupSummaryRowStyle}>
                 <div id={`chart-group-${group.key}`} style={groupSummaryStyle}>
@@ -610,6 +870,14 @@ export function InsightsChartsOverviewPage() {
               <div style={cardGridStyle(isMobile)}>
                 {group.cards.map((card) => {
                   const focused = selectedGroup === group.key && selectedCard === card.id;
+                  const activeFocusLabel =
+                    focusLabel && (focusCard ? card.id === focusCard : card.id === selectedCard)
+                      ? focusLabel
+                      : null;
+                  const previewItems = prioritizeFocusedPreviewItems(
+                    card.previewItems ?? [],
+                    activeFocusLabel,
+                  );
                   return (
                     <div key={card.id} style={chartCardStyle(focused)}>
                       <div style={chartCardHeaderStyle}>
@@ -618,6 +886,11 @@ export function InsightsChartsOverviewPage() {
                           <div style={chartCardSummaryStyle}>{card.summary}</div>
                         </div>
                         <div style={chartCardBadgeRowStyle}>
+                          {card.source ? (
+                            <span style={{ ...sourcePillStyle, ...sourceTone(card.source) }}>
+                              {sourceLabel(card.source, t)}
+                            </span>
+                          ) : null}
                           <span style={cardTypePillStyle}>
                             {chartTypeLabel(card.chartType, t)}
                           </span>
@@ -633,6 +906,35 @@ export function InsightsChartsOverviewPage() {
                           </span>
                         ))}
                       </div>
+                      {previewItems.length > 0 ? (
+                        <div style={previewListStyle}>
+                          {card.previewTitle || activeFocusLabel ? (
+                            <div style={previewHeaderStyle}>
+                              {card.previewTitle ? (
+                                <span style={previewTitleStyle}>{card.previewTitle}</span>
+                              ) : null}
+                              {activeFocusLabel ? (
+                                <span style={previewFocusStyle}>{activeFocusLabel}</span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {previewItems.map((item) => {
+                            const itemFocused = matchesFocusLabel(item.label, activeFocusLabel);
+                            return (
+                              <div
+                                key={`${card.id}-${item.label}-${item.display}`}
+                                style={previewRowStyle(itemFocused)}
+                              >
+                                <span style={previewLabelStyle}>{item.label}</span>
+                                <span style={previewValueStyle}>{item.display}</span>
+                                {item.note ? (
+                                  <span style={previewNoteStyle}>{item.note}</span>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                       {card.href ? (
                         <button
                           type="button"
@@ -766,6 +1068,13 @@ const dataQualityPillStyle: CSSProperties = {
   fontWeight: 700,
 };
 
+const sourcePillStyle: CSSProperties = {
+  padding: "0.16rem 0.5rem",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+};
+
 const metricChipWrapStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -779,6 +1088,69 @@ const metricChipStyle: CSSProperties = {
   color: pageColorTokens.textPrimary,
   background: pageColorTokens.surfaceMuted,
   border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const previewListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.4rem",
+  padding: "0.75rem",
+  borderRadius: 12,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const previewHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.5rem",
+  flexWrap: "wrap",
+};
+
+const previewTitleStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: pageColorTokens.textSecondary,
+};
+
+const previewFocusStyle: CSSProperties = {
+  padding: "0.16rem 0.45rem",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  color: pageColorTokens.brandBlueDark,
+  background: "#eef4ff",
+  border: "1px solid rgba(0, 91, 211, 0.18)",
+};
+
+const previewRowStyle = (focused: boolean): CSSProperties => ({
+  display: "grid",
+  gap: "0.12rem",
+  padding: "0.35rem 0.45rem",
+  borderRadius: 10,
+  background: focused ? "#eef4ff" : "transparent",
+  border: focused
+    ? "1px solid rgba(0, 91, 211, 0.18)"
+    : "1px solid transparent",
+});
+
+const previewLabelStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const previewValueStyle: CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textBody,
+};
+
+const previewNoteStyle: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
 };
 
 const selectedGroupBadgeStyle: CSSProperties = {
