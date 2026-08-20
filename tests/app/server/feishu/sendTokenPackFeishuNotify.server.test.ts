@@ -55,7 +55,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
   it("skips when FEISHU_ENABLED is false", async () => {
     process.env.FEISHU_ENABLED = "false";
-    process.env.FEISHU_WEBHOOK_URL_SUBSCRIPTION = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
@@ -70,7 +70,7 @@ describe("sendTokenPackFeishuNotify", () => {
   });
 
   it("skips when webhook url is not configured", async () => {
-    delete process.env.FEISHU_WEBHOOK_URL_SUBSCRIPTION;
+    delete process.env.FEISHU_WEBHOOK_URL_SUPPORT;
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
@@ -85,7 +85,7 @@ describe("sendTokenPackFeishuNotify", () => {
   });
 
   it("returns ok on successful webhook response", async () => {
-    process.env.FEISHU_WEBHOOK_URL_SUBSCRIPTION = "https://example.com/hook";
+    process.env.FEISHU_WEBHOOK_URL_SUPPORT = "https://example.com/hook";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({

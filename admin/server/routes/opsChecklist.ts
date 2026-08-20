@@ -13,34 +13,43 @@ type ServiceStatus = {
   rechargeSignal: string;
 };
 
-function hasEnv(...names: string[]): boolean {
+function hasAllEnv(...names: string[]): boolean {
+  return names.every((name) => Boolean(process.env[name]?.trim()));
+}
+
+function hasAnyEnv(...names: string[]): boolean {
   return names.some((name) => Boolean(process.env[name]?.trim()));
 }
 
 function buildServiceStatuses(): ServiceStatus[] {
   return [
     {
-      key: "turso-libsql",
-      name: "Turso (libSQL)",
+      key: "spark-turso",
+      name: "Spark Turso",
       category: "core",
       required: true,
-      configured: hasEnv(
-        "TURSO_TEST_DATABASE_URL",
-        "TURSO_TEST_AUTH_TOKEN",
-        "TURSO_PROD_DATABASE_URL",
-        "TURSO_PROD_AUTH_TOKEN",
-      ),
-      note: "账户、订阅、计费流水、会话等主数据",
+      configured: hasAllEnv("SPARK_DATABASE_URL", "SPARK_DATABASE_AUTH_TOKEN"),
+      note: "账户、订阅、计费流水、会话等（SPARK_DATABASE_URL / SPARK_DATABASE_AUTH_TOKEN）",
       costSignal: "连接数、写入量、存储量、查询慢日志",
       rechargeSignal: "连接接近上限、慢查询持续、写入延迟抬升",
+    },
+    {
+      key: "tsf-turso",
+      name: "TSF Turso",
+      category: "core",
+      required: false,
+      configured: hasAllEnv("TSF_DATABASE_URL", "TSF_DATABASE_AUTH_TOKEN"),
+      note: "翻译 Tab / 额度观测（TSF_DATABASE_URL / TSF_DATABASE_AUTH_TOKEN）",
+      costSignal: "连接数、写入量、查询延迟",
+      rechargeSignal: "连接接近上限、慢查询持续",
     },
     {
       key: "azure-cosmos",
       name: "Azure Cosmos DB",
       category: "core",
       required: false,
-      configured: hasEnv("COSMOS_ENDPOINT", "COSMOS_KEY"),
-      note: "翻译任务与 Agent 运行日志",
+      configured: hasAllEnv("COSMOS_ENDPOINT", "COSMOS_KEY"),
+      note: "翻译任务与 Agent 运行日志（COSMOS_ENDPOINT / COSMOS_KEY）",
       costSignal: "RU/s 消耗、429 比例、跨分区查询成本",
       rechargeSignal: "429 连续出现、RU 长时间接近上限",
     },
@@ -49,42 +58,44 @@ function buildServiceStatuses(): ServiceStatus[] {
       name: "Azure Blob Storage",
       category: "core",
       required: false,
-      configured: hasEnv("AZURE_BLOB_CONNECTION_STRING"),
-      note: "翻译内容分块、图片翻译与文生图结果",
+      configured: hasAnyEnv("AZURE_BLOB_CONNECTION_STRING"),
+      note: "翻译 Blob / shop-profile 产物（AZURE_BLOB_CONNECTION_STRING）",
       costSignal: "存储容量、请求次数、出网流量",
       rechargeSignal: "存储增长过快、下载/访问费用异常",
     },
     {
       key: "redis",
-      name: "Redis",
+      name: "Redis (RENDER_KV)",
       category: "core",
       required: false,
-      configured: hasEnv("RENDER_KV", "REDIS_URL"),
-      note: "TSF 翻译运维（优先 RENDER_KV / Render KV 单机；兼容 REDIS_URL Azure Cluster，单机设 REDIS_CLUSTER=false）",
+      configured: hasAnyEnv("RENDER_KV"),
+      note: "TSF 翻译运维只读 / hint（RENDER_KV）",
       costSignal: "内存使用率、连接数、命中率",
       rechargeSignal: "内存接近上限、频繁 eviction",
     },
     {
-      key: "llm-openai-deepseek",
-      name: "OpenAI / DeepSeek",
+      key: "openrouter",
+      name: "OpenRouter",
       category: "ai",
       required: false,
-      configured: hasEnv("OPENAI_API_KEY", "DEEPSEEK_API_KEY"),
-      note: "AI 对话、商品描述与翻译模型调用",
-      costSignal: "token 消耗速度、每功能单次成本",
-      rechargeSignal: "日预算使用率 > 80% 或单日突增",
+      configured: hasAnyEnv("OPENROUTER_API_KEY"),
+      note: "Admin OpenRouter 探测页（OPENROUTER_API_KEY）",
+      costSignal: "探测调用额度",
+      rechargeSignal: "额度不足 / 探测失败",
     },
     {
-      key: "picture-translate-engines",
-      name: "Volcengine / Aidge",
-      category: "ai",
+      key: "aliyun-sls",
+      name: "Aliyun SLS",
+      category: "ops",
       required: false,
-      configured:
-        hasEnv("HUOSHAN_API_KEY", "VOLC_ACCESSKEY") ||
-        hasEnv("AIDGE_ACCESS_KEY_ID", "AIDGE_ACCESS_KEY_NAME"),
-      note: "整图翻译双引擎路由",
-      costSignal: "图片翻译请求量与每张图定额 token",
-      rechargeSignal: "调用失败重试增多、余额预警",
+      configured: hasAllEnv(
+        "ALIBABA_CLOUD_ACCESS_KEY_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+        "ALIBABA_CLOUD_ENDPOINT",
+      ),
+      note: "Pixel / App 日志（ALIBABA_CLOUD_*）",
+      costSignal: "写入量、查询流量",
+      rechargeSignal: "查询失败或配额告警",
     },
   ];
 }

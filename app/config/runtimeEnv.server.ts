@@ -169,14 +169,10 @@ function tursoPairOk(urlKey: string, tokenKey: string): boolean {
 function logCriticalEnvStatus(): void {
   console.info(`${ENV_LOG} ===== 关键变量 =====`);
 
-  const tursoTestOk = tursoPairOk("TURSO_TEST_DATABASE_URL", "TURSO_TEST_AUTH_TOKEN");
-  const tursoProdOk = tursoPairOk("TURSO_PROD_DATABASE_URL", "TURSO_PROD_AUTH_TOKEN");
-  logEnvCheck("Turso", tursoTestOk || tursoProdOk, [
-    ["TURSO_TARGET", process.env.TURSO_TARGET],
-    ["TURSO_TEST_DATABASE_URL", process.env.TURSO_TEST_DATABASE_URL],
-    ["TURSO_TEST_AUTH_TOKEN", process.env.TURSO_TEST_AUTH_TOKEN],
-    ["TURSO_PROD_DATABASE_URL", process.env.TURSO_PROD_DATABASE_URL],
-    ["TURSO_PROD_AUTH_TOKEN", process.env.TURSO_PROD_AUTH_TOKEN],
+  const tursoOk = tursoPairOk("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN");
+  logEnvCheck("Turso", tursoOk, [
+    ["TURSO_DATABASE_URL", process.env.TURSO_DATABASE_URL],
+    ["TURSO_AUTH_TOKEN", process.env.TURSO_AUTH_TOKEN],
   ]);
 
   logEnvCheck(
@@ -195,32 +191,14 @@ function logCriticalEnvStatus(): void {
     ["COSMOS_AGENT_RUNS_CONTAINER", process.env.COSMOS_AGENT_RUNS_CONTAINER, "agent_runs"],
   ]);
 
-  // 主应用专用 Render KV：`SPARK_KV`（测试实例 spark-kv-test）。
-  // 兼容旧 `REDIS_URL` / host+password 写法，便于本地与历史环境。
+  // 主应用专用 Render KV：`SPARK_KV`
   const sparkKv = process.env.SPARK_KV?.trim();
-  const redisUrl = process.env.REDIS_URL?.trim();
-  const redisHost =
-    process.env.REDIS_HOSTNAME?.trim() ||
-    process.env.REDIS_HOST?.trim() ||
-    process.env.REDISCACHEHOSTNAME?.trim();
-  const redisPassword =
-    process.env.REDIS_PASSWORD?.trim() || process.env.REDISCACHEKEY?.trim();
-  const redisOk = Boolean(sparkKv || redisUrl || (redisHost && redisPassword));
-  const redisFields: Array<[string, string | undefined, string?]> = sparkKv
-    ? [["SPARK_KV", sparkKv]]
-    : redisUrl
-      ? [["REDIS_URL", redisUrl]]
-      : [
-          ["REDIS_HOSTNAME", process.env.REDIS_HOSTNAME],
-          ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
-          ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
-        ];
-  logEnvCheck("Redis", redisOk, redisFields);
+  const redisOk = Boolean(sparkKv);
+  logEnvCheck("Redis", redisOk, [["SPARK_KV", process.env.SPARK_KV]]);
 
   const blobConn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   logEnvCheck("Blob", Boolean(blobConn), [
     ["AZURE_BLOB_CONNECTION_STRING", blobConn],
-    ["AZURE_BLOB_TRANSLATION_CONTAINER", process.env.AZURE_BLOB_TRANSLATION_CONTAINER, "translation-content"],
   ]);
 
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
@@ -269,8 +247,7 @@ export function ensureRuntimeEnv(): void {
     process.env.RENDER &&
     secretFileApplied === 0 &&
     !process.env.SHOPIFY_API_KEY?.trim() &&
-    !tursoPairOk("TURSO_TEST_DATABASE_URL", "TURSO_TEST_AUTH_TOKEN") &&
-    !tursoPairOk("TURSO_PROD_DATABASE_URL", "TURSO_PROD_AUTH_TOKEN")
+    !tursoPairOk("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN")
   ) {
     console.warn(
       `${ENV_LOG} ⚠️ 未从 Secret File 加载任何变量，且 Turso/Shopify 均未配置。请检查 Render Environment Groups 是否包含 Secret File（文件名需为 .env）或是否已正确链接。`,
@@ -291,7 +268,7 @@ export function describeTursoEnvKeys(): string {
   if (keys.length === 0) {
     return (
       "process.env 中无任何 TURSO_* 键。" +
-      `请确认仓库根目录 ${path.join(getProjectRoot(), ".env")} 存在且含 TURSO_TEST_*；` +
+      `请确认仓库根目录 ${path.join(getProjectRoot(), ".env")} 存在且含 TURSO_DATABASE_URL / TURSO_AUTH_TOKEN；` +
       "Render 请在 Environment 面板配置或使用 Secret File /etc/secrets/.env。"
     );
   }

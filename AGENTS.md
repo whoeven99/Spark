@@ -54,7 +54,7 @@ Spark/
 ├─ extensions/                Shopify 扩展：Web Pixel + Theme（TikTok / Google Remarketing / Image Switcher）
 ├─ prisma/                    schema、迁移和计费种子 SQL
 ├─ tests/                     与 app/ 大体镜像的 Vitest 测试
-├─ scripts/                   运维、Turso、部署、飞书文档等脚本
+├─ scripts/                   运维脚本（Turso 迁移、部署、飞书文档、广告沙盒探针等）；共用 `scripts/lib/loadEnv.mjs`
 ├─ docs/                      架构、交互、设计、路线图和运营文档
 ├─ public/                    静态资源（favicon、workbench demo）
 ├─ translation-reports/       翻译运维报告输出目录（产物，非源码）
@@ -94,7 +94,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源。
 - `/api/automation-overview`：Today/自动化概览。
 - `/api/task-proposal`：聊天中的任务建议/确认载荷。
-- `/api/support`、`/api/external-support`：客服会话与外部支持入口。
+- `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单（paid/cancelled）、退款、库存、履约，以及 Google Merchant 商品状态与 Meta Catalog Webhook；公共执行/调试工具在 `app/server/webhook/`。
@@ -205,7 +205,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 - Prisma schema：`prisma/schema.prisma`；生成目录：`app/generated/prisma/`。
 - 修改 schema 后至少运行 `npx prisma generate` 和适当的 schema 校验/测试。
-- Turso 运行时由 `app/db.server.ts` 和 `TURSO_*` 变量连接；Prisma datasource 的 `DATABASE_URL` 主要用于 CLI、本地 SQLite 和生成流程。
+- Turso 运行时由 `app/db.server.ts` 读 `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`（测/产各环境各自配值，无 `TURSO_TARGET`）；Prisma datasource 的 `DATABASE_URL` 主要用于 CLI、本地 SQLite 和生成流程。
 - 测试/生产 Turso 迁移使用仓库脚本：`npm run turso:migrate:test`、`npm run turso:migrate:prod`。
 - 不要把 `prisma migrate deploy` 直接指向 `libsql://`。
 - 当前迁移目录中部分 `add_*` 迁移时间早于 `init`；新建本地库前先核对迁移顺序。必要时使用本地 SQLite + `prisma db push`，不要擅自重排或改写已上线迁移。
@@ -277,10 +277,35 @@ npm run turso:migrate:test
 
 - Node 版本要求以 `package.json` 为准：`>=20.19 <22 || >=22.12`。
 - `npm run dev` 包装 `shopify app dev`，需要 Shopify CLI 登录和应用配置；多应用配置用 `npm run dev:yw`、`npm run dev:spark-zz`（对应 `shopify.app.*.toml`）。
-- 运维/交付脚本：`npm run deploy:test`（Render 测试环境）、`npm run push:pr`（提交 + push + 建 PR）、`npm run render:digest`（Render 日志摘要）、`npm run orders:create`（生成测试订单）、`npm run turso:migrate:prod`、`npm run turso:drop-schema:test|prod`（破坏性，需明确授权）。完整清单以 `package.json` scripts 为准。
+- 运维/交付 npm 脚本：`npm run deploy:test`（Render 测试环境）、`npm run push:pr`（提交 + push + 建 PR）、`npm run orders:create`（生成测试订单）、`npm run turso:migrate:test|prod`。完整清单以 `package.json` scripts 为准。
 - 主应用服务端运行需要 Shopify 和 Turso 相关变量；AI、Cosmos、Blob、Redis、SES、飞书等能力按功能依赖相应变量。
-- 单元测试位于 `tests/`；`scripts/*.test.cjs` 不属于 Vitest，需按脚本单独用 `node --test` 执行（仓库已有 `npm run test:render-digest` 等包装）。
+- 单元测试位于 `tests/`（Vitest）。
 - 不读取或输出 `.env` / `.env.prod` 的值。只记录所需变量名。
+- 诊断脚本默认叠 `.env.test` → `.env`（`scripts/lib/loadEnv.mjs`）；查产需显式 `--env=.env.prod`。交互约定见 `.cursor/rules/env-prod-safety.mdc`。
+
+### 脚本清单（`scripts/`）
+
+Package-backed：
+
+- `scripts/turso-migrate.cjs` — `npm run turso:migrate:test|prod`
+- `scripts/cursor-push-pr.mjs` — `npm run push:pr`
+- `scripts/deploy-test-render.mjs` — `npm run deploy:test`
+- `scripts/create-test-orders.mjs` — `npm run orders:create`
+
+运维 / Agent 入口（无 npm，按需手跑）：
+
+- `scripts/fetch-feishu-doc.mjs` — 拉取飞书 Wiki/Docx（§6 强制入口）
+- `scripts/query-turso.mjs` — 快速查 Turso 表（默认测环境）
+- `scripts/lib/loadEnv.mjs` — 上述脚本共用的 env 叠载与 Turso/Redis/Cosmos 解析
+- `scripts/generate-notification-html-templates.cjs` — 重生 SES 邮件 HTML（`app/server/notifications/tencent-cloud-html/`）
+- `scripts/test-pixel-ingest.mjs` — 向 `/api/pixel-ingest` 发测试 envelope
+- Meta / TikTok 广告沙盒：`check-meta-sandbox-posts.mjs`、`list-meta-sandbox-pages.mjs`、`diagnose-meta-sandbox-seed.mjs`、`list-tiktok-sandbox-identities.mjs`、`seed-tiktok-sandbox.mjs`、`upload-tiktok-sandbox-creative.mjs`
+
+CI：
+
+- `.github/scripts/render-deploy-and-wait.sh` — `spark-deploy.yml` Admin Test 部署轮询；飞书部署通知在 workflow 内直接 `curl`，不依赖本地 digest 脚本
+
+不要恢复已删除的 Render 日志 digest 脚本（`render-daily-log-digest` 等）或缺失的 `turso-drop-schema-*` npm 入口。临时探针放仓库外，或用完即删；`scripts/tmp*` 未跟踪文件勿擅自纳入改动。
 
 ## 11. 验证矩阵
 

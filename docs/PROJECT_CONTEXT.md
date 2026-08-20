@@ -36,7 +36,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话和文件上下文。
 - `/api/task-proposal`：聊天中的任务建议/确认载荷。
 - `/api/automation-overview`：Today 和工作台自动化概览。
-- `/api/support`、`/api/external-support`：客服会话入口。
+- `/api/support`：客服会话入口。
 - `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
 - `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console。
 - `POST /api/pagespeed`：PageSpeed Insights 实验室分析（不落库）。
@@ -128,7 +128,9 @@ npm run turso:migrate:test
 ## 8. 关键环境变量分组
 
 - Shopify：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`。
-- Turso：`TURSO_TARGET`、`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`、`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`、`DATABASE_URL`。
+- Turso（主应用）：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`（测/产各自配值）；`DATABASE_URL` 仅 Prisma CLI / 本地 SQLite。
+- Turso（Admin）：`SPARK_DATABASE_URL` / `SPARK_DATABASE_AUTH_TOKEN`（Spark 库）；
+  `TSF_DATABASE_URL` / `TSF_DATABASE_AUTH_TOKEN`（翻译库）；测/产分服务配值，无 TARGET。
 - AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。
 - Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；主应用 Render KV 用 `SPARK_KV`（测试实例 `spark-kv-test`）；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。
 - 图片翻译：`HUOSHAN_*` / `VOLC_*`、`AIDGE_*`、`PICTURE_TRANSLATE_*`。

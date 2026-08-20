@@ -1631,6 +1631,8 @@
     "allInsightsDetailHint": "The raw health diagnosis has been moved out of this task list to reduce information pressure.",
     "viewHealthDetail": "View diagnosis",
     "valueUnavailable": "No value-layer data is available yet.",
+    "valueLoading": "Calculating value-layer data…",
+    "valueLoadFailed": "Could not load value-layer data. Please try again shortly.",
     "detailHeroReview": "Review status",
     "detailRiskCritical": "Number of risk environments that need immediate follow-up.",
     "detailRiskInsights": "Number of active anomaly insights available for validation.",
