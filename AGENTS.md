@@ -121,7 +121,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Google Analytics 4 | `app/server/googleAnalytics/`（`ga4Api.server.ts` 读数、`ga4Credentials.server.ts` OAuth 凭证） |
 | Google Search Console | `app/server/googleSearchConsole/`（`gscApi.server.ts`、`gscCredentials.server.ts`） |
 | PageSpeed Insights | `app/server/pageSpeed/`（PSI v5 `fetch`，平台级 `GOOGLE_PAGESPEED_API_KEY`，结果不落库） |
-| ShopifyQL 官方报表 | `app/server/shopifyql/`（`shopifyqlQuery` + 六域 preset，入口 `/app/settings/shopify-reports`，需要 `read_reports` 与 Protected Customer Data Level 2） |
+| ShopifyQL 官方报表 | `app/server/shopifyql/`（`shopifyqlQuery` + 七域 preset：销售/退款/成本利润/客户/库存/履约/店面漏斗，入口 `/app/settings/shopify-reports`，需要 `read_reports` 与 Protected Customer Data Level 2） |
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts` |
