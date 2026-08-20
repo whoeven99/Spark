@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
+import { resolveHealthMonitorDetail } from "../lib/healthMonitorAiDetail";
 import {
   HEALTH_MONITORS,
   getHealthMonitorGroups,
@@ -41,6 +42,7 @@ export default function AppHealthMonitor() {
 
   const selectedMonitor =
     HEALTH_MONITORS.find((item) => item.id === selectedMonitorId) ?? HEALTH_MONITORS[0];
+  const selectedDetail = useMemo(() => resolveHealthMonitorDetail(selectedMonitor), [selectedMonitor]);
 
   const monitoringSummary = useMemo(() => getHealthMonitorSummary(), []);
 
@@ -108,6 +110,7 @@ export default function AppHealthMonitor() {
         {viewMode === "detail" ? (
           <DetailSection
             monitor={selectedMonitor}
+            detail={selectedDetail}
             onBackToRun={() => setViewMode("run")}
             onOpenAi={() => navigate("/app")}
           />
@@ -253,10 +256,12 @@ function RunSection({
 
 function DetailSection({
   monitor,
+  detail,
   onBackToRun,
   onOpenAi,
 }: {
   monitor: HealthMonitorRecord;
+  detail: ReturnType<typeof resolveHealthMonitorDetail>;
   onBackToRun: () => void;
   onOpenAi: () => void;
 }) {
@@ -270,8 +275,11 @@ function DetailSection({
           <span style={statusBadgeStyle(monitor.status)}>{statusLabel(monitor.status)}</span>
           <div style={detailHeroMainStyle}>
             <div style={detailMetaStyle}>{monitor.group}</div>
-            <h3 style={detailIssueTitleStyle}>{monitor.issue}</h3>
+            <h3 style={detailIssueTitleStyle}>{detail.result.problem}</h3>
             <div style={detailValueStyle}>当前关键数据：{monitor.value}</div>
+            <div style={detailMetaStyle}>
+              已走通链路：Input {"->"} Prompt {"->"} Result
+            </div>
           </div>
         </div>
         <div style={buttonRowStyle}>
@@ -282,15 +290,15 @@ function DetailSection({
       </PageSurface>
 
       <PageSurface title="问题是什么" subtitle="只保留一句判断，让用户先知道结论。">
-        <p style={detailLeadStyle}>{monitor.issue}</p>
+        <p style={detailLeadStyle}>{detail.result.problem}</p>
       </PageSurface>
 
       <PageSurface title="数据论据" subtitle="用结构化证据支撑结论，而不是铺解释性散文。">
         <div style={evidenceListStyle}>
-          {monitor.evidence.map((entry) => (
+          {detail.result.evidenceSummary.map((entry) => (
             <div key={entry.label} style={evidenceItemStyle}>
               <strong style={evidenceLabelStyle}>{entry.label}</strong>
-              <span style={evidenceValueStyle}>{entry.value}</span>
+              <span style={evidenceValueStyle}>{entry.summary}</span>
             </div>
           ))}
         </div>
@@ -298,18 +306,32 @@ function DetailSection({
 
       <PageSurface title="解决办法" subtitle="每条动作都应该可以进一步转进现有 Tasks。">
         <div style={actionListStyle}>
-          {monitor.actions.map((action) => (
+          {detail.result.actions.map((action) => (
             <div key={action.title} style={actionItemStyle}>
-              <strong style={actionTitleStyle}>{action.title}</strong>
+              <strong style={actionTitleStyle}>
+                {action.title}
+                <span style={actionPriorityStyle}>{action.priority}</span>
+              </strong>
               <span style={actionDetailStyle}>{action.detail}</span>
             </div>
           ))}
         </div>
       </PageSurface>
 
-      <PageSurface title="和 AI 聊聊" subtitle="这里先保留一个入口，同时把当前报告摘要直接展示出来。">
+      <PageSurface title="和 AI 聊聊" subtitle="这里先展示生成后的 chat prompt，后续只需要把 generate 这一步替换成真实 LLM。">
         <div style={aiPanelStyle}>
-          <pre style={aiPromptStyle}>{monitor.aiPrompt}</pre>
+          <div style={aiMetaPanelStyle}>
+            <strong style={evidenceLabelStyle}>MonitorDetailInput</strong>
+            <pre style={aiPromptStyle}>{JSON.stringify(detail.input, null, 2)}</pre>
+          </div>
+          <div style={aiMetaPanelStyle}>
+            <strong style={evidenceLabelStyle}>Prompt Preview</strong>
+            <pre style={aiPromptStyle}>{detail.prompt.user}</pre>
+          </div>
+          <div style={aiMetaPanelStyle}>
+            <strong style={evidenceLabelStyle}>AI Chat Prompt</strong>
+            <pre style={aiPromptStyle}>{detail.result.aiChatPrompt}</pre>
+          </div>
           <div style={buttonRowStyle}>
             <button type="button" style={primaryButtonStyle} onClick={onOpenAi}>
               把这份报告带去 AI
@@ -618,8 +640,23 @@ const actionItemStyle: CSSProperties = {
 };
 
 const actionTitleStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
   fontSize: "0.9rem",
   color: pageColorTokens.textPrimary,
+};
+
+const actionPriorityStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.12rem 0.38rem",
+  borderRadius: 999,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.7rem",
+  fontWeight: 700,
 };
 
 const actionDetailStyle: CSSProperties = {
@@ -631,6 +668,11 @@ const actionDetailStyle: CSSProperties = {
 const aiPanelStyle: CSSProperties = {
   display: "grid",
   gap: "0.9rem",
+};
+
+const aiMetaPanelStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.4rem",
 };
 
 const aiPromptStyle: CSSProperties = {
