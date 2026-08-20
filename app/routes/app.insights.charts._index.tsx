@@ -1,11 +1,7 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import { parseRangeDays } from "../server/adsInsights/dateRange.server";
-import {
-  buildAdsOverview,
-  type AdsOverviewSnapshot,
-} from "../server/adsInsights/overview.server";
+import type { AdsOverviewSnapshot } from "../server/adsInsights/overview.server";
 import {
   loadBusinessReportLiveData,
 } from "../server/operations/businessReportSnapshot.server";
@@ -19,25 +15,32 @@ export type InsightsOverviewLoaderData = {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const [{ session }, businessReportData] = await Promise.all([
-    authenticate.admin(request),
-    loadBusinessReportLiveData(request),
-  ]);
+  const authContext = await authenticate.admin(request);
   const url = new URL(request.url);
-  const rangeDays = parseRangeDays(url.searchParams.get("range"));
+  const groupParam = url.searchParams.get("group");
+  const group =
+    groupParam === "acquisition" ||
+    groupParam === "conversion" ||
+    groupParam === "operations"
+      ? groupParam
+      : "roi";
 
   try {
-    const overview = await buildAdsOverview({ shop: session.shop, rangeDays });
+    const businessReportData = await loadBusinessReportLiveData(request, {
+      mode: "insights_charts",
+      group,
+      authContext,
+    });
     return {
-      overview,
+      overview: null,
       liveData: businessReportData.liveData,
       failed: false,
     } satisfies InsightsOverviewLoaderData;
   } catch (error) {
-    console.error("[insights.charts._index] build overview failed:", error);
+    console.error("[insights.charts._index] loader failed:", error);
     return {
       overview: null,
-      liveData: businessReportData.liveData,
+      liveData: null,
       failed: true,
     } satisfies InsightsOverviewLoaderData;
   }

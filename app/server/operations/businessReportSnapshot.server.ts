@@ -19,8 +19,17 @@ import { computeChannelRoi } from "./channelRoi.server";
 import { ensureCustomerValueLayer } from "./customerValue.server";
 import { listOperationTasks } from "./dailyInspection.server";
 import { computeOperationsDiagnosis } from "./diagnosis.server";
-import { getShopCostConfig } from "./roi/costConfig.server";
+import { DEFAULT_COST_CONFIG, getShopCostConfig } from "./roi/costConfig.server";
 import type { LiveSnapshotData } from "./businessReportSnapshot.shared";
+
+type InsightsChartsGroup = "roi" | "acquisition" | "conversion" | "operations";
+type LiveDataMode = "full" | "insights_charts";
+
+type LoadBusinessReportLiveDataOptions = {
+  mode?: LiveDataMode;
+  group?: InsightsChartsGroup;
+  authContext?: Awaited<ReturnType<typeof authenticate.admin>>;
+};
 
 function buildSince(rangeDays: number): string {
   return `-${rangeDays}d`;
@@ -44,37 +53,80 @@ function buildStorefrontFunnelQuery(rangeDays: number): string {
 
 export async function loadBusinessReportLiveData(
   request: Request,
+  options?: LoadBusinessReportLiveDataOptions,
 ): Promise<{ liveData: LiveSnapshotData | null }> {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = options?.authContext ?? (await authenticate.admin(request));
   const url = new URL(request.url);
   const rangeDays = parseRangeDays(url.searchParams.get("range"));
   const now = new Date();
   const requestLocale = detectRequestLocale(request, {
     sessionLocale: readShopifySessionLocale(session),
   });
+  const mode = options?.mode ?? "full";
+  const group = options?.group ?? "roi";
+  const chartsScope =
+    mode === "insights_charts"
+      ? {
+          includeAds: group === "roi",
+          includeGa4: group === "roi" || group === "acquisition" || group === "conversion",
+          includeDiagnosis: group === "conversion" || group === "operations",
+          includeShopifyReports:
+            group === "roi" || group === "conversion" || group === "operations",
+          includeTasks: false,
+          includeCustomerAggregates: false,
+          includeChannelRoi: false,
+          includePageSpeed: false,
+          includeCostConfig: false,
+        }
+      : {
+          includeAds: true,
+          includeGa4: true,
+          includeDiagnosis: true,
+          includeShopifyReports: true,
+          includeTasks: true,
+          includeCustomerAggregates: true,
+          includeChannelRoi: true,
+          includePageSpeed: true,
+          includeCostConfig: true,
+        };
 
   try {
-    const costConfig = await getShopCostConfig(session.shop);
-    const operationTasks = await listOperationTasks(session.shop).catch((error) => {
-      console.error("[today.insights] operation tasks load failed:", error);
-      return [];
-    });
-    const diagnosis = await computeOperationsDiagnosis(session.shop, now);
-    const ga4Credential = await getGa4Credential(session.shop).catch((error) => {
-      console.error("[today.insights] ga4 credential load failed:", error);
-      return null;
-    });
+    const costConfig = chartsScope.includeCostConfig
+      ? await getShopCostConfig(session.shop)
+      : DEFAULT_COST_CONFIG;
+    const operationTasks = chartsScope.includeTasks
+      ? await listOperationTasks(session.shop).catch((error) => {
+          console.error("[today.insights] operation tasks load failed:", error);
+          return [];
+        })
+      : [];
+    const diagnosis = chartsScope.includeDiagnosis
+      ? await computeOperationsDiagnosis(session.shop, now)
+      : null;
+    const ga4Credential = chartsScope.includeGa4
+      ? await getGa4Credential(session.shop).catch((error) => {
+          console.error("[today.insights] ga4 credential load failed:", error);
+          return null;
+        })
+      : null;
 
     const [customerAggregates, channelRoi, ads, ga4, pageSpeed, shopifyReports] = await Promise.all([
-      ensureCustomerValueLayer(session.shop, costConfig.defaultGrossMarginPercent, { now }).catch((error) => {
-        console.error("[today.insights] customer value layer failed:", error);
-        return null;
-      }),
-      computeChannelRoi(session.shop, costConfig, now).catch((error) => {
-        console.error("[today.insights] channel roi failed:", error);
-        return null;
-      }),
-      (async () => {
+      chartsScope.includeCustomerAggregates
+        ? ensureCustomerValueLayer(session.shop, costConfig.defaultGrossMarginPercent, { now }).catch(
+            (error) => {
+              console.error("[today.insights] customer value layer failed:", error);
+              return null;
+            },
+          )
+        : Promise.resolve(null),
+      chartsScope.includeChannelRoi
+        ? computeChannelRoi(session.shop, costConfig, now).catch((error) => {
+            console.error("[today.insights] channel roi failed:", error);
+            return null;
+          })
+        : Promise.resolve(null),
+      chartsScope.includeAds
+        ? (async () => {
         const platforms: AdsInsightsPlatform[] = ["meta", "google", "tiktok"];
         const results = await Promise.all(
           platforms.map(async (platform) => {
@@ -136,12 +188,14 @@ export async function loadBusinessReportLiveData(
           totalRoas: totalSpend > 0 ? totalConversionsValue / totalSpend : null,
           currencyCode:
             platformSummaries.find((item) => item.currencyCode)?.currencyCode ??
-            diagnosis.summaryMetrics.currency ??
+            diagnosis?.summaryMetrics.currency ??
             null,
           platformSummaries,
         };
-      })(),
-      (async () => {
+      })()
+        : Promise.resolve(null),
+      chartsScope.includeGa4
+        ? (async () => {
         if (!ga4Credential || ga4Credential.properties.length === 0) {
           return {
             connected: false,
@@ -205,8 +259,10 @@ export async function loadBusinessReportLiveData(
             error: error instanceof Error ? error.message : "GA4 查询失败",
           };
         }
-      })(),
-      (async () => {
+      })()
+        : Promise.resolve(null),
+      chartsScope.includePageSpeed
+        ? (async () => {
         const shopInfo = await fetchShopBasicInfo(admin).catch((error) => {
           console.error("[today.insights] shop basic info failed:", error);
           return null;
@@ -242,12 +298,14 @@ export async function loadBusinessReportLiveData(
             error: error instanceof Error ? error.message : "PageSpeed 分析失败",
           };
         }
-      })(),
-      (async () => {
+      })()
+        : Promise.resolve(null),
+      chartsScope.includeShopifyReports
+        ? (async () => {
         if (!hasReadReportsScope(session.scope)) {
           return {
             access: "missing_scope" as const,
-            currencyCode: diagnosis.summaryMetrics.currency ?? null,
+            currencyCode: diagnosis?.summaryMetrics.currency ?? null,
             salesTrend: [],
             refundTrend: [],
             fulfillmentTrend: [],
@@ -270,7 +328,7 @@ export async function loadBusinessReportLiveData(
         ) {
           return {
             access: "access_denied" as const,
-            currencyCode: diagnosis.summaryMetrics.currency ?? null,
+            currencyCode: diagnosis?.summaryMetrics.currency ?? null,
             salesTrend: [],
             refundTrend: [],
             fulfillmentTrend: [],
@@ -293,7 +351,7 @@ export async function loadBusinessReportLiveData(
 
         return {
           access: "ok" as const,
-          currencyCode: diagnosis.summaryMetrics.currency ?? null,
+          currencyCode: diagnosis?.summaryMetrics.currency ?? null,
           salesTrend: salesResult.ok
             ? salesResult.rows.map((row) => ({
                 date: String(row.day ?? ""),
@@ -329,7 +387,8 @@ export async function loadBusinessReportLiveData(
                 }
               : null,
         };
-      })(),
+      })()
+        : Promise.resolve(null),
     ]);
 
     return {

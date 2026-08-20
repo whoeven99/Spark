@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { resolveDateWindow } from "../../server/adsInsights/dateRange.server";
 import {
   analysisPageContentStyle,
   mobilePageContentStyle,
@@ -50,6 +51,12 @@ type FunnelStep = {
   label: string;
   count: number;
   rateFromPrev: number | null;
+};
+
+type ObjectListRow = {
+  label: string;
+  value: string;
+  detail?: string;
 };
 
 type ChartsLiveData = NonNullable<InsightsOverviewLoaderData["liveData"]>;
@@ -187,7 +194,6 @@ function buildTrafficBuckets(
 
 function buildTopMetrics(
   liveData: ChartsLiveData,
-  overview: InsightsOverviewLoaderData["overview"],
   currencyCode: string | null,
   t: ReturnType<typeof useTranslation>["t"],
 ): SummaryMetric[] {
@@ -218,7 +224,7 @@ function buildTopMetrics(
       : ga4Summary != null
         ? calculateRate(ga4Summary.totalPurchases, ga4Summary.totalSessions)
         : diagnosisMetrics?.conversionRate7d ?? null;
-  const roas = overview?.totals.roas ?? liveData.ads?.totalRoas ?? null;
+  const roas = liveData.ads?.totalRoas ?? null;
 
   return [
     { label: t("insights.chartMetricSessions"), value: formatInteger(sessions) },
@@ -399,6 +405,91 @@ function buildAdsComparisons(liveData: ChartsLiveData) {
       value: item.roas ?? 0,
     })),
   };
+}
+
+function buildRoiPlatformRows(
+  liveData: ChartsLiveData,
+  currencyCode: string | null,
+  t: ReturnType<typeof useTranslation>["t"],
+): ObjectListRow[] {
+  return [...(liveData.ads?.platformSummaries ?? [])]
+    .sort((left, right) => right.spend - left.spend)
+    .slice(0, 5)
+    .map((item) => ({
+      label: item.accountName || item.platform,
+      value: formatRatio(item.roas),
+      detail: [
+        `${t("insights.chartMetricSpend")}: ${formatMoney(item.spend, item.currencyCode ?? currencyCode)}`,
+        `${t("insights.chartMetricConversions")}: ${formatInteger(item.conversions)}`,
+      ].join(" · "),
+    }));
+}
+
+function buildAcquisitionChannelRows(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+): ObjectListRow[] {
+  return (liveData.ga4?.channelRows ?? []).slice(0, 5).map((row) => ({
+    label: row.key,
+    value: formatInteger(row.sessions),
+    detail: [
+      `${t("insights.chartMetricUsers")}: ${formatInteger(row.users)}`,
+      `${t("insights.chartMetricPurchases")}: ${formatInteger(row.purchases)}`,
+    ].join(" · "),
+  }));
+}
+
+function buildLandingPageRows(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+): ObjectListRow[] {
+  return (liveData.ga4?.landingRows ?? []).slice(0, 5).map((row) => ({
+    label: row.key,
+    value: formatPercent(calculateRate(row.purchases, row.sessions)),
+    detail: [
+      `${t("insights.chartMetricSessions")}: ${formatInteger(row.sessions)}`,
+      `${t("insights.chartMetricPurchases")}: ${formatInteger(row.purchases)}`,
+    ].join(" · "),
+  }));
+}
+
+function buildRefundSpikeRows(
+  refundSeries: ChartSeries[],
+  t: ReturnType<typeof useTranslation>["t"],
+): ObjectListRow[] {
+  const points = refundSeries[0]?.points ?? [];
+  return [...points]
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 5)
+    .map((point) => ({
+      label: point.label,
+      value: formatInteger(point.value),
+      detail: t("insights.chartRefundSpikeDetail"),
+    }));
+}
+
+function buildFulfillmentGapRows(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+): ObjectListRow[] {
+  const rows = liveData.shopifyReports?.fulfillmentTrend ?? [];
+  return [...rows]
+    .map((row) => ({
+      date: formatDateLabel(row.date),
+      gap: Math.max(row.shipped - row.fulfilled, 0),
+      fulfilled: row.fulfilled,
+      shipped: row.shipped,
+    }))
+    .sort((left, right) => right.gap - left.gap)
+    .slice(0, 5)
+    .map((row) => ({
+      label: row.date,
+      value: formatInteger(row.gap),
+      detail: [
+        `${t("insights.chartFulfillmentShipped")}: ${formatInteger(row.shipped)}`,
+        `${t("insights.chartFulfillmentFulfilled")}: ${formatInteger(row.fulfilled)}`,
+      ].join(" · "),
+    }));
 }
 
 function hasSeriesData(series: ChartSeries[]): boolean {
@@ -684,29 +775,63 @@ function CompactMetricGrid({
   );
 }
 
+function ObjectList({
+  title,
+  valueLabel,
+  rows,
+}: {
+  title: string;
+  valueLabel: string;
+  rows: ObjectListRow[];
+}) {
+  return (
+    <div style={objectListCardStyle}>
+      <div style={objectListHeaderStyle}>
+        <span style={objectListTitleStyle}>{title}</span>
+        <span style={objectListValueLabelStyle}>{valueLabel}</span>
+      </div>
+      {rows.length > 0 ? (
+        <div style={objectListStyle}>
+          {rows.map((row) => (
+            <div key={`${row.label}-${row.value}`} style={objectRowStyle}>
+              <div style={objectRowMainStyle}>
+                <span style={objectRowLabelStyle}>{row.label}</span>
+                {row.detail ? <span style={objectRowDetailStyle}>{row.detail}</span> : null}
+              </div>
+              <strong style={objectRowValueStyle}>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyChart label="—" />
+      )}
+    </div>
+  );
+}
+
 export function InsightsChartsOverviewPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
-  const { overview, liveData, failed } = useLoaderData<InsightsOverviewLoaderData>();
+  const { liveData, failed } = useLoaderData<InsightsOverviewLoaderData>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
 
   const rangeDaysParam = searchParams.get("range");
   const rangeDays =
     rangeDaysParam === "30" ? 30 : rangeDaysParam === "14" ? 14 : 7;
+  const windowRange = useMemo(() => resolveDateWindow(rangeDays), [rangeDays]);
   const activeDirection = resolveDataDirection(searchParams.get("group"));
   const refreshing = revalidator.state !== "idle";
 
   const currencyCode =
     liveData?.shopifyReports?.currencyCode ??
     liveData?.ads?.currencyCode ??
-    overview?.currencyCode ??
     liveData?.diagnosis?.summaryMetrics.currency ??
     null;
 
   const topMetrics = useMemo(
-    () => (liveData ? buildTopMetrics(liveData, overview, currencyCode, t) : []),
-    [currencyCode, liveData, overview, t],
+    () => (liveData ? buildTopMetrics(liveData, currencyCode, t) : []),
+    [currencyCode, liveData, t],
   );
   const trafficBuckets = useMemo(
     () => (liveData ? buildTrafficBuckets(liveData, t) : []),
@@ -741,6 +866,23 @@ export function InsightsChartsOverviewPage() {
 
   const storefrontFunnel = liveData?.shopifyReports?.storefrontFunnel ?? null;
   const fulfillmentMetrics = liveData?.diagnosis?.summaryMetrics ?? null;
+  const roiPlatformRows = useMemo(
+    () => (liveData ? buildRoiPlatformRows(liveData, currencyCode, t) : []),
+    [currencyCode, liveData, t],
+  );
+  const acquisitionChannelRows = useMemo(
+    () => (liveData ? buildAcquisitionChannelRows(liveData, t) : []),
+    [liveData, t],
+  );
+  const landingPageRows = useMemo(
+    () => (liveData ? buildLandingPageRows(liveData, t) : []),
+    [liveData, t],
+  );
+  const refundSpikeRows = useMemo(() => buildRefundSpikeRows(refundSeries, t), [refundSeries, t]);
+  const fulfillmentGapRows = useMemo(
+    () => (liveData ? buildFulfillmentGapRows(liveData, t) : []),
+    [liveData, t],
+  );
   const directionItems = useMemo(
     () => [
       { key: "roi" as const, label: t("insights.chartGroupRoiTitle") },
@@ -891,14 +1033,12 @@ export function InsightsChartsOverviewPage() {
           onChange={handleRangeChange}
         />
         <div style={toolbarSideStyle}>
-          {overview ? (
-            <span style={pageHintTextStyle}>
-              {t("insights.windowHint", {
-                start: overview.dateStart,
-                end: overview.dateEnd,
-              })}
-            </span>
-          ) : null}
+          <span style={pageHintTextStyle}>
+            {t("insights.windowHint", {
+              start: windowRange.dateStart,
+              end: windowRange.dateEnd,
+            })}
+          </span>
           <button
             type="button"
             style={refreshButtonStyle(refreshing)}
@@ -967,6 +1107,18 @@ export function InsightsChartsOverviewPage() {
                     },
                   ]}
                 />
+                <div style={objectGridStyle(isMobile)}>
+                  <ObjectList
+                    title={t("insights.chartTopChannelsTitle")}
+                    valueLabel={t("insights.chartMetricSessions")}
+                    rows={acquisitionChannelRows}
+                  />
+                  <ObjectList
+                    title={t("insights.chartTopLandingPagesTitle")}
+                    valueLabel={t("insights.chartMetricCvr")}
+                    rows={landingPageRows}
+                  />
+                </div>
               </div>
             </PageSurface>
           ) : null}
@@ -1008,6 +1160,14 @@ export function InsightsChartsOverviewPage() {
                     />
                   </div>
                 </div>
+              </PageSurface>
+
+              <PageSurface title={t("insights.chartTopPlatformsTitle")}>
+                <ObjectList
+                  title={t("insights.chartTopPlatformsTitle")}
+                  valueLabel={t("insights.chartMetricRoas")}
+                  rows={roiPlatformRows}
+                />
               </PageSurface>
             </>
           ) : null}
@@ -1062,6 +1222,11 @@ export function InsightsChartsOverviewPage() {
                   ]}
                 />
                 <FunnelChart steps={funnelSteps} t={t} />
+                <ObjectList
+                  title={t("insights.chartTopLandingPagesTitle")}
+                  valueLabel={t("insights.chartMetricCvr")}
+                  rows={landingPageRows}
+                />
               </div>
             </PageSurface>
           ) : null}
@@ -1116,6 +1281,18 @@ export function InsightsChartsOverviewPage() {
                     format="number"
                     currencyCode={currencyCode}
                   />
+                  <div style={objectGridStyle(isMobile)}>
+                    <ObjectList
+                      title={t("insights.chartRefundSpikeTitle")}
+                      valueLabel={t("insights.chartRefundQuantity")}
+                      rows={refundSpikeRows}
+                    />
+                    <ObjectList
+                      title={t("insights.chartFulfillmentGapTitle")}
+                      valueLabel={t("insights.chartFulfillmentGapMetric")}
+                      rows={fulfillmentGapRows}
+                    />
+                  </div>
                 </div>
               </PageSurface>
             </>
@@ -1155,6 +1332,12 @@ const sectionStackStyle: CSSProperties = {
 const subChartGridStyle = (isMobile: boolean): CSSProperties => ({
   display: "grid",
   gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+  gap: "0.85rem",
+});
+
+const objectGridStyle = (isMobile: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
   gap: "0.85rem",
 });
 
@@ -1362,6 +1545,72 @@ const compactMetricValueStyle: CSSProperties = {
   fontSize: 16,
   lineHeight: 1.2,
   color: pageColorTokens.textPrimary,
+};
+
+const objectListCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 14,
+  background: pageColorTokens.surfaceMuted,
+  padding: "0.85rem",
+  display: "grid",
+  gap: "0.75rem",
+};
+
+const objectListHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "0.75rem",
+};
+
+const objectListTitleStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const objectListValueLabelStyle: CSSProperties = {
+  fontSize: 11,
+  color: pageColorTokens.textSecondary,
+};
+
+const objectListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.65rem",
+};
+
+const objectRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "0.75rem",
+  paddingBottom: "0.65rem",
+  borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const objectRowMainStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.2rem",
+  minWidth: 0,
+};
+
+const objectRowLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textPrimary,
+  wordBreak: "break-word",
+};
+
+const objectRowDetailStyle: CSSProperties = {
+  fontSize: 11,
+  color: pageColorTokens.textSecondary,
+  wordBreak: "break-word",
+};
+
+const objectRowValueStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  whiteSpace: "nowrap",
 };
 
 const refreshButtonStyle = (disabled: boolean): CSSProperties => ({
