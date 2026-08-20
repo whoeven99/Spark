@@ -112,6 +112,62 @@ const PRESETS: Record<ReportTab, ReportPreset[]> = {
       seriesKeys: [],
       xKey: "product_title_at_time_of_sale",
     },
+    {
+      id: "refunds-reversal-order",
+      kind: "table",
+      titleKey: "shopifyReports.tableReversalOrder",
+      query:
+        "FROM sales SHOW sales_reversals, reversed_quantity GROUP BY order_name SINCE {{SINCE}} UNTIL today ORDER BY reversed_quantity ASC LIMIT 20",
+      seriesKeys: [],
+      xKey: "order_name",
+    },
+    {
+      id: "refunds-return-reason",
+      kind: "table",
+      titleKey: "shopifyReports.tableReturnReason",
+      query:
+        "FROM sales SHOW sales_reversals, reversed_quantity GROUP BY return_reason SINCE {{SINCE}} UNTIL today ORDER BY reversed_quantity ASC LIMIT 20",
+      seriesKeys: [],
+      xKey: "return_reason",
+    },
+  ],
+  profit: [
+    {
+      id: "profit-summary",
+      kind: "summary",
+      titleKey: "shopifyReports.summaryTitle",
+      query:
+        "FROM sales SHOW net_sales, cost_of_goods_sold, gross_profit, gross_margin, net_sales_with_cost_recorded, net_sales_without_cost_recorded, shipping_charges, shipping_charge_discounts, total_shipping_charges SINCE {{SINCE}} UNTIL today",
+      seriesKeys: [],
+      xKey: "day",
+    },
+    {
+      id: "profit-trend",
+      kind: "timeseries",
+      titleKey: "shopifyReports.trendProfit",
+      query:
+        "FROM sales SHOW gross_profit, cost_of_goods_sold TIMESERIES day SINCE {{SINCE}} UNTIL today ORDER BY day ASC",
+      seriesKeys: ["gross_profit", "cost_of_goods_sold"],
+      xKey: "day",
+    },
+    {
+      id: "profit-shipping-trend",
+      kind: "timeseries",
+      titleKey: "shopifyReports.trendShipping",
+      query:
+        "FROM sales SHOW shipping_charges, total_shipping_charges TIMESERIES day SINCE {{SINCE}} UNTIL today ORDER BY day ASC",
+      seriesKeys: ["shipping_charges", "total_shipping_charges"],
+      xKey: "day",
+    },
+    {
+      id: "profit-product",
+      kind: "table",
+      titleKey: "shopifyReports.tableProfitProduct",
+      query:
+        "FROM sales SHOW net_sales, cost_of_goods_sold, gross_profit GROUP BY product_title SINCE {{SINCE}} UNTIL today ORDER BY gross_profit DESC LIMIT 20",
+      seriesKeys: [],
+      xKey: "product_title",
+    },
   ],
   customers: [
     {

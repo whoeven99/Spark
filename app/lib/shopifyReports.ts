@@ -1,6 +1,7 @@
 export const REPORT_TABS = [
   "sales",
   "refunds",
+  "profit",
   "customers",
   "inventory",
   "fulfillment",

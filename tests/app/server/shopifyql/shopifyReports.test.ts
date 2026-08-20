@@ -20,6 +20,7 @@ import {
 describe("shopify reports helpers", () => {
   it("parses tab and range from query params", () => {
     expect(parseReportTab("inventory")).toBe("inventory");
+    expect(parseReportTab("profit")).toBe("profit");
     expect(parseReportTab("unknown")).toBe("sales");
     expect(parseRangeKey("90d")).toBe("90d");
     expect(parseRangeKey("week")).toBe("30d");
@@ -52,7 +53,33 @@ describe("shopify reports helpers", () => {
       "refunds-trend",
     ]);
     expect(refunds.some((preset) => preset.id === "refunds-reversal-product")).toBe(true);
+    expect(refunds.some((preset) => preset.id === "refunds-reversal-order")).toBe(true);
+    expect(refunds.some((preset) => preset.id === "refunds-return-reason")).toBe(true);
     expect(refunds.some((preset) => preset.query.includes("FROM returns"))).toBe(true);
+    expect(refunds.find((preset) => preset.id === "refunds-reversal-order")?.query).toContain("order_name");
+    expect(refunds.find((preset) => preset.id === "refunds-return-reason")?.query).toContain("return_reason");
+  });
+
+  it("adds a profit tab with official COGS, gross profit, and customer-paid shipping", () => {
+    const profit = listReportPresets("profit");
+    const summary = profit.find((preset) => preset.id === "profit-summary");
+    const trend = profit.find((preset) => preset.id === "profit-trend");
+    const shipping = profit.find((preset) => preset.id === "profit-shipping-trend");
+    const product = profit.find((preset) => preset.id === "profit-product");
+
+    expect(profit.map((preset) => preset.id)).toEqual([
+      "profit-summary",
+      "profit-trend",
+      "profit-shipping-trend",
+      "profit-product",
+    ]);
+    expect(summary?.query).toContain("cost_of_goods_sold");
+    expect(summary?.query).toContain("gross_profit");
+    expect(summary?.query).toContain("shipping_charges");
+    expect(summary?.query).not.toContain("shop_campaign_ad_spend");
+    expect(trend?.seriesKeys).toEqual(["gross_profit", "cost_of_goods_sold"]);
+    expect(shipping?.query).toContain("total_shipping_charges");
+    expect(product?.query).toContain("GROUP BY product_title");
   });
 
   it("keeps negative reversal quantities visible on the chart domain", () => {

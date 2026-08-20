@@ -39,6 +39,7 @@ import {
 const TAB_LABEL_KEYS: Record<ReportTab, string> = {
   sales: "shopifyReports.tabSales",
   refunds: "shopifyReports.tabRefunds",
+  profit: "shopifyReports.tabProfit",
   customers: "shopifyReports.tabCustomers",
   inventory: "shopifyReports.tabInventory",
   fulfillment: "shopifyReports.tabFulfillment",
@@ -180,6 +181,7 @@ export function ShopifyReportsPage() {
                 visual="table"
               />
             ))}
+            {tab === "profit" ? <p style={pageHintTextStyle}>{t("shopifyReports.profitHint")}</p> : null}
             <p style={pageHintTextStyle}>{t("shopifyReports.footerNote")}</p>
           </>
         ) : null}
