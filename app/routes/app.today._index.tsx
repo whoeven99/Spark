@@ -12,7 +12,8 @@ import {
 import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
 import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
 import { useFeatureView } from "../lib/featureTrack";
-import { mobilePageContentStyle, pageColorTokens, pageContentStyle, pageEmptyStateStyle, pageHintTextStyle, pageMetricCardStyle, pageMetricLabelStyle, pageMetricTileStyle, pageMetricValueStyle, PageSurface, pageSectionSubtitleStyle, pageStatusCardStyle } from "./page/pageUiStyles";
+import { getHealthMonitorSummary, getPriorityHealthMonitors, type HealthMonitorStatus } from "../lib/healthMonitorData";
+import { mobilePageContentStyle, pageColorTokens, pageContentStyle, pageEmptyStateStyle, pageHintTextStyle, pageMetricCardStyle, pageMetricLabelStyle, pageMetricValueStyle, PageSurface, pageSectionSubtitleStyle, pageStatusCardStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import type { WorkspaceDashboardAlertTone, WorkspaceDashboardMetric, WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
@@ -62,6 +63,10 @@ export default function TodayOverview() {
   const topInsights = buildTopInsights(dailyOps);
   const actionHints = dashboardSnapshot.suggestions.slice(0, 3);
   const activeTasks = dailyOps?.tasks.filter((task) => task.status === "open" || task.status === "in_progress") ?? [];
+  const healthSummary = getHealthMonitorSummary();
+  const topHealthMonitors = getPriorityHealthMonitors(4);
+  const siteHealth = healthSummary.groups.find((group) => group.title === "站点健康度");
+  const businessHealth = healthSummary.groups.find((group) => group.title === "经营健康度");
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -130,21 +135,68 @@ export default function TodayOverview() {
             </PageSurface>
 
             <PageSurface
-              title={t("todayDashboard.metricsTitle")}
-              subtitle={t("todayDashboard.metricsSubtitle")}
+              title={t("todayDashboard.healthTitle")}
+              subtitle={t("todayDashboard.healthSubtitle")}
             >
               <div style={metricGridStyle(isMobile)}>
-                {dashboardSnapshot.metrics.map((metric) => (
-                  <div key={metric.label} style={metricCardStyle}>
-                    <div style={metricTitleRowStyle}>
-                      <span style={pageMetricLabelStyle}>{metric.label}</span>
-                      {metric.pendingIntegration ? (
-                        <span style={subtleBadgeStyle}>{t("todayDashboard.pendingData")}</span>
-                      ) : null}
-                    </div>
-                    <div style={pageMetricValueStyle}>{metric.value}</div>
-                    <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
+                <div style={metricCardStyle}>
+                  <div style={metricTitleRowStyle}>
+                    <span style={pageMetricLabelStyle}>{t("todayDashboard.healthSiteTitle")}</span>
+                    <span style={statusBadgeStyle(mapHealthStatusToCockpitTone(siteHealth?.status ?? "good"))}>
+                      {formatHealthStatusLabel(siteHealth?.status ?? "good", t)}
+                    </span>
                   </div>
+                  <div style={pageMetricValueStyle}>{siteHealth?.riskCount ?? 0}</div>
+                  <div style={metricDeltaStyle(siteHealth?.riskCount ? "negative" : "neutral")}>
+                    {t("todayDashboard.healthRiskCount", { count: siteHealth?.riskCount ?? 0 })}
+                  </div>
+                </div>
+                <div style={metricCardStyle}>
+                  <div style={metricTitleRowStyle}>
+                    <span style={pageMetricLabelStyle}>{t("todayDashboard.healthBusinessTitle")}</span>
+                    <span style={statusBadgeStyle(mapHealthStatusToCockpitTone(businessHealth?.status ?? "good"))}>
+                      {formatHealthStatusLabel(businessHealth?.status ?? "good", t)}
+                    </span>
+                  </div>
+                  <div style={pageMetricValueStyle}>{businessHealth?.riskCount ?? 0}</div>
+                  <div style={metricDeltaStyle((businessHealth?.riskCount ?? 0) > 0 ? "negative" : "neutral")}>
+                    {t("todayDashboard.healthRiskCount", { count: businessHealth?.riskCount ?? 0 })}
+                  </div>
+                </div>
+                <div style={metricCardStyle}>
+                  <div style={metricTitleRowStyle}>
+                    <span style={pageMetricLabelStyle}>{t("todayDashboard.healthMonitorEntry")}</span>
+                    <span style={subtleBadgeStyle}>
+                      {healthSummary.completed}/{healthSummary.total}
+                    </span>
+                  </div>
+                  <div style={pageMetricValueStyle}>{healthSummary.riskCount}</div>
+                  <div style={metricDeltaStyle(healthSummary.riskCount > 0 ? "negative" : "neutral")}>
+                    {t("todayDashboard.healthOpenHint", {
+                      riskCount: healthSummary.riskCount,
+                      watchCount: healthSummary.watchCount,
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div style={pageStackCompactStyle}>
+                {topHealthMonitors.map((monitor) => (
+                  <button
+                    key={monitor.id}
+                    type="button"
+                    style={insightButtonStyle(mapHealthStatusToCockpitTone(monitor.status))}
+                    onClick={() => navigate("/app/health-monitor")}
+                  >
+                    <div style={insightHeaderStyle}>
+                      <span style={insightTitleStyle}>{monitor.title}</span>
+                      <span style={statusBadgeStyle(mapHealthStatusToCockpitTone(monitor.status))}>
+                        {formatHealthStatusLabel(monitor.status, t)}
+                      </span>
+                    </div>
+                    <div style={summaryValueStyle}>{monitor.value}</div>
+                    <div style={pageHintTextStyle}>{monitor.summary}</div>
+                  </button>
                 ))}
               </div>
             </PageSurface>
@@ -500,6 +552,21 @@ function statusRank(status: "healthy" | "watch" | "risk") {
   if (status === "risk") return 2;
   if (status === "watch") return 1;
   return 0;
+}
+
+function mapHealthStatusToCockpitTone(status: HealthMonitorStatus): CockpitTone {
+  if (status === "risk") return "critical";
+  if (status === "watch") return "warning";
+  return "positive";
+}
+
+function formatHealthStatusLabel(
+  status: HealthMonitorStatus,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (status === "risk") return t("todayDashboard.healthStatusRisk");
+  if (status === "watch") return t("todayDashboard.healthStatusWatch");
+  return t("todayDashboard.healthStatusGood");
 }
 
 function mapAlertToneToCockpitTone(tone: WorkspaceDashboardAlertTone): CockpitTone {

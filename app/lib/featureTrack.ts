@@ -24,6 +24,7 @@ export type FeatureKey =
   | "billing"
   // 新信息架构的一级目的地（PR1）
   | "today"
+  | "health-monitor"
   | "studio"
   | "tasks"
   | "settings"

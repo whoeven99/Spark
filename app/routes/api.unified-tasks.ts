@@ -5,6 +5,7 @@ import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import type { AITaskItem } from "../lib/aiTaskTypes";
 import { listOperationTasks } from "../server/operations/dailyInspection.server";
 import { isOperationTaskCurrent, isOperationTaskHistory } from "../lib/operationTaskList";
+import { listScheduledAutomationTasks } from "../server/automation/scheduledAutomationCatalog.server";
 import type {
   UnifiedTaskEntry,
   UnifiedTaskListResponse,
@@ -18,11 +19,13 @@ const FETCH_ALL_SIZE = 200;
 
 function entryUpdatedAt(entry: UnifiedTaskEntry): string {
   if (entry.entryType === "ai_task") return entry.task.updatedAt;
+  if (entry.entryType === "automation_task") return entry.task.updatedAt;
   return entry.task.resolvedAt ?? entry.task.createdAt;
 }
 
 function parseTypeFilter(value: string | null): UnifiedTaskTypeFilter {
   if (
+    value === "automation_task" ||
     value === "operation_task" ||
     value === "product_improve" ||
     value === "image_generation" ||
@@ -53,6 +56,7 @@ function matchesTypeFilter(
   typeFilter: UnifiedTaskTypeFilter,
 ): boolean {
   if (typeFilter === "all") return true;
+  if (entry.entryType === "automation_task") return typeFilter === "automation_task";
   if (entry.entryType === "operation_task") return typeFilter === "operation_task";
   return entry.task.taskType === typeFilter;
 }
@@ -62,6 +66,10 @@ function matchesStatusFilter(
   statusFilter: UnifiedTaskStatusFilter,
 ): boolean {
   if (statusFilter === "all") return true;
+
+  if (entry.entryType === "automation_task") {
+    return statusFilter === "open";
+  }
 
   if (entry.entryType === "operation_task") {
     const status = entry.task.status;
@@ -115,6 +123,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
     listOperationTasks(session.shop),
   ]);
+  const automationEntries: UnifiedTaskEntry[] =
+    view === "current"
+      ? listScheduledAutomationTasks().map((task) => ({
+          entryType: "automation_task",
+          task,
+        }))
+      : [];
 
   const aiEntries: UnifiedTaskEntry[] = aiTaskPage.tasks.map((task: AITaskItem) => ({
     entryType: "ai_task",
@@ -131,14 +146,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       task,
     }));
 
-  const merged = [...aiEntries, ...operationEntries]
+  const merged = [...automationEntries, ...aiEntries, ...operationEntries]
     .filter((entry) => matchesTypeFilter(entry, typeFilter))
     .filter((entry) => matchesStatusFilter(entry, statusFilter))
-    .sort(
-    (a, b) =>
-      new Date(entryUpdatedAt(b)).getTime() -
-      new Date(entryUpdatedAt(a)).getTime(),
-  );
+    .sort((a, b) => {
+      if (a.entryType === "automation_task" && b.entryType === "automation_task") {
+        return a.task.sortOrder - b.task.sortOrder;
+      }
+      if (a.entryType === "automation_task") return -1;
+      if (b.entryType === "automation_task") return 1;
+      return new Date(entryUpdatedAt(b)).getTime() - new Date(entryUpdatedAt(a)).getTime();
+    });
 
   const totalCount = merged.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -155,7 +173,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     totalPages,
     currentCount:
       aiTaskPage.metrics.currentCount +
-      operationTasks.filter((task) => isOperationTaskCurrent(task, now)).length,
+      operationTasks.filter((task) => isOperationTaskCurrent(task, now)).length +
+      automationEntries.length,
     historyCount:
       aiTaskPage.metrics.historyCount +
       operationTasks.filter((task) => isOperationTaskHistory(task, now)).length,

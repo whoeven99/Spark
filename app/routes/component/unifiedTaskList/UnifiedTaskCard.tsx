@@ -4,6 +4,7 @@ import { TaskCard } from "../aiTask/TaskCard";
 import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import { OperationTaskCard } from "./OperationTaskCard";
+import { AutomationTaskCard } from "./AutomationTaskCard";
 
 type Props = {
   entry: UnifiedTaskEntry;
@@ -23,6 +24,9 @@ export function UnifiedTaskCard({
   deleting = false,
 }: Props) {
   const navigate = useNavigate();
+  if (entry.entryType === "automation_task") {
+    return <AutomationTaskCard task={entry.task} />;
+  }
   if (entry.entryType === "operation_task") {
     return (
       <OperationTaskCard

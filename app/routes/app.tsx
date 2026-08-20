@@ -51,6 +51,7 @@ const NAV_ITEMS: Record<
     labelKey:
       | "nav.ask"
       | "nav.today"
+      | "nav.healthMonitor"
       | "nav.studio"
       | "nav.insights"
       | "nav.tasks"
@@ -60,6 +61,7 @@ const NAV_ITEMS: Record<
 > = {
   ask: { href: "/app", labelKey: "nav.ask" },
   today: { href: "/app/today", labelKey: "nav.today" },
+  "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
   insights: { href: "/app/insights", labelKey: "nav.insights" },
   tasks: { href: "/app/tasks", labelKey: "nav.tasks" },

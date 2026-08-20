@@ -21,7 +21,7 @@ export default function AppTasks() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title="任务中心"
-        subtitle="统一查看并处理经营任务、文案、图片与批处理任务。"
+        subtitle="统一查看并处理定时任务、经营任务、文案、图片与批处理任务。"
         titleBarTitle={t("nav.tasks")}
         backLabel="返回首页"
         fallbackPath="/app"

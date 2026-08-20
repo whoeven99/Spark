@@ -1,0 +1,1376 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark 经营工作流 Demo</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --surface: #ffffff;
+        --surface-subtle: #fafbfb;
+        --surface-emphasis: #f1f8f5;
+        --border: #e1e3e5;
+        --border-strong: #c9cdd2;
+        --text: #1f2124;
+        --text-subtle: #61666c;
+        --text-muted: #8c9196;
+        --green: #008060;
+        --green-bg: #e9f7ef;
+        --blue: #005bd3;
+        --blue-bg: #eef4ff;
+        --orange: #b98900;
+        --orange-bg: #fff7e0;
+        --red: #d82c0d;
+        --red-bg: #fff0ee;
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+        --radius-xl: 20px;
+        --radius-lg: 16px;
+        --radius-md: 12px;
+        --radius-sm: 10px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        background: linear-gradient(180deg, #f2f3f5 0%, #eef1f4 100%);
+        border-right: 1px solid var(--border);
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .brand {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .brand-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+        background: #111827;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .brand p,
+      .muted {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .workflow-card,
+      .nav button,
+      .side-panel,
+      .card,
+      .detail-block,
+      .schedule-card,
+      .report-card,
+      .assistant-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .workflow-card {
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .chip {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .chip.fake {
+        background: var(--orange-bg);
+        color: #8a6500;
+      }
+
+      .chip.green {
+        background: var(--green-bg);
+        color: var(--green);
+      }
+
+      .chip.blue {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .nav {
+        display: grid;
+        gap: 8px;
+      }
+
+      .nav button {
+        padding: 12px 14px;
+        text-align: left;
+        cursor: pointer;
+        display: grid;
+        gap: 4px;
+      }
+
+      .nav button.active {
+        border-color: rgba(0, 128, 96, 0.25);
+        background: var(--surface-emphasis);
+      }
+
+      .nav-title {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .nav-detail {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-subtle);
+      }
+
+      .side-panel {
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .side-panel h3,
+      .card h3,
+      .detail-block h3,
+      .schedule-card h3,
+      .report-card h3,
+      .assistant-card h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .main {
+        padding: 24px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+        gap: 18px;
+      }
+
+      .hero-card {
+        padding: 20px;
+        border-radius: var(--radius-xl);
+        background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-card h2 {
+        margin: 8px 0 10px;
+        font-size: 30px;
+        line-height: 1.15;
+      }
+
+      .hero-card p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--text-subtle);
+        max-width: 800px;
+      }
+
+      .hero-actions,
+      .summary-grid,
+      .workspace-grid,
+      .monitor-list,
+      .evidence-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .hero-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 18px;
+      }
+
+      .hero-action {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        padding: 14px;
+      }
+
+      .hero-action strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+
+      .hero-action span {
+        color: var(--text-subtle);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      .metric {
+        font-size: 28px;
+        font-weight: 800;
+        margin: 6px 0 4px;
+      }
+
+      .metric-label {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .workspace-grid {
+        grid-template-columns: 360px minmax(0, 1fr) 360px;
+        align-items: start;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .section-title p {
+        margin: 4px 0 0;
+        color: var(--text-subtle);
+        font-size: 12px;
+      }
+
+      .monitor-group {
+        display: grid;
+        gap: 10px;
+      }
+
+      .monitor-group-header {
+        padding-top: 4px;
+      }
+
+      .monitor-group-header strong {
+        font-size: 13px;
+      }
+
+      .monitor-group-header span {
+        display: block;
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .monitor-item {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        padding: 14px;
+        cursor: pointer;
+        display: grid;
+        gap: 8px;
+      }
+
+      .monitor-item.active {
+        border-color: rgba(0, 91, 211, 0.26);
+        background: #f8fbff;
+      }
+
+      .monitor-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .monitor-head strong {
+        font-size: 14px;
+      }
+
+      .status {
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .status.risk {
+        background: var(--red-bg);
+        color: var(--red);
+      }
+
+      .status.watch {
+        background: var(--orange-bg);
+        color: #8a6500;
+      }
+
+      .status.good {
+        background: var(--green-bg);
+        color: var(--green);
+      }
+
+      .monitor-summary,
+      .monitor-meta,
+      .evidence-row,
+      .recommendation,
+      .assistant-card p {
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--text-subtle);
+      }
+
+      .monitor-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        color: var(--text-muted);
+      }
+
+      .detail-pane {
+        display: grid;
+        gap: 14px;
+      }
+
+      .detail-hero {
+        padding: 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(135deg, #ffffff 0%, #f6fbf8 100%);
+      }
+
+      .detail-hero h2 {
+        margin: 10px 0 8px;
+        font-size: 24px;
+      }
+
+      .detail-hero p {
+        margin: 0;
+        color: var(--text-subtle);
+        line-height: 1.7;
+        font-size: 14px;
+      }
+
+      .detail-meta {
+        margin-top: 14px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .detail-block {
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .detail-block-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .detail-block-header span {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .problem-statement {
+        padding: 14px;
+        border-radius: var(--radius-md);
+        background: var(--surface-subtle);
+        border: 1px solid var(--border);
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.7;
+      }
+
+      .evidence-row {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+
+      .evidence-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      .evidence-row strong {
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .recommendation {
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background: var(--surface-subtle);
+      }
+
+      .recommendation strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text);
+      }
+
+      .assistant-card {
+        padding: 16px;
+        background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
+      }
+
+      .assistant-preview {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(0, 91, 211, 0.16);
+        background: rgba(255, 255, 255, 0.78);
+        font-size: 12px;
+        line-height: 1.7;
+        white-space: pre-line;
+        color: var(--text-subtle);
+      }
+
+      .primary-btn,
+      .ghost-btn {
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .primary-btn {
+        border: 1px solid var(--green);
+        background: var(--green);
+        color: #fff;
+      }
+
+      .ghost-btn {
+        border: 1px solid var(--border-strong);
+        background: #fff;
+        color: var(--text);
+      }
+
+      .action-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .schedule-card,
+      .report-card {
+        padding: 16px;
+      }
+
+      .schedule-card.active {
+        border-color: rgba(0, 128, 96, 0.22);
+        background: #f7fcf9;
+      }
+
+      .overview-stack,
+      .health-stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .overview-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .cta-card,
+      .progress-card,
+      .monitor-section,
+      .monitor-result-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .cta-card,
+      .progress-card,
+      .monitor-section {
+        padding: 18px;
+      }
+
+      .cta-card h3,
+      .progress-card h3,
+      .monitor-section h3 {
+        margin: 0;
+      }
+
+      .cta-card p,
+      .progress-card p,
+      .monitor-section p {
+        margin: 8px 0 0;
+        color: var(--text-subtle);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .page-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .page-header-row h2 {
+        margin: 10px 0 0;
+        font-size: 28px;
+      }
+
+      .progress-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .progress-metric {
+        padding: 14px;
+        border-radius: var(--radius-md);
+        background: var(--surface-subtle);
+        border: 1px solid var(--border);
+      }
+
+      .progress-metric strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .progress-metric span {
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .dashboard-groups {
+        display: grid;
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .dashboard-group {
+        padding: 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background: var(--surface-subtle);
+      }
+
+      .dashboard-group h4 {
+        margin: 0 0 10px;
+        font-size: 14px;
+      }
+
+      .dashboard-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .dashboard-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(120px, 0.7fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+
+      .dashboard-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      .dashboard-row-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .dashboard-row-value {
+        font-size: 13px;
+        color: var(--text-subtle);
+        text-align: right;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: #edf1f4;
+        overflow: hidden;
+        margin-top: 14px;
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green) 0%, #37b48b 100%);
+      }
+
+      .monitor-board,
+      .monitor-result-list {
+        display: grid;
+        gap: 16px;
+      }
+
+      .monitor-section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+      }
+
+      .monitor-result-card {
+        padding: 14px;
+        background: var(--surface-subtle);
+        display: grid;
+        gap: 10px;
+      }
+
+      .monitor-result-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .monitor-result-top strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .result-progress {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .result-summary {
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--text-subtle);
+      }
+
+      .result-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .result-stage {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .schedule-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .schedule-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+
+      .mini-pill {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border);
+        font-size: 11px;
+        color: var(--text-subtle);
+      }
+
+      .report-card strong {
+        font-size: 13px;
+      }
+
+      .report-card .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      @media (max-width: 1400px) {
+        .workspace-grid {
+          grid-template-columns: 320px minmax(0, 1fr);
+        }
+
+        .right-column {
+          grid-column: 1 / -1;
+        }
+
+        .overview-actions {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 1080px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .hero,
+        .workspace-grid,
+        .summary-grid,
+        .hero-actions,
+        .progress-grid,
+        .overview-actions {
+          grid-template-columns: 1fr;
+        }
+
+        .main {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div>
+          <div class="brand">
+            <div class="brand-icon">SP</div>
+            <div>
+              <h1>Spark 经营工作流</h1>
+              <p>从零整理用户每天怎么判断、怎么行动。</p>
+            </div>
+          </div>
+
+          <div class="workflow-card">
+            <span class="chip fake">HTML Demo · Fake Data</span>
+            <div>
+              <strong>这版只回答一个问题：</strong>
+              <p class="muted">如果页面彻底重做，用户应该如何从“看问题”走到“进入监测”和“交给 AI / 任务执行”。</p>
+            </div>
+          </div>
+
+          <div class="nav" style="margin-top: 14px">
+            <button class="active">
+              <span class="nav-title">1. 监测中心</span>
+              <span class="nav-detail">先按健康度分类找问题，而不是在很多功能页里切换。</span>
+            </button>
+            <button>
+              <span class="nav-title">2. 固定详情页</span>
+              <span class="nav-detail">每个监测项都固定为：问题、数据论据、解决办法、和 AI 聊聊。</span>
+            </button>
+            <button>
+              <span class="nav-title">3. 执行回到任务</span>
+              <span class="nav-detail">建议动作生成后进入现有 Tasks，不单独再造任务页。</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="side-panel">
+          <h3>设计原则</h3>
+          <div class="muted">1. 用户先看问题，不先看数据海洋。</div>
+          <div class="muted">2. 每个监测页格式固定，阅读负担稳定。</div>
+          <div class="muted">3. 任务只保留一个收口：现有 Tasks。</div>
+        </div>
+      </aside>
+
+      <main class="main" id="app-content"></main>
+    </div>
+
+    <script>
+      const monitors = [
+        {
+          id: "site-performance",
+          group: "商店健康度",
+          title: "页面性能",
+          status: "watch",
+          badge: "关注",
+          summary: "移动端 LCP 明显偏慢，首页和重点落地页承接开始影响转化。",
+          meta: ["PageSpeed", "首页 / 爆款页", "近 7 天"],
+          heroTag: "站点健康度",
+          heroTitle: "页面性能正在拖慢核心落地页承接，属于需要优先验证的站点问题",
+          heroBody:
+            "这类问题不是独立的技术指标页，而是经营问题的一部分。用户在这里应该直接看到它是否在拖累转化，而不是先读 Lighthouse 术语。",
+          blockLabel: "站点健康",
+          problem:
+            "重点落地页的移动端加载体验偏慢，当前已经影响点击后的承接效率，属于会继续拉低转化率的关注项。",
+          evidence: [
+            { label: "核心指标", value: "LCP 4.8s，超过目标值 2.5s；CLS 0.06，暂时稳定。" },
+            { label: "业务影响", value: "来自广告的爆款页会话转化率 1.3%，显著低于站内均值 1.9%。" },
+            { label: "对比基准", value: "上周同页 LCP 3.2s，本周下降明显，且问题集中在移动端图片与首屏脚本。" }
+          ],
+          actions: [
+            { title: "先收缩首屏资源", detail: "压缩首图、延后非关键脚本，把首屏交互时间拉回 3 秒内。" },
+            { title: "按页面级建立修复优先级", detail: "先修广告主落地页，再修 SEO 核心入口页，避免平均分散处理。" },
+            { title: "接入到每日健康度监测", detail: "把首页、爆款页、活动页设成固定监测对象，每天自动复核。" }
+          ],
+          ai:
+            "请基于以下页面性能监测结果，帮我判断它是否已经影响转化，并给出按优先级排序的修复方案。\n\n问题：移动端 LCP 偏慢，广告落地页 CVR 下滑。\n证据：LCP 4.8s；广告落地页 CVR 1.3%，站内均值 1.9%；问题集中在首页与爆款页。\n目标：先判断是不是今天需要马上处理的经营问题，再输出 3 条可以进入任务系统的动作。 "
+        },
+        {
+          id: "seo-health",
+          group: "商店健康度",
+          title: "SEO 情况",
+          status: "good",
+          badge: "正常",
+          summary: "搜索曝光平稳，但部分高意图页面点击率偏低，适合作为持续优化项。",
+          meta: ["Search Console", "自然搜索", "近 28 天"],
+          heroTag: "站点健康度",
+          heroTitle: "SEO 整体稳定，但高意图入口页的点击效率还有优化空间",
+          heroBody:
+            "SEO 页不应该只是一堆 query 数据，而是要直接告诉用户：有没有拖业务、值不值得今天优先处理。",
+          blockLabel: "SEO 监测",
+          problem: "SEO 当前不是风险项，但高意图词的排名与点击率错位，属于可以稳定积累的中优先级问题。",
+          evidence: [
+            { label: "曝光趋势", value: "近 28 天曝光 +12%，点击 +4%，增幅不同步。" },
+            { label: "重点页面", value: "品牌词和类目词稳定，但 3 个高意图商品页 CTR 低于均值 22% 以上。" },
+            { label: "对比基准", value: "同类页平均 CTR 4.6%，当前关注页为 3.2% - 3.5%。" }
+          ],
+          actions: [
+            { title: "改标题与摘要", detail: "优先优化高意图商品页的标题结构和 meta 描述，不先全站大改。" },
+            { title: "补内容承接", detail: "为高意图类目页增加 FAQ 和对比型内容，提高点击后的相关性。" },
+            { title: "每周复盘一次", detail: "不必做成日更风险项，更适合进入每周持续优化轨道。" }
+          ],
+          ai:
+            "你现在是一名偏增长导向的 SEO 顾问。请基于以下监测结果，告诉我哪些页面值得优先优化，以及应该改标题、摘要还是正文承接。\n\n问题：高意图页 CTR 偏低。\n证据：曝光 +12%，点击 +4%；3 个高意图商品页 CTR 低于均值 22% 以上。"
+        },
+        {
+          id: "roi-health",
+          group: "经营健康度",
+          title: "ROI 情况（短期 / 长期）",
+          status: "risk",
+          badge: "风险",
+          summary: "短期 ROI 从 2.7x 下滑到 1.9x，长期回收仍未完全失守，但需要马上找出拖累环节。",
+          meta: ["Ads + Shopify", "短期 / 长期", "近 7 / 30 天"],
+          heroTag: "经营健康度",
+          heroTitle: "ROI 已经进入风险区间，当前最重要的不是继续看报表，而是快速定位拖累源",
+          heroBody:
+            "这里应该是用户最常打开的监测项之一。它不该是一张大表，而应该直接回答：回报率到底哪里坏了，是流量坏了、转化坏了，还是商品利润结构坏了。",
+          blockLabel: "ROI 监测",
+          problem:
+            "短期 ROI 明显下滑，且下滑主要由转化承接变差和广告花费结构偏移造成；长期回收暂时还有缓冲，但不能继续放任。",
+          evidence: [
+            { label: "短期 ROI", value: "近 7 天 ROI 1.9x，上周为 2.7x；广告花费 +18%，收入仅 +2%。" },
+            { label: "长期回收", value: "30 天复购贡献仍维持在 24%，说明品牌与老客价值还在，并非全面失守。" },
+            { label: "基准比较", value: "站内转化率从 1.9% 下降到 1.4%，落地页和加购环节均有回落。" }
+          ],
+          actions: [
+            { title: "先暂停低回收广告组", detail: "把 ROAS 低于 1.2x 且连续 3 天无改善的组先收缩预算。" },
+            { title: "修复高花费落地页承接", detail: "围绕流量最大的 3 个入口页排查性能、信息匹配和优惠表达。" },
+            { title: "把 ROI 诊断拆到任务", detail: "分别生成广告结构调整、页面承接优化、利润校准 3 类任务。" }
+          ],
+          ai:
+            "请基于这份 ROI 监测结果，告诉我先做广告调整、页面优化还是利润核算修正，并给出判断依据。\n\n问题：短期 ROI 从 2.7x 下滑到 1.9x。\n证据：广告花费 +18%，收入仅 +2%；转化率从 1.9% 降到 1.4%；长期回收仍有 24% 老客贡献。"
+        },
+        {
+          id: "conversion-health",
+          group: "经营健康度",
+          title: "转化率健康度",
+          status: "risk",
+          badge: "风险",
+          summary: "会话规模还在，但访问到加购、加购到结账两段都在掉点，是当前最值得优先打开的经营问题。",
+          meta: ["GA4 + Shopify", "全站漏斗", "近 7 天"],
+          heroTag: "经营健康度",
+          heroTitle: "转化率是当前最核心的问题，它已经直接拖累短期 ROI 和收入效率",
+          heroBody:
+            "这是最接近你说的固定详情页的例子。用户打开后不需要猜页面结构，因为永远都是同一个阅读节奏。",
+          blockLabel: "转化率监测",
+          problem:
+            "当前核心问题不是流量不够，而是承接变差：从访问到加购、从加购到结账两段都在掉点，导致同样规模的流量没有转成订单。",
+          evidence: [
+            { label: "漏斗变化", value: "访问到加购从 8.1% 降到 6.4%；加购到结账从 46% 降到 39%。" },
+            { label: "页面对象", value: "问题集中在 3 个广告主落地页和 1 个高流量商品详情页。" },
+            { label: "对比基准", value: "本周总体转化率 1.4%，低于近 30 天均值 1.9%，且问题不在支付成功段。" }
+          ],
+          actions: [
+            { title: "优先检查高流量落地页", detail: "对首屏利益点、价格表达、优惠和 CTA 做逐页复核。" },
+            { title: "拆分加购与结账动作", detail: "不要笼统做“优化转化率”，而要分别进任务系统。" },
+            { title: "让 AI 基于报告生成实验方案", detail: "把当前问题、证据和页面对象一起带给 AI，生成 A/B 测试假设。" }
+          ],
+          ai:
+            "请你扮演转化优化顾问。基于以下监测结果，帮我判断先优化首屏表达、加购动机还是结账链路，并输出 3 个可执行实验。\n\n问题：访问到加购、加购到结账两段都在掉点。\n证据：访问到加购 8.1% -> 6.4%；加购到结账 46% -> 39%；问题集中在 3 个广告主落地页。"
+        },
+        {
+          id: "inventory-health",
+          group: "经营健康度",
+          title: "库存健康度",
+          status: "watch",
+          badge: "关注",
+          summary: "3 个高贡献 SKU 的可售天数不足 7 天，还没有断货，但已经需要提前行动。",
+          meta: ["Shopify", "SKU 对象", "近 7 天"],
+          heroTag: "经营健康度",
+          heroTitle: "库存不是今天最大的风险，但已经是影响接下来 3 到 5 天销售承接的关注项",
+          heroBody:
+            "库存页应该讲的是经营风险，而不是简单库存表。用户要一眼知道：哪些 SKU 值得马上补、哪些只需要观察。",
+          blockLabel: "库存监测",
+          problem:
+            "当前库存风险集中在少数高贡献 SKU，上架面看起来还正常，但如果继续放量投放，未来一周容易出现断货或履约承压。",
+          evidence: [
+            { label: "重点 SKU", value: "3 个高贡献 SKU 可售天数分别为 4.2 / 5.7 / 6.1 天。" },
+            { label: "影响范围", value: "这 3 个 SKU 合计贡献近 7 天收入的 31%。" },
+            { label: "基准比较", value: "安全库存目标为 10 天以上，当前均低于目标阈值。" }
+          ],
+          actions: [
+            { title: "先锁定高贡献 SKU", detail: "围绕收入占比最高的 SKU 先补货或调整投放，别先全店铺平均处理。" },
+            { title: "联动广告预算", detail: "对低库存 SKU 关联的广告组设置预算提醒或下调策略。" },
+            { title: "进入每日健康度监测", detail: "这类风险适合做日常自动巡检，而不是每次手动翻表。" }
+          ],
+          ai:
+            "请根据以下库存监测结果，告诉我哪些 SKU 要立刻补货，哪些 SKU 只需要控制投放，并给出排序。\n\n证据：3 个高贡献 SKU 可售天数分别为 4.2 / 5.7 / 6.1 天；它们贡献近 7 天收入的 31%。"
+        },
+        {
+          id: "fulfillment-health",
+          group: "经营健康度",
+          title: "履约健康度",
+          status: "watch",
+          badge: "关注",
+          summary: "超时未发货订单占比还没到风险阈值，但已经开始影响退款和客服压力。",
+          meta: ["履约 + 退款", "订单对象", "近 7 天"],
+          heroTag: "经营健康度",
+          heroTitle: "履约还没有完全失控，但已经开始放大退款和售后压力",
+          heroBody:
+            "履约页应该帮助用户看到它对经营结果的连锁影响，而不是只停留在物流数据本身。",
+          blockLabel: "履约监测",
+          problem:
+            "超时未发货订单已经连续 3 天抬头，目前尚未大面积拖垮履约，但已经开始向退款和客服投诉传导。",
+          evidence: [
+            { label: "履约指标", value: "超时未发货 18 单，占近 7 天订单量的 4.6%。" },
+            { label: "连锁影响", value: "相关订单退款率 9.2%，明显高于整体退款率 3.8%。" },
+            { label: "对比基准", value: "正常目标应控制在 2% 以内，当前已高出基准一倍以上。" }
+          ],
+          actions: [
+            { title: "先分仓库 / 物流渠道看", detail: "不要把履约问题当作统一问题，先定位哪个仓或承运商在放大异常。" },
+            { title: "把异常订单推到任务", detail: "让运营直接处理超时订单清单，而不是只在报告里看到提醒。" },
+            { title: "与退款监测联动", detail: "建立履约异常到退款异常的因果视图，避免各看各的。" }
+          ],
+          ai:
+            "请基于以下履约监测结果，帮我设计一个优先排查顺序，判断是仓库、承运商还是内部处理节奏的问题。\n\n证据：超时未发货 18 单，占比 4.6%；关联订单退款率 9.2%，整体退款率 3.8%。"
+        }
+      ];
+
+      const monitoringRun = {
+        title: "今日健康度监测",
+        window: "今天 08:30 触发",
+        progress: 100,
+        completed: 12,
+        total: 12,
+        risks: 2,
+        watches: 2,
+        healthy: 8
+      };
+
+      const groupDescriptions = {
+        商店健康度: "偏前台体验、页面质量与自然流量健康，适合快速识别站点是否正在拖累经营结果。",
+        经营健康度: "偏 ROI、收入、流量、转化、库存与履约等经营表现，帮助先找今天最值得处理的问题。"
+      };
+
+      const dashboardGroups = [
+        {
+          title: "站点健康度",
+          items: [
+            { label: "页面性能", value: "LCP 4.8s", status: "watch", badge: "关注" },
+            { label: "SEO 情况", value: "CTR 3.4%", status: "good", badge: "正常" }
+          ]
+        },
+        {
+          title: "经营健康度",
+          items: [
+            { label: "ROI 情况（短期和长期）", value: "1.9x / 2.8x", status: "risk", badge: "风险" },
+            { label: "收入健康度", value: "近 7 天 +2%", status: "watch", badge: "关注" },
+            { label: "流量健康度", value: "Sessions +11%", status: "good", badge: "正常" },
+            { label: "广告投放健康度", value: "ROAS 1.7x", status: "watch", badge: "关注" },
+            { label: "转化率健康度", value: "CVR 1.4%", status: "risk", badge: "风险" },
+            { label: "库存健康度", value: "3 个 SKU < 7天", status: "watch", badge: "关注" },
+            { label: "履约健康度", value: "超时单 4.6%", status: "watch", badge: "关注" },
+            { label: "商品成本和定价健康度", value: "毛利率 46%", status: "good", badge: "正常" }
+          ]
+        }
+      ];
+
+      let selectedMonitorId = "conversion-health";
+      let currentView = "overview";
+
+      function statusClass(status) {
+        if (status === "risk") return "risk";
+        if (status === "watch") return "watch";
+        return "good";
+      }
+
+      function viewMonitorDetail(monitorId) {
+        selectedMonitorId = monitorId;
+        currentView = "detail";
+        renderApp();
+      }
+
+      function renderOverview() {
+        return `
+          <section class="overview-stack">
+            <section class="progress-card">
+              <div class="page-header-row">
+                <div>
+                  <span class="chip blue">一级页面仪表板</span>
+                  <h3 style="margin-top: 12px">今日健康度概览</h3>
+                  <p>一级页只保留健康度指标本身。每个指标只展示一个关键数据和一个健康度 flag，避免语义重叠。</p>
+                </div>
+                <span class="chip green">本次监测已完成</span>
+              </div>
+              <div class="dashboard-groups">
+                ${dashboardGroups
+                  .map(
+                    (group) => `
+                      <section class="dashboard-group">
+                        <h4>${group.title}</h4>
+                        <div class="dashboard-list">
+                          ${group.items
+                            .map(
+                              (item) => `
+                                <div class="dashboard-row">
+                                  <div class="dashboard-row-title">${item.label}</div>
+                                  <div class="dashboard-row-value">${item.value}</div>
+                                  <span class="status ${statusClass(item.status)}">${item.badge}</span>
+                                </div>
+                              `,
+                            )
+                            .join("")}
+                        </div>
+                      </section>
+                    `,
+                  )
+                  .join("")}
+              </div>
+              <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: 100%"></div>
+              </div>
+              <div class="action-row" style="margin-top: 14px">
+                <button class="primary-btn" data-open-health>进入健康度监测</button>
+                <button class="ghost-btn">查看最近一次运行</button>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function renderHealthMonitoring() {
+        const groups = [...new Set(monitors.map((item) => item.group))];
+        return `
+          <section class="health-stack">
+            <div class="page-header-row">
+              <div>
+                <button class="ghost-btn" data-back-overview>返回一级页面</button>
+                <span class="chip blue" style="margin-top: 14px">二级页面 · 健康度监测</span>
+                <h2>健康度监测</h2>
+                <p>
+                  这一层不是直接讲完整分析，而是先展示本次监测的整体进度，以及每一项检查的状态、当前结论和是否发现问题。点击单项结论后，再进入三级详情页。
+                </p>
+              </div>
+            </div>
+
+            <section class="progress-card">
+              <div class="page-header-row">
+                <div>
+                  <h3>${monitoringRun.title}</h3>
+                  <p>${monitoringRun.window} · 已完成 ${monitoringRun.completed}/${monitoringRun.total} 项监测</p>
+                </div>
+                <span class="chip green">本次运行已完成</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: ${monitoringRun.progress}%"></div>
+              </div>
+              <div class="progress-grid">
+                <div class="progress-metric">
+                  <strong>总进度</strong>
+                  <span>${monitoringRun.progress}%</span>
+                </div>
+                <div class="progress-metric">
+                  <strong>风险项</strong>
+                  <span>${monitoringRun.risks}</span>
+                </div>
+                <div class="progress-metric">
+                  <strong>关注项</strong>
+                  <span>${monitoringRun.watches}</span>
+                </div>
+                <div class="progress-metric">
+                  <strong>正常项</strong>
+                  <span>${monitoringRun.healthy}</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="monitor-board">
+              ${groups
+                .map((group) => {
+                  const items = monitors
+                    .filter((item) => item.group === group)
+                    .map(
+                      (item) => `
+                        <div class="monitor-result-card">
+                          <div class="monitor-result-top">
+                            <div>
+                              <strong>${item.title}</strong>
+                              <div class="result-summary">${item.summary}</div>
+                            </div>
+                            <span class="status ${statusClass(item.status)}">${item.badge}</span>
+                          </div>
+                          <div class="result-progress">
+                            <span>进度：已完成</span>
+                            <span>·</span>
+                            <span>结论：${item.badge === "正常" ? "当前无明显问题" : "发现异常，建议查看"}</span>
+                            <span>·</span>
+                            <span>${item.meta.join(" · ")}</span>
+                          </div>
+                          <div class="result-footer">
+                            <span class="result-stage">监测已完成</span>
+                            <button class="ghost-btn" data-open-detail="${item.id}">查看结论结果</button>
+                          </div>
+                        </div>
+                      `,
+                    )
+                    .join("");
+
+                  return `
+                    <section class="monitor-section">
+                      <div class="monitor-section-head">
+                        <div>
+                          <h3>${group}</h3>
+                          <p>${groupDescriptions[group]}</p>
+                        </div>
+                        <span class="chip blue">${monitors.filter((item) => item.group === group).length} 项</span>
+                      </div>
+                      <div class="monitor-result-list">${items}</div>
+                    </section>
+                  `;
+                })
+                .join("")}
+            </section>
+          </section>
+        `;
+      }
+
+      function renderDetail() {
+        const monitor = monitors.find((item) => item.id === selectedMonitorId) || monitors[0];
+        return `
+          <section class="health-stack">
+            <div class="page-header-row">
+              <div>
+                <button class="ghost-btn" data-back-health>返回健康度监测</button>
+                <span class="chip green" style="margin-top: 14px">三级页面 · 监测结论</span>
+                <h2>${monitor.title}</h2>
+                <p>这个页面就只保留四个问题：问题、论据、解决办法，以及和 AI 聊聊的入口。</p>
+              </div>
+            </div>
+
+            <section class="detail-hero">
+              <span class="chip ${monitor.status === "risk" ? "fake" : monitor.status === "watch" ? "blue" : "green"}">${monitor.heroTag}</span>
+              <h2>${monitor.heroTitle}</h2>
+              <p>${monitor.heroBody}</p>
+              <div class="detail-meta">
+                <span class="mini-pill">${monitor.blockLabel}</span>
+                ${monitor.meta.map((value) => `<span class="mini-pill">${value}</span>`).join("")}
+              </div>
+            </section>
+
+            <section class="detail-block">
+              <div class="detail-block-header">
+                <h3>1. 问题是什么</h3>
+                <span>固定阅读入口</span>
+              </div>
+              <div class="problem-statement">${monitor.problem}</div>
+            </section>
+
+            <section class="detail-block">
+              <div class="detail-block-header">
+                <h3>2. 数据论据</h3>
+                <span>数据 + 规则 + 基准比较</span>
+              </div>
+              <div class="evidence-list">
+                ${monitor.evidence
+                  .map(
+                    (item) => `
+                      <div class="evidence-row">
+                        <strong>${item.label}</strong>
+                        <div>${item.value}</div>
+                      </div>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            </section>
+
+            <section class="detail-block">
+              <div class="detail-block-header">
+                <h3>3. 解决办法</h3>
+                <span>建议动作后续进入现有 Tasks</span>
+              </div>
+              ${monitor.actions
+                .map(
+                  (item) => `
+                    <div class="recommendation">
+                      <strong>${item.title}</strong>
+                      <div>${item.detail}</div>
+                    </div>
+                  `,
+                )
+                .join("")}
+              <div class="action-row">
+                <button class="primary-btn">生成 3 条任务建议</button>
+                <button class="ghost-btn">查看关联对象</button>
+              </div>
+            </section>
+
+            <section class="assistant-card">
+              <div class="detail-block-header">
+                <h3>4. 和 AI 聊聊</h3>
+                <span>把当前报告直接带过去</span>
+              </div>
+              <p>这里不是空跳转，而是把当前监测页的结构化内容一起交给 AI，让对话天然带上下文。</p>
+              <div class="assistant-preview">${monitor.ai}</div>
+              <div class="action-row" style="margin-top: 12px">
+                <button class="primary-btn">带着这份报告发起 AI 对话</button>
+                <button class="ghost-btn">复制报告摘要</button>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function bindOverviewEvents() {
+        document.querySelectorAll("[data-open-health]").forEach((button) => {
+          button.addEventListener("click", () => {
+            currentView = "health";
+            renderApp();
+          });
+        });
+        document.querySelectorAll("[data-open-detail]").forEach((button) => {
+          button.addEventListener("click", () => {
+            viewMonitorDetail(button.dataset.openDetail);
+          });
+        });
+      }
+
+      function bindHealthEvents() {
+        const back = document.querySelector("[data-back-overview]");
+        if (back) {
+          back.addEventListener("click", () => {
+            currentView = "overview";
+            renderApp();
+          });
+        }
+        document.querySelectorAll("[data-open-detail]").forEach((button) => {
+          button.addEventListener("click", () => {
+            viewMonitorDetail(button.dataset.openDetail);
+          });
+        });
+      }
+
+      function bindDetailEvents() {
+        const back = document.querySelector("[data-back-health]");
+        if (back) {
+          back.addEventListener("click", () => {
+            currentView = "health";
+            renderApp();
+          });
+        }
+      }
+
+      function renderApp() {
+        const root = document.getElementById("app-content");
+        if (!root) return;
+
+        if (currentView === "health") {
+          root.innerHTML = renderHealthMonitoring();
+          bindHealthEvents();
+          return;
+        }
+
+        if (currentView === "detail") {
+          root.innerHTML = renderDetail();
+          bindDetailEvents();
+          return;
+        }
+
+        root.innerHTML = renderOverview();
+        bindOverviewEvents();
+      }
+
+      renderApp();
+    </script>
+  </body>
+  </html>

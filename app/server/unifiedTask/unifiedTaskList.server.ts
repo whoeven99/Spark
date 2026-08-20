@@ -7,6 +7,7 @@ const DEFAULT_MERGE_POOL_SIZE = 200;
 
 function entryUpdatedAt(entry: UnifiedTaskEntry): string {
   if (entry.entryType === "ai_task") return entry.task.updatedAt;
+  if (entry.entryType === "automation_task") return entry.task.updatedAt;
   return entry.task.resolvedAt ?? entry.task.createdAt;
 }
 

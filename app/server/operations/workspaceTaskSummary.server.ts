@@ -1,6 +1,9 @@
 import type { AITaskItem, AITaskStatus, AITaskType } from "../../lib/aiTaskTypes";
 import type { WorkspaceDashboardTaskSummary } from "../../lib/workspaceDashboardTypes";
-import type { UnifiedTaskEntry } from "../../lib/unifiedTaskTypes";
+import type {
+  ScheduledAutomationTaskView,
+  UnifiedTaskEntry,
+} from "../../lib/unifiedTaskTypes";
 import type { OperationTaskView } from "./dailyInspection.server";
 
 const AI_TASK_TYPE_LABELS: Record<AITaskType, string> = {
@@ -80,13 +83,21 @@ function summarizeOperationTask(task: OperationTaskView): WorkspaceDashboardTask
   };
 }
 
+function summarizeAutomationTask(task: ScheduledAutomationTaskView): WorkspaceDashboardTaskSummary {
+  return {
+    id: task.id,
+    title: task.title,
+    result: [task.schedule, task.defaultQuestion].filter(Boolean).join(" · "),
+  };
+}
+
 export function buildWorkspaceTaskSummaries(
   entries: UnifiedTaskEntry[],
 ): WorkspaceDashboardTaskSummary[] {
   return entries
-    .map((entry) =>
-      entry.entryType === "ai_task"
-        ? summarizeAITask(entry.task)
-        : summarizeOperationTask(entry.task),
-    );
+    .map((entry) => {
+      if (entry.entryType === "ai_task") return summarizeAITask(entry.task);
+      if (entry.entryType === "automation_task") return summarizeAutomationTask(entry.task);
+      return summarizeOperationTask(entry.task);
+    });
 }

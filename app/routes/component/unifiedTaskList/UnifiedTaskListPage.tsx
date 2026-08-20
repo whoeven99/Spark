@@ -38,6 +38,7 @@ function readTypeFilterFromSearch(search: string): UnifiedTaskTypeFilter {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const value = params.get("unifiedType");
   if (
+    value === "automation_task" ||
     value === "operation_task" ||
     value === "product_improve" ||
     value === "image_generation" ||
@@ -274,6 +275,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
   const typeFilters = [
     { key: "all" as const, label: "全部类型" },
+    { key: "automation_task" as const, label: "定时任务" },
     { key: "operation_task" as const, label: "经营任务" },
     { key: "product_improve" as const, label: "文案" },
     { key: "image_generation" as const, label: "图片生成" },
@@ -347,7 +349,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     >
       <PageSectionHeader
         title="任务收件箱"
-        subtitle="统一查看经营任务、文案、图片和批处理任务"
+        subtitle="统一查看定时任务、经营任务、文案、图片和批处理任务"
         badge={<div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>当前结果 {totalCount} 条</div>}
       />
 

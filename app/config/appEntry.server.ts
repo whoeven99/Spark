@@ -8,6 +8,7 @@
 export type NavItemKey =
   | "ask"
   | "today"
+  | "health-monitor"
   | "studio"
   | "insights"
   | "tasks"
@@ -21,7 +22,7 @@ type AppShellConfig = {
 
 const DEFAULT_APP_SHELL_CONFIG = {
   home: "/app",
-  nav: ["ask", "today", "studio", "insights", "tasks", "settings"],
+  nav: ["ask", "today", "health-monitor", "studio", "insights", "tasks", "settings"],
 } as const satisfies AppShellConfig;
 
 export function getAppEntryConfig(): AppShellConfig {
