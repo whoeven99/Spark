@@ -160,6 +160,15 @@ const PRESETS: Record<ReportTab, ReportPreset[]> = {
       xKey: "day",
     },
     {
+      id: "profit-shipping-labels-summary",
+      kind: "summary",
+      titleKey: "shopifyReports.summaryShippingLabels",
+      query:
+        "FROM shipping_labels SHOW shipping_labels, shipping_label_costs, average_shipping_label_cost SINCE {{SINCE}} UNTIL today",
+      seriesKeys: [],
+      xKey: "day",
+    },
+    {
       id: "profit-product",
       kind: "table",
       titleKey: "shopifyReports.tableProfitProduct",
@@ -167,6 +176,24 @@ const PRESETS: Record<ReportTab, ReportPreset[]> = {
         "FROM sales SHOW net_sales, cost_of_goods_sold, gross_profit GROUP BY product_title SINCE {{SINCE}} UNTIL today ORDER BY gross_profit DESC LIMIT 20",
       seriesKeys: [],
       xKey: "product_title",
+    },
+    {
+      id: "profit-shipping-labels-trend",
+      kind: "timeseries",
+      titleKey: "shopifyReports.trendShippingLabels",
+      query:
+        "FROM shipping_labels SHOW shipping_label_costs TIMESERIES day SINCE {{SINCE}} UNTIL today ORDER BY day ASC",
+      seriesKeys: ["shipping_label_costs"],
+      xKey: "day",
+    },
+    {
+      id: "profit-shipping-labels-carrier",
+      kind: "table",
+      titleKey: "shopifyReports.tableShippingLabelCarrier",
+      query:
+        "FROM shipping_labels SHOW shipping_labels, shipping_label_costs, average_shipping_label_cost GROUP BY shipping_carrier SINCE {{SINCE}} UNTIL today ORDER BY shipping_label_costs DESC LIMIT 20",
+      seriesKeys: [],
+      xKey: "shipping_carrier",
     },
   ],
   customers: [

@@ -66,12 +66,18 @@ describe("shopify reports helpers", () => {
     const trend = profit.find((preset) => preset.id === "profit-trend");
     const shipping = profit.find((preset) => preset.id === "profit-shipping-trend");
     const product = profit.find((preset) => preset.id === "profit-product");
+    const labelSummary = profit.find((preset) => preset.id === "profit-shipping-labels-summary");
+    const labelTrend = profit.find((preset) => preset.id === "profit-shipping-labels-trend");
+    const labelCarrier = profit.find((preset) => preset.id === "profit-shipping-labels-carrier");
 
     expect(profit.map((preset) => preset.id)).toEqual([
       "profit-summary",
       "profit-trend",
       "profit-shipping-trend",
+      "profit-shipping-labels-summary",
       "profit-product",
+      "profit-shipping-labels-trend",
+      "profit-shipping-labels-carrier",
     ]);
     expect(summary?.query).toContain("cost_of_goods_sold");
     expect(summary?.query).toContain("gross_profit");
@@ -80,6 +86,10 @@ describe("shopify reports helpers", () => {
     expect(trend?.seriesKeys).toEqual(["gross_profit", "cost_of_goods_sold"]);
     expect(shipping?.query).toContain("total_shipping_charges");
     expect(product?.query).toContain("GROUP BY product_title");
+    expect(labelSummary?.query).toContain("FROM shipping_labels");
+    expect(labelSummary?.query).toContain("shipping_label_costs");
+    expect(labelTrend?.seriesKeys).toEqual(["shipping_label_costs"]);
+    expect(labelCarrier?.query).toContain("GROUP BY shipping_carrier");
   });
 
   it("keeps negative reversal quantities visible on the chart domain", () => {

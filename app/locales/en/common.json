@@ -814,6 +814,7 @@
     "queryDialogTitle": "Current ShopifyQL",
     "queryDialogClose": "Close",
     "summaryTitle": "Range summary",
+    "summaryShippingLabels": "Shopify shipping label costs",
     "trendSales": "Daily sales trend",
     "trendReversalsQuantity": "Daily reversed quantity",
     "trendReversalsAmount": "Daily sales reversals",
@@ -824,6 +825,7 @@
     "trendSessions": "Daily session trend",
     "trendProfit": "Daily gross profit and COGS",
     "trendShipping": "Daily customer-paid shipping",
+    "trendShippingLabels": "Daily shipping label costs",
     "tableSalesChannel": "By sales channel",
     "tableSalesProduct": "By product",
     "tableReversalProduct": "By reversed product",
@@ -836,6 +838,7 @@
     "tableInventorySku": "By SKU",
     "tableInventoryAdjustments": "By inventory adjustment reason",
     "tableFulfillmentCarrier": "By carrier",
+    "tableShippingLabelCarrier": "Shipping label costs by carrier",
     "tableSessionReferrer": "By referrer",
     "sourceHint": "Source: ShopifyQL / Shopify Analytics",
     "timezoneHint": "Shop timezone {{timezone}} · Currency {{currency}}",
@@ -845,7 +848,7 @@
     "funnelCart": "Added to cart",
     "funnelCheckout": "Reached checkout",
     "funnelCompleted": "Completed checkout",
-    "profitHint": "Gross profit only covers products with inventory cost recorded. Shipping is the amount customers paid, not carrier cost, and it does not include ad spend.",
+    "profitHint": "Gross profit only covers products with inventory cost recorded. Customer shipping is what buyers paid. Label costs only include labels purchased in Shopify, not external FedEx/SF invoices, and this view does not include ad spend.",
     "footerNote": "These numbers use Shopify's official analytics definitions and may differ from Today diagnosis, which reads Spark's synced tables."
   },
   "gsc": {

@@ -224,12 +224,16 @@ function SummaryCard({
 }) {
   const { t } = useTranslation();
   if (!result) return null;
+  const accent =
+    result.titleKey === "shopifyReports.summaryTitle" ? undefined : t(result.titleKey);
   if (result.error) {
-    return <div style={formErrorBoxStyle}>{result.error}</div>;
+    const errorBox = <div style={formErrorBoxStyle}>{result.error}</div>;
+    return accent ? <PageSurface title={accent}>{errorBox}</PageSurface> : errorBox;
   }
   const row = result.rows[0];
   if (!row) {
-    return <div style={pageEmptyStateStyle}>{t("shopifyReports.emptyTitle")}</div>;
+    const empty = <div style={pageEmptyStateStyle}>{t("shopifyReports.emptyTitle")}</div>;
+    return accent ? <PageSurface title={accent}>{empty}</PageSurface> : empty;
   }
   const metrics = result.columns
     .filter((column) => column.name !== result.xKey)
@@ -237,7 +241,13 @@ function SummaryCard({
       label: column.displayName || column.name,
       value: formatReportCell(row[column.name] ?? null, column.dataType, { locale, currencyCode }),
     }));
-  return <PageMetricCard metrics={metrics} footer={t("shopifyReports.sourceHint")} />;
+  return (
+    <PageMetricCard
+      accent={accent}
+      metrics={metrics}
+      footer={t("shopifyReports.sourceHint")}
+    />
+  );
 }
 
 function QuerySection({
