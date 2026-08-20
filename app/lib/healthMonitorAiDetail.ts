@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { HealthMonitorRecord, HealthMonitorStatus } from "./healthMonitorData";
 
+const nonEmptyStringSchema = z.string().trim().min(1);
+const safeMonitorNameSchema = z.string().trim().min(1).catch("unknown_monitor");
+
 const monitorGroupSchema = z.enum(["site_health", "business_health"]);
 const statusSchema = z.enum(["good", "watch", "risk"]);
 const scoringSchema = z.enum(["high", "medium", "low"]);
@@ -11,14 +14,14 @@ const objectTypeSchema = z.enum(["page", "sku", "channel", "campaign", "landing_
 export const monitorDetailInputSchema = z.object({
   version: z.literal("v1"),
   monitor: z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
+    id: nonEmptyStringSchema,
+    name: safeMonitorNameSchema,
     group: monitorGroupSchema,
-    label: z.string().min(1),
+    label: nonEmptyStringSchema,
     status: statusSchema,
   }),
   timeWindow: z.object({
-    label: z.string().min(1),
+    label: nonEmptyStringSchema,
     startAt: z.string().optional(),
     endAt: z.string().optional(),
   }),
@@ -27,62 +30,62 @@ export const monitorDetailInputSchema = z.object({
     confidence: scoringSchema,
   }),
   coreMetric: z.object({
-    label: z.string().min(1),
-    value: z.string().min(1),
+    label: nonEmptyStringSchema,
+    value: nonEmptyStringSchema,
     unit: z.string().optional(),
     direction: z.enum(["up", "down", "flat"]).optional(),
   }),
   benchmark: z.object({
-    label: z.string().min(1),
-    value: z.string().min(1),
+    label: nonEmptyStringSchema,
+    value: nonEmptyStringSchema,
     delta: z.string().optional(),
     direction: z.enum(["better", "worse", "flat"]),
   }),
   facts: z.array(
     z.object({
-      label: z.string().min(1),
-      value: z.string().min(1),
+      label: nonEmptyStringSchema,
+      value: nonEmptyStringSchema,
       source: sourceSchema,
     }),
   ).min(1),
   affectedObjects: z.array(
     z.object({
       type: objectTypeSchema,
-      name: z.string().min(1),
+      name: nonEmptyStringSchema,
       summary: z.string().optional(),
     }),
   ).optional(),
-  possibleCauses: z.array(z.string().min(1)).optional(),
+  possibleCauses: z.array(nonEmptyStringSchema).optional(),
   candidateActions: z.array(
     z.object({
-      title: z.string().min(1),
-      detail: z.string().min(1),
+      title: nonEmptyStringSchema,
+      detail: nonEmptyStringSchema,
       priority: prioritySchema,
     }),
   ).optional(),
   generationTrace: z.object({
-    dataFacts: z.array(z.string().min(1)).min(1),
-    rulesApplied: z.array(z.string().min(1)).min(1),
-    benchmarkComparisons: z.array(z.string().min(1)).min(1),
+    dataFacts: z.array(nonEmptyStringSchema).min(1),
+    rulesApplied: z.array(nonEmptyStringSchema).min(1),
+    benchmarkComparisons: z.array(nonEmptyStringSchema).min(1),
   }),
 });
 
 export const monitorDetailResultSchema = z.object({
-  problem: z.string().min(1).max(120),
+  problem: nonEmptyStringSchema.max(120),
   evidenceSummary: z.array(
     z.object({
-      label: z.string().min(1),
-      summary: z.string().min(1),
+      label: nonEmptyStringSchema,
+      summary: nonEmptyStringSchema,
     }),
   ).min(2).max(4),
   actions: z.array(
     z.object({
-      title: z.string().min(1),
-      detail: z.string().min(1),
+      title: nonEmptyStringSchema,
+      detail: nonEmptyStringSchema,
       priority: prioritySchema,
     }),
   ).min(1).max(4),
-  aiChatPrompt: z.string().min(1).max(400),
+  aiChatPrompt: nonEmptyStringSchema.max(400),
 });
 
 export type MonitorDetailInput = z.infer<typeof monitorDetailInputSchema>;
@@ -93,7 +96,7 @@ export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDe
     version: "v1",
     monitor: {
       id: monitor.id,
-      name: toSnakeCase(monitor.title),
+      name: toSnakeCase(monitor.title) || monitor.id,
       group: monitor.group === "站点健康度" ? "site_health" : "business_health",
       label: monitor.title,
       status: monitor.status,
@@ -131,7 +134,10 @@ export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDe
     },
   };
 
-  return monitorDetailInputSchema.parse(input);
+  const parsed = monitorDetailInputSchema.safeParse(input);
+  if (parsed.success) return parsed.data;
+  console.error("[health-monitor] invalid detail input:", parsed.error.flatten());
+  return buildFallbackHealthMonitorDetail(monitor).input;
 }
 
 export function buildMonitorDetailPrompt(input: MonitorDetailInput) {
@@ -168,30 +174,55 @@ export function generateMonitorDetailResult(input: MonitorDetailInput): MonitorD
     aiChatPrompt: buildAiChatPrompt(input),
   };
 
-  return monitorDetailResultSchema.parse(result);
+  const parsed = monitorDetailResultSchema.safeParse(result);
+  if (parsed.success) return parsed.data;
+  console.error("[health-monitor] invalid detail result:", parsed.error.flatten());
+  return buildFallbackHealthMonitorDetail({
+    id: input.monitor.id,
+    group: input.monitor.group === "site_health" ? "站点健康度" : "经营健康度",
+    title: input.monitor.label,
+    value: input.coreMetric.value,
+    status: input.monitor.status,
+    summary: input.facts[0]?.value ?? input.monitor.label,
+    issue: input.facts[0]?.value ?? input.monitor.label,
+    evidence: input.facts.slice(0, 3).map((fact) => ({
+      label: fact.label,
+      value: fact.value,
+    })),
+    actions: (input.candidateActions ?? []).slice(0, 3).map((action) => ({
+      title: action.title,
+      detail: action.detail,
+    })),
+    aiPrompt: buildAiChatPrompt(input),
+  }).result;
 }
 
 export function resolveHealthMonitorDetail(monitor: HealthMonitorRecord) {
-  const input = buildMonitorDetailInput(monitor);
-  const prompt = buildMonitorDetailPrompt(input);
-  const result = generateMonitorDetailResult(input);
+  try {
+    const input = buildMonitorDetailInput(monitor);
+    const prompt = buildMonitorDetailPrompt(input);
+    const result = generateMonitorDetailResult(input);
 
-  return {
-    input,
-    prompt,
-    result,
-  };
+    return {
+      input,
+      prompt,
+      result,
+    };
+  } catch (error) {
+    console.error("[health-monitor] resolve detail failed:", error);
+    return buildFallbackHealthMonitorDetail(monitor);
+  }
 }
 
 function buildProblem(input: MonitorDetailInput) {
   const benchmarkDelta = input.benchmark.delta ? `，${input.benchmark.delta}` : "";
   if (input.monitor.status === "risk") {
-    return `${input.monitor.label}已进入风险状态，当前${input.coreMetric.label}为 ${input.coreMetric.value}，相对${input.benchmark.label}${benchmarkDelta}，需要优先处理。`;
+    return truncateText(`${input.monitor.label}已进入风险状态，当前${input.coreMetric.label}为 ${input.coreMetric.value}，相对${input.benchmark.label}${benchmarkDelta}，需要优先处理。`, 120);
   }
   if (input.monitor.status === "watch") {
-    return `${input.monitor.label}当前处于关注状态，${input.coreMetric.label}为 ${input.coreMetric.value}，建议继续跟进并准备处理动作。`;
+    return truncateText(`${input.monitor.label}当前处于关注状态，${input.coreMetric.label}为 ${input.coreMetric.value}，建议继续跟进并准备处理动作。`, 120);
   }
-  return `${input.monitor.label}当前整体稳定，${input.coreMetric.label}为 ${input.coreMetric.value}，暂不属于优先处理问题。`;
+  return truncateText(`${input.monitor.label}当前整体稳定，${input.coreMetric.label}为 ${input.coreMetric.value}，暂不属于优先处理问题。`, 120);
 }
 
 function buildAiChatPrompt(input: MonitorDetailInput) {
@@ -339,4 +370,70 @@ function toSnakeCase(value: string) {
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "")
     .toLowerCase();
+}
+
+function buildFallbackHealthMonitorDetail(monitor: HealthMonitorRecord) {
+  const input: MonitorDetailInput = {
+    version: "v1",
+    monitor: {
+      id: monitor.id,
+      name: monitor.id,
+      group: monitor.group === "站点健康度" ? "site_health" : "business_health",
+      label: monitor.title,
+      status: monitor.status,
+    },
+    timeWindow: {
+      label: "近7天",
+    },
+    scoring: {
+      dataQuality: "medium",
+      confidence: "medium",
+    },
+    coreMetric: {
+      label: inferCoreMetricLabel(monitor),
+      value: monitor.value,
+      unit: inferUnit(monitor.value),
+      direction: inferDirection(monitor.status),
+    },
+    benchmark: buildBenchmark(monitor),
+    facts: monitor.evidence.slice(0, 3).map((entry) => ({
+      label: entry.label,
+      value: entry.value,
+      source: "internal" as const,
+    })),
+    possibleCauses: [monitor.summary],
+    candidateActions: monitor.actions.slice(0, 3).map((action, index) => ({
+      title: action.title,
+      detail: action.detail,
+      priority: index === 0 ? "P0" : index === 1 ? "P1" : "P2",
+    })),
+    generationTrace: {
+      dataFacts: [monitor.value],
+      rulesApplied: [buildRuleTrace(monitor.status, monitor.title)],
+      benchmarkComparisons: [buildBenchmarkTrace(monitor)],
+    },
+  };
+
+  return {
+    input,
+    prompt: buildMonitorDetailPrompt(input),
+    result: {
+      problem: truncateText(monitor.issue, 120),
+      evidenceSummary: monitor.evidence.slice(0, 3).map((entry) => ({
+        label: entry.label,
+        summary: entry.value,
+      })),
+      actions: monitor.actions.slice(0, 3).map((action, index) => ({
+        title: action.title,
+        detail: action.detail,
+        priority: index === 0 ? "P0" : index === 1 ? "P1" : "P2",
+      })),
+      aiChatPrompt: truncateText(monitor.aiPrompt, 400),
+    },
+  };
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
 }
