@@ -39,6 +39,7 @@ import {
 const TAB_LABEL_KEYS: Record<ReportTab, string> = {
   sales: "shopifyReports.tabSales",
   refunds: "shopifyReports.tabRefunds",
+  profit: "shopifyReports.tabProfit",
   customers: "shopifyReports.tabCustomers",
   inventory: "shopifyReports.tabInventory",
   fulfillment: "shopifyReports.tabFulfillment",
@@ -93,8 +94,8 @@ export function ShopifyReportsPage() {
   const tab = data.tab;
   const range = data.range;
 
-  const summary = data.queries.find((item) => item.kind === "summary");
-  const trend = data.queries.find((item) => item.kind === "timeseries");
+  const summaries = data.queries.filter((item) => item.kind === "summary");
+  const trends = data.queries.filter((item) => item.kind === "timeseries");
   const tables = data.queries.filter((item) => item.kind === "table");
 
   return (
@@ -147,18 +148,28 @@ export function ShopifyReportsPage() {
 
         {data.access === "ok" ? (
           <>
-            <SummaryCard result={summary} locale={i18n.language} currencyCode={data.currencyCode} />
+            {summaries.map((summary) => (
+              <SummaryCard
+                key={summary.id}
+                result={summary}
+                locale={i18n.language}
+                currencyCode={data.currencyCode}
+              />
+            ))}
             {tab === "storefront" ? (
-              <StorefrontFunnel result={summary} locale={i18n.language} />
+              <StorefrontFunnel result={summaries[0]} locale={i18n.language} />
             ) : null}
-            <QuerySection
-              result={trend}
-              emptyLabel={t("shopifyReports.emptyTrend")}
-              locale={i18n.language}
-              currencyCode={data.currencyCode}
-              onOpenQuery={setQueryPreview}
-              visual="chart"
-            />
+            {trends.map((trend) => (
+              <QuerySection
+                key={trend.id}
+                result={trend}
+                emptyLabel={t("shopifyReports.emptyTrend")}
+                locale={i18n.language}
+                currencyCode={data.currencyCode}
+                onOpenQuery={setQueryPreview}
+                visual="chart"
+              />
+            ))}
             {tables.map((table) => (
               <QuerySection
                 key={table.id}
@@ -170,6 +181,7 @@ export function ShopifyReportsPage() {
                 visual="table"
               />
             ))}
+            {tab === "profit" ? <p style={pageHintTextStyle}>{t("shopifyReports.profitHint")}</p> : null}
             <p style={pageHintTextStyle}>{t("shopifyReports.footerNote")}</p>
           </>
         ) : null}
@@ -212,21 +224,30 @@ function SummaryCard({
 }) {
   const { t } = useTranslation();
   if (!result) return null;
+  const accent =
+    result.titleKey === "shopifyReports.summaryTitle" ? undefined : t(result.titleKey);
   if (result.error) {
-    return <div style={formErrorBoxStyle}>{result.error}</div>;
+    const errorBox = <div style={formErrorBoxStyle}>{result.error}</div>;
+    return accent ? <PageSurface title={accent}>{errorBox}</PageSurface> : errorBox;
   }
   const row = result.rows[0];
   if (!row) {
-    return <div style={pageEmptyStateStyle}>{t("shopifyReports.emptyTitle")}</div>;
+    const empty = <div style={pageEmptyStateStyle}>{t("shopifyReports.emptyTitle")}</div>;
+    return accent ? <PageSurface title={accent}>{empty}</PageSurface> : empty;
   }
   const metrics = result.columns
     .filter((column) => column.name !== result.xKey)
-    .slice(0, 6)
     .map((column) => ({
       label: column.displayName || column.name,
       value: formatReportCell(row[column.name] ?? null, column.dataType, { locale, currencyCode }),
     }));
-  return <PageMetricCard metrics={metrics} footer={t("shopifyReports.sourceHint")} />;
+  return (
+    <PageMetricCard
+      accent={accent}
+      metrics={metrics}
+      footer={t("shopifyReports.sourceHint")}
+    />
+  );
 }
 
 function QuerySection({

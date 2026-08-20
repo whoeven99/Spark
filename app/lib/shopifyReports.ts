@@ -1,6 +1,7 @@
 export const REPORT_TABS = [
   "sales",
   "refunds",
+  "profit",
   "customers",
   "inventory",
   "fulfillment",
@@ -166,4 +167,28 @@ export function readNumericCell(
 ): number | null {
   if (!row) return null;
   return parseNumeric(row[key] ?? null);
+}
+
+export function niceChartMagnitude(raw: number): number {
+  const abs = Math.abs(raw);
+  if (abs <= 0) return 1;
+  const mag = 10 ** Math.floor(Math.log10(abs));
+  const normed = abs / mag;
+  const nice = normed <= 1 ? 1 : normed <= 2 ? 2 : normed <= 5 ? 5 : 10;
+  return nice * mag;
+}
+
+export function computeLinearChartDomain(values: number[]): { min: number; max: number } {
+  const rawMin = Math.min(...values, 0);
+  const rawMax = Math.max(...values, 0);
+  const min = rawMin < 0 ? -niceChartMagnitude(rawMin) : 0;
+  const max = rawMax > 0 ? niceChartMagnitude(rawMax) : 0;
+  if (min === 0 && max === 0) return { min: 0, max: 1 };
+  return { min, max };
+}
+
+export function chartAxisTicks(min: number, max: number): number[] {
+  if (min < 0 && max > 0) return [min, 0, max];
+  if (min < 0) return [min, min / 2, 0];
+  return [0, max / 2, max];
 }
