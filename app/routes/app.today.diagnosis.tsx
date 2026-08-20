@@ -41,6 +41,12 @@ import {
   pageSectionMajorTitleStyle,
   pageAccentBadgeStyle,
 } from "./page/pageUiStyles";
+import {
+  buildOperationTaskPrompt,
+  inferOperationTaskPresentation,
+  type OperationTaskPresentation as TaskPresentation,
+  type OperationTaskPresentationEffect as InsightEffect,
+} from "../lib/operationTaskPresentation";
 
 type LoaderData =
   | { ok: true; result: DailyOperationsResult }
@@ -111,7 +117,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (!updated) {
         return Response.json({ ok: false, error: "task not found" }, { status: 404 });
       }
-      return Response.json({ ok: true });
+      return Response.json({ ok: true, task: updated });
     }
     return Response.json({ ok: false, error: "unsupported intent" }, { status: 400 });
   } catch (error) {
@@ -422,7 +428,6 @@ function quadrantLabel(
 
 type InsightsView = "today" | "all";
 type TodayTaskTab = "all" | "q1" | "q3" | "in_progress" | "done";
-type InsightEffect = "revenue" | "conversion" | "efficiency" | "retention";
 type DetailSection = "performance" | "risk" | "value" | "task";
 
 type RiskEnvironmentCard = {
@@ -434,14 +439,6 @@ type RiskEnvironmentCard = {
   primaryMetric: string;
   secondaryMetric: string;
   summary: string;
-};
-
-type TaskPresentation = {
-  objective: string;
-  impactMetric: string;
-  estimatedLift: string;
-  roiImpact: string;
-  effect: InsightEffect;
 };
 
 type DetailTableColumn<Row> = {
@@ -957,81 +954,25 @@ function taskStatusRank(status: string) {
   }
 }
 
-function inferTaskPresentation(
-  task: OperationTaskView,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): TaskPresentation {
-  if (
-    task.sourceKey === "fulfillment_overdue" ||
-    task.sourceKey === "logistics_stale" ||
-    task.sourceKey === "routine_shipping"
-  ) {
-    return {
-      objective: t("dailyOps.taskObjectiveFulfillment"),
-      impactMetric: t("dailyOps.taskMetricFulfillment"),
-      estimatedLift: t("dailyOps.taskLiftFulfillment"),
-      roiImpact: t("dailyOps.taskRoiFulfillment"),
-      effect: "efficiency",
-    };
-  }
-  if (task.sourceKey === "refund_spike") {
-    return {
-      objective: t("dailyOps.taskObjectiveRefund"),
-      impactMetric: t("dailyOps.taskMetricRefund"),
-      estimatedLift: t("dailyOps.taskLiftRefund"),
-      roiImpact: t("dailyOps.taskRoiRefund"),
-      effect: "retention",
-    };
-  }
-  if (
-    task.sourceKey === "inventory_risk" ||
-    task.sourceKey === "inventory_replenish_plan"
-  ) {
-    return {
-      objective: t("dailyOps.taskObjectiveInventory"),
-      impactMetric: t("dailyOps.taskMetricInventory"),
-      estimatedLift: t("dailyOps.taskLiftInventory"),
-      roiImpact: t("dailyOps.taskRoiInventory"),
-      effect: "revenue",
-    };
-  }
-  return {
-    objective: t("dailyOps.taskObjectiveTraffic"),
-    impactMetric: t("dailyOps.taskMetricTraffic"),
-    estimatedLift: t("dailyOps.taskLiftTraffic"),
-    roiImpact: t("dailyOps.taskRoiTraffic"),
-    effect: task.sourceKey === "sales_decline" ? "revenue" : "conversion",
-  };
-}
+type ReportTaskMetadata = {
+  objective?: string;
+  impactMetrics?: string[];
+  estimatedLift?: string | null;
+  roiImpactSummary?: string;
+  effect?: InsightEffect;
+  primaryObjectId?: string | null;
+  primaryObjectType?: string | null;
+};
 
-function buildTaskPrompt(
-  task: OperationTaskView,
-  presentation: TaskPresentation,
-  taskStatusText: string,
-  dueWindowText: string,
-  t: (key: string, options?: Record<string, unknown>) => string,
-) {
-  const actionLines =
-    task.suggestedActions.length > 0
-      ? task.suggestedActions.map((action) => `- ${action}`).join("\n")
-      : `- ${t("dailyOps.taskNoSuggestedActions")}`;
-  return [
-    t("dailyOps.taskPromptHeader"),
-    `${t("dailyOps.taskPromptTitle")}：${task.title}`,
-    `${t("dailyOps.taskPromptStatus")}：${taskStatusText}`,
-    `${t("dailyOps.taskPromptReason")}：${task.triggerReason}`,
-    `${t("dailyOps.taskPromptObjective")}：${presentation.objective}`,
-    `${t("dailyOps.taskPromptMetric")}：${presentation.impactMetric}`,
-    `${t("dailyOps.taskPromptLift")}：${presentation.estimatedLift}`,
-    `${t("dailyOps.taskPromptRoi")}：${presentation.roiImpact}`,
-    `${t("dailyOps.taskPromptDue")}：${dueWindowText}`,
-    task.ownerRole
-      ? `${t("dailyOps.taskPromptOwner")}：${task.ownerRole}`
-      : `${t("dailyOps.taskPromptOwner")}：${t("dailyOps.taskPromptOwnerUnknown")}`,
-    `${t("dailyOps.taskPromptActions")}：\n${actionLines}`,
-    "",
-    t("dailyOps.taskPromptInstruction"),
-  ].join("\n");
+function getReportTaskMetadata(relatedObjects: unknown): ReportTaskMetadata | null {
+  if (!relatedObjects || typeof relatedObjects !== "object" || Array.isArray(relatedObjects)) {
+    return null;
+  }
+  const reportTask = (relatedObjects as Record<string, unknown>).reportTask;
+  if (!reportTask || typeof reportTask !== "object" || Array.isArray(reportTask)) {
+    return null;
+  }
+  return reportTask as ReportTaskMetadata;
 }
 
 function buildRiskEnvironmentCards(
@@ -1171,6 +1112,7 @@ function buildTaskRelatedSummaryItems(
   relatedObjects: unknown,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): TaskRelatedSummaryItem[] {
+  const reportTask = getReportTaskMetadata(relatedObjects);
   const orders = getObjectArray<{ orderNumber?: string }>(relatedObjects, "orders")
     .map((item) => item.orderNumber)
     .filter((value): value is string => Boolean(value));
@@ -1229,6 +1171,15 @@ function buildTaskRelatedSummaryItems(
       key: "abnormalOrders",
       label: t("orderMonitor.abnormalRefundOrdersTitle"),
       value: pickPreview(abnormalOrders),
+    });
+  }
+  if (reportTask?.primaryObjectId) {
+    items.push({
+      key: "reportPrimaryObject",
+      label: t("dailyOps.relatedObjectsLabel"),
+      value: reportTask.primaryObjectType
+        ? `${reportTask.primaryObjectType}: ${reportTask.primaryObjectId}`
+        : reportTask.primaryObjectId,
     });
   }
   return items;
@@ -1552,12 +1503,14 @@ export default function DailyOperationsPage() {
                 params.set("panel", "chat");
                 params.set(
                   "prefillTaskPrompt",
-                  buildTaskPrompt(
+                  buildOperationTaskPrompt(
                     task,
                     presentation,
-                    taskStatusText(task.status),
-                    dueWindowText(task.dueWindow),
-                    t,
+                    {
+                      taskStatusText: taskStatusText(task.status),
+                      dueWindowText: dueWindowText(task.dueWindow),
+                      t,
+                    },
                   ),
                 );
                 navigate(`/app?${params.toString()}`);
@@ -1690,7 +1643,7 @@ function DailyOperationsBody({
         if (allPriorityFilter !== "all" && task.priority !== allPriorityFilter) return false;
         if (
           allEffectFilter !== "all" &&
-          inferTaskPresentation(task, t).effect !== allEffectFilter
+          inferOperationTaskPresentation(task, t).effect !== allEffectFilter
         ) {
           return false;
         }
@@ -1700,7 +1653,7 @@ function DailyOperationsBody({
   );
 
   const renderTaskListRow = (task: OperationTaskView) => {
-    const presentation = inferTaskPresentation(task, t);
+    const presentation = inferOperationTaskPresentation(task, t);
     const closed = ["done", "ignored", "auto_closed"].includes(task.status);
     return (
       <div
@@ -3482,7 +3435,7 @@ function DailyOperationsDetail({
     if (!selectedTask) {
       return <div style={pageEmptyStateStyle}>{t("dailyOps.taskDetailEmpty")}</div>;
     }
-    const presentation = inferTaskPresentation(selectedTask, t);
+    const presentation = inferOperationTaskPresentation(selectedTask, t);
     const closed = ["done", "ignored", "auto_closed"].includes(selectedTask.status);
     return (
       <div style={detailSectionStackStyle}>
@@ -3609,12 +3562,14 @@ function DailyOperationsDetail({
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  const prompt = buildTaskPrompt(
+                  const prompt = buildOperationTaskPrompt(
                     selectedTask,
                     presentation,
-                    taskStatusText(selectedTask.status),
-                    dueWindowText(selectedTask.dueWindow),
-                    t,
+                    {
+                      taskStatusText: taskStatusText(selectedTask.status),
+                      dueWindowText: dueWindowText(selectedTask.dueWindow),
+                      t,
+                    },
                   );
                   const params = new URLSearchParams();
                   params.set("panel", "chat");

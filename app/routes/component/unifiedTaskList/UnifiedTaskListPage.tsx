@@ -38,6 +38,7 @@ function readTypeFilterFromSearch(search: string): UnifiedTaskTypeFilter {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const value = params.get("unifiedType");
   if (
+    value === "operation_task" ||
     value === "product_improve" ||
     value === "image_generation" ||
     value === "picture_translate"
@@ -52,9 +53,12 @@ function readStatusFilterFromSearch(search: string): UnifiedTaskStatusFilter {
   const value = params.get("unifiedStatus");
   if (
     value === "running" ||
+    value === "open" ||
+    value === "in_progress" ||
     value === "needs_review" ||
     value === "failed" ||
-    value === "completed"
+    value === "completed" ||
+    value === "ignored"
   ) {
     return value;
   }
@@ -253,6 +257,11 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     );
   }
 
+  const handleOperationTaskUpdated = useCallback(() => {
+    pageCache.current = {};
+    void load(view, page, typeFilter, statusFilter, true);
+  }, [load, page, statusFilter, typeFilter, view]);
+
   // ── Tab bar ────────────────────────────────────────────────────────────────
 
   const tabs = useMemo(
@@ -265,6 +274,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
   const typeFilters = [
     { key: "all" as const, label: "全部类型" },
+    { key: "operation_task" as const, label: "经营任务" },
     { key: "product_improve" as const, label: "文案" },
     { key: "image_generation" as const, label: "图片生成" },
     { key: "picture_translate" as const, label: "图片翻译" },
@@ -273,9 +283,12 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
   const statusFilters = [
     { key: "all" as const, label: "全部状态" },
     { key: "running" as const, label: "进行中" },
+    { key: "open" as const, label: "待处理" },
+    { key: "in_progress" as const, label: "处理中" },
     { key: "needs_review" as const, label: "待审核" },
     { key: "failed" as const, label: "失败" },
     { key: "completed" as const, label: "已完成" },
+    { key: "ignored" as const, label: "已忽略" },
   ];
 
   const tabBar = (
@@ -334,7 +347,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     >
       <PageSectionHeader
         title="任务收件箱"
-        subtitle="统一查看文案、图片和批处理任务"
+        subtitle="统一查看经营任务、文案、图片和批处理任务"
         badge={<div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>当前结果 {totalCount} 条</div>}
       />
 
@@ -406,6 +419,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
                 entry={entry}
                 locationSearch={locationSearch}
                 onAITaskDeleted={(id) => void handleAITaskDeleted(id)}
+                onOperationTaskUpdated={handleOperationTaskUpdated}
                 onTaskUpdated={handleTaskUpdated}
                 deleting={isDeletingThis}
               />

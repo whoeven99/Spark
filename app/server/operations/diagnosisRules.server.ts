@@ -343,6 +343,8 @@ const RULES: RuleDefinition[] = [
   },
 ];
 
+export const RULE_MANAGED_SOURCE_KEYS = RULES.map((rule) => rule.key);
+
 /** 计算 dueWindow 对应的截止时间。 */
 export function dueWindowToDate(window: TaskDueWindow, now: Date): Date | null {
   switch (window) {

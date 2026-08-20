@@ -30,4 +30,36 @@ describe("buildWorkspaceTaskSummaries", () => {
     expect(summaries[0]?.result).toContain("已完成");
     expect(summaries[0]?.result).toContain("2 个商品");
   });
+
+  it("summarizes operation_task entries", () => {
+    const entries: UnifiedTaskEntry[] = [
+      {
+        entryType: "operation_task",
+        task: {
+          id: "op-task-1",
+          dedupeKey: "growth_focus:high_value_segment:ltv:this_week",
+          sourceKey: "report:growth_focus",
+          title: "放大利润与高价值客群",
+          quadrant: "q3",
+          priority: "P1",
+          status: "open",
+          triggerReason: "高价值客群和利润渠道已经形成结构优势。",
+          relatedObjects: {},
+          suggestedActions: ["优先圈定高价值客群并规划二次触达。"],
+          ownerRole: "运营",
+          dueWindow: "this_week",
+          dueAt: null,
+          createdAt: "2026-08-20T08:00:00.000Z",
+          resolvedAt: null,
+        },
+      },
+    ];
+
+    const summaries = buildWorkspaceTaskSummaries(entries);
+
+    expect(summaries[0]?.title).toBe("放大利润与高价值客群");
+    expect(summaries[0]?.result).toContain("P1");
+    expect(summaries[0]?.result).toContain("待处理");
+    expect(summaries[0]?.result).toContain("优先圈定高价值客群并规划二次触达。");
+  });
 });

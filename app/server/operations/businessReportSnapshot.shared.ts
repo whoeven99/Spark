@@ -7,6 +7,7 @@ import type { PageSpeedReport } from "../../lib/pageSpeedTypes";
 import type { AdsInsightsPlatform } from "../adsInsights/types.server";
 import type { ChannelRoiResult } from "./channelRoi.server";
 import type { CustomerValueAggregates } from "./customerValue.server";
+import type { OperationTaskView } from "./dailyInspection.server";
 import type { OperationsDiagnosis } from "./diagnosis.server";
 
 export type PeriodKey = "7d" | "30d";
@@ -102,6 +103,97 @@ export type FactorDiagnosisCard = {
   href?: string;
 };
 
+export type ReportTaskPriority = "P0" | "P1" | "P2";
+export type ReportTaskQuadrant = "q1" | "q2" | "q3" | "q4";
+export type ReportTaskDueWindow = "today" | "48h" | "this_week" | "backlog";
+export type ReportTaskSourceType = "rule" | "hybrid";
+export type ReportTaskConfidence = "high" | "medium" | "low";
+
+export type ReportTaskCandidate = {
+  problemKey: string;
+  sourceType: ReportTaskSourceType;
+  priority: ReportTaskPriority;
+  quadrant: ReportTaskQuadrant;
+  dueWindow: ReportTaskDueWindow;
+  ownerRole: string;
+  objective: string;
+  impactMetrics: string[];
+  estimatedLift?: string;
+  confidence: ReportTaskConfidence;
+  riskEnvironment: string;
+  whyNow: string;
+  roiImpactSummary: string;
+  action: string;
+  dedupeKey: string;
+  primaryObjectId?: string;
+  primaryObjectType?: string;
+  aiExecutionPrompt: string;
+};
+
+type ReportTaskCandidateSeed = Omit<
+  ReportTaskCandidate,
+  "action" | "dedupeKey" | "aiExecutionPrompt"
+>;
+
+export type ReportTaskCandidatePipeline = {
+  ruleCandidates: ReportTaskCandidate[];
+  aiCandidates: ReportTaskCandidate[];
+  mergedCandidates: ReportTaskCandidate[];
+  dedupedCount: number;
+};
+
+export type ReportBenchmarkKind = "historical" | "structural" | "threshold" | "mixed";
+
+export type ReportFactorGenerationTrace = {
+  moduleKey: string;
+  moduleTitle: string;
+  roiLayerLabel: string;
+  source: ModuleSource;
+  sourceInputs: string[];
+  derivedMetrics: ModuleMetric[];
+  benchmark: {
+    kind: ReportBenchmarkKind;
+    summary: string;
+  };
+  classification: {
+    statusLabel: string;
+    tone: ReportCardTone;
+    insightTitle?: string;
+  };
+  mappedActionKeys: string[];
+  impactPath: string;
+};
+
+export type ReportActionGenerationTrace = {
+  actionKey: string;
+  title: string;
+  roiLayerLabel: string;
+  tone: ReportCardTone;
+  targetModuleKeys: string[];
+  sourceType: ReportTaskSourceType | null;
+  problemKey?: string;
+  dedupeKey?: string;
+  whyNow: string;
+  impactMetrics: string[];
+};
+
+export type SnapshotReportGenerationTrace = {
+  factors: ReportFactorGenerationTrace[];
+  actions: ReportActionGenerationTrace[];
+};
+
+export type ReportRecommendedAction = {
+  key: string;
+  title: string;
+  roiLayerLabel: string;
+  summary: string;
+  action: string;
+  tone: ReportCardTone;
+  targetModuleKeys?: string[];
+  taskCandidate?: ReportTaskCandidate;
+  href?: string;
+};
+
 export type SnapshotReport = {
   summary: string;
   cards: ReportSummaryCard[];
@@ -110,7 +202,9 @@ export type SnapshotReport = {
   insights: InsightListItem[];
   drilldowns: DrilldownEntry[];
   focus: string[];
-  actions: string[];
+  actions: ReportRecommendedAction[];
+  taskPipeline: ReportTaskCandidatePipeline;
+  generationTrace: SnapshotReportGenerationTrace;
   narratives: NarrativeCard[];
   charts: ModuleChart[];
 };
@@ -130,6 +224,7 @@ export type LiveSnapshotData = {
   shop: string;
   generatedAt: string;
   costConfigured: boolean;
+  operationTasks: OperationTaskView[];
   diagnosis: OperationsDiagnosis | null;
   customerAggregates: CustomerValueAggregates | null;
   channelRoi: ChannelRoiResult | null;
@@ -239,7 +334,7 @@ const mockReport7d: SnapshotReport = {
       action: "先查漏斗掉点和核心 landing page。",
       source: "real",
       tone: "warning",
-      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
+      href: buildInsightsChartsHref({ group: "conversion", card: "funnel" }),
     },
     {
       key: "afterSales",
@@ -253,7 +348,10 @@ const mockReport7d: SnapshotReport = {
       action: "优先排查高退款 SKU 和履约链路。",
       source: "real",
       tone: "negative",
-      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+      href: buildInsightsChartsHref({
+        group: "merchandising_ops",
+        card: "fulfillment_refund",
+      }),
     },
     {
       key: "channel",
@@ -267,7 +365,7 @@ const mockReport7d: SnapshotReport = {
       action: "优先看最赚钱渠道和值得扩量的客群。",
       source: "estimated",
       tone: "positive",
-      href: "/app/today/diagnosis?detail=value&valueTab=channels",
+      href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
     },
   ],
   insights: [
@@ -278,7 +376,7 @@ const mockReport7d: SnapshotReport = {
       detail: "先看漏斗掉点和核心 landing page。",
       tone: "warning",
       targetKey: "conversion",
-      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
+      href: buildInsightsChartsHref({ group: "conversion", card: "funnel" }),
     },
     {
       title: "退款已开始侵蚀利润",
@@ -287,7 +385,10 @@ const mockReport7d: SnapshotReport = {
       detail: "优先排查高退款 SKU 和履约链路。",
       tone: "critical",
       targetKey: "afterSales",
-      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+      href: buildInsightsChartsHref({
+        group: "merchandising_ops",
+        card: "fulfillment_refund",
+      }),
     },
     {
       title: "渠道利润差异已经拉开",
@@ -296,14 +397,14 @@ const mockReport7d: SnapshotReport = {
       detail: "优先看最赚钱渠道和值得扩量的客群。",
       tone: "info",
       targetKey: "channel",
-      href: "/app/today/diagnosis?detail=value&valueTab=channels",
+      href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
     },
   ],
   drilldowns: [
-    { key: "refund", title: "退款详情", detail: "看异常退款订单、退款 SKU 和原因聚类", badge: "高优先", href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health" },
-    { key: "inventory", title: "库存详情", detail: "看风险 SKU、可售天数和预计损失", badge: "对象深钻", href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory" },
-    { key: "conversion", title: "流量/转化详情", detail: "看漏斗掉点、landing page 和渠道来源", badge: "定位卡点", href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health" },
-    { key: "channel", title: "渠道 ROI", detail: "看收入、利润和值得继续投的渠道", badge: "经营复盘", href: "/app/today/diagnosis?detail=value&valueTab=channels" },
+    { key: "refund", title: "退款详情", detail: "看异常退款订单、退款 SKU 和原因聚类", badge: "高优先", href: buildInsightsChartsHref({ group: "merchandising_ops", card: "fulfillment_refund" }) },
+    { key: "inventory", title: "库存详情", detail: "看风险 SKU、可售天数和预计损失", badge: "对象深钻", href: buildInsightsChartsHref({ group: "merchandising_ops", card: "inventory_flow" }) },
+    { key: "conversion", title: "流量/转化详情", detail: "看漏斗掉点、landing page 和渠道来源", badge: "定位卡点", href: buildInsightsChartsHref({ group: "conversion", card: "funnel" }) },
+    { key: "channel", title: "渠道 ROI", detail: "看收入、利润和值得继续投的渠道", badge: "经营复盘", href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }) },
   ],
   focus: [
     "先用利润、退款和库存把经营结果层看清。",
@@ -311,10 +412,110 @@ const mockReport7d: SnapshotReport = {
     "最后再让 AI 基于模块摘要生成报告。",
   ],
   actions: [
-    "先补广告成本与渠道映射。",
-    "再补 GA4 来源和 landing page 维度。",
-    "最后接 AI 风险、机会和动作建议。",
+    {
+      key: "conversion_mock",
+      title: "先修站内转化链路",
+      roiLayerLabel: "回收速度",
+      summary: "当前判断先不要继续堆流量，先把站内漏斗掉点找出来。",
+      action: "优先检查核心 landing page、支付成功率和主要漏斗流失点。",
+      tone: "warning",
+      targetModuleKeys: ["conversion"],
+      taskCandidate: {
+        problemKey: "conversion_repair",
+        sourceType: "rule",
+        priority: "P1",
+        quadrant: "q1",
+        dueWindow: "48h",
+        ownerRole: "运营/站点",
+        primaryObjectId: "conversion_funnel",
+        primaryObjectType: "flow",
+        objective: "先拆清站内漏斗卡点，再决定是修 landing page、支付还是流量匹配问题。",
+        impactMetrics: ["会话转化率", "支付成功率", "Landing Page 承接"],
+        estimatedLift: "预计带动关键漏斗指标改善 3%~8%。",
+        confidence: "medium",
+        riskEnvironment: "站内转化",
+        whyNow: "当前转化漏斗还在掉量，继续加流量只会放大低转化问题。",
+        roiImpactSummary: "先修漏斗承接和支付链路，避免回收速度继续变慢。",
+        action: "优先检查核心 landing page、支付成功率和主要漏斗流失点。",
+        dedupeKey: "conversion_repair:conversion_funnel:会话转化率:48h",
+        aiExecutionPrompt: "请围绕「先拆清站内漏斗卡点，再决定是修 landing page、支付还是流量匹配问题。」执行。优先关注 会话转化率 / 支付成功率 / Landing Page 承接。建议动作：优先检查核心 landing page、支付成功率和主要漏斗流失点。",
+      },
+      href: buildInsightsChartsHref({ group: "conversion", card: "funnel" }),
+    },
+    {
+      key: "aftersales_mock",
+      title: "先止住退款与履约损耗",
+      roiLayerLabel: "短期 ROI",
+      summary: "退款和物流异常已经开始直接侵蚀利润。",
+      action: "优先排查高退款 SKU、异常订单和履约链路。",
+      tone: "negative",
+      targetModuleKeys: ["afterSales"],
+      taskCandidate: {
+        problemKey: "after_sales_risk",
+        sourceType: "rule",
+        priority: "P0",
+        quadrant: "q1",
+        dueWindow: "today",
+        ownerRole: "运营/售后",
+        primaryObjectId: "refund_fulfillment",
+        primaryObjectType: "risk_cluster",
+        objective: "优先复盘退款与履约异常，修正商品、物流或售后策略。",
+        impactMetrics: ["退款率", "物流异常率", "复购率"],
+        estimatedLift: "若根因处理到位，预计 1~2 周内退款风险下降 5%~10%。",
+        confidence: "high",
+        riskEnvironment: "售后与履约",
+        whyNow: "退款和物流异常已经进入利润层，放着不处理会继续侵蚀短期结果。",
+        roiImpactSummary: "先止住售后与履约损耗，直接保护短期 ROI。",
+        action: "优先排查高退款 SKU、异常订单和履约链路。",
+        dedupeKey: "after_sales_risk:refund_fulfillment:退款率:today",
+        aiExecutionPrompt: "请围绕「优先复盘退款与履约异常，修正商品、物流或售后策略。」执行。优先关注 退款率 / 物流异常率 / 复购率。建议动作：优先排查高退款 SKU、异常订单和履约链路。",
+      },
+      href: buildInsightsChartsHref({
+        group: "merchandising_ops",
+        card: "fulfillment_refund",
+      }),
+    },
+    {
+      key: "channel_mock",
+      title: "放大高质量渠道与客群",
+      roiLayerLabel: "长期价值",
+      summary: "渠道利润和高价值客户差异已经拉开，可以开始做结构性放大。",
+      action: "先看最赚钱渠道、复购客群和值得继续扩量的对象。",
+      tone: "positive",
+      targetModuleKeys: ["channel", "customerValue"],
+      taskCandidate: {
+        problemKey: "growth_focus",
+        sourceType: "hybrid",
+        priority: "P1",
+        quadrant: "q3",
+        dueWindow: "this_week",
+        ownerRole: "运营/投放",
+        primaryObjectId: "high_value_channels",
+        primaryObjectType: "channel_cluster",
+        objective: "围绕高价值渠道与客群做结构性放大，而不是继续平均分配预算。",
+        impactMetrics: ["渠道利润", "高价值客户占比", "复购率"],
+        estimatedLift: "预计改善更稳的预算回收，并放大长期价值贡献。",
+        confidence: "medium",
+        riskEnvironment: "客户价值增长",
+        whyNow: "渠道利润结构已经拉开差距，当前已经能看出哪些对象值得继续放大。",
+        roiImpactSummary: "把预算和经营动作聚焦到高价值对象，更容易放大长期 ROI。",
+        action: "先看最赚钱渠道、复购客群和值得继续扩量的对象。",
+        dedupeKey: "growth_focus:high_value_channels:渠道利润:this_week",
+        aiExecutionPrompt: "请围绕「围绕高价值渠道与客群做结构性放大，而不是继续平均分配预算。」执行。优先关注 渠道利润 / 高价值客户占比 / 复购率。建议动作：先看最赚钱渠道、复购客群和值得继续扩量的对象。",
+      },
+      href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
+    },
   ],
+  taskPipeline: {
+    ruleCandidates: [],
+    aiCandidates: [],
+    mergedCandidates: [],
+    dedupedCount: 0,
+  },
+  generationTrace: {
+    factors: [],
+    actions: [],
+  },
   narratives: [
     { title: "风险", body: "当前最大的风险不是没数据，而是数据还没被整理成可执行的经营阅读顺序。" },
     { title: "机会", body: "利润、售后、客户价值和渠道层已经具备接真实数据的基础，可以先形成一版日报。" },
@@ -706,16 +907,24 @@ function getFactorRoiLayerLabel(moduleKey: string): string {
 
 function getModuleDrilldownHref(moduleKey: string): string | undefined {
   const hrefByModuleKey: Record<string, string> = {
-    traffic: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=traffic_anomaly",
-    cost: "/app/today/diagnosis?detail=value&valueTab=channels",
-    conversion: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
-    afterSales: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
-    profit: "/app/today/diagnosis?detail=value&valueTab=channels",
-    productInventory:
-      "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory",
-    customerValue: "/app/today/diagnosis?detail=value&valueTab=channels",
-    channel: "/app/today/diagnosis?detail=value&valueTab=channels",
-    siteExperience: "/app/settings/pagespeed?source=daily-insights",
+    traffic: buildInsightsChartsHref({ group: "acquisition", card: "traffic_scale" }),
+    cost: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
+    conversion: buildInsightsChartsHref({ group: "conversion", card: "funnel" }),
+    afterSales: buildInsightsChartsHref({
+      group: "merchandising_ops",
+      card: "fulfillment_refund",
+    }),
+    profit: buildInsightsChartsHref({ group: "roi", card: "short_term_roi" }),
+    productInventory: buildInsightsChartsHref({
+      group: "merchandising_ops",
+      card: "inventory_flow",
+    }),
+    customerValue: buildInsightsChartsHref({ group: "roi", card: "payback_curve" }),
+    channel: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
+    siteExperience: buildInsightsChartsHref({
+      group: "conversion",
+      card: "site_experience",
+    }),
   };
 
   return hrefByModuleKey[moduleKey];
@@ -773,6 +982,149 @@ function buildFactorImpactPath(moduleKey: string): string {
   }
 }
 
+function inferBenchmarkKind(module: BusinessModule): ReportBenchmarkKind {
+  const hasDelta = module.metrics.some((metric) => Boolean(metric.delta));
+  if (hasDelta) {
+    return module.key === "channel" || module.key === "traffic" ? "mixed" : "historical";
+  }
+
+  switch (module.key) {
+    case "traffic":
+    case "channel":
+      return "structural";
+    case "conversion":
+    case "afterSales":
+    case "siteExperience":
+    case "customerValue":
+      return "threshold";
+    default:
+      return "historical";
+  }
+}
+
+function buildModuleSourceInputs(moduleKey: string): string[] {
+  switch (moduleKey) {
+    case "traffic":
+      return ["GA4 sessions / channel / landing page", "Web Pixel 流量基线"];
+    case "cost":
+      return ["广告花费", "支付手续费", "折扣成本", "退款损失"];
+    case "conversion":
+      return ["Sessions", "订单数", "支付尝试", "支付成功数"];
+    case "afterSales":
+      return ["退款订单", "退款 SKU", "超时履约订单", "物流异常对象"];
+    case "profit":
+      return ["收入", "SKU 成本", "支付/折扣/退款损耗", "广告花费"];
+    case "productInventory":
+      return ["库存风险对象", "可售天数", "退款 SKU 聚类"];
+    case "customerValue":
+      return ["客户分层", "复购率", "动态 LTV"];
+    case "channel":
+      return ["渠道收入/利润", "客户质量", "广告平台 spend"];
+    case "siteExperience":
+      return ["PageSpeed 实验室报告", "Top landing page 对象"];
+    default:
+      return ["经营诊断聚合数据"];
+  }
+}
+
+function buildRecommendedAction(params: {
+  key: string;
+  title: string;
+  roiLayerLabel: string;
+  summary: string;
+  action: string;
+  tone: ReportCardTone;
+  targetModuleKeys?: string[];
+  taskCandidate?: ReportTaskCandidateSeed;
+  href?: string;
+}): ReportRecommendedAction {
+  const { taskCandidate, ...rest } = params;
+  if (!taskCandidate) {
+    return rest;
+  }
+
+  const primaryMetric = taskCandidate.impactMetrics[0] ?? params.key;
+  const dedupeKey = [
+    taskCandidate.problemKey,
+    taskCandidate.primaryObjectId ?? "shop",
+    primaryMetric,
+    taskCandidate.dueWindow,
+  ].join(":");
+
+  return {
+    ...rest,
+    taskCandidate: {
+      ...taskCandidate,
+      action: params.action,
+      dedupeKey,
+      aiExecutionPrompt: `请围绕「${taskCandidate.objective}」执行。优先关注 ${taskCandidate.impactMetrics.join(" / ")}。建议动作：${params.action}`,
+    },
+  };
+}
+
+export function buildReportGenerationTrace(params: {
+  modules: BusinessModule[];
+  factorCards: FactorDiagnosisCard[];
+  actions: ReportRecommendedAction[];
+  insights: InsightListItem[];
+}): SnapshotReportGenerationTrace {
+  const insightByTargetKey = new Map<string, InsightListItem>();
+  params.insights.forEach((item) => {
+    if (item.targetKey && !insightByTargetKey.has(item.targetKey)) {
+      insightByTargetKey.set(item.targetKey, item);
+    }
+  });
+
+  const factorCardByKey = new Map(params.factorCards.map((card) => [card.key, card]));
+  const actionKeysByModule = new Map<string, string[]>();
+
+  params.actions.forEach((action) => {
+    action.targetModuleKeys?.forEach((moduleKey) => {
+      const existing = actionKeysByModule.get(moduleKey) ?? [];
+      existing.push(action.key);
+      actionKeysByModule.set(moduleKey, existing);
+    });
+  });
+
+  return {
+    factors: params.modules.map((module) => {
+      const factorCard = factorCardByKey.get(module.key);
+      const linkedInsight = insightByTargetKey.get(module.key);
+      return {
+        moduleKey: module.key,
+        moduleTitle: module.title,
+        roiLayerLabel: factorCard?.roiLayerLabel ?? getFactorRoiLayerLabel(module.key),
+        source: module.source,
+        sourceInputs: buildModuleSourceInputs(module.key),
+        derivedMetrics: module.metrics,
+        benchmark: {
+          kind: inferBenchmarkKind(module),
+          summary: factorCard?.comparison ?? buildFactorComparison(module),
+        },
+        classification: {
+          statusLabel: factorCard?.statusLabel ?? "Unknown",
+          tone: factorCard?.tone ?? "neutral",
+          insightTitle: linkedInsight?.title,
+        },
+        mappedActionKeys: actionKeysByModule.get(module.key) ?? [],
+        impactPath: factorCard?.impactPath ?? buildFactorImpactPath(module.key),
+      };
+    }),
+    actions: params.actions.map((action) => ({
+      actionKey: action.key,
+      title: action.title,
+      roiLayerLabel: action.roiLayerLabel,
+      tone: action.tone,
+      targetModuleKeys: action.targetModuleKeys ?? [],
+      sourceType: action.taskCandidate?.sourceType ?? null,
+      problemKey: action.taskCandidate?.problemKey,
+      dedupeKey: action.taskCandidate?.dedupeKey,
+      whyNow: action.taskCandidate?.whyNow ?? action.summary,
+      impactMetrics: action.taskCandidate?.impactMetrics ?? [],
+    })),
+  };
+}
+
 function diagnosisFocusLabel(key: string): string {
   switch (key) {
     case "sales_trend":
@@ -795,6 +1147,151 @@ function diagnosisFocusLabel(key: string): string {
       return "经营环节";
   }
 }
+
+const REPORT_TASK_PRIORITY_RANK: Record<ReportTaskPriority, number> = {
+  P0: 0,
+  P1: 1,
+  P2: 2,
+};
+
+const REPORT_TASK_DUE_WINDOW_RANK: Record<ReportTaskDueWindow, number> = {
+  today: 0,
+  "48h": 1,
+  this_week: 2,
+  backlog: 3,
+};
+
+const REPORT_TASK_CONFIDENCE_RANK: Record<ReportTaskConfidence, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function preferLongerText(primary?: string, secondary?: string): string | undefined {
+  const left = primary?.trim() ?? "";
+  const right = secondary?.trim() ?? "";
+  if (!left) return right || undefined;
+  if (!right) return left;
+  return right.length > left.length ? right : left;
+}
+
+function compareReportTaskCandidates(
+  left: ReportTaskCandidate,
+  right: ReportTaskCandidate,
+): number {
+  const priorityDelta =
+    REPORT_TASK_PRIORITY_RANK[left.priority] - REPORT_TASK_PRIORITY_RANK[right.priority];
+  if (priorityDelta !== 0) return priorityDelta;
+
+  const dueWindowDelta =
+    REPORT_TASK_DUE_WINDOW_RANK[left.dueWindow] - REPORT_TASK_DUE_WINDOW_RANK[right.dueWindow];
+  if (dueWindowDelta !== 0) return dueWindowDelta;
+
+  const confidenceDelta =
+    REPORT_TASK_CONFIDENCE_RANK[left.confidence] - REPORT_TASK_CONFIDENCE_RANK[right.confidence];
+  if (confidenceDelta !== 0) return confidenceDelta;
+
+  if (left.sourceType !== right.sourceType) {
+    return left.sourceType === "rule" ? -1 : 1;
+  }
+
+  return left.problemKey.localeCompare(right.problemKey);
+}
+
+function mergeTwoReportTaskCandidates(
+  primary: ReportTaskCandidate,
+  secondary: ReportTaskCandidate,
+): ReportTaskCandidate {
+  const preferred =
+    compareReportTaskCandidates(primary, secondary) <= 0 ? primary : secondary;
+  const fallback = preferred === primary ? secondary : primary;
+  const mergedSourceType =
+    preferred.sourceType === fallback.sourceType
+      ? preferred.sourceType
+      : "hybrid";
+
+  return {
+    ...preferred,
+    sourceType: mergedSourceType,
+    ownerRole: preferLongerText(preferred.ownerRole, fallback.ownerRole) ?? preferred.ownerRole,
+    objective: preferLongerText(preferred.objective, fallback.objective) ?? preferred.objective,
+    impactMetrics: uniqueStrings([...preferred.impactMetrics, ...fallback.impactMetrics]),
+    estimatedLift: preferLongerText(preferred.estimatedLift, fallback.estimatedLift),
+    confidence:
+      REPORT_TASK_CONFIDENCE_RANK[preferred.confidence] <=
+      REPORT_TASK_CONFIDENCE_RANK[fallback.confidence]
+        ? preferred.confidence
+        : fallback.confidence,
+    riskEnvironment:
+      preferLongerText(preferred.riskEnvironment, fallback.riskEnvironment) ??
+      preferred.riskEnvironment,
+    whyNow: preferLongerText(preferred.whyNow, fallback.whyNow) ?? preferred.whyNow,
+    roiImpactSummary:
+      preferLongerText(preferred.roiImpactSummary, fallback.roiImpactSummary) ??
+      preferred.roiImpactSummary,
+    action: preferLongerText(preferred.action, fallback.action) ?? preferred.action,
+    primaryObjectId: preferred.primaryObjectId ?? fallback.primaryObjectId,
+    primaryObjectType: preferred.primaryObjectType ?? fallback.primaryObjectType,
+    aiExecutionPrompt:
+      preferLongerText(preferred.aiExecutionPrompt, fallback.aiExecutionPrompt) ??
+      preferred.aiExecutionPrompt,
+  };
+}
+
+export function mergeReportTaskCandidates(
+  ruleCandidates: ReportTaskCandidate[],
+  aiCandidates: ReportTaskCandidate[],
+): ReportTaskCandidatePipeline {
+  const mergedByKey = new Map<string, ReportTaskCandidate>();
+  const inputs = [...ruleCandidates, ...aiCandidates];
+
+  for (const candidate of inputs) {
+    const existing = mergedByKey.get(candidate.dedupeKey);
+    if (!existing) {
+      mergedByKey.set(candidate.dedupeKey, candidate);
+      continue;
+    }
+    mergedByKey.set(candidate.dedupeKey, mergeTwoReportTaskCandidates(existing, candidate));
+  }
+
+  const mergedCandidates = Array.from(mergedByKey.values()).sort(compareReportTaskCandidates);
+  return {
+    ruleCandidates: [...ruleCandidates].sort(compareReportTaskCandidates),
+    aiCandidates: [...aiCandidates].sort(compareReportTaskCandidates),
+    mergedCandidates,
+    dedupedCount: Math.max(0, inputs.length - mergedCandidates.length),
+  };
+}
+
+export function buildReportTaskCandidatePipeline(
+  actions: ReportRecommendedAction[],
+): ReportTaskCandidatePipeline {
+  const ruleCandidates: ReportTaskCandidate[] = [];
+  const aiCandidates: ReportTaskCandidate[] = [];
+
+  for (const action of actions) {
+    if (!action.taskCandidate) continue;
+    if (action.taskCandidate.sourceType === "rule") {
+      ruleCandidates.push(action.taskCandidate);
+      continue;
+    }
+    aiCandidates.push(action.taskCandidate);
+  }
+
+  return mergeReportTaskCandidates(ruleCandidates, aiCandidates);
+}
+
+mockReport7d.taskPipeline = buildReportTaskCandidatePipeline(mockReport7d.actions);
+mockReport7d.generationTrace = buildReportGenerationTrace({
+  modules: mockSnapshots["7d"].modules ?? [],
+  factorCards: mockReport7d.factorCards,
+  actions: mockReport7d.actions,
+  insights: mockReport7d.insights,
+});
 
 function clampChartShare(value: number | null | undefined): number {
   if (value == null || !Number.isFinite(value)) return 10;
@@ -839,6 +1336,20 @@ function buildPageSpeedHref(
   next.set("source", "daily-insights");
   if (label) next.set("label", label);
   return `/app/settings/pagespeed?${next.toString()}`;
+}
+
+function buildInsightsChartsHref(params: {
+  group: "roi" | "acquisition" | "conversion" | "merchandising_ops";
+  card: string;
+  extra?: Record<string, string | undefined | null>;
+}): string {
+  const next = new URLSearchParams();
+  next.set("group", params.group);
+  next.set("card", params.card);
+  Object.entries(params.extra ?? {}).forEach(([key, value]) => {
+    if (value) next.set(key, value);
+  });
+  return `/app/insights/charts?${next.toString()}`;
 }
 
 export function appendReturnTo(href: string, returnTo: string): string {
@@ -1001,14 +1512,9 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
   const primaryStorefrontUrl = pageSpeed?.url ?? null;
   const topLandingPath = ga4TopLanding ? normalizeGa4Key(ga4TopLanding.key, "/") : null;
   const topLandingPageUrl = buildStorefrontUrl(primaryStorefrontUrl, topLandingPath);
-  const pageSpeedHref = buildPageSpeedHref(
-    primaryStorefrontUrl,
-    pageSpeed?.strategy ?? "mobile",
-    "店铺首页",
-  );
   const topLandingPageHref = topLandingPageUrl
     ? buildPageSpeedHref(topLandingPageUrl, pageSpeed?.strategy ?? "mobile", topLandingPath ?? "主 landing page")
-    : null;
+    : undefined;
   const overallSiteConversionRate =
     computeConversionRate(ga4?.summary?.totalPurchases, ga4?.summary?.totalSessions) ??
     diagnosis.summaryMetrics.conversionRate7d;
@@ -1446,10 +1952,39 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     Boolean(pageSpeedReport),
   ].filter(Boolean).length;
 
-  const reportActions: string[] = [];
+  const reportActions: ReportRecommendedAction[] = [];
   if (diagnosis.summaryMetrics.riskSkuCount > 0) {
     reportActions.push(
-      `先处理 ${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个高风险 SKU，优先保护 ${formatCurrency(diagnosis.summaryMetrics.estimatedInventoryLoss, currency)} 的潜在缺货损失。`,
+      buildRecommendedAction({
+        key: "inventory_risk",
+        title: "先处理高风险 SKU",
+        roiLayerLabel: "短期 ROI",
+        summary: `当前已有 ${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个高风险 SKU，潜在损失约 ${formatCurrency(diagnosis.summaryMetrics.estimatedInventoryLoss, currency)}。`,
+        action: "优先补货、调投放或限制缺货商品继续消耗流量。",
+        tone: diagnosis.summaryMetrics.estimatedInventoryLoss > 0 ? "negative" : "warning",
+        targetModuleKeys: ["productInventory"],
+        taskCandidate: {
+          problemKey: "inventory_risk",
+          sourceType: "rule",
+          priority: "P0",
+          quadrant: "q1",
+          dueWindow: "today",
+          ownerRole: "供应链/采购",
+          primaryObjectId: "risk_sku",
+          primaryObjectType: "inventory_cluster",
+          objective: "用补货、限量或替代 SKU 方案控制缺货损失。",
+          impactMetrics: ["可售天数", "缺货率", "保住的 GMV"],
+          estimatedLift: "预计保护未来 7 天销售额，减少断货造成的收入流失。",
+          confidence: "high",
+          riskEnvironment: "库存供给",
+          whyNow: `高风险 SKU 已经对应 ${formatCurrency(diagnosis.summaryMetrics.estimatedInventoryLoss, currency)} 的潜在损失，不先处理会继续漏损销售。`,
+          roiImpactSummary: "先止住缺货和错配流量，直接保护短期 ROI。",
+        },
+        href: buildInsightsChartsHref({
+          group: "merchandising_ops",
+          card: "inventory_flow",
+        }),
+      }),
     );
   }
   if (
@@ -1458,7 +1993,51 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
   ) {
     const focusSku = diagnosis.detail.topRefundSkus[0]?.sku;
     reportActions.push(
-      `复盘退款与履约链路${focusSku ? `，优先检查 ${focusSku}` : ""}，先止住退款率 ${formatSignedPercentPoint(diagnosis.summaryMetrics.refundRateDelta)} 的恶化。`,
+      buildRecommendedAction({
+        key: "after_sales_risk",
+        title: "先止住退款与履约损耗",
+        roiLayerLabel: "短期 ROI",
+        summary: `退款率正在恶化 ${formatSignedPercentPoint(diagnosis.summaryMetrics.refundRateDelta)}，${diagnosis.summaryMetrics.carrierIssueCount > 0 ? `同时有 ${formatNumber(diagnosis.summaryMetrics.carrierIssueCount)} 个物流异常对象。` : "已经开始侵蚀利润。"}`
+          ,
+        action: focusSku
+          ? `优先复盘 ${focusSku} 与相关异常订单，确认退款、履约或物流问题来自哪里。`
+          : "优先排查高退款对象、超时订单和物流异常链路。",
+        tone:
+          diagnosis.summaryMetrics.refundRateDelta > 1 || diagnosis.summaryMetrics.carrierIssueCount > 0
+            ? "negative"
+            : "warning",
+        targetModuleKeys: ["afterSales", "productInventory"],
+        taskCandidate: {
+          problemKey: "after_sales_risk",
+          sourceType: "rule",
+          priority:
+            diagnosis.summaryMetrics.refundRateDelta > 1 ||
+            diagnosis.summaryMetrics.carrierIssueCount > 0
+              ? "P0"
+              : "P1",
+          quadrant: "q1",
+          dueWindow: "48h",
+          ownerRole: "运营/售后",
+          primaryObjectId: focusSku ?? "refund_fulfillment",
+          primaryObjectType: focusSku ? "sku" : "risk_cluster",
+          objective: "复盘退款异常并修正商品、物流或售后策略。",
+          impactMetrics: ["退款率", "差评风险", "复购率"],
+          estimatedLift: "若根因处理到位，预计 1~2 周内退款风险下降 5%~10%。",
+          confidence:
+            diagnosis.summaryMetrics.refundRateDelta > 1 ||
+            diagnosis.summaryMetrics.carrierIssueCount > 0
+              ? "high"
+              : "medium",
+          riskEnvironment: "售后与履约",
+          whyNow: `退款和履约问题已经在扩大损耗，${diagnosis.summaryMetrics.carrierIssueCount > 0 ? "而且还有物流异常对象需要同步处理。" : "如果继续放大，会直接侵蚀利润。"}`
+            ,
+          roiImpactSummary: "先止住退款和履约损耗，保护短期利润与 ROI。",
+        },
+        href: buildInsightsChartsHref({
+          group: "merchandising_ops",
+          card: "fulfillment_refund",
+        }),
+      }),
     );
   }
   if (
@@ -1467,30 +2046,205 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     diagnosis.summaryMetrics.conversionRate7d <= diagnosis.summaryMetrics.conversionRatePrev7d
   ) {
     reportActions.push(
-      `检查 ${ga4TopLanding ? `${normalizeGa4Key(ga4TopLanding.key, "/")} 落地页` : "核心商品页"} 的转化链路，优先提升站内转化而不是继续盲目加流量。`,
+      buildRecommendedAction({
+        key: "conversion_repair",
+        title: "先修站内转化链路",
+        roiLayerLabel: "回收速度",
+        summary: `当前 CVR 没有好转，${ga4TopLanding ? `${normalizeGa4Key(ga4TopLanding.key, "/")} 承接页` : "核心商品页"} 需要优先复盘。`,
+        action: "先看漏斗掉点、支付成功率和 landing page 承接，而不是继续盲目加流量。",
+        tone: "warning",
+        targetModuleKeys: ["conversion"],
+        taskCandidate: {
+          problemKey: "conversion_repair",
+          sourceType: "rule",
+          priority: "P1",
+          quadrant: "q1",
+          dueWindow: "today",
+          ownerRole: "运营/站点",
+          primaryObjectId: ga4TopLanding?.key ?? "conversion_funnel",
+          primaryObjectType: ga4TopLanding ? "landing_page" : "flow",
+          objective: "先拆清流量和转化问题，再决定是优化渠道、商品页还是站内路径。",
+          impactMetrics: ["会话数", "转化率", "支付成功率"],
+          estimatedLift: "预计带动关键漏斗指标改善 3%~8%。",
+          confidence: ga4TopLanding ? "high" : "medium",
+          riskEnvironment: "站内转化",
+          whyNow: "当前回收速度已经被站内转化链路拖慢，继续加流量只会放大低转化问题。",
+          roiImpactSummary: "先修漏斗承接和支付成功率，再决定是否继续扩量。",
+        },
+        href: buildInsightsChartsHref({ group: "conversion", card: "funnel" }),
+      }),
     );
   }
   if (ads && topAdsPlatform) {
+    const shouldStopLoss = topAdsPlatform.roas != null && topAdsPlatform.roas < 1;
     reportActions.push(
-      topAdsPlatform.roas != null && topAdsPlatform.roas < 1
-        ? `压缩 ${topAdsPlatform.platform} 的低效投放，当前平台 ROAS 只有 ${formatNumber(topAdsPlatform.roas, 2)}。`
-        : `把预算优先集中到 ${topAdsPlatform.platform} 的高质量广告组，减少低质量流量稀释经营利润。`,
+      buildRecommendedAction({
+        key: "ads_budget",
+        title:
+          shouldStopLoss
+            ? `压缩 ${topAdsPlatform.platform} 低效投放`
+            : `把预算集中到 ${topAdsPlatform.platform}`,
+        roiLayerLabel: "短期 ROI",
+        summary:
+          shouldStopLoss
+            ? `当前平台 ROAS 只有 ${formatNumber(topAdsPlatform.roas, 2)}，已经开始稀释经营利润。`
+            : `${topAdsPlatform.platform} 当前仍是最值得优先看的投放平台。`,
+        action:
+          shouldStopLoss
+            ? "先关掉低效广告组，再把预算回收到更稳的渠道和对象。"
+            : "优先把预算集中到高质量广告组，减少低质量流量对利润的稀释。",
+        tone: shouldStopLoss ? "negative" : "warning",
+        targetModuleKeys: ["channel", "profit"],
+        taskCandidate: {
+          problemKey: shouldStopLoss ? "ad_burn" : "budget_reallocation",
+          sourceType: "hybrid",
+          priority: shouldStopLoss ? "P0" : "P1",
+          quadrant: shouldStopLoss ? "q1" : "q3",
+          dueWindow: shouldStopLoss ? "today" : "this_week",
+          ownerRole: "运营/投放",
+          primaryObjectId: topAdsPlatform.platform,
+          primaryObjectType: "ad_platform",
+          objective: shouldStopLoss
+            ? "压缩低效投放，把预算回收到更稳的渠道和对象。"
+            : "把预算集中到高质量广告组和更稳的渠道对象。",
+          impactMetrics: ["ROAS", "经营利润", "渠道效率"],
+          estimatedLift: shouldStopLoss
+            ? "先止住低效预算消耗，再把预算回收到更稳的渠道对象。"
+            : "预计改善稳定回收，并减少低质量流量对利润的稀释。",
+          confidence: topAdsPlatform.roas != null ? "high" : "medium",
+          riskEnvironment: "投放效率",
+          whyNow: shouldStopLoss
+            ? `${topAdsPlatform.platform} 当前已经开始以低效率消耗预算，需要先止损。`
+            : `${topAdsPlatform.platform} 已经表现出更高的质量，可以开始做结构性预算倾斜。`,
+          roiImpactSummary: shouldStopLoss
+            ? "先关停低效投放，直接修复短期 ROI。"
+            : "把预算集中到高质量广告组，更容易放大稳定回收。",
+        },
+        href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
+      }),
     );
   }
   if (pageSpeedPerformance?.score != null && pageSpeedPerformance.score < 90) {
+    const isCriticalExperienceIssue = pageSpeedPerformance.score < 50;
     reportActions.push(
-      pageSpeedTopOpportunity
-        ? `站点体验也在影响经营判断，先处理「${pageSpeedTopOpportunity.title}」，避免首页速度继续拖累转化。`
-        : `当前移动端性能分只有 ${formatScore(pageSpeedPerformance.score)}，建议优先复盘首页速度和阻塞资源。`,
+      buildRecommendedAction({
+        key: "site_experience",
+        title: "先修站点体验问题",
+        roiLayerLabel: "回收速度",
+        summary:
+          pageSpeedTopOpportunity
+            ? `当前最值得先修的是「${pageSpeedTopOpportunity.title}」，站点体验已经在拖累转化。`
+            : `当前移动端性能分只有 ${formatScore(pageSpeedPerformance.score)}，体验已经进入经营判断。`,
+        action: "先复盘首页速度、阻塞资源和关键体验问题，再判断是否拖累站内转化。",
+        tone: isCriticalExperienceIssue ? "negative" : "warning",
+        targetModuleKeys: ["siteExperience", "conversion"],
+        taskCandidate: {
+          problemKey: "site_experience",
+          sourceType: "hybrid",
+          priority: isCriticalExperienceIssue ? "P1" : "P2",
+          quadrant: isCriticalExperienceIssue ? "q1" : "q3",
+          dueWindow: isCriticalExperienceIssue ? "today" : "this_week",
+          ownerRole: "运营/前端",
+          primaryObjectId: topLandingPath ?? "storefront_experience",
+          primaryObjectType: topLandingPath ? "landing_page" : "experience_surface",
+          objective: "优先处理关键站点体验问题，避免主要页面继续漏损转化。",
+          impactMetrics: ["PageSpeed 性能分", "LCP", "站内转化率"],
+          estimatedLift: "若关键体验问题被修复，通常会先改善主要承接页的转化表现。",
+          confidence: pageSpeedTopOpportunity ? "high" : "medium",
+          riskEnvironment: "站点体验",
+          whyNow: pageSpeedTopOpportunity
+            ? `「${pageSpeedTopOpportunity.title}」已经成为当前最明显的体验瓶颈。`
+            : "站点体验已经进入经营判断，继续放着不管会拖慢回收。",
+          roiImpactSummary: "站点体验会直接影响 landing page 承接和回收速度。",
+        },
+        href: buildInsightsChartsHref({
+          group: "conversion",
+          card: "site_experience",
+          extra: {
+              pageSpeedUrl: primaryStorefrontUrl,
+          },
+        }),
+      }),
     );
   }
   if (topLandingPageUrl) {
     reportActions.push(
-      `把 ${topLandingPath} 作为体验排查对象单独复盘，确认主要承接流量的页面是否也在拖累转化。`,
+      buildRecommendedAction({
+        key: "landing_experience",
+        title: "单独复盘主要 Landing Page",
+        roiLayerLabel: "回收速度",
+        summary: `${topLandingPath} 当前承接了主要流量，需要单独确认页面体验是否在漏损转化。`,
+        action: "优先检查首屏速度、关键信息承接和交互阻塞，确认这条链路是否在掉量。",
+        tone: "warning",
+        targetModuleKeys: ["siteExperience", "conversion", "traffic"],
+        taskCandidate: {
+          problemKey: "landing_experience",
+          sourceType: "hybrid",
+          priority: "P1",
+          quadrant: "q3",
+          dueWindow: "this_week",
+          ownerRole: "运营/前端",
+          primaryObjectId: topLandingPath ?? "top_landing_page",
+          primaryObjectType: "landing_page",
+          objective: "单独复盘主要 landing page 的承接问题，优先优化最核心的入口页面。",
+          impactMetrics: ["Landing Page 会话数", "Landing Page 转化率", "首屏速度"],
+          estimatedLift: "主要承接页优化通常最容易先抬升回收速度。",
+          confidence: "medium",
+          riskEnvironment: "站内转化",
+          whyNow: `${topLandingPath} 已经是当前主要承接页，优先级足够高，值得单独复盘。`,
+          roiImpactSummary: "主要承接页体验改善最容易先抬升回收速度。",
+        },
+        href: buildInsightsChartsHref({
+          group: "conversion",
+          card: "landing_page",
+          extra: {
+            landingPage: topLandingPath,
+            pageSpeedUrl: topLandingPageUrl,
+          },
+        }),
+      }),
     );
   }
   if (reportActions.length === 0) {
-    reportActions.push("当前没有明显的紧急止损项，可以把精力放在利润扩张和高价值客户经营上。");
+    reportActions.push(
+      buildRecommendedAction({
+        key: "growth_focus",
+        title: "放大利润与高价值客群",
+        roiLayerLabel: customer ? "长期价值" : "短期 ROI",
+        summary: "当前没有明显的紧急止损项，可以把精力放在更稳的增长动作上。",
+        action: customer
+          ? "优先围绕高价值客户、复购和高质量渠道做放大。"
+          : "优先围绕利润更稳的渠道和商品做结构优化。",
+        tone: "positive",
+        targetModuleKeys: customer ? ["customerValue", "channel"] : ["profit", "channel"],
+        taskCandidate: {
+          problemKey: "growth_focus",
+          sourceType: "hybrid",
+          priority: "P2",
+          quadrant: "q3",
+          dueWindow: "this_week",
+          ownerRole: customer ? "运营/CRM" : "运营",
+          primaryObjectId: customer ? "high_value_customers" : "profit_structure",
+          primaryObjectType: customer ? "customer_segment" : "profit_cluster",
+          objective: customer
+            ? "围绕高价值客户、复购和高质量渠道做结构性放大。"
+            : "围绕利润更稳的渠道和商品做结构优化。",
+          impactMetrics: customer
+            ? ["高价值客户占比", "复购率", "渠道利润"]
+            : ["经营利润", "渠道质量", "商品利润"],
+          estimatedLift: customer
+            ? "预计改善长期价值和更稳的预算回收。"
+            : "预计改善整体经营质量，并减少资源错配。",
+          confidence: customer ? "medium" : "low",
+          riskEnvironment: customer ? "客户价值增长" : "利润结构优化",
+          whyNow: "当前没有明显的紧急止损项，可以开始做结构优化和增长放大。",
+          roiImpactSummary: customer
+            ? "围绕高价值客户和复购经营，更容易放大长期 ROI。"
+            : "把资源向更稳的利润渠道和商品倾斜，改善整体经营质量。",
+        },
+        href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
+      }),
+    );
   }
 
   const reportFocus = [
@@ -1542,7 +2296,19 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         item.key === "inventory_health" ||
         item.key === "fulfillment_health" ||
         item.key === "logistics_anomaly"
-          ? `/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=${item.key}`
+          ? item.key === "traffic_anomaly"
+            ? buildInsightsChartsHref({ group: "acquisition", card: "traffic_scale" })
+            : item.key === "conversion_health"
+              ? buildInsightsChartsHref({ group: "conversion", card: "funnel" })
+              : item.key === "inventory_health"
+                ? buildInsightsChartsHref({
+                    group: "merchandising_ops",
+                    card: "inventory_flow",
+                  })
+                : buildInsightsChartsHref({
+                    group: "merchandising_ops",
+                    card: "fulfillment_refund",
+                  })
           : undefined,
     }));
 
@@ -1559,7 +2325,13 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         "建议进入 PageSpeed 详情，先确认首页速度和阻塞资源是否在影响经营结果。",
       tone: pageSpeedPerformance.score < 50 ? "critical" : "warning",
       targetKey: "siteExperience",
-      href: pageSpeedHref,
+      href: buildInsightsChartsHref({
+        group: "conversion",
+        card: "site_experience",
+        extra: {
+          pageSpeedUrl: primaryStorefrontUrl,
+        },
+      }),
     });
   }
 
@@ -1571,7 +2343,14 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
       detail: "这个页面承接了当前最多流量，建议单独用 PageSpeed 复盘其首屏和交互体验。",
       tone: "info",
       targetKey: "siteExperience",
-      href: topLandingPageHref,
+      href: buildInsightsChartsHref({
+        group: "conversion",
+        card: "landing_page",
+        extra: {
+          landingPage: topLandingPath,
+          pageSpeedUrl: topLandingPageUrl,
+        },
+      }),
     });
   }
 
@@ -1581,28 +2360,37 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
       title: "退款详情",
       detail: "看异常退款订单、退款 SKU 和退款原因聚类。",
       badge: `${formatPercent(diagnosis.summaryMetrics.refundRate30d)} 退款率`,
-      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+      href: buildInsightsChartsHref({
+        group: "merchandising_ops",
+        card: "fulfillment_refund",
+      }),
     },
     {
       key: "inventory",
       title: "库存详情",
       detail: "看风险 SKU、可售天数和预计损失。",
       badge: `${formatNumber(diagnosis.summaryMetrics.riskSkuCount)} 个风险 SKU`,
-      href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory",
+      href: buildInsightsChartsHref({
+        group: "merchandising_ops",
+        card: "inventory_flow",
+      }),
     },
     {
       key: "fulfillment",
       title: "履约与物流",
       detail: "看超时未发货、物流异常和关联售后问题。",
       badge: `${formatNumber(diagnosis.summaryMetrics.overdueOrderCount + diagnosis.summaryMetrics.carrierIssueCount)} 个异常对象`,
-      href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=fulfillment",
+      href: buildInsightsChartsHref({
+        group: "merchandising_ops",
+        card: "fulfillment_refund",
+      }),
     },
     {
       key: "channel",
       title: "渠道 ROI",
       detail: "看收入、利润和值得继续投的渠道。",
       badge: topProfitChannel ? `${topProfitChannel.label} 最稳` : "经营复盘",
-      href: "/app/today/diagnosis?detail=value&valueTab=channels",
+      href: buildInsightsChartsHref({ group: "roi", card: "channel_roi" }),
     },
     {
       key: "pagespeed",
@@ -1614,7 +2402,13 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
           : pageSpeed?.error
             ? "读取异常"
             : "待分析",
-      href: pageSpeedHref,
+      href: buildInsightsChartsHref({
+        group: "conversion",
+        card: "site_experience",
+        extra: {
+            pageSpeedUrl: primaryStorefrontUrl,
+        },
+      }),
     },
     ...(topLandingPageHref && topLandingPath
       ? [
@@ -1623,7 +2417,14 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
             title: "Top Landing 体验",
             detail: `直接检查 ${topLandingPath} 的首屏与交互体验，确认主要承接页是否在漏损流量。`,
             badge: "对象深钻",
-            href: topLandingPageHref,
+            href: buildInsightsChartsHref({
+              group: "conversion",
+              card: "landing_page",
+              extra: {
+                landingPage: topLandingPath,
+                pageSpeedUrl: topLandingPageUrl,
+              },
+            }),
           } satisfies DrilldownEntry,
         ]
       : []),
@@ -1725,6 +2526,14 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     };
   });
 
+  const reportTaskPipeline = buildReportTaskCandidatePipeline(reportActions);
+  const reportGenerationTrace = buildReportGenerationTrace({
+    modules: sharedModules,
+    factorCards,
+    actions: reportActions,
+    insights: reportInsights,
+  });
+
   const report: SnapshotReport = {
     summary:
       ads && overallBusinessRoi != null
@@ -1764,7 +2573,9 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     insights: reportInsights.length > 0 ? reportInsights.slice(0, 4) : mockReport7d.insights,
     drilldowns: reportDrilldowns,
     focus: reportFocus,
-    actions: reportActions,
+    actions: reportActions.slice(0, 4),
+    taskPipeline: reportTaskPipeline,
+    generationTrace: reportGenerationTrace,
     narratives: [
       {
         title: "风险",
@@ -1784,7 +2595,10 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
       },
       {
         title: "建议动作",
-        body: reportActions.slice(0, 2).join(" "),
+        body: reportActions
+          .slice(0, 2)
+          .map((item) => item.action)
+          .join(" "),
       },
     ],
     charts: [

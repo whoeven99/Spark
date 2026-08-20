@@ -14,6 +14,7 @@ import { runPageSpeedAnalysis } from "../pageSpeed/pageSpeedApi.server";
 import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 import { computeChannelRoi } from "./channelRoi.server";
 import { ensureCustomerValueLayer } from "./customerValue.server";
+import { listOperationTasks } from "./dailyInspection.server";
 import { computeOperationsDiagnosis } from "./diagnosis.server";
 import { getShopCostConfig } from "./roi/costConfig.server";
 import type { LiveSnapshotData } from "./businessReportSnapshot.shared";
@@ -27,6 +28,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const costConfig = await getShopCostConfig(session.shop);
+    const operationTasks = await listOperationTasks(session.shop).catch((error) => {
+      console.error("[today.insights] operation tasks load failed:", error);
+      return [];
+    });
     const diagnosis = await computeOperationsDiagnosis(session.shop, now);
     const ga4Credential = await getGa4Credential(session.shop).catch((error) => {
       console.error("[today.insights] ga4 credential load failed:", error);
@@ -212,6 +217,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shop: session.shop,
         generatedAt: now.toISOString(),
         costConfigured: costConfig.isConfigured,
+        operationTasks,
         diagnosis,
         customerAggregates,
         channelRoi,

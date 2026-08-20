@@ -6,7 +6,7 @@ import {
   buildAdsOverview,
   type AdsOverviewSnapshot,
 } from "../server/adsInsights/overview.server";
-import { InsightsOverviewPage } from "./page/InsightsOverviewPage";
+import { InsightsChartsOverviewPage } from "./page/InsightsChartsOverviewPage";
 
 export type InsightsOverviewLoaderData = {
   overview: AdsOverviewSnapshot | null;
@@ -28,7 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function AppInsightsChartsOverview() {
-  return <InsightsOverviewPage />;
+  return <InsightsChartsOverviewPage />;
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

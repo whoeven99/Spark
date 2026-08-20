@@ -1,5 +1,15 @@
-import { useCallback, useMemo, type CSSProperties } from "react";
-import { useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
+import type { ActionFunctionArgs } from "react-router";
+import {
+  useFetcher,
+  useLoaderData,
+  useLocation,
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+} from "react-router";
+import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { DestinationFilterBar, DestinationPage } from "./component/shared/DestinationPage";
 import {
@@ -24,11 +34,96 @@ import {
   type ModuleFilterKey,
   type ModuleSource,
   type ReportCardTone,
+  type ReportRecommendedAction,
+  type ReportTaskCandidate,
   type ReportRoiLayerCard,
   type ReportSummaryCard,
 } from "../server/operations/businessReportSnapshot.shared";
+import { createOperationTaskFromReportCandidate } from "../server/operations/dailyInspection.server";
+import { authenticate } from "../shopify.server";
 
 export { loader };
+
+type ActionData =
+  | { ok: true; created: boolean; taskId: string }
+  | { ok: false; error: string };
+
+function isReportTaskCandidate(value: unknown): value is ReportTaskCandidate {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.problemKey === "string" &&
+    (candidate.sourceType === "rule" || candidate.sourceType === "hybrid") &&
+    (candidate.priority === "P0" || candidate.priority === "P1" || candidate.priority === "P2") &&
+    (candidate.quadrant === "q1" ||
+      candidate.quadrant === "q2" ||
+      candidate.quadrant === "q3" ||
+      candidate.quadrant === "q4") &&
+    (candidate.dueWindow === "today" ||
+      candidate.dueWindow === "48h" ||
+      candidate.dueWindow === "this_week" ||
+      candidate.dueWindow === "backlog") &&
+    typeof candidate.ownerRole === "string" &&
+    typeof candidate.objective === "string" &&
+    Array.isArray(candidate.impactMetrics) &&
+    candidate.impactMetrics.every((metric) => typeof metric === "string") &&
+    (candidate.confidence === "high" ||
+      candidate.confidence === "medium" ||
+      candidate.confidence === "low") &&
+    typeof candidate.riskEnvironment === "string" &&
+    typeof candidate.whyNow === "string" &&
+    typeof candidate.roiImpactSummary === "string" &&
+    typeof candidate.action === "string" &&
+    typeof candidate.dedupeKey === "string" &&
+    typeof candidate.aiExecutionPrompt === "string"
+  );
+}
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const formData = await request.formData();
+
+  if (formData.get("intent")?.toString() !== "create-report-task") {
+    return Response.json({ ok: false, error: "unsupported intent" } satisfies ActionData, {
+      status: 400,
+    });
+  }
+
+  const title = formData.get("title")?.toString().trim();
+  const rawTaskCandidate = formData.get("taskCandidate")?.toString();
+  if (!title || !rawTaskCandidate) {
+    return Response.json({ ok: false, error: "missing params" } satisfies ActionData, {
+      status: 400,
+    });
+  }
+
+  try {
+    const parsed = JSON.parse(rawTaskCandidate) as unknown;
+    if (!isReportTaskCandidate(parsed)) {
+      return Response.json({ ok: false, error: "invalid candidate" } satisfies ActionData, {
+        status: 400,
+      });
+    }
+    const result = await createOperationTaskFromReportCandidate(session.shop, {
+      title,
+      taskCandidate: parsed,
+    });
+    return Response.json({
+      ok: true,
+      created: result.created,
+      taskId: result.task.id,
+    } satisfies ActionData);
+  } catch (error) {
+    console.error("[today.insights] create report task failed:", error);
+    return Response.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "unknown error",
+      } satisfies ActionData,
+      { status: 500 },
+    );
+  }
+};
 
 const pageStyles = {
   page: {
@@ -572,7 +667,25 @@ const pageStyles = {
     background: "#ffffff",
     padding: "0.9rem",
     display: "grid",
-    gap: "0.25rem",
+    gap: "0.45rem",
+    textAlign: "left" as const,
+  } as CSSProperties,
+  actionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.65rem",
+    alignItems: "flex-start",
+  } as CSSProperties,
+  actionTitle: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  actionMeta: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+    alignItems: "center",
   } as CSSProperties,
   actionLabel: {
     fontSize: 11,
@@ -585,6 +698,64 @@ const pageStyles = {
     fontSize: 13,
     lineHeight: 1.6,
     color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  actionSummary: {
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: pageColorTokens.textBody,
+  } as CSSProperties,
+  actionDraftCard: {
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: pageColorTokens.surfaceMuted,
+    padding: "0.8rem 0.85rem",
+    display: "grid",
+    gap: "0.45rem",
+  } as CSSProperties,
+  actionDraftBadgeRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+    alignItems: "center",
+  } as CSSProperties,
+  actionDraftMetaList: {
+    display: "grid",
+    gap: "0.25rem",
+  } as CSSProperties,
+  actionDraftMetrics: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+  } as CSSProperties,
+  actionLink: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: pageColorTokens.brandBlueDark,
+  } as CSSProperties,
+  actionButtonRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.55rem",
+    alignItems: "center",
+  } as CSSProperties,
+  actionButton: (tone: "primary" | "secondary"): CSSProperties => ({
+    borderRadius: pageColorTokens.radiusControl,
+    border:
+      tone === "primary"
+        ? `1px solid ${pageColorTokens.brandBlue}`
+        : `1px solid ${pageColorTokens.border}`,
+    background: tone === "primary" ? pageColorTokens.brandBlue : "#ffffff",
+    color: tone === "primary" ? "#ffffff" : pageColorTokens.textPrimary,
+    padding: "0.48rem 0.78rem",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  }),
+  actionPipelineSummary: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.45rem",
+    marginBottom: "0.9rem",
   } as CSSProperties,
   aiCard: {
     border: `1px dashed ${pageColorTokens.borderInput}`,
@@ -602,6 +773,66 @@ const pageStyles = {
   aiBody: {
     fontSize: 12,
     lineHeight: 1.55,
+    color: pageColorTokens.textSecondary,
+  } as CSSProperties,
+  traceSummary: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.45rem",
+    marginBottom: "0.85rem",
+  } as CSSProperties,
+  traceGrid: (isMobile: boolean): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+    gap: "0.75rem",
+  }),
+  traceCard: {
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: "#ffffff",
+    padding: "0.9rem",
+    display: "grid",
+    gap: "0.5rem",
+  } as CSSProperties,
+  traceHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.65rem",
+    alignItems: "flex-start",
+  } as CSSProperties,
+  traceTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  traceMeta: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+    alignItems: "center",
+  } as CSSProperties,
+  traceLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: pageColorTokens.textSecondary,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+  } as CSSProperties,
+  traceSection: {
+    display: "grid",
+    gap: "0.35rem",
+  } as CSSProperties,
+  traceDetailList: {
+    display: "grid",
+    gap: "0.25rem",
+  } as CSSProperties,
+  traceDetailRow: {
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: pageColorTokens.textBody,
+  } as CSSProperties,
+  traceEmpty: {
+    fontSize: 12,
     color: pageColorTokens.textSecondary,
   } as CSSProperties,
 };
@@ -638,6 +869,458 @@ function RoiLayerCardView({
   );
 }
 
+function reportTaskPriorityTone(priority: "P0" | "P1" | "P2"): ReportCardTone {
+  if (priority === "P0") return "negative";
+  if (priority === "P1") return "warning";
+  return "neutral";
+}
+
+function reportTaskConfidenceTone(
+  confidence: "high" | "medium" | "low",
+): ReportCardTone {
+  if (confidence === "high") return "positive";
+  if (confidence === "medium") return "warning";
+  return "neutral";
+}
+
+function GenerationTraceSection({
+  factorTraces,
+  actionTraces,
+  isMobile,
+}: {
+  factorTraces: Array<{
+    moduleKey: string;
+    moduleTitle: string;
+    roiLayerLabel: string;
+    source: ModuleSource;
+    sourceInputs: string[];
+    derivedMetrics: Array<{ label: string; value: string; delta?: string }>;
+    benchmark: { kind: string; summary: string };
+    classification: { statusLabel: string; tone: ReportCardTone; insightTitle?: string };
+    mappedActionKeys: string[];
+    impactPath: string;
+  }>;
+  actionTraces: Array<{
+    actionKey: string;
+    title: string;
+    roiLayerLabel: string;
+    tone: ReportCardTone;
+    targetModuleKeys: string[];
+    sourceType: "rule" | "hybrid" | null;
+    problemKey?: string;
+    dedupeKey?: string;
+    whyNow: string;
+    impactMetrics: string[];
+  }>;
+  isMobile: boolean;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <PageSurface title={t("insights.generationTraceTitle")}>
+      <div style={pageStyles.traceSummary}>
+        <span style={pageStyles.factorBadge("neutral")}>
+          {t("insights.generationTraceFactorCount", { count: factorTraces.length })}
+        </span>
+        <span style={pageStyles.factorBadge("warning")}>
+          {t("insights.generationTraceActionCount", { count: actionTraces.length })}
+        </span>
+      </div>
+      <div style={pageStyles.traceGrid(isMobile)}>
+        {factorTraces.map((item) => (
+          <div key={`factor-${item.moduleKey}`} style={pageStyles.traceCard}>
+            <div style={pageStyles.traceHeader}>
+              <div>
+                <div style={pageStyles.traceTitle}>{item.moduleTitle}</div>
+                <div style={pageStyles.factorSummary}>
+                  {item.classification.insightTitle ?? item.impactPath}
+                </div>
+              </div>
+              <div style={pageStyles.traceMeta}>
+                <span style={pageStyles.factorBadge(item.classification.tone)}>
+                  {item.classification.statusLabel}
+                </span>
+                <span style={pageStyles.factorBadge("neutral")}>{item.roiLayerLabel}</span>
+                <SourceBadge source={item.source} />
+              </div>
+            </div>
+
+            <div style={pageStyles.traceSection}>
+              <span style={pageStyles.traceLabel}>
+                {t("insights.generationTraceInputLabel")}
+              </span>
+              <div style={pageStyles.factorEvidenceList}>
+                {item.sourceInputs.map((input) => (
+                  <span key={`${item.moduleKey}-${input}`} style={pageStyles.factorEvidenceItem}>
+                    {input}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div style={pageStyles.traceSection}>
+              <span style={pageStyles.traceLabel}>
+                {t("insights.generationTraceDerivedMetricsLabel")}
+              </span>
+              <div style={pageStyles.factorEvidenceList}>
+                {item.derivedMetrics.map((metric) => (
+                  <span
+                    key={`${item.moduleKey}-${metric.label}`}
+                    style={pageStyles.factorEvidenceItem}
+                  >
+                    {metric.label} {metric.value}
+                    {metric.delta ? ` (${metric.delta})` : ""}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div style={pageStyles.traceDetailList}>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceBenchmarkLabel")}：
+                </span>
+                <span>{item.benchmark.summary}</span>
+              </div>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceBenchmarkKindLabel")}：
+                </span>
+                <span>{item.benchmark.kind}</span>
+              </div>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceImpactPathLabel")}：
+                </span>
+                <span>{item.impactPath}</span>
+              </div>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceMappedActionsLabel")}：
+                </span>
+                <span>
+                  {item.mappedActionKeys.length > 0
+                    ? item.mappedActionKeys.join(" / ")
+                    : t("insights.generationTraceNone")}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {actionTraces.map((item) => (
+          <div key={`action-${item.actionKey}`} style={pageStyles.traceCard}>
+            <div style={pageStyles.traceHeader}>
+              <div>
+                <div style={pageStyles.traceTitle}>{item.title}</div>
+                <div style={pageStyles.factorSummary}>{item.whyNow}</div>
+              </div>
+              <div style={pageStyles.traceMeta}>
+                <span style={pageStyles.factorBadge(item.tone)}>{item.roiLayerLabel}</span>
+                {item.sourceType ? (
+                  <span style={pageStyles.factorBadge("neutral")}>{item.sourceType}</span>
+                ) : null}
+              </div>
+            </div>
+
+            <div style={pageStyles.traceSection}>
+              <span style={pageStyles.traceLabel}>
+                {t("insights.generationTraceActionTargetsLabel")}
+              </span>
+              <div style={pageStyles.factorEvidenceList}>
+                {item.targetModuleKeys.map((moduleKey) => (
+                  <span key={`${item.actionKey}-${moduleKey}`} style={pageStyles.factorEvidenceItem}>
+                    {moduleKey}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div style={pageStyles.traceSection}>
+              <span style={pageStyles.traceLabel}>
+                {t("insights.generationTraceDerivedMetricsLabel")}
+              </span>
+              <div style={pageStyles.factorEvidenceList}>
+                {item.impactMetrics.map((metric) => (
+                  <span key={`${item.actionKey}-${metric}`} style={pageStyles.factorEvidenceItem}>
+                    {metric}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div style={pageStyles.traceDetailList}>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceWhyNowLabel")}：
+                </span>
+                <span>{item.whyNow}</span>
+              </div>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceProblemKeyLabel")}：
+                </span>
+                <span>{item.problemKey ?? t("insights.generationTraceNone")}</span>
+              </div>
+              <div style={pageStyles.traceDetailRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.generationTraceDedupeKeyLabel")}：
+                </span>
+                <span>{item.dedupeKey ?? t("insights.generationTraceNone")}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {factorTraces.length === 0 && actionTraces.length === 0 ? (
+        <div style={pageStyles.traceEmpty}>{t("insights.generationTraceEmpty")}</div>
+      ) : null}
+    </PageSurface>
+  );
+}
+
+function RecommendedActionCard({
+  item,
+  onNavigate,
+  onSendToAi,
+  onCreateTask,
+  onOpenTask,
+  existingTaskId,
+  createPending,
+}: {
+  item: ReportRecommendedAction;
+  onNavigate: (href: string | undefined) => void;
+  onSendToAi: (taskCandidate: ReportTaskCandidate | undefined, title: string) => void;
+  onCreateTask: (taskCandidate: ReportTaskCandidate | undefined, title: string) => void;
+  onOpenTask: (taskId: string) => void;
+  existingTaskId?: string;
+  createPending: boolean;
+}) {
+  const { t } = useTranslation();
+  const taskCandidate = item.taskCandidate;
+  const dueWindowLabel =
+    taskCandidate?.dueWindow === "today"
+      ? t("dailyOps.dueWindowToday")
+      : taskCandidate?.dueWindow === "48h"
+        ? t("dailyOps.dueWindow48h")
+        : taskCandidate?.dueWindow === "this_week"
+          ? t("dailyOps.dueWindowThisWeek")
+          : taskCandidate?.dueWindow === "backlog"
+            ? t("dailyOps.dueWindowBacklog")
+            : null;
+  const quadrantLabel = taskCandidate
+    ? t(`dailyOps.quadrant${taskCandidate.quadrant.toUpperCase()}`)
+    : null;
+  const confidenceLabel =
+    taskCandidate?.confidence === "high"
+      ? t("dailyOps.confidenceHigh")
+      : taskCandidate?.confidence === "medium"
+        ? t("dailyOps.confidenceMedium")
+        : taskCandidate?.confidence === "low"
+          ? t("dailyOps.confidenceLow")
+          : null;
+  const sourceLabel =
+    taskCandidate?.sourceType === "rule"
+      ? t("insights.recommendedActionSourceRule")
+      : taskCandidate?.sourceType === "hybrid"
+        ? t("insights.recommendedActionSourceHybrid")
+        : null;
+
+  return (
+    <div style={pageStyles.actionCard}>
+      <div style={pageStyles.actionHeader}>
+        <div>
+          <div style={pageStyles.actionTitle}>{item.title}</div>
+          <div style={pageStyles.actionSummary}>{item.summary}</div>
+        </div>
+        <div style={pageStyles.actionMeta}>
+          <span style={pageStyles.factorBadge(item.tone)}>{item.roiLayerLabel}</span>
+          {taskCandidate ? (
+            <>
+              <span style={pageStyles.factorBadge(reportTaskPriorityTone(taskCandidate.priority))}>
+                {taskCandidate.priority}
+              </span>
+              <span style={pageStyles.factorBadge("neutral")}>
+                {taskCandidate.quadrant.toUpperCase()}
+              </span>
+            </>
+          ) : null}
+        </div>
+      </div>
+      <span style={pageStyles.actionLabel}>{t("insights.recommendedActionActionLabel")}</span>
+      <span style={pageStyles.actionBody}>{item.action}</span>
+      {taskCandidate ? (
+        <div style={pageStyles.actionDraftCard}>
+          <span style={pageStyles.actionLabel}>{t("insights.recommendedActionTaskDraft")}</span>
+          <div style={pageStyles.actionDraftBadgeRow}>
+            <span style={pageStyles.factorBadge(reportTaskPriorityTone(taskCandidate.priority))}>
+              {taskCandidate.priority}
+            </span>
+            <span style={pageStyles.factorBadge("neutral")}>
+              {taskCandidate.quadrant.toUpperCase()}
+            </span>
+            {dueWindowLabel ? (
+              <span style={pageStyles.factorBadge("neutral")}>{dueWindowLabel}</span>
+            ) : null}
+            {sourceLabel ? (
+              <span style={pageStyles.factorBadge("neutral")}>{sourceLabel}</span>
+            ) : null}
+            {confidenceLabel ? (
+              <span
+                style={pageStyles.factorBadge(
+                  reportTaskConfidenceTone(taskCandidate.confidence),
+                )}
+              >
+                {confidenceLabel}
+              </span>
+            ) : null}
+          </div>
+          <div style={pageStyles.actionDraftMetaList}>
+            <div style={pageStyles.factorMetaRow}>
+              <span style={pageStyles.factorMetaLabel}>
+                {t("insights.recommendedActionOwner")}：
+              </span>
+              <span>{taskCandidate.ownerRole}</span>
+            </div>
+            {quadrantLabel ? (
+              <div style={pageStyles.factorMetaRow}>
+                <span style={pageStyles.factorMetaLabel}>
+                  {t("insights.recommendedActionQuadrant")}：
+                </span>
+                <span>{quadrantLabel}</span>
+              </div>
+            ) : null}
+            <div style={pageStyles.factorMetaRow}>
+              <span style={pageStyles.factorMetaLabel}>
+                {t("insights.recommendedActionObjective")}：
+              </span>
+              <span>{taskCandidate.objective}</span>
+            </div>
+            <div style={pageStyles.factorMetaRow}>
+              <span style={pageStyles.factorMetaLabel}>
+                {t("insights.recommendedActionRiskEnvironment")}：
+              </span>
+              <span>{taskCandidate.riskEnvironment}</span>
+            </div>
+            <div style={pageStyles.factorMetaRow}>
+              <span style={pageStyles.factorMetaLabel}>
+                {t("insights.recommendedActionWhyNow")}：
+              </span>
+              <span>{taskCandidate.whyNow}</span>
+            </div>
+            <div style={pageStyles.factorMetaRow}>
+              <span style={pageStyles.factorMetaLabel}>
+                {t("insights.recommendedActionEstimatedLift")}：
+              </span>
+              <span>{taskCandidate.estimatedLift ?? "—"}</span>
+            </div>
+            <div style={pageStyles.factorMetaRow}>
+              <span style={pageStyles.factorMetaLabel}>
+                {t("insights.recommendedActionRoiImpact")}：
+              </span>
+              <span>{taskCandidate.roiImpactSummary}</span>
+            </div>
+          </div>
+          <div>
+            <span style={pageStyles.actionLabel}>
+              {t("insights.recommendedActionImpactMetrics")}
+            </span>
+            <div style={pageStyles.actionDraftMetrics}>
+              {taskCandidate.impactMetrics.map((metric) => (
+                <span
+                  key={`${item.key}-${metric}`}
+                  style={pageStyles.factorEvidenceItem}
+                >
+                  {metric}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <span style={pageStyles.actionLink}>
+        {item.href
+          ? t("insights.recommendedActionOpenDrilldown")
+          : t("insights.recommendedActionKeepJudgment")}
+      </span>
+      <div style={pageStyles.actionButtonRow}>
+        {item.href ? (
+          <button
+            type="button"
+            style={pageStyles.actionButton("secondary")}
+            onClick={() => onNavigate(item.href)}
+          >
+            {t("insights.recommendedActionOpenDrilldown")}
+          </button>
+        ) : null}
+        {taskCandidate ? (
+          existingTaskId ? (
+            <button
+              type="button"
+              style={pageStyles.actionButton("secondary")}
+              onClick={() => onOpenTask(existingTaskId)}
+            >
+              {t("insights.recommendedActionViewTask")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              style={pageStyles.actionButton("secondary")}
+              onClick={() => onCreateTask(taskCandidate, item.title)}
+              disabled={createPending}
+            >
+              {createPending
+                ? t("insights.recommendedActionAddingTask")
+                : t("insights.recommendedActionAddTask")}
+            </button>
+          )
+        ) : null}
+        {taskCandidate ? (
+          <button
+            type="button"
+            style={pageStyles.actionButton("primary")}
+            onClick={() => onSendToAi(taskCandidate, item.title)}
+          >
+            {t("dailyOps.actionSendToAi")}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function buildReportTaskPrompt(
+  title: string,
+  taskCandidate: ReportTaskCandidate,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const dueWindowLabel =
+    taskCandidate.dueWindow === "today"
+      ? t("dailyOps.dueWindowToday")
+      : taskCandidate.dueWindow === "48h"
+        ? t("dailyOps.dueWindow48h")
+        : taskCandidate.dueWindow === "this_week"
+          ? t("dailyOps.dueWindowThisWeek")
+          : t("dailyOps.dueWindowBacklog");
+
+  return [
+    t("dailyOps.taskPromptHeader"),
+    `${t("dailyOps.taskPromptTitle")}：${title}`,
+    `${t("dailyOps.taskPromptStatus")}：${taskCandidate.priority} / ${taskCandidate.quadrant.toUpperCase()}`,
+    `${t("dailyOps.taskPromptReason")}：${taskCandidate.whyNow}`,
+    `${t("dailyOps.taskPromptObjective")}：${taskCandidate.objective}`,
+    `${t("dailyOps.taskPromptMetric")}：${taskCandidate.impactMetrics.join(" / ")}`,
+    `${t("dailyOps.taskPromptLift")}：${taskCandidate.estimatedLift ?? "—"}`,
+    `${t("dailyOps.taskPromptRoi")}：${taskCandidate.roiImpactSummary}`,
+    `${t("dailyOps.taskPromptDue")}：${dueWindowLabel}`,
+    `${t("dailyOps.taskPromptOwner")}：${taskCandidate.ownerRole || t("dailyOps.taskPromptOwnerUnknown")}`,
+    `${t("insights.recommendedActionRiskEnvironment")}：${taskCandidate.riskEnvironment}`,
+    `${t("dailyOps.taskPromptActions")}：\n- ${taskCandidate.action}`,
+    "",
+    t("dailyOps.taskPromptInstruction"),
+  ].join("\n");
+}
+
 export function BusinessInsightsPage({
   title = "商业洞察",
   subtitle = "把经营数据整理成一份围绕 ROI 的日报，再往下展开各模块细节。",
@@ -650,7 +1333,11 @@ export function BusinessInsightsPage({
   fallbackPath?: string;
 } = {}) {
   const { liveData } = useLoaderData<typeof loader>();
+  const shopify = useAppBridge();
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
+  const taskCreateFetcher = useFetcher<ActionData>();
+  const revalidator = useRevalidator();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -658,6 +1345,38 @@ export function BusinessInsightsPage({
   const moduleFilter = (searchParams.get("module") as ModuleFilterKey | null) ?? "all";
   const snapshots = useMemo(() => buildLiveSnapshots(liveData), [liveData]);
   const snapshot = useMemo(() => snapshots[period], [period, snapshots]);
+  const operationTasks = liveData?.operationTasks ?? [];
+  const mergedTaskCandidateByKey = useMemo(
+    () =>
+      new Map(
+        snapshot.report.taskPipeline.mergedCandidates.map((candidate) => [
+          candidate.dedupeKey,
+          candidate,
+        ]),
+      ),
+    [snapshot.report.taskPipeline.mergedCandidates],
+  );
+  const operationTaskByDedupe = useMemo(
+    () => new Map(operationTasks.map((task) => [task.dedupeKey, task])),
+    [operationTasks],
+  );
+  const operationTaskByProblemKey = useMemo(
+    () =>
+      new Map(
+        operationTasks.map((task) => {
+          const normalizedSourceKey = task.sourceKey.startsWith("report:")
+            ? task.sourceKey.slice("report:".length)
+            : task.sourceKey;
+          return [normalizedSourceKey, task];
+        }),
+      ),
+    [operationTasks],
+  );
+  const pendingCreateDedupeKey =
+    taskCreateFetcher.formData?.get("intent")?.toString() === "create-report-task"
+      ? taskCreateFetcher.formData.get("dedupeKey")?.toString() ?? null
+      : null;
+  const handledTaskToastRef = useRef<string | null>(null);
   const moduleOptions = useMemo(
     () => [{ key: "all", label: "查看全部模块" }, ...snapshot.modules.map((item) => ({ key: item.key, label: item.title }))],
     [snapshot.modules],
@@ -672,9 +1391,73 @@ export function BusinessInsightsPage({
   }, [location.pathname, moduleFilter, period]);
 
   const buildDetailHref = useCallback(
-    (href: string) => appendReturnTo(href, currentReturnTo),
+    (href: string) => {
+      const [path, query = ""] = href.split("?");
+      const next = new URLSearchParams(query);
+      if (path === "/app/insights/charts" && !next.has("range")) {
+        next.set("range", period === "30d" ? "30" : "7");
+      }
+      return appendReturnTo(`${path}?${next.toString()}`, currentReturnTo);
+    },
+    [currentReturnTo, period],
+  );
+  const buildTaskHref = useCallback(
+    (taskId: string) =>
+      appendReturnTo(`/app/today/diagnosis?detail=task&taskId=${encodeURIComponent(taskId)}`, currentReturnTo),
     [currentReturnTo],
   );
+  const navigateTaskCandidateToAi = useCallback(
+    (taskCandidate: ReportTaskCandidate | undefined, actionTitle: string) => {
+      if (!taskCandidate) return;
+      const params = new URLSearchParams(
+        typeof window !== "undefined"
+          ? window.location.search.startsWith("?")
+            ? window.location.search.slice(1)
+            : window.location.search
+          : "",
+      );
+      params.set("panel", "chat");
+      params.set("prefillTaskPrompt", buildReportTaskPrompt(actionTitle, taskCandidate, t));
+      navigate(`/app?${params.toString()}`);
+    },
+    [navigate, t],
+  );
+  const submitTaskCandidate = useCallback(
+    (taskCandidate: ReportTaskCandidate | undefined, actionTitle: string) => {
+      if (!taskCandidate) return;
+      taskCreateFetcher.submit(
+        {
+          intent: "create-report-task",
+          title: actionTitle,
+          dedupeKey: taskCandidate.dedupeKey,
+          taskCandidate: JSON.stringify(taskCandidate),
+        },
+        { method: "post" },
+      );
+    },
+    [taskCreateFetcher],
+  );
+
+  useEffect(() => {
+    if (taskCreateFetcher.state !== "idle" || !taskCreateFetcher.data?.ok) return;
+    const toastKey = `${taskCreateFetcher.data.taskId}:${taskCreateFetcher.data.created ? "created" : "existing"}`;
+    if (handledTaskToastRef.current === toastKey) return;
+    handledTaskToastRef.current = toastKey;
+    shopify.toast.show(
+      t(
+        taskCreateFetcher.data.created
+          ? "insights.recommendedActionTaskAdded"
+          : "insights.recommendedActionTaskExists",
+      ),
+    );
+    revalidator.revalidate();
+  }, [revalidator, shopify, t, taskCreateFetcher.data, taskCreateFetcher.state]);
+
+  useEffect(() => {
+    if (taskCreateFetcher.state !== "idle") return;
+    if (!taskCreateFetcher.data || taskCreateFetcher.data.ok) return;
+    shopify.toast.show(taskCreateFetcher.data.error);
+  }, [shopify, taskCreateFetcher.data, taskCreateFetcher.state]);
 
   const handleModuleChange = (nextKey: string) => {
     const next = new URLSearchParams(searchParams);
@@ -700,6 +1483,24 @@ export function BusinessInsightsPage({
         href: item.href ? buildDetailHref(item.href) : undefined,
       })),
     [buildDetailHref, moduleFilter, snapshot.report.factorCards],
+  );
+  const factorTraces = useMemo(
+    () =>
+      snapshot.report.generationTrace.factors.filter((item) =>
+        factorCards.some((card) => card.key === item.moduleKey),
+      ),
+    [factorCards, snapshot.report.generationTrace.factors],
+  );
+  const actionTraces = useMemo(
+    () => {
+      const visibleActionKeys = new Set(snapshot.report.actions.map((item) => item.key));
+      return snapshot.report.generationTrace.actions.filter((item) => {
+        if (!visibleActionKeys.has(item.actionKey)) return false;
+        if (moduleFilter === "all") return true;
+        return item.targetModuleKeys.includes(moduleFilter);
+      });
+    },
+    [moduleFilter, snapshot.report.actions, snapshot.report.generationTrace.actions],
   );
 
   return (
@@ -887,12 +1688,64 @@ export function BusinessInsightsPage({
           </PageSurface>
 
           <PageSurface title="推荐动作">
+            <div style={pageStyles.actionPipelineSummary}>
+              <span style={pageStyles.factorBadge("neutral")}>
+                {t("insights.recommendedActionRuleCount", {
+                  count: snapshot.report.taskPipeline.ruleCandidates.length,
+                })}
+              </span>
+              <span style={pageStyles.factorBadge("neutral")}>
+                {t("insights.recommendedActionAiCount", {
+                  count: snapshot.report.taskPipeline.aiCandidates.length,
+                })}
+              </span>
+              <span style={pageStyles.factorBadge("warning")}>
+                {t("insights.recommendedActionMergedCount", {
+                  count: snapshot.report.taskPipeline.mergedCandidates.length,
+                })}
+              </span>
+              {snapshot.report.taskPipeline.dedupedCount > 0 ? (
+                <span style={pageStyles.factorBadge("positive")}>
+                  {t("insights.recommendedActionDedupedCount", {
+                    count: snapshot.report.taskPipeline.dedupedCount,
+                  })}
+                </span>
+              ) : null}
+            </div>
             <div style={pageStyles.actionList}>
-              {snapshot.report.actions.map((item, index) => (
-                <div key={`${index + 1}-${item}`} style={pageStyles.actionCard}>
-                  <span style={pageStyles.actionLabel}>{`动作 ${index + 1}`}</span>
-                  <span style={pageStyles.actionBody}>{item}</span>
-                </div>
+              {snapshot.report.actions.map((item) => (
+                (() => {
+                  const mergedTaskCandidate = item.taskCandidate
+                    ? (mergedTaskCandidateByKey.get(item.taskCandidate.dedupeKey) ??
+                      item.taskCandidate)
+                    : undefined;
+                  const existingTask = mergedTaskCandidate
+                    ? (operationTaskByDedupe.get(mergedTaskCandidate.dedupeKey) ??
+                      operationTaskByProblemKey.get(mergedTaskCandidate.problemKey))
+                    : undefined;
+
+                  return (
+                    <RecommendedActionCard
+                      key={item.key}
+                      item={{
+                        ...item,
+                        taskCandidate: mergedTaskCandidate,
+                        href: item.href ? buildDetailHref(item.href) : undefined,
+                      }}
+                      existingTaskId={existingTask?.id}
+                      createPending={
+                        Boolean(mergedTaskCandidate) &&
+                        pendingCreateDedupeKey === mergedTaskCandidate?.dedupeKey
+                      }
+                      onCreateTask={submitTaskCandidate}
+                      onOpenTask={(taskId) => navigate(buildTaskHref(taskId))}
+                      onSendToAi={navigateTaskCandidateToAi}
+                      onNavigate={(href) => {
+                        if (href) navigate(href);
+                      }}
+                    />
+                  );
+                })()
               ))}
             </div>
           </PageSurface>
@@ -915,6 +1768,12 @@ export function BusinessInsightsPage({
               ))}
             </div>
           </PageSurface>
+
+          <GenerationTraceSection
+            factorTraces={factorTraces}
+            actionTraces={actionTraces}
+            isMobile={isMobile}
+          />
         </div>
       </DestinationPage>
     </div>

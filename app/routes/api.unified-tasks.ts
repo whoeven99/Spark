@@ -3,6 +3,8 @@ import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import type { AITaskItem } from "../lib/aiTaskTypes";
+import { listOperationTasks } from "../server/operations/dailyInspection.server";
+import { isOperationTaskCurrent, isOperationTaskHistory } from "../lib/operationTaskList";
 import type {
   UnifiedTaskEntry,
   UnifiedTaskListResponse,
@@ -14,12 +16,14 @@ import type {
 const DEFAULT_PAGE_SIZE = 10;
 const FETCH_ALL_SIZE = 200;
 
-function entryUpdatedAt(entry: Extract<UnifiedTaskEntry, { entryType: "ai_task" }>): string {
-  return entry.task.updatedAt;
+function entryUpdatedAt(entry: UnifiedTaskEntry): string {
+  if (entry.entryType === "ai_task") return entry.task.updatedAt;
+  return entry.task.resolvedAt ?? entry.task.createdAt;
 }
 
 function parseTypeFilter(value: string | null): UnifiedTaskTypeFilter {
   if (
+    value === "operation_task" ||
     value === "product_improve" ||
     value === "image_generation" ||
     value === "picture_translate"
@@ -32,9 +36,12 @@ function parseTypeFilter(value: string | null): UnifiedTaskTypeFilter {
 function parseStatusFilter(value: string | null): UnifiedTaskStatusFilter {
   if (
     value === "running" ||
+    value === "open" ||
+    value === "in_progress" ||
     value === "needs_review" ||
     value === "failed" ||
-    value === "completed"
+    value === "completed" ||
+    value === "ignored"
   ) {
     return value;
   }
@@ -42,18 +49,32 @@ function parseStatusFilter(value: string | null): UnifiedTaskStatusFilter {
 }
 
 function matchesTypeFilter(
-  entry: Extract<UnifiedTaskEntry, { entryType: "ai_task" }>,
+  entry: UnifiedTaskEntry,
   typeFilter: UnifiedTaskTypeFilter,
 ): boolean {
   if (typeFilter === "all") return true;
+  if (entry.entryType === "operation_task") return typeFilter === "operation_task";
   return entry.task.taskType === typeFilter;
 }
 
 function matchesStatusFilter(
-  entry: Extract<UnifiedTaskEntry, { entryType: "ai_task" }>,
+  entry: UnifiedTaskEntry,
   statusFilter: UnifiedTaskStatusFilter,
 ): boolean {
   if (statusFilter === "all") return true;
+
+  if (entry.entryType === "operation_task") {
+    const status = entry.task.status;
+    if (statusFilter === "running") return status === "in_progress";
+    if (statusFilter === "open") return status === "open";
+    if (statusFilter === "in_progress") return status === "in_progress";
+    if (statusFilter === "completed") {
+      return status === "done" || status === "auto_closed";
+    }
+    if (statusFilter === "ignored") return status === "ignored";
+    if (statusFilter === "failed" || statusFilter === "needs_review") return false;
+    return true;
+  }
 
   const status = entry.task.status;
   if (statusFilter === "running") return status === "running";
@@ -70,6 +91,7 @@ function matchesStatusFilter(
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
+  const now = new Date();
 
   const view: UnifiedTaskView =
     url.searchParams.get("view") === "history" ? "history" : "current";
@@ -84,18 +106,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const typeFilter = parseTypeFilter(url.searchParams.get("type"));
   const statusFilter = parseStatusFilter(url.searchParams.get("status"));
 
-  const aiTaskPage = await listTasksPageForShop({
-    shop: session.shop,
-    view,
-    page: 1,
-    pageSize: FETCH_ALL_SIZE,
-  });
+  const [aiTaskPage, operationTasks] = await Promise.all([
+    listTasksPageForShop({
+      shop: session.shop,
+      view,
+      page: 1,
+      pageSize: FETCH_ALL_SIZE,
+    }),
+    listOperationTasks(session.shop),
+  ]);
 
-  const aiEntries: UnifiedTaskEntry[] = aiTaskPage.tasks.map(
-    (task: AITaskItem) => ({ entryType: "ai_task", task }),
-  );
+  const aiEntries: UnifiedTaskEntry[] = aiTaskPage.tasks.map((task: AITaskItem) => ({
+    entryType: "ai_task",
+    task,
+  }));
+  const operationEntries: UnifiedTaskEntry[] = operationTasks
+    .filter((task) => {
+      return view === "history"
+        ? isOperationTaskHistory(task, now)
+        : isOperationTaskCurrent(task, now);
+    })
+    .map((task) => ({
+      entryType: "operation_task",
+      task,
+    }));
 
-  const merged = aiEntries
+  const merged = [...aiEntries, ...operationEntries]
     .filter((entry) => matchesTypeFilter(entry, typeFilter))
     .filter((entry) => matchesStatusFilter(entry, statusFilter))
     .sort(
@@ -117,7 +153,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pageSize,
     totalCount,
     totalPages,
-    currentCount: aiTaskPage.metrics.currentCount,
-    historyCount: aiTaskPage.metrics.historyCount,
+    currentCount:
+      aiTaskPage.metrics.currentCount +
+      operationTasks.filter((task) => isOperationTaskCurrent(task, now)).length,
+    historyCount:
+      aiTaskPage.metrics.historyCount +
+      operationTasks.filter((task) => isOperationTaskHistory(task, now)).length,
   });
 };

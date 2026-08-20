@@ -5,9 +5,9 @@
 import type { HeadersFunction } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
-import { BusinessInsightsPage, loader } from "./app.today.insights";
+import { action, BusinessInsightsPage, loader } from "./app.today.insights";
 
-export { loader };
+export { action, loader };
 
 export default function AppInsightsReports() {
   const { t } = useTranslation();

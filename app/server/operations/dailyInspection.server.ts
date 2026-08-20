@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { ReportTaskCandidate } from "./businessReportSnapshot.shared";
 import {
   computeOperationsDiagnosis,
   PAYMENT_SUCCESS_RISK_PERCENT,
@@ -12,6 +13,7 @@ import type { ShopifyAdminGraphqlClient } from "./productOperationsQuery.server"
 import {
   dueWindowToDate,
   evaluateDiagnosisRules,
+  RULE_MANAGED_SOURCE_KEYS,
   type TaskDueWindow,
   type TaskPriority,
   type TaskQuadrant,
@@ -30,6 +32,7 @@ const STALE_TASK_AUTO_CLOSE_DAYS = 14;
 
 export type OperationTaskView = {
   id: string;
+  dedupeKey: string;
   sourceKey: string;
   title: string;
   quadrant: TaskQuadrant;
@@ -154,6 +157,7 @@ function toDateKey(date: Date, timeZone: string = DEFAULT_SNAPSHOT_TIMEZONE): st
 
 function toTaskView(task: {
   id: string;
+  dedupeKey: string;
   sourceKey: string;
   title: string;
   quadrant: string;
@@ -170,6 +174,7 @@ function toTaskView(task: {
 }): OperationTaskView {
   return {
     id: task.id,
+    dedupeKey: task.dedupeKey,
     sourceKey: task.sourceKey,
     title: task.title,
     quadrant: task.quadrant as TaskQuadrant,
@@ -185,6 +190,110 @@ function toTaskView(task: {
     dueAt: task.dueAt?.toISOString() ?? null,
     createdAt: task.createdAt.toISOString(),
     resolvedAt: task.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+type ReportTaskPresentationEffect = "revenue" | "conversion" | "retention" | "efficiency";
+
+type CreateOperationTaskFromReportCandidateInput = {
+  title: string;
+  taskCandidate: ReportTaskCandidate;
+  now?: Date;
+};
+
+type CreateOperationTaskFromReportCandidateResult = {
+  created: boolean;
+  task: OperationTaskView;
+};
+
+function inferReportTaskPresentationEffect(
+  candidate: ReportTaskCandidate,
+): ReportTaskPresentationEffect {
+  switch (candidate.problemKey) {
+    case "inventory_risk":
+    case "growth_focus":
+    case "ad_burn":
+    case "budget_reallocation":
+      return "revenue";
+    case "after_sales_risk":
+      return "retention";
+    case "site_experience":
+    case "landing_experience":
+    case "conversion_repair":
+      return "conversion";
+    default:
+      return "efficiency";
+  }
+}
+
+function buildReportTaskSourceKey(problemKey: string): string {
+  return `report:${problemKey}`;
+}
+
+export async function createOperationTaskFromReportCandidate(
+  shop: string,
+  input: CreateOperationTaskFromReportCandidateInput,
+): Promise<CreateOperationTaskFromReportCandidateResult> {
+  const now = input.now ?? new Date();
+  const { title, taskCandidate } = input;
+  const activeStatuses = ["open", "in_progress"] as const;
+  const canReuseRuleTask = RULE_MANAGED_SOURCE_KEYS.includes(taskCandidate.problemKey);
+
+  const existing = await prisma.operationTask.findFirst({
+    where: {
+      shop,
+      status: { in: [...activeStatuses] },
+      OR: [
+        { dedupeKey: taskCandidate.dedupeKey },
+        ...(canReuseRuleTask ? [{ sourceKey: taskCandidate.problemKey }] : []),
+      ],
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+  if (existing) {
+    return {
+      created: false,
+      task: toTaskView(existing),
+    };
+  }
+
+  const created = await prisma.operationTask.create({
+    data: {
+      shop,
+      snapshotId: null,
+      sourceKey: buildReportTaskSourceKey(taskCandidate.problemKey),
+      dedupeKey: taskCandidate.dedupeKey,
+      title,
+      quadrant: taskCandidate.quadrant,
+      priority: taskCandidate.priority,
+      status: "open",
+      triggerReason: taskCandidate.whyNow,
+      relatedObjects: {
+        reportTask: {
+          origin: "insights_report",
+          problemKey: taskCandidate.problemKey,
+          sourceType: taskCandidate.sourceType,
+          objective: taskCandidate.objective,
+          impactMetrics: taskCandidate.impactMetrics,
+          estimatedLift: taskCandidate.estimatedLift ?? null,
+          roiImpactSummary: taskCandidate.roiImpactSummary,
+          riskEnvironment: taskCandidate.riskEnvironment,
+          whyNow: taskCandidate.whyNow,
+          primaryObjectId: taskCandidate.primaryObjectId ?? null,
+          primaryObjectType: taskCandidate.primaryObjectType ?? null,
+          effect: inferReportTaskPresentationEffect(taskCandidate),
+        },
+      },
+      suggestedActions: [taskCandidate.action],
+      ownerRole: taskCandidate.ownerRole,
+      dueWindow: taskCandidate.dueWindow,
+      dueAt: dueWindowToDate(taskCandidate.dueWindow, now),
+    },
+  });
+
+  return {
+    created: true,
+    task: toTaskView(created),
   };
 }
 
@@ -551,6 +660,7 @@ async function syncTasks(
   generated: ReturnType<typeof evaluateDiagnosisRules>,
   now: Date,
 ): Promise<void> {
+  const ruleManagedSourceKeys = new Set(RULE_MANAGED_SOURCE_KEYS);
   const generatedKeys = new Set(generated.map((t) => t.dedupeKey));
   const activeTasks = await prisma.operationTask.findMany({
     where: { shop, status: { in: ["open", "in_progress"] } },
@@ -611,6 +721,7 @@ async function syncTasks(
     now.getTime() - STALE_TASK_AUTO_CLOSE_DAYS * 24 * 60 * 60 * 1000,
   );
   for (const task of activeTasks) {
+    if (!ruleManagedSourceKeys.has(task.sourceKey)) continue;
     const conditionGone = !generatedKeys.has(task.dedupeKey);
     const tooOld = task.createdAt < staleBefore;
     if (conditionGone || (tooOld && task.status === "open")) {
@@ -815,7 +926,12 @@ export async function updateOperationTaskStatus(
     where: { id: taskId },
     data: {
       status,
-      resolvedAt: action === "done" ? new Date() : action === "reopen" ? null : task.resolvedAt,
+      resolvedAt:
+        action === "done" || action === "ignore"
+          ? new Date()
+          : action === "reopen"
+            ? null
+            : task.resolvedAt,
     },
   });
   return toTaskView(updated);
