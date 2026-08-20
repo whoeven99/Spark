@@ -33,6 +33,7 @@ import {
 import { getGa4Credential, getGa4Pending } from "../server/googleAnalytics/ga4Credentials.server";
 import { getGscCredential, getGscPending } from "../server/googleSearchConsole/gscCredentials.server";
 import { getFedexCredential, getSfCredential } from "../server/logisticsCredentialStore.server";
+import { hasReadReportsScope } from "../lib/shopifyReports";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -124,11 +125,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         configuredCount: [fedex, sf].filter(Boolean).length,
         totalCount: 2,
       },
+      shopifyReports: {
+        hasReadReports: hasReadReportsScope(session.scope),
+      },
     },
   };
 };
 
-type SettingsModuleId = "billing" | "data" | "feedback";
+type SettingsModuleId = "billing" | "data" | "shopifyReports" | "feedback";
 
 type SettingsModule = {
   id: SettingsModuleId;
@@ -165,6 +169,12 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
         to: "/app/settings/data",
         labelKey: "settingsShell.navData",
         descKey: "settingsShell.descData",
+      },
+      {
+        id: "shopifyReports",
+        to: "/app/settings/shopify-reports",
+        labelKey: "settingsShell.navShopifyReports",
+        descKey: "settingsShell.descShopifyReports",
       },
     ],
   },
@@ -222,6 +232,15 @@ function buildModuleSummary(
       return {
         badge: t("settingsShell.statusTool"),
         meta: t("settingsShell.summaryDataTools"),
+      };
+    case "shopifyReports":
+      return {
+        badge: summaries.shopifyReports.hasReadReports
+          ? t("settingsShell.statusReady")
+          : t("settingsShell.statusNeedsSetup"),
+        meta: summaries.shopifyReports.hasReadReports
+          ? t("settingsShell.summaryShopifyReportsReady")
+          : t("settingsShell.summaryShopifyReportsNeedsAuth"),
       };
     case "feedback":
       return {

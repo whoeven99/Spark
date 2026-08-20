@@ -10,6 +10,7 @@
 | 商品与商品变体 | Shopify Admin GraphQL | 商品搜索、商品详情、商品文案生成、商品质量评分 |
 | 店铺语言与 locale | Shopify Admin GraphQL | 商品文案目标语言、图片翻译目标语言 |
 | Shopify 内容对象 | Shopify Admin GraphQL | 工作台上下文对象查询、Admin 翻译资源观测 |
+| ShopifyQL 官方报表 | Admin GraphQL `shopifyqlQuery`（需 `read_reports`） | Settings 历史指标查询；不落库 |
 | 订单 | Prisma/Turso `ShopOrder`，Webhook + 历史回补 | 销售额、订单数、AOV、渠道来源、取消率、经营诊断 |
 | 订单行项目 | Prisma/Turso `ShopOrderLineItem` | SKU 销售、商品归因、库存风险估算、退款 SKU 关联 |
 | 退款 | Prisma/Turso `ShopRefund`，Webhook + 回补 | 退款金额、退款率、退款趋势、异常退款订单 |
@@ -55,6 +56,7 @@
 | 自动化 | 每日经营巡检、执行历史、推荐 Playbook 模板 | `/api/automation-overview`、首页/助手 |
 | 计费与额度 | 套餐订阅、按量购包、取消订阅、Credit 余额与用量 | `/app/settings/billing` |
 | 数据工具 | 历史订单回补、同步状态查看、订单/客户/库存/履约记录数 | `/app/settings/data` |
+| Shopify 报表 | 用 ShopifyQL 查询官方历史指标（销售/退款/客户/库存/履约/店面漏斗） | `/app/settings/shopify-reports` |
 | 广告 Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads-catalog` |
 | Google Pixel 向导 | Nabu 风格三步向导：添加像素（Conversion ID + Label）/ 开启 App Embed 并检测状态 / 创建像素（选择事件、增强型转化、purchase Custom Pixel） | `/app/ads/google-pixel` |
 | Google Pixel Activity | 店面 gtag / purchase Custom Pixel 事件双写阿里云 SLS；商户页展示卡片、日趋势、漏斗与事件明细 | `/app/ads/google-pixel/activity` |
@@ -76,7 +78,7 @@
 | Today | 经营概览、每日待办、订单风险、退款、库存、履约、ROI、客户价值 | 看结果、找问题、排优先级 |
 | Studio | 商品文案、图片生成、图片翻译、质量评分 | 生产和优化内容资产 |
 | Tasks | AI 异步任务、日志、结果、审核、失败重试 | 所有后台工作跑到哪了 |
-| Settings | 计费、数据同步、广告、物流、反馈 | 低频配置和基础设施 |
+| Settings | 计费、数据同步、官方报表查询、广告、物流、反馈 | 低频配置和基础设施 |
 | 内部 Admin | 运营监控、客服、收入、日志、定价、TSF 观测 | 内部团队管理 Spark |
 
 ## 首页目标
