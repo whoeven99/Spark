@@ -10,6 +10,7 @@
  *   --env=.env.admin.prod → .env.admin.prod → .env
  *
  * Redis：SPARK_KV → RENDER_KV → REDIS_URL*
+ * （可与 TSF 共用同一实例；主应用业务 key 必须 `spark:` 前缀，见 AGENTS.md）
  * Cosmos：COSMOS_ENDPOINT / COSMOS_KEY
  * Turso（App）：TURSO_DATABASE_URL / TURSO_AUTH_TOKEN
  * Turso（Admin）：SPARK_DATABASE_* / TSF_DATABASE_*
