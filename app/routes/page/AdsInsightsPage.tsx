@@ -778,7 +778,9 @@ export function AdsInsightsPage() {
   }, [okData?.campaigns, platform, tiktokSandbox, customMetrics]);
 
   const catalogLink = `/app/ads-catalog${locationSearch}`;
-  const settingsLink = "/app/settings";
+  const settingsLink = `/app/settings${locationSearch}`;
+  const googleConnectionLink = `/app/settings/connections/google${locationSearch}`;
+  const tiktokConnectionLink = `/app/settings/connections/tiktok${locationSearch}`;
   const googleAttributionLink = `/app/ads/google-attribution${locationSearch}`;
 
   const deepRows =
@@ -1705,7 +1707,7 @@ export function AdsInsightsPage() {
           {platform === "google" && !googleSandbox && !connections.google.connected && (
             <div style={hintBoxStyle}>
               <div>{t("adsInsights.googleNotConnected")}</div>
-              <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
+              <Link to={googleConnectionLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
                 {t("adsInsights.goAdsCatalog")}
               </Link>
             </div>
@@ -1714,7 +1716,7 @@ export function AdsInsightsPage() {
           {platform === "tiktok" && !tiktokSandbox && !connections.tiktok.connected && (
             <div style={hintBoxStyle}>
               <div>{t("adsInsights.tiktokNotConnected")}</div>
-              <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
+              <Link to={tiktokConnectionLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
                 {t("adsInsights.goAdsCatalog")}
               </Link>
             </div>

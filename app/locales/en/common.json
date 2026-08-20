@@ -2,7 +2,7 @@
   "googlePixelOnboarding": {
     "pageTitle": "Get started with Google Pixel",
     "pageSubtitle": "Add your Google Ads conversion pixel, enable the theme App Embed, and choose the events to track.",
-    "back": "Back to Ads Catalog",
+    "back": "Back to Connection Center",
     "stepLabel": "Step {{current}}/3: {{title}}",
     "step1Title": "Add pixel",
     "step1Hint": "Connect your Google account, or manually enter your Conversion ID and Conversion Label.",
@@ -41,8 +41,8 @@
     "enhancedBody": "Advanced matching uses hashed customer data for better audience reach.",
     "enhancedOn": "Enabled",
     "enhancedOff": "Enable",
-    "purchaseNeedsSave": "Click Done to generate and copy the purchase Custom Pixel script, then return to Ads Catalog.",
-    "finishToCatalog": "Finish and return to Ads Catalog",
+    "purchaseNeedsSave": "Click Done to generate and copy the purchase Custom Pixel script, then open Pixel data.",
+    "finishToCatalog": "Finish and open Pixel data",
     "navBack": "Back",
     "navNext": "Next",
     "navSkip": "Skip",
@@ -130,7 +130,7 @@
   "googlePixelData": {
     "pageTitle": "Google Pixel data",
     "pageSubtitle": "Review saved pixel config, runtime status, Custom Pixel script, and Google Ads account performance summary.",
-    "back": "Back to Ads Catalog",
+    "back": "Back to Connection Center",
     "emptyBody": "Google Pixel is not configured yet. Complete the 3-step wizard first.",
     "editWizard": "Edit setup wizard",
     "openActivity": "Event activity",
@@ -145,7 +145,7 @@
     "sectionLimits": "Data boundaries",
     "limitsBody": "Storefront gtag events are also mirrored to Alibaba Log Service — open Event activity for charts and details. The summary above is still live from the Google Ads API (Catalog-linked account).",
     "performanceHint": "Fetched live with the Catalog-linked Google Ads account; Event activity uses the mirrored SLS stream.",
-    "performanceNeedAds": "Google Ads is not connected. Authorize it in Ads Catalog first.",
+    "performanceNeedAds": "Google Ads is not connected. Authorize it in Connection Center first.",
     "performanceLoadFailed": "Failed to load Google Ads performance.",
     "performanceLoading": "Loading performance from Google Ads…",
     "performanceRefresh": "Refresh",
@@ -198,10 +198,10 @@
   "metaPixelData": {
     "pageTitle": "Meta Pixel data",
     "pageSubtitle": "Review saved Pixel config, runtime status, and Meta Graph API event stats for the last 7 days.",
-    "back": "Back to Ads Catalog",
-    "emptyBody": "Meta Pixel is not configured yet. Save a Pixel ID in Ads Catalog first.",
-    "configureInCatalog": "Configure in Ads Catalog",
-    "editConfig": "Edit Pixel config",
+    "back": "Back to Connection Center",
+    "emptyBody": "Meta Pixel is not configured yet. Finish Pixel setup in Connection Center first.",
+    "configureInCatalog": "Open connection settings",
+    "editConfig": "Open connection settings",
     "openEventsManager": "Open Events Manager",
     "openInsights": "Open Ads Insights",
     "sectionOverview": "Pixel configuration",
@@ -218,7 +218,7 @@
     "statsPermissionError": "Cannot read Pixel stats. Check Meta authorization permissions.",
     "statsEmpty": "No event counts in this window yet.",
     "statsWindow": "Last {{days}} days ({{window}})",
-    "connectMetaAds": "Connect Meta Ads in Ads Catalog",
+    "connectMetaAds": "Connect Meta Ads in Connection Center",
     "eventTotals": "Event totals",
     "eventTotalsWeb": "Browser (Pixel)",
     "eventTotalsServer": "Server (CAPI)",
@@ -362,7 +362,7 @@
     "ask": "Assistant",
     "today": "Operations",
     "healthMonitor": "Health Monitor",
-    "studio": "Studio",
+    "studio": "Creative Workbench",
     "tasks": "Tasks",
     "settings": "Settings",
     "insights": "Insights",
@@ -370,6 +370,105 @@
   },
   "todayShell": {
     "overview": "Overview"
+  },
+  "studioWorkbench": {
+    "eyebrow": "Tools Hub",
+    "pageTitle": "Creative Workbench",
+    "pageSubtitle": "Treat apps and skills as callable capabilities in one place. Connection Center handles access and health; the workbench handles usage and execution.",
+    "openConnections": "Open Connection Center",
+    "metricAccent": "Lock the tool groups first, then keep adding capabilities into them.",
+    "metrics": {
+      "groups": "Tool groups",
+      "ready": "Ready entries",
+      "planned": "Planned capabilities"
+    },
+    "metricFooter": "Catalog now lives in the workbench as a tool entry, while authorization, binding, and diagnostics stay in Connection Center.",
+    "metricFooterLink": "Open Connection Center",
+    "boundary": {
+      "connections": {
+        "title": "What Connection Center owns",
+        "subtitle": "Infrastructure only: capability access and health status.",
+        "item1": "Channel authorization, account binding, and credential setup",
+        "item2": "Health checks, snapshots, event delivery, and channel diagnostics",
+        "item3": "Prepare capabilities so the workbench can call them cleanly"
+      },
+      "workbench": {
+        "title": "What the workbench owns",
+        "subtitle": "A tool aggregation layer for actual usage and execution.",
+        "item1": "Ads creation, catalog management, and feed or product distribution",
+        "item2": "Product copy, image tools, and later landing-page or asset generation",
+        "item3": "A unified entry for AI assistant flows, batch tasks, and automation skills"
+      }
+    },
+    "groups": {
+      "delivery": {
+        "title": "Delivery & Distribution",
+        "subtitle": "Keep ads creation, catalog management, and product distribution in one group."
+      },
+      "content": {
+        "title": "Content & Assets",
+        "subtitle": "Production tools for product content, visual assets, and page materials."
+      },
+      "ai": {
+        "title": "AI / Automation Skills",
+        "subtitle": "A home for the assistant, batch execution, and future automation workflows."
+      }
+    },
+    "cards": {
+      "adsCreate": {
+        "title": "Ads creation",
+        "description": "Open the Meta / TikTok / Google ad creation flow and continue with campaign, ad set, and ad setup.",
+        "meta": "This is a capability-usage entry, not the single purpose of the creative destination."
+      },
+      "adsEdit": {
+        "title": "Ads editing",
+        "description": "Open the editing flow for existing delivery objects and step through campaign, ad set, and ad selection before updating.",
+        "meta": "A natural follow-up entry for delivery optimization and issue fixing."
+      },
+      "catalog": {
+        "title": "Catalog management",
+        "description": "Open the cross-channel catalog workspace to handle merchandising, sync, review, and follow-up tasks.",
+        "meta": "Catalog is now grouped under the workbench, while channel binding stays in Connection Center."
+      },
+      "feed": {
+        "title": "Feed / product distribution",
+        "description": "Jump straight into sync and delivery flows for TikTok, Google, and Meta product distribution.",
+        "meta": "This currently reuses the Ads Catalog sync view and can later split into its own distribution panel."
+      },
+      "productCopy": {
+        "title": "Product copy",
+        "description": "Generate titles, selling points, and descriptions for single products or batches, with task tracking included.",
+        "meta": "A natural default entry for content production."
+      },
+      "imageTools": {
+        "title": "Image tools",
+        "description": "Keep image generation, picture translation, and result reuse together in one asset-production workspace.",
+        "meta": "Generation, translation, and task list support are already available."
+      },
+      "landingPage": {
+        "title": "Landing page generation",
+        "description": "A future home for page generation, rewriting, and page-level asset composition.",
+        "meta": "It already has a stable place in the IA, so new capability can slot in without reshuffling."
+      },
+      "aiAssistant": {
+        "title": "AI assistant",
+        "description": "Start one-off execution, analysis, and skill calls from the assistant when the request is more open-ended.",
+        "meta": "Apps and skills become callable capabilities, and the assistant orchestrates them."
+      },
+      "taskWorkbench": {
+        "title": "Task workbench",
+        "description": "Review current and historical tasks, batch results, manual approval, and downstream execution.",
+        "meta": "This is the execution surface for AI and automation skills, not a separate IA layer."
+      },
+      "automation": {
+        "title": "Automation skills",
+        "description": "A future place for reusable batch templates, routine inspections, and cross-tool execution flows.",
+        "meta": "The group is defined now so new skills can drop into it later."
+      }
+    },
+    "statusReady": "Ready",
+    "statusPlanned": "Planned",
+    "openTool": "Open tool"
   },
   "todayDashboard": {
     "title": "Operations",
@@ -660,7 +759,7 @@
     "overviewFooterGenerated": "Updated: {{time}}",
     "emptyTitle": "No ad platform connected yet",
     "emptyBody": "Connect Meta, Google or TikTok and this page will summarise spend, conversions and product review status.",
-    "emptyCta": "Connect an ad platform",
+    "emptyCta": "Open Connection Center",
     "kpiSectionTitle": "Combined performance",
     "kpiSectionSubtitle": "Counts connected platforms with stored metrics only; derived metrics are computed per range.",
     "mixedCurrencyHint": "Connected platforms use different currencies. Totals are not converted and are for scale only.",
@@ -799,7 +898,10 @@
       "colItem": "Check",
       "colState": "State",
       "colDetail": "Detail",
-      "fixCta": "Fix in Ads Catalog",
+      "colAction": "Fix path",
+      "fixCta": "Fix in Connections Center",
+      "openCatalog": "Open Ads Catalog",
+      "manageInConnections": "Fix in Connections Center",
       "state": {
         "ok": "Healthy",
         "warning": "Attention",
@@ -829,7 +931,7 @@
         "linkPending": "Invitation pending, accept it in Google Ads",
         "linkNotLinked": "Not linked, Shopping ads cannot use this feed",
         "linkFailed": "Link failed",
-        "linkProbeFailed": "Probe failed, check the Ads Catalog page",
+        "linkProbeFailed": "Probe failed. Re-check authorization and linkage in Connections Center",
         "requiresGoogleAds": "Connect Google Ads first",
         "notConfigured": "No AW tag configured",
         "metafieldFailed": "AW config failed to publish; the storefront sends no remarketing events",
@@ -855,7 +957,8 @@
     "reviewDisapproved": "Disapproved",
     "reviewLastChecked": "Last checked",
     "reviewNever": "Never checked",
-    "reviewEmpty": "No review status synced yet. Run a sync from Ads Catalog first.",
+    "reviewEmpty": "No review status synced yet. Run a product sync from Ads Catalog first.",
+    "reviewOpenCatalog": "Open Ads Catalog sync",
     "reviewBadgeAttention": "{{count}} disapproved products",
     "reviewBadgeHealthy": "Review stable",
     "connectionSectionTitle": "Connection snapshot",
@@ -3386,7 +3489,7 @@
     "metaSandboxSeedError": "Failed to create Meta sandbox test structure.",
     "tableTitleMetaSandbox": "Meta sandbox account {{accountId}}",
     "tableSubtitleMetaSandbox": "{{start}} → {{end}} · Meta Graph API (sandbox ad account)",
-    "goAdsCatalog": "Open Ads Catalog to connect",
+    "goAdsCatalog": "Open Connection Center",
     "openCatalogBindings": "Open catalog bindings",
     "legacyAuthPanelTitle": "Legacy account selector",
     "legacyMetaAuthPanelBody": "The Meta Ads account picker still lives on this page during the transition, so you can finish account switching and troubleshooting here. The unified connection entry point will keep moving toward Settings.",
@@ -3439,7 +3542,7 @@
   },
   "adsCreate": {
     "pageTitle": "Create Ads",
-    "pageSubtitle": "Create campaigns, ad sets and ads on Meta / TikTok / Google",
+    "pageSubtitle": "A delivery tool inside the Creative Workbench for creating campaigns, ad sets, and ads on Meta / TikTok / Google.",
     "platformTabsAria": "Ad platform selector",
     "tabMeta": "Facebook (Meta)",
     "tabTiktok": "TikTok",
@@ -3477,11 +3580,11 @@
     "recentTitle": "Created this session",
     "recentAdId": "Ad ID: {{id}}",
     "recentCampaignId": "Campaign ID: {{id}}",
-    "goConnectMeta": "Connect Meta ad account",
-    "goConnectTiktok": "Connect TikTok",
-    "goConnectGoogle": "Connect Google Ads",
+    "goConnectMeta": "Open Connection Center for Meta Ads",
+    "goConnectTiktok": "Open Connection Center for TikTok",
+    "goConnectGoogle": "Open Connection Center for Google Ads",
     "meta": {
-      "notConnected": "Meta ad account not connected. Please connect your Meta ad account in Ads Insights settings first.",
+      "notConnected": "Meta ad account not connected. Please finish Meta Ads setup in Connection Center first.",
       "connectedAs": "Connected: {{account}}",
       "fieldObjective": "Campaign objective",
       "objectiveTraffic": "Traffic",
@@ -3512,7 +3615,7 @@
       "pageRequired": "Please select a Facebook Page for this ad"
     },
     "tiktok": {
-      "notConnected": "TikTok advertiser not connected. Authorize TikTok to continue — product catalog binding is not required for ad creation.",
+      "notConnected": "TikTok advertiser not connected. Finish TikTok authorization in Connection Center to continue — product catalog binding is not required for ad creation.",
       "connectedAs": "Connected: Advertiser {{id}}",
       "fieldObjective": "Campaign objective",
       "objectiveTraffic": "Traffic",
@@ -3555,7 +3658,7 @@
       "fieldAdTextHint": "Up to 100 characters"
     },
     "google": {
-      "notConnected": "Google Ads account not connected. Please authorize in Ads Catalog first.",
+      "notConnected": "Google Ads account not connected. Please finish Google Ads authorization in Connection Center first.",
       "connectedAs": "Connected: Customer ID {{id}}",
       "devTokenMissing": "GOOGLE_ADS_DEVELOPER_TOKEN is not configured. Google Ads API calls are disabled.",
       "fieldDailyBudget": "Daily budget",
@@ -3587,7 +3690,7 @@
   },
   "adsEdit": {
     "pageTitle": "Edit Ads",
-    "pageSubtitle": "Update existing campaigns, ad sets, and ads on Meta / TikTok / Google",
+    "pageSubtitle": "A delivery tool inside the Creative Workbench for updating existing campaigns, ad sets, and ads on Meta / TikTok / Google.",
     "save": "Save Changes",
     "saving": "Saving…",
     "successMsg": "Ad updated successfully",

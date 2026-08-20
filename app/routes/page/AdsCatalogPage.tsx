@@ -564,7 +564,9 @@ export function AdsCatalogPage() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
-  const settingsHubPath = "/app/settings";
+  const settingsHubPath = locationSearch
+    ? `/app/settings${locationSearch}`
+    : "/app/settings";
   const insightsPath = locationSearch
     ? `/app/insights/charts${locationSearch}&group=roi`
     : "/app/insights/charts?group=roi";

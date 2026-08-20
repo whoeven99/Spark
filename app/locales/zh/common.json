@@ -2,7 +2,7 @@
   "googlePixelOnboarding": {
     "pageTitle": "开始配置 Google Pixel",
     "pageSubtitle": "添加 Google Ads 转化像素、启用主题 App Embed，并选择要追踪的事件。",
-    "back": "返回广告目录",
+    "back": "返回连接中心",
     "stepLabel": "第 {{current}}/3 步：{{title}}",
     "step1Title": "添加像素",
     "step1Hint": "连接 Google 账户，或手动填写 Conversion ID 与 Conversion Label。",
@@ -41,8 +41,8 @@
     "enhancedBody": "高级匹配使用哈希后的客户数据以提升受众触达。",
     "enhancedOn": "已启用",
     "enhancedOff": "启用",
-    "purchaseNeedsSave": "点击「完成」会生成并复制购买 Custom Pixel 脚本，然后返回广告目录。",
-    "finishToCatalog": "完成并返回广告目录",
+    "purchaseNeedsSave": "点击「完成」会生成并复制购买 Custom Pixel 脚本，然后打开 Pixel 数据页。",
+    "finishToCatalog": "完成并打开 Pixel 数据页",
     "navBack": "上一步",
     "navNext": "下一步",
     "navSkip": "跳过",
@@ -130,7 +130,7 @@
   "googlePixelData": {
     "pageTitle": "Google Pixel 数据",
     "pageSubtitle": "查看已保存的 Pixel 配置、运行状态、Custom Pixel 脚本，以及 Google Ads 账户成效摘要。",
-    "back": "返回广告目录",
+    "back": "返回连接中心",
     "emptyBody": "尚未配置 Google Pixel。请先完成三步向导。",
     "editWizard": "编辑配置向导",
     "openActivity": "Event activity",
@@ -145,7 +145,7 @@
     "sectionLimits": "数据边界",
     "limitsBody": "店面 gtag 事件会同步一份到阿里云日志，可在「Event activity」查看图表与明细。上方成效汇总仍来自 Google Ads API（Catalog 已关联账户）；系列→广告组明细请到「广告洞察」。",
     "performanceHint": "使用 Catalog 已绑定的 Google Ads 账户实时拉取，不落地存储明细流水。",
-    "performanceNeedAds": "尚未连接 Google Ads。请先在广告 Catalog 完成授权。",
+    "performanceNeedAds": "尚未连接 Google Ads。请先在连接中心完成授权。",
     "performanceLoadFailed": "加载 Google Ads 成效失败。",
     "performanceLoading": "正在从 Google Ads 拉取成效…",
     "performanceRefresh": "刷新",
@@ -198,10 +198,10 @@
   "metaPixelData": {
     "pageTitle": "Meta Pixel 数据",
     "pageSubtitle": "查看已保存的 Pixel 配置、运行状态，以及 Meta Graph API 近 7 天事件统计。",
-    "back": "返回广告目录",
-    "emptyBody": "尚未配置 Meta Pixel。请先在广告 Catalog 保存 Pixel ID。",
-    "configureInCatalog": "在广告 Catalog 配置",
-    "editConfig": "编辑 Pixel 配置",
+    "back": "返回连接中心",
+    "emptyBody": "尚未配置 Meta Pixel。请先在连接中心完成 Pixel 配置。",
+    "configureInCatalog": "打开连接设置",
+    "editConfig": "打开连接设置",
     "openEventsManager": "打开 Events Manager",
     "openInsights": "打开广告洞察",
     "sectionOverview": "像素配置",
@@ -218,7 +218,7 @@
     "statsPermissionError": "无法读取 Pixel 统计，请检查 Meta 授权权限。",
     "statsEmpty": "该时间范围内暂无事件计数。",
     "statsWindow": "近 {{days}} 天（{{window}}）",
-    "connectMetaAds": "在广告 Catalog 连接 Meta Ads",
+    "connectMetaAds": "在连接中心连接 Meta Ads",
     "eventTotals": "事件总量",
     "eventTotalsWeb": "Browser（Pixel）",
     "eventTotalsServer": "Server（CAPI）",
@@ -362,7 +362,7 @@
     "ask": "助手",
     "today": "经营",
     "healthMonitor": "健康度监测",
-    "studio": "创作",
+    "studio": "创作工作台",
     "tasks": "任务",
     "settings": "设置",
     "insights": "洞察",
@@ -370,6 +370,105 @@
   },
   "todayShell": {
     "overview": "概览"
+  },
+  "studioWorkbench": {
+    "eyebrow": "Tools Hub",
+    "pageTitle": "创作工作台",
+    "pageSubtitle": "把 app 和 skill 视为可调用能力统一挂在这里；连接中心负责接入与健康，创作工作台负责使用与执行。",
+    "openConnections": "打开连接中心",
+    "metricAccent": "先定工具分组，再往里挂能力。",
+    "metrics": {
+      "groups": "工具分组",
+      "ready": "已可用入口",
+      "planned": "待补能力"
+    },
+    "metricFooter": "Catalog 已回收到创作工作台作为工具入口；授权、绑定与健康诊断继续放在连接中心。",
+    "metricFooterLink": "查看连接中心",
+    "boundary": {
+      "connections": {
+        "title": "连接中心负责什么",
+        "subtitle": "基础设施层，只处理能力接入与健康状态。",
+        "item1": "渠道授权、账号绑定和基础凭证配置",
+        "item2": "健康检查、快照、事件回传和渠道诊断",
+        "item3": "把可用性准备好，再交给创作工作台调用"
+      },
+      "workbench": {
+        "title": "创作工作台负责什么",
+        "subtitle": "工具聚合层，承接真正的使用动作和执行动作。",
+        "item1": "广告创建、Catalog 管理、Feed / 商品分发",
+        "item2": "商品文案、图片工具、后续落地页与素材生成",
+        "item3": "AI 助手、批处理和自动化 skill 的统一入口"
+      }
+    },
+    "groups": {
+      "delivery": {
+        "title": "投放与分发",
+        "subtitle": "把广告创建、Catalog 管理和商品分发收成同一组入口。"
+      },
+      "content": {
+        "title": "内容与素材",
+        "subtitle": "面向商品内容、视觉素材和页面资产的生产工具。"
+      },
+      "ai": {
+        "title": "AI / 自动化 Skill",
+        "subtitle": "承接 AI 助手、批处理和后续自动化工作流。"
+      }
+    },
+    "cards": {
+      "adsCreate": {
+        "title": "广告创建",
+        "description": "进入 Meta / TikTok / Google 的广告创建流程，继续完成 campaign、ad set 和 ad 配置。",
+        "meta": "这是“能力使用”入口，不再作为创作页的唯一职责。"
+      },
+      "adsEdit": {
+        "title": "广告编辑",
+        "description": "进入已有投放对象的编辑流程，逐级选择 campaign、ad set 和 ad 后继续修改。",
+        "meta": "适合作为投放优化和问题修正的后续动作入口。"
+      },
+      "catalog": {
+        "title": "Catalog 管理",
+        "description": "进入跨渠道 Catalog 管理台，统一处理商品展示、同步、审核和任务。",
+        "meta": "Catalog 归位到创作工作台；渠道绑定仍保留在连接中心。"
+      },
+      "feed": {
+        "title": "Feed / 商品分发",
+        "description": "直接进入商品同步与投递链路，处理 TikTok / Google / Meta 的商品分发任务。",
+        "meta": "当前复用 Ads Catalog 的同步视图，后续可以继续独立成分发面板。"
+      },
+      "productCopy": {
+        "title": "商品文案",
+        "description": "面向单商品或批次商品生成标题、卖点和详情文案，并保留任务追踪。",
+        "meta": "适合作为内容生产的默认入口。"
+      },
+      "imageTools": {
+        "title": "图片工具",
+        "description": "统一承接文生图、图片翻译和结果复用，形成素材生产工作区。",
+        "meta": "当前已支持生成、翻译和任务列表。"
+      },
+      "landingPage": {
+        "title": "落地页生成",
+        "description": "后续用于承接页面生成、页面改写和页面级素材编排。",
+        "meta": "先保留在内容组，后续新增能力时无需再调整 IA。"
+      },
+      "aiAssistant": {
+        "title": "AI 助手",
+        "description": "从助手页发起一次性执行、分析和 skill 调用，适合承接开放式需求。",
+        "meta": "把 app 和 skill 都视为可调用能力，再由助手做编排。"
+      },
+      "taskWorkbench": {
+        "title": "任务工作台",
+        "description": "查看当前与历史任务，承接批处理结果、审核动作和后续执行。",
+        "meta": "作为 AI / 自动化 skill 的执行落点，而不是单独的信息架构层。"
+      },
+      "automation": {
+        "title": "自动化 Skill",
+        "description": "后续用于沉淀可复用的批处理模板、自动巡检和跨工具执行流。",
+        "meta": "先把组挂好，新增 skill 时可以直接并入这里。"
+      }
+    },
+    "statusReady": "已可用",
+    "statusPlanned": "规划中",
+    "openTool": "进入工具"
   },
   "todayDashboard": {
     "title": "经营",
@@ -660,7 +759,7 @@
     "overviewFooterGenerated": "更新时间：{{time}}",
     "emptyTitle": "尚未接入广告平台",
     "emptyBody": "连接 Meta、Google 或 TikTok 后，这里会汇总投放花费、转化与商品审核情况。",
-    "emptyCta": "去连接广告平台",
+    "emptyCta": "打开连接中心",
     "kpiSectionTitle": "合并表现",
     "kpiSectionSubtitle": "仅统计已连接且已落库的平台，派生指标按区间实时计算。",
     "mixedCurrencyHint": "已连接平台使用了多种币种，合计不做汇率换算，仅作规模参考。",
@@ -799,7 +898,10 @@
       "colItem": "检查项",
       "colState": "状态",
       "colDetail": "说明",
-      "fixCta": "去广告 Catalog 处理",
+      "colAction": "处理入口",
+      "fixCta": "在连接中心处理",
+      "openCatalog": "去 Ads Catalog",
+      "manageInConnections": "在连接中心处理",
       "state": {
         "ok": "正常",
         "warning": "待处理",
@@ -829,7 +931,7 @@
         "linkPending": "邀请待接受，需在 Google Ads 侧确认",
         "linkNotLinked": "未关联，Shopping 广告用不到该目录",
         "linkFailed": "关联失败",
-        "linkProbeFailed": "探测失败，请到广告 Catalog 页查看",
+        "linkProbeFailed": "探测失败，请在连接中心检查授权与关联状态后重试",
         "requiresGoogleAds": "需先连接 Google Ads",
         "notConfigured": "未配置 AW 标签",
         "metafieldFailed": "AW 配置下发失败，店面不会上报再营销事件",
@@ -855,7 +957,8 @@
     "reviewDisapproved": "被拒",
     "reviewLastChecked": "最近检查",
     "reviewNever": "尚未检查",
-    "reviewEmpty": "尚未同步商品审核状态，先在广告 Catalog 完成一次同步。",
+    "reviewEmpty": "尚未同步商品审核状态，请先在 Ads Catalog 运行一次商品同步。",
+    "reviewOpenCatalog": "去 Ads Catalog 同步",
     "reviewBadgeAttention": "{{count}} 个被拒商品",
     "reviewBadgeHealthy": "审核稳定",
     "connectionSectionTitle": "连接快照",
@@ -3386,7 +3489,7 @@
     "metaSandboxSeedError": "Meta 沙盒测试结构创建失败。",
     "tableTitleMetaSandbox": "Meta 沙盒账户 {{accountId}}",
     "tableSubtitleMetaSandbox": "{{start}} → {{end}} · Meta Graph API（沙盒广告账户）",
-    "goAdsCatalog": "前往广告 Catalog 完成连接",
+    "goAdsCatalog": "打开连接中心",
     "openCatalogBindings": "打开 Catalog 绑定",
     "legacyAuthPanelTitle": "旧版账户选择面板",
     "legacyMetaAuthPanelBody": "Meta Ads 账户选择暂时还在当前页保留，用于完成过渡期的切换与排查。后续统一连接入口会继续收敛到设置页。",
@@ -3439,7 +3542,7 @@
   },
   "adsCreate": {
     "pageTitle": "创建广告",
-    "pageSubtitle": "在 Meta / TikTok / Google 上创建广告系列、广告组与广告",
+    "pageSubtitle": "创作工作台里的投放工具，用来在 Meta / TikTok / Google 上创建广告系列、广告组与广告。",
     "platformTabsAria": "广告平台选择",
     "tabMeta": "Facebook (Meta)",
     "tabTiktok": "TikTok",
@@ -3477,11 +3580,11 @@
     "recentTitle": "本次会话创建记录",
     "recentAdId": "广告 ID：{{id}}",
     "recentCampaignId": "系列 ID：{{id}}",
-    "goConnectMeta": "前往连接 Meta 广告账户",
-    "goConnectTiktok": "前往连接 TikTok",
-    "goConnectGoogle": "前往连接 Google Ads",
+    "goConnectMeta": "前往连接中心连接 Meta 广告账户",
+    "goConnectTiktok": "前往连接中心连接 TikTok",
+    "goConnectGoogle": "前往连接中心连接 Google Ads",
     "meta": {
-      "notConnected": "Meta 广告账户未连接。请先在广告洞察设置中连接你的 Meta 广告账户。",
+      "notConnected": "Meta 广告账户未连接。请先在连接中心完成 Meta 广告账户连接。",
       "connectedAs": "已连接：{{account}}",
       "fieldObjective": "广告目标",
       "objectiveTraffic": "流量",
@@ -3512,7 +3615,7 @@
       "pageRequired": "请选择用于投放的 Facebook 主页"
     },
     "tiktok": {
-      "notConnected": "TikTok 广告主账户未连接。请先完成 TikTok 授权（无需绑定商品目录即可创建广告）。",
+      "notConnected": "TikTok 广告主账户未连接。请先在连接中心完成 TikTok 授权（无需绑定商品目录即可创建广告）。",
       "connectedAs": "已连接：广告主 {{id}}",
       "fieldObjective": "广告目标",
       "objectiveTraffic": "流量",
@@ -3555,7 +3658,7 @@
       "fieldAdTextHint": "最多 100 个字符"
     },
     "google": {
-      "notConnected": "Google Ads 账户未连接。请先在 Ads Catalog 中完成 Google Ads 授权。",
+      "notConnected": "Google Ads 账户未连接。请先在连接中心完成 Google Ads 授权。",
       "connectedAs": "已连接：客户 ID {{id}}",
       "devTokenMissing": "GOOGLE_ADS_DEVELOPER_TOKEN 环境变量未配置，无法调用 Google Ads API。",
       "fieldDailyBudget": "日预算",
@@ -3587,7 +3690,7 @@
   },
   "adsEdit": {
     "pageTitle": "编辑广告",
-    "pageSubtitle": "在 Meta / TikTok / Google 上修改已有的广告系列、广告组与广告",
+    "pageSubtitle": "创作工作台里的投放工具，用来修改 Meta / TikTok / Google 上已有的广告系列、广告组与广告。",
     "save": "保存修改",
     "saving": "保存中…",
     "successMsg": "广告已成功更新",

@@ -2,7 +2,7 @@
  * 洞察 › 总览 UI。
  *
  * 布局：区间工具条 → 合并 KPI → 客户分析模板 → 下一步分析路径 → 商品审核。
- * 全页只读：任何写操作都通过链接跳回 Ads Catalog / 投放明细，不在这里发起。
+ * 全页只读：任何写操作都通过链接跳回连接中心 / Ads Catalog / 投放明细，不在这里发起。
  */
 import { useEffect, type CSSProperties } from "react";
 import {
@@ -172,7 +172,7 @@ export function InsightsOverviewPage() {
           }
           onOpenCatalog={() => navigate(appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch))}
           onOpenCatalogTasks={() => navigate(buildCatalogTasksHref(embeddedSearch))}
-          onOpenSettings={() => navigate(appendEmbeddedSearchToPath("/app/settings", embeddedSearch))}
+          onOpenConnections={() => navigate(appendEmbeddedSearchToPath("/app/settings", embeddedSearch))}
         />
       ) : null}
     </div>
@@ -207,7 +207,7 @@ function OverviewBody({
   onOpenPerformance,
   onOpenCatalog,
   onOpenCatalogTasks,
-  onOpenSettings,
+  onOpenConnections,
 }: {
   overview: AdsOverviewSnapshot;
   isMobile: boolean;
@@ -216,7 +216,7 @@ function OverviewBody({
   onOpenPerformance: (platform: AdsOverviewPlatform["platform"]) => void;
   onOpenCatalog: () => void;
   onOpenCatalogTasks: () => void;
-  onOpenSettings: () => void;
+  onOpenConnections: () => void;
 }) {
   const { t } = useTranslation();
   const anyConnected = overview.platforms.some((item) => item.connected);
@@ -267,7 +267,7 @@ function OverviewBody({
           {t("insights.emptyTitle")}
         </strong>
         <span>{t("insights.emptyBody")}</span>
-        <button type="button" style={primaryButtonStyle} onClick={onOpenCatalog}>
+        <button type="button" style={primaryButtonStyle} onClick={onOpenConnections}>
           {t("insights.emptyCta")}
         </button>
       </div>
@@ -398,11 +398,14 @@ function OverviewBody({
             onClick={onOpenCatalogTasks}
           />
           <AnalysisActionCard
-            title={t("insights.analysisSettingsTitle")}
-            body={t("insights.analysisSettingsBody")}
-            footnote={t("insights.analysisSettingsFootnote")}
-            cta={t("insights.analysisOpenSettings")}
-            onClick={onOpenSettings}
+            title={t("insights.analysisConnectionsTitle")}
+            body={t("insights.analysisConnectionsBody")}
+            footnote={t("insights.analysisConnectionsFootnote", {
+              connected: connectedCount,
+              total: overview.platforms.length,
+            })}
+            cta={t("insights.analysisOpenConnections")}
+            onClick={onOpenConnections}
           />
         </div>
       </PageSurface>
@@ -419,7 +422,7 @@ function OverviewBody({
             </span>
           }
         />
-        <ReviewTable reviews={overview.reviews} />
+        <ReviewTable reviews={overview.reviews} onOpenCatalogTasks={onOpenCatalogTasks} />
       </PageSurface>
     </>
   );
@@ -488,12 +491,25 @@ function MetricTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ReviewTable({ reviews }: { reviews: AdsOverviewReview[] }) {
+function ReviewTable({
+  reviews,
+  onOpenCatalogTasks,
+}: {
+  reviews: AdsOverviewReview[];
+  onOpenCatalogTasks: () => void;
+}) {
   const { t } = useTranslation();
   const hasData = reviews.some((review) => review.total > 0);
 
   if (!hasData) {
-    return <p style={pageHintTextStyle}>{t("insights.reviewEmpty")}</p>;
+    return (
+      <div style={reviewEmptyStateStyle}>
+        <p style={pageHintTextStyle}>{t("insights.reviewEmpty")}</p>
+        <button type="button" style={secondaryButtonStyle} onClick={onOpenCatalogTasks}>
+          {t("insights.reviewOpenCatalog")}
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -974,6 +990,12 @@ const tdMetaStyle: CSSProperties = {
   ...tdStyle,
   color: pageColorTokens.textSecondary,
   fontSize: 12,
+};
+
+const reviewEmptyStateStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.7rem",
+  justifyItems: "start",
 };
 
 const refreshButtonStyle = (disabled: boolean): CSSProperties => ({

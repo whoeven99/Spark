@@ -5,6 +5,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
+import { appendEmbeddedSearchToPath } from "../lib/embeddedLocationSearch";
 import {
   PageHeaderNav,
   PageSectionHeader,
@@ -70,8 +72,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 export default function AppSettingsConnectionDetail() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
+  const embeddedSearch = useEmbeddedLocationSearch();
   const { platform, overview } = useLoaderData<typeof loader>();
   const config = CHANNEL_CONFIG[platform];
+  const catalogPath = appendEmbeddedSearchToPath(config.catalogPath, embeddedSearch);
+  const insightsPath = appendEmbeddedSearchToPath("/app/insights/charts?group=roi", embeddedSearch);
   const platformItem = overview.platforms.find((item) => item.platform === platform);
 
   if (!platformItem) {
@@ -131,10 +136,10 @@ export default function AppSettingsConnectionDetail() {
           />
         </div>
         <div style={actionRowStyle}>
-          <Link to={config.catalogPath} style={linkButtonStyle(true)}>
+          <Link to={catalogPath} style={linkButtonStyle(true)}>
             {t("settingsShell.manageConnection")}
           </Link>
-          <Link to="/app/insights/charts?group=roi" style={linkButtonStyle(false)}>
+          <Link to={insightsPath} style={linkButtonStyle(false)}>
             {t("settingsShell.openInsights")}
           </Link>
         </div>
@@ -146,7 +151,7 @@ export default function AppSettingsConnectionDetail() {
           subtitle={t("settingsShell.channelHealthSubtitle", { channel: config.label })}
         />
         {healthChecks.length > 0 ? (
-          <HealthChecksTable checks={healthChecks} t={t} />
+          <HealthChecksTable checks={healthChecks} catalogPath={catalogPath} t={t} />
         ) : (
           <SectionEmptyState message={t("settingsShell.channelHealthEmpty")} />
         )}
@@ -161,7 +166,11 @@ export default function AppSettingsConnectionDetail() {
           {review && review.total > 0 ? (
             <ReviewSnapshotTable review={review} t={t} language={i18n.language} />
           ) : (
-            <SectionEmptyState message={t("insights.reviewEmpty")} />
+            <SectionEmptyState
+              message={t("insights.reviewEmpty")}
+              actionLabel={t("insights.reviewOpenCatalog")}
+              actionTo={catalogPath}
+            />
           )}
         </PageSurface>
       ) : null}
@@ -205,15 +214,34 @@ function OverviewCard({ label, value, hint }: { label: string; value: string; hi
   );
 }
 
-function SectionEmptyState({ message }: { message: string }) {
-  return <div style={emptyStateStyle}>{message}</div>;
+function SectionEmptyState({
+  message,
+  actionLabel,
+  actionTo,
+}: {
+  message: string;
+  actionLabel?: string;
+  actionTo?: string;
+}) {
+  return (
+    <div style={emptyStateStyle}>
+      <span>{message}</span>
+      {actionLabel && actionTo ? (
+        <Link to={actionTo} style={emptyStateLinkStyle}>
+          {actionLabel}
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 function HealthChecksTable({
   checks,
+  catalogPath,
   t,
 }: {
   checks: AdsHealthCheck[];
+  catalogPath: string;
   t: ReturnType<typeof useTranslation>["t"];
 }) {
   return (
@@ -224,25 +252,59 @@ function HealthChecksTable({
             <th style={thStyle}>{t("insights.health.colItem")}</th>
             <th style={thStyle}>{t("insights.health.colState")}</th>
             <th style={thStyle}>{t("insights.health.colDetail")}</th>
+            <th style={thStyle}>{t("insights.health.colAction")}</th>
           </tr>
         </thead>
         <tbody>
-          {checks.map((check) => (
-            <tr key={check.key}>
-              <td style={tdStyle}>{t(`insights.health.item.${check.key}`)}</td>
-              <td style={tdStyle}>
-                <span style={healthStatePillStyle(check.state)}>{t(`insights.health.state.${check.state}`)}</span>
-              </td>
-              <td style={tdMetaStyle}>
-                {t(`insights.health.detail.${check.detailCode}`)}
-                {check.reference ? ` · ${check.reference}` : ""}
-              </td>
-            </tr>
-          ))}
+          {checks.map((check) => {
+            const action = resolveHealthAction(check, catalogPath, t);
+            return (
+              <tr key={check.key}>
+                <td style={tdStyle}>{t(`insights.health.item.${check.key}`)}</td>
+                <td style={tdStyle}>
+                  <span style={healthStatePillStyle(check.state)}>{t(`insights.health.state.${check.state}`)}</span>
+                </td>
+                <td style={tdMetaStyle}>
+                  {t(`insights.health.detail.${check.detailCode}`)}
+                  {check.reference ? ` · ${check.reference}` : ""}
+                </td>
+                <td style={tdMetaStyle}>
+                  {action?.href ? (
+                    <Link to={action.href} style={tableActionLinkStyle}>
+                      {action.label}
+                    </Link>
+                  ) : action ? (
+                    <span style={tableActionTextStyle}>{action.label}</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
+}
+
+function resolveHealthAction(
+  check: AdsHealthCheck,
+  catalogPath: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): { label: string; href?: string } | null {
+  if (check.state === "ok") return null;
+
+  if (check.detailCode === "missingDataSource") {
+    return {
+      label: t("insights.health.openCatalog"),
+      href: catalogPath,
+    };
+  }
+
+  return {
+    label: t("insights.health.manageInConnections"),
+  };
 }
 
 function ReviewSnapshotTable({
@@ -434,6 +496,25 @@ const emptyStateStyle: CSSProperties = {
   background: pageColorTokens.surfaceMuted,
   color: pageColorTokens.textSecondary,
   fontSize: 12,
+  display: "grid",
+  gap: "0.55rem",
+};
+
+const emptyStateLinkStyle: CSSProperties = {
+  color: pageColorTokens.brandBlueDark,
+  fontWeight: 700,
+  textDecoration: "none",
+};
+
+const tableActionLinkStyle: CSSProperties = {
+  color: pageColorTokens.brandBlueDark,
+  fontWeight: 700,
+  textDecoration: "none",
+};
+
+const tableActionTextStyle: CSSProperties = {
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
 };
 
 const healthStateTokens: Record<AdsHealthState, { color: string; background: string; border: string }> = {

@@ -115,6 +115,7 @@ export function GooglePixelDataPage() {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
+  const connectionPath = `/app/settings/connections/google${locationSearch}`;
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
   const [error, setError] = useState("");
@@ -228,7 +229,7 @@ export function GooglePixelDataPage() {
           title={t("googlePixelData.pageTitle")}
           subtitle={t("googlePixelData.pageSubtitle")}
           backLabel={t("googlePixelData.back")}
-          fallbackPath="/app/ads-catalog"
+          fallbackPath="/app/settings/connections/google"
           preserveSearch
         />
         <div style={cardStyle}>
@@ -237,7 +238,7 @@ export function GooglePixelDataPage() {
             <Link to={`/app/ads/google-pixel${locationSearch}`} style={primaryBtn}>
               {t("adsCatalog.googlePixelSetup")}
             </Link>
-            <Link to={`/app/ads-catalog${locationSearch}`} style={secondaryBtn}>
+            <Link to={connectionPath} style={secondaryBtn}>
               {t("googlePixelData.back")}
             </Link>
           </div>
@@ -272,7 +273,7 @@ export function GooglePixelDataPage() {
         title={t("googlePixelData.pageTitle")}
         subtitle={t("googlePixelData.pageSubtitle")}
         backLabel={t("googlePixelData.back")}
-        fallbackPath="/app/ads-catalog"
+        fallbackPath="/app/settings/connections/google"
         preserveSearch
       />
 
