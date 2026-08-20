@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { useCallback, useMemo, type CSSProperties } from "react";
 import { useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { DestinationFilterBar, DestinationPage } from "./component/shared/DestinationPage";
@@ -8,12 +8,9 @@ import {
   mobilePageContentStyle,
   pageColorTokens,
   pageContentStyle,
-  pageEmptyStateStyle,
   pageFieldLabelStyle,
-  pageHintTextStyle,
   pageSelectStyle,
   pageSectionHeaderRowStyle,
-  pageSectionSubtitleStyle,
   pageStatusCardStyle,
 } from "./page/pageUiStyles";
 
@@ -22,13 +19,12 @@ import {
   appendReturnTo,
   buildLiveSnapshots,
   periodItems,
-  type BusinessModule,
   type ChartKind,
   type InsightItemTone,
-  type ModuleChart,
   type ModuleFilterKey,
   type ModuleSource,
   type ReportCardTone,
+  type ReportRoiLayerCard,
   type ReportSummaryCard,
 } from "../server/operations/businessReportSnapshot.shared";
 
@@ -445,6 +441,151 @@ const pageStyles = {
     gap: "1rem",
     alignItems: "start",
   }),
+  compactGrid: (isMobile: boolean, columns = 3): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : `repeat(${columns}, minmax(0, 1fr))`,
+    gap: "0.75rem",
+  }),
+  conclusionCard: {
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: "#ffffff",
+    padding: "0.95rem",
+    display: "grid",
+    gap: "0.35rem",
+  } as CSSProperties,
+  conclusionTitle: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: pageColorTokens.textSecondary,
+  } as CSSProperties,
+  conclusionBody: {
+    fontSize: 13,
+    lineHeight: 1.6,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  factorGrid: (isMobile: boolean): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+    gap: "0.75rem",
+  }),
+  factorCard: {
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: "#ffffff",
+    padding: "0.95rem",
+    display: "grid",
+    gap: "0.55rem",
+    textAlign: "left" as const,
+  } as CSSProperties,
+  factorHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.65rem",
+    alignItems: "flex-start",
+  } as CSSProperties,
+  factorTitle: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
+  factorMeta: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+    alignItems: "center",
+  } as CSSProperties,
+  factorBadge: (tone: ReportCardTone): CSSProperties => ({
+    borderRadius: 999,
+    padding: "0.18rem 0.5rem",
+    fontSize: 11,
+    fontWeight: 700,
+    color:
+      tone === "negative"
+        ? "#b91c1c"
+        : tone === "warning"
+          ? "#9a3412"
+          : tone === "positive"
+            ? "#047857"
+            : "#334155",
+    background:
+      tone === "negative"
+        ? "#fee2e2"
+        : tone === "warning"
+          ? "#ffedd5"
+          : tone === "positive"
+            ? "#dcfce7"
+            : "#e5e7eb",
+  }),
+  factorSummary: {
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: pageColorTokens.textBody,
+  } as CSSProperties,
+  factorEvidenceList: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.45rem",
+  } as CSSProperties,
+  factorEvidenceItem: {
+    borderRadius: 999,
+    padding: "0.18rem 0.55rem",
+    fontSize: 11,
+    color: pageColorTokens.textBody,
+    background: pageColorTokens.surfaceMuted,
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+  } as CSSProperties,
+  factorFooter: {
+    display: "grid",
+    gap: "0.3rem",
+  } as CSSProperties,
+  factorMetaList: {
+    display: "grid",
+    gap: "0.25rem",
+  } as CSSProperties,
+  factorMetaRow: {
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: pageColorTokens.textBody,
+  } as CSSProperties,
+  factorMetaLabel: {
+    color: pageColorTokens.textSecondary,
+    fontWeight: 700,
+  } as CSSProperties,
+  factorAction: {
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: pageColorTokens.textSecondary,
+  } as CSSProperties,
+  factorLink: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: pageColorTokens.brandBlueDark,
+  } as CSSProperties,
+  actionList: {
+    display: "grid",
+    gap: "0.75rem",
+  } as CSSProperties,
+  actionCard: {
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: "#ffffff",
+    padding: "0.9rem",
+    display: "grid",
+    gap: "0.25rem",
+  } as CSSProperties,
+  actionLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: pageColorTokens.textSecondary,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+  } as CSSProperties,
+  actionBody: {
+    fontSize: 13,
+    lineHeight: 1.6,
+    color: pageColorTokens.textPrimary,
+  } as CSSProperties,
   aiCard: {
     border: `1px dashed ${pageColorTokens.borderInput}`,
     borderRadius: pageColorTokens.radiusControl,
@@ -471,90 +612,26 @@ function SourceBadge({ source }: { source: ModuleSource }) {
   return <span style={pageStyles.sourceBadge(source)}>{label}</span>;
 }
 
-function ModuleChartPreview({ chart }: { chart: ModuleChart }) {
-  if (chart.kind === "table") {
-    return (
-      <div style={pageStyles.chartCard}>
-        <div style={pageStyles.chartTitle}>{chart.title}</div>
-        <div style={pageStyles.tableList}>
-          {chart.items.map((item) => (
-            <div key={`${chart.title}-${item.label}`} style={pageStyles.tableItem}>
-              <div style={pageStyles.tableTop}>
-                <strong style={pageStyles.chartLabel}>{item.label}</strong>
-                <span style={pageStyles.chartValue}>{item.display}</span>
-              </div>
-              {item.note ? <div style={pageStyles.tableNote}>{item.note}</div> : null}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={pageStyles.chartCard}>
-      <div style={pageStyles.chartTitle}>{chart.title}</div>
-      {chart.items.map((item) => (
-        <div key={`${chart.title}-${item.label}`} style={pageStyles.chartRow}>
-          <span style={pageStyles.chartLabel}>{item.label}</span>
-          <div style={pageStyles.chartTrack}>
-            <div style={pageStyles.chartBar(chart.kind, item.value)} />
-          </div>
-          <span style={pageStyles.chartValue}>{item.display}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function BusinessModuleCard({
-  module,
-  isMobile,
-}: {
-  module: BusinessModule;
-  isMobile: boolean;
-}) {
-  return (
-    <PageSurface title={module.title} subtitle={module.subtitle}>
-      <div style={pageStyles.moduleHeader}>
-        <p style={pageStyles.moduleSummary}>{module.summary}</p>
-        <SourceBadge source={module.source} />
-      </div>
-
-      <div style={pageStyles.moduleContent(isMobile)}>
-        <div>
-          <div style={pageStyles.metricGrid}>
-            {module.metrics.map((metric) => (
-              <div key={`${module.key}-${metric.label}`} style={pageStyles.metricItem}>
-                <span style={pageStyles.metricLabel}>{metric.label}</span>
-                <span style={pageStyles.metricValue}>{metric.value}</span>
-                <span style={pageStyles.metricDelta}>{metric.delta ?? "—"}</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={pageStyles.signalList}>
-            {module.signals.map((signal) => (
-              <div key={`${module.key}-${signal}`} style={pageStyles.signalItem}>
-                <span style={pageStyles.signalDot} />
-                <span>{signal}</span>
-              </div>
-            ))}
-          </div>
-
-          <p style={pageHintTextStyle}>{module.actionHint}</p>
-        </div>
-
-        <ModuleChartPreview chart={module.chart} />
-      </div>
-    </PageSurface>
-  );
-}
-
 function ReportSummaryCardView({ card }: { card: ReportSummaryCard }) {
   return (
     <div style={pageStyles.reportCard(card.tone)}>
       <span style={pageStyles.reportCardLabel}>{card.label}</span>
+      <span style={pageStyles.reportCardValue}>{card.value}</span>
+      <span style={pageStyles.reportCardDetail}>{card.detail}</span>
+    </div>
+  );
+}
+
+function RoiLayerCardView({
+  title,
+  card,
+}: {
+  title: string;
+  card: ReportRoiLayerCard;
+}) {
+  return (
+    <div style={pageStyles.reportCard(card.tone)}>
+      <span style={pageStyles.reportCardLabel}>{title}</span>
       <span style={pageStyles.reportCardValue}>{card.value}</span>
       <span style={pageStyles.reportCardDetail}>{card.detail}</span>
     </div>
@@ -581,20 +658,8 @@ export function BusinessInsightsPage({
   const moduleFilter = (searchParams.get("module") as ModuleFilterKey | null) ?? "all";
   const snapshots = useMemo(() => buildLiveSnapshots(liveData), [liveData]);
   const snapshot = useMemo(() => snapshots[period], [period, snapshots]);
-  const filteredModules = useMemo(
-    () => (moduleFilter === "all" ? snapshot.modules : snapshot.modules.filter((item) => item.key === moduleFilter)),
-    [moduleFilter, snapshot.modules],
-  );
   const moduleOptions = useMemo(
     () => [{ key: "all", label: "查看全部模块" }, ...snapshot.modules.map((item) => ({ key: item.key, label: item.title }))],
-    [snapshot.modules],
-  );
-  const moduleSourceCounts = useMemo(
-    () => ({
-      real: snapshot.modules.filter((item) => item.source === "real").length,
-      estimated: snapshot.modules.filter((item) => item.source === "estimated").length,
-      pending: snapshot.modules.filter((item) => item.source === "pending").length,
-    }),
     [snapshot.modules],
   );
 
@@ -606,9 +671,10 @@ export function BusinessInsightsPage({
     return `${location.pathname}${query ? `?${query}` : ""}`;
   }, [location.pathname, moduleFilter, period]);
 
-  const buildDetailHref = (href: string) => {
-    return appendReturnTo(href, currentReturnTo);
-  };
+  const buildDetailHref = useCallback(
+    (href: string) => appendReturnTo(href, currentReturnTo),
+    [currentReturnTo],
+  );
 
   const handleModuleChange = (nextKey: string) => {
     const next = new URLSearchParams(searchParams);
@@ -624,6 +690,18 @@ export function BusinessInsightsPage({
     });
   };
 
+  const factorCards = useMemo(
+    () =>
+      (moduleFilter === "all"
+        ? snapshot.report.factorCards
+        : snapshot.report.factorCards.filter((item) => item.key === moduleFilter)
+      ).map((item) => ({
+        ...item,
+        href: item.href ? buildDetailHref(item.href) : undefined,
+      })),
+    [buildDetailHref, moduleFilter, snapshot.report.factorCards],
+  );
+
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
@@ -634,15 +712,11 @@ export function BusinessInsightsPage({
         isMobile={isMobile}
       >
         <div style={pageStyles.page}>
-          <PageSurface
-            title="经营总览"
-            subtitle="先把经营结果、数据覆盖和 ROI 阅读入口放到同一屏里。"
-          >
+          <PageSurface title="报告头部">
             <div style={pageStyles.heroGrid(isMobile)}>
               <PageMetricCard
                 accent={snapshot.metricAccent}
                 metrics={snapshot.topMetrics}
-                footer={snapshot.summary}
               />
 
               <div style={pageStyles.coverageList}>
@@ -692,67 +766,99 @@ export function BusinessInsightsPage({
                   </select>
                 </div>
               </div>
-
-              <div style={pageStyles.controlCard}>
-                <div style={pageFieldLabelStyle}>本页重点</div>
-                <div style={pageStyles.helperList}>
-                  {snapshot.highlights.map((item) => (
-                    <div key={item} style={pageStyles.helperItem}>
-                      <span style={pageStyles.helperDot} />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <ReportSummaryCardView
+                card={
+                  snapshot.report.cards[2] ?? {
+                    label: "数据可信度",
+                    value: "待补",
+                    detail: "关键数据信号还在继续补齐。",
+                    tone: "neutral",
+                  }
+                }
+              />
             </div>
           </PageSurface>
 
-          <PageSurface
-            title="ROI 日报"
-            subtitle="日报先回答：ROI 是否健康、卡在哪个环节、今天先做什么。"
-          >
-            <p style={{ ...pageSectionSubtitleStyle, margin: "0 0 1rem" }}>{snapshot.report.summary}</p>
-
-            <div style={pageStyles.reportCardGrid(isMobile)}>
-              {snapshot.report.cards.map((card) => (
-                <ReportSummaryCardView key={card.label} card={card} />
+          <PageSurface title="经营结论">
+            <div style={pageStyles.compactGrid(isMobile)}>
+              {snapshot.report.narratives.map((item) => (
+                <div key={item.title} style={pageStyles.conclusionCard}>
+                  <div style={pageStyles.conclusionTitle}>{item.title}</div>
+                  <div style={pageStyles.conclusionBody}>{item.body}</div>
+                </div>
               ))}
             </div>
+          </PageSurface>
 
-            <div style={{ height: "1rem" }} />
-
-            <div style={pageStyles.reportContentGrid(isMobile)}>
-              <div style={pageStyles.helperList}>
-                <div style={pageFieldLabelStyle}>本次判断依据</div>
-                {snapshot.report.focus.map((item) => (
-                  <div key={item} style={pageStyles.helperItem}>
-                    <span style={pageStyles.helperDot} />
-                    <span>{item}</span>
-                  </div>
-                ))}
-
-                <div style={{ height: "0.5rem" }} />
-                <div style={pageFieldLabelStyle}>今日优先动作</div>
-                {snapshot.report.actions.map((item) => (
-                  <div key={item} style={pageStyles.helperItem}>
-                    <span style={pageStyles.helperDot} />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={pageStyles.moduleGrid}>
-                {snapshot.report.charts.map((chart) => (
-                  <ModuleChartPreview key={chart.title} chart={chart} />
-                ))}
-              </div>
+          <PageSurface title="ROI 三层判断">
+            <div style={pageStyles.reportCardGrid(isMobile)}>
+              {snapshot.report.roiLayers.map((item) => (
+                <RoiLayerCardView key={item.key} title={item.title} card={item} />
+              ))}
             </div>
           </PageSurface>
 
-          <PageSurface
-            title="关键洞察"
-            subtitle="首页先看洞察列表，详情解释和对象排查再往下深钻。"
-          >
+          <PageSurface title="关键因子诊断">
+            <div style={pageStyles.factorGrid(isMobile)}>
+              {factorCards.map((item) => (
+                <button
+                  key={item.key}
+                  id={`module-${item.key}`}
+                  type="button"
+                  style={pageStyles.factorCard}
+                  onClick={() => {
+                    if (item.href) {
+                      navigate(item.href);
+                      return;
+                    }
+                    handleModuleChange(item.key);
+                  }}
+                >
+                  <div style={pageStyles.factorHeader}>
+                    <div>
+                      <div style={pageStyles.factorTitle}>{item.title}</div>
+                      <div style={pageStyles.factorSummary}>{item.summary}</div>
+                    </div>
+                    <div style={pageStyles.factorMeta}>
+                      <span style={pageStyles.factorBadge(item.tone)}>{item.statusLabel}</span>
+                      <span style={pageStyles.factorBadge("neutral")}>{item.roiLayerLabel}</span>
+                      <SourceBadge source={item.source} />
+                    </div>
+                  </div>
+
+                  <div style={pageStyles.factorEvidenceList}>
+                    {item.evidence.map((evidence) => (
+                      <span key={`${item.key}-${evidence}`} style={pageStyles.factorEvidenceItem}>
+                        {evidence}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={pageStyles.factorFooter}>
+                    <div style={pageStyles.factorMetaList}>
+                      <div style={pageStyles.factorMetaRow}>
+                        <span style={pageStyles.factorMetaLabel}>对比基准：</span>
+                        <span>{item.comparison}</span>
+                      </div>
+                      <div style={pageStyles.factorMetaRow}>
+                        <span style={pageStyles.factorMetaLabel}>影响路径：</span>
+                        <span>{item.impactPath}</span>
+                      </div>
+                    </div>
+                    <div style={pageStyles.factorAction}>
+                      <span style={pageStyles.factorMetaLabel}>推荐动作：</span>
+                      <span>{item.action}</span>
+                    </div>
+                    <span style={pageStyles.factorLink}>
+                      {item.href ? "查看深钻" : "聚焦该因子"}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </PageSurface>
+
+          <PageSurface title="Top 洞察">
             <div style={pageStyles.insightList}>
               {snapshot.report.insights.map((item) => (
                 <button
@@ -780,10 +886,18 @@ export function BusinessInsightsPage({
             </div>
           </PageSurface>
 
-          <PageSurface
-            title="深钻入口"
-            subtitle="列表负责快速判断，详情负责展开对象、原因、ROI 影响和任务。"
-          >
+          <PageSurface title="推荐动作">
+            <div style={pageStyles.actionList}>
+              {snapshot.report.actions.map((item, index) => (
+                <div key={`${index + 1}-${item}`} style={pageStyles.actionCard}>
+                  <span style={pageStyles.actionLabel}>{`动作 ${index + 1}`}</span>
+                  <span style={pageStyles.actionBody}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </PageSurface>
+
+          <PageSurface title="深钻入口">
             <div style={pageStyles.drilldownGrid(isMobile)}>
               {snapshot.report.drilldowns.map((item) => (
                 <button
@@ -801,56 +915,6 @@ export function BusinessInsightsPage({
               ))}
             </div>
           </PageSurface>
-
-          <PageSurface
-            title="模块化数据视图"
-            subtitle="先把流量、成本、转化、售后、利润等经营模块分开展示，后续 AI 只需要读取模块摘要，不直接吞原始杂乱数据。"
-          >
-            <div style={pageStyles.moduleToolbar(isMobile)}>
-              <p style={{ ...pageSectionSubtitleStyle, margin: 0 }}>
-                当前展示 {filteredModules.length} / {snapshot.modules.length} 个模块，页面阅读顺序会尽量保持“先结果、再原因、再动作”的单栏节奏。
-              </p>
-              <div style={pageStyles.moduleCounts}>
-                <span style={pageStyles.countBadge("real")}>真实数据 {moduleSourceCounts.real}</span>
-                <span style={pageStyles.countBadge("estimated")}>待接入 {moduleSourceCounts.estimated}</span>
-                <span style={pageStyles.countBadge("pending")}>占位 {moduleSourceCounts.pending}</span>
-              </div>
-            </div>
-
-            <div style={pageStyles.moduleGrid}>
-              {filteredModules.map((module) => (
-                <div key={module.key} id={`module-${module.key}`}>
-                  <BusinessModuleCard module={module} isMobile={isMobile} />
-                </div>
-              ))}
-            </div>
-          </PageSurface>
-
-          <PageSurface
-            title="日报结论"
-            subtitle="这里已经开始基于上面的真实数据摘要输出风险、机会和建议动作。"
-          >
-            <div style={pageStyles.aiGrid(isMobile)}>
-              {snapshot.report.narratives.map((item) => (
-                <div key={item.title} style={pageStyles.aiCard}>
-                  <div style={pageStyles.aiTitle}>{item.title}</div>
-                  <div style={pageStyles.aiBody}>{item.body}</div>
-                </div>
-              ))}
-            </div>
-          </PageSurface>
-
-          <div style={pageEmptyStateStyle}>
-            <strong>当前页面是第一版前端展示骨架</strong>
-            <span style={pageSectionSubtitleStyle}>
-              {liveData
-                ? `当前已基于 ${liveData.shop} 的现有数据能力接入部分真实模块，剩余缺口会继续逐步替换占位。`
-                : "当前还没拿到可用的真实数据，所以页面先退回到前端骨架。"}
-            </span>
-            <span style={{ ...pageSectionSubtitleStyle, marginTop: 0 }}>
-              当前建议的实现顺序：{snapshot.nextSteps.join(" -> ")}
-            </span>
-          </div>
         </div>
       </DestinationPage>
     </div>

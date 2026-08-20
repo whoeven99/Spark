@@ -79,9 +79,34 @@ export type DrilldownEntry = {
   href: string;
 };
 
+export type ReportRoiLayerCard = {
+  key: "short_term" | "payback" | "lifetime";
+  title: string;
+  value: string;
+  detail: string;
+  tone: ReportCardTone;
+};
+
+export type FactorDiagnosisCard = {
+  key: string;
+  title: string;
+  statusLabel: string;
+  roiLayerLabel: string;
+  summary: string;
+  evidence: string[];
+  comparison: string;
+  impactPath: string;
+  action: string;
+  source: ModuleSource;
+  tone: ReportCardTone;
+  href?: string;
+};
+
 export type SnapshotReport = {
   summary: string;
   cards: ReportSummaryCard[];
+  roiLayers: ReportRoiLayerCard[];
+  factorCards: FactorDiagnosisCard[];
   insights: InsightListItem[];
   drilldowns: DrilldownEntry[];
   focus: string[];
@@ -177,6 +202,73 @@ const mockReport7d: SnapshotReport = {
     { label: "经营 ROI", value: "待接入", detail: "广告成本映射后展示真实 ROI", tone: "neutral" },
     { label: "当前卡点", value: "站内转化", detail: "先用漏斗定位掉点位置", tone: "warning" },
     { label: "数据可信度", value: "逐步补齐", detail: "优先接真实利润、渠道和流量来源", tone: "neutral" },
+  ],
+  roiLayers: [
+    {
+      key: "short_term",
+      title: "短期 ROI",
+      value: "待接成本",
+      detail: "广告成本映射后展示真实经营 ROI。",
+      tone: "neutral",
+    },
+    {
+      key: "payback",
+      title: "回收速度",
+      value: "Normal",
+      detail: "先用转化漏斗和站点体验判断回收快慢。",
+      tone: "warning",
+    },
+    {
+      key: "lifetime",
+      title: "长期价值",
+      value: "Medium",
+      detail: "客户价值层就绪后再稳定输出长期判断。",
+      tone: "neutral",
+    },
+  ],
+  factorCards: [
+    {
+      key: "conversion",
+      title: "转化效率",
+      statusLabel: "Watch",
+      roiLayerLabel: "回收速度",
+      summary: "当前最值得先盯的是站内转化链路。",
+      evidence: ["整体 CVR 2.46%", "支付成功率 91.2%"],
+      comparison: "较上期 CVR 下滑 0.3pp",
+      impactPath: "流量进入 -> 商品页承接 -> 支付成功 -> 回收速度",
+      action: "先查漏斗掉点和核心 landing page。",
+      source: "real",
+      tone: "warning",
+      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
+    },
+    {
+      key: "afterSales",
+      title: "履约与售后损耗",
+      statusLabel: "Risk",
+      roiLayerLabel: "短期 ROI",
+      summary: "退款和物流异常已经开始侵蚀利润。",
+      evidence: ["退款率 4.8%", "物流异常 18 单"],
+      comparison: "退款率较上期 +1.1pp",
+      impactPath: "退款损耗 -> 贡献利润下降 -> 短期 ROI 受压",
+      action: "优先排查高退款 SKU 和履约链路。",
+      source: "real",
+      tone: "negative",
+      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+    },
+    {
+      key: "channel",
+      title: "生命周期价值",
+      statusLabel: "Healthy",
+      roiLayerLabel: "长期价值",
+      summary: "渠道利润差异已经拉开，可开始围绕高质量渠道放大。",
+      evidence: ["最高利润渠道 Google", "高价值客户占比 17%"],
+      comparison: "结构对比优先看高利润渠道 vs 全站",
+      impactPath: "获客渠道质量 -> 客户价值层 -> 长期 ROI",
+      action: "优先看最赚钱渠道和值得扩量的客群。",
+      source: "estimated",
+      tone: "positive",
+      href: "/app/today/diagnosis?detail=value&valueTab=channels",
+    },
   ],
   insights: [
     {
@@ -577,6 +669,108 @@ function reportToneFromConfidence(connectedSignals: number): ReportCardTone {
   if (connectedSignals >= 4) return "positive";
   if (connectedSignals >= 2) return "warning";
   return "neutral";
+}
+
+function mapInsightToneToReportTone(tone: InsightItemTone | undefined): ReportCardTone {
+  if (tone === "critical") return "negative";
+  if (tone === "warning") return "warning";
+  if (tone === "info") return "positive";
+  return "neutral";
+}
+
+function getFactorStatusLabel(tone: InsightItemTone | undefined): string {
+  if (tone === "critical") return "Risk";
+  if (tone === "warning") return "Watch";
+  if (tone === "info") return "Healthy";
+  return "Unknown";
+}
+
+function getFactorRoiLayerLabel(moduleKey: string): string {
+  switch (moduleKey) {
+    case "traffic":
+    case "cost":
+    case "profit":
+    case "afterSales":
+    case "productInventory":
+      return "短期 ROI";
+    case "conversion":
+    case "siteExperience":
+      return "回收速度";
+    case "customerValue":
+    case "channel":
+      return "长期价值";
+    default:
+      return "经营因子";
+  }
+}
+
+function getModuleDrilldownHref(moduleKey: string): string | undefined {
+  const hrefByModuleKey: Record<string, string> = {
+    traffic: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=traffic_anomaly",
+    cost: "/app/today/diagnosis?detail=value&valueTab=channels",
+    conversion: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
+    afterSales: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=refund_health",
+    profit: "/app/today/diagnosis?detail=value&valueTab=channels",
+    productInventory:
+      "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory",
+    customerValue: "/app/today/diagnosis?detail=value&valueTab=channels",
+    channel: "/app/today/diagnosis?detail=value&valueTab=channels",
+    siteExperience: "/app/settings/pagespeed?source=daily-insights",
+  };
+
+  return hrefByModuleKey[moduleKey];
+}
+
+function buildFactorComparison(module: BusinessModule): string {
+  const deltas = module.metrics
+    .map((metric) => (metric.delta ? `${metric.label} ${metric.delta}` : null))
+    .filter((value): value is string => Boolean(value));
+
+  if (deltas.length > 0) {
+    return `历史基准：${deltas[0]}`;
+  }
+
+  switch (module.key) {
+    case "traffic":
+      return "结构基准：当前来源结构对比全站流量分布。";
+    case "conversion":
+      return "经验阈值：优先看 CVR、支付成功率和漏斗掉点。";
+    case "afterSales":
+      return "经验阈值：退款率、履约超时和物流异常优先对比最近 30 天均值。";
+    case "siteExperience":
+      return "经验阈值：PageSpeed、LCP 和 TBT 对比行业可用阈值。";
+    case "customerValue":
+      return "历史基准：复购率与高价值客户占比对比近 30 天结构。";
+    case "channel":
+      return "结构基准：高利润渠道对比全站与其他主要渠道。";
+    default:
+      return "历史基准：优先对比最近一个周期与当前结构差异。";
+  }
+}
+
+function buildFactorImpactPath(moduleKey: string): string {
+  switch (moduleKey) {
+    case "traffic":
+      return "流量规模/质量 -> 商品页承接 -> 转化效率 -> 短期 ROI";
+    case "cost":
+      return "成本结构 -> 贡献利润 -> 经营利润 -> 短期 ROI";
+    case "conversion":
+      return "访问进入 -> 站内漏斗 -> 支付成功 -> 回收速度";
+    case "afterSales":
+      return "退款/履约损耗 -> 利润侵蚀 -> 短期 ROI";
+    case "profit":
+      return "收入质量 -> 贡献利润 -> 广告后经营利润 -> 短期 ROI";
+    case "productInventory":
+      return "商品供给/质量 -> 转化与退款 -> 短期 ROI";
+    case "customerValue":
+      return "复购与 LTV -> 生命周期价值 -> 长期 ROI";
+    case "channel":
+      return "获客渠道质量 -> 客户价值层 -> 长期 ROI";
+    case "siteExperience":
+      return "站点体验 -> Landing Page 承接 -> 回收速度";
+    default:
+      return "经营因子 -> ROI 影响";
+  }
 }
 
 function diagnosisFocusLabel(key: string): string {
@@ -1435,6 +1629,102 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
       : []),
   ];
 
+  const insightByTargetKey = new Map<string, InsightListItem>();
+  reportInsights.forEach((item) => {
+    if (item.targetKey && !insightByTargetKey.has(item.targetKey)) {
+      insightByTargetKey.set(item.targetKey, item);
+    }
+  });
+
+  const moduleByKey = new Map(sharedModules.map((item) => [item.key, item]));
+  const conversionRoiModule = moduleByKey.get("conversion");
+  const siteExperienceRoiModule = moduleByKey.get("siteExperience");
+  const customerValueRoiModule = moduleByKey.get("customerValue");
+  const channelRoiModuleForReport = moduleByKey.get("channel");
+
+  const paybackTone =
+    insightByTargetKey.get("conversion")?.tone ?? insightByTargetKey.get("siteExperience")?.tone;
+  const lifetimeTone =
+    insightByTargetKey.get("customerValue")?.tone ?? insightByTargetKey.get("channel")?.tone;
+
+  const reportRoiLayers: ReportRoiLayerCard[] = [
+    {
+      key: "short_term",
+      title: "短期 ROI",
+      value:
+        overallBusinessRoi != null
+          ? `${roiGrade.label} / ${formatSignedPercent(overallBusinessRoi * 100)}`
+          : "待接广告成本",
+      detail:
+        overallBusinessRoi != null
+          ? `经营利润 ${formatCurrency(operatingProfitAfterAds, currency)}`
+          : "当前只能先读贡献利润与渠道质量",
+      tone: roiGrade.tone,
+    },
+    {
+      key: "payback",
+      title: "回收速度",
+      value:
+        paybackTone === "critical"
+          ? "Slow"
+          : paybackTone === "warning"
+            ? "Normal"
+            : "Fast",
+      detail:
+        conversionRoiModule && siteExperienceRoiModule
+          ? `${conversionRoiModule.metrics[0]?.label ?? "CVR"} ${conversionRoiModule.metrics[0]?.value ?? "—"} / ${siteExperienceRoiModule.metrics[0]?.label ?? "性能分"} ${siteExperienceRoiModule.metrics[0]?.value ?? "—"}`
+          : conversionRoiModule
+            ? `${conversionRoiModule.metrics[0]?.label ?? "CVR"} ${conversionRoiModule.metrics[0]?.value ?? "—"}`
+            : "先看转化漏斗和站点体验是否拖慢回收。",
+      tone: mapInsightToneToReportTone(paybackTone),
+    },
+    {
+      key: "lifetime",
+      title: "长期价值",
+      value:
+        customerValueRoiModule?.source === "pending"
+          ? "待补客户价值"
+          : lifetimeTone === "critical"
+            ? "Low"
+            : lifetimeTone === "warning"
+              ? "Medium"
+              : "High",
+      detail:
+        customerValueRoiModule && channelRoiModuleForReport
+          ? `${customerValueRoiModule.metrics[0]?.label ?? "复购率"} ${customerValueRoiModule.metrics[0]?.value ?? "—"} / ${channelRoiModuleForReport.metrics[1]?.label ?? "最高收入渠道"} ${channelRoiModuleForReport.metrics[1]?.value ?? "—"}`
+          : customerValueRoiModule
+            ? `${customerValueRoiModule.metrics[0]?.label ?? "复购率"} ${customerValueRoiModule.metrics[0]?.value ?? "—"}`
+            : "客户价值层未完全就绪，先用渠道质量做方向判断。",
+      tone: mapInsightToneToReportTone(lifetimeTone),
+    },
+  ];
+
+  const factorCards: FactorDiagnosisCard[] = sharedModules.map((module) => {
+    const linkedInsight = insightByTargetKey.get(module.key);
+    const tone =
+      linkedInsight?.tone ??
+      (module.source === "pending"
+        ? "warning"
+        : module.source === "estimated"
+          ? "warning"
+          : "info");
+
+    return {
+      key: module.key,
+      title: module.title,
+      statusLabel: getFactorStatusLabel(tone),
+      roiLayerLabel: getFactorRoiLayerLabel(module.key),
+      summary: linkedInsight?.title ?? module.summary,
+      evidence: module.metrics.slice(0, 2).map((metric) => `${metric.label} ${metric.value}`),
+      comparison: buildFactorComparison(module),
+      impactPath: buildFactorImpactPath(module.key),
+      action: linkedInsight?.detail ?? module.actionHint,
+      source: module.source,
+      tone: mapInsightToneToReportTone(tone),
+      href: linkedInsight?.href ?? getModuleDrilldownHref(module.key),
+    };
+  });
+
   const report: SnapshotReport = {
     summary:
       ads && overallBusinessRoi != null
@@ -1469,6 +1759,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         tone: reportToneFromConfidence(connectedSignals),
       },
     ],
+    roiLayers: reportRoiLayers,
+    factorCards,
     insights: reportInsights.length > 0 ? reportInsights.slice(0, 4) : mockReport7d.insights,
     drilldowns: reportDrilldowns,
     focus: reportFocus,

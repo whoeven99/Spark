@@ -4,7 +4,12 @@ import type {
   LoaderFunctionArgs,
   ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
+import {
+  Outlet,
+  useLoaderData,
+  useLocation,
+  useRouteError,
+} from "react-router";
 import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -37,6 +42,7 @@ import {
   resolveEmbeddedLocationSearch,
 } from "../lib/embeddedLocationSearch";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
+import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -180,15 +186,21 @@ function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const { t } = useTranslation();
   const location = useLocation();
   const embeddedSearch = resolveEmbeddedLocationSearch(location.search);
+  const navigate = useEmbeddedNavigate();
 
   return (
     <s-app-nav>
       {nav.map((item) => {
         const config = NAV_ITEMS[item];
+        const target = appendEmbeddedSearchToPath(config.href, embeddedSearch);
         return (
           <s-link
             key={item}
-            href={appendEmbeddedSearchToPath(config.href, embeddedSearch)}
+            href={target}
+            onClick={(event) => {
+              event.preventDefault();
+              void navigate(target);
+            }}
           >
             {t(config.labelKey)}
           </s-link>
