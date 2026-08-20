@@ -30,10 +30,8 @@ import {
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
-import type { AdsHealthCheck, AdsHealthState } from "../server/adsCatalog/adsHealth.server";
 import {
   buildAdsOverview,
-  type AdsOverviewConnection,
   type AdsOverviewPlatform,
   type AdsOverviewReview,
 } from "../server/adsInsights/overview.server";
@@ -288,32 +286,10 @@ type ConnectionChannelCardProps = {
   onNavigate: (to: string) => void;
 };
 
-const PLATFORM_LABEL: Record<AdsOverviewPlatform["platform"], string> = {
-  meta: "Meta",
-  google: "Google",
-  tiktok: "TikTok",
-};
+type ConnectionChannelCardData = Omit<ConnectionChannelCardProps, "onNavigate">;
 
 function formatInteger(value: number): string {
   return Math.round(value).toLocaleString("en-US");
-}
-
-function formatMoney(value: number, currency: string | null): string {
-  const amount = value.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-  return currency ? `${currency} ${amount}` : amount;
-}
-
-function formatRatio(value: number | null, suffix: string): string {
-  if (value === null) return "—";
-  return `${value.toFixed(2)}${suffix}`;
-}
-
-function formatTimestamp(iso: string | null): string | null {
-  if (!iso) return null;
-  return iso.replace("T", " ").slice(0, 16);
 }
 
 function minutesSince(iso: string, baseIso: string): number {
@@ -389,7 +365,7 @@ function buildGoogleSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
   connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   const capabilities: ConnectionCapability[] = [
     {
       label: t("settingsShell.googleCapabilityMerchant"),
@@ -486,9 +462,13 @@ function buildGoogleSummary(
     capabilities,
     links: [
       {
+        label: t("settingsShell.openChannelDetail"),
+        to: "/app/settings/connections/google",
+        tone: "primary",
+      },
+      {
         label: t("settingsShell.googleManageAdsCatalog"),
         to: "/app/ads-catalog?tab=credentials",
-        tone: "primary",
       },
       {
         label: t("settingsShell.googleManageAnalytics"),
@@ -510,7 +490,7 @@ function buildMetaSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
   connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   const capabilities: ConnectionCapability[] = [
     {
       label: t("settingsShell.metaCapabilityCatalog"),
@@ -570,9 +550,13 @@ function buildMetaSummary(
     capabilities,
     links: [
       {
+        label: t("settingsShell.openChannelDetail"),
+        to: "/app/settings/connections/meta",
+        tone: "primary",
+      },
+      {
         label: t("settingsShell.metaManageCatalog"),
         to: "/app/ads-catalog?tab=credentials",
-        tone: "primary",
       },
       {
         label: t("settingsShell.openInsights"),
@@ -586,7 +570,7 @@ function buildTiktokSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
   connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   const capabilities: ConnectionCapability[] = [
     {
       label: t("settingsShell.tiktokCapabilityCatalog"),
@@ -639,9 +623,13 @@ function buildTiktokSummary(
     capabilities,
     links: [
       {
+        label: t("settingsShell.openChannelDetail"),
+        to: "/app/settings/connections/tiktok",
+        tone: "primary",
+      },
+      {
         label: t("settingsShell.tiktokManageCatalog"),
         to: "/app/ads-catalog?tab=credentials",
-        tone: "primary",
       },
       {
         label: t("settingsShell.openInsights"),
@@ -654,7 +642,7 @@ function buildTiktokSummary(
 function buildLogisticsSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   return {
     title: t("settingsShell.channelLogisticsTitle"),
     description: t("settingsShell.channelLogisticsSubtitle"),
@@ -756,24 +744,8 @@ export default function SettingsIndex() {
           badge={<span style={hubBadgeStyle}>{t("settingsShell.sectionConnectionsHubBadge")}</span>}
         />
         <div style={hubHintStyle}>{t("settingsShell.sectionConnectionsHubFootnote")}</div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-            gap: "0.85rem",
-          }}
-        >
-          {connectionCards.map((card) => (
-            <ConnectionChannelCard
-              key={card.title}
-              {...card}
-              onNavigate={navigate}
-            />
-          ))}
-        </div>
-
         {connectionOverview ? (
-          <div style={diagnosticsWrapStyle}>
+          <div style={diagnosticsOverviewStyle}>
             <div style={diagnosticsHeaderStyle}>
               <div style={{ display: "grid", gap: 4 }}>
                 <div style={diagnosticsTitleStyle}>{t("settingsShell.diagnosticsTitle")}</div>
@@ -812,40 +784,44 @@ export default function SettingsIndex() {
                 value={formatInteger(disapprovedProducts)}
               />
             </div>
-
-            <div style={diagnosticsSectionStyle}>
-              <div style={diagnosticsTitleStyle}>{t("settingsShell.byPlatformTitle")}</div>
-              <div style={platformGridStyle(isMobile)}>
-                {connectionOverview.platforms.map((platform) => (
-                  <SettingsPlatformCard
-                    key={platform.platform}
-                    item={platform}
-                    generatedAt={connectionOverview.generatedAt}
-                    onNavigate={navigate}
-                    t={t}
-                  />
-                ))}
+            <div style={diagnosticsSummaryRowStyle}>
+              <div style={diagnosticsHeadlineStyle}>
+                {healthAttentionCount > 0 || disapprovedProducts > 0
+                  ? t("settingsShell.diagnosticsSummaryAttention", {
+                      health: healthAttentionCount,
+                      products: formatInteger(disapprovedProducts),
+                    })
+                  : t("settingsShell.diagnosticsSummaryHealthy", {
+                      connected: connectedPlatforms,
+                      total: connectionOverview.platforms.length,
+                    })}
               </div>
-            </div>
-
-            <div style={diagnosticsSectionStyle}>
-              <div style={diagnosticsTitleStyle}>{t("settingsShell.integrationHealthTitle")}</div>
-              <HealthChecksTable checks={connectionOverview.health} t={t} />
-            </div>
-
-            <div style={diagnosticsSectionStyle}>
-              <div style={diagnosticsTitleStyle}>{t("settingsShell.productReadinessTitle")}</div>
-              <ReviewSnapshotTable reviews={connectionOverview.reviews} t={t} />
-            </div>
-
-            <div style={diagnosticsSectionStyle}>
-              <div style={diagnosticsTitleStyle}>{t("settingsShell.connectionSnapshotTitle")}</div>
-              <ConnectionSnapshotTable connections={connectionOverview.connections} t={t} />
+              <div style={diagnosticsSummaryCaptionStyle}>{t("settingsShell.channelSectionSubtitle")}</div>
             </div>
           </div>
         ) : (
           <div style={diagnosticsEmptyStyle}>{t("settingsShell.diagnosticsUnavailable")}</div>
         )}
+
+        <div style={channelSectionStyle}>
+          <div style={diagnosticsTitleStyle}>{t("settingsShell.channelSectionTitle")}</div>
+          <div style={diagnosticsSubtitleStyle}>{t("settingsShell.channelSectionSubtitle")}</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              gap: "0.85rem",
+            }}
+          >
+            {connectionCards.map((card) => (
+              <ConnectionChannelCard
+                key={card.title}
+                {...card}
+                onNavigate={navigate}
+              />
+            ))}
+          </div>
+        </div>
       </PageSurface>
 
       {SETTINGS_SECTIONS.slice(1).map((section) => (
@@ -919,203 +895,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
     <div style={diagnosticMetricCardStyle}>
       <div style={diagnosticMetricLabelStyle}>{label}</div>
       <div style={diagnosticMetricValueStyle}>{value}</div>
-    </div>
-  );
-}
-
-function SettingsPlatformCard({
-  item,
-  generatedAt,
-  onNavigate,
-  t,
-}: {
-  item: AdsOverviewPlatform;
-  generatedAt: string;
-  onNavigate: (to: string) => void;
-  t: ReturnType<typeof useTranslation>["t"];
-}) {
-  const managePath =
-    item.platform === "google"
-      ? "/app/ads-catalog?tab=credentials"
-      : item.platform === "meta"
-        ? "/app/ads-catalog?tab=credentials"
-        : "/app/ads-catalog?tab=credentials";
-  const insightsPath = "/app/insights/charts?group=roi";
-
-  return (
-    <div style={connectionCardStyle}>
-      <div style={connectionHeaderStyle}>
-        <div style={{ display: "grid", gap: 4 }}>
-          <div style={connectionTitleStyle}>{PLATFORM_LABEL[item.platform]}</div>
-          <div style={connectionDescriptionStyle}>
-            {item.accountName || item.accountId || t("settingsShell.platformNoAccount")}
-          </div>
-        </div>
-        <span style={channelBadgeStyle(item.connected ? "ready" : "needs_setup")}>
-          {item.connected ? t("settingsShell.statusConnected") : t("settingsShell.statusNeedsSetup")}
-        </span>
-      </div>
-      <div style={{ display: "grid", gap: 8 }}>
-        <div style={capabilityRowStyle}>
-          <span style={capabilityLabelStyle}>{t("settingsShell.platformSnapshot")}</span>
-          <span style={capabilityValueStyle(item.snapshot && !item.snapshot.stale ? "ready" : "attention")}>
-            {item.snapshot
-              ? item.snapshot.stale
-                ? t("settingsShell.snapshotStale")
-                : t("settingsShell.snapshotFresh", {
-                    minutes: minutesSince(item.snapshot.fetchedAt, generatedAt),
-                  })
-              : t("settingsShell.snapshotNone")}
-          </span>
-        </div>
-        <div style={capabilityRowStyle}>
-          <span style={capabilityLabelStyle}>{t("settingsShell.platformSpend")}</span>
-          <span style={capabilityValueStyle("ready")}>
-            {item.totals ? formatMoney(item.totals.spend, item.currencyCode) : "—"}
-          </span>
-        </div>
-        <div style={capabilityRowStyle}>
-          <span style={capabilityLabelStyle}>{t("settingsShell.platformRoas")}</span>
-          <span style={capabilityValueStyle("ready")}>
-            {item.totals ? formatRatio(item.totals.roas, "x") : "—"}
-          </span>
-        </div>
-      </div>
-      <div style={connectionLinksStyle}>
-        <button type="button" onClick={() => onNavigate(managePath)} style={connectionLinkButtonStyle(true)}>
-          {t("settingsShell.manageConnection")}
-        </button>
-        <button type="button" onClick={() => onNavigate(insightsPath)} style={connectionLinkButtonStyle(false)}>
-          {t("settingsShell.openInsights")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function HealthChecksTable({
-  checks,
-  t,
-}: {
-  checks: AdsHealthCheck[];
-  t: ReturnType<typeof useTranslation>["t"];
-}) {
-  return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>{t("insights.health.colPlatform")}</th>
-            <th style={thStyle}>{t("insights.health.colItem")}</th>
-            <th style={thStyle}>{t("insights.health.colState")}</th>
-            <th style={thStyle}>{t("insights.health.colDetail")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {checks.map((check, index) => {
-            const prev = checks[index - 1];
-            const isGroupStart = index === 0 || prev?.platform !== check.platform;
-            return (
-              <tr key={check.key}>
-                <td style={{ ...tdStyle, fontWeight: isGroupStart ? 700 : 400 }}>
-                  {isGroupStart ? PLATFORM_LABEL[check.platform] : ""}
-                </td>
-                <td style={tdStyle}>{t(`insights.health.item.${check.key}`)}</td>
-                <td style={tdStyle}>
-                  <span style={healthStatePillStyle(check.state)}>
-                    {t(`insights.health.state.${check.state}`)}
-                  </span>
-                </td>
-                <td style={tdMetaStyle}>
-                  {t(`insights.health.detail.${check.detailCode}`)}
-                  {check.reference ? ` · ${check.reference}` : ""}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ReviewSnapshotTable({
-  reviews,
-  t,
-}: {
-  reviews: AdsOverviewReview[];
-  t: ReturnType<typeof useTranslation>["t"];
-}) {
-  const hasData = reviews.some((review) => review.total > 0);
-  if (!hasData) {
-    return <div style={diagnosticsEmptyStyle}>{t("insights.reviewEmpty")}</div>;
-  }
-
-  return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>{t("insights.reviewChannel")}</th>
-            <th style={thNumericStyle}>{t("insights.reviewTotal")}</th>
-            <th style={thNumericStyle}>{t("insights.reviewApproved")}</th>
-            <th style={thNumericStyle}>{t("insights.reviewPending")}</th>
-            <th style={thNumericStyle}>{t("insights.reviewDisapproved")}</th>
-            <th style={thStyle}>{t("insights.reviewLastChecked")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {reviews.map((review) => (
-            <tr key={review.channel}>
-              <td style={tdStyle}>
-                {review.channel === "gmc"
-                  ? t("insights.reviewChannelGmc")
-                  : t("insights.reviewChannelMeta")}
-              </td>
-              <td style={tdNumericStyle}>{formatInteger(review.total)}</td>
-              <td style={tdNumericStyle}>{formatInteger(review.approved)}</td>
-              <td style={tdNumericStyle}>{formatInteger(review.pending)}</td>
-              <td style={tdNumericStyle}>{formatInteger(review.disapproved)}</td>
-              <td style={tdMetaStyle}>{formatTimestamp(review.lastCheckedAt) ?? t("insights.reviewNever")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ConnectionSnapshotTable({
-  connections,
-  t,
-}: {
-  connections: AdsOverviewConnection[];
-  t: ReturnType<typeof useTranslation>["t"];
-}) {
-  return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>{t("insights.connectionPlatform")}</th>
-            <th style={thStyle}>{t("insights.connectionStatus")}</th>
-            <th style={thStyle}>{t("insights.connectionAccount")}</th>
-            <th style={thStyle}>{t("insights.connectionUpdatedAt")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {connections.map((connection) => (
-            <tr key={connection.platform}>
-              <td style={tdMonoStyle}>{connection.platform}</td>
-              <td style={tdStyle}>
-                {connection.connected ? t("settingsShell.statusConnected") : t("settingsShell.statusNeedsSetup")}
-              </td>
-              <td style={tdMetaStyle}>{connection.externalAccountId ?? "—"}</td>
-              <td style={tdMetaStyle}>{formatTimestamp(connection.updatedAt) ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -1249,12 +1028,14 @@ const channelBadgeStyle = (
   }`,
 });
 
-const diagnosticsWrapStyle: CSSProperties = {
+const diagnosticsOverviewStyle: CSSProperties = {
   display: "grid",
   gap: "1rem",
-  marginTop: "1rem",
-  paddingTop: "1rem",
-  borderTop: `1px solid ${pageColorTokens.divider}`,
+  padding: "1rem",
+  marginBottom: "1rem",
+  borderRadius: 16,
+  border: `1px solid ${pageColorTokens.divider}`,
+  background: pageColorTokens.surfaceMuted,
 };
 
 const diagnosticsHeaderStyle: CSSProperties = {
@@ -1276,9 +1057,21 @@ const diagnosticsSubtitleStyle: CSSProperties = {
   color: pageColorTokens.textSecondary,
 };
 
-const diagnosticsSectionStyle: CSSProperties = {
+const diagnosticsSummaryRowStyle: CSSProperties = {
   display: "grid",
   gap: "0.7rem",
+};
+
+const diagnosticsHeadlineStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const diagnosticsSummaryCaptionStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
 };
 
 const diagnosticsEmptyStyle: CSSProperties = {
@@ -1308,93 +1101,9 @@ const diagnosticMetricValueStyle: CSSProperties = {
   color: pageColorTokens.textPrimary,
 };
 
-const platformGridStyle = (isMobile: boolean): CSSProperties => ({
+const channelSectionStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-  gap: "0.75rem",
-});
-
-const healthStateTokens: Record<AdsHealthState, { color: string; background: string; border: string }> = {
-  ok: {
-    color: pageColorTokens.brandGreenDark,
-    background: pageColorTokens.brandGreenLight,
-    border: "rgba(0, 166, 124, 0.28)",
-  },
-  warning: {
-    color: "#8a5a00",
-    background: "#fff7e0",
-    border: "rgba(185, 137, 0, 0.3)",
-  },
-  missing: {
-    color: pageColorTokens.textSecondary,
-    background: pageColorTokens.surfaceMuted,
-    border: pageColorTokens.borderSubtle,
-  },
-  unknown: {
-    color: pageColorTokens.textSecondary,
-    background: pageColorTokens.surfaceMuted,
-    border: pageColorTokens.borderSubtle,
-  },
-};
-
-const healthStatePillStyle = (state: AdsHealthState): CSSProperties => {
-  const token = healthStateTokens[state];
-  return {
-    display: "inline-block",
-    padding: "0.12rem 0.45rem",
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-    color: token.color,
-    background: token.background,
-    border: `1px solid ${token.border}`,
-  };
-};
-
-const tableWrapStyle: CSSProperties = {
-  ...destinationSurfaceStyle,
-  overflowX: "auto",
-};
-
-const tableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: 13,
-};
-
-const thStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "0.6rem 0.85rem",
-  fontSize: 11,
-  fontWeight: 750,
-  letterSpacing: "0.03em",
-  textTransform: "uppercase",
-  color: pageColorTokens.textSecondary,
-  borderBottom: `1px solid ${pageColorTokens.divider}`,
-  whiteSpace: "nowrap",
-};
-
-const thNumericStyle: CSSProperties = { ...thStyle, textAlign: "right" };
-
-const tdStyle: CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  color: pageColorTokens.textBody,
-  borderBottom: `1px solid ${pageColorTokens.divider}`,
-};
-
-const tdNumericStyle: CSSProperties = { ...tdStyle, textAlign: "right" };
-
-const tdMetaStyle: CSSProperties = {
-  ...tdStyle,
-  color: pageColorTokens.textSecondary,
-  fontSize: 12,
-};
-
-const tdMonoStyle: CSSProperties = {
-  ...tdStyle,
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-  fontSize: 12,
+  gap: "0.85rem",
 };
 
 export const headers: HeadersFunction = (headersArgs) => {
