@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLiveSnapshots,
   buildReportGenerationTrace,
   buildReportTaskCandidatePipeline,
   mergeReportTaskCandidates,
@@ -231,6 +232,30 @@ describe("buildReportGenerationTrace", () => {
       dedupeKey: "conversion_repair:landing:/products/a:today",
       whyNow: "继续加流量只会放大低转化问题。",
       impactMetrics: ["整体 CVR", "支付成功率"],
+    });
+  });
+});
+
+describe("buildLiveSnapshots", () => {
+  it("exposes ROI data quality and confidence on report layers", () => {
+    const snapshots = buildLiveSnapshots(null);
+    const roiLayers = snapshots["7d"].report.roiLayers;
+
+    expect(roiLayers).toHaveLength(3);
+    expect(roiLayers[0]).toMatchObject({
+      key: "short_term",
+      dataQuality: "estimated",
+      confidence: "low",
+    });
+    expect(roiLayers[1]).toMatchObject({
+      key: "payback",
+      dataQuality: "estimated",
+      confidence: "medium",
+    });
+    expect(roiLayers[2]).toMatchObject({
+      key: "lifetime",
+      dataQuality: "predicted",
+      confidence: "low",
     });
   });
 });

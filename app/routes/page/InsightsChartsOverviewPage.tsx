@@ -1,19 +1,11 @@
 import { useMemo, type CSSProperties } from "react";
-import {
-  useLoaderData,
-  useNavigate,
-  useRevalidator,
-  useSearchParams,
-} from "react-router";
+import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { appendEmbeddedSearchToPath } from "../../lib/embeddedLocationSearch";
-import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import {
   analysisPageContentStyle,
   mobilePageContentStyle,
   PageHeaderNav,
-  PageSectionHeader,
   PageSurface,
   pageColorTokens,
   pageEmptyStateStyle,
@@ -23,732 +15,727 @@ import {
   pageMetricTileStyle,
   pageMetricValueStyle,
 } from "./pageUiStyles";
-import {
-  DestinationFilterBar,
-  destinationSurfaceStyle,
-} from "../component/shared/DestinationPage";
-import type {
-  AdsOverviewPlatform,
-  AdsOverviewReview,
-  AdsOverviewSnapshot,
-} from "../../server/adsInsights/overview.server";
-import {
-  buildLiveSnapshots,
-  type BusinessModule,
-  type ModuleChart,
-  type ModuleSource,
-  type Snapshot,
-} from "../../server/operations/businessReportSnapshot.shared";
+import { DestinationFilterBar } from "../component/shared/DestinationPage";
 import type { InsightsOverviewLoaderData } from "../app.insights.charts._index";
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
-const COMPARE_OPTIONS = [
-  "previous_period",
-  "historical_baseline",
-  "structural",
-] as const;
+const Y_AXIS_RATIOS = [0, 0.5, 1] as const;
+const LINE_COLORS = ["#005bd3", "#008060", "#c05717"] as const;
 
-type CompareMode = (typeof COMPARE_OPTIONS)[number];
-type DashboardGroupKey =
-  | "roi"
-  | "acquisition"
-  | "conversion"
-  | "merchandising_ops";
-type ChartType =
-  | "line"
-  | "bar"
-  | "stacked_bar"
-  | "funnel"
-  | "table"
-  | "cohort_curve";
-type ChartDataQuality = "high" | "medium" | "low" | "pending";
+type MetricFormat = "number" | "money" | "percent" | "ratio";
 
-type DashboardCard = {
-  id: string;
-  title: string;
-  summary: string;
-  chartType: ChartType;
-  metrics: string[];
-  dataQuality: ChartDataQuality;
-  source?: ModuleSource;
-  previewTitle?: string;
-  previewItems?: Array<{
-    label: string;
-    display: string;
-    note?: string;
-  }>;
-  href?: string;
-  actionLabel?: string;
+type SummaryMetric = {
+  label: string;
+  value: string;
 };
 
-type DashboardGroup = {
-  key: DashboardGroupKey;
-  title: string;
-  summary: string;
-  cards: DashboardCard[];
+type ChartPoint = {
+  label: string;
+  value: number;
 };
 
-type ChartsDashboard = {
-  groups: DashboardGroup[];
+type ChartSeries = {
+  label: string;
+  color: string;
+  points: ChartPoint[];
 };
 
-type ChartsLiveData = InsightsOverviewLoaderData["liveData"];
+type ComparisonItem = {
+  label: string;
+  value: number;
+};
 
-function formatInteger(value: number): string {
+type FunnelStep = {
+  label: string;
+  count: number;
+  rateFromPrev: number | null;
+};
+
+type ChartsLiveData = NonNullable<InsightsOverviewLoaderData["liveData"]>;
+
+function sum(values: number[]): number {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function niceMax(rawMax: number): number {
+  if (rawMax <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(rawMax));
+  const normalized = rawMax / magnitude;
+  const rounded =
+    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return rounded * magnitude;
+}
+
+function formatInteger(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
   return Math.round(value).toLocaleString("en-US");
 }
 
-function formatMoney(value: number, currency: string | null): string {
+function formatMoney(value: number | null | undefined, currencyCode: string | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
   const amount = value.toLocaleString("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
-  return currency ? `${currency} ${amount}` : amount;
+  return currencyCode ? `${currencyCode} ${amount}` : amount;
 }
 
-function formatRatio(value: number | null, suffix: string): string {
-  if (value === null) return "—";
-  return `${value.toFixed(2)}${suffix}`;
+function formatPercent(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(1)}%`;
 }
 
-function formatPercent(value: number | null): string {
-  if (value === null) return "—";
-  return `${value.toFixed(2)}%`;
+function formatRatio(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(2)}x`;
 }
 
-function chartTypeFromModule(kind: ModuleChart["kind"]): ChartType {
-  switch (kind) {
-    case "bars":
-      return "bar";
-    case "stack":
-      return "stacked_bar";
-    case "funnel":
-      return "funnel";
-    default:
-      return "table";
+function formatAxisValue(
+  value: number,
+  format: MetricFormat,
+  currencyCode: string | null,
+): string {
+  if (format === "money") return formatMoney(value, currencyCode);
+  if (format === "percent") return `${Math.round(value)}%`;
+  if (format === "ratio") return `${value.toFixed(1)}x`;
+  return value.toLocaleString("en-US", {
+    notation: value >= 1000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  });
+}
+
+function formatPointValue(
+  value: number,
+  format: MetricFormat,
+  currencyCode: string | null,
+): string {
+  if (format === "money") return formatMoney(value, currencyCode);
+  if (format === "percent") return formatPercent(value);
+  if (format === "ratio") return formatRatio(value);
+  return formatInteger(value);
+}
+
+function formatDateLabel(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  return `${match[2]}-${match[3]}`;
+}
+
+function calculateRate(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return (numerator / denominator) * 100;
+}
+
+function isPaidChannel(label: string): boolean {
+  return [
+    "paid",
+    "display",
+    "cross-network",
+    "affiliate",
+    "shopping",
+    "cpc",
+    "ppc",
+  ].some((keyword) => label.includes(keyword));
+}
+
+function isSearchChannel(label: string): boolean {
+  return label.includes("organic search") || label === "search";
+}
+
+function buildTrafficBuckets(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+): ComparisonItem[] {
+  const rows = liveData.ga4?.channelRows ?? [];
+  let paid = 0;
+  let search = 0;
+  let organic = 0;
+
+  for (const row of rows) {
+    const normalized = row.key.trim().toLowerCase();
+    if (isPaidChannel(normalized)) {
+      paid += row.sessions;
+      continue;
+    }
+    if (isSearchChannel(normalized)) {
+      search += row.sessions;
+      continue;
+    }
+    organic += row.sessions;
   }
+
+  return [
+    { label: t("insights.chartTrafficPaid"), value: paid },
+    { label: t("insights.chartTrafficSearch"), value: search },
+    { label: t("insights.chartTrafficOrganic"), value: organic },
+  ];
 }
 
-function moduleSourceToQuality(source: ModuleSource): ChartDataQuality {
-  if (source === "real") return "high";
-  if (source === "estimated") return "medium";
-  return "pending";
+function buildTopMetrics(
+  liveData: ChartsLiveData,
+  overview: InsightsOverviewLoaderData["overview"],
+  currencyCode: string | null,
+  t: ReturnType<typeof useTranslation>["t"],
+): SummaryMetric[] {
+  const salesTrend = liveData.shopifyReports?.salesTrend ?? [];
+  const storefrontFunnel = liveData.shopifyReports?.storefrontFunnel;
+  const ga4Summary = liveData.ga4?.summary;
+  const diagnosisMetrics = liveData.diagnosis?.summaryMetrics;
+
+  const sessions =
+    storefrontFunnel?.sessions ??
+    ga4Summary?.totalSessions ??
+    diagnosisMetrics?.sessions7d ??
+    0;
+  const revenue =
+    salesTrend.length > 0
+      ? sum(salesTrend.map((point) => point.sales))
+      : ga4Summary?.totalRevenue ?? diagnosisMetrics?.salesAmount7d ?? 0;
+  const orders =
+    salesTrend.length > 0
+      ? sum(salesTrend.map((point) => point.orders))
+      : storefrontFunnel?.completedCheckout ??
+        ga4Summary?.totalPurchases ??
+        diagnosisMetrics?.orderCount7d ??
+        0;
+  const cvr =
+    storefrontFunnel != null
+      ? calculateRate(storefrontFunnel.completedCheckout, storefrontFunnel.sessions)
+      : ga4Summary != null
+        ? calculateRate(ga4Summary.totalPurchases, ga4Summary.totalSessions)
+        : diagnosisMetrics?.conversionRate7d ?? null;
+  const roas = overview?.totals.roas ?? liveData.ads?.totalRoas ?? null;
+
+  return [
+    { label: t("insights.chartMetricSessions"), value: formatInteger(sessions) },
+    { label: t("insights.chartMetricRevenue"), value: formatMoney(revenue, currencyCode) },
+    { label: t("insights.chartMetricOrders"), value: formatInteger(orders) },
+    { label: t("insights.chartMetricCvr"), value: formatPercent(cvr) },
+    { label: t("insights.chartMetricRoas"), value: formatRatio(roas) },
+  ];
 }
 
-function findModule(snapshot: Snapshot, key: string): BusinessModule | null {
-  return snapshot.modules.find((module) => module.key === key) ?? null;
+function buildRevenueSeries(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+): ChartSeries[] {
+  const salesTrend = liveData.shopifyReports?.salesTrend ?? [];
+  if (salesTrend.length > 0) {
+    return [
+      {
+        label: t("insights.chartRevenueSeries"),
+        color: LINE_COLORS[0],
+        points: salesTrend.map((point) => ({
+          label: formatDateLabel(point.date),
+          value: point.sales,
+        })),
+      },
+    ];
+  }
+
+  const ga4Series = liveData.ga4?.timeSeries ?? [];
+  if (ga4Series.length > 0) {
+    return [
+      {
+        label: t("insights.chartRevenueSeries"),
+        color: LINE_COLORS[0],
+        points: ga4Series.map((point) => ({
+          label: formatDateLabel(point.key),
+          value: point.revenue,
+        })),
+      },
+    ];
+  }
+
+  return [];
 }
 
-function findMetricValue(module: BusinessModule | null, label: string): string | null {
-  return module?.metrics.find((metric) => metric.label === label)?.value ?? null;
+function buildOrderAfterSalesSeries(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  const salesTrend = liveData.shopifyReports?.salesTrend ?? [];
+  const refundTrend = liveData.shopifyReports?.refundTrend ?? [];
+  const ga4Series = liveData.ga4?.timeSeries ?? [];
+
+  const orderCountSeries: ChartSeries[] =
+    salesTrend.length > 0
+      ? [
+          {
+            label: t("insights.chartOrdersCount"),
+            color: LINE_COLORS[0],
+            points: salesTrend.map((point) => ({
+              label: formatDateLabel(point.date),
+              value: point.orders,
+            })),
+          },
+        ]
+      : ga4Series.length > 0
+        ? [
+            {
+              label: t("insights.chartOrdersCount"),
+              color: LINE_COLORS[0],
+              points: ga4Series.map((point) => ({
+                label: formatDateLabel(point.key),
+                value: point.purchases,
+              })),
+            },
+          ]
+        : [];
+
+  const orderAmountSeries = buildRevenueSeries(liveData, t);
+
+  const refundSeries: ChartSeries[] =
+    refundTrend.length > 0
+      ? [
+          {
+            label: t("insights.chartRefundQuantity"),
+            color: LINE_COLORS[2],
+            points: refundTrend.map((point) => ({
+              label: formatDateLabel(point.date),
+              value: point.returnedQuantity,
+            })),
+          },
+        ]
+      : [];
+
+  return { orderCountSeries, orderAmountSeries, refundSeries };
 }
 
-function buildPreviewItems(module: BusinessModule | null, limit = 3) {
-  if (!module) return [];
-  return module.chart.items.slice(0, limit).map((item) => ({
-    label: item.label,
-    display: item.display,
-    note: item.note,
+function buildFulfillmentSeries(
+  liveData: ChartsLiveData,
+  t: ReturnType<typeof useTranslation>["t"],
+): ChartSeries[] {
+  const fulfillmentTrend = liveData.shopifyReports?.fulfillmentTrend ?? [];
+  return [
+    {
+      label: t("insights.chartFulfillmentFulfilled"),
+      color: LINE_COLORS[1],
+      points: fulfillmentTrend.map((point) => ({
+        label: formatDateLabel(point.date),
+        value: point.fulfilled,
+      })),
+    },
+    {
+      label: t("insights.chartFulfillmentShipped"),
+      color: LINE_COLORS[0],
+      points: fulfillmentTrend.map((point) => ({
+        label: formatDateLabel(point.date),
+        value: point.shipped,
+      })),
+    },
+  ].filter((series) => series.points.length > 0);
+}
+
+function buildFunnelData(liveData: ChartsLiveData, rangeDays: number): FunnelStep[] {
+  const storefrontFunnel = liveData.shopifyReports?.storefrontFunnel;
+  const conversionMetrics = liveData.diagnosis?.items.find(
+    (item) => item.key === "conversion_health",
+  )?.metrics;
+  const ga4Series = liveData.ga4?.timeSeries ?? [];
+  const ga4Summary = liveData.ga4?.summary;
+  const diagnosisMetrics = liveData.diagnosis?.summaryMetrics;
+
+  const sessions =
+    storefrontFunnel?.sessions ??
+    ga4Summary?.totalSessions ??
+    (rangeDays === 7 ? diagnosisMetrics?.sessions7d : null) ??
+    0;
+  const addToCart =
+    storefrontFunnel?.cartAdditions ??
+    sum(ga4Series.map((point) => point.itemsAddedToCart)) ??
+    0;
+  const reachedCheckout =
+    storefrontFunnel?.reachedCheckout ??
+    Number(conversionMetrics?.checkoutStarted7d ?? 0);
+  const completedCheckout =
+    storefrontFunnel?.completedCheckout ??
+    Number(conversionMetrics?.checkoutCompleted7d ?? ga4Summary?.totalPurchases ?? 0);
+
+  const steps = [
+    { label: "visit", count: sessions },
+    { label: "cart", count: addToCart },
+    { label: "checkout", count: reachedCheckout },
+    { label: "order", count: completedCheckout },
+  ];
+
+  return steps.map((step, index) => ({
+    label: step.label,
+    count: step.count,
+    rateFromPrev:
+      index === 0 ? null : calculateRate(step.count, Math.max(steps[index - 1]?.count ?? 0, 0)),
   }));
 }
 
-function normalizePreviewKey(value: string | null | undefined, fallback = "—"): string {
-  return value?.trim() || fallback;
-}
+function buildAdsComparisons(liveData: ChartsLiveData) {
+  const platforms = liveData.ads?.platformSummaries ?? [];
+  const sorted = [...platforms].sort((left, right) => right.spend - left.spend);
 
-function normalizeMatchValue(value: string | null | undefined): string {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-function matchesFocusLabel(label: string, focusLabel: string | null): boolean {
-  const normalizedFocus = normalizeMatchValue(focusLabel);
-  if (!normalizedFocus) return false;
-  return normalizeMatchValue(label) === normalizedFocus;
-}
-
-function prioritizeFocusedPreviewItems<
-  T extends {
-    label: string;
-    display: string;
-    note?: string;
-  },
->(items: T[], focusLabel: string | null): T[] {
-  if (!focusLabel) return items;
-  return [...items].sort((left, right) => {
-    const leftFocused = matchesFocusLabel(left.label, focusLabel);
-    const rightFocused = matchesFocusLabel(right.label, focusLabel);
-    if (leftFocused === rightFocused) return 0;
-    return leftFocused ? -1 : 1;
-  });
-}
-
-function buildLandingPreviewItems(liveData: ChartsLiveData, limit = 3) {
-  const rows = liveData?.ga4?.landingRows ?? [];
-  return rows.slice(0, limit).map((row) => {
-    const cvr = row.sessions > 0 ? (row.purchases / row.sessions) * 100 : null;
-    return {
-      label: normalizePreviewKey(row.key, "/"),
-      display: `${row.sessions.toLocaleString("en-US")} sessions`,
-      note: `${formatMoney(row.revenue, null)} revenue / CVR ${formatPercent(cvr)}`,
-    };
-  });
-}
-
-function buildChannelQualityPreviewItems(
-  liveData: ChartsLiveData,
-  module: BusinessModule | null,
-  limit = 3,
-) {
-  const rows = liveData?.ga4?.channelRows ?? [];
-  if (rows.length > 0) {
-    return rows.slice(0, limit).map((row) => {
-      const cvr = row.sessions > 0 ? (row.purchases / row.sessions) * 100 : null;
-      return {
-        label: normalizePreviewKey(row.key),
-        display: `${row.sessions.toLocaleString("en-US")} sessions`,
-        note: `${formatMoney(row.revenue, null)} revenue / CVR ${formatPercent(cvr)}`,
-      };
-    });
-  }
-  return buildPreviewItems(module, limit);
-}
-
-function buildInventoryPreviewItems(
-  liveData: ChartsLiveData,
-  module: BusinessModule | null,
-  limit = 3,
-) {
-  const currency = liveData?.diagnosis?.summaryMetrics.currency ?? null;
-  const rows = liveData?.diagnosis?.detail.inventoryRisks ?? [];
-  if (rows.length > 0) {
-    return rows.slice(0, limit).map((row) => ({
-      label: row.sku,
-      display: formatMoney(row.estimatedLoss, currency),
-      note: `${row.title} / ${row.risk.toUpperCase()} / 可售 ${row.sellableDays ?? "∞"} 天`,
-    }));
-  }
-  return buildPreviewItems(module, limit);
-}
-
-function buildAfterSalesPreviewItems(
-  liveData: ChartsLiveData,
-  module: BusinessModule | null,
-  limit = 3,
-) {
-  const currency = liveData?.diagnosis?.summaryMetrics.currency ?? null;
-  const rows = liveData?.diagnosis?.detail.topRefundSkus ?? [];
-  if (rows.length > 0) {
-    return rows.slice(0, limit).map((row) => ({
-      label: row.sku,
-      display: formatMoney(row.amount, currency),
-      note: `${row.title} / ${row.reason} / Qty ${formatInteger(row.quantity)}`,
-    }));
-  }
-  return buildPreviewItems(module, limit);
-}
-
-function buildModuleCard(params: {
-  id: string;
-  title: string;
-  module: BusinessModule | null;
-  fallbackSummary: string;
-  href?: string;
-  actionLabel?: string;
-  metrics?: string[];
-  previewTitle?: string;
-  previewItems?: Array<{
-    label: string;
-    display: string;
-    note?: string;
-  }>;
-  chartType?: ChartType;
-}): DashboardCard {
-  const module = params.module;
   return {
-    id: params.id,
-    title: params.title,
-    summary: module?.summary ?? params.fallbackSummary,
-    chartType: params.chartType ?? (module ? chartTypeFromModule(module.chart.kind) : "table"),
-    metrics:
-      params.metrics ??
-      (module?.metrics.slice(0, 3).map((metric) => `${metric.label} ${metric.value}`) ?? []),
-    dataQuality: module ? moduleSourceToQuality(module.source) : "pending",
-    source: module?.source,
-    previewTitle: params.previewTitle ?? module?.chart.title,
-    previewItems: params.previewItems ?? buildPreviewItems(module),
-    href: params.href,
-    actionLabel: params.actionLabel,
+    traffic: sorted.map((item) => ({
+      label: item.accountName || item.platform,
+      value: item.clicks,
+    })),
+    conversions: sorted.map((item) => ({
+      label: item.accountName || item.platform,
+      value: item.conversions,
+    })),
+    roi: sorted.map((item) => ({
+      label: item.accountName || item.platform,
+      value: item.roas ?? 0,
+    })),
   };
 }
 
-function qualityTone(quality: ChartDataQuality): CSSProperties {
-  if (quality === "high") {
-    return {
-      color: pageColorTokens.brandGreenDark,
-      background: pageColorTokens.brandGreenLight,
-      border: "1px solid rgba(0, 166, 124, 0.26)",
-    };
-  }
-  if (quality === "medium") {
-    return {
-      color: "#8a5a00",
-      background: "#fff7e0",
-      border: "1px solid rgba(185, 137, 0, 0.28)",
-    };
-  }
-  if (quality === "low") {
-    return {
-      color: pageColorTokens.textSecondary,
-      background: pageColorTokens.surfaceMuted,
-      border: `1px solid ${pageColorTokens.borderSubtle}`,
-    };
-  }
-  return {
-    color: pageColorTokens.textSecondary,
-    background: pageColorTokens.surfaceMuted,
-    border: `1px dashed ${pageColorTokens.borderInput}`,
-  };
+function hasSeriesData(series: ChartSeries[]): boolean {
+  return series.some((item) => item.points.some((point) => point.value > 0));
 }
 
-function chartTypeLabel(type: ChartType, t: ReturnType<typeof useTranslation>["t"]): string {
-  switch (type) {
-    case "line":
-      return t("insights.chartTypeLine");
-    case "bar":
-      return t("insights.chartTypeBar");
-    case "stacked_bar":
-      return t("insights.chartTypeStackedBar");
-    case "funnel":
-      return t("insights.chartTypeFunnel");
-    case "table":
-      return t("insights.chartTypeTable");
-    default:
-      return t("insights.chartTypeCohort");
-  }
+function hasComparisonData(items: ComparisonItem[]): boolean {
+  return items.some((item) => item.value > 0);
 }
 
-function qualityLabel(
-  quality: ChartDataQuality,
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  switch (quality) {
-    case "high":
-      return t("insights.chartDataQualityHigh");
-    case "medium":
-      return t("insights.chartDataQualityMedium");
-    case "low":
-      return t("insights.chartDataQualityLow");
-    default:
-      return t("insights.chartDataQualityPending");
-  }
+function MetricTile({ label, value }: SummaryMetric) {
+  return (
+    <div style={pageMetricCardStyle}>
+      <div style={pageMetricTileStyle}>
+        <p style={pageMetricLabelStyle}>{label}</p>
+        <p style={pageMetricValueStyle}>{value}</p>
+      </div>
+    </div>
+  );
 }
 
-function sourceLabel(
-  source: ModuleSource,
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  switch (source) {
-    case "real":
-      return t("insights.chartSourceReal");
-    case "estimated":
-      return t("insights.chartSourceEstimated");
-    default:
-      return t("insights.chartSourcePending");
-  }
+function EmptyChart({ label }: { label: string }) {
+  return <div style={chartEmptyStyle}>{label}</div>;
 }
 
-function sourceTone(source: ModuleSource): CSSProperties {
-  if (source === "real") {
-    return {
-      color: pageColorTokens.brandGreenDark,
-      background: pageColorTokens.brandGreenLight,
-      border: "1px solid rgba(0, 166, 124, 0.26)",
-    };
+function LineChart({
+  series,
+  format,
+  currencyCode,
+}: {
+  series: ChartSeries[];
+  format: MetricFormat;
+  currencyCode: string | null;
+}) {
+  const points = series[0]?.points ?? [];
+  if (!hasSeriesData(series) || points.length === 0) {
+    return <EmptyChart label="—" />;
   }
-  if (source === "estimated") {
-    return {
-      color: "#8a5a00",
-      background: "#fff7e0",
-      border: "1px solid rgba(185, 137, 0, 0.28)",
-    };
-  }
-  return {
-    color: pageColorTokens.textSecondary,
-    background: pageColorTokens.surfaceMuted,
-    border: `1px dashed ${pageColorTokens.borderInput}`,
-  };
+
+  const width = 720;
+  const height = 220;
+  const padding = { top: 16, right: 16, bottom: 28, left: 48 };
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+  const maxValue = niceMax(
+    Math.max(0, ...series.flatMap((item) => item.points.map((point) => point.value))),
+  );
+  const getX = (index: number) =>
+    padding.left + (points.length === 1 ? innerWidth / 2 : (index / (points.length - 1)) * innerWidth);
+  const getY = (value: number) => padding.top + innerHeight - (value / maxValue) * innerHeight;
+  const xLabelIndices =
+    points.length <= 6
+      ? points.map((_, index) => index)
+      : [0, ...Array.from({ length: 4 }, (_, index) => Math.round(((index + 1) / 5) * (points.length - 1))), points.length - 1];
+
+  return (
+    <div style={chartFrameStyle}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" role="img">
+        {Y_AXIS_RATIOS.map((ratio) => {
+          const y = padding.top + innerHeight * (1 - ratio);
+          return (
+            <g key={ratio}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y}
+                y2={y}
+                stroke={pageColorTokens.borderSubtle}
+              />
+              <text
+                x={padding.left - 8}
+                y={y + 4}
+                textAnchor="end"
+                fontSize="10"
+                fill={pageColorTokens.textSecondary}
+              >
+                {formatAxisValue(maxValue * ratio, format, currencyCode)}
+              </text>
+            </g>
+          );
+        })}
+        {series.map((item) => {
+          const path = item.points
+            .map((point, index) => {
+              const command = index === 0 ? "M" : "L";
+              return `${command} ${getX(index).toFixed(1)} ${getY(point.value).toFixed(1)}`;
+            })
+            .join(" ");
+
+          return (
+            <g key={item.label}>
+              <path
+                d={path}
+                fill="none"
+                stroke={item.color}
+                strokeWidth="2.4"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+              {item.points.map((point, index) => (
+                <circle
+                  key={`${item.label}-${point.label}`}
+                  cx={getX(index)}
+                  cy={getY(point.value)}
+                  r={3.5}
+                  fill={item.color}
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                />
+              ))}
+            </g>
+          );
+        })}
+        {xLabelIndices.map((index) => (
+          <text
+            key={`${points[index]?.label ?? index}-${index}`}
+            x={getX(index)}
+            y={height - 8}
+            textAnchor="middle"
+            fontSize="10"
+            fill={pageColorTokens.textSecondary}
+          >
+            {points[index]?.label}
+          </text>
+        ))}
+      </svg>
+      <div style={legendStyle}>
+        {series.map((item) => (
+          <span key={item.label} style={legendItemStyle}>
+            <span style={{ ...legendDotStyle, background: item.color }} />
+            {item.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function buildPerformanceHref(
-  platform: AdsOverviewPlatform["platform"],
-  rangeDays: number,
-  search: string,
-): string {
-  const params = new URLSearchParams(search);
-  params.set("platform", platform);
-  params.set("range", String(rangeDays));
-  params.delete("sandbox");
-  return `/app/insights/charts/performance?${params.toString()}`;
+function VerticalBarChart({
+  items,
+  format,
+  currencyCode,
+}: {
+  items: ComparisonItem[];
+  format: MetricFormat;
+  currencyCode: string | null;
+}) {
+  if (!hasComparisonData(items)) {
+    return <EmptyChart label="—" />;
+  }
+
+  const maxValue = niceMax(Math.max(...items.map((item) => item.value), 0));
+
+  return (
+    <div style={barGroupStyle}>
+      {items.map((item, index) => {
+        const heightRatio = item.value > 0 ? Math.max(0.08, item.value / maxValue) : 0;
+        return (
+          <div key={item.label} style={barColumnStyle}>
+            <div style={barTrackStyle}>
+              <div
+                style={{
+                  ...barFillStyle,
+                  height: `${heightRatio * 100}%`,
+                  background: LINE_COLORS[index % LINE_COLORS.length],
+                }}
+              />
+            </div>
+            <div style={barValueStyle}>{formatPointValue(item.value, format, currencyCode)}</div>
+            <div style={barLabelStyle}>{item.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function buildChartsDashboard(params: {
-  overview: AdsOverviewSnapshot | null;
-  liveData: ChartsLiveData;
-  snapshot: Snapshot;
-  compareMode: CompareMode;
-  embeddedSearch: string;
-  pageSpeedTargetUrl: string | null;
-  landingPageLabel: string | null;
+function HorizontalBarChart({
+  items,
+  format,
+  currencyCode,
+}: {
+  items: ComparisonItem[];
+  format: MetricFormat;
+  currencyCode: string | null;
+}) {
+  if (!hasComparisonData(items)) {
+    return <EmptyChart label="—" />;
+  }
+
+  const maxValue = Math.max(...items.map((item) => item.value), 0);
+
+  return (
+    <div style={horizontalListStyle}>
+      {items.map((item, index) => {
+        const width = maxValue > 0 ? Math.max(0.08, item.value / maxValue) : 0;
+        return (
+          <div key={item.label} style={horizontalRowStyle}>
+            <div style={horizontalRowHeaderStyle}>
+              <span style={horizontalLabelStyle}>{item.label}</span>
+              <span style={horizontalValueStyle}>
+                {formatPointValue(item.value, format, currencyCode)}
+              </span>
+            </div>
+            <div style={horizontalTrackStyle}>
+              <div
+                style={{
+                  ...horizontalFillStyle,
+                  width: `${width * 100}%`,
+                  background: LINE_COLORS[index % LINE_COLORS.length],
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FunnelChart({
+  steps,
+  t,
+}: {
+  steps: FunnelStep[];
   t: ReturnType<typeof useTranslation>["t"];
-}): ChartsDashboard {
-  const {
-    overview,
-    liveData,
-    snapshot,
-    compareMode,
-    embeddedSearch,
-    pageSpeedTargetUrl,
-    landingPageLabel,
-    t,
-  } = params;
-  const connectedPlatforms = overview?.platforms.filter((item) => item.connected) ?? [];
-  const connectedCount = connectedPlatforms.length;
-  const freshPlatforms = connectedPlatforms.filter(
-    (item) => item.snapshot && !item.snapshot.stale,
-  ).length;
-  const bestPlatform = [...connectedPlatforms]
-    .filter((item) => item.totals?.roas != null)
-    .sort((left, right) => (right.totals?.roas ?? 0) - (left.totals?.roas ?? 0))[0] ?? null;
-  const disapprovedTotal = (overview?.reviews ?? []).reduce(
-    (sum, review) => sum + review.disapproved,
-    0,
-  );
-  const healthAttentionCount = (overview?.health ?? []).filter((item) => item.state !== "ok").length;
-  const primaryPerformanceHref = buildPerformanceHref(
-    bestPlatform?.platform ?? "meta",
-    overview?.rangeDays ?? 7,
-    embeddedSearch,
-  );
-  const pageSpeedHref = pageSpeedTargetUrl
-    ? `/app/settings/pagespeed?url=${encodeURIComponent(pageSpeedTargetUrl)}&strategy=mobile&autorun=1&source=insights-charts`
-    : "/app/settings/pagespeed?source=insights-charts";
-  const profitModule = findModule(snapshot, "profit");
-  const costModule = findModule(snapshot, "cost");
-  const channelModule = findModule(snapshot, "channel");
-  const trafficModule = findModule(snapshot, "traffic");
-  const conversionModule = findModule(snapshot, "conversion");
-  const customerModule = findModule(snapshot, "customerValue");
-  const siteExperienceModule = findModule(snapshot, "siteExperience");
-  const inventoryModule = findModule(snapshot, "productInventory");
-  const afterSalesModule = findModule(snapshot, "afterSales");
-  const shortTermRoi = snapshot.report.roiLayers.find((item) => item.key === "short_term") ?? null;
-  const paybackRoi = snapshot.report.roiLayers.find((item) => item.key === "payback") ?? null;
-  const lifetimeRoi = snapshot.report.roiLayers.find((item) => item.key === "lifetime") ?? null;
-  const topLandingMetric = findMetricValue(trafficModule, "Top Landing");
-  const landingPreviewItems = buildLandingPreviewItems(liveData);
+}) {
+  if (!steps.some((step) => step.count > 0)) {
+    return <EmptyChart label="—" />;
+  }
 
-  const roiCards: DashboardCard[] = [
-    buildModuleCard({
-      id: "short_term_roi",
-      title: t("insights.chartCardShortTermRoiTitle"),
-      module: profitModule,
-      fallbackSummary:
-        shortTermRoi?.detail ??
-        t("insights.chartCardShortTermRoiSummaryPending"),
-      metrics: [
-        `${shortTermRoi?.title ?? t("insights.chartCardShortTermRoiTitle")} ${shortTermRoi?.value ?? "—"}`,
-        `${findMetricValue(profitModule, "贡献利润") ?? "贡献利润 —"}`,
-        `${findMetricValue(costModule, "广告花费") ?? "广告花费 —"}`,
-      ],
-      previewTitle: profitModule?.chart.title ?? shortTermRoi?.title,
-      href: primaryPerformanceHref,
-      actionLabel: t("insights.chartCardOpenPerformance"),
-    }),
-    buildModuleCard({
-      id: "channel_roi",
-      title: t("insights.chartCardChannelRoiTitle"),
-      module: channelModule,
-      fallbackSummary:
-        bestPlatform
-          ? t("insights.chartCardChannelRoiSummaryReady", {
-              platform: bestPlatform.accountName || bestPlatform.platform,
-              roas: formatRatio(bestPlatform.totals?.roas ?? null, "x"),
-            })
-          : t("insights.chartCardChannelRoiSummaryPending"),
-      metrics: [
-        `${findMetricValue(channelModule, "最高收入渠道") ?? "最高收入渠道 —"}`,
-        `${findMetricValue(channelModule, "最高利润渠道") ?? "最高利润渠道 —"}`,
-        connectedCount > 0
-          ? t("insights.chartCardConnectedPlatformsMetric", {
-              connected: connectedCount,
-              total: overview?.platforms.length ?? connectedCount,
-            })
-          : `${findMetricValue(channelModule, "Top 投放平台") ?? "Top 投放平台 —"}`,
-      ],
-      href: primaryPerformanceHref,
-      actionLabel: t("insights.chartCardOpenPerformance"),
-    }),
-    buildModuleCard({
-      id: "payback_curve",
-      title: t("insights.chartCardPaybackCurveTitle"),
-      module: conversionModule,
-      fallbackSummary: paybackRoi?.detail ?? t("insights.chartCardPaybackCurveSummary"),
-      metrics: [
-        `${paybackRoi?.title ?? t("insights.chartCardPaybackCurveTitle")} ${paybackRoi?.value ?? "—"}`,
-        `${findMetricValue(conversionModule, "整体 CVR") ?? "整体 CVR —"}`,
-        `${findMetricValue(siteExperienceModule, "性能分") ?? "性能分 —"}`,
-      ],
-      previewTitle: conversionModule?.chart.title ?? paybackRoi?.title,
-      href: "/app/insights?module=conversion",
-      actionLabel: t("insights.chartCardOpenEvidence"),
-    }),
-  ];
-
-  const acquisitionCards: DashboardCard[] = [
-    buildModuleCard({
-      id: "traffic_scale",
-      title: t("insights.chartCardTrafficScaleTitle"),
-      module: trafficModule,
-      fallbackSummary: t("insights.chartCardTrafficScaleSummaryPending"),
-      href: "/app/insights?module=traffic",
-      actionLabel: t("insights.chartCardOpenEvidence"),
-    }),
-    buildModuleCard({
-      id: "channel_quality",
-      title: t("insights.chartCardChannelQualityTitle"),
-      module: channelModule,
-      fallbackSummary:
-        healthAttentionCount > 0
-          ? t("insights.chartCardChannelQualitySummaryWatch", {
-              count: healthAttentionCount,
-            })
-          : t("insights.chartCardChannelQualitySummaryReady"),
-      metrics: [
-        t("insights.chartCardHealthMetric", { count: healthAttentionCount }),
-        connectedCount > 0
-          ? t("insights.chartCardFreshSnapshotsMetric", {
-              ready: freshPlatforms,
-              total: connectedCount,
-            })
-          : `${findMetricValue(channelModule, "可归因收入占比") ?? "可归因收入占比 —"}`,
-        `${findMetricValue(customerModule, "高价值客户占比") ?? "高价值客户占比 —"}`,
-      ],
-      previewTitle: t("insights.chartCardChannelQualityPreviewTitle"),
-      previewItems: buildChannelQualityPreviewItems(liveData, channelModule),
-      href: appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch),
-      actionLabel: t("insights.chartCardOpenCatalog"),
-    }),
-    buildModuleCard({
-      id: "acquisition_cohort",
-      title: t("insights.chartCardAcquisitionCohortTitle"),
-      module: customerModule,
-      fallbackSummary: t("insights.chartCardAcquisitionCohortSummary", {
-        compare:
-          compareMode === "historical_baseline"
-            ? t("insights.compareHistoricalBaseline")
-            : compareMode === "structural"
-              ? t("insights.compareStructural")
-              : t("insights.comparePreviousPeriod"),
-      }),
-      metrics: [
-        `${lifetimeRoi?.title ?? "长期价值"} ${lifetimeRoi?.value ?? "—"}`,
-        `${findMetricValue(customerModule, "复购率") ?? "复购率 —"}`,
-        `${findMetricValue(customerModule, "平均动态 LTV") ?? "平均动态 LTV —"}`,
-      ],
-      previewTitle: t("insights.chartCardAcquisitionCohortPreviewTitle"),
-      href: "/app/insights?module=customerValue",
-      actionLabel: t("insights.chartCardOpenEvidence"),
-    }),
-  ];
-
-  const conversionCards: DashboardCard[] = [
-    buildModuleCard({
-      id: "funnel",
-      title: t("insights.chartCardFunnelTitle"),
-      module: conversionModule,
-      fallbackSummary: t("insights.chartCardFunnelSummary"),
-      href: "/app/today/diagnosis?detail=risk&riskTab=insights&insightKey=conversion_health",
-      actionLabel: t("insights.chartCardOpenDiagnosis"),
-    }),
-    {
-      id: "landing_page",
-      title: t("insights.chartCardLandingPageTitle"),
-      summary: landingPageLabel
-        ? t("insights.chartCardLandingPageSummaryFocused", { page: landingPageLabel })
-        : topLandingMetric
-          ? `${t("insights.chartCardLandingPageSummary")} ${topLandingMetric}`
-          : t("insights.chartCardLandingPageSummary"),
-      chartType: "table",
-      metrics: [
-        landingPageLabel
-          ? t("insights.chartCardLandingPageMetricFocused", { page: landingPageLabel })
-          : `Top Landing ${topLandingMetric ?? "—"}`,
-        `${findMetricValue(trafficModule, "近 7 天 Sessions") ?? "近 7 天 Sessions —"}`,
-        `${findMetricValue(conversionModule, "整体 CVR") ?? "整体 CVR —"}`,
-      ],
-      dataQuality:
-        trafficModule && trafficModule.source !== "pending"
-          ? moduleSourceToQuality(trafficModule.source)
-          : pageSpeedTargetUrl
-            ? "medium"
-            : "pending",
-      source: trafficModule?.source,
-      previewTitle: t("insights.chartCardLandingPagePreviewTitle"),
-      previewItems:
-        landingPreviewItems.length > 0
-          ? landingPreviewItems
-          : buildPreviewItems(trafficModule),
-      href: pageSpeedHref,
-      actionLabel: t("insights.chartCardOpenPageSpeed"),
-    },
-    buildModuleCard({
-      id: "site_experience",
-      title: t("insights.chartCardSiteExperienceTitle"),
-      module: siteExperienceModule,
-      fallbackSummary: t("insights.chartCardSiteExperienceSummary"),
-      href: pageSpeedHref,
-      actionLabel: t("insights.chartCardOpenPageSpeed"),
-    }),
-  ];
-
-  const merchandisingOpsCards: DashboardCard[] = [
-    {
-      id: "product_review",
-      title: t("insights.chartCardProductReviewTitle"),
-      summary:
-        disapprovedTotal > 0
-          ? t("insights.chartCardProductReviewSummaryWatch", { count: disapprovedTotal })
-          : t("insights.chartCardProductReviewSummaryReady"),
-      chartType: "table",
-      metrics: (overview?.reviews ?? []).map((review) =>
-        t("insights.chartCardProductReviewMetric", {
-          channel:
-            review.channel === "gmc"
-              ? t("insights.reviewChannelGmc")
-              : t("insights.reviewChannelMeta"),
-          count: review.disapproved,
-        }),
-      ),
-      dataQuality: hasReviewCoverage(overview?.reviews ?? []) ? "high" : "pending",
-      previewTitle: connectedCount > 0 ? t("insights.chartCardOpenCatalog") : undefined,
-      previewItems:
-        overview?.reviews.slice(0, 3).map((review) => ({
-          label:
-            review.channel === "gmc"
-              ? t("insights.reviewChannelGmc")
-              : t("insights.reviewChannelMeta"),
-          display: `${review.disapproved}`,
-          note: `${review.approved}/${review.total}`,
-        })) ?? [],
-      href: appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch),
-      actionLabel: t("insights.chartCardOpenCatalog"),
-    },
-    buildModuleCard({
-      id: "inventory_flow",
-      title: t("insights.chartCardInventoryFlowTitle"),
-      module: inventoryModule,
-      fallbackSummary: t("insights.chartCardInventoryFlowSummary"),
-      previewItems: buildInventoryPreviewItems(liveData, inventoryModule),
-      href: "/app/today/diagnosis?detail=risk&riskTab=environment&environmentKey=inventory",
-      actionLabel: t("insights.chartCardOpenDiagnosis"),
-    }),
-    buildModuleCard({
-      id: "fulfillment_refund",
-      title: t("insights.chartCardFulfillmentRefundTitle"),
-      module: afterSalesModule,
-      fallbackSummary: t("insights.chartCardFulfillmentRefundSummary"),
-      previewItems: buildAfterSalesPreviewItems(liveData, afterSalesModule),
-      href: "/app/today/orders",
-      actionLabel: t("insights.chartCardOpenOrders"),
-    }),
-  ];
-
-  return {
-    groups: [
-      {
-        key: "roi",
-        title: t("insights.chartGroupRoiTitle"),
-        summary: t("insights.chartGroupRoiSummary"),
-        cards: roiCards,
-      },
-      {
-        key: "acquisition",
-        title: t("insights.chartGroupAcquisitionTitle"),
-        summary: t("insights.chartGroupAcquisitionSummary"),
-        cards: acquisitionCards,
-      },
-      {
-        key: "conversion",
-        title: t("insights.chartGroupConversionTitle"),
-        summary: t("insights.chartGroupConversionSummary"),
-        cards: conversionCards,
-      },
-      {
-        key: "merchandising_ops",
-        title: t("insights.chartGroupMerchandisingOpsTitle"),
-        summary: t("insights.chartGroupMerchandisingOpsSummary"),
-        cards: merchandisingOpsCards,
-      },
-    ],
+  const labelMap: Record<string, string> = {
+    visit: t("insights.chartFunnelVisit"),
+    cart: t("insights.chartFunnelAddToCart"),
+    checkout: t("insights.chartFunnelCheckout"),
+    order: t("insights.chartFunnelOrder"),
   };
+  const maxCount = Math.max(...steps.map((step) => step.count), 1);
+
+  return (
+    <div style={funnelStyle}>
+      {steps.map((step, index) => {
+        const width = Math.max(0.2, step.count / maxCount);
+        return (
+          <div key={step.label} style={funnelRowStyle}>
+            <div style={funnelHeaderStyle}>
+              <span style={funnelLabelStyle}>{labelMap[step.label] ?? step.label}</span>
+              <span style={funnelValueStyle}>{formatInteger(step.count)}</span>
+            </div>
+            <div style={funnelTrackStyle}>
+              <div
+                style={{
+                  ...funnelFillStyle,
+                  width: `${width * 100}%`,
+                  opacity: 1 - index * 0.12,
+                }}
+              />
+            </div>
+            <div style={funnelRateStyle}>
+              {step.rateFromPrev == null ? "—" : formatPercent(step.rateFromPrev)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function hasReviewCoverage(reviews: AdsOverviewReview[]): boolean {
-  return reviews.some((review) => review.total > 0);
+function CompactMetricGrid({
+  metrics,
+}: {
+  metrics: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <div style={compactMetricGridStyle}>
+      {metrics.map((metric) => (
+        <div key={metric.label} style={compactMetricCardStyle}>
+          <span style={compactMetricLabelStyle}>{metric.label}</span>
+          <strong style={compactMetricValueStyle}>{metric.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function InsightsChartsOverviewPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
-  const navigate = useNavigate();
   const { overview, liveData, failed } = useLoaderData<InsightsOverviewLoaderData>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
-  const embeddedSearch = useEmbeddedLocationSearch();
 
   const rangeDaysParam = searchParams.get("range");
   const rangeDays =
-    rangeDaysParam === "30" ? 30 : rangeDaysParam === "14" ? 14 : overview?.rangeDays ?? 7;
-  const periodKey = rangeDays === 30 ? "30d" : "7d";
-  const compareMode = (
-    COMPARE_OPTIONS.includes(
-      (searchParams.get("compare") as CompareMode | null) ?? "previous_period",
-    )
-      ? (searchParams.get("compare") as CompareMode | null)
-      : "previous_period"
-  ) ?? "previous_period";
-  const selectedGroup = (searchParams.get("group") as DashboardGroupKey | null) ?? null;
-  const selectedCard = searchParams.get("card");
+    rangeDaysParam === "30" ? 30 : rangeDaysParam === "14" ? 14 : 7;
   const refreshing = revalidator.state !== "idle";
-  const pageSpeedTargetUrl = searchParams.get("pageSpeedUrl");
-  const landingPageLabel = searchParams.get("landingPage");
-  const focusCard = searchParams.get("focusCard");
-  const focusLabel = searchParams.get("focusLabel");
-  const snapshots = useMemo(() => buildLiveSnapshots(liveData), [liveData]);
-  const snapshot = useMemo(() => snapshots[periodKey], [periodKey, snapshots]);
 
-  const dashboard = useMemo(
+  const currencyCode =
+    liveData?.shopifyReports?.currencyCode ??
+    liveData?.ads?.currencyCode ??
+    overview?.currencyCode ??
+    liveData?.diagnosis?.summaryMetrics.currency ??
+    null;
+
+  const topMetrics = useMemo(
+    () => (liveData ? buildTopMetrics(liveData, overview, currencyCode, t) : []),
+    [currencyCode, liveData, overview, t],
+  );
+  const trafficBuckets = useMemo(
+    () => (liveData ? buildTrafficBuckets(liveData, t) : []),
+    [liveData, t],
+  );
+  const revenueSeries = useMemo(
+    () => (liveData ? buildRevenueSeries(liveData, t) : []),
+    [liveData, t],
+  );
+  const { orderCountSeries, orderAmountSeries, refundSeries } = useMemo(
     () =>
-      buildChartsDashboard({
-        overview,
-        liveData,
-        snapshot,
-        compareMode,
-        embeddedSearch,
-        pageSpeedTargetUrl,
-        landingPageLabel,
-        t,
-      }),
-    [
-      compareMode,
-      embeddedSearch,
-      landingPageLabel,
-      liveData,
-      overview,
-      pageSpeedTargetUrl,
-      snapshot,
-      t,
-    ],
+      liveData
+        ? buildOrderAfterSalesSeries(liveData, t)
+        : { orderCountSeries: [], orderAmountSeries: [], refundSeries: [] },
+    [liveData, t],
+  );
+  const fulfillmentSeries = useMemo(
+    () => (liveData ? buildFulfillmentSeries(liveData, t) : []),
+    [liveData, t],
+  );
+  const funnelSteps = useMemo(
+    () => (liveData ? buildFunnelData(liveData, rangeDays) : []),
+    [liveData, rangeDays],
+  );
+  const adsComparisons = useMemo(
+    () =>
+      liveData
+        ? buildAdsComparisons(liveData)
+        : { traffic: [], conversions: [], roi: [] },
+    [liveData],
+  );
+
+  const storefrontFunnel = liveData?.shopifyReports?.storefrontFunnel ?? null;
+  const fulfillmentMetrics = liveData?.diagnosis?.summaryMetrics ?? null;
+  const hasAnyData = Boolean(
+    hasComparisonData(trafficBuckets) ||
+      hasSeriesData(revenueSeries) ||
+      hasSeriesData(orderCountSeries) ||
+      hasSeriesData(refundSeries) ||
+      hasSeriesData(fulfillmentSeries) ||
+      funnelSteps.some((step) => step.count > 0) ||
+      hasComparisonData(adsComparisons.traffic) ||
+      hasComparisonData(adsComparisons.conversions) ||
+      hasComparisonData(adsComparisons.roi),
   );
 
   const handleRangeChange = (next: string) => {
@@ -757,52 +744,26 @@ export function InsightsChartsOverviewPage() {
     setSearchParams(params, { preventScrollReset: true });
   };
 
-  const handleCompareChange = (next: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("compare", next);
-    setSearchParams(params, { preventScrollReset: true });
-  };
-
-  const anyConnected = overview?.platforms.some((item) => item.connected) ?? false;
-  const hasBusinessEvidence = snapshot.modules.some((item) => item.source !== "pending");
-  const hasAnyEvidence = anyConnected || hasBusinessEvidence;
-
   return (
     <div style={isMobile ? mobilePageContentStyle : analysisPageContentStyle}>
       <PageHeaderNav
         titleBarTitle={t("nav.insights")}
         title={t("insights.chartsTitle")}
-        subtitle={t("insights.chartsSubtitle")}
+        subtitle={t("insights.chartCenterPageSubtitle")}
         backLabel={t("insights.backToToday")}
         fallbackPath="/app/today"
       />
 
       <div style={toolbarStyle(isMobile)}>
-        <div style={toolbarFilterGrid(isMobile)}>
-          <DestinationFilterBar
-            label={t("insights.rangeLabel")}
-            items={RANGE_OPTIONS.map((days) => ({
-              key: String(days),
-              label: t("insights.rangeDays", { count: days }),
-            }))}
-            active={String(rangeDays)}
-            onChange={handleRangeChange}
-          />
-          <DestinationFilterBar
-            label={t("insights.compareLabel")}
-            items={COMPARE_OPTIONS.map((mode) => ({
-              key: mode,
-              label:
-                mode === "previous_period"
-                  ? t("insights.comparePreviousPeriod")
-                  : mode === "historical_baseline"
-                    ? t("insights.compareHistoricalBaseline")
-                    : t("insights.compareStructural"),
-            }))}
-            active={compareMode}
-            onChange={handleCompareChange}
-          />
-        </div>
+        <DestinationFilterBar
+          label={t("insights.rangeLabel")}
+          items={RANGE_OPTIONS.map((days) => ({
+            key: String(days),
+            label: t("insights.rangeDays", { count: days }),
+          }))}
+          active={String(rangeDays)}
+          onChange={handleRangeChange}
+        />
         <div style={toolbarSideStyle}>
           {overview ? (
             <span style={pageHintTextStyle}>
@@ -810,10 +771,6 @@ export function InsightsChartsOverviewPage() {
                 start: overview.dateStart,
                 end: overview.dateEnd,
               })}
-            </span>
-          ) : liveData?.generatedAt ? (
-            <span style={pageHintTextStyle}>
-              {new Date(liveData.generatedAt).toLocaleString()}
             </span>
           ) : null}
           <button
@@ -829,144 +786,193 @@ export function InsightsChartsOverviewPage() {
 
       {failed ? <div style={errorBoxStyle}>{t("insights.loadFailed")}</div> : null}
 
-      {!hasAnyEvidence ? (
+      {!hasAnyData ? (
         <div style={pageEmptyStateStyle}>
           <strong style={{ fontSize: "1rem", color: pageColorTokens.textPrimary }}>
-            {t("insights.emptyTitle")}
+            {t("insights.chartCenterEmptyTitle")}
           </strong>
-          <span>{t("insights.emptyBody")}</span>
-          <button
-            type="button"
-            style={primaryButtonStyle}
-            onClick={() => navigate(appendEmbeddedSearchToPath("/app/ads-catalog", embeddedSearch))}
-          >
-            {t("insights.emptyCta")}
-          </button>
+          <span>{t("insights.chartCenterEmptyBody")}</span>
         </div>
       ) : (
         <>
-          <PageSurface>
-            <PageSectionHeader
-              title={t("insights.chartsOverviewSectionTitle")}
-              subtitle={t("insights.chartsOverviewSectionSubtitle")}
-            />
-            <div style={metricGridStyle(isMobile)}>
-              {snapshot.topMetrics.slice(0, 4).map((metric) => (
-                <MetricTile key={metric.label} label={metric.label} value={metric.value} />
+          <PageSurface title={t("insights.chartCenterSummaryTitle")}>
+            <div style={summaryGridStyle(isMobile)}>
+              {topMetrics.map((metric) => (
+                <MetricTile key={metric.label} {...metric} />
               ))}
             </div>
           </PageSurface>
 
-          {dashboard.groups.map((group) => (
-            <PageSurface key={group.key} title={group.title}>
-              <div style={groupSummaryRowStyle}>
-                <div id={`chart-group-${group.key}`} style={groupSummaryStyle}>
-                  {group.summary}
-                </div>
-                {selectedGroup === group.key ? (
-                  <span style={selectedGroupBadgeStyle}>{t("insights.chartGroupFocused")}</span>
-                ) : null}
+          <PageSurface title={t("insights.chartCenterTrafficTitle")}>
+            <div style={sectionStackStyle}>
+              <VerticalBarChart
+                items={trafficBuckets}
+                format="number"
+                currencyCode={currencyCode}
+              />
+              <CompactMetricGrid
+                metrics={[
+                  {
+                    label: t("insights.chartTrafficSessions"),
+                    value:
+                      liveData?.ga4?.summary?.totalSessions != null
+                        ? formatInteger(liveData.ga4.summary.totalSessions)
+                        : "—",
+                  },
+                  {
+                    label: t("insights.chartTrafficTopSource"),
+                    value: liveData?.ga4?.channelRows?.[0]?.key ?? "—",
+                  },
+                  {
+                    label: t("insights.chartTrafficTopLanding"),
+                    value: liveData?.ga4?.landingRows?.[0]?.key ?? "—",
+                  },
+                ]}
+              />
+            </div>
+          </PageSurface>
+
+          <PageSurface title={t("insights.chartCenterRevenueTitle")}>
+            <LineChart
+              series={revenueSeries}
+              format="money"
+              currencyCode={currencyCode}
+            />
+          </PageSurface>
+
+          <PageSurface title={t("insights.chartCenterFunnelTitle")}>
+            <div style={sectionStackStyle}>
+              <CompactMetricGrid
+                metrics={[
+                  {
+                    label: t("insights.chartFunnelClickConversion"),
+                    value: formatPercent(
+                      storefrontFunnel
+                        ? calculateRate(
+                            storefrontFunnel.completedCheckout,
+                            storefrontFunnel.sessions,
+                          )
+                        : calculateRate(
+                            funnelSteps[3]?.count ?? 0,
+                            funnelSteps[0]?.count ?? 0,
+                          ),
+                    ),
+                  },
+                  {
+                    label: t("insights.chartFunnelCartConversion"),
+                    value: formatPercent(
+                      storefrontFunnel
+                        ? calculateRate(
+                            storefrontFunnel.cartAdditions,
+                            storefrontFunnel.sessions,
+                          )
+                        : calculateRate(
+                            funnelSteps[1]?.count ?? 0,
+                            funnelSteps[0]?.count ?? 0,
+                          ),
+                    ),
+                  },
+                  {
+                    label: t("insights.chartFunnelOrderConversion"),
+                    value: formatPercent(
+                      storefrontFunnel
+                        ? calculateRate(
+                            storefrontFunnel.completedCheckout,
+                            storefrontFunnel.reachedCheckout,
+                          )
+                        : calculateRate(
+                            funnelSteps[3]?.count ?? 0,
+                            funnelSteps[2]?.count ?? 0,
+                          ),
+                    ),
+                  },
+                ]}
+              />
+              <FunnelChart steps={funnelSteps} t={t} />
+            </div>
+          </PageSurface>
+
+          <PageSurface title={t("insights.chartCenterOrderAfterSalesTitle")}>
+            <div style={subChartGridStyle(isMobile)}>
+              <div style={subChartCardStyle}>
+                <div style={subChartTitleStyle}>{t("insights.chartOrdersCount")}</div>
+                <LineChart
+                  series={orderCountSeries}
+                  format="number"
+                  currencyCode={currencyCode}
+                />
               </div>
-              <div style={cardGridStyle(isMobile)}>
-                {group.cards.map((card) => {
-                  const focused = selectedGroup === group.key && selectedCard === card.id;
-                  const activeFocusLabel =
-                    focusLabel && (focusCard ? card.id === focusCard : card.id === selectedCard)
-                      ? focusLabel
-                      : null;
-                  const previewItems = prioritizeFocusedPreviewItems(
-                    card.previewItems ?? [],
-                    activeFocusLabel,
-                  );
-                  return (
-                    <div key={card.id} style={chartCardStyle(focused)}>
-                      <div style={chartCardHeaderStyle}>
-                        <div style={{ display: "grid", gap: "0.35rem" }}>
-                          <div style={cardTitleStyle}>{card.title}</div>
-                          <div style={chartCardSummaryStyle}>{card.summary}</div>
-                        </div>
-                        <div style={chartCardBadgeRowStyle}>
-                          {card.source ? (
-                            <span style={{ ...sourcePillStyle, ...sourceTone(card.source) }}>
-                              {sourceLabel(card.source, t)}
-                            </span>
-                          ) : null}
-                          <span style={cardTypePillStyle}>
-                            {chartTypeLabel(card.chartType, t)}
-                          </span>
-                          <span style={{ ...dataQualityPillStyle, ...qualityTone(card.dataQuality) }}>
-                            {qualityLabel(card.dataQuality, t)}
-                          </span>
-                        </div>
-                      </div>
-                      <div style={metricChipWrapStyle}>
-                        {card.metrics.map((metric) => (
-                          <span key={`${card.id}-${metric}`} style={metricChipStyle}>
-                            {metric}
-                          </span>
-                        ))}
-                      </div>
-                      {previewItems.length > 0 ? (
-                        <div style={previewListStyle}>
-                          {card.previewTitle || activeFocusLabel ? (
-                            <div style={previewHeaderStyle}>
-                              {card.previewTitle ? (
-                                <span style={previewTitleStyle}>{card.previewTitle}</span>
-                              ) : null}
-                              {activeFocusLabel ? (
-                                <span style={previewFocusStyle}>{activeFocusLabel}</span>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          {previewItems.map((item) => {
-                            const itemFocused = matchesFocusLabel(item.label, activeFocusLabel);
-                            return (
-                              <div
-                                key={`${card.id}-${item.label}-${item.display}`}
-                                style={previewRowStyle(itemFocused)}
-                              >
-                                <span style={previewLabelStyle}>{item.label}</span>
-                                <span style={previewValueStyle}>{item.display}</span>
-                                {item.note ? (
-                                  <span style={previewNoteStyle}>{item.note}</span>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                      {card.href ? (
-                        <button
-                          type="button"
-                          style={secondaryButtonStyle}
-                          onClick={() => navigate(appendEmbeddedSearchToPath(card.href!, embeddedSearch))}
-                        >
-                          {card.actionLabel ?? t("insights.chartCardOpenEvidence")}
-                        </button>
-                      ) : (
-                        <span style={pageHintTextStyle}>
-                          {t("insights.chartCardPendingAction")}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+              <div style={subChartCardStyle}>
+                <div style={subChartTitleStyle}>{t("insights.chartOrdersAmount")}</div>
+                <LineChart
+                  series={orderAmountSeries}
+                  format="money"
+                  currencyCode={currencyCode}
+                />
               </div>
-            </PageSurface>
-          ))}
+              <div style={subChartCardStyle}>
+                <div style={subChartTitleStyle}>{t("insights.chartRefundQuantity")}</div>
+                <LineChart
+                  series={refundSeries}
+                  format="number"
+                  currencyCode={currencyCode}
+                />
+              </div>
+            </div>
+          </PageSurface>
+
+          <PageSurface title={t("insights.chartCenterFulfillmentTitle")}>
+            <div style={sectionStackStyle}>
+              <CompactMetricGrid
+                metrics={[
+                  {
+                    label: t("insights.chartFulfillmentOverdue"),
+                    value: formatInteger(fulfillmentMetrics?.overdueOrderCount),
+                  },
+                  {
+                    label: t("insights.chartFulfillmentCarrierIssues"),
+                    value: formatInteger(fulfillmentMetrics?.carrierIssueCount),
+                  },
+                ]}
+              />
+              <LineChart
+                series={fulfillmentSeries}
+                format="number"
+                currencyCode={currencyCode}
+              />
+            </div>
+          </PageSurface>
+
+          <PageSurface title={t("insights.chartCenterAdsTitle")}>
+            <div style={subChartGridStyle(isMobile)}>
+              <div style={subChartCardStyle}>
+                <div style={subChartTitleStyle}>{t("insights.chartAdsTraffic")}</div>
+                <HorizontalBarChart
+                  items={adsComparisons.traffic}
+                  format="number"
+                  currencyCode={currencyCode}
+                />
+              </div>
+              <div style={subChartCardStyle}>
+                <div style={subChartTitleStyle}>{t("insights.chartAdsConversions")}</div>
+                <HorizontalBarChart
+                  items={adsComparisons.conversions}
+                  format="number"
+                  currencyCode={currencyCode}
+                />
+              </div>
+              <div style={subChartCardStyle}>
+                <div style={subChartTitleStyle}>{t("insights.chartAdsRoi")}</div>
+                <HorizontalBarChart
+                  items={adsComparisons.roi}
+                  format="ratio"
+                  currencyCode={currencyCode}
+                />
+              </div>
+            </div>
+          </PageSurface>
         </>
       )}
-    </div>
-  );
-}
-
-function MetricTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={pageMetricCardStyle}>
-      <div style={pageMetricTileStyle}>
-        <p style={pageMetricLabelStyle}>{label}</p>
-        <p style={pageMetricValueStyle}>{value}</p>
-      </div>
     </div>
   );
 }
@@ -974,14 +980,8 @@ function MetricTile({ label, value }: { label: string; value: string }) {
 const toolbarStyle = (isMobile: boolean): CSSProperties => ({
   display: "flex",
   flexDirection: isMobile ? "column" : "row",
-  alignItems: isMobile ? "stretch" : "flex-end",
   justifyContent: "space-between",
-  gap: "0.75rem",
-});
-
-const toolbarFilterGrid = (isMobile: boolean): CSSProperties => ({
-  display: "grid",
-  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(220px, max-content))",
+  alignItems: isMobile ? "stretch" : "flex-end",
   gap: "0.75rem",
 });
 
@@ -992,175 +992,227 @@ const toolbarSideStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const metricGridStyle = (isMobile: boolean): CSSProperties => ({
+const summaryGridStyle = (isMobile: boolean): CSSProperties => ({
   display: "grid",
-  gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))",
   gap: "0.75rem",
 });
 
-const groupSummaryStyle: CSSProperties = {
-  fontSize: 13,
-  lineHeight: 1.5,
-  color: pageColorTokens.textBody,
+const sectionStackStyle: CSSProperties = {
+  display: "grid",
+  gap: "1rem",
 };
 
-const groupSummaryRowStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "0.75rem",
-  flexWrap: "wrap",
-};
-
-const cardGridStyle = (isMobile: boolean): CSSProperties => ({
+const subChartGridStyle = (isMobile: boolean): CSSProperties => ({
   display: "grid",
   gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+  gap: "0.85rem",
+});
+
+const subChartCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 14,
+  background: pageColorTokens.surfaceMuted,
+  padding: "0.85rem",
+  display: "grid",
   gap: "0.75rem",
-});
-
-const chartCardStyle = (focused: boolean): CSSProperties => ({
-  ...destinationSurfaceStyle,
-  padding: "1rem",
-  display: "grid",
-  gap: "0.8rem",
-  borderColor: focused ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle,
-  boxShadow: focused ? "0 0 0 1px rgba(0, 91, 211, 0.12)" : destinationSurfaceStyle.boxShadow,
-  background: focused ? "#f7fbff" : pageColorTokens.surface,
-});
-
-const chartCardHeaderStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.65rem",
 };
 
-const chartCardSummaryStyle: CSSProperties = {
+const subChartTitleStyle: CSSProperties = {
   fontSize: 13,
-  lineHeight: 1.5,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const chartFrameStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.75rem",
+};
+
+const chartEmptyStyle: CSSProperties = {
+  display: "grid",
+  placeItems: "center",
+  minHeight: 180,
+  borderRadius: 14,
+  border: `1px dashed ${pageColorTokens.borderInput}`,
+  color: pageColorTokens.textSecondary,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const legendStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.85rem",
+  flexWrap: "wrap",
+  fontSize: 12,
+  color: pageColorTokens.textSecondary,
+};
+
+const legendItemStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+};
+
+const legendDotStyle: CSSProperties = {
+  width: 10,
+  height: 10,
+  borderRadius: 999,
+};
+
+const barGroupStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "0.85rem",
+  alignItems: "end",
+  minHeight: 260,
+};
+
+const barColumnStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.45rem",
+  justifyItems: "center",
+};
+
+const barTrackStyle: CSSProperties = {
+  width: "100%",
+  minHeight: 180,
+  borderRadius: 14,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  display: "flex",
+  alignItems: "flex-end",
+  padding: "0.6rem",
+};
+
+const barFillStyle: CSSProperties = {
+  width: "100%",
+  borderRadius: 10,
+  minHeight: 12,
+};
+
+const barValueStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const barLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textBody,
+  textAlign: "center",
+};
+
+const horizontalListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.75rem",
+};
+
+const horizontalRowStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+};
+
+const horizontalRowHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+};
+
+const horizontalLabelStyle: CSSProperties = {
+  fontSize: 12,
   color: pageColorTokens.textBody,
 };
 
-const chartCardBadgeRowStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.4rem",
-};
-
-const cardTitleStyle: CSSProperties = {
-  fontSize: 15,
-  fontWeight: 750,
-  color: pageColorTokens.textPrimary,
-};
-
-const cardTypePillStyle: CSSProperties = {
-  padding: "0.16rem 0.5rem",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
-  color: pageColorTokens.textSecondary,
-  background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-};
-
-const dataQualityPillStyle: CSSProperties = {
-  padding: "0.16rem 0.5rem",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
-};
-
-const sourcePillStyle: CSSProperties = {
-  padding: "0.16rem 0.5rem",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
-};
-
-const metricChipWrapStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.4rem",
-};
-
-const metricChipStyle: CSSProperties = {
-  padding: "0.36rem 0.55rem",
-  borderRadius: 10,
+const horizontalValueStyle: CSSProperties = {
   fontSize: 12,
+  fontWeight: 700,
   color: pageColorTokens.textPrimary,
-  background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
 };
 
-const previewListStyle: CSSProperties = {
+const horizontalTrackStyle: CSSProperties = {
+  width: "100%",
+  height: 10,
+  borderRadius: 999,
+  background: pageColorTokens.divider,
+  overflow: "hidden",
+};
+
+const horizontalFillStyle: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+};
+
+const funnelStyle: CSSProperties = {
   display: "grid",
-  gap: "0.4rem",
-  padding: "0.75rem",
+  gap: "0.75rem",
+};
+
+const funnelRowStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+};
+
+const funnelHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+};
+
+const funnelLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textBody,
+};
+
+const funnelValueStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const funnelTrackStyle: CSSProperties = {
+  width: "100%",
+  height: 18,
+  borderRadius: 999,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  overflow: "hidden",
+};
+
+const funnelFillStyle: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  background: "linear-gradient(90deg, #2952d8 0%, #4070f4 100%)",
+};
+
+const funnelRateStyle: CSSProperties = {
+  fontSize: 11,
+  color: pageColorTokens.textSecondary,
+};
+
+const compactMetricGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: "0.75rem",
+};
+
+const compactMetricCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
   borderRadius: 12,
   background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-};
-
-const previewHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "0.5rem",
-  flexWrap: "wrap",
-};
-
-const previewTitleStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  color: pageColorTokens.textSecondary,
-};
-
-const previewFocusStyle: CSSProperties = {
-  padding: "0.16rem 0.45rem",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
-  color: pageColorTokens.brandBlueDark,
-  background: "#eef4ff",
-  border: "1px solid rgba(0, 91, 211, 0.18)",
-};
-
-const previewRowStyle = (focused: boolean): CSSProperties => ({
+  padding: "0.75rem",
   display: "grid",
-  gap: "0.12rem",
-  padding: "0.35rem 0.45rem",
-  borderRadius: 10,
-  background: focused ? "#eef4ff" : "transparent",
-  border: focused
-    ? "1px solid rgba(0, 91, 211, 0.18)"
-    : "1px solid transparent",
-});
-
-const previewLabelStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  color: pageColorTokens.textPrimary,
+  gap: "0.25rem",
 };
 
-const previewValueStyle: CSSProperties = {
-  fontSize: 12,
-  color: pageColorTokens.textBody,
-};
-
-const previewNoteStyle: CSSProperties = {
+const compactMetricLabelStyle: CSSProperties = {
   fontSize: 11,
-  lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
 };
 
-const selectedGroupBadgeStyle: CSSProperties = {
-  padding: "0.18rem 0.55rem",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 700,
-  color: pageColorTokens.brandBlueDark,
-  background: "#eef4ff",
-  border: "1px solid rgba(0, 91, 211, 0.2)",
+const compactMetricValueStyle: CSSProperties = {
+  fontSize: 16,
+  lineHeight: 1.2,
+  color: pageColorTokens.textPrimary,
 };
 
 const refreshButtonStyle = (disabled: boolean): CSSProperties => ({
@@ -1174,31 +1226,6 @@ const refreshButtonStyle = (disabled: boolean): CSSProperties => ({
   cursor: disabled ? "default" : "pointer",
   fontFamily: "inherit",
 });
-
-const secondaryButtonStyle: CSSProperties = {
-  justifySelf: "start",
-  padding: "0.4rem 0.75rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.borderInput}`,
-  background: pageColorTokens.surface,
-  color: pageColorTokens.textBody,
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
-const primaryButtonStyle: CSSProperties = {
-  padding: "0.5rem 1rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: "none",
-  background: pageColorTokens.brandGreen,
-  color: "#ffffff",
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
 
 const errorBoxStyle: CSSProperties = {
   padding: "0.75rem 1rem",

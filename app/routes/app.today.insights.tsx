@@ -530,6 +530,12 @@ const pageStyles = {
     lineHeight: 1.5,
     color: pageColorTokens.textBody,
   } as CSSProperties,
+  roiMetaRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+    alignItems: "center",
+  } as CSSProperties,
   reportContentGrid: (isMobile: boolean): CSSProperties => ({
     display: "grid",
     gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
@@ -860,10 +866,35 @@ function RoiLayerCardView({
   title: string;
   card: ReportRoiLayerCard;
 }) {
+  const { t } = useTranslation();
+  const dataQualityLabel =
+    card.dataQuality === "realized"
+      ? t("insights.roiDataQualityRealized")
+      : card.dataQuality === "estimated"
+        ? t("insights.roiDataQualityEstimated")
+        : t("insights.roiDataQualityPredicted");
+  const confidenceLabel =
+    card.confidence === "high"
+      ? t("dailyOps.confidenceHigh")
+      : card.confidence === "medium"
+        ? t("dailyOps.confidenceMedium")
+        : t("dailyOps.confidenceLow");
+  const dataQualityTone: ReportCardTone =
+    card.dataQuality === "realized"
+      ? "positive"
+      : card.dataQuality === "estimated"
+        ? "warning"
+        : "neutral";
+  const confidenceTone = reportTaskConfidenceTone(card.confidence);
+
   return (
     <div style={pageStyles.reportCard(card.tone)}>
       <span style={pageStyles.reportCardLabel}>{title}</span>
       <span style={pageStyles.reportCardValue}>{card.value}</span>
+      <div style={pageStyles.roiMetaRow}>
+        <span style={pageStyles.factorBadge(dataQualityTone)}>{dataQualityLabel}</span>
+        <span style={pageStyles.factorBadge(confidenceTone)}>{confidenceLabel}</span>
+      </div>
       <span style={pageStyles.reportCardDetail}>{card.detail}</span>
     </div>
   );
@@ -1345,7 +1376,7 @@ export function BusinessInsightsPage({
   const moduleFilter = (searchParams.get("module") as ModuleFilterKey | null) ?? "all";
   const snapshots = useMemo(() => buildLiveSnapshots(liveData), [liveData]);
   const snapshot = useMemo(() => snapshots[period], [period, snapshots]);
-  const operationTasks = liveData?.operationTasks ?? [];
+  const operationTasks = useMemo(() => liveData?.operationTasks ?? [], [liveData]);
   const mergedTaskCandidateByKey = useMemo(
     () =>
       new Map(

@@ -85,6 +85,8 @@ export type ReportRoiLayerCard = {
   title: string;
   value: string;
   detail: string;
+  dataQuality: "realized" | "estimated" | "predicted";
+  confidence: "high" | "medium" | "low";
   tone: ReportCardTone;
 };
 
@@ -229,10 +231,11 @@ export type LiveSnapshotData = {
   customerAggregates: CustomerValueAggregates | null;
   channelRoi: ChannelRoiResult | null;
   ads: {
-    rangeDays: 30;
+    rangeDays: 7 | 14 | 30;
     totalSpend: number;
     totalClicks: number;
     totalImpressions: number;
+    totalConversions: number;
     totalConversionsValue: number;
     totalRoas: number | null;
     currencyCode: string | null;
@@ -243,6 +246,7 @@ export type LiveSnapshotData = {
       spend: number;
       clicks: number;
       impressions: number;
+      conversions: number;
       conversionsValue: number;
       roas: number | null;
       campaignCount: number;
@@ -260,6 +264,19 @@ export type LiveSnapshotData = {
       totalRevenue: number;
       totalPurchases: number;
     } | null;
+    timeSeries: Array<{
+      key: string;
+      users: number;
+      sessions: number;
+      pageViews: number;
+      revenue: number;
+      purchases: number;
+      engagementRate: number;
+      bounceRate: number;
+      averageSessionDuration: number;
+      itemsViewed: number;
+      itemsAddedToCart: number;
+    }>;
     channelRows: Array<{
       key: string;
       users: number;
@@ -284,6 +301,30 @@ export type LiveSnapshotData = {
     report: PageSpeedReport | null;
     error: string | null;
   } | null;
+  shopifyReports: {
+    access: "ok" | "missing_scope" | "access_denied";
+    currencyCode: string | null;
+    salesTrend: Array<{
+      date: string;
+      sales: number;
+      orders: number;
+    }>;
+    refundTrend: Array<{
+      date: string;
+      returnedQuantity: number;
+    }>;
+    fulfillmentTrend: Array<{
+      date: string;
+      fulfilled: number;
+      shipped: number;
+    }>;
+    storefrontFunnel: {
+      sessions: number;
+      cartAdditions: number;
+      reachedCheckout: number;
+      completedCheckout: number;
+    } | null;
+  } | null;
 };
 
 export const periodItems: Array<{ key: PeriodKey; label: string }> = [
@@ -304,6 +345,8 @@ const mockReport7d: SnapshotReport = {
       title: "短期 ROI",
       value: "待接成本",
       detail: "广告成本映射后展示真实经营 ROI。",
+      dataQuality: "estimated",
+      confidence: "low",
       tone: "neutral",
     },
     {
@@ -311,6 +354,8 @@ const mockReport7d: SnapshotReport = {
       title: "回收速度",
       value: "Normal",
       detail: "先用转化漏斗和站点体验判断回收快慢。",
+      dataQuality: "estimated",
+      confidence: "medium",
       tone: "warning",
     },
     {
@@ -318,13 +363,15 @@ const mockReport7d: SnapshotReport = {
       title: "长期价值",
       value: "Medium",
       detail: "客户价值层就绪后再稳定输出长期判断。",
+      dataQuality: "predicted",
+      confidence: "low",
       tone: "neutral",
     },
   ],
   factorCards: [
     {
       key: "conversion",
-      title: "转化效率",
+      title: getFactorTitle("conversion"),
       statusLabel: "Watch",
       roiLayerLabel: "回收速度",
       summary: "当前最值得先盯的是站内转化链路。",
@@ -338,7 +385,7 @@ const mockReport7d: SnapshotReport = {
     },
     {
       key: "afterSales",
-      title: "履约与售后损耗",
+      title: getFactorTitle("afterSales"),
       statusLabel: "Risk",
       roiLayerLabel: "短期 ROI",
       summary: "退款和物流异常已经开始侵蚀利润。",
@@ -355,7 +402,7 @@ const mockReport7d: SnapshotReport = {
     },
     {
       key: "channel",
-      title: "生命周期价值",
+      title: getFactorTitle("channel"),
       statusLabel: "Healthy",
       roiLayerLabel: "长期价值",
       summary: "渠道利润差异已经拉开，可开始围绕高质量渠道放大。",
@@ -872,6 +919,55 @@ function reportToneFromConfidence(connectedSignals: number): ReportCardTone {
   return "neutral";
 }
 
+function buildShortTermRoiAssessment(params: {
+  overallBusinessRoi: number | null;
+  hasAds: boolean;
+  hasChannel: boolean;
+  hasDiagnosis: boolean;
+}): Pick<ReportRoiLayerCard, "dataQuality" | "confidence"> {
+  if (params.overallBusinessRoi != null && params.hasAds && params.hasChannel) {
+    return { dataQuality: "realized", confidence: "high" };
+  }
+  if (params.overallBusinessRoi != null) {
+    return { dataQuality: "realized", confidence: "medium" };
+  }
+  if (params.hasChannel || params.hasDiagnosis) {
+    return { dataQuality: "estimated", confidence: "medium" };
+  }
+  return { dataQuality: "estimated", confidence: "low" };
+}
+
+function buildPaybackRoiAssessment(params: {
+  conversionSource: ModuleSource | undefined;
+  siteExperienceSource: ModuleSource | undefined;
+  ga4Connected: boolean;
+}): Pick<ReportRoiLayerCard, "dataQuality" | "confidence"> {
+  if (
+    params.conversionSource === "real" &&
+    params.siteExperienceSource === "real" &&
+    params.ga4Connected
+  ) {
+    return { dataQuality: "estimated", confidence: "medium" };
+  }
+  if (params.conversionSource && params.conversionSource !== "pending") {
+    return { dataQuality: "estimated", confidence: "medium" };
+  }
+  return { dataQuality: "estimated", confidence: "low" };
+}
+
+function buildLifetimeRoiAssessment(params: {
+  customerSource: ModuleSource | undefined;
+  channelSource: ModuleSource | undefined;
+}): Pick<ReportRoiLayerCard, "dataQuality" | "confidence"> {
+  if (params.customerSource === "real" && params.channelSource && params.channelSource !== "pending") {
+    return { dataQuality: "predicted", confidence: "medium" };
+  }
+  if (params.customerSource && params.customerSource !== "pending") {
+    return { dataQuality: "predicted", confidence: "medium" };
+  }
+  return { dataQuality: "predicted", confidence: "low" };
+}
+
 function mapInsightToneToReportTone(tone: InsightItemTone | undefined): ReportCardTone {
   if (tone === "critical") return "negative";
   if (tone === "warning") return "warning";
@@ -884,6 +980,30 @@ function getFactorStatusLabel(tone: InsightItemTone | undefined): string {
   if (tone === "warning") return "Watch";
   if (tone === "info") return "Healthy";
   return "Unknown";
+}
+
+function getFactorTitle(moduleKey: string): string {
+  switch (moduleKey) {
+    case "traffic":
+      return "流量规模";
+    case "cost":
+    case "channel":
+      return "投放效率";
+    case "conversion":
+      return "转化效率";
+    case "siteExperience":
+      return "转化效率（体验）";
+    case "profit":
+      return "定价与客单价";
+    case "productInventory":
+      return "商品经营质量";
+    case "afterSales":
+      return "履约与售后损耗";
+    case "customerValue":
+      return "生命周期价值";
+    default:
+      return "经营因子";
+  }
 }
 
 function getFactorRoiLayerLabel(moduleKey: string): string {
@@ -2492,6 +2612,21 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
     insightByTargetKey.get("conversion")?.tone ?? insightByTargetKey.get("siteExperience")?.tone;
   const lifetimeTone =
     insightByTargetKey.get("customerValue")?.tone ?? insightByTargetKey.get("channel")?.tone;
+  const shortTermRoiAssessment = buildShortTermRoiAssessment({
+    overallBusinessRoi,
+    hasAds: Boolean(ads),
+    hasChannel: Boolean(channel),
+    hasDiagnosis: diagnosis.hasData,
+  });
+  const paybackRoiAssessment = buildPaybackRoiAssessment({
+    conversionSource: conversionRoiModule?.source,
+    siteExperienceSource: siteExperienceRoiModule?.source,
+    ga4Connected: Boolean(ga4?.connected),
+  });
+  const lifetimeRoiAssessment = buildLifetimeRoiAssessment({
+    customerSource: customerValueRoiModule?.source,
+    channelSource: channelRoiModuleForReport?.source,
+  });
 
   const reportRoiLayers: ReportRoiLayerCard[] = [
     {
@@ -2505,6 +2640,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
         overallBusinessRoi != null
           ? `经营利润 ${formatCurrency(operatingProfitAfterAds, currency)}`
           : "当前只能先读贡献利润与渠道质量",
+      dataQuality: shortTermRoiAssessment.dataQuality,
+      confidence: shortTermRoiAssessment.confidence,
       tone: roiGrade.tone,
     },
     {
@@ -2522,6 +2659,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
           : conversionRoiModule
             ? `${conversionRoiModule.metrics[0]?.label ?? "CVR"} ${conversionRoiModule.metrics[0]?.value ?? "—"}`
             : "先看转化漏斗和站点体验是否拖慢回收。",
+      dataQuality: paybackRoiAssessment.dataQuality,
+      confidence: paybackRoiAssessment.confidence,
       tone: mapInsightToneToReportTone(paybackTone),
     },
     {
@@ -2541,6 +2680,8 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
           : customerValueRoiModule
             ? `${customerValueRoiModule.metrics[0]?.label ?? "复购率"} ${customerValueRoiModule.metrics[0]?.value ?? "—"}`
             : "客户价值层未完全就绪，先用渠道质量做方向判断。",
+      dataQuality: lifetimeRoiAssessment.dataQuality,
+      confidence: lifetimeRoiAssessment.confidence,
       tone: mapInsightToneToReportTone(lifetimeTone),
     },
   ];
@@ -2557,7 +2698,7 @@ export function buildLiveSnapshots(liveData: LiveSnapshotData | null): Record<Pe
 
     return {
       key: module.key,
-      title: module.title,
+      title: getFactorTitle(module.key),
       statusLabel: getFactorStatusLabel(tone),
       roiLayerLabel: getFactorRoiLayerLabel(module.key),
       summary: linkedInsight?.title ?? module.summary,
