@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ShopifyAdminGraphqlClient } from "../../../../app/server/ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
+  chartAxisTicks,
+  computeLinearChartDomain,
   hasReadReportsScope,
   interpolateSince,
+  niceChartMagnitude,
   normalizeReportRows,
   parseRangeKey,
   parseReportTab,
@@ -31,6 +34,32 @@ describe("shopify reports helpers", () => {
   it("interpolates SINCE placeholders", () => {
     expect(interpolateSince("SINCE {{SINCE}} UNTIL today", "7d")).toBe("SINCE -7d UNTIL today");
     expect(buildPresetQuery(listReportPresets("sales")[0]!, "30d")).toContain("SINCE -30d");
+  });
+
+  it("uses 2026-07 sales reversal fields and queries both sales and returns datasets", () => {
+    const salesSummary = listReportPresets("sales")[0]!;
+    const refunds = listReportPresets("refunds");
+    const refundsSummary = refunds.find((preset) => preset.id === "refunds-summary");
+
+    expect(salesSummary.query).toContain("sales_reversals");
+    expect(salesSummary.query).not.toContain(", returns");
+    expect(refundsSummary?.query).toContain("sales_reversals");
+    expect(refundsSummary?.query).toContain("reversed_quantity");
+    expect(refundsSummary?.query).not.toContain("net_returns");
+    expect(refunds.filter((preset) => preset.kind === "timeseries").map((preset) => preset.id)).toEqual([
+      "refunds-reversals-quantity-trend",
+      "refunds-reversals-amount-trend",
+      "refunds-trend",
+    ]);
+    expect(refunds.some((preset) => preset.id === "refunds-reversal-product")).toBe(true);
+    expect(refunds.some((preset) => preset.query.includes("FROM returns"))).toBe(true);
+  });
+
+  it("keeps negative reversal quantities visible on the chart domain", () => {
+    expect(niceChartMagnitude(58)).toBe(100);
+    expect(computeLinearChartDomain([-58, 0, 0])).toEqual({ min: -100, max: 0 });
+    expect(computeLinearChartDomain([0, 0])).toEqual({ min: 0, max: 1 });
+    expect(chartAxisTicks(-100, 0)).toEqual([-100, -50, 0]);
   });
 
   it("normalizes object rows only", () => {

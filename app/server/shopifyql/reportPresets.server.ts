@@ -16,7 +16,7 @@ const PRESETS: Record<ReportTab, ReportPreset[]> = {
       kind: "summary",
       titleKey: "shopifyReports.summaryTitle",
       query:
-        "FROM sales SHOW total_sales, net_sales, orders, average_order_value, discounts, returns SINCE {{SINCE}} UNTIL today",
+        "FROM sales SHOW total_sales, net_sales, orders, average_order_value, discounts, sales_reversals SINCE {{SINCE}} UNTIL today",
       seriesKeys: [],
       xKey: "day",
     },
@@ -54,8 +54,26 @@ const PRESETS: Record<ReportTab, ReportPreset[]> = {
       kind: "summary",
       titleKey: "shopifyReports.summaryTitle",
       query:
-        "FROM sales SHOW returns, net_returns, total_returns, reversed_quantity SINCE {{SINCE}} UNTIL today",
+        "FROM sales SHOW sales_reversals, net_sales_reversals, total_sales_reversals, reversed_quantity, shipping_reversals, discount_reversals, tax_reversals SINCE {{SINCE}} UNTIL today",
       seriesKeys: [],
+      xKey: "day",
+    },
+    {
+      id: "refunds-reversals-quantity-trend",
+      kind: "timeseries",
+      titleKey: "shopifyReports.trendReversalsQuantity",
+      query:
+        "FROM sales SHOW reversed_quantity TIMESERIES day SINCE {{SINCE}} UNTIL today ORDER BY day ASC",
+      seriesKeys: ["reversed_quantity"],
+      xKey: "day",
+    },
+    {
+      id: "refunds-reversals-amount-trend",
+      kind: "timeseries",
+      titleKey: "shopifyReports.trendReversalsAmount",
+      query:
+        "FROM sales SHOW sales_reversals TIMESERIES day SINCE {{SINCE}} UNTIL today ORDER BY day ASC",
+      seriesKeys: ["sales_reversals"],
       xKey: "day",
     },
     {
@@ -66,6 +84,15 @@ const PRESETS: Record<ReportTab, ReportPreset[]> = {
         "FROM returns SHOW returned_quantity TIMESERIES day SINCE {{SINCE}} UNTIL today ORDER BY day ASC",
       seriesKeys: ["returned_quantity"],
       xKey: "day",
+    },
+    {
+      id: "refunds-reversal-product",
+      kind: "table",
+      titleKey: "shopifyReports.tableReversalProduct",
+      query:
+        "FROM sales SHOW sales_reversals, reversed_quantity GROUP BY product_title SINCE {{SINCE}} UNTIL today ORDER BY reversed_quantity ASC LIMIT 20",
+      seriesKeys: [],
+      xKey: "product_title",
     },
     {
       id: "refunds-status",

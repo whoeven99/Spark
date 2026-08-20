@@ -93,8 +93,8 @@ export function ShopifyReportsPage() {
   const tab = data.tab;
   const range = data.range;
 
-  const summary = data.queries.find((item) => item.kind === "summary");
-  const trend = data.queries.find((item) => item.kind === "timeseries");
+  const summaries = data.queries.filter((item) => item.kind === "summary");
+  const trends = data.queries.filter((item) => item.kind === "timeseries");
   const tables = data.queries.filter((item) => item.kind === "table");
 
   return (
@@ -147,18 +147,28 @@ export function ShopifyReportsPage() {
 
         {data.access === "ok" ? (
           <>
-            <SummaryCard result={summary} locale={i18n.language} currencyCode={data.currencyCode} />
+            {summaries.map((summary) => (
+              <SummaryCard
+                key={summary.id}
+                result={summary}
+                locale={i18n.language}
+                currencyCode={data.currencyCode}
+              />
+            ))}
             {tab === "storefront" ? (
-              <StorefrontFunnel result={summary} locale={i18n.language} />
+              <StorefrontFunnel result={summaries[0]} locale={i18n.language} />
             ) : null}
-            <QuerySection
-              result={trend}
-              emptyLabel={t("shopifyReports.emptyTrend")}
-              locale={i18n.language}
-              currencyCode={data.currencyCode}
-              onOpenQuery={setQueryPreview}
-              visual="chart"
-            />
+            {trends.map((trend) => (
+              <QuerySection
+                key={trend.id}
+                result={trend}
+                emptyLabel={t("shopifyReports.emptyTrend")}
+                locale={i18n.language}
+                currencyCode={data.currencyCode}
+                onOpenQuery={setQueryPreview}
+                visual="chart"
+              />
+            ))}
             {tables.map((table) => (
               <QuerySection
                 key={table.id}
@@ -221,7 +231,6 @@ function SummaryCard({
   }
   const metrics = result.columns
     .filter((column) => column.name !== result.xKey)
-    .slice(0, 6)
     .map((column) => ({
       label: column.displayName || column.name,
       value: formatReportCell(row[column.name] ?? null, column.dataType, { locale, currencyCode }),

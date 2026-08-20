@@ -1,15 +1,12 @@
 import { pageColorTokens } from "../../page/pageUiStyles";
-import { formatReportCell, type ReportQueryResult } from "../../../lib/shopifyReports";
+import {
+  chartAxisTicks,
+  computeLinearChartDomain,
+  formatReportCell,
+  type ReportQueryResult,
+} from "../../../lib/shopifyReports";
 
 const SERIES_COLORS = ["#005bd3", "#008060", "#c05717"] as const;
-
-function niceMax(rawMax: number): number {
-  if (rawMax <= 0) return 1;
-  const mag = 10 ** Math.floor(Math.log10(rawMax));
-  const normed = rawMax / mag;
-  const nice = normed <= 1 ? 1 : normed <= 2 ? 2 : normed <= 5 ? 5 : 10;
-  return nice * mag;
-}
 
 function toNumber(value: string | number | boolean | null): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -48,21 +45,23 @@ export function ShopifyReportsChart({
 
   const width = 720;
   const height = 220;
-  const pad = { top: 16, right: 16, bottom: 28, left: 48 };
+  const pad = { top: 16, right: 16, bottom: 28, left: 52 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
-  const maxValue = niceMax(Math.max(...points.flatMap((point) => point.values), 0));
+  const domain = computeLinearChartDomain(points.flatMap((point) => point.values));
+  const span = domain.max - domain.min || 1;
+  const ticks = chartAxisTicks(domain.min, domain.max);
   const getX = (index: number) =>
     pad.left + (points.length === 1 ? innerW / 2 : (index / (points.length - 1)) * innerW);
-  const getY = (value: number) => pad.top + innerH - (value / maxValue) * innerH;
+  const getY = (value: number) => pad.top + innerH - ((value - domain.min) / span) * innerH;
 
   return (
     <div>
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" role="img">
-        {[0, 0.5, 1].map((ratio) => {
-          const y = pad.top + innerH * (1 - ratio);
+        {ticks.map((tick) => {
+          const y = getY(tick);
           return (
-            <g key={ratio}>
+            <g key={tick}>
               <line
                 x1={pad.left}
                 x2={width - pad.right}
@@ -71,7 +70,7 @@ export function ShopifyReportsChart({
                 stroke={pageColorTokens.borderSubtle}
               />
               <text x={pad.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill={pageColorTokens.textSecondary}>
-                {maxValue * ratio}
+                {tick}
               </text>
             </g>
           );
