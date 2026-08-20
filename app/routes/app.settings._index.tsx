@@ -500,7 +500,7 @@ function buildGoogleSummary(
       },
       {
         label: t("settingsShell.openInsights"),
-        to: "/app/insights",
+        to: "/app/insights/charts?group=roi",
       },
     ] satisfies ConnectionLink[],
   };
@@ -576,7 +576,7 @@ function buildMetaSummary(
       },
       {
         label: t("settingsShell.openInsights"),
-        to: "/app/insights/charts/performance?platform=meta",
+        to: "/app/insights/charts?group=roi",
       },
     ] satisfies ConnectionLink[],
   };
@@ -645,7 +645,7 @@ function buildTiktokSummary(
       },
       {
         label: t("settingsShell.openInsights"),
-        to: "/app/insights/charts/performance?platform=tiktok",
+        to: "/app/insights/charts?group=roi",
       },
     ] satisfies ConnectionLink[],
   };
@@ -940,7 +940,7 @@ function SettingsPlatformCard({
       : item.platform === "meta"
         ? "/app/ads-catalog?tab=credentials"
         : "/app/ads-catalog?tab=credentials";
-  const insightsPath = `/app/insights/charts/performance?platform=${item.platform}`;
+  const insightsPath = "/app/insights/charts?group=roi";
 
   return (
     <div style={connectionCardStyle}>

@@ -413,7 +413,10 @@ export function GoogleAdsPerformancePanel({ enabled }: { enabled: boolean }) {
           </div>
           <TrendChart days={state.data.days} />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link to={`/app/settings/ads-insights${locationSearch}`} style={secondaryBtn}>
+            <Link
+              to={locationSearch ? `/app/insights/charts${locationSearch}&group=roi` : "/app/insights/charts?group=roi"}
+              style={secondaryBtn}
+            >
               {t("googlePixelData.openInsights")}
             </Link>
           </div>

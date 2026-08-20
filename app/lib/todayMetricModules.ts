@@ -353,7 +353,7 @@ export function getTodayRoiMonitor() {
     metrics: ROI_METRICS,
     factors: ROI_FACTORS,
     chartPath: "/app/insights/charts?range=7",
-    reportPath: "/app/insights",
+    reportPath: "/app/today/insights",
   };
 }
 

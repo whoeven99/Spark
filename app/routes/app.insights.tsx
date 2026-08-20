@@ -1,55 +1,19 @@
 /**
- * 洞察目的地：把经营报告和图表证据收敛成一个只读分析入口。
- * 顶部 SegmentedTab 在 Reports / Charts 之间切换；写操作仍留在 Settings、Ads Catalog、Tasks。
+ * 洞察目的地：收敛为只读数据入口。
+ * 经营判断继续留在 Today，渠道连接与授权逐步收回 Settings。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLocation, useNavigate } from "react-router";
+import { Outlet } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
-import { SegmentedPageTabs } from "./component/shared/SegmentedPageTabs";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
   return null;
 };
 
-type InsightsTab = "reports" | "charts";
-
-function resolveTab(pathname: string): InsightsTab {
-  if (pathname.includes("/insights/charts")) return "charts";
-  return "reports";
-}
-
 export default function AppInsights() {
-  const { t } = useTranslation();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const activeTab = resolveTab(location.pathname);
-
-  const items = [
-    { key: "reports" as const, label: t("insights.tabReports") },
-    { key: "charts" as const, label: t("insights.tabCharts") },
-  ];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <SegmentedPageTabs
-        activeTab={activeTab}
-        items={items}
-        ariaLabel={t("nav.insights")}
-        density="compact"
-        onTabChange={(tab) =>
-          navigate(
-            tab === "reports"
-              ? `/app/insights${location.search}`
-              : `/app/insights/charts${location.search}`,
-          )
-        }
-      />
-      <Outlet />
-    </div>
-  );
+  return <Outlet />;
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

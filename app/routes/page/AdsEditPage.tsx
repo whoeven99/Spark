@@ -156,9 +156,15 @@ export function AdsEditPage() {
   const currentConnected = connections[platform];
 
   const connectLinks: Record<AdsEditPlatform, string> = {
-    meta: `/app/insights/charts/performance${locationSearch}`,
-    tiktok: `/app/ads-catalog${locationSearch}`,
-    google: `/app/ads-catalog${locationSearch}`,
+    meta: locationSearch
+      ? `/app/ads-catalog${locationSearch}&tab=credentials&platform=facebook`
+      : "/app/ads-catalog?tab=credentials&platform=facebook",
+    tiktok: locationSearch
+      ? `/app/ads-catalog${locationSearch}&tab=credentials&platform=tiktok`
+      : "/app/ads-catalog?tab=credentials&platform=tiktok",
+    google: locationSearch
+      ? `/app/ads-catalog${locationSearch}&tab=credentials&platform=google`
+      : "/app/ads-catalog?tab=credentials&platform=google",
   };
 
   const connectLabels: Record<AdsEditPlatform, string> = {

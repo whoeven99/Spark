@@ -286,7 +286,10 @@ export function GooglePixelDataPage() {
         <a href={themeEditorUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("adsCatalog.googleRemarketing.openThemeEditor")}
         </a>
-        <Link to={`/app/settings/ads-insights${locationSearch}`} style={secondaryBtn}>
+        <Link
+          to={locationSearch ? `/app/insights/charts${locationSearch}&group=roi` : "/app/insights/charts?group=roi"}
+          style={secondaryBtn}
+        >
           {t("googlePixelData.openInsights")}
         </Link>
       </div>
@@ -441,7 +444,13 @@ export function GooglePixelDataPage() {
           <button
             type="button"
             style={secondaryBtn}
-            onClick={() => navigate(`/app/settings/ads-insights${locationSearch}`)}
+            onClick={() =>
+              navigate(
+                locationSearch
+                  ? `/app/insights/charts${locationSearch}&group=roi`
+                  : "/app/insights/charts?group=roi",
+              )
+            }
           >
             {t("googlePixelData.openInsights")}
           </button>

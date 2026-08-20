@@ -6,7 +6,6 @@ import {
   PageSurface,
   pageColorTokens,
   pageContentStyle,
-  pageHintTextStyle,
 } from "./pageUiStyles";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { MetaAdsForm } from "../component/adsCreate/MetaAdsForm";
@@ -139,7 +138,11 @@ function ConnectionStatus({ platform, loaderData, locationSearch, t }: Connectio
       return (
         <NotConnectedBanner
           msg={t("adsCreate.meta.notConnected")}
-          linkTo={`/app/insights/charts/performance${locationSearch}`}
+          linkTo={
+            locationSearch
+              ? `/app/ads-catalog${locationSearch}&tab=credentials&platform=facebook`
+              : "/app/ads-catalog?tab=credentials&platform=facebook"
+          }
           linkLabel={t("adsCreate.goConnectMeta")}
         />
       );

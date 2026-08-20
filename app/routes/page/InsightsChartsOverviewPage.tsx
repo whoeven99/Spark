@@ -16,6 +16,7 @@ import {
   pageMetricValueStyle,
 } from "./pageUiStyles";
 import { DestinationFilterBar } from "../component/shared/DestinationPage";
+import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { InsightsOverviewLoaderData } from "../app.insights.charts._index";
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
@@ -52,6 +53,19 @@ type FunnelStep = {
 };
 
 type ChartsLiveData = NonNullable<InsightsOverviewLoaderData["liveData"]>;
+type DataDirection = "roi" | "acquisition" | "conversion" | "operations";
+
+function resolveDataDirection(value: string | null): DataDirection {
+  if (
+    value === "roi" ||
+    value === "acquisition" ||
+    value === "conversion" ||
+    value === "operations"
+  ) {
+    return value;
+  }
+  return "roi";
+}
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -680,6 +694,7 @@ export function InsightsChartsOverviewPage() {
   const rangeDaysParam = searchParams.get("range");
   const rangeDays =
     rangeDaysParam === "30" ? 30 : rangeDaysParam === "14" ? 14 : 7;
+  const activeDirection = resolveDataDirection(searchParams.get("group"));
   const refreshing = revalidator.state !== "idle";
 
   const currencyCode =
@@ -726,6 +741,112 @@ export function InsightsChartsOverviewPage() {
 
   const storefrontFunnel = liveData?.shopifyReports?.storefrontFunnel ?? null;
   const fulfillmentMetrics = liveData?.diagnosis?.summaryMetrics ?? null;
+  const directionItems = useMemo(
+    () => [
+      { key: "roi" as const, label: t("insights.chartGroupRoiTitle") },
+      { key: "acquisition" as const, label: t("insights.chartGroupAcquisitionTitle") },
+      { key: "conversion" as const, label: t("insights.chartGroupConversionTitle") },
+      {
+        key: "operations" as const,
+        label: t("insights.chartGroupMerchandisingOpsTitle"),
+      },
+    ],
+    [t],
+  );
+  const directionSummary = useMemo(() => {
+    switch (activeDirection) {
+      case "roi":
+        return {
+          title: t("insights.chartGroupRoiTitle"),
+          summary: t("insights.chartGroupRoiSummary"),
+          metrics: [
+            topMetrics[1],
+            topMetrics[4],
+            topMetrics[2],
+          ].filter(Boolean),
+        };
+      case "acquisition":
+        return {
+          title: t("insights.chartGroupAcquisitionTitle"),
+          summary: t("insights.chartGroupAcquisitionSummary"),
+          metrics: [
+            topMetrics[0],
+            {
+              label: t("insights.chartTrafficTopSource"),
+              value: liveData?.ga4?.channelRows?.[0]?.key ?? "—",
+            },
+            {
+              label: t("insights.chartTrafficPaid"),
+              value: formatInteger(
+                trafficBuckets.find(
+                  (item) => item.label === t("insights.chartTrafficPaid"),
+                )?.value,
+              ),
+            },
+          ],
+        };
+      case "conversion":
+        return {
+          title: t("insights.chartGroupConversionTitle"),
+          summary: t("insights.chartGroupConversionSummary"),
+          metrics: [
+            topMetrics[3],
+            {
+              label: t("insights.chartFunnelCartConversion"),
+              value: formatPercent(
+                storefrontFunnel
+                  ? calculateRate(storefrontFunnel.cartAdditions, storefrontFunnel.sessions)
+                  : calculateRate(funnelSteps[1]?.count ?? 0, funnelSteps[0]?.count ?? 0),
+              ),
+            },
+            {
+              label: t("insights.chartFunnelOrderConversion"),
+              value: formatPercent(
+                storefrontFunnel
+                  ? calculateRate(
+                      storefrontFunnel.completedCheckout,
+                      storefrontFunnel.reachedCheckout,
+                    )
+                  : calculateRate(funnelSteps[3]?.count ?? 0, funnelSteps[2]?.count ?? 0),
+              ),
+            },
+          ],
+        };
+      case "operations":
+      default:
+        return {
+          title: t("insights.chartGroupMerchandisingOpsTitle"),
+          summary: t("insights.chartGroupMerchandisingOpsSummary"),
+          metrics: [
+            topMetrics[2],
+            {
+              label: t("insights.chartRefundQuantity"),
+              value: formatInteger(
+                refundSeries.reduce(
+                  (total, series) =>
+                    total + series.points.reduce((sum, point) => sum + point.value, 0),
+                  0,
+                ),
+              ),
+            },
+            {
+              label: t("insights.chartFulfillmentOverdue"),
+              value: formatInteger(fulfillmentMetrics?.overdueOrderCount),
+            },
+          ],
+        };
+    }
+  }, [
+    activeDirection,
+    fulfillmentMetrics?.overdueOrderCount,
+    funnelSteps,
+    liveData?.ga4?.channelRows,
+    refundSeries,
+    storefrontFunnel,
+    t,
+    topMetrics,
+    trafficBuckets,
+  ]);
   const hasAnyData = Boolean(
     hasComparisonData(trafficBuckets) ||
       hasSeriesData(revenueSeries) ||
@@ -741,6 +862,11 @@ export function InsightsChartsOverviewPage() {
   const handleRangeChange = (next: string) => {
     const params = new URLSearchParams(searchParams);
     params.set("range", next);
+    setSearchParams(params, { preventScrollReset: true });
+  };
+  const handleDirectionChange = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("group", next);
     setSearchParams(params, { preventScrollReset: true });
   };
 
@@ -784,6 +910,14 @@ export function InsightsChartsOverviewPage() {
         </div>
       </div>
 
+      <SegmentedPageTabs
+        activeTab={activeDirection}
+        items={directionItems}
+        ariaLabel={t("insights.chartsTitle")}
+        density="compact"
+        onTabChange={handleDirectionChange}
+      />
+
       {failed ? <div style={errorBoxStyle}>{t("insights.loadFailed")}</div> : null}
 
       {!hasAnyData ? (
@@ -795,182 +929,197 @@ export function InsightsChartsOverviewPage() {
         </div>
       ) : (
         <>
-          <PageSurface title={t("insights.chartCenterSummaryTitle")}>
+          <PageSurface
+            title={directionSummary.title}
+            subtitle={directionSummary.summary}
+          >
             <div style={summaryGridStyle(isMobile)}>
-              {topMetrics.map((metric) => (
+              {directionSummary.metrics.map((metric) => (
                 <MetricTile key={metric.label} {...metric} />
               ))}
             </div>
           </PageSurface>
 
-          <PageSurface title={t("insights.chartCenterTrafficTitle")}>
-            <div style={sectionStackStyle}>
-              <VerticalBarChart
-                items={trafficBuckets}
-                format="number"
-                currencyCode={currencyCode}
-              />
-              <CompactMetricGrid
-                metrics={[
-                  {
-                    label: t("insights.chartTrafficSessions"),
-                    value:
-                      liveData?.ga4?.summary?.totalSessions != null
-                        ? formatInteger(liveData.ga4.summary.totalSessions)
-                        : "—",
-                  },
-                  {
-                    label: t("insights.chartTrafficTopSource"),
-                    value: liveData?.ga4?.channelRows?.[0]?.key ?? "—",
-                  },
-                  {
-                    label: t("insights.chartTrafficTopLanding"),
-                    value: liveData?.ga4?.landingRows?.[0]?.key ?? "—",
-                  },
-                ]}
-              />
-            </div>
-          </PageSurface>
-
-          <PageSurface title={t("insights.chartCenterRevenueTitle")}>
-            <LineChart
-              series={revenueSeries}
-              format="money"
-              currencyCode={currencyCode}
-            />
-          </PageSurface>
-
-          <PageSurface title={t("insights.chartCenterFunnelTitle")}>
-            <div style={sectionStackStyle}>
-              <CompactMetricGrid
-                metrics={[
-                  {
-                    label: t("insights.chartFunnelClickConversion"),
-                    value: formatPercent(
-                      storefrontFunnel
-                        ? calculateRate(
-                            storefrontFunnel.completedCheckout,
-                            storefrontFunnel.sessions,
-                          )
-                        : calculateRate(
-                            funnelSteps[3]?.count ?? 0,
-                            funnelSteps[0]?.count ?? 0,
-                          ),
-                    ),
-                  },
-                  {
-                    label: t("insights.chartFunnelCartConversion"),
-                    value: formatPercent(
-                      storefrontFunnel
-                        ? calculateRate(
-                            storefrontFunnel.cartAdditions,
-                            storefrontFunnel.sessions,
-                          )
-                        : calculateRate(
-                            funnelSteps[1]?.count ?? 0,
-                            funnelSteps[0]?.count ?? 0,
-                          ),
-                    ),
-                  },
-                  {
-                    label: t("insights.chartFunnelOrderConversion"),
-                    value: formatPercent(
-                      storefrontFunnel
-                        ? calculateRate(
-                            storefrontFunnel.completedCheckout,
-                            storefrontFunnel.reachedCheckout,
-                          )
-                        : calculateRate(
-                            funnelSteps[3]?.count ?? 0,
-                            funnelSteps[2]?.count ?? 0,
-                          ),
-                    ),
-                  },
-                ]}
-              />
-              <FunnelChart steps={funnelSteps} t={t} />
-            </div>
-          </PageSurface>
-
-          <PageSurface title={t("insights.chartCenterOrderAfterSalesTitle")}>
-            <div style={subChartGridStyle(isMobile)}>
-              <div style={subChartCardStyle}>
-                <div style={subChartTitleStyle}>{t("insights.chartOrdersCount")}</div>
-                <LineChart
-                  series={orderCountSeries}
+          {activeDirection === "acquisition" ? (
+            <PageSurface title={t("insights.chartCenterTrafficTitle")}>
+              <div style={sectionStackStyle}>
+                <VerticalBarChart
+                  items={trafficBuckets}
                   format="number"
                   currencyCode={currencyCode}
                 />
+                <CompactMetricGrid
+                  metrics={[
+                    {
+                      label: t("insights.chartTrafficSessions"),
+                      value:
+                        liveData?.ga4?.summary?.totalSessions != null
+                          ? formatInteger(liveData.ga4.summary.totalSessions)
+                          : "—",
+                    },
+                    {
+                      label: t("insights.chartTrafficTopSource"),
+                      value: liveData?.ga4?.channelRows?.[0]?.key ?? "—",
+                    },
+                    {
+                      label: t("insights.chartTrafficTopLanding"),
+                      value: liveData?.ga4?.landingRows?.[0]?.key ?? "—",
+                    },
+                  ]}
+                />
               </div>
-              <div style={subChartCardStyle}>
-                <div style={subChartTitleStyle}>{t("insights.chartOrdersAmount")}</div>
+            </PageSurface>
+          ) : null}
+
+          {activeDirection === "roi" ? (
+            <>
+              <PageSurface title={t("insights.chartCenterRevenueTitle")}>
                 <LineChart
-                  series={orderAmountSeries}
+                  series={revenueSeries}
                   format="money"
                   currencyCode={currencyCode}
                 />
-              </div>
-              <div style={subChartCardStyle}>
-                <div style={subChartTitleStyle}>{t("insights.chartRefundQuantity")}</div>
-                <LineChart
-                  series={refundSeries}
-                  format="number"
-                  currencyCode={currencyCode}
-                />
-              </div>
-            </div>
-          </PageSurface>
+              </PageSurface>
 
-          <PageSurface title={t("insights.chartCenterFulfillmentTitle")}>
-            <div style={sectionStackStyle}>
-              <CompactMetricGrid
-                metrics={[
-                  {
-                    label: t("insights.chartFulfillmentOverdue"),
-                    value: formatInteger(fulfillmentMetrics?.overdueOrderCount),
-                  },
-                  {
-                    label: t("insights.chartFulfillmentCarrierIssues"),
-                    value: formatInteger(fulfillmentMetrics?.carrierIssueCount),
-                  },
-                ]}
-              />
-              <LineChart
-                series={fulfillmentSeries}
-                format="number"
-                currencyCode={currencyCode}
-              />
-            </div>
-          </PageSurface>
+              <PageSurface title={t("insights.chartCenterAdsTitle")}>
+                <div style={subChartGridStyle(isMobile)}>
+                  <div style={subChartCardStyle}>
+                    <div style={subChartTitleStyle}>{t("insights.chartAdsTraffic")}</div>
+                    <HorizontalBarChart
+                      items={adsComparisons.traffic}
+                      format="number"
+                      currencyCode={currencyCode}
+                    />
+                  </div>
+                  <div style={subChartCardStyle}>
+                    <div style={subChartTitleStyle}>{t("insights.chartAdsConversions")}</div>
+                    <HorizontalBarChart
+                      items={adsComparisons.conversions}
+                      format="number"
+                      currencyCode={currencyCode}
+                    />
+                  </div>
+                  <div style={subChartCardStyle}>
+                    <div style={subChartTitleStyle}>{t("insights.chartAdsRoi")}</div>
+                    <HorizontalBarChart
+                      items={adsComparisons.roi}
+                      format="ratio"
+                      currencyCode={currencyCode}
+                    />
+                  </div>
+                </div>
+              </PageSurface>
+            </>
+          ) : null}
 
-          <PageSurface title={t("insights.chartCenterAdsTitle")}>
-            <div style={subChartGridStyle(isMobile)}>
-              <div style={subChartCardStyle}>
-                <div style={subChartTitleStyle}>{t("insights.chartAdsTraffic")}</div>
-                <HorizontalBarChart
-                  items={adsComparisons.traffic}
-                  format="number"
-                  currencyCode={currencyCode}
+          {activeDirection === "conversion" ? (
+            <PageSurface title={t("insights.chartCenterFunnelTitle")}>
+              <div style={sectionStackStyle}>
+                <CompactMetricGrid
+                  metrics={[
+                    {
+                      label: t("insights.chartFunnelClickConversion"),
+                      value: formatPercent(
+                        storefrontFunnel
+                          ? calculateRate(
+                              storefrontFunnel.completedCheckout,
+                              storefrontFunnel.sessions,
+                            )
+                          : calculateRate(
+                              funnelSteps[3]?.count ?? 0,
+                              funnelSteps[0]?.count ?? 0,
+                            ),
+                      ),
+                    },
+                    {
+                      label: t("insights.chartFunnelCartConversion"),
+                      value: formatPercent(
+                        storefrontFunnel
+                          ? calculateRate(
+                              storefrontFunnel.cartAdditions,
+                              storefrontFunnel.sessions,
+                            )
+                          : calculateRate(
+                              funnelSteps[1]?.count ?? 0,
+                              funnelSteps[0]?.count ?? 0,
+                            ),
+                      ),
+                    },
+                    {
+                      label: t("insights.chartFunnelOrderConversion"),
+                      value: formatPercent(
+                        storefrontFunnel
+                          ? calculateRate(
+                              storefrontFunnel.completedCheckout,
+                              storefrontFunnel.reachedCheckout,
+                            )
+                          : calculateRate(
+                              funnelSteps[3]?.count ?? 0,
+                              funnelSteps[2]?.count ?? 0,
+                            ),
+                      ),
+                    },
+                  ]}
                 />
+                <FunnelChart steps={funnelSteps} t={t} />
               </div>
-              <div style={subChartCardStyle}>
-                <div style={subChartTitleStyle}>{t("insights.chartAdsConversions")}</div>
-                <HorizontalBarChart
-                  items={adsComparisons.conversions}
-                  format="number"
-                  currencyCode={currencyCode}
-                />
-              </div>
-              <div style={subChartCardStyle}>
-                <div style={subChartTitleStyle}>{t("insights.chartAdsRoi")}</div>
-                <HorizontalBarChart
-                  items={adsComparisons.roi}
-                  format="ratio"
-                  currencyCode={currencyCode}
-                />
-              </div>
-            </div>
-          </PageSurface>
+            </PageSurface>
+          ) : null}
+
+          {activeDirection === "operations" ? (
+            <>
+              <PageSurface title={t("insights.chartCenterOrderAfterSalesTitle")}>
+                <div style={subChartGridStyle(isMobile)}>
+                  <div style={subChartCardStyle}>
+                    <div style={subChartTitleStyle}>{t("insights.chartOrdersCount")}</div>
+                    <LineChart
+                      series={orderCountSeries}
+                      format="number"
+                      currencyCode={currencyCode}
+                    />
+                  </div>
+                  <div style={subChartCardStyle}>
+                    <div style={subChartTitleStyle}>{t("insights.chartOrdersAmount")}</div>
+                    <LineChart
+                      series={orderAmountSeries}
+                      format="money"
+                      currencyCode={currencyCode}
+                    />
+                  </div>
+                  <div style={subChartCardStyle}>
+                    <div style={subChartTitleStyle}>{t("insights.chartRefundQuantity")}</div>
+                    <LineChart
+                      series={refundSeries}
+                      format="number"
+                      currencyCode={currencyCode}
+                    />
+                  </div>
+                </div>
+              </PageSurface>
+
+              <PageSurface title={t("insights.chartCenterFulfillmentTitle")}>
+                <div style={sectionStackStyle}>
+                  <CompactMetricGrid
+                    metrics={[
+                      {
+                        label: t("insights.chartFulfillmentOverdue"),
+                        value: formatInteger(fulfillmentMetrics?.overdueOrderCount),
+                      },
+                      {
+                        label: t("insights.chartFulfillmentCarrierIssues"),
+                        value: formatInteger(fulfillmentMetrics?.carrierIssueCount),
+                      },
+                    ]}
+                  />
+                  <LineChart
+                    series={fulfillmentSeries}
+                    format="number"
+                    currencyCode={currencyCode}
+                  />
+                </div>
+              </PageSurface>
+            </>
+          ) : null}
         </>
       )}
     </div>

@@ -140,9 +140,18 @@ function readTaskIdFromSearch(search: string): string | null {
   return params.get("taskId");
 }
 
+function readPlatformFromSearch(search: string): Platform | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const platform = params.get("platform");
+  if (platform === "google" || platform === "facebook" || platform === "tiktok") {
+    return platform;
+  }
+  return null;
+}
+
 function syncAdsCatalogPageSearch(
   locationSearch: string,
-  updates: { tab?: Tab; taskId?: string | null },
+  updates: { tab?: Tab; taskId?: string | null; platform?: Platform },
 ) {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(
@@ -157,6 +166,9 @@ function syncAdsCatalogPageSearch(
     params.set("taskId", updates.taskId);
   } else if (updates.taskId === null) {
     params.delete("taskId");
+  }
+  if (updates.platform) {
+    params.set("platform", updates.platform);
   }
   const query = params.toString();
   const nextSearch = query ? `?${query}` : "";
@@ -221,7 +233,9 @@ export function AdsCatalogPage() {
   const taskPageSize = loaderData.initialTaskPage.pageSize;
 
   const [tab, setTabState] = useState<Tab>(() => readTabFromSearch(location.search) ?? "sync");
-  const [platform, setPlatform] = useState<Platform>("google");
+  const [platform, setPlatformState] = useState<Platform>(
+    () => readPlatformFromSearch(location.search) ?? "google",
+  );
   const [productIdsRaw, setProductIdsRaw] = useState("");
   const [filters, setFilters] = useState<GoogleFiltersValue>(DEFAULT_FILTERS);
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
@@ -284,6 +298,14 @@ export function AdsCatalogPage() {
       } else {
         syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId: null });
       }
+    },
+    [locationSearch],
+  );
+
+  const setPlatform = useCallback(
+    (nextPlatform: Platform) => {
+      setPlatformState(nextPlatform);
+      syncAdsCatalogPageSearch(locationSearch, { platform: nextPlatform });
     },
     [locationSearch],
   );
@@ -543,7 +565,9 @@ export function AdsCatalogPage() {
     [selectedTaskId, tasks],
   );
   const settingsHubPath = "/app/settings";
-  const insightsPath = `/app/insights/charts/performance${locationSearch}`;
+  const insightsPath = locationSearch
+    ? `/app/insights/charts${locationSearch}&group=roi`
+    : "/app/insights/charts?group=roi";
 
   const credentialReady =
     platform === "facebook"
