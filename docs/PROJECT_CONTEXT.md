@@ -76,7 +76,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
   - 商品审核状态：`GmcProductStatus` / `MetaProductStatus` 按店铺全量重建（`deleteMany` + 分批 `createMany`），拉取需翻完分页。
 - Azure Cosmos DB：Agent 运行摘要、Playbook Case，以及 Admin 翻译观测中读取的外部任务数据。
 - Azure Blob Storage：上传文件、图片生成、图片翻译和少量兼容翻译内容。
-- Redis：Admin 运营排查和部分历史/兼容状态读取，不作为新核心业务对象的默认存储。
+- Redis：与 ciwi-translate（TSF）**共用同一 Render KV**。主应用经 `SPARK_KV` 接入；写入 key 必须带 `spark:` 前缀，禁止碰 TSF 的 `translate:v4:` / `tsf:` / `tm:v5:` 等前缀。Admin 经 `RENDER_KV` 只读观测 TSF key。不作为新核心业务对象的默认存储。
 - Aliyun SLS：Pixel、访问与功能行为日志。
 - Shopify Admin GraphQL / Billing：店铺数据、写回、订阅与一次性购包。
 - 腾讯 SES / 飞书：商户邮件与内部运营通知，通知失败通常不阻断主流程。
@@ -132,7 +132,7 @@ npm run turso:migrate:test
 - Turso（Admin）：`SPARK_DATABASE_URL` / `SPARK_DATABASE_AUTH_TOKEN`（Spark 库）；
   `TSF_DATABASE_URL` / `TSF_DATABASE_AUTH_TOKEN`（翻译库）；测/产分服务配值，无 TARGET。
 - AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。
-- Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；主应用 Render KV 用 `SPARK_KV`（测试实例 `spark-kv-test`）；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。
+- Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；主应用 Render KV 用 `SPARK_KV`（与 TSF **共用同一实例** 时也走此变量）；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。主应用 key 必须以 `spark:` 开头，避免与 TSF 冲突。
 - 图片翻译：`HUOSHAN_*` / `VOLC_*`、`AIDGE_*`、`PICTURE_TRANSLATE_*`。
 - 图片生成：`AZURE_BLOB_GENERATED_IMAGES_CONTAINER`、`IMAGE_GEN_BLOB_SAS_TTL_MINUTES`。
 - Billing：`BILLING_GATEWAY`、`BILLING_TEST`、`BILLING_ENABLED`。

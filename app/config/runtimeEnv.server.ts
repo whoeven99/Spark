@@ -191,7 +191,7 @@ function logCriticalEnvStatus(): void {
     ["COSMOS_AGENT_RUNS_CONTAINER", process.env.COSMOS_AGENT_RUNS_CONTAINER, "agent_runs"],
   ]);
 
-  // 主应用专用 Render KV：`SPARK_KV`
+  // Render KV：`SPARK_KV`（可与 TSF 共用同一实例；业务 key 必须 `spark:` 前缀，见 AGENTS.md）
   const sparkKv = process.env.SPARK_KV?.trim();
   const redisOk = Boolean(sparkKv);
   logEnvCheck("Redis", redisOk, [["SPARK_KV", process.env.SPARK_KV]]);

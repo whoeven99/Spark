@@ -149,7 +149,9 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
   - 审核状态与广告实体都是「全量重建」写法：`$transaction` 里 `deleteMany` + 分批 `createMany`，不要退回逐条 upsert。因此拉取必须翻完分页，截断会把没拉到的商品当成已下架。
 - **Azure Cosmos DB**：Agent 运行摘要和 Playbook Case 等事件/结果型数据；入口集中在 `app/server/cosmos/`、`agentRunLog/`、`playbookCase/`。默认不应假设容器会自动创建。
 - **Azure Blob Storage**：上传文件、图片生成、图片翻译及兼容翻译内容。写入前确认容器、SAS 生命周期和清理策略。
-- **Redis / Render KV**：主应用专用 KV 环境变量为 `SPARK_KV`（Render 测试实例名 `spark-kv-test`，本地 `.env` 与 Render 测试环境已配）；后续主应用缓存/锁等场景统一读 `SPARK_KV`，不要用 Admin 的 `RENDER_KV`。Admin 翻译运维仍优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。主应用业务代码目前尚未接入 Redis 客户端；接入时须可缺省降级，且不要未经确认把新的核心业务对象只存 Redis。
+- **Redis / Render KV**：**与 ciwi-translate（TSF）共用同一 Render Key Value 实例**（`SPARK_KV` / Admin 的 `RENDER_KV` 可指向同一 URL；本地 External、Render 同区用 Internal）。主应用读写统一走环境变量 `SPARK_KV`；Admin 翻译运维只读仍优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`），用于观测 TSF 已有 key，**不要**用 Admin 客户端写入 Spark 业务 key。
+  - **Key 命名空间（强制）**：主应用写入的每个 key **必须以 `spark:` 开头**（推荐 `spark:{domain}:{…}`，例如 `spark:lock:daily-snapshot:{shop}`）。**禁止**使用或覆盖 TSF 已有前缀：`translate:v4:`、`tsf:`、`tm:v5:`，以及其它非 `spark:` 前缀。接入客户端时集中做一个 key helper，禁止业务代码手拼裸 key。
+  - 主应用业务代码目前尚未接入 Redis 客户端；接入时须可缺省降级，且不要未经确认把新的核心业务对象只存 Redis。
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。历史指标报表走 `shopifyqlQuery`（需 `read_reports`），入口 `/app/settings/shopify-reports`。
 - **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。
