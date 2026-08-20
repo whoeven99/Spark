@@ -47,10 +47,8 @@ interface ImportMetaEnv {
   readonly NOTIFICATION_LEGAL_NAME?: string;
   /** 飞书运营通知总开关；false 关闭全部 channel（默认 true） */
   readonly FEISHU_ENABLED?: string;
-  /** 卸载飞书群机器人 Webhook；未设则跳过 */
-  readonly FEISHU_WEBHOOK_URL_UNINSTALL?: string;
-  /** 订阅生效飞书群机器人 Webhook；未设则跳过 */
-  readonly FEISHU_WEBHOOK_URL_SUBSCRIPTION?: string;
+  /** 飞书运营通知 Webhook（卸载 / 订阅购包 / 客服消息统一）；未设则跳过 */
+  readonly FEISHU_WEBHOOK_URL_SUPPORT?: string;
   /** Partner API Access Token；用于卸载时读取 RelationshipUninstalled 原因/反馈；未设则飞书显示「未提供」 */
   readonly SHOPIFY_PARTNER_API_TOKEN?: string;
   /** Partner Dashboard 组织 ID（URL 中 partners.shopify.com/{id}/...）；未设则跳过 Partner 查询 */

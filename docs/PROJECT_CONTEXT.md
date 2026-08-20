@@ -36,7 +36,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话和文件上下文。
 - `/api/task-proposal`：聊天中的任务建议/确认载荷。
 - `/api/automation-overview`：Today 和工作台自动化概览。
-- `/api/support`、`/api/external-support`：客服会话入口。
+- `/api/support`：客服会话入口。
 - `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
 - `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console。
 - `POST /api/pagespeed`：PageSpeed Insights 实验室分析（不落库）。

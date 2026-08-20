@@ -1,42 +1,19 @@
 /**
  * 列出沙盒广告主下所有 identity（identity_id + identity_type）。
- * 用法：node scripts/list-tiktok-sandbox-identities.mjs [可选：要查找的 identity_id]
+ * 用法：node scripts/list-tiktok-sandbox-identities.mjs [identity_id] [--env=.env.test]
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadStackedEnv } from "./lib/loadEnv.mjs";
 
-const targetId = (process.argv[2] || "").trim();
+const targetId = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
-
-function loadDotEnv() {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const envPath = path.join(root, ".env");
-  if (!existsSync(envPath)) return;
-  for (const rawLine of readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
 
 function env(name) {
   return (process.env[name] || "").trim();
 }
 
 async function main() {
-  loadDotEnv();
+  loadStackedEnv();
   const accessToken = env("TIKTOK_SANDBOX_ACCESS_TOKEN");
   const advertiserId = env("TIKTOK_SANDBOX_ADVERTISER_ID");
   if (!accessToken || !advertiserId) {
