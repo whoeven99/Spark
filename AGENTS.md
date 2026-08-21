@@ -121,7 +121,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Google Analytics 4 | `app/server/googleAnalytics/`（`ga4Api.server.ts` 读数、`ga4Credentials.server.ts` OAuth 凭证） |
 | Google Search Console | `app/server/googleSearchConsole/`（`gscApi.server.ts`、`gscCredentials.server.ts`） |
 | PageSpeed Insights | `app/server/pageSpeed/`（PSI v5 `fetch`，平台级 `GOOGLE_PAGESPEED_API_KEY`，结果不落库） |
-| ShopifyQL 官方报表 | `app/server/shopifyql/`（`shopifyqlQuery` + 七域 preset：销售/退款/成本利润/客户/库存/履约/店面漏斗，入口 `/app/settings/shopify-reports`，需要 `read_reports` 与 Protected Customer Data Level 2） |
+| ShopifyQL 官方报表 | `app/server/shopifyql/`（`shopifyqlQuery` + 七域 preset：销售/退款/成本利润/客户/库存/履约/店面漏斗，入口 `/app/settings/shopify-reports`，需要 `read_reports` 与 Protected Customer Data Level 2）。读路径：Redis（`SPARK_KV`，TTL 5 分钟）→ Turso 整页 JSON 快照（7/30/90/365）→ 仅快照缺失时串行回源；过期先返回旧快照再排队刷新，同一店铺同一时刻只允许一次回源 |
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts` |
@@ -151,9 +151,9 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 - **Azure Blob Storage**：上传文件、图片生成、图片翻译及兼容翻译内容。写入前确认容器、SAS 生命周期和清理策略。
 - **Redis / Render KV**：**与 ciwi-translate（TSF）共用同一 Render Key Value 实例**（`SPARK_KV` / Admin 的 `RENDER_KV` 可指向同一 URL；本地 External、Render 同区用 Internal）。主应用读写统一走环境变量 `SPARK_KV`；Admin 翻译运维只读仍优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`），用于观测 TSF 已有 key，**不要**用 Admin 客户端写入 Spark 业务 key。
   - **Key 命名空间（强制）**：主应用写入的每个 key **必须以 `spark:` 开头**（推荐 `spark:{domain}:{…}`，例如 `spark:lock:daily-snapshot:{shop}`）。**禁止**使用或覆盖 TSF 已有前缀：`translate:v4:`、`tsf:`、`tm:v5:`，以及其它非 `spark:` 前缀。接入客户端时集中做一个 key helper，禁止业务代码手拼裸 key。
-  - 主应用业务代码目前尚未接入 Redis 客户端；接入时须可缺省降级，且不要未经确认把新的核心业务对象只存 Redis。
+  - 主应用 Shopify 报表短缓存走 `app/server/kv/sparkKv.server.ts`（`sparkKvKey` 统一 `spark:` 前缀，可缺省降级读 Turso）。不要把核心业务对象只存 Redis。
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
-- **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。历史指标报表走 `shopifyqlQuery`（需 `read_reports`），入口 `/app/settings/shopify-reports`。
+- **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。历史指标报表走 `shopifyqlQuery`（需 `read_reports`），入口 `/app/settings/shopify-reports`；页面默认读 Turso 快照 / Redis 缓存，不在请求里并行打 ShopifyQL。
 - **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。
 - **Google Ads 再营销**：Ads Catalog 使用 `product_link` / `product_link_invitation` 完成 GMC↔Ads 幂等关联，并从 Ads customer 设置发现 AW 标签。Theme block 只发送非 purchase 店面事件；purchase 由商户手动安装的实验性 Custom Pixel 发送，Google 官方不支持该运行方式，UI 必须持续展示数据损失、重复上报与 Support 不保障告警。
 - **Google Analytics 4 Data API / Search Console API**：Settings 下 GA4 与 GSC 的连接、属性/站点发现与报表读取，均为只读分析数据；OAuth 凭证经 `app/server/googleAnalytics/ga4Credentials.server.ts`、`app/server/googleSearchConsole/gscCredentials.server.ts` 存取。

@@ -10,7 +10,7 @@
 | 商品与商品变体 | Shopify Admin GraphQL | 商品搜索、商品详情、商品文案生成、商品质量评分 |
 | 店铺语言与 locale | Shopify Admin GraphQL | 商品文案目标语言、图片翻译目标语言 |
 | Shopify 内容对象 | Shopify Admin GraphQL | 工作台上下文对象查询、Admin 翻译资源观测 |
-| ShopifyQL 官方报表 | Admin GraphQL `shopifyqlQuery`（需 `read_reports`） | Settings 历史指标查询（销售/退款/成本利润/客户/库存/履约/店面漏斗）；不落库 |
+| ShopifyQL 官方报表 | Admin GraphQL `shopifyqlQuery`（需 `read_reports`）；Turso `ShopifyReportSnapshot` 整页 JSON；Redis `spark:shopify-reports:*` 5 分钟缓存 | Settings 历史指标查询（销售/退款/成本利润/客户/库存/履约/店面漏斗）；过期返回旧快照并排队串行回源 |
 | 订单 | Prisma/Turso `ShopOrder`，Webhook + 历史回补 | 销售额、订单数、AOV、渠道来源、取消率、经营诊断 |
 | 订单行项目 | Prisma/Turso `ShopOrderLineItem` | SKU 销售、商品归因、库存风险估算、退款 SKU 关联 |
 | 退款 | Prisma/Turso `ShopRefund`，Webhook + 回补 | 退款金额、退款率、退款趋势、异常退款订单 |

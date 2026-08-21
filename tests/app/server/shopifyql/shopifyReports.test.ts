@@ -3,6 +3,7 @@ import type { ShopifyAdminGraphqlClient } from "../../../../app/server/ai/skills
 import {
   chartAxisTicks,
   computeLinearChartDomain,
+  emptyReportsPage,
   hasReadReportsScope,
   interpolateSince,
   niceChartMagnitude,
@@ -11,11 +12,29 @@ import {
   parseReportTab,
 } from "../../../../app/lib/shopifyReports";
 import { buildPresetQuery, listReportPresets } from "../../../../app/server/shopifyql/reportPresets.server";
-import { loadShopifyReports } from "../../../../app/server/shopifyql/shopifyReports.server";
+import {
+  loadShopifyReports,
+  type ShopifyReportsRuntime,
+} from "../../../../app/server/shopifyql/shopifyReports.server";
 import {
   executeShopifyqlQuery,
   isShopifyqlAccessDenied,
+  retryAfterMsFromCost,
 } from "../../../../app/server/shopifyql/shopifyqlQuery.server";
+import { sparkKvKey } from "../../../../app/server/kv/sparkKv.server";
+
+function memoryRuntime(overrides: Partial<ShopifyReportsRuntime> = {}): ShopifyReportsRuntime {
+  return {
+    readCache: async () => null,
+    loadSnapshot: async () => null,
+    writeCache: async () => undefined,
+    persistPage: async () => undefined,
+    acquireLock: async () => true,
+    releaseLock: async () => undefined,
+    enqueueRefresh: vi.fn(),
+    ...overrides,
+  };
+}
 
 describe("shopify reports helpers", () => {
   it("parses tab and range from query params", () => {
@@ -120,6 +139,21 @@ describe("shopify reports helpers", () => {
     ).toBe(true);
     expect(isShopifyqlAccessDenied([{ message: "timeout" }])).toBe(false);
   });
+
+  it("namespaces Spark KV keys under spark:", () => {
+    expect(sparkKvKey("shopify-reports", "lock", "a.myshopify.com")).toBe(
+      "spark:shopify-reports:lock:a.myshopify.com",
+    );
+  });
+
+  it("computes ShopifyQL retry delay from windowResetAt", () => {
+    expect(
+      retryAfterMsFromCost(
+        { windowResetAt: "2026-08-21T04:00:10.000Z" },
+        Date.parse("2026-08-21T04:00:00.000Z"),
+      ),
+    ).toBe(10_000);
+  });
 });
 
 describe("executeShopifyqlQuery", () => {
@@ -172,23 +206,175 @@ describe("executeShopifyqlQuery", () => {
     expect(result.ok).toBe(false);
     expect(result.accessDenied).toBe(true);
   });
+
+  it("marks throttled ShopifyQL responses for retry", async () => {
+    const admin: ShopifyAdminGraphqlClient = {
+      graphql: vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            errors: [{ message: "Rate limited. Please retry later.", extensions: { code: "THROTTLED" } }],
+            extensions: {
+              shopifyqlCost: { currentlyAvailable: 0, windowResetAt: "2026-08-21T04:00:05.000Z" },
+            },
+          }),
+          { status: 429 },
+        ),
+      ),
+    };
+
+    const result = await executeShopifyqlQuery(admin, "FROM sales SHOW total_sales");
+    expect(result.ok).toBe(false);
+    expect(result.throttled).toBe(true);
+  });
 });
 
 describe("loadShopifyReports", () => {
+  const shop = "demo.myshopify.com";
+
   it("does not call ShopifyQL when the scope is missing", async () => {
     const graphql = vi.fn();
     const admin: ShopifyAdminGraphqlClient = { graphql };
+    const fetchPage = vi.fn();
 
     const page = await loadShopifyReports({
       admin,
+      shop,
       tab: "sales",
       range: "7d",
       hasReadReports: false,
+      runtime: memoryRuntime({ fetchPage }),
     });
 
     expect(page.access).toBe("missing_scope");
     expect(page.queries).toEqual([]);
     expect(graphql).not.toHaveBeenCalled();
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("returns a fresh Redis page without hitting Shopify or Turso", async () => {
+    const fetchPage = vi.fn();
+    const loadSnapshot = vi.fn();
+    const cached = emptyReportsPage("sales", "7d", "ok", {
+      freshness: "fresh",
+      fetchedAt: "2026-08-21T04:00:00.000Z",
+      queries: [
+        {
+          id: "sales-summary",
+          kind: "summary",
+          query: "FROM sales SHOW total_sales",
+          titleKey: "shopifyReports.summaryTitle",
+          seriesKeys: [],
+          xKey: "day",
+          columns: [],
+          rows: [{ total_sales: 10 }],
+          parseErrors: [],
+          error: null,
+        },
+      ],
+    });
+
+    const page = await loadShopifyReports({
+      admin: { graphql: vi.fn() },
+      shop,
+      tab: "sales",
+      range: "7d",
+      hasReadReports: true,
+      runtime: memoryRuntime({
+        readCache: async () => cached,
+        loadSnapshot,
+        fetchPage,
+      }),
+    });
+
+    expect(page.queries[0]?.rows[0]?.total_sales).toBe(10);
+    expect(loadSnapshot).not.toHaveBeenCalled();
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("returns a stale Turso snapshot and enqueues a refresh", async () => {
+    const enqueueRefresh = vi.fn();
+    const fetchPage = vi.fn();
+    const snapshot = emptyReportsPage("sales", "30d", "ok", {
+      freshness: "stale",
+      fetchedAt: "2026-08-21T03:00:00.000Z",
+      queries: [
+        {
+          id: "sales-summary",
+          kind: "summary",
+          query: "FROM sales SHOW total_sales",
+          titleKey: "shopifyReports.summaryTitle",
+          seriesKeys: [],
+          xKey: "day",
+          columns: [],
+          rows: [{ total_sales: 42 }],
+          parseErrors: [],
+          error: null,
+        },
+      ],
+    });
+
+    const page = await loadShopifyReports({
+      admin: { graphql: vi.fn() },
+      shop,
+      tab: "sales",
+      range: "30d",
+      hasReadReports: true,
+      runtime: memoryRuntime({
+        loadSnapshot: async () => snapshot,
+        enqueueRefresh,
+        fetchPage,
+      }),
+    });
+
+    expect(page.refreshing).toBe(true);
+    expect(page.queries[0]?.rows[0]?.total_sales).toBe(42);
+    expect(enqueueRefresh).toHaveBeenCalledTimes(1);
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("fetches Shopify only on a cold start after acquiring the shop lock", async () => {
+    const persistPage = vi.fn();
+    const releaseLock = vi.fn();
+    const fetched = emptyReportsPage("sales", "7d", "ok", {
+      freshness: "fresh",
+      fetchedAt: "2026-08-21T04:10:00.000Z",
+    });
+
+    const page = await loadShopifyReports({
+      admin: { graphql: vi.fn() },
+      shop,
+      tab: "sales",
+      range: "7d",
+      hasReadReports: true,
+      runtime: memoryRuntime({
+        persistPage,
+        releaseLock,
+        fetchPage: async () => fetched,
+      }),
+    });
+
+    expect(page.fetchedAt).toBe("2026-08-21T04:10:00.000Z");
+    expect(persistPage).toHaveBeenCalledTimes(1);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns loading when another refresh already holds the shop lock", async () => {
+    const fetchPage = vi.fn();
+    const page = await loadShopifyReports({
+      admin: { graphql: vi.fn() },
+      shop,
+      tab: "sales",
+      range: "7d",
+      hasReadReports: true,
+      runtime: memoryRuntime({
+        acquireLock: async () => false,
+        fetchPage,
+      }),
+    });
+
+    expect(page.freshness).toBe("loading");
+    expect(page.refreshing).toBe(true);
+    expect(fetchPage).not.toHaveBeenCalled();
   });
 
   it("collapses ACCESS_DENIED into a page-level empty state", async () => {
@@ -207,9 +393,11 @@ describe("loadShopifyReports", () => {
 
     const page = await loadShopifyReports({
       admin,
+      shop,
       tab: "sales",
       range: "7d",
       hasReadReports: true,
+      runtime: memoryRuntime(),
     });
 
     expect(page.access).toBe("access_denied");

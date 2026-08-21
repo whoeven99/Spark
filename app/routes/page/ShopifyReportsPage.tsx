@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
-import { useLoaderData } from "react-router";
+import { useEffect, useState } from "react";
+import { useLoaderData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
@@ -35,6 +35,13 @@ import {
   pageEmptyStateStyle,
   pageHintTextStyle,
 } from "./pageUiStyles";
+
+function minutesAgo(iso: string | null): number | null {
+  if (!iso) return null;
+  const elapsed = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(elapsed) || elapsed < 0) return 0;
+  return Math.max(1, Math.round(elapsed / 60_000));
+}
 
 const TAB_LABEL_KEYS: Record<ReportTab, string> = {
   sales: "shopifyReports.tabSales",
@@ -87,12 +94,22 @@ export function ShopifyReportsPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
+  const revalidator = useRevalidator();
   const data = useLoaderData<ShopifyReportsPageData>();
   useFeatureView("settings");
 
   const [queryPreview, setQueryPreview] = useState<string | null>(null);
   const tab = data.tab;
   const range = data.range;
+  const shouldPoll = data.access === "ok" && (data.freshness === "loading" || data.refreshing);
+
+  useEffect(() => {
+    if (!shouldPoll) return undefined;
+    const timer = window.setInterval(() => {
+      if (revalidator.state === "idle") revalidator.revalidate();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [shouldPoll, revalidator]);
 
   const summaries = data.queries.filter((item) => item.kind === "summary");
   const trends = data.queries.filter((item) => item.kind === "timeseries");
@@ -124,6 +141,8 @@ export function ShopifyReportsPage() {
           </p>
         ) : null}
 
+        <FreshnessBanner data={data} locale={i18n.language} />
+
         <SegmentedPageTabs
           activeTab={tab}
           items={REPORT_TABS.map((key) => ({ key, label: t(TAB_LABEL_KEYS[key]) }))}
@@ -146,7 +165,14 @@ export function ShopifyReportsPage() {
           />
         ) : null}
 
-        {data.access === "ok" ? (
+        {data.access === "ok" && data.freshness === "loading" ? (
+          <AccessEmpty
+            title={t("shopifyReports.freshnessLoading")}
+            body={t("shopifyReports.freshnessLoadingBody")}
+          />
+        ) : null}
+
+        {data.access === "ok" && data.freshness !== "loading" ? (
           <>
             {summaries.map((summary) => (
               <SummaryCard
@@ -202,6 +228,31 @@ export function ShopifyReportsPage() {
       </DialogShell>
     </div>
   );
+}
+
+function FreshnessBanner({
+  data,
+  locale,
+}: {
+  data: ShopifyReportsPageData;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  if (data.access !== "ok") return null;
+  if (data.freshness === "loading") return null;
+  const time = data.fetchedAt
+    ? new Date(data.fetchedAt).toLocaleString(locale, { hour: "2-digit", minute: "2-digit" })
+    : "—";
+  const minutes = minutesAgo(data.fetchedAt);
+  if (data.freshness === "stale" || data.refreshing) {
+    return (
+      <p style={staleHintStyle}>
+        {t("shopifyReports.freshnessStale", { time, minutes: minutes ?? 1 })}
+      </p>
+    );
+  }
+  if (!data.fetchedAt) return null;
+  return <p style={{ ...pageHintTextStyle, marginTop: 0 }}>{t("shopifyReports.freshnessFresh", { time })}</p>;
 }
 
 function AccessEmpty({ title, body }: { title: string; body: string }) {
@@ -329,6 +380,16 @@ function StorefrontFunnel({
     </PageSurface>
   );
 }
+
+const staleHintStyle: CSSProperties = {
+  ...pageHintTextStyle,
+  marginTop: 0,
+  marginBottom: 8,
+  padding: "8px 12px",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.warningBg,
+  color: pageColorTokens.textBody,
+};
 
 const queryButtonStyle: CSSProperties = {
   border: `1px solid ${pageColorTokens.border}`,
