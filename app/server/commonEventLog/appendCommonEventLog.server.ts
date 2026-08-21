@@ -1,11 +1,13 @@
-import { Prisma } from "../../generated/prisma";
+import type { Prisma } from "../../generated/prisma";
 import prisma from "../../db.server";
 import type { CommonEventType } from "./types.server";
 
 function isCommonEventLogUniqueViolation(error: unknown): boolean {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
   );
 }
 
