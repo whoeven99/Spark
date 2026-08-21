@@ -139,10 +139,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (detail === "task") {
-    const result = await ensureDailySnapshot(session.shop);
+    let result: Awaited<ReturnType<typeof ensureDailySnapshot>> | null = null;
+    try {
+      result = await ensureDailySnapshot(session.shop);
+    } catch (error) {
+      console.error("[app.today.diagnosis] failed to load daily snapshot, redirecting to task center without task lookup:", error);
+    }
     const taskId = url.searchParams.get("taskId")?.trim() || null;
     const task = taskId
-      ? result.tasks.find((item) => item.id === taskId) ?? null
+      ? result?.tasks.find((item) => item.id === taskId) ?? null
       : null;
     throw redirect(
       buildTaskCenterPath({

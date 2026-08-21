@@ -2,7 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
-import type { AITaskItem } from "../lib/aiTaskTypes";
+import type { AITaskItem, AITaskListPageData } from "../lib/aiTaskTypes";
 import {
   listOperationTasks,
   updateOperationTaskStatus,
@@ -114,6 +114,23 @@ function matchesOperationSourceFilter(entry: UnifiedTaskEntry, operationSourceFi
   return operationSourceFilter.includes(entry.task.sourceKey);
 }
 
+function buildEmptyAITaskPage(view: UnifiedTaskView, page: number, pageSize: number): AITaskListPageData {
+  return {
+    tasks: [],
+    view,
+    page,
+    pageSize,
+    totalCount: 0,
+    totalPages: 1,
+    metrics: {
+      currentCount: 0,
+      historyCount: 0,
+      runningCount: 0,
+      totalCount: 0,
+    },
+  };
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
@@ -139,6 +156,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       view,
       page: 1,
       pageSize: FETCH_ALL_SIZE,
+    }).catch((error) => {
+      console.error("[api.unified-tasks] failed to load AI tasks, falling back to empty list:", error);
+      return buildEmptyAITaskPage(view, 1, FETCH_ALL_SIZE);
     }),
     listOperationTasks(session.shop),
   ]);

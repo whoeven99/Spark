@@ -328,6 +328,28 @@ function buildFallbackOperationTasks(now: Date = new Date()): OperationTaskView[
   ];
 }
 
+function findFallbackOperationTask(taskId: string, now: Date = new Date()): OperationTaskView | null {
+  return buildFallbackOperationTasks(now).find((task) => task.id === taskId) ?? null;
+}
+
+function applyOperationTaskAction(
+  task: OperationTaskView,
+  action: OperationTaskAction,
+  now: Date = new Date(),
+): OperationTaskView {
+  const nextStatus = TASK_ACTION_TO_STATUS[action];
+  return {
+    ...task,
+    status: nextStatus,
+    resolvedAt:
+      action === "done" || action === "ignore"
+        ? now.toISOString()
+        : action === "reopen"
+          ? null
+          : task.resolvedAt,
+  };
+}
+
 type ReportTaskPresentationEffect = "revenue" | "conversion" | "retention" | "efficiency";
 
 type CreateOperationTaskFromReportCandidateInput = {
@@ -1092,6 +1114,11 @@ export async function updateOperationTaskStatus(
   taskId: string,
   action: OperationTaskAction,
 ): Promise<OperationTaskView | null> {
+  const fallbackTask = findFallbackOperationTask(taskId);
+  if (fallbackTask) {
+    return applyOperationTaskAction(fallbackTask, action);
+  }
+
   const task = await prisma.operationTask.findUnique({ where: { id: taskId } });
   if (!task || task.shop !== shop) return null;
   const status = TASK_ACTION_TO_STATUS[action];
