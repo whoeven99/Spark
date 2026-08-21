@@ -362,9 +362,13 @@ export function WorkspaceAppShellPage({
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const { isMobile } = useResponsiveLayout();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
+  const [conversationList, setConversationList] = useState<Conversation[]>(
+    Array.isArray(initialConversationList) ? initialConversationList : [],
+  );
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    initialConversationList.length > 0 ? initialConversationList[0].id : null,
+    Array.isArray(initialConversationList) && initialConversationList.length > 0
+      ? initialConversationList[0]?.id ?? null
+      : null,
   );
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});

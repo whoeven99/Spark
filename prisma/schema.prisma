@@ -218,6 +218,7 @@ model Account {
 /// 套餐目录（订阅 / 按量包 / 内置试用定义）。
 model PlanCatalog {
   planKey          String   @id
+  appName          String   @default("spark")
   /// SUBSCRIPTION | ONE_TIME_PACK | INTERNAL_TRIAL
   kind             String
   /// MONTHLY | ANNUAL；一次性包为 null

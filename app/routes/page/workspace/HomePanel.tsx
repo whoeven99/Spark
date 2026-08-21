@@ -565,11 +565,13 @@ export function HomePanel({
     useState<AutomationOverview | null>(null);
   const now = useMemo(() => new Date(), []);
   const needsAttention = snapshot.automation?.status === "attention";
-  const suggestionItems = snapshot.suggestions.slice(0, 3);
-  const topMetrics = snapshot.metrics.slice(0, 5);
-  const topAlerts = snapshot.alerts.slice(0, 3);
-  const recentTasks = snapshot.recentTaskSummaries.slice(0, 3);
-  const recommendedPlaybooks = automationOverview?.recommendedPlaybooks ?? [];
+  const suggestionItems = (snapshot.suggestions ?? []).slice(0, 3);
+  const topMetrics = (snapshot.metrics ?? []).slice(0, 5);
+  const topAlerts = (snapshot.alerts ?? []).slice(0, 3);
+  const recentTasks = (snapshot.recentTaskSummaries ?? []).slice(0, 3);
+  const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
+    ? automationOverview.recommendedPlaybooks
+    : [];
 
   useEffect(() => {
     let cancelled = false;
