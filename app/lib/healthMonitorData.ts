@@ -2,7 +2,8 @@ export type HealthMonitorStatus = "good" | "watch" | "risk";
 
 export type HealthMonitorRecord = {
   id: string;
-  group: "站点健康度" | "经营健康度";
+  group: "可信度健康" | "目标健康";
+  relatedModule: "ROI" | "收入与订单" | "流量质量" | "转化承接" | "全局";
   title: string;
   value: string;
   status: HealthMonitorStatus;
@@ -16,7 +17,8 @@ export type HealthMonitorRecord = {
 export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   {
     id: "page-performance",
-    group: "站点健康度",
+    group: "可信度健康",
+    relatedModule: "转化承接",
     title: "页面性能",
     value: "LCP 4.8s",
     status: "watch",
@@ -37,7 +39,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "seo-health",
-    group: "站点健康度",
+    group: "可信度健康",
+    relatedModule: "流量质量",
     title: "SEO 情况",
     value: "CTR 3.4%",
     status: "good",
@@ -57,7 +60,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "roi-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "ROI",
     title: "ROI 情况（短期和长期）",
     value: "1.9x / 2.8x",
     status: "risk",
@@ -78,7 +82,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "revenue-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "收入与订单",
     title: "收入健康度",
     value: "近 7 天 +2%",
     status: "watch",
@@ -98,7 +103,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "traffic-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "流量质量",
     title: "流量健康度",
     value: "Sessions +11%",
     status: "good",
@@ -117,7 +123,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "ads-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "ROI",
     title: "广告投放健康度",
     value: "ROAS 1.7x",
     status: "watch",
@@ -137,7 +144,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "conversion-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "转化承接",
     title: "转化率健康度",
     value: "CVR 1.4%",
     status: "risk",
@@ -158,7 +166,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "inventory-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "收入与订单",
     title: "库存健康度",
     value: "3 个 SKU < 7天",
     status: "watch",
@@ -178,7 +187,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "fulfillment-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "收入与订单",
     title: "履约健康度",
     value: "超时单 4.6%",
     status: "watch",
@@ -198,7 +208,8 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
   {
     id: "pricing-health",
-    group: "经营健康度",
+    group: "目标健康",
+    relatedModule: "ROI",
     title: "商品成本和定价健康度",
     value: "毛利率 46%",
     status: "good",
@@ -217,7 +228,7 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   },
 ];
 
-const GROUP_ORDER: HealthMonitorRecord["group"][] = ["站点健康度", "经营健康度"];
+const GROUP_ORDER: HealthMonitorRecord["group"][] = ["可信度健康", "目标健康"];
 
 export function getHealthMonitorGroups() {
   return GROUP_ORDER.map((group) => ({

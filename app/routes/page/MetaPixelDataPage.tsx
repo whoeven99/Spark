@@ -233,12 +233,6 @@ export function MetaPixelDataPage() {
         <a href={eventsManagerUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("metaPixelData.openEventsManager")}
         </a>
-        <Link
-          to={locationSearch ? `/app/insights/charts${locationSearch}&group=roi` : "/app/insights/charts?group=roi"}
-          style={secondaryBtn}
-        >
-          {t("metaPixelData.openInsights")}
-        </Link>
       </div>
 
       <MetaPixelStatsPanel

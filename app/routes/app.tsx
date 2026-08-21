@@ -53,7 +53,6 @@ const NAV_ITEMS: Record<
       | "nav.today"
       | "nav.healthMonitor"
       | "nav.studio"
-      | "nav.insights"
       | "nav.tasks"
       | "nav.settings"
       | "nav.adsCatalog";
@@ -63,7 +62,6 @@ const NAV_ITEMS: Record<
   today: { href: "/app/today", labelKey: "nav.today" },
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
-  insights: { href: "/app/insights", labelKey: "nav.insights" },
   tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
   settings: { href: "/app/settings", labelKey: "nav.settings" },
   "ads-catalog": { href: "/app/ads-catalog", labelKey: "nav.adsCatalog" },

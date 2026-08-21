@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData, useNavigate, useRevalidator } from "react-router";
+import { Link, useLoaderData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import {
@@ -112,7 +112,6 @@ function StatusPill({
 export function GooglePixelDataPage() {
   const { t } = useTranslation();
   const data = useLoaderData<GooglePixelDataLoaderData>();
-  const navigate = useNavigate();
   const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
   const connectionPath = `/app/settings/connections/google${locationSearch}`;
@@ -287,12 +286,6 @@ export function GooglePixelDataPage() {
         <a href={themeEditorUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("adsCatalog.googleRemarketing.openThemeEditor")}
         </a>
-        <Link
-          to={locationSearch ? `/app/insights/charts${locationSearch}&group=roi` : "/app/insights/charts?group=roi"}
-          style={secondaryBtn}
-        >
-          {t("googlePixelData.openInsights")}
-        </Link>
       </div>
 
       <GoogleAdsPerformancePanel enabled={data.adsConnected} />
@@ -441,21 +434,6 @@ export function GooglePixelDataPage() {
       <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelData.sectionLimits")}</h3>
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>{t("googlePixelData.limitsBody")}</p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            style={secondaryBtn}
-            onClick={() =>
-              navigate(
-                locationSearch
-                  ? `/app/insights/charts${locationSearch}&group=roi`
-                  : "/app/insights/charts?group=roi",
-              )
-            }
-          >
-            {t("googlePixelData.openInsights")}
-          </button>
-        </div>
       </div>
 
       {hint ? <div style={pageHintTextStyle}>{hint}</div> : null}

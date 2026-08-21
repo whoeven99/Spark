@@ -3839,8 +3839,8 @@
         "file": "文件"
       },
       "status": {
-        "needsAttention": "今日巡检有需关注事项",
-        "healthy": "今日巡检正常"
+        "needsAttention": "健康度概况中有需关注事项",
+        "healthy": "健康度概况整体稳定"
       },
       "askSpark": "ASK SPARK",
       "assistantTitle": "继续追问，或直接发起一个任务",
@@ -3849,14 +3849,14 @@
       "send": "发送",
       "command": {
         "eyebrow": "TODAY COMMAND CENTER",
-        "needsAttention": "今天有需要优先处理的经营风险",
-        "healthy": "今日经营状态整体正常",
+        "needsAttention": "今天有需要优先处理的健康异常与经营问题",
+        "healthy": "今日经营与健康状态整体稳定",
         "noData": "暂无可用经营数据",
         "updatedAt": "数据更新于 {{time}}",
         "snapshotDate": "快照 {{date}}",
         "snapshotPending": "完成数据回补后会生成今日经营摘要",
-        "noUrgentRisk": "当前未发现紧急风险，可在每日经营待办中查看完整诊断与四象限任务。",
-        "noPriorityRisk": "暂无需要优先处理的风险。",
+        "noUrgentRisk": "当前未发现紧急健康异常，可在健康度监测中查看完整诊断与处理建议。",
+        "noPriorityRisk": "暂无需要优先处理的健康异常。",
         "noBusinessData": "暂无经营数据。"
       },
       "fallbackActions": {
@@ -3865,17 +3865,19 @@
         "actions": "帮我列出今天最值得处理的运营动作"
       },
       "links": {
-        "dashboard": "经营看板",
-        "dailyOps": "每日待办",
-        "tasks": "任务中心"
+        "dashboard": "经营指标",
+        "dailyOps": "健康度监测",
+        "tasks": "待办"
       },
       "pendingIntegration": "待接入",
       "sections": {
-        "topRisks": "最重要的风险",
-        "topRisksHint": "最多展示 3 条，完整列表在每日待办里",
+        "businessMetrics": "经营指标",
+        "businessMetricsHint": "先看 ROI 与关键经营指标摘要，再进入 Today 查看完整拆解",
+        "topRisks": "健康度概况",
+        "topRisksHint": "最多展示 3 条，完整列表在健康度监测里",
         "recommendedActions": "推荐动作",
-        "recommendedActionsHint": "基于今日诊断直接进入下一步",
-        "recentTasks": "最近任务",
+        "recommendedActionsHint": "基于当前经营与健康判断，直接进入下一步",
+        "recentTasks": "待办",
         "runningTasks": "{{count}} 个任务进行中",
         "noRunningTasks": "当前没有进行中任务",
         "noRecentTasks": "暂无近期任务。创建文案或图片任务后会显示在这里。"

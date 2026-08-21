@@ -1464,12 +1464,20 @@ function buildInsightsChartsHref(params: {
   extra?: Record<string, string | undefined | null>;
 }): string {
   const next = new URLSearchParams();
-  next.set("group", params.group);
   next.set("card", params.card);
   Object.entries(params.extra ?? {}).forEach(([key, value]) => {
     if (value) next.set(key, value);
   });
-  return `/app/insights/charts?${next.toString()}`;
+  const path =
+    params.group === "acquisition"
+      ? "/app/today/traffic"
+      : params.group === "conversion"
+        ? "/app/today/conversion"
+        : params.group === "merchandising_ops"
+          ? "/app/today/orders"
+          : "/app/today/roi";
+  const query = next.toString();
+  return `${path}${query ? `?${query}` : ""}`;
 }
 
 export function appendReturnTo(href: string, returnTo: string): string {

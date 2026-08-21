@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../../hooks/useEmbeddedLocationSearch";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
@@ -412,14 +411,6 @@ export function GoogleAdsPerformancePanel({ enabled }: { enabled: boolean }) {
             ))}
           </div>
           <TrendChart days={state.data.days} />
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link
-              to={locationSearch ? `/app/insights/charts${locationSearch}&group=roi` : "/app/insights/charts?group=roi"}
-              style={secondaryBtn}
-            >
-              {t("googlePixelData.openInsights")}
-            </Link>
-          </div>
         </>
       ) : null}
     </div>

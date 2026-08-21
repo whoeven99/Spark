@@ -478,10 +478,6 @@ function buildGoogleSummary(
         label: t("settingsShell.googleManageSearchConsole"),
         to: "/app/settings/google-search-console",
       },
-      {
-        label: t("settingsShell.openInsights"),
-        to: "/app/insights/charts?group=roi",
-      },
     ] satisfies ConnectionLink[],
   };
 }
@@ -558,10 +554,6 @@ function buildMetaSummary(
         label: t("settingsShell.metaManageCatalog"),
         to: "/app/ads-catalog?tab=credentials",
       },
-      {
-        label: t("settingsShell.openInsights"),
-        to: "/app/insights/charts?group=roi",
-      },
     ] satisfies ConnectionLink[],
   };
 }
@@ -630,10 +622,6 @@ function buildTiktokSummary(
       {
         label: t("settingsShell.tiktokManageCatalog"),
         to: "/app/ads-catalog?tab=credentials",
-      },
-      {
-        label: t("settingsShell.openInsights"),
-        to: "/app/insights/charts?group=roi",
       },
     ] satisfies ConnectionLink[],
   };

@@ -3839,8 +3839,8 @@
         "file": "File"
       },
       "status": {
-        "needsAttention": "Today’s inspection found items that need attention",
-        "healthy": "Today’s inspection looks healthy"
+        "needsAttention": "The health overview has items that need attention",
+        "healthy": "The health overview looks stable"
       },
       "askSpark": "ASK SPARK",
       "assistantTitle": "Ask a follow-up or start a task directly",
@@ -3849,14 +3849,14 @@
       "send": "Send",
       "command": {
         "eyebrow": "TODAY COMMAND CENTER",
-        "needsAttention": "There are operational risks that should be handled first today",
-        "healthy": "Today’s business health looks stable overall",
+        "needsAttention": "There are health exceptions and business issues that should be handled first today",
+        "healthy": "Today’s business and health status look stable overall",
         "noData": "No business data available yet",
         "updatedAt": "Updated {{time}}",
         "snapshotDate": "Snapshot {{date}}",
         "snapshotPending": "Today’s operations summary will appear after data backfill completes",
-        "noUrgentRisk": "No urgent risks were found. You can open Daily Ops for the full diagnosis and action list.",
-        "noPriorityRisk": "No priority risks right now.",
+        "noUrgentRisk": "No urgent health exceptions were found. Open Health Monitor for the full diagnosis and suggested actions.",
+        "noPriorityRisk": "No priority health exceptions right now.",
         "noBusinessData": "No business data yet."
       },
       "fallbackActions": {
@@ -3865,17 +3865,19 @@
         "actions": "List the most worthwhile operational actions for today"
       },
       "links": {
-        "dashboard": "Operations dashboard",
-        "dailyOps": "Daily ops",
-        "tasks": "Task center"
+        "dashboard": "Business metrics",
+        "dailyOps": "Health Monitor",
+        "tasks": "Todo"
       },
       "pendingIntegration": "Pending",
       "sections": {
-        "topRisks": "Top risks",
-        "topRisksHint": "Shows up to 3 items. See Daily Ops for the full list.",
+        "businessMetrics": "Business metrics",
+        "businessMetricsHint": "Start with ROI and the key business metrics summary, then open Today for the full breakdown",
+        "topRisks": "Health overview",
+        "topRisksHint": "Shows up to 3 items. Open Health Monitor for the full list.",
         "recommendedActions": "Recommended actions",
-        "recommendedActionsHint": "Jump straight to the next step from today’s diagnosis",
-        "recentTasks": "Recent tasks",
+        "recommendedActionsHint": "Jump straight to the next step from the current business and health diagnosis",
+        "recentTasks": "Todo",
         "runningTasks": "{{count}} tasks running",
         "noRunningTasks": "No tasks are currently running",
         "noRecentTasks": "No recent tasks yet. Copy and image tasks will appear here after you create them."

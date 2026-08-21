@@ -874,9 +874,10 @@ function CommandCenter({
           detail: "",
           prompt,
         }));
+  const metricColumns = isMobile ? 2 : 3;
 
   return (
-    <section style={homeStyles.commandGrid(isMobile)}>
+    <section style={panelStackStyle}>
       <div style={homeStyles.commandMain}>
         <div style={homeStyles.sectionHead}>
           <div>
@@ -888,25 +889,42 @@ function CommandCenter({
             {t("workspace.home.links.dashboard")} →
           </button>
         </div>
+      </div>
 
-        <div style={homeStyles.summaryGrid(isMobile)}>
-          {topMetrics.map((metric) => (
-            <div key={metric.label} style={homeStyles.summaryMetric}>
-              <div style={metricLabelStyle}>
-                {metric.label}
-                {metric.pendingIntegration ? (
-                  <span style={homeStyles.pendingBadge}>
-                    {t("workspace.home.pendingIntegration")}
-                  </span>
-                ) : null}
+      <div style={homeStyles.metricsGrid(isMobile ? 1 : 3)}>
+        <section style={homeStyles.sectionCard}>
+          <div style={homeStyles.sectionHead}>
+            <div>
+              <h3 style={homeStyles.sectionTitle}>
+                {t("workspace.home.sections.businessMetrics")}
+              </h3>
+              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
+                {t("workspace.home.sections.businessMetricsHint")}
               </div>
-              <div style={{ ...metricValueStyle, fontSize: 22, marginTop: 8 }}>{metric.value}</div>
-              <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
             </div>
-          ))}
-        </div>
+            <button type="button" style={textButtonStyle} onClick={onOpenDashboard}>
+              {t("workspace.home.links.dashboard")} →
+            </button>
+          </div>
+          <div style={homeStyles.metricsGrid(metricColumns)}>
+            {topMetrics.map((metric) => (
+              <div key={metric.label} style={homeStyles.summaryMetric}>
+                <div style={metricLabelStyle}>
+                  {metric.label}
+                  {metric.pendingIntegration ? (
+                    <span style={homeStyles.pendingBadge}>
+                      {t("workspace.home.pendingIntegration")}
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ ...metricValueStyle, fontSize: 22, marginTop: 8 }}>{metric.value}</div>
+                <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        <div>
+        <section style={homeStyles.sectionCard}>
           <div style={homeStyles.sectionHead}>
             <div>
               <h3 style={homeStyles.sectionTitle}>{t("workspace.home.sections.topRisks")}</h3>
@@ -924,7 +942,12 @@ function CommandCenter({
                 <button
                   key={`${alert.title}-${alert.detail}`}
                   type="button"
-                  style={{ ...homeStyles.alertItem(alert.tone), textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
+                  style={{
+                    ...homeStyles.alertItem(alert.tone),
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
                   onClick={onOpenDailyOps}
                 >
                   <span style={homeStyles.alertBadge(alert.tone)}>
@@ -942,19 +965,6 @@ function CommandCenter({
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      <aside style={homeStyles.commandSide}>
-        <section style={homeStyles.sectionCard}>
-          <div style={homeStyles.sectionHead}>
-            <div>
-              <h3 style={homeStyles.sectionTitle}>{t("workspace.home.sections.recommendedActions")}</h3>
-              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
-                {t("workspace.home.sections.recommendedActionsHint")}
-              </div>
-            </div>
-          </div>
           <div style={homeStyles.actionList}>
             {actionItems.slice(0, 3).map((item) => (
               <button
@@ -965,7 +975,14 @@ function CommandCenter({
               >
                 {item.label}
                 {item.detail ? (
-                  <span style={{ display: "block", marginTop: 3, color: shopifyUi.textSecondary, fontWeight: 500 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: 3,
+                      color: shopifyUi.textSecondary,
+                      fontWeight: 500,
+                    }}
+                  >
                     {item.detail}
                   </span>
                 ) : null}
@@ -998,13 +1015,29 @@ function CommandCenter({
               {t("workspace.home.links.tasks")} →
             </button>
           </div>
+          {snapshot.automation ? (
+            <div style={{ ...homeStyles.taskItem, marginBottom: 10 }}>
+              <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
+              <span style={sectionTextStyle}>{snapshot.automation.detail}</span>
+              {snapshot.automation.lastRunAt ? (
+                <span style={mutedMetaStyle}>
+                  {formatInspectionTime(snapshot.automation.lastRunAt, t)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div style={homeStyles.taskList}>
             {recentTasks.length > 0 ? (
               recentTasks.map((task) => (
                 <button
                   key={task.id}
                   type="button"
-                  style={{ ...homeStyles.taskItem, textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
+                  style={{
+                    ...homeStyles.taskItem,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
                   onClick={onOpenTasks}
                 >
                   <span style={sectionTitleSmallStyle}>{task.title}</span>
@@ -1018,7 +1051,7 @@ function CommandCenter({
             )}
           </div>
         </section>
-      </aside>
+      </div>
     </section>
   );
 }

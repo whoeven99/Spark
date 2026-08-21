@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
+import { useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../hooks/useOAuthPopup";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
@@ -460,8 +460,6 @@ export function GoogleSearchConsolePage() {
     : hasPending
       ? t("gsc.overviewPendingHint", { count: pendingSites.length })
       : t("gsc.overviewNeedsSetupHint");
-  const insightsPath = "/app/insights";
-
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <PageHeaderNav
@@ -495,32 +493,6 @@ export function GoogleSearchConsolePage() {
           />
 
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-              padding: "14px 16px",
-              borderRadius: pageColorTokens.radiusCard,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              background: pageColorTokens.surfaceMuted,
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-              {t("gsc.insightsGuideTitle")}
-            </div>
-            <div style={{ fontSize: "0.875rem", lineHeight: 1.5, color: pageColorTokens.textSecondary }}>
-              {t("gsc.insightsGuideBody")}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <Link to={insightsPath} style={guideLinkStyle(true)}>
-                {t("settingsShell.openInsights")}
-              </Link>
-              <Link to="/app/settings" style={guideLinkStyle(false)}>
-                {t("common.manageConnections")}
-              </Link>
-            </div>
-          </div>
-
             {authBanner ? (
               <div
                 style={{
@@ -590,17 +562,3 @@ export function GoogleSearchConsolePage() {
     </div>
   );
 }
-
-const guideLinkStyle = (primary: boolean) => ({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "8px 12px",
-  borderRadius: 999,
-  border: `1px solid ${primary ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
-  background: primary ? pageColorTokens.brandBlueLight : pageColorTokens.surface,
-  color: primary ? pageColorTokens.brandBlueDark : pageColorTokens.textPrimary,
-  fontSize: 12,
-  fontWeight: 700,
-  textDecoration: "none",
-});

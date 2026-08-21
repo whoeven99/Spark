@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { resolveHealthMonitorDetail } from "../lib/healthMonitorAiDetail";
+import { buildWorkspaceChatPrefillPath } from "../lib/workspaceChatPrefill";
 import {
   HEALTH_MONITORS,
   getHealthMonitorGroups,
@@ -50,7 +51,7 @@ export default function AppHealthMonitor() {
     {
       key: "overview",
       title: "一级概览",
-      detail: "先看站点健康度与经营健康度的整体状态。",
+      detail: "先看可信度健康与目标健康的整体状态。",
       badge: "首页",
       active: viewMode === "overview",
       onClick: () => setViewMode("overview"),
@@ -77,7 +78,7 @@ export default function AppHealthMonitor() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title={t("nav.healthMonitor")}
-        subtitle="先把健康度监测本身做成独立目的地，再决定如何和 Today、洞察、任务做进一步腾挪。"
+        subtitle="Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。"
         titleBarTitle={t("nav.healthMonitor")}
         backLabel="返回首页"
         fallbackPath="/app"
@@ -112,7 +113,17 @@ export default function AppHealthMonitor() {
             monitor={selectedMonitor}
             detail={selectedDetail}
             onBackToRun={() => setViewMode("run")}
-            onOpenAi={() => navigate("/app")}
+            onOpenAi={() =>
+              navigate(
+                buildWorkspaceChatPrefillPath({
+                  prompt: selectedDetail.result.aiChatPrompt,
+                  constraints: [
+                    `当前 AI 语境：Health Monitor / ${selectedMonitor.title}`,
+                    "只回答可信度、达标性、异常原因和处理优先级，不切回经营总览语境。",
+                  ],
+                }),
+              )
+            }
           />
         ) : null}
       </DestinationPage>
@@ -132,7 +143,7 @@ function OverviewSection({
   return (
     <PageSurface
       title="今日健康度概览"
-      subtitle="一级页面只保留健康度指标。每一项只展示一个关键数据和一个健康度 flag，避免语义重叠。"
+      subtitle="一级页面只保留两类摘要：可信度健康与目标健康。每项只展示当前状态、关键数据和受影响经营模块。"
     >
       <div style={stackStyle}>
         {groups.map((group) => (
@@ -144,7 +155,10 @@ function OverviewSection({
             <div style={monitorListStyle}>
               {group.items.map((item) => (
                 <div key={item.id} style={dashboardRowStyle}>
-                  <div style={dashboardTitleStyle}>{item.title}</div>
+                  <div>
+                    <div style={dashboardTitleStyle}>{item.title}</div>
+                    <div style={dashboardMetaStyle}>影响模块：{item.relatedModule}</div>
+                  </div>
                   <div style={dashboardValueStyle}>{item.value}</div>
                   <span style={statusBadgeStyle(item.status)}>{statusLabel(item.status)}</span>
                   <button
@@ -191,7 +205,7 @@ function RunSection({
     <div style={stackStyle}>
       <PageSurface
         title="本次健康度监测"
-        subtitle="二级页面更像 PageSpeed Insights 的阅读方式：先看本次运行进度，再看每一项监测当前有没有问题。"
+        subtitle="二级页面按健康判定来读：先看本次运行进度，再看每项监测当前是否可信、是否达标。"
       >
         <div style={summaryGridStyle}>
           <div style={summaryTileStyle}>
@@ -225,7 +239,7 @@ function RunSection({
         <PageSurface
           key={group.title}
           title={group.title}
-          subtitle="每个结论结果都可以点进去，进入固定的分析详情页。"
+          subtitle="每个健康项都可以点进去，进入固定的四段式诊断详情页。"
         >
           <div style={monitorCardGridStyle}>
             {group.items.map((item) => (
@@ -234,6 +248,7 @@ function RunSection({
                   <div>
                     <h3 style={monitorCardTitleStyle}>{item.title}</h3>
                     <p style={monitorCardValueStyle}>{item.value}</p>
+                    <p style={monitorCardMetaStyle}>影响模块：{item.relatedModule}</p>
                   </div>
                   <span style={statusBadgeStyle(item.status)}>{statusLabel(item.status)}</span>
                 </div>
@@ -269,7 +284,7 @@ function DetailSection({
     <div style={stackStyle}>
       <PageSurface
         title={monitor.title}
-        subtitle="三级页面固定为四段式：问题是什么、数据论据、解决办法、和 AI 聊聊。"
+        subtitle="三级页面固定为四段式：问题是什么、数据论据、解决办法、和 AI 聊聊。这里回答的是健康判断，不是经营总览。"
       >
         <div style={detailHeroStyle}>
           <span style={statusBadgeStyle(monitor.status)}>{statusLabel(monitor.status)}</span>
@@ -277,6 +292,7 @@ function DetailSection({
             <div style={detailMetaStyle}>{monitor.group}</div>
             <h3 style={detailIssueTitleStyle}>{detail.result.problem}</h3>
             <div style={detailValueStyle}>当前关键数据：{monitor.value}</div>
+            <div style={detailMetaStyle}>影响经营模块：{monitor.relatedModule}</div>
             <div style={detailMetaStyle}>
               已走通链路：Input {"->"} Prompt {"->"} Result
             </div>
@@ -318,7 +334,7 @@ function DetailSection({
         </div>
       </PageSurface>
 
-      <PageSurface title="和 AI 聊聊" subtitle="这里先展示生成后的 chat prompt，后续只需要把 generate 这一步替换成真实 LLM。">
+      <PageSurface title="和 AI 聊聊" subtitle="这里的 AI 只负责继续诊断这个健康项：为什么异常、影响什么、先修哪里。">
         <div style={aiPanelStyle}>
           <div style={aiMetaPanelStyle}>
             <strong style={evidenceLabelStyle}>MonitorDetailInput</strong>
@@ -334,7 +350,7 @@ function DetailSection({
           </div>
           <div style={buttonRowStyle}>
             <button type="button" style={primaryButtonStyle} onClick={onOpenAi}>
-              把这份报告带去 AI
+              带着这个健康项去和 AI 聊
             </button>
           </div>
         </div>
@@ -423,6 +439,12 @@ const dashboardTitleStyle: CSSProperties = {
   color: pageColorTokens.textPrimary,
 };
 
+const dashboardMetaStyle: CSSProperties = {
+  marginTop: "0.2rem",
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+};
+
 const dashboardValueStyle: CSSProperties = {
   fontSize: "0.85rem",
   color: pageColorTokens.textSecondary,
@@ -439,6 +461,12 @@ const baseStatusBadgeStyle: CSSProperties = {
   fontSize: "0.75rem",
   fontWeight: 760,
   whiteSpace: "nowrap",
+};
+
+const monitorCardMetaStyle: CSSProperties = {
+  margin: "0.25rem 0 0",
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
 };
 
 const buttonRowStyle: CSSProperties = {

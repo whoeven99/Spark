@@ -567,9 +567,6 @@ export function AdsCatalogPage() {
   const settingsHubPath = locationSearch
     ? `/app/settings${locationSearch}`
     : "/app/settings";
-  const insightsPath = locationSearch
-    ? `/app/insights/charts${locationSearch}&group=roi`
-    : "/app/insights/charts?group=roi";
 
   const credentialReady =
     platform === "facebook"
@@ -957,9 +954,6 @@ export function AdsCatalogPage() {
                 <Link to={settingsHubPath} style={guideLinkStyle(true)}>
                   {t("common.manageConnections")}
                 </Link>
-                <Link to={insightsPath} style={guideLinkStyle(false)}>
-                  {t("settingsShell.openInsights")}
-                </Link>
               </div>
             </div>
 
@@ -1182,9 +1176,6 @@ export function AdsCatalogPage() {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   <Link to={settingsHubPath} style={guideLinkStyle(true)}>
                     {t("common.manageConnections")}
-                  </Link>
-                  <Link to={insightsPath} style={guideLinkStyle(false)}>
-                    {t("adsCatalog.insightsGuideLink")}
                   </Link>
                 </div>
               </div>

@@ -852,7 +852,7 @@ export function AdsInsightsPage() {
         title={t("adsInsights.pageTitle")}
         subtitle={t("adsInsights.pageSubtitle")}
         backLabel={t("insights.backToCharts")}
-        fallbackPath="/app/insights/charts"
+        fallbackPath="/app/today/roi"
       />
 
       <PageSurface>

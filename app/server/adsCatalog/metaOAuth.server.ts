@@ -364,7 +364,7 @@ export async function buildMetaAdsOAuthStartUrl(params: {
   return { ok: true, authUrl };
 }
 
-/** Meta Ads OAuth 完成后跳回广告洞察页。 */
+/** Meta Ads OAuth 完成后跳回广告连接与配置页。 */
 export function buildMetaAdsOAuthReturnUrl(params: {
   shop: string;
   host?: string;
@@ -372,11 +372,12 @@ export function buildMetaAdsOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
+  const nextQuery = { ...params.query, tab: "credentials", platform: "facebook" };
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/insights/charts/performance",
+    path: "/app/ads-catalog",
     shop: params.shop,
     request: params.request,
-    query: params.query,
+    query: nextQuery,
   });
   if (adminUrl) return adminUrl;
 
@@ -385,13 +386,15 @@ export function buildMetaAdsOAuthReturnUrl(params: {
     readEnv("META_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/insights/charts/performance", base.replace(/\/$/, "") || base);
+  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
   for (const [key, value] of Object.entries(params.query ?? {})) {
     target.searchParams.set(key, value);
   }
+  target.searchParams.set("tab", "credentials");
+  target.searchParams.set("platform", "facebook");
   return target.toString();
 }
 

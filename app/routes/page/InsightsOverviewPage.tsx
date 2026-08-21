@@ -185,10 +185,11 @@ function buildPerformanceHref(
   search: string,
 ): string {
   const params = new URLSearchParams(search);
-  params.set("platform", platform);
+  params.set("tab", "credentials");
+  params.set("platform", platform === "meta" ? "facebook" : platform);
   params.set("range", String(rangeDays));
   params.delete("sandbox");
-  return `/app/insights/charts/performance?${params.toString()}`;
+  return `/app/ads-catalog?${params.toString()}`;
 }
 
 function buildCatalogTasksHref(search: string): string {

@@ -98,15 +98,15 @@ export default function TodayOverview() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title={t("todayDashboard.title")}
-        subtitle="Today 首页先只保留经营状态和投资回报率监测两个模块：先看概括，再进入详情或图表。"
+        subtitle="Today 只讨论赚钱：先看 ROI 和关键经营模块，再进入详情页判断今天是哪里在支撑或拖累赚钱结果。"
         titleBarTitle={t("nav.today")}
         backLabel={t("todayDashboard.back")}
         fallbackPath="/app"
         isMobile={isMobile}
       >
         <PageSurface
-          title="经营状态"
-          subtitle="基于已知数据先看流量、转化、订单三个模块。卡片暂时展示昨日值和 7 日均值的对比。"
+          title="经营模块"
+          subtitle="今天先收敛成 3 个解释赚钱的经营模块：收入与订单、流量质量、转化承接。"
         >
           <div style={moduleGridStyle(isMobile, 3)}>
             {modules.map((module) => (
@@ -129,8 +129,7 @@ export default function TodayOverview() {
                 <p style={summaryTextStyle}>{module.summary}</p>
                 <p style={pageHintTextStyle}>{module.chartHint}</p>
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="查看详情" tone="subtle" onClick={() => navigate(module.detailPath)} />
-                  <SurfaceButton label="查看图表" onClick={() => navigate(module.chartPath)} />
+                  <SurfaceButton label="查看模块详情" onClick={() => navigate(module.detailPath)} />
                 </div>
               </div>
             ))}
@@ -138,8 +137,8 @@ export default function TodayOverview() {
         </PageSurface>
 
         <PageSurface
-          title="投资回报率监测"
-          subtitle="把原来的 ROI 三层摘要和影响 ROI 的 Top 3 因子合并成一个模块，首页先直接看短期和长期结果。"
+          title="ROI"
+          subtitle="ROI 是 Today 里最核心的赚钱结果，这里直接看短期和长期表现，再决定往哪个经营模块继续深钻。"
         >
           <div style={moduleGridStyle(isMobile, 2)}>
             {roiMonitor.metrics.map((metric) => (
@@ -167,11 +166,10 @@ export default function TodayOverview() {
             <div style={factorHeaderStyle(isMobile)}>
               <div>
                 <div style={pageMetricLabelStyle}>影响 ROI 的 Top 3 因子</div>
-                <div style={pageHintTextStyle}>先告诉你当前 ROI 是被哪些环节拖住，而不是把判断拆散到多个区域。</div>
+                <div style={pageHintTextStyle}>先告诉你当前 ROI 是被哪些环节拖住，而不是把经营判断拆散到多个入口。</div>
               </div>
               <div style={cardActionRowStyle(isMobile)}>
-                <SurfaceButton label="查看 ROI 图表" onClick={() => navigate(roiMonitor.chartPath)} />
-                <SurfaceButton label="查看 ROI 报告" tone="subtle" onClick={() => navigate(roiMonitor.reportPath)} />
+                <SurfaceButton label="查看 ROI 详情" onClick={() => navigate(roiMonitor.chartPath)} />
               </div>
             </div>
 

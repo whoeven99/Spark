@@ -777,17 +777,29 @@ export function WorkspaceAppShellPage({
 
   useEffect(() => {
     const prefillPrompt = searchParams.get("prefillTaskPrompt");
-    if (!prefillPrompt) return;
-    if (processedPrefillPromptRef.current === prefillPrompt) return;
-    processedPrefillPromptRef.current = prefillPrompt;
+    const prefillConstraints = searchParams.getAll("prefillConstraint");
+    const prefillSignature = JSON.stringify({
+      prompt: prefillPrompt ?? "",
+      constraints: prefillConstraints,
+    });
+    if (!prefillPrompt && prefillConstraints.length === 0) {
+      processedPrefillPromptRef.current = null;
+      return;
+    }
+    if (processedPrefillPromptRef.current === prefillSignature) return;
+    processedPrefillPromptRef.current = prefillSignature;
     createConversationRef.current?.({
-      draft: prefillPrompt,
+      draft: prefillPrompt ?? "",
       assistantText: prefillWelcomeText,
     });
+    for (const constraint of prefillConstraints) {
+      workspaceContext.addConstraint(constraint);
+    }
     const next = new URLSearchParams(searchParams);
     next.delete("prefillTaskPrompt");
+    next.delete("prefillConstraint");
     setSearchParams(next);
-  }, [prefillWelcomeText, searchParams, setSearchParams]);
+  }, [prefillWelcomeText, searchParams, setSearchParams, workspaceContext.addConstraint]);
 
   const sendMessage = async () => {
     if (!activeConversation) return;
@@ -1468,7 +1480,7 @@ export function WorkspaceAppShellPage({
               createConversation();
             }}
             onOpenDashboard={() => navigate("/app/today")}
-            onOpenDailyOps={() => navigate("/app/today/diagnosis")}
+            onOpenDailyOps={() => navigate("/app/health-monitor")}
             onOpenTasks={() => navigate("/app/tasks")}
           />
         ) : null}

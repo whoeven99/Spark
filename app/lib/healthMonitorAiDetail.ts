@@ -97,7 +97,7 @@ export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDe
     monitor: {
       id: monitor.id,
       name: toSnakeCase(monitor.title) || monitor.id,
-      group: monitor.group === "站点健康度" ? "site_health" : "business_health",
+      group: monitor.group === "可信度健康" ? "site_health" : "business_health",
       label: monitor.title,
       status: monitor.status,
     },
@@ -179,7 +179,8 @@ export function generateMonitorDetailResult(input: MonitorDetailInput): MonitorD
   console.error("[health-monitor] invalid detail result:", parsed.error.flatten());
   return buildFallbackHealthMonitorDetail({
     id: input.monitor.id,
-    group: input.monitor.group === "site_health" ? "站点健康度" : "经营健康度",
+      group: input.monitor.group === "site_health" ? "可信度健康" : "目标健康",
+      relatedModule: "全局",
     title: input.monitor.label,
     value: input.coreMetric.value,
     status: input.monitor.status,
@@ -378,7 +379,7 @@ function buildFallbackHealthMonitorDetail(monitor: HealthMonitorRecord) {
     monitor: {
       id: monitor.id,
       name: monitor.id,
-      group: monitor.group === "站点健康度" ? "site_health" : "business_health",
+      group: monitor.group === "可信度健康" ? "site_health" : "business_health",
       label: monitor.title,
       status: monitor.status,
     },

@@ -1,4 +1,6 @@
-export type TodayBusinessModuleKey = "traffic" | "conversion" | "orders";
+import type { AiDrilldownAction } from "./aiDrilldownContext";
+
+export type TodayBusinessModuleKey = "roi" | "traffic" | "conversion" | "orders";
 
 export type TodayOverviewModule = {
   key: TodayBusinessModuleKey;
@@ -46,12 +48,15 @@ export type TodayMetricTable = {
   rows: string[][];
 };
 
+export type TodayMetricAction = AiDrilldownAction;
+
 export type TodayMetricDetail = {
   key: TodayBusinessModuleKey;
   title: string;
   subtitle: string;
   intro: string;
   accent: string;
+  primaryQuestion: string;
   chartHref: string;
   chartLabel: string;
   chartHint: string;
@@ -62,14 +67,15 @@ export type TodayMetricDetail = {
   }>;
   statuses: TodayMetricStatus[];
   tables: TodayMetricTable[];
+  actions: TodayMetricAction[];
   conclusions: string[];
 };
 
 const OVERVIEW_MODULES: TodayOverviewModule[] = [
   {
     key: "traffic",
-    title: "流量",
-    summary: "昨日流量高于 7 日均值，当前主要增量来自付费渠道回升和首页入口放量。",
+    title: "流量质量",
+    summary: "昨日流量高于 7 日均值，但高质量流量占比没有同步抬升，今天要继续盯住有效输入而不是单纯冲量。",
     yesterdayLabel: "昨日会话",
     yesterdayValue: "8,420",
     averageLabel: "7 日均值",
@@ -77,13 +83,13 @@ const OVERVIEW_MODULES: TodayOverviewModule[] = [
     deltaLabel: "较均值",
     deltaValue: "+5.9%",
     detailPath: "/app/today/traffic",
-    chartPath: "/app/settings/shopify-reports?tab=storefront&range=7d",
-    chartHint: "查看 Shopify Reports / Storefront 的 7 天趋势和来源结构。",
+    chartPath: "/app/today/traffic",
+    chartHint: "进入流量质量详情页，继续看趋势、来源结构和高流量落地页。",
   },
   {
     key: "conversion",
-    title: "转化",
-    summary: "昨日转化率高于 7 日均值，但加购到结账阶段仍有掉点，需要继续观察承接页质量。",
+    title: "转化承接",
+    summary: "昨日转化率高于 7 日均值，但加购到结账阶段仍有掉点，赚钱效率仍在被中后段承接拖累。",
     yesterdayLabel: "昨日转化率",
     yesterdayValue: "1.82%",
     averageLabel: "7 日均值",
@@ -91,13 +97,13 @@ const OVERVIEW_MODULES: TodayOverviewModule[] = [
     deltaLabel: "较均值",
     deltaValue: "+0.18pp",
     detailPath: "/app/today/conversion",
-    chartPath: "/app/settings/shopify-reports?tab=storefront&range=7d",
-    chartHint: "查看 Shopify Reports / Storefront 的漏斗和转化趋势。",
+    chartPath: "/app/today/conversion",
+    chartHint: "进入转化承接详情页，继续看漏斗趋势、掉点环节和关键页面。",
   },
   {
     key: "orders",
-    title: "订单",
-    summary: "昨日订单量和收入都略高于 7 日均值，退款和取消暂时没有形成新的异常抬头。",
+    title: "收入与订单",
+    summary: "昨日订单量和收入都略高于 7 日均值，但折扣订单和退款仍在影响真实赚钱质量。",
     yesterdayLabel: "昨日订单数",
     yesterdayValue: "126",
     averageLabel: "7 日均值",
@@ -105,8 +111,8 @@ const OVERVIEW_MODULES: TodayOverviewModule[] = [
     deltaLabel: "较均值",
     deltaValue: "+6.8%",
     detailPath: "/app/today/orders",
-    chartPath: "/app/settings/shopify-reports?tab=sales&range=7d",
-    chartHint: "查看 Shopify Reports / Sales 的订单和销售额趋势。",
+    chartPath: "/app/today/orders",
+    chartHint: "进入收入与订单详情页，继续看收入趋势、订单结构和退款影响。",
   },
 ];
 
@@ -156,15 +162,96 @@ const ROI_FACTORS: TodayRoiFactor[] = [
 ];
 
 const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
+  roi: {
+    key: "roi",
+    title: "ROI 详情",
+    subtitle: "ROI 在 Today 里代表全店经营的赚钱结果，要一起看收入、投入、转化承接和利润损耗。",
+    intro: "这个页面用来回答今天到底赚没赚钱，以及最主要的支撑项和拖累项分别是什么。",
+    accent: "近 7 天 vs 前 30 天基准",
+    primaryQuestion: "今天全店的赚钱结果到底有没有变差，最主要的拖累项和支撑项分别是什么？",
+    chartHref: "/app/today/roi",
+    chartLabel: "查看 ROI 详情",
+    chartHint: "先在当前详情页收敛整体判断，再决定是否继续深钻到具体模块。",
+    metrics: [
+      { label: "短期 ROI", value: "1.9x" },
+      { label: "长期 ROI", value: "2.8x" },
+      { label: "近 7 天收入", value: "$56,300" },
+      { label: "近 7 天投入", value: "$29,640" },
+      { label: "退款损耗", value: "$2,180" },
+      { label: "老客贡献", value: "24%" },
+    ],
+    statuses: [
+      {
+        label: "整体赚钱结果",
+        status: "watch",
+        detail: "长期 ROI 还在安全区，但短期 ROI 已明显偏离基准，说明赚钱效率正在走弱。",
+      },
+      {
+        label: "流量与转化",
+        status: "risk",
+        detail: "高成本流量占比抬升，同时商品页到结账页承接偏弱，短期 ROI 被双重拖累。",
+      },
+      {
+        label: "利润损耗",
+        status: "watch",
+        detail: "退款和售后成本没有失控，但仍在侵蚀利润空间，压缩最终回报。",
+      },
+    ],
+    tables: [
+      {
+        title: "ROI 结果拆解",
+        columns: ["指标", "当前", "基准", "变化"],
+        rows: [
+          ["短期 ROI", "1.9x", "2.3x", "-0.4x"],
+          ["长期 ROI", "2.8x", "2.6x", "+0.2x"],
+          ["收入", "$56,300", "$54,800", "+2.7%"],
+          ["投入", "$29,640", "$23,800", "+24.5%"],
+        ],
+      },
+      {
+        title: "影响 ROI 的关键因子",
+        columns: ["因子", "当前判断", "影响", "建议"],
+        rows: [
+          ["流量质量", "高成本渠道占比上升", "拖累 ROI", "先压低低效流量"],
+          ["转化承接", "详情页到结账偏弱", "直接影响回收", "优先修高流量页面"],
+          ["售后损耗", "退款集中在 2 个 SKU", "侵蚀利润", "跟进退款原因"],
+          ["老客复购", "仍有一定支撑", "稳定长期 ROI", "继续维护老客"],
+        ],
+      },
+    ],
+    actions: [
+      {
+        title: "先压低低效流量",
+        detail: "优先收紧高成本低回收渠道，避免短期 ROI 继续被无效获客拖累。",
+        priority: "P0",
+      },
+      {
+        title: "排查关键承接页",
+        detail: "先看高流量商品页和优惠页的承接掉点，确认是页面内容还是结账前链路在拖累回收。",
+        priority: "P1",
+      },
+      {
+        title: "跟进退款损耗对象",
+        detail: "把退款集中 SKU 单独拉出来看原因，避免利润继续被售后损耗侵蚀。",
+        priority: "P2",
+      },
+    ],
+    conclusions: [
+      "Today 里的 ROI 不是广告 ROI，而是全店经营是否赚钱的总结果。",
+      "今天最值得优先处理的是高成本低效率流量，以及转化承接偏弱的关键页面。",
+      "如果要继续深钻，优先进入流量质量和转化承接两个模块，而不是继续分散看其他入口。",
+    ],
+  },
   traffic: {
     key: "traffic",
-    title: "流量详情",
-    subtitle: "先看昨日结果与 7 日均值，再判断流量规模、渠道结构和落地页承接是否健康。",
-    intro: "这个页面先沿用订单详情页的组织方式，把流量当成独立模块来读：先看摘要，再看状态、关键对象和结论。",
+    title: "流量质量详情",
+    subtitle: "这个模块不只看流量大小，而是看今天进来的流量是否真的在支撑赚钱。",
+    intro: "流量质量页的重点不是继续看曝光和会话，而是判断这些流量值不值钱、能不能转成结果。",
     accent: "昨日 vs 近 7 日均值",
-    chartHref: "/app/settings/shopify-reports?tab=storefront&range=7d",
-    chartLabel: "查看流量图表",
-    chartHint: "进入 Shopify Reports / Storefront，可继续查看 sessions、referrer 与 7 天趋势。",
+    primaryQuestion: "今天进来的流量到底有没有价值，是哪些渠道和落地页在支撑或拖累赚钱？",
+    chartHref: "/app/today/traffic",
+    chartLabel: "查看流量质量详情",
+    chartHint: "当前详情页已经收敛了流量质量判断，后续会继续补更完整的趋势深钻。",
     metrics: [
       { label: "昨日会话", value: "8,420" },
       { label: "7 日均值", value: "7,950" },
@@ -212,6 +299,23 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
         ],
       },
     ],
+    actions: [
+      {
+        title: "优先修高流量落地页",
+        detail: "先处理跳出率高但会话量大的页面，避免新增流量继续低效流失。",
+        priority: "P0",
+      },
+      {
+        title: "复核渠道质量",
+        detail: "把 Paid Social 和 Organic Search 分开看，确认增长是不是来自真正能支撑转化的流量。",
+        priority: "P1",
+      },
+      {
+        title: "联动转化承接判断",
+        detail: "如果落地页问题持续存在，直接去转化承接模块核对加购到结账的掉点位置。",
+        priority: "P2",
+      },
+    ],
     conclusions: [
       "流量规模本身没有问题，今天先不要把注意力放在继续冲量上。",
       "应该优先检查高流量落地页的承接与页面内容，避免新增流量继续低效消耗。",
@@ -220,13 +324,14 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
   },
   conversion: {
     key: "conversion",
-    title: "转化详情",
-    subtitle: "把转化当成独立经营模块，先看结果，再看漏斗掉点和承接对象。",
-    intro: "这里延续订单详情页的版式，但主题切到转化模块，重点不看订单履约，而是看漏斗掉点和页面承接效率。",
+    title: "转化承接详情",
+    subtitle: "这个模块用来回答流量进来后有没有被接住，以及哪里正在拖累赚钱效率。",
+    intro: "转化承接页的重点是看漏斗掉点和页面承接，不是单独把订单结果再重复一遍。",
     accent: "昨日 vs 近 7 日均值",
-    chartHref: "/app/settings/shopify-reports?tab=storefront&range=7d",
-    chartLabel: "查看转化图表",
-    chartHint: "进入 Shopify Reports / Storefront，可继续查看 conversion_rate 与 checkout 漏斗。",
+    primaryQuestion: "流量进来以后是在哪里被漏掉的，哪个承接环节正在拖累今天的赚钱效率？",
+    chartHref: "/app/today/conversion",
+    chartLabel: "查看转化承接详情",
+    chartHint: "当前详情页已经收敛了承接判断，后续会继续补更完整的漏斗趋势深钻。",
     metrics: [
       { label: "昨日转化率", value: "1.82%" },
       { label: "7 日均值", value: "1.64%" },
@@ -274,6 +379,23 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
         ],
       },
     ],
+    actions: [
+      {
+        title: "优先修商品详情页承接",
+        detail: "先处理高流量但 CVR 走弱的商品页，把最明显的中段漏斗掉点止住。",
+        priority: "P0",
+      },
+      {
+        title: "复核结账页阻碍",
+        detail: "排查支付、运费展示和优惠说明，减少最后一步的流失。",
+        priority: "P1",
+      },
+      {
+        title: "对齐流量入口",
+        detail: "把流量质量模块里的高流量入口与当前漏斗掉点对照，避免继续把流量送到低效页面。",
+        priority: "P2",
+      },
+    ],
     conclusions: [
       "当前问题不是完全没有转化，而是中后段漏斗还不够稳。",
       "需要优先处理商品详情页和结账页的承接问题，而不是继续盲目放大流量。",
@@ -282,13 +404,14 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
   },
   orders: {
     key: "orders",
-    title: "订单详情",
-    subtitle: "订单模块先看昨日与 7 日均值，再检查收入、取消和退款是否出现新的异常。",
-    intro: "订单页不再承担完整订单监控中心的职责，而是先收敛成 Today 里“订单模块”的对应详情页面。",
+    title: "收入与订单详情",
+    subtitle: "这个模块负责解释赚钱规模有没有起来，以及订单增长是不是健康增长。",
+    intro: "收入与订单页不再只看订单数，而是一起看收入、客单、退款和折扣对真实赚钱结果的影响。",
     accent: "昨日 vs 近 7 日均值",
-    chartHref: "/app/settings/shopify-reports?tab=sales&range=7d",
-    chartLabel: "查看订单图表",
-    chartHint: "进入 Shopify Reports / Sales，可继续查看 total sales、orders 与商品维度拆解。",
+    primaryQuestion: "今天的订单和收入增长是不是健康增长，哪些对象正在支撑或侵蚀真实赚钱结果？",
+    chartHref: "/app/today/orders",
+    chartLabel: "查看收入与订单详情",
+    chartHint: "当前详情页已经收敛了收入与订单判断，后续会继续补更完整的趋势深钻。",
     metrics: [
       { label: "昨日订单数", value: "126" },
       { label: "7 日均值", value: "118" },
@@ -336,6 +459,23 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
         ],
       },
     ],
+    actions: [
+      {
+        title: "先拆折扣订单占比",
+        detail: "确认订单增长是不是主要由折扣拉动，避免把规模增长误判成赚钱改善。",
+        priority: "P0",
+      },
+      {
+        title: "跟进退款集中对象",
+        detail: "把退款集中 SKU 和取消订单原因单独排查，减少对短期利润的侵蚀。",
+        priority: "P1",
+      },
+      {
+        title: "复核高客单支撑项",
+        detail: "确认高客单订单来自哪些商品或套装，判断这些增长是否可持续。",
+        priority: "P2",
+      },
+    ],
     conclusions: [
       "订单模块目前整体稳定，但利润质量还不能只看订单数。",
       "下一步应该把折扣、退款和高客单对象一起看，判断订单增长是不是健康增长。",
@@ -352,8 +492,8 @@ export function getTodayRoiMonitor() {
   return {
     metrics: ROI_METRICS,
     factors: ROI_FACTORS,
-    chartPath: "/app/insights/charts?range=7",
-    reportPath: "/app/today/insights",
+    chartPath: "/app/today/roi",
+    reportPath: "/app/today/roi",
   };
 }
 

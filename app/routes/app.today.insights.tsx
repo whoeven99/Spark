@@ -1425,12 +1425,22 @@ export function BusinessInsightsPage({
     (href: string) => {
       const [path, query = ""] = href.split("?");
       const next = new URLSearchParams(query);
-      if (path === "/app/insights/charts" && !next.has("range")) {
-        next.set("range", period === "30d" ? "30" : "7");
+      let resolvedPath = path;
+      if (path === "/app/insights/charts") {
+        const group = next.get("group");
+        resolvedPath =
+          group === "acquisition"
+            ? "/app/today/traffic"
+            : group === "conversion"
+              ? "/app/today/conversion"
+              : group === "operations" || group === "merchandising_ops"
+                ? "/app/today/orders"
+                : "/app/today/roi";
+        next.delete("group");
       }
-      return appendReturnTo(`${path}?${next.toString()}`, currentReturnTo);
+      return appendReturnTo(`${resolvedPath}?${next.toString()}`, currentReturnTo);
     },
-    [currentReturnTo, period],
+    [currentReturnTo],
   );
   const buildTaskHref = useCallback(
     (taskId: string) =>

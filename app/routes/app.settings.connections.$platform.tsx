@@ -76,7 +76,6 @@ export default function AppSettingsConnectionDetail() {
   const { platform, overview } = useLoaderData<typeof loader>();
   const config = CHANNEL_CONFIG[platform];
   const catalogPath = appendEmbeddedSearchToPath(config.catalogPath, embeddedSearch);
-  const insightsPath = appendEmbeddedSearchToPath("/app/insights/charts?group=roi", embeddedSearch);
   const platformItem = overview.platforms.find((item) => item.platform === platform);
 
   if (!platformItem) {
@@ -138,9 +137,6 @@ export default function AppSettingsConnectionDetail() {
         <div style={actionRowStyle}>
           <Link to={catalogPath} style={linkButtonStyle(true)}>
             {t("settingsShell.manageConnection")}
-          </Link>
-          <Link to={insightsPath} style={linkButtonStyle(false)}>
-            {t("settingsShell.openInsights")}
           </Link>
         </div>
       </PageSurface>
