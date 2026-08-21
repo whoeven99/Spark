@@ -26,15 +26,15 @@ function statusLabel(
 ): string {
   switch (status) {
     case "open":
-      return t("dailyOps.taskStatusOpen");
+      return t("taskWorkbench.taskStatusOpen");
     case "in_progress":
-      return t("dailyOps.taskStatusInProgress");
+      return t("taskWorkbench.taskStatusInProgress");
     case "done":
-      return t("dailyOps.taskStatusDone");
+      return t("taskWorkbench.taskStatusDone");
     case "ignored":
-      return t("dailyOps.taskStatusIgnored");
+      return t("taskWorkbench.taskStatusIgnored");
     default:
-      return t("dailyOps.taskStatusAutoClosed");
+      return t("taskWorkbench.taskStatusAutoClosed");
   }
 }
 
@@ -74,13 +74,13 @@ function dueWindowLabel(
 ): string {
   switch (dueWindow) {
     case "today":
-      return t("dailyOps.dueWindowToday");
+      return t("taskWorkbench.dueWindowToday");
     case "48h":
-      return t("dailyOps.dueWindow48h");
+      return t("taskWorkbench.dueWindow48h");
     case "this_week":
-      return t("dailyOps.dueWindowThisWeek");
+      return t("taskWorkbench.dueWindowThisWeek");
     default:
-      return t("dailyOps.dueWindowBacklog");
+      return t("taskWorkbench.dueWindowBacklog");
   }
 }
 
@@ -165,14 +165,25 @@ const ACTION_TO_STATUS: Record<OperationTaskAction, OperationTaskView["status"]>
   reopen: "open",
 };
 
-function buildReturnToPath(locationSearch: string) {
-  return `/app/tasks${locationSearch}`;
+function buildTaskDetailPath(locationSearch: string, taskId: string) {
+  const params = new URLSearchParams(
+    locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+  );
+  params.set("taskId", taskId);
+  const query = params.toString();
+  return `/app/tasks${query ? `?${query}` : ""}`;
 }
+
+type TaskActionResponse = {
+  ok?: boolean;
+  error?: string;
+  task?: OperationTaskView;
+};
 
 export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const fetcher = useFetcher<{ ok?: boolean }>();
+  const fetcher = useFetcher<TaskActionResponse>();
   const [localStatus, setLocalStatus] = useState<OperationTaskView["status"]>(task.status);
   const submittedAction = useRef<OperationTaskAction | null>(null);
 
@@ -183,7 +194,7 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
   useEffect(() => {
     if (fetcher.state !== "idle") return;
     if (!fetcher.data?.ok || !submittedAction.current) return;
-    setLocalStatus(ACTION_TO_STATUS[submittedAction.current]);
+    setLocalStatus(fetcher.data.task?.status ?? ACTION_TO_STATUS[submittedAction.current]);
     submittedAction.current = null;
     onUpdated?.();
   }, [fetcher.data, fetcher.state, onUpdated]);
@@ -191,7 +202,7 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
   const metaLine = useMemo(
     () =>
       [
-        task.ownerRole ?? t("dailyOps.taskPromptOwnerUnknown"),
+        task.ownerRole ?? t("taskWorkbench.taskPromptOwnerUnknown"),
         dueWindowLabel(task.dueWindow, t),
         task.quadrant.toUpperCase(),
       ].join(" · "),
@@ -225,11 +236,8 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
     </span>
   );
 
-  const returnTo = buildReturnToPath(locationSearch);
   const openDetail = () =>
-    navigate(
-      `/app/today/diagnosis?detail=task&taskId=${encodeURIComponent(task.id)}&returnTo=${encodeURIComponent(returnTo)}`,
-    );
+    navigate(buildTaskDetailPath(locationSearch, task.id));
   const sendToAi = () => {
     const params = new URLSearchParams(
       locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
@@ -254,7 +262,7 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
         taskAction,
       },
       {
-        action: "/app/today/diagnosis",
+        action: "/api/unified-tasks",
         method: "post",
       },
     );
@@ -263,21 +271,21 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
   const actions: CardAction[] = [];
   if (localStatus === "open") {
     actions.push({
-      label: t("dailyOps.actionStart"),
+      label: t("taskWorkbench.actionStart"),
       tone: "primary",
       disabled: pendingAction != null,
       onClick: () => submitTaskAction("start"),
     });
   } else if (localStatus === "in_progress") {
     actions.push({
-      label: t("dailyOps.actionDone"),
+      label: t("taskWorkbench.actionDone"),
       tone: "primary",
       disabled: pendingAction != null,
       onClick: () => submitTaskAction("done"),
     });
   } else {
     actions.push({
-      label: t("dailyOps.actionReopen"),
+      label: t("taskWorkbench.actionReopen"),
       tone: "primary",
       disabled: pendingAction != null,
       onClick: () => submitTaskAction("reopen"),
@@ -285,7 +293,7 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
   }
   actions.push(
     {
-      label: t("dailyOps.actionSendToAi"),
+      label: t("taskWorkbench.actionSendToAi"),
       tone: "secondary",
       disabled: pendingAction != null,
       onClick: sendToAi,
@@ -317,8 +325,8 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
       }
       primaryCopy={presentation.objective}
       secondaryCopy={[
-        `${t("dailyOps.taskImpactMetricLabel")}：${presentation.impactMetric}`,
-        `${t("dailyOps.taskRoiImpactLabel")}：${presentation.roiImpact}`,
+        `${t("taskWorkbench.taskImpactMetricLabel")}：${presentation.impactMetric}`,
+        `${t("taskWorkbench.taskRoiImpactLabel")}：${presentation.roiImpact}`,
       ].join(" | ")}
       progressPercent={progressPercent(localStatus)}
       progressBackground={progressBackground(localStatus)}
@@ -341,7 +349,7 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
             }}
           >
             <strong style={{ color: pageColorTokens.textPrimary }}>
-              {t("dailyOps.taskPromptReason")}：
+              {t("taskWorkbench.taskPromptReason")}：
             </strong>{" "}
             {task.triggerReason}
           </div>
@@ -357,9 +365,9 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
             }}
           >
             <strong style={{ color: pageColorTokens.textPrimary }}>
-              {t("dailyOps.taskPromptActions")}：
+              {t("taskWorkbench.taskPromptActions")}：
             </strong>{" "}
-            {task.suggestedActions[0] ?? t("dailyOps.taskNoSuggestedActions")}
+            {task.suggestedActions[0] ?? t("taskWorkbench.taskNoSuggestedActions")}
           </div>
         </div>
       }

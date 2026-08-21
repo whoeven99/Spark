@@ -1,6 +1,10 @@
+import { useSearchParams } from "react-router";
 import { getTodayMetricDetail } from "../lib/todayMetricModules";
 import { TodayMetricDetailPage } from "./page/TodayMetricDetailPage";
 
 export default function TodayTrafficPage() {
-  return <TodayMetricDetailPage data={getTodayMetricDetail("traffic")} />;
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
+
+  return <TodayMetricDetailPage data={getTodayMetricDetail("traffic")} returnTo={returnTo} />;
 }

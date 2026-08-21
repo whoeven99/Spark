@@ -95,10 +95,12 @@
 | `anomalyBreakdown` | 自动化 | 将异常拆解到渠道/地区/SKU 维度 |
 | `dataFreshnessCheck` | 自动化 | 检测数据延迟/缺失，输出置信度 |
 
-**升级现有 Today 诊断页**（`app/routes/app.today.diagnosis.tsx`）：
-- 接入真实订单/退款/客户数据
-- 增加异常告警列表
-- 增加"建议清单"输出
+**完善正式经营入口结构**：
+- `Today` 承接经营结果总览与二级详情模板
+- `Health Monitor` 承接可信度、达标性和异常原因诊断
+- `Tasks` 承接任务状态流转、执行闭环和历史记录
+
+说明：`app/routes/app.today.diagnosis.tsx` 已转为兼容跳转层，不再作为正式诊断页继续升级。
 
 #### 3.4 告警中心
 
@@ -321,7 +323,7 @@ app/server/ai/playbooks/{name}/
 - [ ] Phase 0：Prisma schema 扩展（Order / Refund / Customer / InventoryLevel / Fulfillment）
 - [ ] Phase 0：Shopify Webhook 注册（orders/paid, orders/fulfilled, refunds/create, inventory_levels/update）
 - [ ] Phase 0：MetricsCalculator 实现（GMV / Net Sales / 退款率 / 复购率）
-- [ ] Phase 1：经营体检报告升级（接入真实数据，增加异常告警列表）
+- [ ] Phase 1：完善 Today / Health Monitor / Tasks 正式链路（接入真实数据，补齐异常告警与执行闭环）
 - [ ] Phase 1：告警中心（缺货 / 超卖 / SLA / 退款率）
 - [ ] Phase 1：转化下滑 Playbook（只读，复用质量评分）
 - [ ] Phase 1：case_id 闭环采集（绑定到现有 agentRunLog）

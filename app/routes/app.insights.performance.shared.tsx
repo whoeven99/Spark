@@ -1,6 +1,6 @@
 /**
- * Charts › 投放表现：Meta / Google / TikTok 的系列→广告组→广告结构与指标。
- * 供 `/app/insights/charts/performance` 作为正式入口复用。
+ * Ads Insights 数据装配层：给投放表现页提供连接状态和凭据摘要。
+ * 旧的 Insights 路径只保留兼容跳转，这个模块只负责复用 loader / UI 逻辑。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";

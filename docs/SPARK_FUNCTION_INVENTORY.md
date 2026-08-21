@@ -46,7 +46,8 @@
 | AI 助手 | 自然语言问答、读取店铺数据、打开任务卡片、运行 Playbook、带文件上下文分析 | `/app`、`/chat-stream` |
 | 首页工作台 | 问候、今日巡检状态、经营摘要、推荐 Playbook、最近任务、快捷提问 | `/app` |
 | 经营概览 | 销售额、订单数、退款率、库存风险、经营提醒、关键趋势、建议 | `/app/today` |
-| 每日待办 | 每日经营巡检、诊断证据、四象限任务、任务状态更新、昨日复盘、ROI/客户价值层 | `/app/today/diagnosis` |
+| 健康度监测 | 可信度健康、目标达标性、异常原因、受影响模块与建议动作 | `/app/health-monitor` |
+| 待办中心 | 统一查看经营任务与 AI 任务，处理状态流转、结果和历史记录 | `/app/tasks` |
 | 订单风险监控 | 退款治理、履约 SLA、物流异常、库存风险 SKU、异常订单明细 | `/app/today/orders` |
 | 商品文案 | 生成标题/描述、检测源语言、按目标语言生成、审核后写回 Shopify | `/app/studio/copy` |
 | 商品质量评分 | 评估商品页质量、给出优化建议 | AI 工具 / 商品优化链路 |
@@ -60,9 +61,9 @@
 | 广告 Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads-catalog` |
 | Google Pixel 向导 | Nabu 风格三步向导：添加像素（Conversion ID + Label）/ 开启 App Embed 并检测状态 / 创建像素（选择事件、增强型转化、purchase Custom Pixel） | `/app/ads/google-pixel` |
 | Google Pixel Activity | 店面 gtag / purchase Custom Pixel 事件双写阿里云 SLS；商户页展示卡片、日趋势、漏斗与事件明细 | `/app/ads/google-pixel/activity` |
-| 经营报告 | 经营结论、ROI 判断、关键洞察、推荐动作与深钻入口 | `/app/insights` |
-| 图表中心 | 跨平台花费/ROAS 合并、平台明细、接入链路健康、商品审核分布、连接与快照新鲜度（只读，当前先承接广告总览） | `/app/insights/charts` |
-| 投放表现图表 | Meta / Google / TikTok 广告系列→广告组→广告实时指标（7/14/30 天）；TikTok 支持沙盒开关 | `/app/insights/charts/performance` |
+| Today 二级详情 | ROI、流量、转化、订单等经营详情页，按统一模板承接图表、对象拆解和 AI 下钻 | `/app/today/roi` 等 |
+| Ads Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads-catalog` |
+| 投放表现图表 | Meta / Google / TikTok 广告系列→广告组→广告实时指标（7/14/30 天）；TikTok 支持沙盒开关 | `/app/ads-catalog?tab=credentials&platform=...` |
 | 物流集成配置 | FedEx、顺丰凭证配置 | `/app/settings/logistics` |
 | 用户反馈 | 提交建议或问题 | `/app/settings/feedback` |
 | PageSpeed Insights | 对公网 URL 跑 Google 实验室分析，展示性能/无障碍/SEO/最佳做法分数、指标与审核项 | `/app/settings/pagespeed` |
@@ -76,8 +77,8 @@
 | 一级目的地 | 应放能力 | 用户心智 |
 | --- | --- | --- |
 | Ask | AI 对话、文件上下文、推荐动作、最近任务 | 我想问 Spark 或让它开始做事 |
-| Today | 经营概览、每日待办、订单风险、退款、库存、履约、ROI、客户价值 | 看结果、找问题、排优先级 |
-| Insights | 经营报告、图表中心、趋势深钻、投放表现 | 看判断、看证据、决定下一步 |
+| Today | 经营概览、ROI/流量/转化/订单详情、趋势深钻、经营判断 | 看结果、理解为什么赚钱或没赚钱 |
+| Health Monitor | 可信度健康、目标达标性、异常原因、建议动作 | 判断数据是否可信、结果是否达标 |
 | Studio | 商品文案、图片生成、图片翻译、质量评分 | 生产和优化内容资产 |
 | Tasks | AI 异步任务、日志、结果、审核、失败重试 | 所有后台工作跑到哪了 |
 | Settings | 计费、数据同步、官方报表查询、广告、物流、反馈 | 低频配置和基础设施 |

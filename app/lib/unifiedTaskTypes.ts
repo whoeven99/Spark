@@ -43,6 +43,7 @@ export interface UnifiedTaskListResponse {
   view: UnifiedTaskView;
   typeFilter: UnifiedTaskTypeFilter;
   statusFilter: UnifiedTaskStatusFilter;
+  operationSourceFilter: string[];
   page: number;
   pageSize: number;
   totalCount: number;

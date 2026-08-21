@@ -21,6 +21,7 @@ export function DestinationPage({
   titleBarTitle,
   backLabel = "返回首页",
   fallbackPath = "/app",
+  returnTo,
   actions,
   children,
   isMobile,
@@ -31,6 +32,7 @@ export function DestinationPage({
   titleBarTitle?: string;
   backLabel?: string;
   fallbackPath?: string;
+  returnTo?: string;
   actions?: DestinationActionCard[];
   children?: ReactNode;
   isMobile: boolean;
@@ -44,6 +46,7 @@ export function DestinationPage({
         titleBarTitle={titleBarTitle}
         backLabel={backLabel}
         fallbackPath={fallbackPath}
+        returnTo={returnTo}
       />
       {actions && actions.length > 0 ? (
         <DestinationActionGrid actions={actions} isMobile={isMobile} />

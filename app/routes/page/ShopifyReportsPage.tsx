@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
@@ -60,8 +60,12 @@ const FUNNEL_KEYS = [
   "sessions_that_completed_checkout",
 ] as const;
 
-function buildReportsPath(tab: ReportTab, range: RangeKey): string {
-  return `/app/settings/shopify-reports?tab=${tab}&range=${range}`;
+function buildReportsPath(tab: ReportTab, range: RangeKey, returnTo?: string): string {
+  const params = new URLSearchParams();
+  params.set("tab", tab);
+  params.set("range", range);
+  if (returnTo) params.set("returnTo", returnTo);
+  return `/app/settings/shopify-reports?${params.toString()}`;
 }
 
 function QueryToolbar({
@@ -88,6 +92,8 @@ export function ShopifyReportsPage() {
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
   const data = useLoaderData<ShopifyReportsPageData>();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   useFeatureView("settings");
 
   const [queryPreview, setQueryPreview] = useState<string | null>(null);
@@ -104,15 +110,16 @@ export function ShopifyReportsPage() {
         title={t("shopifyReports.pageTitle")}
         subtitle={t("shopifyReports.pageSubtitle")}
         titleBarTitle={t("shopifyReports.pageTitle")}
-        backLabel={t("shopifyReports.back")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回上一级" : t("shopifyReports.back")}
+        fallbackPath={returnTo ?? "/app/settings"}
+        returnTo={returnTo}
         isMobile={isMobile}
       >
         <DestinationFilterBar
           label={t("shopifyReports.rangeLabel")}
           items={REPORT_RANGES.map((key) => ({ key, label: t(RANGE_LABEL_KEYS[key]) }))}
           active={range}
-          onChange={(next) => navigate(buildReportsPath(tab, next))}
+          onChange={(next) => navigate(buildReportsPath(tab, next, returnTo))}
         />
 
         {data.ianaTimezone || data.currencyCode ? (
@@ -130,7 +137,7 @@ export function ShopifyReportsPage() {
           ariaLabel={t("shopifyReports.pageTitle")}
           density="compact"
           mobileFullWidth={isMobile}
-          onTabChange={(next) => navigate(buildReportsPath(next, range))}
+          onTabChange={(next) => navigate(buildReportsPath(next, range, returnTo))}
         />
 
         {data.access === "missing_scope" ? (

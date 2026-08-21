@@ -89,7 +89,7 @@ function localizeDashboardText(
       t("workspace.dashboard.empty.orders"),
     "暂无可用经营数据": t("workspace.home.command.noData"),
     "完成数据回补后会生成今日经营摘要": t("workspace.home.command.snapshotPending"),
-    "当前未发现紧急风险，可在每日经营待办中查看完整诊断与四象限任务。":
+    "当前未发现紧急风险，可在健康度监测查看完整诊断，并到任务中心跟进待办。":
       t("workspace.home.command.noUrgentRisk"),
     "需 Shopify 弃购或 Analytics": t("workspace.dashboard.metrics.pendingSource"),
     "无上期数据": t("workspace.dashboard.metrics.noPreviousData"),

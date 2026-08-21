@@ -128,7 +128,7 @@ function buildSuggestions(result: DailyOperationsOverviewResult): string[] {
   }
 
   if (lines.length === 0) {
-    return ["当前未发现紧急风险，可在每日经营待办中查看完整诊断与四象限任务。"];
+    return ["当前未发现紧急风险，可在健康度监测查看完整诊断，并到任务中心跟进待办。"];
   }
 
   return lines.slice(0, 6);

@@ -1,9 +1,13 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import type { AITaskItem } from "../lib/aiTaskTypes";
-import { listOperationTasks } from "../server/operations/dailyInspection.server";
+import {
+  listOperationTasks,
+  updateOperationTaskStatus,
+  type OperationTaskAction,
+} from "../server/operations/dailyInspection.server";
 import { isOperationTaskCurrent, isOperationTaskHistory } from "../lib/operationTaskList";
 import { listScheduledAutomationTasks } from "../server/automation/scheduledAutomationCatalog.server";
 import type {
@@ -51,6 +55,14 @@ function parseStatusFilter(value: string | null): UnifiedTaskStatusFilter {
   return "all";
 }
 
+function parseOperationSourceFilter(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item, index, array) => item.length > 0 && array.indexOf(item) === index);
+}
+
 function matchesTypeFilter(
   entry: UnifiedTaskEntry,
   typeFilter: UnifiedTaskTypeFilter,
@@ -96,6 +108,12 @@ function matchesStatusFilter(
   return true;
 }
 
+function matchesOperationSourceFilter(entry: UnifiedTaskEntry, operationSourceFilter: string[]): boolean {
+  if (operationSourceFilter.length === 0) return true;
+  if (entry.entryType !== "operation_task") return false;
+  return operationSourceFilter.includes(entry.task.sourceKey);
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
@@ -113,6 +131,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : DEFAULT_PAGE_SIZE;
   const typeFilter = parseTypeFilter(url.searchParams.get("type"));
   const statusFilter = parseStatusFilter(url.searchParams.get("status"));
+  const operationSourceFilter = parseOperationSourceFilter(url.searchParams.get("operationSource"));
 
   const [aiTaskPage, operationTasks] = await Promise.all([
     listTasksPageForShop({
@@ -149,6 +168,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const merged = [...automationEntries, ...aiEntries, ...operationEntries]
     .filter((entry) => matchesTypeFilter(entry, typeFilter))
     .filter((entry) => matchesStatusFilter(entry, statusFilter))
+    .filter((entry) => matchesOperationSourceFilter(entry, operationSourceFilter))
     .sort((a, b) => {
       if (a.entryType === "automation_task" && b.entryType === "automation_task") {
         return a.task.sortOrder - b.task.sortOrder;
@@ -167,16 +187,64 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     view,
     typeFilter,
     statusFilter,
+    operationSourceFilter,
     page,
     pageSize,
     totalCount,
     totalPages,
     currentCount:
-      aiTaskPage.metrics.currentCount +
-      operationTasks.filter((task) => isOperationTaskCurrent(task, now)).length +
-      automationEntries.length,
+      operationSourceFilter.length > 0
+        ? operationTasks.filter(
+            (task) =>
+              isOperationTaskCurrent(task, now) &&
+              operationSourceFilter.includes(task.sourceKey),
+          ).length
+        : aiTaskPage.metrics.currentCount +
+          operationTasks.filter((task) => isOperationTaskCurrent(task, now)).length +
+          automationEntries.length,
     historyCount:
-      aiTaskPage.metrics.historyCount +
-      operationTasks.filter((task) => isOperationTaskHistory(task, now)).length,
+      operationSourceFilter.length > 0
+        ? operationTasks.filter(
+            (task) =>
+              isOperationTaskHistory(task, now) &&
+              operationSourceFilter.includes(task.sourceKey),
+          ).length
+        : aiTaskPage.metrics.historyCount +
+          operationTasks.filter((task) => isOperationTaskHistory(task, now)).length,
   });
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent")?.toString();
+
+  if (intent !== "task") {
+    return Response.json({ ok: false, error: "unsupported intent" }, { status: 400 });
+  }
+
+  const taskId = formData.get("taskId")?.toString().trim() ?? "";
+  const taskAction = formData.get("taskAction")?.toString() as
+    | OperationTaskAction
+    | undefined;
+
+  if (
+    !taskId ||
+    !taskAction ||
+    !["start", "done", "ignore", "reopen"].includes(taskAction)
+  ) {
+    return Response.json({ ok: false, error: "invalid params" }, { status: 400 });
+  }
+
+  try {
+    const updated = await updateOperationTaskStatus(session.shop, taskId, taskAction);
+    if (!updated) {
+      return Response.json({ ok: false, error: "task not found" }, { status: 404 });
+    }
+    return Response.json({ ok: true, task: updated });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[api.unified-tasks] action failed:", error);
+    return Response.json({ ok: false, error: message }, { status: 500 });
+  }
 };

@@ -1,6 +1,7 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { useLoaderData, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
@@ -8,13 +9,15 @@ import { resolveHealthMonitorDetail } from "../lib/healthMonitorAiDetail";
 import { buildWorkspaceChatPrefillPath } from "../lib/workspaceChatPrefill";
 import {
   HEALTH_MONITORS,
-  getHealthMonitorGroups,
+  buildHealthMonitorRecords,
+  getHealthMonitorGroupsFromRecords,
   getHealthMonitorSummary,
   type HealthMonitorRecord,
   type HealthMonitorStatus,
 } from "../lib/healthMonitorData";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
+import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
 import {
   mobilePageContentStyle,
@@ -25,27 +28,292 @@ import {
 } from "./page/pageUiStyles";
 
 type ViewMode = "overview" | "run" | "detail";
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
+type HealthMonitorFollowupAction = {
+  label: string;
+  path: string;
+  tone?: "primary" | "subtle";
 };
 
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const snapshot = await ensureDailySnapshotOverview(session.shop);
+  return {
+    monitors: buildHealthMonitorRecords({
+      metrics: snapshot.metrics,
+      overview: {
+        salesGrowthRate: snapshot.overview.salesGrowthRate,
+        sessions7d: snapshot.overview.sessions7d,
+        conversionRate7d: snapshot.overview.conversionRate7d,
+      },
+      environments: snapshot.environments,
+      items: snapshot.items,
+    }),
+  };
+};
+
+function resolveHealthMonitorView(value: string | null): ViewMode {
+  if (value === "run" || value === "detail") return value;
+  return "overview";
+}
+
+function resolveHealthMonitorId(
+  value: string | null,
+  monitors: HealthMonitorRecord[],
+): string {
+  if (value && monitors.some((item) => item.id === value)) return value;
+  return monitors[0]?.id ?? "conversion-health";
+}
+
+function buildPathWithReturnTo(path: string, returnTo: string) {
+  const [pathname, rawQuery = ""] = path.split("?");
+  const params = new URLSearchParams(rawQuery);
+  params.set("returnTo", returnTo);
+  const query = params.toString();
+  return `${pathname}${query ? `?${query}` : ""}`;
+}
+
+function buildTaskCenterPath(params: {
+  returnTo: string;
+  operationSources?: string[];
+}) {
+  const next = new URLSearchParams();
+  next.set("returnTo", params.returnTo);
+  next.set("unifiedType", "operation_task");
+  if (params.operationSources && params.operationSources.length > 0) {
+    next.set("unifiedOperationSource", params.operationSources.join(","));
+  }
+  const query = next.toString();
+  return `/app/tasks${query ? `?${query}` : ""}`;
+}
+
+function resolveHealthMonitorFollowupActions(params: {
+  monitor: HealthMonitorRecord;
+  currentPath: string;
+}): HealthMonitorFollowupAction[] {
+  const { monitor, currentPath } = params;
+
+  if (monitor.id === "page-performance") {
+    return [
+      {
+        label: "进入页面性能分析",
+        path: `/app/settings/pagespeed?${new URLSearchParams({
+          source: "health-monitor",
+          label: monitor.title,
+          returnTo: currentPath,
+        }).toString()}`,
+      },
+      {
+        label: "查看转化承接详情",
+        path: buildPathWithReturnTo("/app/today/conversion", currentPath),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (monitor.id === "seo-health") {
+    return [
+      {
+        label: "进入 Search Console",
+        path: buildPathWithReturnTo("/app/settings/google-search-console", currentPath),
+      },
+      {
+        label: "查看流量质量详情",
+        path: buildPathWithReturnTo("/app/today/traffic", currentPath),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (monitor.id === "payment-health") {
+    return [
+      {
+        label: "查看结账漏斗报表",
+        path: buildPathWithReturnTo("/app/settings/shopify-reports?tab=storefront&range=7d", currentPath),
+      },
+      {
+        label: "去任务中心跟进",
+        path: buildTaskCenterPath({
+          returnTo: currentPath,
+          operationSources: ["payment_chain_review"],
+        }),
+        tone: "subtle",
+      },
+      {
+        label: "查看转化承接详情",
+        path: buildPathWithReturnTo("/app/today/conversion", currentPath),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (monitor.id === "roi-health" || monitor.id === "ads-health" || monitor.id === "pricing-health") {
+    return [
+      {
+        label: "查看 ROI 详情",
+        path: buildPathWithReturnTo("/app/today/roi", currentPath),
+      },
+      {
+        label: "去任务中心跟进",
+        path: buildTaskCenterPath({
+          returnTo: currentPath,
+          operationSources:
+            monitor.id === "roi-health" || monitor.id === "ads-health"
+              ? ["sales_decline", "traffic_conversion_drop"]
+              : [],
+        }),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (monitor.id === "revenue-health" || monitor.id === "refund-health") {
+    return [
+      {
+        label: "查看收入与订单详情",
+        path: buildPathWithReturnTo("/app/today/orders", currentPath),
+      },
+      {
+        label: "去任务中心跟进",
+        path: buildTaskCenterPath({
+          returnTo: currentPath,
+          operationSources:
+            monitor.id === "revenue-health"
+              ? ["sales_decline"]
+              : ["refund_spike", "after_sales_timeout"],
+        }),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (monitor.id === "traffic-health") {
+    return [
+      {
+        label: "查看流量质量详情",
+        path: buildPathWithReturnTo("/app/today/traffic", currentPath),
+      },
+    ];
+  }
+
+  if (monitor.id === "conversion-health") {
+    return [
+      {
+        label: "查看转化承接详情",
+        path: buildPathWithReturnTo("/app/today/conversion", currentPath),
+      },
+      {
+        label: "去任务中心跟进",
+        path: buildTaskCenterPath({
+          returnTo: currentPath,
+          operationSources: ["traffic_conversion_drop"],
+        }),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (
+    monitor.id === "product-readiness-health" ||
+    monitor.id === "inventory-health" ||
+    monitor.id === "fulfillment-health"
+  ) {
+    return [
+      {
+        label: "去任务中心跟进",
+        path: buildTaskCenterPath({
+          returnTo: currentPath,
+          operationSources:
+            monitor.id === "product-readiness-health"
+              ? ["launch_failure_review", "product_incomplete"]
+              : monitor.id === "inventory-health"
+                ? ["inventory_risk", "inventory_replenish_plan"]
+                : monitor.id === "fulfillment-health"
+                  ? ["fulfillment_overdue", "logistics_stale", "routine_shipping"]
+                  : [],
+        }),
+      },
+      {
+        label: "查看收入与订单详情",
+        path: buildPathWithReturnTo("/app/today/orders", currentPath),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  if (monitor.id === "risk-control-health") {
+    return [
+      {
+        label: "补齐监测输入",
+        path: buildPathWithReturnTo("/app/settings/data", currentPath),
+      },
+      {
+        label: "查看结账漏斗报表",
+        path: buildPathWithReturnTo("/app/settings/shopify-reports?tab=storefront&range=7d", currentPath),
+        tone: "subtle",
+      },
+    ];
+  }
+
+  return [];
+}
+
 export default function AppHealthMonitor() {
+  const { monitors } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   useFeatureView("health-monitor");
 
-  const [viewMode, setViewMode] = useState<ViewMode>("overview");
-  const [selectedMonitorId, setSelectedMonitorId] = useState<string>("conversion-health");
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    resolveHealthMonitorView(searchParams.get("view")),
+  );
+  const [selectedMonitorId, setSelectedMonitorId] = useState<string>(() =>
+    resolveHealthMonitorId(searchParams.get("monitor"), monitors),
+  );
 
-  const groupedMonitors = useMemo(() => getHealthMonitorGroups(), []);
+  const groupedMonitors = useMemo(
+    () => getHealthMonitorGroupsFromRecords(monitors),
+    [monitors],
+  );
 
   const selectedMonitor =
-    HEALTH_MONITORS.find((item) => item.id === selectedMonitorId) ?? HEALTH_MONITORS[0];
+    monitors.find((item) => item.id === selectedMonitorId) ?? monitors[0] ?? HEALTH_MONITORS[0];
   const selectedDetail = useMemo(() => resolveHealthMonitorDetail(selectedMonitor), [selectedMonitor]);
 
-  const monitoringSummary = useMemo(() => getHealthMonitorSummary(), []);
+  const monitoringSummary = useMemo(() => getHealthMonitorSummary(monitors), [monitors]);
+  const currentHealthMonitorPath = useMemo(() => {
+    const query = searchParams.toString();
+    return `/app/health-monitor${query ? `?${query}` : ""}`;
+  }, [searchParams]);
+  const followupActions = useMemo(
+    () =>
+      resolveHealthMonitorFollowupActions({
+        monitor: selectedMonitor,
+        currentPath: currentHealthMonitorPath,
+      }),
+    [currentHealthMonitorPath, selectedMonitor],
+  );
+
+  useEffect(() => {
+    setViewMode(resolveHealthMonitorView(searchParams.get("view")));
+    setSelectedMonitorId(resolveHealthMonitorId(searchParams.get("monitor"), monitors));
+  }, [monitors, searchParams]);
+
+  const syncHealthMonitorSearch = (next: {
+    view: ViewMode;
+    monitor?: string;
+  }) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("view", next.view);
+    if (next.monitor) {
+      params.set("monitor", next.monitor);
+    } else {
+      params.delete("monitor");
+    }
+    setSearchParams(params, { replace: true, preventScrollReset: true });
+  };
 
   const actions: DestinationActionCard[] = [
     {
@@ -54,7 +322,7 @@ export default function AppHealthMonitor() {
       detail: "先看可信度健康与目标健康的整体状态。",
       badge: "首页",
       active: viewMode === "overview",
-      onClick: () => setViewMode("overview"),
+      onClick: () => syncHealthMonitorSearch({ view: "overview" }),
     },
     {
       key: "run",
@@ -62,7 +330,7 @@ export default function AppHealthMonitor() {
       detail: "查看本次监测进度与每个指标当前有没有问题。",
       badge: `${monitoringSummary.completed}/${monitoringSummary.total}`,
       active: viewMode === "run",
-      onClick: () => setViewMode("run"),
+      onClick: () => syncHealthMonitorSearch({ view: "run" }),
     },
     {
       key: "detail",
@@ -70,7 +338,8 @@ export default function AppHealthMonitor() {
       detail: `${selectedMonitor.title} 的问题、论据、解决办法和 AI 入口。`,
       badge: statusLabel(selectedMonitor.status),
       active: viewMode === "detail",
-      onClick: () => setViewMode("detail"),
+      onClick: () =>
+        syncHealthMonitorSearch({ view: "detail", monitor: selectedMonitor.id }),
     },
   ];
 
@@ -80,18 +349,18 @@ export default function AppHealthMonitor() {
         title={t("nav.healthMonitor")}
         subtitle="Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。"
         titleBarTitle={t("nav.healthMonitor")}
-        backLabel="返回首页"
+        backLabel={returnTo ? "返回上一级" : "返回首页"}
         fallbackPath="/app"
+        returnTo={returnTo}
         isMobile={isMobile}
         actions={actions}
       >
         {viewMode === "overview" ? (
           <OverviewSection
             groups={groupedMonitors}
-            onOpenRun={() => setViewMode("run")}
+            onOpenRun={() => syncHealthMonitorSearch({ view: "run" })}
             onOpenDetail={(monitorId) => {
-              setSelectedMonitorId(monitorId);
-              setViewMode("detail");
+              syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
             }}
           />
         ) : null}
@@ -100,10 +369,9 @@ export default function AppHealthMonitor() {
           <RunSection
             groups={groupedMonitors}
             summary={monitoringSummary}
-            onBackToOverview={() => setViewMode("overview")}
+            onBackToOverview={() => syncHealthMonitorSearch({ view: "overview" })}
             onOpenDetail={(monitorId) => {
-              setSelectedMonitorId(monitorId);
-              setViewMode("detail");
+              syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
             }}
           />
         ) : null}
@@ -112,7 +380,9 @@ export default function AppHealthMonitor() {
           <DetailSection
             monitor={selectedMonitor}
             detail={selectedDetail}
-            onBackToRun={() => setViewMode("run")}
+            onBackToRun={() => syncHealthMonitorSearch({ view: "run" })}
+            followupActions={followupActions}
+            onOpenFollowup={(path) => navigate(path)}
             onOpenAi={() =>
               navigate(
                 buildWorkspaceChatPrefillPath({
@@ -273,11 +543,15 @@ function DetailSection({
   monitor,
   detail,
   onBackToRun,
+  followupActions,
+  onOpenFollowup,
   onOpenAi,
 }: {
   monitor: HealthMonitorRecord;
   detail: ReturnType<typeof resolveHealthMonitorDetail>;
   onBackToRun: () => void;
+  followupActions: HealthMonitorFollowupAction[];
+  onOpenFollowup: (path: string) => void;
   onOpenAi: () => void;
 }) {
   return (
@@ -302,6 +576,16 @@ function DetailSection({
           <button type="button" style={secondaryButtonStyle} onClick={onBackToRun}>
             返回监测进度
           </button>
+          {followupActions.map((action) => (
+            <button
+              key={action.path}
+              type="button"
+              style={action.tone === "subtle" ? secondaryButtonStyle : primaryButtonStyle}
+              onClick={() => onOpenFollowup(action.path)}
+            >
+              {action.label}
+            </button>
+          ))}
         </div>
       </PageSurface>
 

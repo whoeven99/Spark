@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import {
   PageSectionHeader,
   pageColorTokens,
@@ -9,7 +11,9 @@ import {
   destinationSurfaceStyle,
 } from "../shared/DestinationPage";
 import { AITaskPagination } from "../aiTask/AITaskPagination";
+import { buildWorkspaceChatPrefillPath } from "../../../lib/workspaceChatPrefill";
 import { UnifiedTaskCard } from "./UnifiedTaskCard";
+import { buildOperationTaskPrompt, inferOperationTaskPresentation } from "../../../lib/operationTaskPresentation";
 import type {
   UnifiedTaskEntry,
   UnifiedTaskListResponse,
@@ -18,9 +22,24 @@ import type {
   UnifiedTaskView,
 } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { OperationTaskView } from "../../../server/operations/dailyInspection.server";
 
 const PAGE_SIZE = 10;
 const EMPTY_STATE_MIN_HEIGHT = 320;
+const OPERATION_SOURCE_LABELS: Record<string, string> = {
+  fulfillment_overdue: "发货超时",
+  logistics_stale: "物流停滞",
+  refund_spike: "退款异常",
+  after_sales_timeout: "售后超时",
+  inventory_risk: "库存风险",
+  payment_chain_review: "支付链路",
+  sales_decline: "销售下滑",
+  traffic_conversion_drop: "转化承接下滑",
+  routine_shipping: "履约排队",
+  launch_failure_review: "上新复盘",
+  product_incomplete: "商品未就绪",
+  inventory_replenish_plan: "补货计划",
+};
 
 function readViewFromSearch(search: string): UnifiedTaskView {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
@@ -66,11 +85,28 @@ function readStatusFilterFromSearch(search: string): UnifiedTaskStatusFilter {
   return "all";
 }
 
+function readTaskIdFromSearch(search: string): string | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const value = params.get("taskId")?.trim();
+  return value ? value : null;
+}
+
+function readOperationSourceFilterFromSearch(search: string): string[] {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const value = params.get("unifiedOperationSource");
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item, index, array) => item.length > 0 && array.indexOf(item) === index);
+}
+
 function syncSearch(
   view: UnifiedTaskView,
   page: number,
   typeFilter: UnifiedTaskTypeFilter,
   statusFilter: UnifiedTaskStatusFilter,
+  operationSourceFilter: string[],
 ) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
@@ -90,6 +126,11 @@ function syncSearch(
   } else {
     url.searchParams.set("unifiedStatus", statusFilter);
   }
+  if (operationSourceFilter.length === 0) {
+    url.searchParams.delete("unifiedOperationSource");
+  } else {
+    url.searchParams.set("unifiedOperationSource", operationSourceFilter.join(","));
+  }
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
@@ -98,8 +139,9 @@ function getCacheKey(
   page: number,
   typeFilter: UnifiedTaskTypeFilter,
   statusFilter: UnifiedTaskStatusFilter,
+  operationSourceFilter: string[],
 ): string {
-  return `${view}:${page}:${typeFilter}:${statusFilter}`;
+  return `${view}:${page}:${typeFilter}:${statusFilter}:${operationSourceFilter.join(",")}`;
 }
 
 async function fetchUnifiedTasks(
@@ -108,6 +150,7 @@ async function fetchUnifiedTasks(
   page: number,
   typeFilter: UnifiedTaskTypeFilter,
   statusFilter: UnifiedTaskStatusFilter,
+  operationSourceFilter: string[],
 ): Promise<UnifiedTaskListResponse> {
   const q = new URLSearchParams(
     locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
@@ -117,6 +160,9 @@ async function fetchUnifiedTasks(
   q.set("pageSize", String(PAGE_SIZE));
   q.set("type", typeFilter);
   q.set("status", statusFilter);
+  if (operationSourceFilter.length > 0) {
+    q.set("operationSource", operationSourceFilter.join(","));
+  }
   const resp = await fetch(`/api/unified-tasks?${q.toString()}`);
   if (!resp.ok) throw new Error(`Failed to fetch unified tasks: ${resp.status}`);
   return (await resp.json()) as UnifiedTaskListResponse;
@@ -129,6 +175,8 @@ type Props = {
 type CountState = { currentCount: number; historyCount: number };
 
 export function UnifiedTaskListPage({ locationSearch }: Props) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const initialSearch =
     typeof window !== "undefined" ? window.location.search : locationSearch;
 
@@ -140,6 +188,9 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
   const [statusFilter, setStatusFilter] = useState<UnifiedTaskStatusFilter>(() =>
     readStatusFilterFromSearch(initialSearch),
   );
+  const [operationSourceFilter, setOperationSourceFilter] = useState<string[]>(() =>
+    readOperationSourceFilterFromSearch(initialSearch),
+  );
   const [entries, setEntries] = useState<UnifiedTaskEntry[]>([]);
   const [counts, setCounts] = useState<CountState>({ currentCount: 0, historyCount: 0 });
   const [totalCount, setTotalCount] = useState(0);
@@ -149,6 +200,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
   const pageCache = useRef<Record<string, UnifiedTaskListResponse>>({});
+  const currentSearch = location.search || locationSearch;
 
   const load = useCallback(
     async (
@@ -156,9 +208,10 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       p: number,
       type: UnifiedTaskTypeFilter,
       status: UnifiedTaskStatusFilter,
+      operationSource: string[],
       force = false,
     ) => {
-      const key = getCacheKey(v, p, type, status);
+      const key = getCacheKey(v, p, type, status, operationSource);
       if (!force && pageCache.current[key]) {
         const cached = pageCache.current[key];
         setEntries(cached.entries);
@@ -170,7 +223,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       }
       setLoading(true);
       try {
-        const data = await fetchUnifiedTasks(locationSearch, v, p, type, status);
+        const data = await fetchUnifiedTasks(currentSearch, v, p, type, status, operationSource);
         pageCache.current[key] = data;
         setEntries(data.entries);
         setTotalCount(data.totalCount);
@@ -182,14 +235,14 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         setLoading(false);
       }
     },
-    [locationSearch],
+    [currentSearch],
   );
 
   // Initial load and view/page changes
   useEffect(() => {
-    syncSearch(view, page, typeFilter, statusFilter);
-    void load(view, page, typeFilter, statusFilter);
-  }, [view, page, typeFilter, statusFilter, load]);
+    syncSearch(view, page, typeFilter, statusFilter, operationSourceFilter);
+    void load(view, page, typeFilter, statusFilter, operationSourceFilter);
+  }, [view, page, typeFilter, statusFilter, operationSourceFilter, load]);
 
   function scrollToTop() {
     listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -236,7 +289,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         pageCache.current = {};
         setTotalCount((c) => Math.max(0, c - 1));
         // Refresh counts
-        void load(view, page, typeFilter, statusFilter, true);
+        void load(view, page, typeFilter, statusFilter, operationSourceFilter, true);
       }
     } finally {
       setDeletingId(null);
@@ -260,8 +313,27 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
   const handleOperationTaskUpdated = useCallback(() => {
     pageCache.current = {};
-    void load(view, page, typeFilter, statusFilter, true);
-  }, [load, page, statusFilter, typeFilter, view]);
+    void load(view, page, typeFilter, statusFilter, operationSourceFilter, true);
+  }, [load, operationSourceFilter, page, statusFilter, typeFilter, view]);
+
+  const selectedTaskId = useMemo(() => readTaskIdFromSearch(currentSearch), [currentSearch]);
+  const selectedOperationTask = useMemo(() => {
+    if (!selectedTaskId) return null;
+    const selectedEntry = entries.find(
+      (entry): entry is Extract<UnifiedTaskEntry, { entryType: "operation_task" }> =>
+        entry.entryType === "operation_task" && entry.task.id === selectedTaskId,
+    );
+    return selectedEntry?.task ?? null;
+  }, [entries, selectedTaskId]);
+
+  useEffect(() => {
+    if (!selectedTaskId || loading) return;
+    if (selectedOperationTask) return;
+    const params = new URLSearchParams(currentSearch.startsWith("?") ? currentSearch.slice(1) : currentSearch);
+    params.delete("taskId");
+    const query = params.toString();
+    navigate(`/app/tasks${query ? `?${query}` : ""}`, { replace: true });
+  }, [currentSearch, loading, navigate, selectedOperationTask, selectedTaskId]);
 
   // ── Tab bar ────────────────────────────────────────────────────────────────
 
@@ -349,8 +421,39 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     >
       <PageSectionHeader
         title="任务收件箱"
-        subtitle="统一查看定时任务、经营任务、文案、图片和批处理任务"
-        badge={<div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>当前结果 {totalCount} 条</div>}
+        subtitle={
+          operationSourceFilter.length > 0
+            ? `当前仅显示：${operationSourceFilter
+                .map((key) => OPERATION_SOURCE_LABELS[key] ?? key)
+                .join("、")} 相关的经营任务`
+            : "统一查看定时任务、经营任务、文案、图片和批处理任务"
+        }
+        badge={
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: pageColorTokens.textFootnote }}>
+            <span>当前结果 {totalCount} 条</span>
+            {operationSourceFilter.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOperationSourceFilter([]);
+                  setTypeFilter("all");
+                  setPage(1);
+                }}
+                style={{
+                  padding: "0.2rem 0.55rem",
+                  borderRadius: 999,
+                  border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  background: pageColorTokens.surface,
+                  color: pageColorTokens.textSecondary,
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                查看全部
+              </button>
+            ) : null}
+          </div>
+        }
       />
 
       <DestinationFilterBar
@@ -373,6 +476,12 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
   const showEmpty = !loading && entries.length === 0;
   const showLoading = loading && entries.length === 0;
+  const closeTaskDetail = () => {
+    const params = new URLSearchParams(currentSearch.startsWith("?") ? currentSearch.slice(1) : currentSearch);
+    params.delete("taskId");
+    const query = params.toString();
+    navigate(`/app/tasks${query ? `?${query}` : ""}`, { replace: true });
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -380,6 +489,12 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
       {tabBar}
       {filterBar}
+      {selectedOperationTask ? (
+        <OperationTaskDetailPanel
+          task={selectedOperationTask}
+          onClose={closeTaskDetail}
+        />
+      ) : null}
 
       {showLoading ? (
         <div
@@ -404,7 +519,11 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         >
           <span style={{ fontSize: 28, lineHeight: 1 }}>📋</span>
           <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
-            {view === "current" ? "暂无进行中的任务" : "暂无历史任务"}
+            {operationSourceFilter.length > 0
+              ? "当前健康项下暂无匹配任务"
+              : view === "current"
+                ? "暂无进行中的任务"
+                : "暂无历史任务"}
           </span>
           <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
             可以调整类型或状态筛选查看其它任务。
@@ -440,3 +559,181 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     </div>
   );
 }
+
+function operationStatusLabel(
+  status: OperationTaskView["status"],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  switch (status) {
+    case "open":
+      return t("taskWorkbench.taskStatusOpen");
+    case "in_progress":
+      return t("taskWorkbench.taskStatusInProgress");
+    case "done":
+      return t("taskWorkbench.taskStatusDone");
+    case "ignored":
+      return t("taskWorkbench.taskStatusIgnored");
+    default:
+      return t("taskWorkbench.taskStatusAutoClosed");
+  }
+}
+
+function operationDueWindowLabel(
+  task: OperationTaskView,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (task.dueWindow === "today") return t("taskWorkbench.dueWindowToday");
+  if (task.dueWindow === "48h") return t("taskWorkbench.dueWindow48h");
+  if (task.dueWindow === "this_week") return t("taskWorkbench.dueWindowThisWeek");
+  return t("taskWorkbench.dueWindowBacklog");
+}
+
+function renderRelatedObjects(relatedObjects: unknown) {
+  if (!relatedObjects || typeof relatedObjects !== "object") return "—";
+  const entries = Object.entries(relatedObjects as Record<string, unknown>).filter(([, value]) => {
+    if (value == null) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (typeof value === "number" || typeof value === "boolean") return true;
+    if (Array.isArray(value)) return value.length > 0;
+    return typeof value === "object" && Object.keys(value).length > 0;
+  });
+  if (entries.length === 0) return "—";
+  return entries
+    .slice(0, 6)
+    .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
+    .join("\n");
+}
+
+function OperationTaskDetailPanel({
+  task,
+  onClose,
+}: {
+  task: OperationTaskView;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const presentation = inferOperationTaskPresentation(task, t);
+  const aiChatPath = buildWorkspaceChatPrefillPath({
+    prompt: buildOperationTaskPrompt(task, presentation, {
+      taskStatusText: operationStatusLabel(task.status, t),
+      dueWindowText: operationDueWindowLabel(task, t),
+      t,
+    }),
+    constraints: [
+      `当前 AI 语境：Tasks / ${task.title}`,
+      "只围绕当前经营任务的处理顺序、原因判断和执行动作回答，不切回通用助手语境。",
+    ],
+  });
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+        padding: "1rem",
+        ...destinationSurfaceStyle,
+      }}
+    >
+      <PageSectionHeader
+        title={task.title}
+        subtitle={task.triggerReason}
+        badge={
+          <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
+            {task.priority} / {task.quadrant.toUpperCase()} / {operationStatusLabel(task.status, t)}
+          </div>
+        }
+      />
+      <div style={detailGridStyle}>
+        <DetailBlock label={t("taskWorkbench.taskObjectiveLabel")} value={presentation.objective} />
+        <DetailBlock label={t("taskWorkbench.taskImpactMetricLabel")} value={presentation.impactMetric} />
+        <DetailBlock label={t("taskWorkbench.taskEstimatedLiftLabel")} value={presentation.estimatedLift} />
+        <DetailBlock label={t("taskWorkbench.taskRoiImpactLabel")} value={presentation.roiImpact} />
+        <DetailBlock label={t("taskWorkbench.taskPromptOwner")} value={task.ownerRole ?? t("taskWorkbench.taskPromptOwnerUnknown")} />
+        <DetailBlock label={t("taskWorkbench.taskPromptDue")} value={operationDueWindowLabel(task, t)} />
+      </div>
+      <DetailBlock
+        label={t("taskWorkbench.suggestedActionsLabel")}
+        value={task.suggestedActions.length > 0 ? task.suggestedActions.join("\n") : "—"}
+        multiline
+      />
+      <DetailBlock
+        label={t("taskWorkbench.relatedObjectsLabel")}
+        value={renderRelatedObjects(task.relatedObjects)}
+        multiline
+      />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <button type="button" style={detailPrimaryButtonStyle} onClick={() => navigate(aiChatPath)}>
+          {t("taskWorkbench.actionSendToAi")}
+        </button>
+        <button type="button" style={detailSecondaryButtonStyle} onClick={onClose}>
+          {t("common.backToPrevious")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DetailBlock({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 6,
+        padding: "0.85rem 0.95rem",
+        borderRadius: 12,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        background: pageColorTokens.surface,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 700, color: pageColorTokens.textSecondary }}>{label}</div>
+      <div
+        style={{
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: pageColorTokens.textPrimary,
+          whiteSpace: multiline ? "pre-wrap" : "normal",
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+const detailGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 10,
+};
+
+const detailPrimaryButtonStyle = {
+  padding: "0.6rem 0.95rem",
+  borderRadius: 999,
+  border: `1px solid ${pageColorTokens.brandBlue}`,
+  background: pageColorTokens.brandBlue,
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const detailSecondaryButtonStyle = {
+  padding: "0.6rem 0.95rem",
+  borderRadius: 999,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textPrimary,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};

@@ -303,6 +303,7 @@ export function GoogleSearchConsolePage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const loaderData = useLoaderData<GscSettingsLoaderData>();
   const revalidator = useRevalidator();
 
@@ -465,8 +466,9 @@ export function GoogleSearchConsolePage() {
       <PageHeaderNav
         title={t("gsc.title")}
         subtitle={t("gsc.subtitle")}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回健康度监测" : t("settingsShell.back")}
+        fallbackPath={returnTo ?? "/app/settings"}
+        returnTo={returnTo}
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>

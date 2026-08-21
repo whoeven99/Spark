@@ -117,8 +117,16 @@ function SurfaceButton({
 
 export function TodayMetricDetailPage({
   data,
+  backLabel = "返回经营",
+  fallbackPath = "/app/today",
+  returnTo,
+  extraSections,
 }: {
   data: TodayMetricDetail;
+  backLabel?: string;
+  fallbackPath?: string;
+  returnTo?: string;
+  extraSections?: ReactNode;
 }) {
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
@@ -142,8 +150,9 @@ export function TodayMetricDetailPage({
           title={data.title}
           subtitle={data.subtitle}
           titleBarTitle={data.title}
-          backLabel="返回经营"
-          fallbackPath="/app/today"
+          backLabel={backLabel}
+          fallbackPath={fallbackPath}
+          returnTo={returnTo}
         />
 
         <section>
@@ -278,6 +287,8 @@ export function TodayMetricDetailPage({
             ))}
           </PageSurface>
         ) : null}
+
+        {extraSections ?? null}
 
         <PageSurface title="建议动作" subtitle="每条动作都应该能直接承接今天要先做什么。">
           <div style={actionListStyle}>

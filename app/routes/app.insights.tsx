@@ -1,6 +1,6 @@
 /**
- * 洞察目的地：收敛为只读数据入口。
- * 经营判断继续留在 Today，渠道连接与授权逐步收回 Settings。
+ * 旧洞察路径保留为兼容壳。
+ * 经营判断继续留在 Today，渠道连接与授权继续归到 Settings。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Outlet } from "react-router";

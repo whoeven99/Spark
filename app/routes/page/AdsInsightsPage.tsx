@@ -418,6 +418,7 @@ export function AdsInsightsPage() {
   const { isMobile } = useResponsiveLayout();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const loaderData = useLoaderData<AdsInsightsPageLoaderData>();
   const metricsFetcher = useFetcher<InsightsFetcherData>();
   const overviewFetcher = useFetcher<UnifiedOverviewFetcherData>();
@@ -851,8 +852,9 @@ export function AdsInsightsPage() {
       <PageHeaderNav
         title={t("adsInsights.pageTitle")}
         subtitle={t("adsInsights.pageSubtitle")}
-        backLabel={t("insights.backToCharts")}
-        fallbackPath="/app/today/roi"
+        backLabel={returnTo ? "返回上一级" : t("insights.backToCharts")}
+        fallbackPath={returnTo ?? "/app/today/roi"}
+        returnTo={returnTo}
       />
 
       <PageSurface>

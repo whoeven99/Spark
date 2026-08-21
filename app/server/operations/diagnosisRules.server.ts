@@ -1,6 +1,8 @@
 import type { OperationsDiagnosis } from "./diagnosis.server";
 import {
   CARRIER_STALE_DAYS,
+  PAYMENT_SUCCESS_RISK_PERCENT,
+  PAYMENT_SUCCESS_WATCH_PERCENT,
   REFUND_RATE_WATCH_PERCENT,
   REFUND_SPIKE_PERCENT_POINTS,
   SELLABLE_DAYS_RISK,
@@ -12,8 +14,8 @@ import {
  * 诊断 → 任务转换规则（docs/DAILY_OPERATIONS_WORKFLOWS.md §9 首批规则）。
  *
  * 规则以声明式数组组织，后续可平移到数据库规则表。
- * 阶段一覆盖：超时履约、物流异常、退款异常、库存止损、常规发货、销售趋势、
- * 流量/转化异常止损（工作流 5，依赖 Web Pixel 漏斗数据）。
+ * 阶段一覆盖：超时履约、物流异常、退款异常、售后超时处理、库存止损、常规发货、
+ * 支付链路排查、销售趋势、流量/转化异常止损（工作流 5，依赖 Web Pixel 漏斗数据）。
  */
 
 export type TaskQuadrant = "q1" | "q2" | "q3" | "q4";
@@ -133,6 +135,51 @@ const RULES: RuleDefinition[] = [
     },
   },
   {
+    key: "after_sales_timeout",
+    evaluate: (d) => {
+      const item = findItem(d, "refund_health");
+      if (!item || item.status === "healthy") return null;
+
+      const abnormalOrders = d.detail.abnormalRefundOrders;
+      if (abnormalOrders.length <= 0) return null;
+
+      const isRisk = item.status === "risk" || abnormalOrders.length >= 3;
+      const topReasons = Array.from(
+        new Set(abnormalOrders.map((order) => order.reason).filter(Boolean)),
+      ).slice(0, 3);
+
+      return {
+        sourceKey: "after_sales_timeout",
+        dedupeKey: "after_sales_timeout",
+        title: isRisk
+          ? `优先处理 ${abnormalOrders.length} 单高风险售后单`
+          : `跟进 ${abnormalOrders.length} 单异常售后单`,
+        quadrant: isRisk ? "q1" : "q2",
+        priority: isRisk ? "P0" : "P1",
+        triggerReason: [
+          `${abnormalOrders.length} 单退款金额偏高或涉及多件商品`,
+          topReasons.length > 0 ? `主要原因：${topReasons.join(" / ")}` : null,
+          "当前未接入客服响应 SLA，先用异常退款单作为售后超时代理信号",
+        ]
+          .filter(Boolean)
+          .join("；"),
+        relatedObjects: {
+          abnormalOrders,
+          abnormalRefundOrderCount: abnormalOrders.length,
+          refundRate30d: item.metrics.refundRate30d ?? null,
+          refundRateDelta: item.metrics.refundRateDelta ?? null,
+        },
+        suggestedActions: [
+          "按退款金额和退款时间排序，优先处理高金额且原因集中的售后单",
+          "把商品问题、履约问题和售后响应问题拆开复盘，避免混成同一种异常",
+          "对重复出现的退款原因补齐标准回复与处理动作，避免售后继续积压",
+        ],
+        ownerRole: "售后/客服",
+        dueWindow: isRisk ? "today" : "48h",
+      };
+    },
+  },
+  {
     key: "inventory_risk",
     evaluate: (d) => {
       const m = d.summaryMetrics;
@@ -153,6 +200,58 @@ const RULES: RuleDefinition[] = [
         ],
         ownerRole: "供应链/采购",
         dueWindow: "today",
+      };
+    },
+  },
+  {
+    key: "payment_chain_review",
+    evaluate: (d) => {
+      const item = findItem(d, "conversion_health");
+      const successRate = Number(item?.metrics.paymentSuccessRate ?? NaN);
+      const attempts = Number(item?.metrics.paymentAttempts ?? 0);
+      const successful = Number(item?.metrics.paymentSuccessful ?? 0);
+      const paymentRate = Number(item?.metrics.paymentRate ?? NaN);
+      const shouldCreate =
+        (Number.isFinite(successRate) && successRate < PAYMENT_SUCCESS_WATCH_PERCENT) ||
+        attempts > successful;
+      if (!item || !shouldCreate) return null;
+
+      const isRisk =
+        Number.isFinite(successRate) && successRate < PAYMENT_SUCCESS_RISK_PERCENT;
+      const failureCount = Math.max(attempts - successful, 0);
+
+      return {
+        sourceKey: "payment_chain_review",
+        dedupeKey: "payment_chain_review",
+        title: isRisk ? "立即排查支付链路异常" : "复核支付链路与失败订单",
+        quadrant: isRisk ? "q1" : "q2",
+        priority: isRisk ? "P0" : "P1",
+        triggerReason: [
+          Number.isFinite(successRate)
+            ? `订单支付成功率 ${successRate}%（目标 ≥ ${PAYMENT_SUCCESS_WATCH_PERCENT}%）`
+            : null,
+          failureCount > 0 ? `${failureCount} 笔支付尝试未成功` : null,
+          Number.isFinite(paymentRate) ? `结账末端支付成功率 ${paymentRate}%` : null,
+        ]
+          .filter(Boolean)
+          .join("；"),
+        relatedObjects: {
+          paymentSuccessRate: Number.isFinite(successRate) ? successRate : null,
+          paymentAttempts: attempts,
+          paymentSuccessful: successful,
+          paymentFailures: failureCount,
+          checkoutPaymentRate: Number.isFinite(paymentRate) ? paymentRate : null,
+          evidence: item.evidence,
+        },
+        suggestedActions: Array.from(
+          new Set([
+            "先按设备、支付方式和地区拆开失败订单，确认是否集中在单一场景",
+            "复核移动端结账页、支付回跳链路和最近的支付配置改动",
+            ...item.reasoning.filter((reason) => reason.includes("支付") || reason.includes("结账")),
+          ]),
+        ),
+        ownerRole: "运营/支付",
+        dueWindow: isRisk ? "today" : "48h",
       };
     },
   },
@@ -262,6 +361,47 @@ const RULES: RuleDefinition[] = [
     },
   },
   // ── Q2 和 Q3 交界：商品问题（可快速处理）──
+  {
+    key: "launch_failure_review",
+    evaluate: (d) => {
+      const item = findItem(d, "product_operations");
+      if (!item || item.status === "healthy") return null;
+      const draftCount = Number(item.metrics.draftProductCount ?? 0);
+      const noImagesCount = Number(item.metrics.noImagesProductCount ?? 0);
+      const noDescCount = Number(item.metrics.noDescriptionProductCount ?? 0);
+      if (draftCount <= 0) return null;
+
+      const isRisk = draftCount > 5 || item.status === "risk";
+      const blockers: string[] = [`${draftCount} 个商品仍处于草稿待上架`];
+      if (noImagesCount > 0) blockers.push(`${noImagesCount} 个商品缺图`);
+      if (noDescCount > 0) blockers.push(`${noDescCount} 个商品缺描述`);
+
+      return {
+        sourceKey: "launch_failure_review",
+        dedupeKey: "launch_failure_review",
+        title: isRisk ? "立即复盘上新失败与待上架商品" : "复盘上新卡点与待上架商品",
+        quadrant: isRisk ? "q1" : "q2",
+        priority: isRisk ? "P0" : "P1",
+        triggerReason: blockers.join("；"),
+        relatedObjects: {
+          draftCount,
+          noImagesCount,
+          noDescriptionCount: noDescCount,
+          evidence: item.evidence,
+        },
+        suggestedActions: Array.from(
+          new Set([
+            "先按计划主推商品优先级排队，确认哪些新品本应今日上架却仍停在草稿",
+            "逐个复核上架阻塞点：审核、定价、图片、描述和发布流程",
+            "对已确定要上的商品，先补齐最低可上线素材，再安排正式发布",
+            ...item.reasoning.filter((reason) => reason.includes("上新") || reason.includes("草稿")),
+          ]),
+        ),
+        ownerRole: "商品/运营",
+        dueWindow: isRisk ? "today" : "48h",
+      };
+    },
+  },
   {
     key: "product_incomplete",
     evaluate: (d) => {

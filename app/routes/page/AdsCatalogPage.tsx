@@ -226,6 +226,10 @@ export function AdsCatalogPage() {
   const shopify = useAppBridge();
   const location = useLocation();
   const locationSearch = useEmbeddedLocationSearch();
+  const returnTo = useMemo(() => {
+    const params = new URLSearchParams(location.search.startsWith("?") ? location.search.slice(1) : location.search);
+    return params.get("returnTo")?.trim() || undefined;
+  }, [location.search]);
   const loaderData = useLoaderData<AdsCatalogPageLoaderData>();
   const revalidator = useRevalidator();
   const credentials = loaderData.credentials;
@@ -806,8 +810,9 @@ export function AdsCatalogPage() {
   return (
     <PageSurface>
       <PageHeaderNav
-        backLabel={t("common.backToPrevious")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回上一级" : t("common.backToPrevious")}
+        fallbackPath={returnTo ?? "/app/settings"}
+        returnTo={returnTo}
         title={t("adsCatalog.pageTitle")}
         subtitle={t("adsCatalog.pageSubtitle")}
       />

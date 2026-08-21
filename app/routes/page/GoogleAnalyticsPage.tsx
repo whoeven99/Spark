@@ -716,6 +716,8 @@ function ConnectionStatusBadge({
 export function GoogleAnalyticsPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const loaderData = useLoaderData<Ga4SettingsLoaderData>();
   const revalidator = useRevalidator();
 
@@ -735,8 +737,6 @@ export function GoogleAnalyticsPage() {
   const disconnectFetcher = useFetcher<DisconnectResponse>();
 
   const propertySelectIntentRef = useRef<"pending" | "switch">("pending");
-
-  const [searchParams] = useSearchParams();
 
   // 同步 loader 数据（revalidation 后更新 state）
   const isFirstMount = useRef(true);
@@ -951,8 +951,9 @@ export function GoogleAnalyticsPage() {
       <PageHeaderNav
         title={t("ga4.title")}
         subtitle={t("ga4.subtitle")}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回上一级" : t("settingsShell.back")}
+        fallbackPath={returnTo ?? "/app/settings"}
+        returnTo={returnTo}
       />
 
       <PageSurface>

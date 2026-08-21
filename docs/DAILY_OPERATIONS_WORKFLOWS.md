@@ -1,12 +1,12 @@
-# Spark 每日经营诊断与待办工作流设计
+# Spark 经营结果、健康监测与待办工作流设计
 
 ## 1. 文档目标
 
-本文档用于将“每日诊断报告 + 每日待办任务 + 风险环境监控 + AI 任务生成”统一收敛为一套可落地的产品设计与数据设计文档，并作为 `daily-operations` 的主文档。
+本文档用于将 `Today`、`Health Monitor`、`Tasks` 与 AI 下钻统一收敛为一套可落地的产品设计与数据设计文档。若本文档中的旧设计与当前代码冲突，应以正式目的地结构为准，而不是继续扩展历史 `daily-operations` / `today/diagnosis` 语义。
 
 本文档重点回答 7 个问题：
 
-- 页面应该如何组织 `今日洞察 / 所有洞察` 的工作模式
+- 正式目的地应该如何划分 `Today / Health Monitor / Tasks / Settings`
 - 页面应该如何按 `紧急 / 重要` 四象限组织任务优先级
 - 每一个业务点如何抽象为一个 `1 / 2 / 3` 的标准工作流
 - 每一个诊断点如何定义输入数据、计算口径、推理逻辑和输出任务
@@ -16,8 +16,9 @@
 
 本文档适用于：
 
-- 每日经营诊断页
-- 每日待办任务页
+- Today 正式页与二级详情页
+- Health Monitor 正式页与详情页
+- Tasks 正式页
 - 自动巡检任务
 - 异常告警与增长机会发现
 - 风险环境监控与失败率解释
@@ -107,24 +108,29 @@ else:
 
 ## 4. 页面信息架构
 
-页面应升级为双模式工作台：
+页面应升级为正式四目的地结构：
 
-1. `今日洞察`
-2. `所有洞察`
+1. `Today`
+2. `Health Monitor`
+3. `Tasks`
+4. `Settings`
 
 ### 4.1 今日洞察
 
-今日洞察建议按以下顺序展示：
+Today 首页建议按以下顺序展示：
 
 1. `经营摘要`
-2. `关键风险环境`
-3. `AI 数据洞察`
-4. `待办事项`
+2. `关键经营指标`
+3. `关键对象与趋势入口`
+4. `推荐动作`
+5. `AI 下钻入口`
 
-首页原则不是“把所有解释都铺开”，而是：
+Today 首页原则不是“把所有解释都铺开”，而是：
 
 - 首页做 `索引与优先级判断`
-- 详情页做 `证据、对象与动作展开`
+- Today 二级详情做 `结论、图表、对象与动作展开`
+- Health Monitor 做 `可信度、达标性与异常原因展开`
+- Tasks 做 `任务执行与状态流转`
 - 首页少描述、多状态、多数量、多入口
 - 详情页少摘要、多对象列表、多异常证据、多关联任务
 
@@ -742,10 +748,10 @@ type DetailAiContext = {
 推荐 URL 结构：
 
 ```text
-/app/daily-operations?detail=refund
-/app/daily-operations?detail=logistics
-/app/daily-operations?detail=inventory
-/app/daily-operations?detail=task&id=<taskId>
+/app/health-monitor?view=detail&monitor=refund-health
+/app/health-monitor?view=detail&monitor=fulfillment-health
+/app/health-monitor?view=detail&monitor=inventory-health
+/app/tasks?taskId=<taskId>
 ```
 
 如果需要深链接定位，建议继续附加：
@@ -4283,6 +4289,22 @@ type DiagnosisRule = {
 - 当前项目现成数据基础更偏订单、退款、库存、履约
 - 应优先跑通风险发现和任务闭环
 
+### 12.4 当前开发 TODO
+
+- [ ] Health Monitor 改为读取每日巡检真实数据，不再只依赖静态样例监测项
+- [x] 支付管理补齐任务闭环，新增“支付链路排查”规则任务
+- [ ] 风控管理补齐监测输入与规则任务，新增“风控阈值复核”链路
+- [x] 上新管理从“商品信息不完整”扩展到“上新失败复盘”
+- [ ] 售后与服务补齐“售后超时处理”规则任务
+- [ ] Health Monitor 详情与 Today / Tasks 的联动继续统一到真实对象与真实证据
+- [ ] ROI / 客户分层 / 项目目标值等规则表逐步从常量迁移到可配置规则源
+- [ ] 诊断、风险环境、任务、AI 猜测等实体补齐正式数据建模
+
+本轮启动项：
+
+- `Health Monitor -> 每日巡检快照` 真实数据接线
+- 优先覆盖支付、风控、上新、退款、库存、履约、转化等当前已有巡检输出
+
 ## 13. 后续数据建模建议
 
 建议将文档中的诊断、风险环境与任务抽象为以下基础实体：
@@ -4335,16 +4357,17 @@ type DiagnosisItem = {
 - ROI 应如何分层计算与展示
 - 哪些经营因子会影响不同层级的 ROI
 - 洞察应如何按固定对象结构产出
-- Today、Reports、Charts 三种页面分别承载什么
+- Today、Health Monitor、Tasks 与 AI 下钻分别承载什么
 - 一条洞察如何从数据、规则和基准比较中稳定生成
 
-### 14.1 Today / Reports / Charts 的职责边界
+### 14.1 Today / Health Monitor / Tasks 的职责边界
 
-建议将经营分析能力拆成三个稳定工作模式：
+建议将正式经营分析能力拆成三个稳定目的地和一个统一下钻方式：
 
 - `Today`：经营驾驶舱，只承载聚合摘要、关键判断和今日动作
-- `Reports`：经营判断中心，只承载结论、洞察、推荐动作和深钻入口
-- `Charts`：证据工作台，只承载趋势图、结构对比、漏斗、cohort 与对象排序
+- `Health Monitor`：可信度与达标性判断中心，只承载健康状态、异常原因和建议动作
+- `Tasks`：执行中心，只承载任务状态流转、结果和历史
+- `AI`：统一深钻入口，承接对象级分析、图表追问和动作细化
 
 建议遵循以下边界：
 
@@ -4364,26 +4387,31 @@ type DiagnosisItem = {
 - 技术型 PageSpeed audit 明细
 - 全量任务列表
 
-#### Reports 负责：
+#### Health Monitor 负责：
 
-- 经营结论
-- ROI 三层判断
-- 关键因子诊断
-- Top 洞察
-- 推荐动作
-- 深钻入口
+- 数据是否可信
+- 关键指标是否达标
+- 异常为什么发生
+- 建议先处理什么
+- 提供继续进入 Tasks 或 AI 的动作入口
 
-#### Charts 负责：
+#### Tasks 负责：
 
-- 趋势变化
-- 结构拆解
-- 漏斗分析
-- cohort 回收
-- 渠道 / 页面 / SKU / 客户分层对象深钻
+- 当前待办
+- 历史待办
+- 状态流转
+- 执行结果与失败原因
+- AI 任务与经营任务的统一承接
+
+#### AI 负责：
+
+- 对当前页面语境继续深钻
+- 承接对象级证据、图表和解释
+- 帮用户把建议动作转成可执行步骤
 
 核心工作路径应固定为：
 
-`Today 看摘要 -> Reports 看判断 -> Charts 看证据 -> Tasks 去执行`
+`Today 看赚钱结果 -> Health Monitor 看可信度与异常 -> Tasks 去执行 -> AI 做更深下钻`
 
 ### 14.2 ROI 三层定义
 
@@ -4701,12 +4729,12 @@ type Insight = {
 页面复用规则建议如下：
 
 - `Today`：读 `title + summary + taskPriority`
-- `Reports`：读完整洞察对象
-- `Charts`：读 `drilldownTargets`
+- `Today 二级详情`：读完整经营洞察对象与图表入口
+- `Health Monitor`：读可信度、阈值、异常原因与关联动作
 - `Tasks`：读 `actions`
 - `AI`：读 `summary + metrics + impactPath + actions`
 
-### 14.5 Today / Reports / Charts 页面承载结构
+### 14.5 Today / Health Monitor / Tasks 页面承载结构
 
 #### 14.5.1 Today：经营驾驶舱
 
@@ -4806,11 +4834,11 @@ type TodayActionCard = {
   label: string;
   summary: string;
   intent:
-    | "open_report"
-    | "open_chart"
+    | "open_today_detail"
+    | "open_health_monitor"
     | "open_task"
     | "open_pagespeed"
-    | "open_diagnosis";
+    | "open_ai_chat";
   target: string;
   priority: TaskPriority;
 };
@@ -4822,46 +4850,45 @@ Today 的压缩原则：
 - 每个 ROI 层只保留状态与一句解释
 - 每个因子只保留一条摘要
 - Top 洞察最多保留 3 条
-- 所有摘要都必须能跳转到 Reports / Charts / Tasks
+- 所有摘要都必须能跳转到 Today 二级详情 / Health Monitor / Tasks / AI
+#### 14.5.2 Health Monitor：可信度与达标性判断中心
 
-#### 14.5.2 Reports：经营判断中心
+Health Monitor 建议固定承载以下四个区块：
 
-Reports 建议固定为七段结构：
+1. 健康度概览
+2. 本次监测进度
+3. 单项结论详情
+4. AI 诊断入口
 
-1. 报告头部
-2. 经营结论
-3. ROI 三层判断
-4. 关键因子诊断
-5. Top 洞察
-6. 推荐动作
-7. 深钻入口
+Health Monitor 负责：
 
-报告类型建议统一复用同一结构，只在时间粒度上区分：
+- 判断结果是否可信
+- 判断关键指标是否达标
+- 解释异常为什么发生
+- 给出优先处理顺序和建议动作
 
-- 日报：更偏短期回报与今日止损
-- 周报：更偏回收速度与因子趋势
-- 月报：更偏长期价值与结构性问题
+Health Monitor 不负责：
 
-Reports 中的“关键因子诊断卡”建议统一包含以下字段：
+- 经营总览摘要
+- ROI 三层经营判断
+- 全量任务列表
+- 独立演化出 Reports / Charts 正式页面
 
-- 因子名称
-- 当前状态
-- 影响 ROI 层级
-- 当前判断
-- 关键证据
-- 对比基准
-- 影响路径
-- 推荐动作
-- 深钻入口
+#### 14.5.3 Tasks：执行中心
 
-#### 14.5.3 Charts：证据工作台
+Tasks 建议固定承载以下内容：
 
-Charts 建议固定为四个一级图表域：
+1. 当前待办
+2. 历史待办
+3. AI 任务
+4. 状态流转与执行结果
 
-1. `ROI`
-2. `Acquisition`
-3. `Conversion`
-4. `Merchandising & Operations`
+Tasks 负责：
+
+- 承接 Today 与 Health Monitor 给出的动作
+- 统一处理任务状态流转
+- 展示执行结果、失败原因和历史痕迹
+- 将任务上下文继续交给 AI 深钻
 
 统一页面结构建议如下：
 
@@ -4903,7 +4930,7 @@ type ChartGroup = {
   charts: ChartCard[];
 };
 
-type ChartsDashboard = {
+type EvidenceDrilldownDashboard = {
   filters: ChartFilters;
   groups: ChartGroup[];
 };
@@ -4942,13 +4969,13 @@ type ChartsDashboard = {
 - 履约与退款
 - 生命周期价值分层
 
-Charts 的核心限制：
+证据与对象深钻层的核心限制：
 
 - 不写长段落判断
 - 不编排任务优先级
 - 不承载完整经营结论
 
-它只负责承接 Reports 的证据链。
+它只负责承接 Today 二级详情、Health Monitor 和 AI 下钻所需要的证据链。
 
 ### 14.6 洞察生成与任务生成流程
 

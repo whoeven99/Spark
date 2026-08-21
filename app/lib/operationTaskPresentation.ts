@@ -43,7 +43,7 @@ export function inferOperationTaskPresentation(
   if (reportTask?.objective && reportTask?.roiImpactSummary) {
     const impactMetric =
       reportTask.impactMetrics?.filter((metric): metric is string => Boolean(metric)).join(" / ") ||
-      t("dailyOps.taskMetricTraffic");
+      t("taskWorkbench.taskMetricTraffic");
     return {
       objective: reportTask.objective,
       impactMetric,
@@ -59,39 +59,42 @@ export function inferOperationTaskPresentation(
     task.sourceKey === "routine_shipping"
   ) {
     return {
-      objective: t("dailyOps.taskObjectiveFulfillment"),
-      impactMetric: t("dailyOps.taskMetricFulfillment"),
-      estimatedLift: t("dailyOps.taskLiftFulfillment"),
-      roiImpact: t("dailyOps.taskRoiFulfillment"),
+      objective: t("taskWorkbench.taskObjectiveFulfillment"),
+      impactMetric: t("taskWorkbench.taskMetricFulfillment"),
+      estimatedLift: t("taskWorkbench.taskLiftFulfillment"),
+      roiImpact: t("taskWorkbench.taskRoiFulfillment"),
       effect: "efficiency",
     };
   }
 
-  if (task.sourceKey === "refund_spike") {
+  if (
+    task.sourceKey === "refund_spike" ||
+    task.sourceKey === "after_sales_timeout"
+  ) {
     return {
-      objective: t("dailyOps.taskObjectiveRefund"),
-      impactMetric: t("dailyOps.taskMetricRefund"),
-      estimatedLift: t("dailyOps.taskLiftRefund"),
-      roiImpact: t("dailyOps.taskRoiRefund"),
+      objective: t("taskWorkbench.taskObjectiveRefund"),
+      impactMetric: t("taskWorkbench.taskMetricRefund"),
+      estimatedLift: t("taskWorkbench.taskLiftRefund"),
+      roiImpact: t("taskWorkbench.taskRoiRefund"),
       effect: "retention",
     };
   }
 
   if (task.sourceKey === "inventory_risk" || task.sourceKey === "inventory_replenish_plan") {
     return {
-      objective: t("dailyOps.taskObjectiveInventory"),
-      impactMetric: t("dailyOps.taskMetricInventory"),
-      estimatedLift: t("dailyOps.taskLiftInventory"),
-      roiImpact: t("dailyOps.taskRoiInventory"),
+      objective: t("taskWorkbench.taskObjectiveInventory"),
+      impactMetric: t("taskWorkbench.taskMetricInventory"),
+      estimatedLift: t("taskWorkbench.taskLiftInventory"),
+      roiImpact: t("taskWorkbench.taskRoiInventory"),
       effect: "revenue",
     };
   }
 
   return {
-    objective: t("dailyOps.taskObjectiveTraffic"),
-    impactMetric: t("dailyOps.taskMetricTraffic"),
-    estimatedLift: t("dailyOps.taskLiftTraffic"),
-    roiImpact: t("dailyOps.taskRoiTraffic"),
+    objective: t("taskWorkbench.taskObjectiveTraffic"),
+    impactMetric: t("taskWorkbench.taskMetricTraffic"),
+    estimatedLift: t("taskWorkbench.taskLiftTraffic"),
+    roiImpact: t("taskWorkbench.taskRoiTraffic"),
     effect: task.sourceKey === "sales_decline" ? "revenue" : "conversion",
   };
 }
@@ -109,23 +112,23 @@ export function buildOperationTaskPrompt(
   const actionLines =
     task.suggestedActions.length > 0
       ? task.suggestedActions.map((action) => `- ${action}`).join("\n")
-      : `- ${t("dailyOps.taskNoSuggestedActions")}`;
+      : `- ${t("taskWorkbench.taskNoSuggestedActions")}`;
 
   return [
-    t("dailyOps.taskPromptHeader"),
-    `${t("dailyOps.taskPromptTitle")}：${task.title}`,
-    `${t("dailyOps.taskPromptStatus")}：${taskStatusText}`,
-    `${t("dailyOps.taskPromptReason")}：${task.triggerReason}`,
-    `${t("dailyOps.taskPromptObjective")}：${presentation.objective}`,
-    `${t("dailyOps.taskPromptMetric")}：${presentation.impactMetric}`,
-    `${t("dailyOps.taskPromptLift")}：${presentation.estimatedLift}`,
-    `${t("dailyOps.taskPromptRoi")}：${presentation.roiImpact}`,
-    `${t("dailyOps.taskPromptDue")}：${dueWindowText}`,
+    t("taskWorkbench.taskPromptHeader"),
+    `${t("taskWorkbench.taskPromptTitle")}：${task.title}`,
+    `${t("taskWorkbench.taskPromptStatus")}：${taskStatusText}`,
+    `${t("taskWorkbench.taskPromptReason")}：${task.triggerReason}`,
+    `${t("taskWorkbench.taskPromptObjective")}：${presentation.objective}`,
+    `${t("taskWorkbench.taskPromptMetric")}：${presentation.impactMetric}`,
+    `${t("taskWorkbench.taskPromptLift")}：${presentation.estimatedLift}`,
+    `${t("taskWorkbench.taskPromptRoi")}：${presentation.roiImpact}`,
+    `${t("taskWorkbench.taskPromptDue")}：${dueWindowText}`,
     task.ownerRole
-      ? `${t("dailyOps.taskPromptOwner")}：${task.ownerRole}`
-      : `${t("dailyOps.taskPromptOwner")}：${t("dailyOps.taskPromptOwnerUnknown")}`,
-    `${t("dailyOps.taskPromptActions")}：\n${actionLines}`,
+      ? `${t("taskWorkbench.taskPromptOwner")}：${task.ownerRole}`
+      : `${t("taskWorkbench.taskPromptOwner")}：${t("taskWorkbench.taskPromptOwnerUnknown")}`,
+    `${t("taskWorkbench.taskPromptActions")}：\n${actionLines}`,
     "",
-    t("dailyOps.taskPromptInstruction"),
+    t("taskWorkbench.taskPromptInstruction"),
   ].join("\n");
 }

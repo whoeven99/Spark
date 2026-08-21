@@ -100,6 +100,7 @@ export function PageSpeedInsightsPage() {
   const returnTo = searchParams.get("returnTo")?.trim() || null;
   const source = searchParams.get("source")?.trim() || null;
   const label = searchParams.get("label")?.trim() || null;
+  const isHealthMonitorSource = source === "health-monitor" || source === "daily-insights";
 
   useEffect(() => {
     if (!shouldAutorun || fetcher.data || fetcher.state !== "idle" || !url.trim()) return;
@@ -111,18 +112,18 @@ export function PageSpeedInsightsPage() {
       <PageHeaderNav
         title={t("pageSpeed.title")}
         subtitle={t("pageSpeed.subtitle")}
-        backLabel={returnTo ? "返回每日洞察" : t("settingsShell.back")}
+        backLabel={returnTo ? (isHealthMonitorSource ? "返回健康度监测" : "返回上一级") : t("settingsShell.back")}
         fallbackPath={returnTo ?? "/app/settings"}
         returnTo={returnTo ?? undefined}
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-        {source === "daily-insights" ? (
+        {isHealthMonitorSource ? (
           <StatusBanner
             message={
               label
-                ? `当前正在分析「${label}」，该结果会用于每日经营洞察，辅助判断体验是否在拖累转化和 ROI。`
-                : "该结果已纳入每日经营洞察，用来辅助判断站点体验是否在拖累转化和 ROI。"
+                ? `当前正在分析「${label}」，该结果会回到 Health Monitor，用来判断站点体验是否正在拖累转化承接与 ROI。`
+                : "该结果会回到 Health Monitor，用来判断站点体验是否正在拖累转化承接与 ROI。"
             }
           />
         ) : null}

@@ -1,5 +1,5 @@
 import prisma from "../../db.server";
-import type { ReportTaskCandidate } from "./businessReportSnapshot.shared";
+import type { ReportTaskCandidate } from "./reportTaskCandidate.shared";
 import {
   computeOperationsDiagnosis,
   PAYMENT_SUCCESS_RISK_PERCENT,
@@ -325,11 +325,11 @@ const INSIGHT_TASK_SOURCE_KEYS: Record<
 > = {
   sales_trend: ["sales_decline"],
   traffic_anomaly: ["traffic_conversion_drop"],
-  conversion_health: ["traffic_conversion_drop"],
-  product_operations: ["product_incomplete"],
+  conversion_health: ["traffic_conversion_drop", "payment_chain_review"],
+  product_operations: ["launch_failure_review", "product_incomplete"],
   fulfillment_health: ["fulfillment_overdue", "routine_shipping"],
   logistics_anomaly: ["logistics_stale"],
-  refund_health: ["refund_spike"],
+  refund_health: ["refund_spike", "after_sales_timeout"],
   inventory_health: ["inventory_risk", "inventory_replenish_plan"],
 };
 
@@ -402,7 +402,7 @@ function buildProductOpsSummary(
   }
   const parts: string[] = [];
   if (metrics.draftProductCount > 0) {
-    parts.push(`${metrics.draftProductCount} 个商品草稿待上架`);
+    parts.push(`${metrics.draftProductCount} 个商品草稿待上架，建议先复盘上新卡点`);
   }
   if (metrics.noImagesProductCount > 0) {
     parts.push(`${metrics.noImagesProductCount} 个商品缺少图片`);
@@ -466,7 +466,7 @@ function buildEnvironments(
   return [
     {
       key: "new-arrivals",
-      titleKey: "dailyOps.riskEnvNewArrivals",
+      titleKey: "healthMonitor.environmentNewArrivals",
       status: products?.status ?? deriveProductOpsStatus(metrics),
       source: hasProductOps ? "real" : "pending",
       summary: buildProductOpsSummary(metrics, products),
@@ -480,7 +480,7 @@ function buildEnvironments(
     },
     {
       key: "inventory",
-      titleKey: "dailyOps.riskEnvInventory",
+      titleKey: "healthMonitor.environmentInventory",
       status: inventory?.status ?? "watch",
       source: "real",
       summary: inventory?.reasoning[0] ?? "优先确认高动销 SKU 的可售天数与补货节奏。",
@@ -492,7 +492,7 @@ function buildEnvironments(
     },
     {
       key: "fulfillment",
-      titleKey: "dailyOps.riskEnvFulfillment",
+      titleKey: "healthMonitor.environmentFulfillment",
       status: fulfillmentStatus,
       source: "real",
       summary:
@@ -507,7 +507,7 @@ function buildEnvironments(
     },
     {
       key: "payments",
-      titleKey: "dailyOps.riskEnvPayments",
+      titleKey: "healthMonitor.environmentPayments",
       status: derivePaymentStatus(metrics),
       source: hasPaymentData ? "real" : "pending",
       summary: hasPaymentData
@@ -524,7 +524,7 @@ function buildEnvironments(
     },
     {
       key: "risk-control",
-      titleKey: "dailyOps.riskEnvRiskControl",
+      titleKey: "healthMonitor.environmentRiskControl",
       status: "watch",
       source: "pending",
       summary: "待接入误杀率、拒付率和高风险订单占比后，再独立判断风控是否阻碍真实转化。",
@@ -532,7 +532,7 @@ function buildEnvironments(
     },
     {
       key: "after-sales",
-      titleKey: "dailyOps.riskEnvAfterSales",
+      titleKey: "healthMonitor.environmentAfterSales",
       status: refund?.status ?? "watch",
       source: "real",
       summary: refund?.reasoning[0] ?? "售后、商品质量和履约问题会共同推高退款率。",
@@ -543,7 +543,7 @@ function buildEnvironments(
     },
     {
       key: "conversion",
-      titleKey: "dailyOps.riskEnvConversion",
+      titleKey: "healthMonitor.environmentConversion",
       status: conversion?.status ?? traffic?.status ?? "watch",
       source: metrics.hasPixelData ? "real" : "pending",
       summary:
