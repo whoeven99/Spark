@@ -7,6 +7,10 @@ import type {
   PlaybookSurfaceItem,
 } from "../../../lib/automationOverviewTypes";
 import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
+import {
+  describeValueShape,
+  logClientDiagnostic,
+} from "../../../lib/clientDiagnostics.client";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
 import {
@@ -581,10 +585,29 @@ export function HomePanel({
       .then((res) => res.json() as Promise<AutomationOverviewResponse>)
       .then((json) => {
         if (cancelled) return;
-        if (json.ok) setAutomationOverview(normalizeAutomationOverview(json.overview));
+        if (!json.ok) {
+          logClientDiagnostic("automation_overview_error", {
+            ok: json.ok,
+            error: json.error,
+          });
+          return;
+        }
+        const overview = json.overview;
+        logClientDiagnostic("automation_overview_shape", {
+          configured: describeValueShape(overview?.configured),
+          history: describeValueShape(overview?.history),
+          recommendedPlaybooks: describeValueShape(overview?.recommendedPlaybooks),
+          templates: describeValueShape(overview?.templates),
+        });
+        setAutomationOverview(normalizeAutomationOverview(overview));
       })
-      .catch(() => {
-        if (!cancelled) setAutomationOverview(null);
+      .catch((error) => {
+        if (!cancelled) {
+          logClientDiagnostic("automation_overview_fetch_failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setAutomationOverview(null);
+        }
       });
     return () => {
       cancelled = true;
