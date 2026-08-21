@@ -33,16 +33,23 @@ export async function handleAppUninstalled(params: {
     sessionId: params.sessionId,
   });
 
-  await appendCommonEventLog({
-    shop,
-    eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-    topic: params.topic,
-    referenceId,
-    payload:
-      params.payload && typeof params.payload === "object"
-        ? (params.payload as Record<string, unknown>)
-        : { raw: params.payload },
-  });
+  try {
+    await appendCommonEventLog({
+      shop,
+      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+      topic: params.topic,
+      referenceId,
+      payload:
+        params.payload && typeof params.payload === "object"
+          ? (params.payload as Record<string, unknown>)
+          : { raw: params.payload },
+    });
+  } catch (error) {
+    console.error(
+      `[CommonEvent] APP_UNINSTALLED log failed shop=${shop}; continuing session delete`,
+      error,
+    );
+  }
 
   await deleteSessionsForShop(shop);
 }

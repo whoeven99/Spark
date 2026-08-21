@@ -129,39 +129,40 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
   }
 
-  // 2. 快速幂等检查（店铺级 notify 键 + 10min 窗口）
-  const skipOpsNotify = await shouldSkipUninstallOpsNotify(params.shop);
-
-  if (skipOpsNotify) {
-    console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
-  } else {
-    // 3. 店铺级幂等门禁：并发/重试 webhook 共用同一 referenceId，唯一约束兜底
-    const referenceId = buildUninstallNotifyReferenceId(params.shop);
-    const { created } = await appendCommonEventLog({
-      shop: params.shop,
-      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-      topic: params.topic,
-      referenceId,
-      payload:
-        params.payload && typeof params.payload === "object"
-          ? (params.payload as Record<string, unknown>)
-          : { raw: params.payload },
-    });
-
-    if (created) {
-      await sendAppUninstalledFeishuNotify(params);
-      // 传入预加载的收件人快照，Session 删除前已缓存
-      await notifyAppUninstalledEmail({
-        shop: params.shop,
-        appName: "spark",
-        uninstalledAt: params.uninstalledAt,
-        recipient,
-      });
+  // 2–3. 通知与幂等查询失败时不能阻断删 Session：Shopify 已收到 200，不会再重试。
+  try {
+    const skipOpsNotify = await shouldSkipUninstallOpsNotify(params.shop);
+    if (skipOpsNotify) {
+      console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
     } else {
-      console.info(
-        `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
-      );
+      const referenceId = buildUninstallNotifyReferenceId(params.shop);
+      const { created } = await appendCommonEventLog({
+        shop: params.shop,
+        eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+        topic: params.topic,
+        referenceId,
+        payload:
+          params.payload && typeof params.payload === "object"
+            ? (params.payload as Record<string, unknown>)
+            : { raw: params.payload },
+      });
+
+      if (created) {
+        await sendAppUninstalledFeishuNotify(params);
+        await notifyAppUninstalledEmail({
+          shop: params.shop,
+          appName: "spark",
+          uninstalledAt: params.uninstalledAt,
+          recipient,
+        });
+      } else {
+        console.info(
+          `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
+        );
+      }
     }
+  } catch (error) {
+    console.error(`${LOG} ops-notify-failed shop=${params.shop}`, error);
   }
 
   // 4. 持久化（appendCommonEventLog 内部 dedup 幂等，deleteSessionsForShop 正常执行）
