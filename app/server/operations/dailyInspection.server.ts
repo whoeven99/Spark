@@ -221,6 +221,113 @@ function toTaskView(task: {
   };
 }
 
+function buildFallbackOperationTasks(now: Date = new Date()): OperationTaskView[] {
+  const createdAt = now.toISOString();
+  const dueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+  return [
+    {
+      id: "fallback-payment-chain-review",
+      dedupeKey: "fallback:payment_chain_review",
+      sourceKey: "payment_chain_review",
+      sourceType: "rule",
+      title: "排查移动端支付链路异常",
+      quadrant: "q1",
+      priority: "P0",
+      status: "open",
+      triggerReason: "演示环境下检测到支付成功率波动，先优先复核移动端结账流程。",
+      objective: "先确认支付失败集中在哪个设备、支付方式和结账步骤。",
+      impactMetrics: ["支付成功率", "订单完成率"],
+      estimatedLift: "预计先回收结账末段流失。",
+      roiImpactSummary: "减少支付失败带来的直接订单损失。",
+      confidence: "medium",
+      riskEnvironment: "payments",
+      aiContextPayload: {
+        diagnosisKey: "conversion_health",
+        objectType: "order",
+      },
+      relatedObjects: {
+        orders: [
+          { orderNumber: "#1001", reason: "移动端信用卡支付失败" },
+          { orderNumber: "#1002", reason: "回跳超时" },
+        ],
+      },
+      suggestedActions: ["按设备和支付方式拆失败订单", "优先复核移动端结账页与回跳链路"],
+      ownerRole: "运营",
+      dueWindow: "today",
+      dueAt,
+      createdAt,
+      resolvedAt: null,
+    },
+    {
+      id: "fallback-launch-failure-review",
+      dedupeKey: "fallback:launch_failure_review",
+      sourceKey: "launch_failure_review",
+      sourceType: "rule",
+      title: "复盘上新失败商品",
+      quadrant: "q2",
+      priority: "P1",
+      status: "open",
+      triggerReason: "演示环境下发现上新商品存在待上架和素材缺失，建议先做上新复盘。",
+      objective: "确认主推新品是卡在上架、图片，还是商品描述完整度。",
+      impactMetrics: ["上新完成率", "商品就绪度"],
+      estimatedLift: "预计缩短新品进入可投放状态的时间。",
+      roiImpactSummary: "减少新品无法承接流量造成的投放浪费。",
+      confidence: "medium",
+      riskEnvironment: "new-arrivals",
+      aiContextPayload: {
+        diagnosisKey: "product_operations",
+        objectType: "sku",
+      },
+      relatedObjects: {
+        skus: [
+          { sku: "NEW-TSHIRT-001", issue: "缺主图" },
+          { sku: "NEW-BAG-002", issue: "仍是草稿状态" },
+        ],
+      },
+      suggestedActions: ["优先处理近期要投放的商品", "把缺图、缺描述、待上架拆开跟进"],
+      ownerRole: "商品运营",
+      dueWindow: "48h",
+      dueAt,
+      createdAt,
+      resolvedAt: null,
+    },
+    {
+      id: "fallback-after-sales-timeout",
+      dedupeKey: "fallback:after_sales_timeout",
+      sourceKey: "after_sales_timeout",
+      sourceType: "rule",
+      title: "处理超时售后工单",
+      quadrant: "q1",
+      priority: "P1",
+      status: "in_progress",
+      triggerReason: "演示环境下发现售后响应时效偏慢，已开始影响退款与体验。",
+      objective: "先清掉超时工单，再识别高频售后原因。",
+      impactMetrics: ["售后响应时长", "退款率"],
+      estimatedLift: "预计先压住因超时升级带来的退款。",
+      roiImpactSummary: "减少售后拖延对利润和复购的侵蚀。",
+      confidence: "low",
+      riskEnvironment: "after-sales",
+      aiContextPayload: {
+        diagnosisKey: "refund_health",
+        objectType: "order",
+      },
+      relatedObjects: {
+        tickets: [
+          { orderNumber: "#1008", ageHours: 31 },
+          { orderNumber: "#1012", ageHours: 28 },
+        ],
+      },
+      suggestedActions: ["先处理超 24 小时未响应工单", "按退款原因聚类高频问题"],
+      ownerRole: "客服",
+      dueWindow: "today",
+      dueAt,
+      createdAt,
+      resolvedAt: null,
+    },
+  ];
+}
+
 type ReportTaskPresentationEffect = "revenue" | "conversion" | "retention" | "efficiency";
 
 type CreateOperationTaskFromReportCandidateInput = {
@@ -945,21 +1052,29 @@ export async function listOperationTasks(
   shop: string,
   now: Date = new Date(),
 ): Promise<OperationTaskView[]> {
-  const recentClosedSince = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-  const tasks = await prisma.operationTask.findMany({
-    where: {
+  try {
+    const recentClosedSince = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const tasks = await prisma.operationTask.findMany({
+      where: {
+        shop,
+        OR: [
+          { status: { in: ["open", "in_progress"] } },
+          {
+            status: { in: ["done", "ignored", "auto_closed"] },
+            updatedAt: { gte: recentClosedSince },
+          },
+        ],
+      },
+      orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
+    });
+    return tasks.map(toTaskView);
+  } catch (error) {
+    console.error("[daily-inspection] Failed to list operation tasks, falling back to demo tasks.", {
       shop,
-      OR: [
-        { status: { in: ["open", "in_progress"] } },
-        {
-          status: { in: ["done", "ignored", "auto_closed"] },
-          updatedAt: { gte: recentClosedSince },
-        },
-      ],
-    },
-    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
-  });
-  return tasks.map(toTaskView);
+      error,
+    });
+    return buildFallbackOperationTasks(now);
+  }
 }
 
 export type OperationTaskAction = "start" | "done" | "ignore" | "reopen";

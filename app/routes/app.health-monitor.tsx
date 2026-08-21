@@ -36,20 +36,34 @@ type HealthMonitorFollowupAction = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const snapshot = await ensureDailySnapshot(session.shop);
-  return {
-    monitors: buildHealthMonitorRecords({
-      metrics: snapshot.metrics,
-      overview: {
-        salesGrowthRate: snapshot.overview.salesGrowthRate,
-        sessions7d: snapshot.overview.sessions7d,
-        conversionRate7d: snapshot.overview.conversionRate7d,
-      },
-      environments: snapshot.environments,
-      items: snapshot.items,
-      detail: snapshot.detail,
-    }),
-  };
+  try {
+    const snapshot = await ensureDailySnapshot(session.shop);
+    return {
+      monitors: buildHealthMonitorRecords({
+        metrics: snapshot.metrics,
+        overview: {
+          salesGrowthRate: snapshot.overview.salesGrowthRate,
+          sessions7d: snapshot.overview.sessions7d,
+          conversionRate7d: snapshot.overview.conversionRate7d,
+        },
+        environments: snapshot.environments,
+        items: snapshot.items,
+        detail: snapshot.detail,
+      }),
+      usingFallback: false,
+      fallbackMessage: null,
+    };
+  } catch (error) {
+    console.error(
+      "[health-monitor] Failed to load daily snapshot, falling back to demo data.",
+      error,
+    );
+    return {
+      monitors: buildHealthMonitorRecords(),
+      usingFallback: true,
+      fallbackMessage: "当前展示的是演示数据，真实健康度快照暂时不可用。",
+    };
+  }
 };
 
 function resolveHealthMonitorView(value: string | null): ViewMode {
@@ -259,7 +273,7 @@ function resolveHealthMonitorFollowupActions(params: {
 }
 
 export default function AppHealthMonitor() {
-  const { monitors } = useLoaderData<typeof loader>();
+  const { monitors, usingFallback, fallbackMessage } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
@@ -356,6 +370,20 @@ export default function AppHealthMonitor() {
         isMobile={isMobile}
         actions={actions}
       >
+        {usingFallback ? (
+          <PageSurface
+            title="当前为演示数据"
+            subtitle={fallbackMessage ?? "真实健康度快照暂时不可用，页面已自动切换到兜底数据。"}
+          >
+            <div style={fallbackBannerStyle}>
+              <strong style={fallbackBannerTitleStyle}>已跳过实时数据加载</strong>
+              <p style={fallbackBannerTextStyle}>
+                当前先保证 Health Monitor 页面可访问，后续再继续处理数据库或快照链路。
+              </p>
+            </div>
+          </PageSurface>
+        ) : null}
+
         {viewMode === "overview" ? (
           <OverviewSection
             groups={groupedMonitors}
@@ -1111,6 +1139,28 @@ const actionPriorityStyle: CSSProperties = {
 const actionDetailStyle: CSSProperties = {
   fontSize: "0.85rem",
   color: pageColorTokens.textBody,
+  lineHeight: 1.55,
+};
+
+const fallbackBannerStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+  padding: "0.85rem 0.95rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.warningBg,
+  border: "1px solid rgba(185, 137, 0, 0.24)",
+};
+
+const fallbackBannerTitleStyle: CSSProperties = {
+  color: pageColorTokens.textPrimary,
+  fontSize: "0.92rem",
+  fontWeight: 700,
+};
+
+const fallbackBannerTextStyle: CSSProperties = {
+  margin: 0,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.82rem",
   lineHeight: 1.55,
 };
 
