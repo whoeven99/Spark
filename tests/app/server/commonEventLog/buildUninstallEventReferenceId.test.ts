@@ -1,16 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildUninstallEventReferenceId,
-  buildUninstallNotifyReferenceId,
-} from "../../../../app/server/commonEventLog/handleAppUninstalled.server";
-
-describe("buildUninstallNotifyReferenceId", () => {
-  it("uses shop-level key for ops notify dedup", () => {
-    expect(buildUninstallNotifyReferenceId("demo.myshopify.com")).toBe(
-      "uninstall:notify:demo.myshopify.com",
-    );
-  });
-});
+import { buildUninstallEventReferenceId } from "../../../../app/server/commonEventLog/handleAppUninstalled.server";
 
 describe("buildUninstallEventReferenceId", () => {
   it("prefers webhook id for dedup", () => {

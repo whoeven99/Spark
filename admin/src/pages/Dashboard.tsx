@@ -59,6 +59,12 @@ export default function Dashboard() {
       ),
     },
     {
+      title: "App",
+      dataIndex: "appName",
+      key: "appName",
+      render: (v: string) => <Tag>{v}</Tag>,
+    },
+    {
       title: "时间",
       dataIndex: "createdAt",
       key: "createdAt",
@@ -137,7 +143,7 @@ export default function Dashboard() {
         }
       >
         <Table
-          dataSource={Array.isArray(data.recentEvents) ? data.recentEvents : []}
+          dataSource={data.recentEvents}
           columns={eventColumns}
           rowKey={(r, i) => `${r.shop}-${r.createdAt}-${i}`}
           size="small"

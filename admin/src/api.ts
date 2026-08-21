@@ -60,6 +60,7 @@ export type OverviewData = {
   totalPurchasedTokens: number;
   recentEvents: {
     shop: string;
+    appName: string;
     eventType: string;
     topic: string | null;
     createdAt: string;
@@ -68,6 +69,7 @@ export type OverviewData = {
 
 export type ShopRow = {
   shop: string;
+  appName: string;
   subscriptionTokens: number;
   purchasedTokens: number;
   trialTokens: number;

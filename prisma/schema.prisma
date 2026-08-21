@@ -287,6 +287,8 @@ model AccountPeriodUsage {
 model CommonEventLog {
   id          String   @id @default(cuid())
   shop        String
+  /// 与 BillingLog 等一致，当前固定为 spark
+  appName     String
   /// APP_INSTALLED | APP_UNINSTALLED | SCOPES_UPDATE
   eventType   String
   /// Shopify webhook topic，如 app/uninstalled

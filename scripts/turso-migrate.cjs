@@ -66,76 +66,6 @@ function checksumSql(sql) {
   return crypto.createHash("sha256").update(sql, "utf8").digest("hex");
 }
 
-function stripSqlLineComments(sql) {
-  return sql
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("--"))
-    .join("\n")
-    .trim();
-}
-
-function migrationErrorText(error) {
-  return [error?.message, error?.cause?.message, String(error)]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function isAlterAddColumnStatement(sql) {
-  const executable = stripSqlLineComments(sql);
-  return /\bALTER\s+TABLE\b/i.test(executable) && /\bADD\s+COLUMN\b/i.test(executable);
-}
-
-function describeMigrationStatement(sql) {
-  const executable = stripSqlLineComments(sql);
-  const addColumn = executable.match(/\bADD\s+COLUMN\s+"([^"]+)"/i);
-  if (addColumn) return `COLUMN "${addColumn[1]}"`;
-  const createTable = executable.match(/\bCREATE\s+TABLE\s+"([^"]+)"/i);
-  if (createTable) return `TABLE "${createTable[1]}"`;
-  const createIndex = executable.match(/\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+"([^"]+)"/i);
-  if (createIndex) return `INDEX "${createIndex[1]}"`;
-  const dropColumn = executable.match(/\bDROP\s+COLUMN\s+"([^"]+)"/i);
-  if (dropColumn) return `COLUMN "${dropColumn[1]}"`;
-  return executable.split(/\s+/).slice(0, 4).join(" ");
-}
-
-function shouldSkipKnownMigrationError(statement, msg) {
-  const executable = stripSqlLineComments(statement);
-  if (!executable) return false;
-
-  if (isAlterAddColumnStatement(statement) && /duplicate column name/i.test(msg)) {
-    console.log(`[turso:migrate] 跳过已存在列 (${describeMigrationStatement(statement)})`);
-    return true;
-  }
-
-  if (/\bCREATE\s+TABLE\b/i.test(executable) && /already exists/i.test(msg)) {
-    console.log(`[turso:migrate] 跳过已存在表 (${describeMigrationStatement(statement)})`);
-    return true;
-  }
-
-  if (/\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/i.test(executable) && /already exists/i.test(msg)) {
-    console.log(`[turso:migrate] 跳过已存在索引 (${describeMigrationStatement(statement)})`);
-    return true;
-  }
-
-  if (/\bDROP\s+COLUMN\b/i.test(executable) && /no such column/i.test(msg)) {
-    console.log(`[turso:migrate] 跳过不存在列 (${describeMigrationStatement(statement)})`);
-    return true;
-  }
-
-  if (
-    /no such table/i.test(msg) &&
-    statement.includes(SATELLITE_SESSION_TABLE)
-  ) {
-    console.log(
-      `[turso:migrate] 跳过（表不存在）: 从 ${SATELLITE_SESSION_TABLE} 合并 Session 数据`,
-    );
-    return true;
-  }
-
-  return false;
-}
-
 function splitStatements(sql) {
   return sql
     .split(/;\s*(?:\r?\n|$)/g)
@@ -184,14 +114,22 @@ async function shouldSkipMigrationStatement(client, statement) {
 
 /** SQLite/Turso 不支持 ADD COLUMN IF NOT EXISTS；列已存在时跳过 ALTER。 */
 async function executeMigrationStatement(client, statement) {
-  const executable = stripSqlLineComments(statement);
-  if (!executable) return;
-
   try {
-    return await executeWithRetry(client, executable);
+    return await executeWithRetry(client, statement);
   } catch (error) {
-    const msg = migrationErrorText(error);
-    if (shouldSkipKnownMigrationError(statement, msg)) {
+    const msg = String(error.message || error);
+    const isAlterAdd = /^\s*ALTER\s+TABLE\b/i.test(statement) && /\bADD\s+COLUMN\b/i.test(statement);
+    if (isAlterAdd && /duplicate column name/i.test(msg)) {
+      console.log(`[turso:migrate] 跳过已存在列 (${statement.split(/\s+/).slice(-3).join(" ")})`);
+      return;
+    }
+    if (
+      /no such table/i.test(msg) &&
+      statement.includes(SATELLITE_SESSION_TABLE)
+    ) {
+      console.log(
+        `[turso:migrate] 跳过（表不存在）: 从 ${SATELLITE_SESSION_TABLE} 合并 Session 数据`,
+      );
       return;
     }
     throw error;
@@ -221,18 +159,10 @@ async function runSeedFile(client, root, fileName, label) {
   const seedPath = path.join(root, "prisma", fileName);
   if (!fs.existsSync(seedPath)) return;
   const statements = splitStatements(fs.readFileSync(seedPath, "utf8"));
-  try {
-    for (const statement of statements) {
-      const executable = stripSqlLineComments(statement);
-      if (!executable) continue;
-      await executeWithRetry(client, executable);
-    }
-    console.log(`[turso:migrate] ${label} 种子 ${statements.length} 条`);
-  } catch (error) {
-    console.warn(
-      `[turso:migrate] ${label} 种子跳过: ${migrationErrorText(error)}`,
-    );
+  for (const statement of statements) {
+    await executeWithRetry(client, statement);
   }
+  console.log(`[turso:migrate] ${label} 种子 ${statements.length} 条`);
 }
 
 async function runSeed(client, root) {

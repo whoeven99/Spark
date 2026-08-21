@@ -19,7 +19,7 @@ overviewRouter.get("/", async (_req, res) => {
           "SELECT SUM(usedTokens) as totalUsed, SUM(subscriptionTokens) as totalSub, SUM(purchasedTokens) as totalPurchased FROM Account",
         ),
         db.execute(
-          "SELECT shop, eventType, topic, createdAt FROM CommonEventLog ORDER BY createdAt DESC LIMIT 30",
+          "SELECT shop, appName, eventType, topic, createdAt FROM CommonEventLog ORDER BY createdAt DESC LIMIT 30",
         ),
       ]);
 
@@ -27,14 +27,13 @@ overviewRouter.get("/", async (_req, res) => {
     const activeSubs = Number(activeSubsResult.rows[0]?.total ?? 0);
     const tokenSum = tokenSumResult.rows[0] ?? {};
 
-    const recentEvents = Array.isArray(recentEventsResult.rows)
-      ? recentEventsResult.rows.map((r) => ({
-          shop: r.shop,
-          eventType: r.eventType,
-          topic: r.topic,
-          createdAt: r.createdAt,
-        }))
-      : [];
+    const recentEvents = recentEventsResult.rows.map((r) => ({
+      shop: r.shop,
+      appName: r.appName,
+      eventType: r.eventType,
+      topic: r.topic,
+      createdAt: r.createdAt,
+    }));
 
     res.json({
       totalShops,

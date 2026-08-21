@@ -11,8 +11,11 @@ function isCommonEventLogUniqueViolation(error: unknown): boolean {
   );
 }
 
+const DEFAULT_COMMON_EVENT_APP_NAME = "spark";
+
 export async function appendCommonEventLog(params: {
   shop: string;
+  appName?: string;
   eventType: CommonEventType;
   topic?: string;
   referenceId?: string;
@@ -20,7 +23,8 @@ export async function appendCommonEventLog(params: {
   metadata?: Record<string, unknown>;
 }): Promise<{ created: boolean }> {
   const shop = params.shop.trim();
-  if (!shop) return { created: false };
+  const appName = (params.appName ?? DEFAULT_COMMON_EVENT_APP_NAME).trim();
+  if (!shop || !appName) return { created: false };
 
   if (params.referenceId) {
     const existing = await prisma.commonEventLog.findFirst({
@@ -37,6 +41,7 @@ export async function appendCommonEventLog(params: {
     await prisma.commonEventLog.create({
       data: {
         shop,
+        appName,
         eventType: params.eventType,
         topic: params.topic,
         referenceId: params.referenceId,
