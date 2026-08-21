@@ -59,12 +59,6 @@ export default function Dashboard() {
       ),
     },
     {
-      title: "App",
-      dataIndex: "appName",
-      key: "appName",
-      render: (v: string) => <Tag>{v}</Tag>,
-    },
-    {
       title: "时间",
       dataIndex: "createdAt",
       key: "createdAt",

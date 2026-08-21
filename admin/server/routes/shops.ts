@@ -63,7 +63,7 @@ shopsRouter.get("/:shop/events", async (req, res) => {
 
     const [eventsResult, billingResult] = await Promise.all([
       db.execute({
-        sql: "SELECT shop, appName, eventType, topic, createdAt FROM CommonEventLog WHERE shop = ? ORDER BY createdAt DESC LIMIT 50",
+        sql: "SELECT shop, eventType, topic, createdAt FROM CommonEventLog WHERE shop = ? ORDER BY createdAt DESC LIMIT 50",
         args: [shop],
       }),
       db.execute({

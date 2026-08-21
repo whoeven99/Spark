@@ -1,7 +1,7 @@
 import prisma from "../../db.server";
 import { appendCommonEventLog } from "../commonEventLog/appendCommonEventLog.server";
 import {
-  buildUninstallEventReferenceId,
+  buildUninstallNotifyReferenceId,
   handleAppUninstalled,
 } from "../commonEventLog/handleAppUninstalled.server";
 import { loadSessionSnapshotForUninstall } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
@@ -23,28 +23,24 @@ export type OnAppUninstalledParams = {
 
 /**
  * 快速幂等检查（两层）：
- * 1. webhookId 精确匹配已有 CommonEventLog referenceId
+ * 1. 店铺级通知幂等键 uninstall:notify:{shop}
  * 2. 10 分钟窗口内已有同店铺卸载事件
  */
-async function shouldSkipUninstallOpsNotify(params: {
-  shop: string;
-  webhookId?: string;
-}): Promise<boolean> {
-  if (params.webhookId) {
-    const byWebhook = await prisma.commonEventLog.findFirst({
-      where: {
-        shop: params.shop,
-        eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-        referenceId: `uninstall:webhook:${params.webhookId}`,
-      },
-    });
-    if (byWebhook) return true;
-  }
+async function shouldSkipUninstallOpsNotify(shop: string): Promise<boolean> {
+  const notifyReferenceId = buildUninstallNotifyReferenceId(shop);
+  const byNotifyRef = await prisma.commonEventLog.findFirst({
+    where: {
+      shop,
+      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+      referenceId: notifyReferenceId,
+    },
+  });
+  if (byNotifyRef) return true;
 
   const since = new Date(Date.now() - UNINSTALL_OPS_DEDUP_WINDOW_MS);
   const recent = await prisma.commonEventLog.findFirst({
     where: {
-      shop: params.shop,
+      shop,
       eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
       createdAt: { gte: since },
     },
@@ -133,21 +129,14 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
   }
 
-  // 2. 快速幂等检查（webhookId 精确匹配 + 10min 窗口）
-  const skipOpsNotify = await shouldSkipUninstallOpsNotify({
-    shop: params.shop,
-    webhookId: params.webhookId,
-  });
+  // 2. 快速幂等检查（店铺级 notify 键 + 10min 窗口）
+  const skipOpsNotify = await shouldSkipUninstallOpsNotify(params.shop);
 
   if (skipOpsNotify) {
     console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
   } else {
-    // 3. 提前写日志作幂等门禁：第一条 Webhook 写入成功（created=true），后续重复投递找到已有记录（created=false）
-    const referenceId = buildUninstallEventReferenceId({
-      shop: params.shop,
-      webhookId: params.webhookId,
-      sessionId: params.sessionId,
-    });
+    // 3. 店铺级幂等门禁：并发/重试 webhook 共用同一 referenceId，唯一约束兜底
+    const referenceId = buildUninstallNotifyReferenceId(params.shop);
     const { created } = await appendCommonEventLog({
       shop: params.shop,
       eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,

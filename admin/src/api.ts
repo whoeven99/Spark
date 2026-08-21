@@ -60,7 +60,6 @@ export type OverviewData = {
   totalPurchasedTokens: number;
   recentEvents: {
     shop: string;
-    appName: string;
     eventType: string;
     topic: string | null;
     createdAt: string;

@@ -1,6 +1,13 @@
-import type { Prisma } from "../../generated/prisma";
+import { Prisma } from "../../generated/prisma";
 import prisma from "../../db.server";
 import type { CommonEventType } from "./types.server";
+
+function isCommonEventLogUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
 
 export async function appendCommonEventLog(params: {
   shop: string;
@@ -24,19 +31,26 @@ export async function appendCommonEventLog(params: {
     if (existing) return { created: false };
   }
 
-  await prisma.commonEventLog.create({
-    data: {
-      shop,
-      eventType: params.eventType,
-      topic: params.topic,
-      referenceId: params.referenceId,
-      payload: params.payload
-        ? (params.payload as Prisma.InputJsonValue)
-        : undefined,
-      metadata: params.metadata
-        ? (params.metadata as Prisma.InputJsonValue)
-        : undefined,
-    },
-  });
-  return { created: true };
+  try {
+    await prisma.commonEventLog.create({
+      data: {
+        shop,
+        eventType: params.eventType,
+        topic: params.topic,
+        referenceId: params.referenceId,
+        payload: params.payload
+          ? (params.payload as Prisma.InputJsonValue)
+          : undefined,
+        metadata: params.metadata
+          ? (params.metadata as Prisma.InputJsonValue)
+          : undefined,
+      },
+    });
+    return { created: true };
+  } catch (error) {
+    if (isCommonEventLogUniqueViolation(error)) {
+      return { created: false };
+    }
+    throw error;
+  }
 }

@@ -297,6 +297,7 @@ model CommonEventLog {
   metadata    Json?
   createdAt   DateTime @default(now())
 
+  @@unique([shop, eventType, referenceId])
   @@index([shop, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])

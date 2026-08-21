@@ -2,6 +2,11 @@ import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { deleteSessionsForShop } from "./sessionTable.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
 
+/** 卸载运营通知幂等键：同店只发一次，与 webhookId 无关。 */
+export function buildUninstallNotifyReferenceId(shop: string): string {
+  return `uninstall:notify:${shop.trim()}`;
+}
+
 export function buildUninstallEventReferenceId(params: {
   shop: string;
   webhookId?: string;
