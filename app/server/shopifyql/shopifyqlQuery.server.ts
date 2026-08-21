@@ -1,5 +1,8 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
-import { formatGraphqlErrors } from "../shopify/parseAdminGraphqlJson.server";
+import {
+  formatGraphqlErrors,
+  parseAdminGraphqlJson,
+} from "../shopify/parseAdminGraphqlJson.server";
 import {
   normalizeReportRows,
   type ReportCellValue,
@@ -36,18 +39,9 @@ type ShopifyqlGraphqlPayload = {
   } | null;
 };
 
-export type ShopifyqlCostInfo = {
-  requestedQueryCost?: number;
-  currentlyAvailable?: number;
-  maximumAvailable?: number;
-  windowResetAt?: string;
-};
-
 export type ShopifyqlQuerySuccess = {
   ok: true;
   accessDenied: false;
-  throttled: false;
-  retryAfterMs: null;
   columns: ShopifyqlColumn[];
   rows: Array<Record<string, ReportCellValue>>;
   parseErrors: string[];
@@ -56,8 +50,6 @@ export type ShopifyqlQuerySuccess = {
 export type ShopifyqlQueryFailure = {
   ok: false;
   accessDenied: boolean;
-  throttled: boolean;
-  retryAfterMs: number | null;
   error: string;
   columns: ShopifyqlColumn[];
   rows: Array<Record<string, ReportCellValue>>;
@@ -70,35 +62,6 @@ type GraphqlErrorWithCode = {
   message?: string;
   extensions?: { code?: string };
 };
-
-type ShopifyqlGraphqlResponse = {
-  data?: ShopifyqlGraphqlPayload;
-  errors?: GraphqlErrorWithCode[];
-  extensions?: { shopifyqlCost?: ShopifyqlCostInfo };
-};
-
-export function retryAfterMsFromCost(cost: ShopifyqlCostInfo | undefined, nowMs = Date.now()): number | null {
-  const resetAt = cost?.windowResetAt;
-  if (!resetAt) return null;
-  const resetMs = Date.parse(resetAt);
-  if (!Number.isFinite(resetMs)) return null;
-  return Math.max(0, resetMs - nowMs);
-}
-
-export function isShopifyqlThrottled(
-  status: number,
-  errors: Array<GraphqlErrorWithCode> | undefined,
-  fallbackMessage = "",
-): boolean {
-  if (status === 429) return true;
-  const haystack = [
-    ...(errors ?? []).map((error) => `${error.message ?? ""} ${error.extensions?.code ?? ""}`),
-    fallbackMessage,
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes("throttled") || haystack.includes("rate limited") || haystack.includes("too many requests");
-}
 
 export function isShopifyqlAccessDenied(
   errors: Array<GraphqlErrorWithCode> | undefined,
@@ -146,19 +109,14 @@ export async function executeShopifyqlQuery(
 
   try {
     const response = await admin.graphql(SHOPIFYQL_QUERY, { variables: { query } });
-    const payload = (await response.json()) as ShopifyqlGraphqlResponse;
-    const graphqlErrors = payload.errors;
-    const cost = payload.extensions?.shopifyqlCost;
-    const throttled = isShopifyqlThrottled(response.status, graphqlErrors);
-    const retryAfterMs = throttled ? retryAfterMsFromCost(cost) ?? 1_000 : null;
+    const payload = await parseAdminGraphqlJson<ShopifyqlGraphqlPayload>(response);
+    const graphqlErrors = payload.errors as GraphqlErrorWithCode[] | undefined;
 
     if (!response.ok || graphqlErrors?.length) {
       const message = formatGraphqlErrors(graphqlErrors) || `HTTP ${response.status}`;
       return {
         ok: false,
         accessDenied: isShopifyqlAccessDenied(graphqlErrors, message),
-        throttled,
-        retryAfterMs,
         error: message,
         ...empty,
       };
@@ -166,14 +124,7 @@ export async function executeShopifyqlQuery(
 
     const result = payload.data?.shopifyqlQuery;
     if (!result) {
-      return {
-        ok: false,
-        accessDenied: false,
-        throttled,
-        retryAfterMs,
-        error: "shopifyqlQuery returned no data",
-        ...empty,
-      };
+      return { ok: false, accessDenied: false, error: "shopifyqlQuery returned no data", ...empty };
     }
 
     const parseErrors = (result.parseErrors ?? []).filter(Boolean);
@@ -181,8 +132,6 @@ export async function executeShopifyqlQuery(
       return {
         ok: false,
         accessDenied: false,
-        throttled: false,
-        retryAfterMs: null,
         error: parseErrors.join("；"),
         ...empty,
         parseErrors,
@@ -192,8 +141,6 @@ export async function executeShopifyqlQuery(
     return {
       ok: true,
       accessDenied: false,
-      throttled: false,
-      retryAfterMs: null,
       columns: mapColumns(result.tableData?.columns),
       rows: normalizeReportRows(result.tableData?.rows),
       parseErrors: [],
@@ -203,8 +150,6 @@ export async function executeShopifyqlQuery(
     return {
       ok: false,
       accessDenied: isShopifyqlAccessDenied(undefined, message),
-      throttled: isShopifyqlThrottled(0, undefined, message),
-      retryAfterMs: null,
       error: message,
       ...empty,
     };

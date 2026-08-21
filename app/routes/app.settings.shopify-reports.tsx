@@ -10,11 +10,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   return loadShopifyReports({
     admin,
-    shop: session.shop,
     tab: parseReportTab(url.searchParams.get("tab")),
     range: parseRangeKey(url.searchParams.get("range")),
     hasReadReports: hasReadReportsScope(session.scope),
-    forceRefresh: url.searchParams.get("refresh") === "1",
   });
 };
 

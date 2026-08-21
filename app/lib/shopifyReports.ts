@@ -49,8 +49,6 @@ export type ReportQueryResult = {
 
 export type ShopifyReportsAccess = "ok" | "missing_scope" | "access_denied";
 
-export type ReportFreshness = "fresh" | "stale" | "loading";
-
 export type ShopifyReportsPageData = {
   tab: ReportTab;
   range: RangeKey;
@@ -58,34 +56,7 @@ export type ShopifyReportsPageData = {
   currencyCode: string | null;
   ianaTimezone: string | null;
   queries: ReportQueryResult[];
-  freshness: ReportFreshness;
-  fetchedAt: string | null;
-  refreshing: boolean;
 };
-
-export function emptyReportsPage(
-  tab: ReportTab,
-  range: RangeKey,
-  access: ShopifyReportsAccess,
-  extras?: Partial<
-    Pick<
-      ShopifyReportsPageData,
-      "freshness" | "fetchedAt" | "refreshing" | "currencyCode" | "ianaTimezone" | "queries"
-    >
-  >,
-): ShopifyReportsPageData {
-  return {
-    tab,
-    range,
-    access,
-    currencyCode: extras?.currencyCode ?? null,
-    ianaTimezone: extras?.ianaTimezone ?? null,
-    queries: extras?.queries ?? [],
-    freshness: extras?.freshness ?? (access === "ok" ? "loading" : "fresh"),
-    fetchedAt: extras?.fetchedAt ?? null,
-    refreshing: extras?.refreshing ?? false,
-  };
-}
 
 export function isReportTab(value: string): value is ReportTab {
   return (REPORT_TABS as readonly string[]).includes(value);

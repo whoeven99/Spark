@@ -55,6 +55,4 @@ interface ImportMetaEnv {
   readonly SHOPIFY_PARTNER_ORGANIZATION_ID?: string;
   /** Partner App ID（Dev Dashboard URL 中 /apps/{id}/ 或 gid://partners/App/{id}）；未设则跳过 Partner 查询 */
   readonly SHOPIFY_PARTNER_APP_ID?: string;
-  /** 主应用 Render KV；未设时 Shopify 报表短缓存降级为只读 Turso */
-  readonly SPARK_KV?: string;
 }
