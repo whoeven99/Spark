@@ -12,6 +12,7 @@ import type {
   AutomationOverviewResponse,
   PlaybookSurfaceItem,
 } from "../../../lib/automationOverviewTypes";
+import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
 import { ChatContextSidebar } from "./ChatContextSidebar";
 import { ContextToolModal } from "./ContextToolModal";
 import {
@@ -181,9 +182,13 @@ export function ChatPanel({
   const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
   const playbookShortcuts = useMemo<PlaybookSurfaceItem[]>(() => {
     if (!automationOverview) return [];
-    const source = automationOverview.recommendedPlaybooks.length > 0
+    const recommended = Array.isArray(automationOverview.recommendedPlaybooks)
       ? automationOverview.recommendedPlaybooks
-      : automationOverview.templates;
+      : [];
+    const templates = Array.isArray(automationOverview.templates)
+      ? automationOverview.templates
+      : [];
+    const source = recommended.length > 0 ? recommended : templates;
     return source.slice(0, isMobile ? 3 : 5);
   }, [automationOverview, isMobile]);
 
@@ -276,7 +281,7 @@ export function ChatPanel({
       .then((res) => res.json() as Promise<AutomationOverviewResponse>)
       .then((json) => {
         if (cancelled) return;
-        if (json.ok) setAutomationOverview(json.overview);
+        if (json.ok) setAutomationOverview(normalizeAutomationOverview(json.overview));
       })
       .catch(() => {
         if (!cancelled) setAutomationOverview(null);

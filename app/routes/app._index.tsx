@@ -20,6 +20,7 @@ import {
 import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
 import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
 import { useFeatureView } from "../lib/featureTrack";
+import { normalizeWorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
@@ -67,7 +68,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .join(" ")
       .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
-  return { conversations, dashboardSnapshot, accountName };
+  return {
+    conversations,
+    dashboardSnapshot: normalizeWorkspaceDashboardSnapshot(
+      dashboardSnapshot,
+      emptyWorkspaceDashboardSnapshot(),
+    ),
+    accountName,
+  };
 };
 
 /** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
@@ -89,7 +97,7 @@ export default function Index() {
       <TitleBar title="Spark" />
       <Suspense fallback={<RoutePageFallback />}>
         <WorkspaceAppShellPage
-          initialConversationList={data?.conversations ?? []}
+          initialConversationList={Array.isArray(data?.conversations) ? data.conversations : []}
           dashboardSnapshot={data?.dashboardSnapshot}
           accountName={data?.accountName}
         />

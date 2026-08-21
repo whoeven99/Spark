@@ -90,9 +90,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sessionLocale: readShopifySessionLocale(session),
   });
   const { nav, home } = getAppEntryConfig();
+  const safeNav = Array.isArray(nav) ? nav : [];
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
+  return {
+    apiKey: process.env.SHOPIFY_API_KEY || "",
+    locale,
+    nav: safeNav,
+    home,
+  };
 };
 
 /** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用。 */
@@ -184,7 +190,7 @@ function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   return (
     <s-app-nav>
       {(Array.isArray(nav) ? nav : []).map((item) => {
-        const config = NAV_ITEMS[item];
+        const config = NAV_ITEMS[item as NavItemKey];
         return (
           <s-link
             key={item}

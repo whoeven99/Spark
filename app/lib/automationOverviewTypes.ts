@@ -44,3 +44,17 @@ export type AutomationOverview = {
 export type AutomationOverviewResponse =
   | { ok: true; overview: AutomationOverview }
   | { ok: false; error: string };
+
+/** 客户端/API 边界：确保列表字段始终是数组，避免 .map 白屏。 */
+export function normalizeAutomationOverview(raw: unknown): AutomationOverview | null {
+  if (!raw || typeof raw !== "object") return null;
+  const overview = raw as Partial<AutomationOverview>;
+  return {
+    configured: Array.isArray(overview.configured) ? overview.configured : [],
+    history: Array.isArray(overview.history) ? overview.history : [],
+    recommendedPlaybooks: Array.isArray(overview.recommendedPlaybooks)
+      ? overview.recommendedPlaybooks
+      : [],
+    templates: Array.isArray(overview.templates) ? overview.templates : [],
+  };
+}

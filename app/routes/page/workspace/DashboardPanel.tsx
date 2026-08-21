@@ -99,7 +99,7 @@ export function DashboardPanel({
         <div style={{ ...mutedMetaStyle, marginBottom: 4 }}>{snapshotMeta}</div>
       ) : null}
       <div style={isMobile ? mobileMetricGridStyle : metricGridStyle}>
-        {(snapshot.metrics ?? []).map((metric) => (
+        {(Array.isArray(snapshot.metrics) ? snapshot.metrics : []).map((metric) => (
           <article key={metric.label} style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
             <DashboardMetricLabel
               label={metric.label}
@@ -123,10 +123,10 @@ export function DashboardPanel({
             </button>
           </div>
           <div style={alertListStyle}>
-            {(snapshot.alerts ?? []).length === 0 ? (
+            {(Array.isArray(snapshot.alerts) ? snapshot.alerts : []).length === 0 ? (
               <div style={sectionTextStyle}>暂无需要优先处理的风险项。</div>
             ) : (
-              (snapshot.alerts ?? []).map((alert) => (
+              (Array.isArray(snapshot.alerts) ? snapshot.alerts : []).map((alert) => (
                 <div key={`${alert.title}-${alert.detail}`} style={alertItemStyle(alert.tone)}>
                   <div style={sectionTitleSmallStyle}>{alert.title}</div>
                   <div style={sectionTextStyle}>{alert.detail}</div>
@@ -212,10 +212,10 @@ export function DashboardPanel({
                 ) : null}
               </div>
             ) : null}
-            {(snapshot.recentTaskSummaries ?? []).length === 0 && !snapshot.automation ? (
+            {(Array.isArray(snapshot.recentTaskSummaries) ? snapshot.recentTaskSummaries : []).length === 0 && !snapshot.automation ? (
               <div style={sectionTextStyle}>暂无近期任务记录。</div>
             ) : (
-              (snapshot.recentTaskSummaries ?? []).map((item) => (
+              (Array.isArray(snapshot.recentTaskSummaries) ? snapshot.recentTaskSummaries : []).map((item) => (
                 <div key={item.id} style={summaryItemStyle}>
                   <div style={sectionTitleSmallStyle}>{item.title}</div>
                   <div style={sectionTextStyle}>{item.result}</div>
@@ -236,7 +236,7 @@ export function DashboardPanel({
             </button>
           </div>
           <div style={listColumnStyle}>
-            {(snapshot.suggestions ?? []).map((item) => (
+            {(Array.isArray(snapshot.suggestions) ? snapshot.suggestions : []).map((item) => (
               <div key={item} style={suggestionItemStyle}>
                 <span style={bulletStyle} />
                 <span style={sectionTextStyle}>{item}</span>

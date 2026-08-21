@@ -6,6 +6,7 @@ import type {
   AutomationOverviewResponse,
   PlaybookSurfaceItem,
 } from "../../../lib/automationOverviewTypes";
+import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
 import {
@@ -565,10 +566,10 @@ export function HomePanel({
     useState<AutomationOverview | null>(null);
   const now = useMemo(() => new Date(), []);
   const needsAttention = snapshot.automation?.status === "attention";
-  const suggestionItems = (snapshot.suggestions ?? []).slice(0, 3);
-  const topMetrics = (snapshot.metrics ?? []).slice(0, 5);
-  const topAlerts = (snapshot.alerts ?? []).slice(0, 3);
-  const recentTasks = (snapshot.recentTaskSummaries ?? []).slice(0, 3);
+  const suggestionItems = (Array.isArray(snapshot.suggestions) ? snapshot.suggestions : []).slice(0, 3);
+  const topMetrics = (Array.isArray(snapshot.metrics) ? snapshot.metrics : []).slice(0, 5);
+  const topAlerts = (Array.isArray(snapshot.alerts) ? snapshot.alerts : []).slice(0, 3);
+  const recentTasks = (Array.isArray(snapshot.recentTaskSummaries) ? snapshot.recentTaskSummaries : []).slice(0, 3);
   const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
     ? automationOverview.recommendedPlaybooks
     : [];
@@ -580,7 +581,7 @@ export function HomePanel({
       .then((res) => res.json() as Promise<AutomationOverviewResponse>)
       .then((json) => {
         if (cancelled) return;
-        if (json.ok) setAutomationOverview(json.overview);
+        if (json.ok) setAutomationOverview(normalizeAutomationOverview(json.overview));
       })
       .catch(() => {
         if (!cancelled) setAutomationOverview(null);

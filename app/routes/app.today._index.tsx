@@ -21,6 +21,7 @@ import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import type { WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
+import { normalizeWorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { useTranslation } from "react-i18next";
 
@@ -41,7 +42,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[today._index] dashboard snapshot failed:", error);
   }
-  return { dashboardSnapshot };
+  return {
+    dashboardSnapshot: normalizeWorkspaceDashboardSnapshot(
+      dashboardSnapshot,
+      emptyWorkspaceDashboardSnapshot(),
+    ),
+  };
 };
 
 /** 看板面板依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
@@ -102,12 +108,12 @@ function buildTodayActions({
   onOpenOrders: () => void;
   onOpenTasks: () => void;
 }) {
-  const riskCount = (snapshot.alerts ?? []).filter((item) => item.tone === "critical").length;
-  const watchCount = (snapshot.alerts ?? []).filter((item) => item.tone === "warning").length;
-  const orderRiskCount = (snapshot.alerts ?? []).filter((item) =>
+  const riskCount = (Array.isArray(snapshot.alerts) ? snapshot.alerts : []).filter((item) => item.tone === "critical").length;
+  const watchCount = (Array.isArray(snapshot.alerts) ? snapshot.alerts : []).filter((item) => item.tone === "warning").length;
+  const orderRiskCount = (Array.isArray(snapshot.alerts) ? snapshot.alerts : []).filter((item) =>
     /退款|履约|物流|库存|订单/.test(`${item.title}${item.detail}`),
   ).length;
-  const taskCount = (snapshot.recentTaskSummaries ?? []).length;
+  const taskCount = (Array.isArray(snapshot.recentTaskSummaries) ? snapshot.recentTaskSummaries : []).length;
   return [
     {
       key: "diagnosis",

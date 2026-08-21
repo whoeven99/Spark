@@ -45,3 +45,21 @@ export type WorkspaceDashboardSnapshot = {
   /** 每日巡检自动化摘要（无快照时为空） */
   automation?: WorkspaceDashboardAutomationSummary;
 };
+
+/** 客户端/loader 边界：非数组 truthy 值（如 {}）也会兜底，避免 .map 白屏。 */
+export function normalizeWorkspaceDashboardSnapshot(
+  snapshot: Partial<WorkspaceDashboardSnapshot> | null | undefined,
+  fallback: WorkspaceDashboardSnapshot,
+): WorkspaceDashboardSnapshot {
+  if (!snapshot || typeof snapshot !== "object") return fallback;
+  return {
+    ...fallback,
+    ...snapshot,
+    metrics: Array.isArray(snapshot.metrics) ? snapshot.metrics : fallback.metrics,
+    alerts: Array.isArray(snapshot.alerts) ? snapshot.alerts : [],
+    suggestions: Array.isArray(snapshot.suggestions) ? snapshot.suggestions : [],
+    recentTaskSummaries: Array.isArray(snapshot.recentTaskSummaries)
+      ? snapshot.recentTaskSummaries
+      : [],
+  };
+}

@@ -14,6 +14,7 @@ import type { ChatMessage } from "../../../lib/chatMessage";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
+import { normalizeWorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { useChatStream } from "../chat/useChatStream";
 import { ChatPanel } from "./ChatPanel";
 import { HomePanel } from "./HomePanel";
@@ -347,13 +348,17 @@ const fallbackDashboardSnapshot: WorkspaceDashboardSnapshot = {
 
 export function WorkspaceAppShellPage({
   initialConversationList = [],
-  dashboardSnapshot = fallbackDashboardSnapshot,
+  dashboardSnapshot: dashboardSnapshotInput = fallbackDashboardSnapshot,
   accountName,
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
   accountName?: string;
 }) {
+  const dashboardSnapshot = normalizeWorkspaceDashboardSnapshot(
+    dashboardSnapshotInput,
+    fallbackDashboardSnapshot,
+  );
   const displayName = accountName?.trim() || DEFAULT_ACCOUNT_DISPLAY_NAME;
   const shopify = useAppBridge();
   const { t } = useTranslation();
@@ -595,9 +600,12 @@ export function WorkspaceAppShellPage({
           if (existing.length > 0) {
             return current;
           }
+          const rawMessages = Array.isArray(data.messages) ? data.messages : [];
           return {
             ...current,
-            [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
+            [activeConversationId]: (rawMessages as Parameters<typeof dbMessageToUiMessage>[0][]).map(
+              dbMessageToUiMessage,
+            ),
           };
         });
       })
