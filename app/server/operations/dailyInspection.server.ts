@@ -34,11 +34,19 @@ export type OperationTaskView = {
   id: string;
   dedupeKey: string;
   sourceKey: string;
+  sourceType: "rule" | "ai" | "hybrid";
   title: string;
   quadrant: TaskQuadrant;
   priority: TaskPriority;
   status: string;
   triggerReason: string;
+  objective: string | null;
+  impactMetrics: string[];
+  estimatedLift: string | null;
+  roiImpactSummary: string | null;
+  confidence: "high" | "medium" | "low" | null;
+  riskEnvironment: string | null;
+  aiContextPayload: unknown;
   relatedObjects: unknown;
   suggestedActions: string[];
   ownerRole: string | null;
@@ -159,11 +167,19 @@ function toTaskView(task: {
   id: string;
   dedupeKey: string;
   sourceKey: string;
+  sourceType: string;
   title: string;
   quadrant: string;
   priority: string;
   status: string;
   triggerReason: string;
+  objective: string | null;
+  impactMetrics: unknown;
+  estimatedLift: string | null;
+  roiImpactSummary: string | null;
+  confidence: string | null;
+  riskEnvironment: string | null;
+  aiContextPayload: unknown;
   relatedObjects: unknown;
   suggestedActions: unknown;
   ownerRole: string | null;
@@ -176,11 +192,23 @@ function toTaskView(task: {
     id: task.id,
     dedupeKey: task.dedupeKey,
     sourceKey: task.sourceKey,
+    sourceType:
+      task.sourceType === "ai" || task.sourceType === "hybrid" ? task.sourceType : "rule",
     title: task.title,
     quadrant: task.quadrant as TaskQuadrant,
     priority: task.priority as TaskPriority,
     status: task.status,
     triggerReason: task.triggerReason,
+    objective: task.objective,
+    impactMetrics: Array.isArray(task.impactMetrics) ? (task.impactMetrics as string[]) : [],
+    estimatedLift: task.estimatedLift,
+    roiImpactSummary: task.roiImpactSummary,
+    confidence:
+      task.confidence === "high" || task.confidence === "medium" || task.confidence === "low"
+        ? task.confidence
+        : null,
+    riskEnvironment: task.riskEnvironment,
+    aiContextPayload: task.aiContextPayload ?? null,
     relatedObjects: task.relatedObjects,
     suggestedActions: Array.isArray(task.suggestedActions)
       ? (task.suggestedActions as string[])
@@ -262,12 +290,24 @@ export async function createOperationTaskFromReportCandidate(
       shop,
       snapshotId: null,
       sourceKey: buildReportTaskSourceKey(taskCandidate.problemKey),
+      sourceType: taskCandidate.sourceType,
       dedupeKey: taskCandidate.dedupeKey,
       title,
       quadrant: taskCandidate.quadrant,
       priority: taskCandidate.priority,
       status: "open",
       triggerReason: taskCandidate.whyNow,
+      objective: taskCandidate.objective,
+      impactMetrics: taskCandidate.impactMetrics,
+      estimatedLift: taskCandidate.estimatedLift ?? null,
+      roiImpactSummary: taskCandidate.roiImpactSummary,
+      confidence: taskCandidate.confidence,
+      riskEnvironment: taskCandidate.riskEnvironment,
+      aiContextPayload: {
+        aiExecutionPrompt: taskCandidate.aiExecutionPrompt,
+        primaryObjectId: taskCandidate.primaryObjectId ?? null,
+        primaryObjectType: taskCandidate.primaryObjectType ?? null,
+      },
       relatedObjects: {
         reportTask: {
           origin: "insights_report",
@@ -281,6 +321,8 @@ export async function createOperationTaskFromReportCandidate(
           whyNow: taskCandidate.whyNow,
           primaryObjectId: taskCandidate.primaryObjectId ?? null,
           primaryObjectType: taskCandidate.primaryObjectType ?? null,
+          confidence: taskCandidate.confidence,
+          aiExecutionPrompt: taskCandidate.aiExecutionPrompt,
           effect: inferReportTaskPresentationEffect(taskCandidate),
         },
       },
@@ -687,6 +729,14 @@ async function syncTasks(
           quadrant: task.quadrant,
           priority: task.priority,
           triggerReason: task.triggerReason,
+          sourceType: task.sourceType,
+          objective: task.objective,
+          impactMetrics: task.impactMetrics,
+          estimatedLift: task.estimatedLift,
+          roiImpactSummary: task.roiImpactSummary,
+          confidence: task.confidence,
+          riskEnvironment: task.riskEnvironment,
+          aiContextPayload: task.aiContextPayload as object | null,
           relatedObjects: task.relatedObjects as object,
           suggestedActions: task.suggestedActions,
           ownerRole: task.ownerRole,
@@ -701,12 +751,20 @@ async function syncTasks(
         shop,
         snapshotId,
         sourceKey: task.sourceKey,
+        sourceType: task.sourceType,
         dedupeKey: task.dedupeKey,
         title: task.title,
         quadrant: task.quadrant,
         priority: task.priority,
         status: "open",
         triggerReason: task.triggerReason,
+        objective: task.objective,
+        impactMetrics: task.impactMetrics,
+        estimatedLift: task.estimatedLift,
+        roiImpactSummary: task.roiImpactSummary,
+        confidence: task.confidence,
+        riskEnvironment: task.riskEnvironment,
+        aiContextPayload: task.aiContextPayload as object | null,
         relatedObjects: task.relatedObjects as object,
         suggestedActions: task.suggestedActions,
         ownerRole: task.ownerRole,

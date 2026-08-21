@@ -772,6 +772,8 @@ model OperationTask {
   snapshotId       String?
   /// 来源规则键：fulfillment_overdue | logistics_stale | refund_spike | inventory_risk | routine_shipping | sales_decline
   sourceKey        String
+  /// rule | ai | hybrid
+  sourceType       String    @default("rule")
   /// 去重键（sourceKey + 关联对象），同一问题在 open/in_progress 状态下只保留一条
   dedupeKey        String
   title            String
@@ -783,6 +785,20 @@ model OperationTask {
   status           String    @default("open")
   /// 触发原因（含证据数字）
   triggerReason    String
+  /// 任务目标（如止损退款 / 提升转化）
+  objective        String?
+  /// 影响指标（字符串数组）
+  impactMetrics    Json?
+  /// 预估提升（保留文案，兼容不同口径）
+  estimatedLift    String?
+  /// ROI 影响摘要
+  roiImpactSummary String?
+  /// high | medium | low
+  confidence       String?
+  /// 风险环境（如 payments / after-sales / conversion）
+  riskEnvironment  String?
+  /// AI 执行语境载荷
+  aiContextPayload Json?
   /// 关联对象 JSON：订单号 / SKU 列表等
   relatedObjects   Json
   /// 建议动作（字符串数组）

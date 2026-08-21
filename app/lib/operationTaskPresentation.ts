@@ -39,6 +39,19 @@ export function inferOperationTaskPresentation(
   task: OperationTaskView,
   t: Translate,
 ): OperationTaskPresentation {
+  if (task.objective && task.roiImpactSummary) {
+    const impactMetric =
+      task.impactMetrics.filter((metric): metric is string => Boolean(metric)).join(" / ") ||
+      t("taskWorkbench.taskMetricTraffic");
+    return {
+      objective: task.objective,
+      impactMetric,
+      estimatedLift: task.estimatedLift?.trim() || "—",
+      roiImpact: task.roiImpactSummary,
+      effect: inferEffectFromTask(task.sourceKey, task.riskEnvironment),
+    };
+  }
+
   const reportTask = getReportTaskMetadata(task.relatedObjects);
   if (reportTask?.objective && reportTask?.roiImpactSummary) {
     const impactMetric =
@@ -97,6 +110,20 @@ export function inferOperationTaskPresentation(
     roiImpact: t("taskWorkbench.taskRoiTraffic"),
     effect: task.sourceKey === "sales_decline" ? "revenue" : "conversion",
   };
+}
+
+function inferEffectFromTask(
+  sourceKey: string,
+  riskEnvironment: string | null,
+): OperationTaskPresentationEffect {
+  if (riskEnvironment === "inventory") return "revenue";
+  if (riskEnvironment === "after-sales") return "retention";
+  if (riskEnvironment === "payments" || riskEnvironment === "conversion") return "conversion";
+  if (sourceKey === "fulfillment_overdue" || sourceKey === "logistics_stale" || sourceKey === "routine_shipping") {
+    return "efficiency";
+  }
+  if (sourceKey === "sales_decline") return "revenue";
+  return "conversion";
 }
 
 export function buildOperationTaskPrompt(

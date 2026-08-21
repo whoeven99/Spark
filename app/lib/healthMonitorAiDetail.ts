@@ -9,7 +9,7 @@ const statusSchema = z.enum(["good", "watch", "risk"]);
 const scoringSchema = z.enum(["high", "medium", "low"]);
 const prioritySchema = z.enum(["P0", "P1", "P2"]);
 const sourceSchema = z.enum(["shopify", "ga4", "ads", "gsc", "pagespeed", "internal"]);
-const objectTypeSchema = z.enum(["page", "sku", "channel", "campaign", "landing_page", "other"]);
+const objectTypeSchema = z.enum(["page", "sku", "channel", "campaign", "landing_page", "order", "other"]);
 
 export const monitorDetailInputSchema = z.object({
   version: z.literal("v1"),
@@ -120,7 +120,7 @@ export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDe
       value: entry.value,
       source: inferSource(monitor.id, entry.label),
     })),
-    affectedObjects: inferAffectedObjects(monitor),
+    affectedObjects: monitor.relatedObjects?.length ? monitor.relatedObjects : inferAffectedObjects(monitor),
     possibleCauses: [monitor.summary],
     candidateActions: monitor.actions.map((action, index) => ({
       title: action.title,
@@ -204,10 +204,16 @@ export function resolveHealthMonitorDetail(monitor: HealthMonitorRecord) {
     const prompt = buildMonitorDetailPrompt(input);
     const result = generateMonitorDetailResult(input);
 
+    const aiChatPrompt =
+      monitor.aiPrompt.trim().length > 0 ? truncateText(monitor.aiPrompt, 400) : result.aiChatPrompt;
+
     return {
       input,
       prompt,
-      result,
+      result: {
+        ...result,
+        aiChatPrompt,
+      },
     };
   } catch (error) {
     console.error("[health-monitor] resolve detail failed:", error);
@@ -288,6 +294,7 @@ function inferAffectedObjects(monitor: HealthMonitorRecord): MonitorDetailInput[
 }
 
 function inferObjectType(value: string): z.infer<typeof objectTypeSchema> {
+  if (value.includes("#")) return "order";
   if (value.includes("落地页")) return "landing_page";
   if (value.includes("页面")) return "page";
   if (value.includes("SKU")) return "sku";

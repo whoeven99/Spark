@@ -17,7 +17,7 @@ import {
 } from "../lib/healthMonitorData";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
-import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
+import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
 import {
   mobilePageContentStyle,
@@ -36,7 +36,7 @@ type HealthMonitorFollowupAction = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const snapshot = await ensureDailySnapshotOverview(session.shop);
+  const snapshot = await ensureDailySnapshot(session.shop);
   return {
     monitors: buildHealthMonitorRecords({
       metrics: snapshot.metrics,
@@ -47,6 +47,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
       environments: snapshot.environments,
       items: snapshot.items,
+      detail: snapshot.detail,
     }),
   };
 };
@@ -558,7 +559,7 @@ function DetailSection({
     <div style={stackStyle}>
       <PageSurface
         title={monitor.title}
-        subtitle="三级页面固定为四段式：问题是什么、数据论据、解决办法、和 AI 聊聊。这里回答的是健康判断，不是经营总览。"
+        subtitle="详情页只回答这个健康项当前是否异常、证据是什么、应该先做什么，而不是重复经营总览。"
       >
         <div style={detailHeroStyle}>
           <span style={statusBadgeStyle(monitor.status)}>{statusLabel(monitor.status)}</span>
@@ -567,9 +568,6 @@ function DetailSection({
             <h3 style={detailIssueTitleStyle}>{detail.result.problem}</h3>
             <div style={detailValueStyle}>当前关键数据：{monitor.value}</div>
             <div style={detailMetaStyle}>影响经营模块：{monitor.relatedModule}</div>
-            <div style={detailMetaStyle}>
-              已走通链路：Input {"->"} Prompt {"->"} Result
-            </div>
           </div>
         </div>
         <div style={buttonRowStyle}>
@@ -590,7 +588,10 @@ function DetailSection({
       </PageSurface>
 
       <PageSurface title="问题是什么" subtitle="只保留一句判断，让用户先知道结论。">
-        <p style={detailLeadStyle}>{detail.result.problem}</p>
+        <div style={detailCalloutStyle}>
+          <p style={detailLeadStyle}>{detail.result.problem}</p>
+          <p style={detailSupportTextStyle}>{monitor.summary}</p>
+        </div>
       </PageSurface>
 
       <PageSurface title="数据论据" subtitle="用结构化证据支撑结论，而不是铺解释性散文。">
@@ -603,6 +604,40 @@ function DetailSection({
           ))}
         </div>
       </PageSurface>
+
+      {detail.input.affectedObjects && detail.input.affectedObjects.length > 0 ? (
+        <PageSurface title="关键对象" subtitle="优先展示这次监测里真正受到影响的订单、SKU 或页面对象。">
+          <div style={objectListStyle}>
+            {detail.input.affectedObjects.map((object) => (
+              <div key={`${object.type}-${object.name}`} style={objectItemStyle}>
+                <div style={objectHeaderStyle}>
+                  <strong style={objectNameStyle}>{object.name}</strong>
+                  <span style={objectTypeStyle}>{objectTypeLabel(object.type)}</span>
+                </div>
+                <p style={objectSummaryStyle}>{object.summary ?? "—"}</p>
+              </div>
+            ))}
+          </div>
+        </PageSurface>
+      ) : null}
+
+      {followupActions.length > 0 ? (
+        <PageSurface title="下一步入口" subtitle="从当前健康项直接进入已有工作流，不重复造一套新页面。">
+          <div style={followupListStyle}>
+            {followupActions.map((action) => (
+              <button
+                key={action.path}
+                type="button"
+                style={action.tone === "subtle" ? followupSecondaryCardStyle : followupPrimaryCardStyle}
+                onClick={() => onOpenFollowup(action.path)}
+              >
+                <strong style={followupCardTitleStyle}>{action.label}</strong>
+                <span style={followupCardTextStyle}>继续查看关联对象、任务或报表。</span>
+              </button>
+            ))}
+          </div>
+        </PageSurface>
+      ) : null}
 
       <PageSurface title="解决办法" subtitle="每条动作都应该可以进一步转进现有 Tasks。">
         <div style={actionListStyle}>
@@ -618,18 +653,10 @@ function DetailSection({
         </div>
       </PageSurface>
 
-      <PageSurface title="和 AI 聊聊" subtitle="这里的 AI 只负责继续诊断这个健康项：为什么异常、影响什么、先修哪里。">
+      <PageSurface title="和 AI 聊聊" subtitle="继续围绕这个健康项下钻原因、排序动作和明确优先级。">
         <div style={aiPanelStyle}>
           <div style={aiMetaPanelStyle}>
-            <strong style={evidenceLabelStyle}>MonitorDetailInput</strong>
-            <pre style={aiPromptStyle}>{JSON.stringify(detail.input, null, 2)}</pre>
-          </div>
-          <div style={aiMetaPanelStyle}>
-            <strong style={evidenceLabelStyle}>Prompt Preview</strong>
-            <pre style={aiPromptStyle}>{detail.prompt.user}</pre>
-          </div>
-          <div style={aiMetaPanelStyle}>
-            <strong style={evidenceLabelStyle}>AI Chat Prompt</strong>
+            <strong style={evidenceLabelStyle}>当前语境</strong>
             <pre style={aiPromptStyle}>{detail.result.aiChatPrompt}</pre>
           </div>
           <div style={buttonRowStyle}>
@@ -647,6 +674,16 @@ function statusLabel(status: HealthMonitorStatus): string {
   if (status === "risk") return "风险";
   if (status === "watch") return "关注";
   return "正常";
+}
+
+function objectTypeLabel(type: string): string {
+  if (type === "order") return "订单";
+  if (type === "sku") return "SKU";
+  if (type === "page") return "页面";
+  if (type === "landing_page") return "落地页";
+  if (type === "campaign") return "广告";
+  if (type === "channel") return "渠道";
+  return "对象";
 }
 
 function statusBadgeStyle(status: HealthMonitorStatus): CSSProperties {
@@ -912,9 +949,71 @@ const detailLeadStyle: CSSProperties = {
   color: pageColorTokens.textBody,
 };
 
+const detailCalloutStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.55rem",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
+};
+
+const detailSupportTextStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.85rem",
+  lineHeight: 1.6,
+  color: pageColorTokens.textSecondary,
+};
+
 const evidenceListStyle: CSSProperties = {
   display: "grid",
   gap: "0.75rem",
+};
+
+const objectListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.75rem",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+};
+
+const objectItemStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.45rem",
+  padding: "0.9rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surface,
+  border: `1px solid ${pageColorTokens.border}`,
+};
+
+const objectHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.5rem",
+};
+
+const objectNameStyle: CSSProperties = {
+  fontSize: "0.88rem",
+  color: pageColorTokens.textPrimary,
+};
+
+const objectTypeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.15rem 0.45rem",
+  borderRadius: 999,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  fontSize: "0.72rem",
+  color: pageColorTokens.textSecondary,
+  whiteSpace: "nowrap",
+};
+
+const objectSummaryStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.84rem",
+  lineHeight: 1.6,
+  color: pageColorTokens.textBody,
 };
 
 const evidenceItemStyle: CSSProperties = {
@@ -940,6 +1039,44 @@ const evidenceValueStyle: CSSProperties = {
 const actionListStyle: CSSProperties = {
   display: "grid",
   gap: "0.75rem",
+};
+
+const followupListStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "0.75rem",
+};
+
+const followupBaseCardStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+  textAlign: "left",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  cursor: "pointer",
+};
+
+const followupPrimaryCardStyle: CSSProperties = {
+  ...followupBaseCardStyle,
+  border: `1px solid ${pageColorTokens.brandBlue}`,
+  background: pageColorTokens.surface,
+};
+
+const followupSecondaryCardStyle: CSSProperties = {
+  ...followupBaseCardStyle,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const followupCardTitleStyle: CSSProperties = {
+  fontSize: "0.9rem",
+  color: pageColorTokens.textPrimary,
+};
+
+const followupCardTextStyle: CSSProperties = {
+  fontSize: "0.82rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textSecondary,
 };
 
 const actionItemStyle: CSSProperties = {

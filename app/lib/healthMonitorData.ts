@@ -1,4 +1,18 @@
 export type HealthMonitorStatus = "good" | "watch" | "risk";
+export type HealthMonitorRelatedObjectType =
+  | "page"
+  | "sku"
+  | "channel"
+  | "campaign"
+  | "landing_page"
+  | "order"
+  | "other";
+
+export type HealthMonitorRelatedObject = {
+  type: HealthMonitorRelatedObjectType;
+  name: string;
+  summary: string;
+};
 
 export type HealthMonitorRecord = {
   id: string;
@@ -10,6 +24,7 @@ export type HealthMonitorRecord = {
   summary: string;
   issue: string;
   evidence: Array<{ label: string; value: string }>;
+  relatedObjects?: HealthMonitorRelatedObject[];
   actions: Array<{ title: string; detail: string }>;
   aiPrompt: string;
 };
@@ -49,11 +64,63 @@ type HealthMonitorSnapshotOverview = {
   conversionRate7d: number | null;
 };
 
+type HealthMonitorDetailOverdueOrder = {
+  orderNumber: string;
+  ageHours: number;
+  customerName: string;
+  createdAt: string;
+};
+
+type HealthMonitorDetailCarrierIssue = {
+  orderNumber: string;
+  carrier: string;
+  trackingNumber: string;
+  shipmentStatus: string;
+  ageDays: number;
+};
+
+type HealthMonitorDetailInventoryRisk = {
+  sku: string;
+  title: string;
+  variantTitle: string;
+  available: number;
+  dailySalesVelocity: number;
+  sellableDays: number | null;
+  estimatedLoss: number;
+  risk: "watch" | "risk";
+};
+
+type HealthMonitorDetailRefundSku = {
+  sku: string;
+  title: string;
+  quantity: number;
+  amount: number;
+  reason: string;
+};
+
+type HealthMonitorDetailRefundOrder = {
+  orderNumber: string;
+  amount: number;
+  rate: number | null;
+  reason: string;
+  skus: string;
+  processedAt: string;
+};
+
+type HealthMonitorSnapshotDetail = {
+  overdueOrders?: HealthMonitorDetailOverdueOrder[];
+  carrierIssues?: HealthMonitorDetailCarrierIssue[];
+  inventoryRisks?: HealthMonitorDetailInventoryRisk[];
+  topRefundSkus?: HealthMonitorDetailRefundSku[];
+  abnormalRefundOrders?: HealthMonitorDetailRefundOrder[];
+};
+
 export type HealthMonitorSnapshotInput = {
   metrics?: HealthMonitorSnapshotMetrics;
   overview?: HealthMonitorSnapshotOverview;
   environments?: HealthMonitorSnapshotEnvironment[];
   items?: HealthMonitorSnapshotItem[];
+  detail?: HealthMonitorSnapshotDetail;
 };
 
 export const HEALTH_MONITORS: HealthMonitorRecord[] = [
@@ -422,6 +489,7 @@ export function buildHealthMonitorRecords(
 
   const metrics = snapshot.metrics ?? {};
   const overview = snapshot.overview;
+  const detail = snapshot.detail;
   const environmentByKey = new Map(
     (snapshot.environments ?? []).map((environment) => [environment.key, environment]),
   );
@@ -523,6 +591,10 @@ export function buildHealthMonitorRecords(
           status: toHealthMonitorStatus(item?.status ?? environment.status),
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
+          relatedObjects: [
+            ...buildRefundSkuObjects(detail?.topRefundSkus),
+            ...buildAbnormalRefundOrderObjects(detail?.abnormalRefundOrders),
+          ].slice(0, 4),
           evidence: mergeEvidence(record.evidence, [
             rate !== null ? `近 30 天退款率 ${formatPercent(rate)}。` : null,
             delta !== null ? `相较上一观察窗口变化 ${formatSignedPercent(delta, "pp")}。` : null,
@@ -543,6 +615,7 @@ export function buildHealthMonitorRecords(
           status: toHealthMonitorStatus(item?.status ?? environment.status),
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
+          relatedObjects: buildInventoryRiskObjects(detail?.inventoryRisks).slice(0, 4),
           evidence: mergeEvidence(record.evidence, [
             riskSkuCount > 0 ? `${formatInteger(riskSkuCount)} 个高动销 SKU 已进入缺货风险区。` : "当前未发现高风险库存 SKU。",
             estimatedLoss !== null
@@ -570,6 +643,10 @@ export function buildHealthMonitorRecords(
           status: toHealthMonitorStatus(item?.status ?? environment.status),
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
+          relatedObjects: [
+            ...buildOverdueOrderObjects(detail?.overdueOrders),
+            ...buildCarrierIssueObjects(detail?.carrierIssues),
+          ].slice(0, 4),
           evidence: mergeEvidence(record.evidence, [
             overdueOrderCount > 0 ? `当前有 ${formatInteger(overdueOrderCount)} 单超时未发货。` : null,
             carrierIssueCount > 0 ? `当前有 ${formatInteger(carrierIssueCount)} 单物流轨迹异常。` : null,
@@ -660,6 +737,56 @@ function mergeEvidence(
 
   if (normalized.length >= 2) return normalized;
   return [...normalized, ...fallback].slice(0, 3);
+}
+
+function buildRefundSkuObjects(
+  skus: HealthMonitorDetailRefundSku[] | undefined,
+): HealthMonitorRelatedObject[] {
+  return (skus ?? []).slice(0, 2).map((item) => ({
+    type: "sku",
+    name: item.sku,
+    summary: `${item.title}｜退款 ${formatInteger(item.quantity)} 件｜金额 ${stripTrailingZero(item.amount)}｜主要原因 ${item.reason}`,
+  }));
+}
+
+function buildAbnormalRefundOrderObjects(
+  orders: HealthMonitorDetailRefundOrder[] | undefined,
+): HealthMonitorRelatedObject[] {
+  return (orders ?? []).slice(0, 2).map((order) => ({
+    type: "order",
+    name: order.orderNumber,
+    summary: `退款 ${stripTrailingZero(order.amount)}｜原因 ${order.reason}｜SKU ${order.skus}`,
+  }));
+}
+
+function buildInventoryRiskObjects(
+  risks: HealthMonitorDetailInventoryRisk[] | undefined,
+): HealthMonitorRelatedObject[] {
+  return (risks ?? []).slice(0, 4).map((item) => ({
+    type: "sku",
+    name: item.sku,
+    summary: `${item.title}${item.variantTitle ? ` / ${item.variantTitle}` : ""}｜库存 ${formatInteger(item.available)}｜可售 ${item.sellableDays === null ? "∞" : stripTrailingZero(item.sellableDays)} 天`,
+  }));
+}
+
+function buildOverdueOrderObjects(
+  orders: HealthMonitorDetailOverdueOrder[] | undefined,
+): HealthMonitorRelatedObject[] {
+  return (orders ?? []).slice(0, 2).map((order) => ({
+    type: "order",
+    name: order.orderNumber,
+    summary: `${order.customerName}｜已等待 ${stripTrailingZero(order.ageHours)} 小时发货`,
+  }));
+}
+
+function buildCarrierIssueObjects(
+  issues: HealthMonitorDetailCarrierIssue[] | undefined,
+): HealthMonitorRelatedObject[] {
+  return (issues ?? []).slice(0, 2).map((issue) => ({
+    type: "order",
+    name: issue.orderNumber,
+    summary: `${issue.carrier}｜${issue.shipmentStatus}｜${formatInteger(issue.ageDays)} 天无新轨迹`,
+  }));
 }
 
 function toHealthMonitorStatus(status: SnapshotStatus): HealthMonitorStatus {

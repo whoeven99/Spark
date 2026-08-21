@@ -588,6 +588,30 @@ function operationDueWindowLabel(
   return t("taskWorkbench.dueWindowBacklog");
 }
 
+function operationSourceTypeLabel(task: OperationTaskView) {
+  if (task.sourceType === "hybrid") return "规则 + AI";
+  if (task.sourceType === "ai") return "AI";
+  return "规则";
+}
+
+function operationConfidenceLabel(task: OperationTaskView) {
+  if (task.confidence === "high") return "高";
+  if (task.confidence === "medium") return "中";
+  if (task.confidence === "low") return "低";
+  return "—";
+}
+
+function operationRiskEnvironmentLabel(task: OperationTaskView) {
+  if (task.riskEnvironment === "after-sales") return "售后";
+  if (task.riskEnvironment === "payments") return "支付";
+  if (task.riskEnvironment === "fulfillment") return "履约";
+  if (task.riskEnvironment === "inventory") return "库存";
+  if (task.riskEnvironment === "conversion") return "转化";
+  if (task.riskEnvironment === "new-arrivals") return "上新";
+  if (task.riskEnvironment === "risk-control") return "风控";
+  return "—";
+}
+
 function renderRelatedObjects(relatedObjects: unknown) {
   if (!relatedObjects || typeof relatedObjects !== "object") return "—";
   const entries = Object.entries(relatedObjects as Record<string, unknown>).filter(([, value]) => {
@@ -649,6 +673,9 @@ function OperationTaskDetailPanel({
         <DetailBlock label={t("taskWorkbench.taskImpactMetricLabel")} value={presentation.impactMetric} />
         <DetailBlock label={t("taskWorkbench.taskEstimatedLiftLabel")} value={presentation.estimatedLift} />
         <DetailBlock label={t("taskWorkbench.taskRoiImpactLabel")} value={presentation.roiImpact} />
+        <DetailBlock label="来源类型" value={operationSourceTypeLabel(task)} />
+        <DetailBlock label="置信度" value={operationConfidenceLabel(task)} />
+        <DetailBlock label="风险环境" value={operationRiskEnvironmentLabel(task)} />
         <DetailBlock label={t("taskWorkbench.taskPromptOwner")} value={task.ownerRole ?? t("taskWorkbench.taskPromptOwnerUnknown")} />
         <DetailBlock label={t("taskWorkbench.taskPromptDue")} value={operationDueWindowLabel(task, t)} />
       </div>
