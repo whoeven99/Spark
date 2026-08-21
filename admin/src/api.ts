@@ -68,7 +68,6 @@ export type OverviewData = {
 
 export type ShopRow = {
   shop: string;
-  appName: string;
   subscriptionTokens: number;
   purchasedTokens: number;
   trialTokens: number;

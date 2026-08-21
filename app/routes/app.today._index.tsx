@@ -102,12 +102,12 @@ function buildTodayActions({
   onOpenOrders: () => void;
   onOpenTasks: () => void;
 }) {
-  const riskCount = snapshot.alerts.filter((item) => item.tone === "critical").length;
-  const watchCount = snapshot.alerts.filter((item) => item.tone === "warning").length;
-  const orderRiskCount = snapshot.alerts.filter((item) =>
+  const riskCount = (snapshot.alerts ?? []).filter((item) => item.tone === "critical").length;
+  const watchCount = (snapshot.alerts ?? []).filter((item) => item.tone === "warning").length;
+  const orderRiskCount = (snapshot.alerts ?? []).filter((item) =>
     /退款|履约|物流|库存|订单/.test(`${item.title}${item.detail}`),
   ).length;
-  const taskCount = snapshot.recentTaskSummaries.length;
+  const taskCount = (snapshot.recentTaskSummaries ?? []).length;
   return [
     {
       key: "diagnosis",

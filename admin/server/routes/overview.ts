@@ -27,12 +27,14 @@ overviewRouter.get("/", async (_req, res) => {
     const activeSubs = Number(activeSubsResult.rows[0]?.total ?? 0);
     const tokenSum = tokenSumResult.rows[0] ?? {};
 
-    const recentEvents = recentEventsResult.rows.map((r) => ({
-      shop: r.shop,
-      eventType: r.eventType,
-      topic: r.topic,
-      createdAt: r.createdAt,
-    }));
+    const recentEvents = Array.isArray(recentEventsResult.rows)
+      ? recentEventsResult.rows.map((r) => ({
+          shop: r.shop,
+          eventType: r.eventType,
+          topic: r.topic,
+          createdAt: r.createdAt,
+        }))
+      : [];
 
     res.json({
       totalShops,

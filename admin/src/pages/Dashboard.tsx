@@ -137,7 +137,7 @@ export default function Dashboard() {
         }
       >
         <Table
-          dataSource={data.recentEvents}
+          dataSource={Array.isArray(data.recentEvents) ? data.recentEvents : []}
           columns={eventColumns}
           rowKey={(r, i) => `${r.shop}-${r.createdAt}-${i}`}
           size="small"

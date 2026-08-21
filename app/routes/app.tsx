@@ -183,7 +183,7 @@ function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
 
   return (
     <s-app-nav>
-      {nav.map((item) => {
+      {(Array.isArray(nav) ? nav : []).map((item) => {
         const config = NAV_ITEMS[item];
         return (
           <s-link

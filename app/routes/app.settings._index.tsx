@@ -672,8 +672,8 @@ function ConnectionChannelCard({
   badge,
   badgeTone,
   meta,
-  capabilities,
-  links,
+  capabilities = [],
+  links = [],
   onNavigate,
 }: ConnectionChannelCardProps) {
   return (
@@ -687,15 +687,15 @@ function ConnectionChannelCard({
       </div>
       <div style={connectionMetaStyle}>{meta}</div>
       <div style={{ display: "grid", gap: 8 }}>
-        {capabilities.map((capability) => (
+        {Array.isArray(capabilities) ? capabilities.map((capability) => (
           <div key={capability.label} style={capabilityRowStyle}>
             <span style={capabilityLabelStyle}>{capability.label}</span>
             <span style={capabilityValueStyle(capability.tone)}>{capability.value}</span>
           </div>
-        ))}
+        )) : null}
       </div>
       <div style={connectionLinksStyle}>
-        {links.map((link) => (
+        {Array.isArray(links) ? links.map((link) => (
           <button
             key={link.to}
             type="button"
@@ -704,7 +704,7 @@ function ConnectionChannelCard({
           >
             {link.label}
           </button>
-        ))}
+        )) : null}
       </div>
     </div>
   );

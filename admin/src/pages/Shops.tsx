@@ -43,7 +43,7 @@ export default function Shops() {
   const load = useCallback((q: string) => {
     setLoading(true);
     fetchShops(q || undefined)
-      .then((r) => setShops(r.shops))
+      .then((r) => setShops(Array.isArray(r.shops) ? r.shops : []))
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
@@ -153,7 +153,7 @@ export default function Shops() {
         <Table
           dataSource={shops}
           columns={columns}
-          rowKey={(r) => `${r.shop}-${r.appName}`}
+          rowKey={(r) => r.shop}
           size="small"
           pagination={{ pageSize: 20 }}
         />
@@ -172,10 +172,10 @@ export default function Shops() {
             items={[
               {
                 key: "events",
-                label: `生命周期事件 (${shopEvents.events.length})`,
+                label: `生命周期事件 ${Array.isArray(shopEvents.events) ? `(${shopEvents.events.length})` : ""}`,
                 children: (
                   <Timeline
-                    items={(shopEvents.events as Record<string, string>[]).map(
+                    items={(Array.isArray(shopEvents.events) ? shopEvents.events : []).map(
                       (e, i) => ({
                         key: i,
                         color:
@@ -202,12 +202,11 @@ export default function Shops() {
               },
               {
                 key: "billing",
-                label: `计费记录 (${shopEvents.billingLogs.length})`,
+                label: `计费记录 ${Array.isArray(shopEvents.billingLogs) ? `(${shopEvents.billingLogs.length})` : ""}`,
                 children: (
                   <Timeline
-                    items={(
-                      shopEvents.billingLogs as Record<string, unknown>[]
-                    ).map((b, i) => ({
+                    items={(Array.isArray(shopEvents.billingLogs) ? shopEvents.billingLogs : []).map(
+                      (b, i) => ({
                       key: i,
                       color: "blue",
                       children: (

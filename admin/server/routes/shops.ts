@@ -11,7 +11,6 @@ shopsRouter.get("/", async (req, res) => {
     const baseQuery = `
       SELECT
         a.shop,
-        a.appName,
         a.subscriptionTokens,
         a.purchasedTokens,
         a.trialTokens,
@@ -24,7 +23,7 @@ shopsRouter.get("/", async (req, res) => {
         sub.currentPeriodEnd
       FROM Account a
       LEFT JOIN AppSubscription sub
-        ON a.shop = sub.shop AND a.appName = sub.appName
+        ON a.shop = sub.shop
       ${search ? "WHERE a.shop LIKE ?" : ""}
       ORDER BY a.updatedAt DESC
       LIMIT 200
@@ -36,7 +35,6 @@ shopsRouter.get("/", async (req, res) => {
 
     const rows = result.rows.map((r) => ({
       shop: r.shop,
-      appName: r.appName,
       subscriptionTokens: Number(r.subscriptionTokens ?? 0),
       purchasedTokens: Number(r.purchasedTokens ?? 0),
       trialTokens: Number(r.trialTokens ?? 0),
@@ -67,14 +65,26 @@ shopsRouter.get("/:shop/events", async (req, res) => {
         args: [shop],
       }),
       db.execute({
-        sql: "SELECT shop, appName, eventType, planKey, tokensDelta, usedTokens, createdAt FROM BillingLog WHERE shop = ? ORDER BY createdAt DESC LIMIT 30",
+        sql: "SELECT shop, eventType, planKey, tokensDelta, usedTokens, createdAt FROM BillingLog WHERE shop = ? ORDER BY createdAt DESC LIMIT 30",
         args: [shop],
       }),
     ]);
 
     res.json({
-      events: eventsResult.rows,
-      billingLogs: billingResult.rows,
+      events: eventsResult.rows.map((r) => ({
+        shop: r.shop,
+        eventType: r.eventType,
+        topic: r.topic,
+        createdAt: r.createdAt,
+      })),
+      billingLogs: billingResult.rows.map((r) => ({
+        shop: r.shop,
+        eventType: r.eventType,
+        planKey: r.planKey,
+        tokensDelta: r.tokensDelta,
+        usedTokens: r.usedTokens,
+        createdAt: r.createdAt,
+      })),
     });
   } catch (err) {
     console.error("[shops/events]", err);
