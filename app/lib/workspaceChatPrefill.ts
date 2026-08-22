@@ -1,9 +1,13 @@
-export function buildWorkspaceChatPrefillPath(params: {
+export const WORKSPACE_ASSISTANT_PATH = "/app/assistant";
+
+export function buildWorkspaceAssistantPath(params: {
   prompt?: string | null;
   constraints?: Array<string | null | undefined>;
+  openContextTool?: string | null;
 }) {
   const searchParams = new URLSearchParams();
   const prompt = params.prompt?.trim();
+  const openContextTool = params.openContextTool?.trim();
 
   if (prompt) {
     searchParams.set("prefillTaskPrompt", prompt);
@@ -15,6 +19,17 @@ export function buildWorkspaceChatPrefillPath(params: {
     searchParams.append("prefillConstraint", next);
   }
 
+  if (openContextTool) {
+    searchParams.set("openContextTool", openContextTool);
+  }
+
   const query = searchParams.toString();
-  return query ? `/app?${query}` : "/app";
+  return query ? `${WORKSPACE_ASSISTANT_PATH}?${query}` : WORKSPACE_ASSISTANT_PATH;
+}
+
+export function buildWorkspaceChatPrefillPath(params: {
+  prompt?: string | null;
+  constraints?: Array<string | null | undefined>;
+}) {
+  return buildWorkspaceAssistantPath(params);
 }

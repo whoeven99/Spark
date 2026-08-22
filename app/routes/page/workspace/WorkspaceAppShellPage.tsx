@@ -137,6 +137,17 @@ const panelItems: Array<{
   { key: "home", labelKey: "workspace.shell.panels.home" },
 ];
 
+function isLaunchContextTool(value: string | null): value is ContextTool {
+  return (
+    value === "product" ||
+    value === "article" ||
+    value === "order" ||
+    value === "file" ||
+    value === "media" ||
+    value === "constraint"
+  );
+}
+
 // ── 左栏会话列表：时间分组与相对时间 ─────────────────────────────────────────
 
 /** 账户展示名兜底（无 session 在线用户信息时，退回到店铺名/通用名，由 loader 传入 accountName）。 */
@@ -359,10 +370,14 @@ export function WorkspaceAppShellPage({
   initialConversationList = [],
   dashboardSnapshot,
   accountName,
+  defaultPanel = "home",
+  autoCreateConversation = false,
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
   accountName?: string;
+  defaultPanel?: WorkspacePanel;
+  autoCreateConversation?: boolean;
 }) {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
@@ -400,13 +415,14 @@ export function WorkspaceAppShellPage({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    initialConversationList.length > 0 ? initialConversationList[0].id : null,
+    autoCreateConversation ? null : (initialConversationList[0]?.id ?? null),
   );
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const createConversationRef = useRef<((options?: { draft?: string; assistantText?: string }) => void) | null>(null);
   const processedPrefillPromptRef = useRef<string | null>(null);
+  const initializedAssistantLandingRef = useRef(false);
   const [runningTaskCount, setRunningTaskCount] = useState(0);
   const [conversationSearch, setConversationSearch] = useState("");
   // 置顶与折叠均为本机偏好（localStorage），不进数据库
@@ -543,7 +559,7 @@ export function WorkspaceAppShellPage({
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
-  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "home";
+  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : defaultPanel;
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
 
@@ -652,7 +668,7 @@ export function WorkspaceAppShellPage({
       pruneEmptyDraftConversations();
     }
     const next = new URLSearchParams(searchParams);
-    if (panel === "home") {
+    if (panel === defaultPanel) {
       next.delete("panel");
     } else {
       next.set("panel", panel);
@@ -778,16 +794,23 @@ export function WorkspaceAppShellPage({
   useEffect(() => {
     const prefillPrompt = searchParams.get("prefillTaskPrompt");
     const prefillConstraints = searchParams.getAll("prefillConstraint");
+    const openContextTool = isLaunchContextTool(searchParams.get("openContextTool"))
+      ? searchParams.get("openContextTool")
+      : null;
     const prefillSignature = JSON.stringify({
       prompt: prefillPrompt ?? "",
       constraints: prefillConstraints,
+      openContextTool: openContextTool ?? "",
     });
-    if (!prefillPrompt && prefillConstraints.length === 0) {
+    if (!prefillPrompt && prefillConstraints.length === 0 && !openContextTool) {
       processedPrefillPromptRef.current = null;
       return;
     }
     if (processedPrefillPromptRef.current === prefillSignature) return;
     processedPrefillPromptRef.current = prefillSignature;
+    if (openContextTool) {
+      pendingHomeContextToolRef.current = openContextTool;
+    }
     createConversationRef.current?.({
       draft: prefillPrompt ?? "",
       assistantText: prefillWelcomeText,
@@ -798,8 +821,21 @@ export function WorkspaceAppShellPage({
     const next = new URLSearchParams(searchParams);
     next.delete("prefillTaskPrompt");
     next.delete("prefillConstraint");
+    next.delete("openContextTool");
     setSearchParams(next);
   }, [prefillWelcomeText, searchParams, setSearchParams, workspaceContext.addConstraint]);
+
+  useEffect(() => {
+    if (!autoCreateConversation) return;
+    if (initializedAssistantLandingRef.current) return;
+    if (activeConversationId) return;
+    if (searchParams.get("prefillTaskPrompt")) return;
+    if (searchParams.getAll("prefillConstraint").length > 0) return;
+    if (isLaunchContextTool(searchParams.get("openContextTool"))) return;
+
+    initializedAssistantLandingRef.current = true;
+    createConversationRef.current?.();
+  }, [activeConversationId, autoCreateConversation, searchParams]);
 
   const sendMessage = async () => {
     if (!activeConversation) return;

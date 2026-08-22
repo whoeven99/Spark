@@ -58,7 +58,7 @@ const NAV_ITEMS: Record<
       | "nav.adsCatalog";
   }
 > = {
-  ask: { href: "/app", labelKey: "nav.ask" },
+  ask: { href: "/app/assistant", labelKey: "nav.ask" },
   today: { href: "/app/today", labelKey: "nav.today" },
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
@@ -164,12 +164,13 @@ export default function App() {
 }
 
 /**
- * 页面留白的唯一来源。工作台首页是整屏两栏布局，自带内边距，因此不套这层容器。
+ * 页面留白的唯一来源。主页与助手页都自带整屏布局，因此不套这层容器。
  */
 function AppShellContent() {
   const location = useLocation();
   const { isMobile } = useResponsiveLayout();
-  const isWorkspace = location.pathname.replace(/\/+$/, "") === "/app";
+  const normalizedPath = location.pathname.replace(/\/+$/, "");
+  const isWorkspace = normalizedPath === "/app" || normalizedPath === "/app/assistant";
 
   if (isWorkspace) {
     return <Outlet />;

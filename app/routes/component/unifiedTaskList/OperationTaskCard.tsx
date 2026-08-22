@@ -12,6 +12,8 @@ import {
   buildOperationTaskPrompt,
   inferOperationTaskPresentation,
 } from "../../../lib/operationTaskPresentation";
+import { appendEmbeddedSearchToPath } from "../../../lib/embeddedLocationSearch";
+import { buildWorkspaceAssistantPath } from "../../../lib/workspaceChatPrefill";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 type Props = {
@@ -239,19 +241,14 @@ export function OperationTaskCard({ task, locationSearch, onUpdated }: Props) {
   const openDetail = () =>
     navigate(buildTaskDetailPath(locationSearch, task.id));
   const sendToAi = () => {
-    const params = new URLSearchParams(
-      locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
-    );
-    params.set("panel", "chat");
-    params.set(
-      "prefillTaskPrompt",
-      buildOperationTaskPrompt(task, presentation, {
+    const assistantPath = buildWorkspaceAssistantPath({
+      prompt: buildOperationTaskPrompt(task, presentation, {
         taskStatusText: statusLabel(localStatus, t),
         dueWindowText: dueWindowLabel(task.dueWindow, t),
         t,
       }),
-    );
-    navigate(`/app?${params.toString()}`);
+    });
+    navigate(appendEmbeddedSearchToPath(assistantPath, locationSearch));
   };
   const submitTaskAction = (taskAction: OperationTaskAction) => {
     submittedAction.current = taskAction;
