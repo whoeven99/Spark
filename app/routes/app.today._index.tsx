@@ -7,8 +7,9 @@ import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { useFeatureView } from "../lib/featureTrack";
 import { hasReadReportsScope } from "../lib/shopifyReports";
+import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
-import { loadTodayOverviewData, TODAY_ALL_COUNTRIES } from "../server/operations/todayGeo.server";
+import { loadTodayOverviewData } from "../server/operations/todayGeo.server";
 import {
   mobilePageContentStyle,
   pageColorTokens,

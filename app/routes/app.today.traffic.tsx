@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
 import { hasReadReportsScope } from "../lib/shopifyReports";
+import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
-import { loadTodayDetailData, TODAY_ALL_COUNTRIES } from "../server/operations/todayGeo.server";
+import { loadTodayDetailData } from "../server/operations/todayGeo.server";
 import { TodayMetricDetailPage } from "./page/TodayMetricDetailPage";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 

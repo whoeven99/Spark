@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { hasReadReportsScope } from "../lib/shopifyReports";
+import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
 import { upsertShopCostConfig } from "../server/operations/roi/costConfig.server";
-import { loadTodayDetailData, TODAY_ALL_COUNTRIES } from "../server/operations/todayGeo.server";
+import { loadTodayDetailData } from "../server/operations/todayGeo.server";
 import type { ValueLayerResponse } from "./api.today-value-layer";
 import {
   TodayRoiValueLayerSection,

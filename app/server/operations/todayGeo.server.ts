@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import { TODAY_ALL_COUNTRIES } from "../../lib/todayGeo.shared";
 import type {
   TodayBusinessModuleKey,
   TodayMetricAction,
@@ -13,8 +14,6 @@ import { readNumericCell } from "../../lib/shopifyReports";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { executeShopifyqlQuery } from "../shopifyql/shopifyqlQuery.server";
 import { getShopCostConfig } from "./roi/costConfig.server";
-
-export const TODAY_ALL_COUNTRIES = "ALL";
 
 type TodayCountryKey = string;
 
