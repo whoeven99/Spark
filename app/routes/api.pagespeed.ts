@@ -30,19 +30,23 @@ function parseLocale(raw: unknown, request: Request, session: unknown): string {
 
 function errorResponse(error: unknown): Response {
   if (error instanceof PageSpeedRequestError) {
+    console.warn(
+      `[PageSpeed] request failed code=${error.errorCode} status=${error.status} message=${error.message}`,
+    );
     const body: PageSpeedResponse = {
       ok: false,
       errorCode: error.errorCode,
       error: error.message,
     };
-    return Response.json(body, { status: error.status });
+    return Response.json(body);
   }
+  console.error("[PageSpeed] unexpected analyze error:", error);
   const body: PageSpeedResponse = {
     ok: false,
     errorCode: "upstream",
     error: error instanceof Error ? error.message : "upstream",
   };
-  return Response.json(body, { status: 502 });
+  return Response.json(body);
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {

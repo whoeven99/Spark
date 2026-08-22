@@ -10,6 +10,11 @@ import type {
   TodayMetricStatus,
   TodayMetricTable,
 } from "../../lib/todayMetricModules";
+import {
+  getTodayMetricDetail,
+  getTodayOverviewModules,
+  getTodayRoiMonitor,
+} from "../../lib/todayMetricModules";
 import { readNumericCell } from "../../lib/shopifyReports";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { executeShopifyqlQuery } from "../shopifyql/shopifyqlQuery.server";
@@ -118,6 +123,30 @@ type OrderScopeData = {
 
 const ORDER_LOOKBACK_DAYS = 37;
 const COUNTRY_OPTION_WINDOW_DAYS = 90;
+
+function buildFallbackFilters(
+  requestedCountry: string | null | undefined,
+  dataNotes: string[],
+): TodayFilterState {
+  const filters = buildCountryOptions(
+    normalizeCountryKey(requestedCountry) ?? requestedCountry ?? null,
+    new Map(),
+    new Map(),
+  );
+  filters.dataNotes.push(...dataNotes);
+  return filters;
+}
+
+function buildFallbackDetail(
+  metric: TodayBusinessModuleKey,
+  requestedCountry: string | null | undefined,
+  note: string,
+): TodayDetailData {
+  return {
+    filters: buildFallbackFilters(requestedCountry, [note]),
+    detail: getTodayMetricDetail(metric),
+  };
+}
 
 const COUNTRY_DISPLAY_NAMES = new Intl.DisplayNames(["zh-CN"], { type: "region" });
 
@@ -1101,28 +1130,49 @@ export async function loadTodayOverviewData(params: {
   now?: Date;
 }): Promise<TodayOverviewData> {
   const now = params.now ?? new Date();
-  const [orderCounts, sessionCounts] = await Promise.all([
-    loadOrderCountryCounts(params.shop, now),
-    params.hasReadReports ? loadSessionCountryCounts(params.admin) : Promise.resolve(new Map<string, number>()),
-  ]);
-  const filters = buildCountryOptions(normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null, orderCounts, sessionCounts);
-  if (!params.hasReadReports) {
-    filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化暂时无法按地区读取 Storefront sessions。");
+  try {
+    const [orderCounts, sessionCounts] = await Promise.all([
+      loadOrderCountryCounts(params.shop, now),
+      params.hasReadReports
+        ? loadSessionCountryCounts(params.admin)
+        : Promise.resolve(new Map<string, number>()),
+    ]);
+    const filters = buildCountryOptions(
+      normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
+      orderCounts,
+      sessionCounts,
+    );
+    if (!params.hasReadReports) {
+      filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化暂时无法按地区读取 Storefront sessions。");
+    }
+    const [orderScope, sessionScope] = await Promise.all([
+      loadOrderScopeData(params.shop, filters.selectedCountry, now),
+      params.hasReadReports
+        ? loadSessionScope(
+            params.admin,
+            filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
+            false,
+          )
+        : Promise.resolve(null),
+    ]);
+    if (params.hasReadReports && sessionScope === null) {
+      filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，流量与转化先显示为空值。");
+    }
+    return {
+      filters,
+      roiMonitor: buildRoiMonitor(orderScope),
+      modules: buildOverviewModules(orderScope, sessionScope),
+    };
+  } catch (error) {
+    console.error("[todayGeo] loadTodayOverviewData failed:", error);
+    return {
+      filters: buildFallbackFilters(params.requestedCountry, [
+        "Today 总览数据暂时加载失败，当前先展示最近一版默认分析文案。",
+      ]),
+      roiMonitor: getTodayRoiMonitor(),
+      modules: getTodayOverviewModules(),
+    };
   }
-  const [orderScope, sessionScope] = await Promise.all([
-    loadOrderScopeData(params.shop, filters.selectedCountry, now),
-    params.hasReadReports
-      ? loadSessionScope(params.admin, filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry, false)
-      : Promise.resolve(null),
-  ]);
-  if (params.hasReadReports && sessionScope === null) {
-    filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，流量与转化先显示为空值。");
-  }
-  return {
-    filters,
-    roiMonitor: buildRoiMonitor(orderScope),
-    modules: buildOverviewModules(orderScope, sessionScope),
-  };
 }
 
 export async function loadTodayDetailData(params: {
@@ -1134,45 +1184,60 @@ export async function loadTodayDetailData(params: {
   now?: Date;
 }): Promise<TodayDetailData> {
   const now = params.now ?? new Date();
-  const [orderCounts, sessionCounts] = await Promise.all([
-    loadOrderCountryCounts(params.shop, now),
-    params.hasReadReports ? loadSessionCountryCounts(params.admin) : Promise.resolve(new Map<string, number>()),
-  ]);
-  const filters = buildCountryOptions(normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null, orderCounts, sessionCounts);
-  if (!params.hasReadReports && (params.metric === "traffic" || params.metric === "conversion")) {
-    filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化详情暂时无法按地区读取 Storefront sessions。");
-  }
+  try {
+    const [orderCounts, sessionCounts] = await Promise.all([
+      loadOrderCountryCounts(params.shop, now),
+      params.hasReadReports
+        ? loadSessionCountryCounts(params.admin)
+        : Promise.resolve(new Map<string, number>()),
+    ]);
+    const filters = buildCountryOptions(
+      normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
+      orderCounts,
+      sessionCounts,
+    );
+    if (!params.hasReadReports && (params.metric === "traffic" || params.metric === "conversion")) {
+      filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化详情暂时无法按地区读取 Storefront sessions。");
+    }
 
-  const selectedCountryLabel = filters.selectedCountryLabel;
+    const selectedCountryLabel = filters.selectedCountryLabel;
 
-  if (params.metric === "orders" || params.metric === "roi") {
-    const orderScope = await loadOrderScopeData(params.shop, filters.selectedCountry, now);
+    if (params.metric === "orders" || params.metric === "roi") {
+      const orderScope = await loadOrderScopeData(params.shop, filters.selectedCountry, now);
+      return {
+        filters,
+        detail:
+          params.metric === "orders"
+            ? buildOrdersDetail(orderScope, selectedCountryLabel)
+            : buildRoiDetail(orderScope, selectedCountryLabel),
+      };
+    }
+
+    const sessionScope =
+      params.hasReadReports
+        ? await loadSessionScope(
+            params.admin,
+            filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
+            true,
+          )
+        : null;
+    if (params.hasReadReports && sessionScope === null) {
+      filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，当前详情页先保留空值。");
+    }
+
     return {
       filters,
       detail:
-        params.metric === "orders"
-          ? buildOrdersDetail(orderScope, selectedCountryLabel)
-          : buildRoiDetail(orderScope, selectedCountryLabel),
+        params.metric === "traffic"
+          ? buildTrafficDetail(sessionScope, selectedCountryLabel)
+          : buildConversionDetail(sessionScope, selectedCountryLabel),
     };
+  } catch (error) {
+    console.error(`[todayGeo] loadTodayDetailData failed metric=${params.metric}:`, error);
+    return buildFallbackDetail(
+      params.metric,
+      params.requestedCountry,
+      "Today 详情数据暂时加载失败，当前先展示默认报告模板。",
+    );
   }
-
-  const sessionScope =
-    params.hasReadReports
-      ? await loadSessionScope(
-          params.admin,
-          filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
-          true,
-        )
-      : null;
-  if (params.hasReadReports && sessionScope === null) {
-    filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，当前详情页先保留空值。");
-  }
-
-  return {
-    filters,
-    detail:
-      params.metric === "traffic"
-        ? buildTrafficDetail(sessionScope, selectedCountryLabel)
-        : buildConversionDetail(sessionScope, selectedCountryLabel),
-  };
 }

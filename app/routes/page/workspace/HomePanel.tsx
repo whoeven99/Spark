@@ -622,6 +622,7 @@ export function HomePanel({
   displayName,
   snapshot,
   runningTaskCount,
+  initialRenderTimeIso,
   onSubmitPrompt,
   onOpenContextTool,
   onMoreContext,
@@ -632,6 +633,7 @@ export function HomePanel({
   displayName: string;
   snapshot: WorkspaceDashboardSnapshot;
   runningTaskCount: number;
+  initialRenderTimeIso?: string;
   onSubmitPrompt: (prompt: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
   onMoreContext: () => void;
@@ -644,7 +646,11 @@ export function HomePanel({
   const [draft, setDraft] = useState("");
   const [automationOverview, setAutomationOverview] =
     useState<AutomationOverview | null>(null);
-  const now = useMemo(() => new Date(), []);
+  const now = useMemo(() => {
+    if (!initialRenderTimeIso) return new Date();
+    const parsed = new Date(initialRenderTimeIso);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [initialRenderTimeIso]);
   const localizedSnapshot = useMemo(
     () => localizeDashboardSnapshot(snapshot, t),
     [snapshot, t],

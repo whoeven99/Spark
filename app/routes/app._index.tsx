@@ -69,7 +69,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .join(" ")
       .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
-  return { dashboardSnapshot, accountName, runningTaskCount };
+  return {
+    dashboardSnapshot,
+    accountName,
+    runningTaskCount,
+    homeRenderTimeIso: new Date().toISOString(),
+  };
 };
 
 export default function Index() {
@@ -85,6 +90,7 @@ export default function Index() {
           displayName={data.accountName}
           snapshot={data.dashboardSnapshot}
           runningTaskCount={data.runningTaskCount}
+          initialRenderTimeIso={data.homeRenderTimeIso}
           onSubmitPrompt={(prompt) => navigate(buildWorkspaceAssistantPath({ prompt }))}
           onOpenContextTool={(tool) =>
             navigate(buildWorkspaceAssistantPath({ openContextTool: tool }))
