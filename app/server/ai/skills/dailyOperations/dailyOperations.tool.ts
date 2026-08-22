@@ -88,12 +88,12 @@ function createGetDailyOperationsTool(context: AgentContext): DynamicStructuredT
 
 export const dailyOperationsToolDefinition: ToolDefinition = {
   name: "dailyOperations",
-  displayName: "每日经营待办",
+  displayName: "健康度与待办",
   category: "店铺运营",
   stage: "monitor",
   description:
-    "读取当日经营诊断快照（销售/履约/物流/退款/库存）与四象限待办任务，回答今天需要处理什么",
+    "读取当日健康诊断快照与任务中心待办，回答今天有哪些风险、异常和待处理事项",
   systemPromptExtension:
-    "当用户询问「今天店铺有什么要处理的」「有哪些经营风险 / 待办任务」「昨天的问题处理得怎么样」时，调用工具 get_daily_operations 获取当日诊断与四象限待办。回复时先讲紧急重要（q1/P0）任务，再概述其他象限；诊断结论需引用 evidence 中的具体数字。任务状态：open=待处理，in_progress=处理中，done=已完成，ignored=已忽略，auto_closed=问题已自动消除。",
+    "当用户询问「今天店铺有什么要处理的」「有哪些经营风险 / 待办任务」「昨天的问题处理得怎么样」时，调用工具 get_daily_operations 获取当日健康诊断与待办任务。回复时先讲紧急重要（q1/P0）任务，再概述其他象限；诊断结论需引用 evidence 中的具体数字。任务状态：open=待处理，in_progress=处理中，done=已完成，ignored=已忽略，auto_closed=问题已自动消除。",
   createTool: (context) => createGetDailyOperationsTool(context),
 };

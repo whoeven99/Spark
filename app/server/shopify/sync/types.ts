@@ -30,6 +30,11 @@ export interface ShopifyCustomerInOrder {
   updated_at: string;
 }
 
+export interface ShopifyOrderAddress {
+  country_code?: string | null;
+  province_code?: string | null;
+}
+
 export interface ShopifyOrderPayload {
   id: number;
   order_number: number;
@@ -44,6 +49,8 @@ export interface ShopifyOrderPayload {
   updated_at: string;
   processed_at: string | null;
   currency: string;
+  presentment_currency?: string | null;
+  customer_locale?: string | null;
   total_price: string;
   subtotal_price: string;
   total_discounts: string;
@@ -59,6 +66,8 @@ export interface ShopifyOrderPayload {
   source_name: string | null;
   landing_site: string | null;
   referring_site: string | null;
+  billing_address?: ShopifyOrderAddress | null;
+  shipping_address?: ShopifyOrderAddress | null;
   tags: string;
   customer: ShopifyCustomerInOrder | null;
   line_items: ShopifyLineItem[];

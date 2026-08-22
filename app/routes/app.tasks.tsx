@@ -7,6 +7,7 @@ import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -16,15 +17,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function AppTasks() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   useFeatureView("tasks");
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title="任务中心"
-        subtitle="统一查看并处理文案、图片与批处理任务。"
+        subtitle="统一查看并处理定时任务、经营任务、文案、图片与批处理任务。"
         titleBarTitle={t("nav.tasks")}
-        backLabel="返回首页"
+        backLabel={returnTo ? "返回上一级" : "返回首页"}
         fallbackPath="/app"
+        returnTo={returnTo}
         isMobile={isMobile}
       >
       <UnifiedTaskListPage

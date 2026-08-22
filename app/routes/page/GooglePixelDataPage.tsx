@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData, useNavigate, useRevalidator } from "react-router";
+import { Link, useLoaderData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import {
@@ -112,9 +112,9 @@ function StatusPill({
 export function GooglePixelDataPage() {
   const { t } = useTranslation();
   const data = useLoaderData<GooglePixelDataLoaderData>();
-  const navigate = useNavigate();
   const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
+  const connectionPath = `/app/settings/connections/google${locationSearch}`;
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
   const [error, setError] = useState("");
@@ -228,7 +228,7 @@ export function GooglePixelDataPage() {
           title={t("googlePixelData.pageTitle")}
           subtitle={t("googlePixelData.pageSubtitle")}
           backLabel={t("googlePixelData.back")}
-          fallbackPath="/app/ads-catalog"
+          fallbackPath="/app/settings/connections/google"
           preserveSearch
         />
         <div style={cardStyle}>
@@ -237,7 +237,7 @@ export function GooglePixelDataPage() {
             <Link to={`/app/ads/google-pixel${locationSearch}`} style={primaryBtn}>
               {t("adsCatalog.googlePixelSetup")}
             </Link>
-            <Link to={`/app/ads-catalog${locationSearch}`} style={secondaryBtn}>
+            <Link to={connectionPath} style={secondaryBtn}>
               {t("googlePixelData.back")}
             </Link>
           </div>
@@ -272,7 +272,7 @@ export function GooglePixelDataPage() {
         title={t("googlePixelData.pageTitle")}
         subtitle={t("googlePixelData.pageSubtitle")}
         backLabel={t("googlePixelData.back")}
-        fallbackPath="/app/ads-catalog"
+        fallbackPath="/app/settings/connections/google"
         preserveSearch
       />
 
@@ -286,9 +286,6 @@ export function GooglePixelDataPage() {
         <a href={themeEditorUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("adsCatalog.googleRemarketing.openThemeEditor")}
         </a>
-        <Link to={`/app/settings/ads-insights${locationSearch}`} style={secondaryBtn}>
-          {t("googlePixelData.openInsights")}
-        </Link>
       </div>
 
       <GoogleAdsPerformancePanel enabled={data.adsConnected} />
@@ -437,15 +434,6 @@ export function GooglePixelDataPage() {
       <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelData.sectionLimits")}</h3>
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>{t("googlePixelData.limitsBody")}</p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            style={secondaryBtn}
-            onClick={() => navigate(`/app/settings/ads-insights${locationSearch}`)}
-          >
-            {t("googlePixelData.openInsights")}
-          </button>
-        </div>
       </div>
 
       {hint ? <div style={pageHintTextStyle}>{hint}</div> : null}

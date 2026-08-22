@@ -18,6 +18,15 @@ export function isSupportedFileExtension(filename: string): boolean {
 export const SUPPORTED_EXTENSIONS_LABEL =
   ".txt / .md / .pdf / .docx / .csv / .xlsx / .json";
 
+async function importOptionalModule<T>(packageName: string): Promise<T> {
+  try {
+    return (await import(/* @vite-ignore */ packageName)) as T;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`缺少可选文件解析依赖 ${packageName}：${reason}`);
+  }
+}
+
 export async function parseFileBuffer(
   buffer: Buffer,
   filename: string,
@@ -42,7 +51,7 @@ export async function parseFileBuffer(
     }
     case ".pdf": {
       // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-      const pdfModule = (await import("pdf-parse")) as any;
+      const pdfModule = (await importOptionalModule<any>("pdf-parse"));
       const pdfParse = (pdfModule.default ?? pdfModule) as (
         data: Buffer,
         options?: object,
@@ -53,16 +62,16 @@ export async function parseFileBuffer(
     }
     case ".docx": {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mammoth = (await import("mammoth")) as {
+      const mammoth = (await importOptionalModule<{
         extractRawText: (options: { buffer: Buffer }) => Promise<{ value: string }>;
-      };
+      }>("mammoth"));
       const result = await mammoth.extractRawText({ buffer });
       text = result.value;
       break;
     }
     case ".csv": {
       // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-      const papaModule = (await import("papaparse" as string)) as any;
+      const papaModule = (await importOptionalModule<any>("papaparse"));
       const Papa = (papaModule.default ?? papaModule) as {
         parse: <T>(input: string, config?: object) => { data: T[] };
       };
@@ -74,10 +83,10 @@ export async function parseFileBuffer(
     case ".xlsx":
     case ".xls": {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const XLSX = (await import("xlsx")) as {
+      const XLSX = (await importOptionalModule<{
         read: (data: Buffer, opts?: object) => { SheetNames: string[]; Sheets: Record<string, unknown> };
         utils: { sheet_to_csv: (sheet: unknown) => string };
-      };
+      }>("xlsx"));
       const workbook = XLSX.read(buffer, { type: "buffer" });
       const sheets = workbook.SheetNames.map((name) => {
         const sheet = workbook.Sheets[name];

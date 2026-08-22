@@ -232,7 +232,7 @@ export function DashboardPanel({
               <div style={sectionTextStyle}>基于当前店铺数据和任务结果生成的建议。</div>
             </div>
             <button type="button" style={ghostButtonStyle} onClick={onOpenDailyOps}>
-              查看每日待办
+              查看健康度监测
             </button>
           </div>
           <div style={listColumnStyle}>

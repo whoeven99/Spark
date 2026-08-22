@@ -140,9 +140,18 @@ function readTaskIdFromSearch(search: string): string | null {
   return params.get("taskId");
 }
 
+function readPlatformFromSearch(search: string): Platform | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const platform = params.get("platform");
+  if (platform === "google" || platform === "facebook" || platform === "tiktok") {
+    return platform;
+  }
+  return null;
+}
+
 function syncAdsCatalogPageSearch(
   locationSearch: string,
-  updates: { tab?: Tab; taskId?: string | null },
+  updates: { tab?: Tab; taskId?: string | null; platform?: Platform },
 ) {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(
@@ -157,6 +166,9 @@ function syncAdsCatalogPageSearch(
     params.set("taskId", updates.taskId);
   } else if (updates.taskId === null) {
     params.delete("taskId");
+  }
+  if (updates.platform) {
+    params.set("platform", updates.platform);
   }
   const query = params.toString();
   const nextSearch = query ? `?${query}` : "";
@@ -214,6 +226,10 @@ export function AdsCatalogPage() {
   const shopify = useAppBridge();
   const location = useLocation();
   const locationSearch = useEmbeddedLocationSearch();
+  const returnTo = useMemo(() => {
+    const params = new URLSearchParams(location.search.startsWith("?") ? location.search.slice(1) : location.search);
+    return params.get("returnTo")?.trim() || undefined;
+  }, [location.search]);
   const loaderData = useLoaderData<AdsCatalogPageLoaderData>();
   const revalidator = useRevalidator();
   const credentials = loaderData.credentials;
@@ -221,7 +237,9 @@ export function AdsCatalogPage() {
   const taskPageSize = loaderData.initialTaskPage.pageSize;
 
   const [tab, setTabState] = useState<Tab>(() => readTabFromSearch(location.search) ?? "sync");
-  const [platform, setPlatform] = useState<Platform>("google");
+  const [platform, setPlatformState] = useState<Platform>(
+    () => readPlatformFromSearch(location.search) ?? "google",
+  );
   const [productIdsRaw, setProductIdsRaw] = useState("");
   const [filters, setFilters] = useState<GoogleFiltersValue>(DEFAULT_FILTERS);
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
@@ -284,6 +302,14 @@ export function AdsCatalogPage() {
       } else {
         syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId: null });
       }
+    },
+    [locationSearch],
+  );
+
+  const setPlatform = useCallback(
+    (nextPlatform: Platform) => {
+      setPlatformState(nextPlatform);
+      syncAdsCatalogPageSearch(locationSearch, { platform: nextPlatform });
     },
     [locationSearch],
   );
@@ -542,8 +568,9 @@ export function AdsCatalogPage() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
-  const settingsHubPath = "/app/settings";
-  const insightsPath = `/app/insights/performance${locationSearch}`;
+  const settingsHubPath = locationSearch
+    ? `/app/settings${locationSearch}`
+    : "/app/settings";
 
   const credentialReady =
     platform === "facebook"
@@ -783,8 +810,9 @@ export function AdsCatalogPage() {
   return (
     <PageSurface>
       <PageHeaderNav
-        backLabel={t("common.backToPrevious")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回上一级" : t("common.backToPrevious")}
+        fallbackPath={returnTo ?? "/app/settings"}
+        returnTo={returnTo}
         title={t("adsCatalog.pageTitle")}
         subtitle={t("adsCatalog.pageSubtitle")}
       />
@@ -930,9 +958,6 @@ export function AdsCatalogPage() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 <Link to={settingsHubPath} style={guideLinkStyle(true)}>
                   {t("common.manageConnections")}
-                </Link>
-                <Link to={insightsPath} style={guideLinkStyle(false)}>
-                  {t("settingsShell.openInsights")}
                 </Link>
               </div>
             </div>
@@ -1156,9 +1181,6 @@ export function AdsCatalogPage() {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   <Link to={settingsHubPath} style={guideLinkStyle(true)}>
                     {t("common.manageConnections")}
-                  </Link>
-                  <Link to={insightsPath} style={guideLinkStyle(false)}>
-                    {t("adsCatalog.insightsGuideLink")}
                   </Link>
                 </div>
               </div>

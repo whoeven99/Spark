@@ -19,6 +19,7 @@ import type {
   AutomationTemplateItem,
   PlaybookSurfaceItem,
 } from "../../lib/automationOverviewTypes";
+import { listScheduledAutomationTasks } from "./scheduledAutomationCatalog.server";
 
 const HISTORY_DAYS = 7;
 
@@ -181,6 +182,14 @@ export async function getAutomationOverview(shop: string): Promise<AutomationOve
   const latestCounts = latest ? countByStatus(latest.items) : { risk: 0, watch: 0 };
 
   const configured: AutomationConfiguredItem[] = [
+    ...listScheduledAutomationTasks().map<AutomationConfiguredItem>((task) => ({
+      id: task.id,
+      title: task.title,
+      schedule: task.schedule,
+      lastRun: null,
+      status: task.enabled ? "healthy" : "attention",
+      outcome: task.summary,
+    })),
     {
       id: "daily-inspection",
       title: "每日经营巡检",

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useState, useEffect } from "react";
 import { useFetcher, useLoaderData, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -25,6 +26,13 @@ import type {
 } from "../component/adsEdit/types";
 
 type SelectionStep = "campaign" | "adset" | "ad" | "edit";
+
+function buildConnectionCenterPath(platform: AdsEditPlatform, locationSearch: string): string {
+  const platformParam = platform === "meta" ? "meta" : platform;
+  return locationSearch
+    ? `/app/settings/connections/${platformParam}${locationSearch}`
+    : `/app/settings/connections/${platformParam}`;
+}
 
 export function AdsEditPage() {
   const { t } = useTranslation();
@@ -156,9 +164,9 @@ export function AdsEditPage() {
   const currentConnected = connections[platform];
 
   const connectLinks: Record<AdsEditPlatform, string> = {
-    meta: `/app/insights/performance${locationSearch}`,
-    tiktok: `/app/ads-catalog${locationSearch}`,
-    google: `/app/ads-catalog${locationSearch}`,
+    meta: buildConnectionCenterPath("meta", locationSearch),
+    tiktok: buildConnectionCenterPath("tiktok", locationSearch),
+    google: buildConnectionCenterPath("google", locationSearch),
   };
 
   const connectLabels: Record<AdsEditPlatform, string> = {
@@ -171,8 +179,10 @@ export function AdsEditPage() {
     <PageSurface>
       <PageHeaderNav
         workspaceOnly={false}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        titleBarTitle={t("nav.studio")}
+        backLabel={t("common.backToPrevious")}
+        fallbackPath="/app/studio"
+        eyebrow={t("studioWorkbench.groups.delivery.title")}
         title={t("adsEdit.pageTitle")}
         subtitle={t("adsEdit.pageSubtitle")}
       />
@@ -462,7 +472,7 @@ const cardTitleStyle = {
   color: pageColorTokens.textPrimary,
 };
 
-const itemBtnStyle: React.CSSProperties = {
+const itemBtnStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",

@@ -32,7 +32,7 @@ import type {
   AdsInsightsRangeDays,
   AdsInsightsView,
 } from "../component/adsInsights/types";
-import type { AdsInsightsPageLoaderData } from "../app.insights.performance";
+import type { AdsInsightsPageLoaderData } from "../app.insights.performance.shared";
 import { formatCurrency, formatNumber, formatRoas } from "../component/adsInsights/metricsFormat";
 import type { AdsOverviewSnapshot } from "../../server/adsInsights/overview.server";
 import type { Ga4StatusResponse } from "../api.ga4.status";
@@ -418,6 +418,7 @@ export function AdsInsightsPage() {
   const { isMobile } = useResponsiveLayout();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const loaderData = useLoaderData<AdsInsightsPageLoaderData>();
   const metricsFetcher = useFetcher<InsightsFetcherData>();
   const overviewFetcher = useFetcher<UnifiedOverviewFetcherData>();
@@ -778,7 +779,9 @@ export function AdsInsightsPage() {
   }, [okData?.campaigns, platform, tiktokSandbox, customMetrics]);
 
   const catalogLink = `/app/ads-catalog${locationSearch}`;
-  const settingsLink = "/app/settings";
+  const settingsLink = `/app/settings${locationSearch}`;
+  const googleConnectionLink = `/app/settings/connections/google${locationSearch}`;
+  const tiktokConnectionLink = `/app/settings/connections/tiktok${locationSearch}`;
   const googleAttributionLink = `/app/ads/google-attribution${locationSearch}`;
 
   const deepRows =
@@ -849,8 +852,9 @@ export function AdsInsightsPage() {
       <PageHeaderNav
         title={t("adsInsights.pageTitle")}
         subtitle={t("adsInsights.pageSubtitle")}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回上一级" : t("insights.backToCharts")}
+        fallbackPath={returnTo ?? "/app/today/roi"}
+        returnTo={returnTo}
       />
 
       <PageSurface>
@@ -1705,7 +1709,7 @@ export function AdsInsightsPage() {
           {platform === "google" && !googleSandbox && !connections.google.connected && (
             <div style={hintBoxStyle}>
               <div>{t("adsInsights.googleNotConnected")}</div>
-              <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
+              <Link to={googleConnectionLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
                 {t("adsInsights.goAdsCatalog")}
               </Link>
             </div>
@@ -1714,7 +1718,7 @@ export function AdsInsightsPage() {
           {platform === "tiktok" && !tiktokSandbox && !connections.tiktok.connected && (
             <div style={hintBoxStyle}>
               <div>{t("adsInsights.tiktokNotConnected")}</div>
-              <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
+              <Link to={tiktokConnectionLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
                 {t("adsInsights.goAdsCatalog")}
               </Link>
             </div>

@@ -25,6 +25,8 @@ const ORDERS_BACKFILL_QUERY = `#graphql
         processedAt
         closedAt
         currencyCode
+        presentmentCurrencyCode
+        customerLocale
         subtotalPriceSet { shopMoney { amount } }
         totalPriceSet { shopMoney { amount } }
         totalDiscountsSet { shopMoney { amount } }
@@ -38,6 +40,14 @@ const ORDERS_BACKFILL_QUERY = `#graphql
         sourceName
         landingPageUrl
         referringSite
+        billingAddress {
+          countryCodeV2
+          provinceCode
+        }
+        shippingAddress {
+          countryCodeV2
+          provinceCode
+        }
         tags
         customer {
           id
@@ -114,6 +124,8 @@ type GraphQLOrderNode = {
   processedAt: string | null;
   closedAt: string | null;
   currencyCode: string;
+  presentmentCurrencyCode: string | null;
+  customerLocale: string | null;
   subtotalPriceSet: { shopMoney: { amount: string } } | null;
   totalPriceSet: { shopMoney: { amount: string } } | null;
   totalDiscountsSet: { shopMoney: { amount: string } } | null;
@@ -127,6 +139,18 @@ type GraphQLOrderNode = {
   sourceName: string | null;
   landingPageUrl: string | null;
   referringSite: string | null;
+  billingAddress:
+    | {
+        countryCodeV2: string | null;
+        provinceCode: string | null;
+      }
+    | null;
+  shippingAddress:
+    | {
+        countryCodeV2: string | null;
+        provinceCode: string | null;
+      }
+    | null;
   tags: string[];
   customer: {
     id: string;
@@ -191,7 +215,7 @@ function gidToId(gid: string): string {
   return parts[parts.length - 1];
 }
 
-function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
+export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
   const orderNumber = parseInt(node.name.replace("#", ""), 10) || 0;
   const customerId = node.customer ? gidToId(node.customer.id) : undefined;
 
@@ -209,6 +233,8 @@ function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
     updated_at: node.updatedAt,
     processed_at: node.processedAt,
     currency: node.currencyCode,
+    presentment_currency: node.presentmentCurrencyCode,
+    customer_locale: node.customerLocale,
     total_price: node.totalPriceSet?.shopMoney.amount ?? "0",
     subtotal_price: node.subtotalPriceSet?.shopMoney.amount ?? "0",
     total_discounts: node.totalDiscountsSet?.shopMoney.amount ?? "0",
@@ -224,6 +250,18 @@ function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
     source_name: node.sourceName,
     landing_site: node.landingPageUrl,
     referring_site: node.referringSite,
+    billing_address: node.billingAddress
+      ? {
+          country_code: node.billingAddress.countryCodeV2,
+          province_code: node.billingAddress.provinceCode,
+        }
+      : null,
+    shipping_address: node.shippingAddress
+      ? {
+          country_code: node.shippingAddress.countryCodeV2,
+          province_code: node.shippingAddress.provinceCode,
+        }
+      : null,
     tags: (node.tags ?? []).join(","),
     customer: node.customer
       ? {

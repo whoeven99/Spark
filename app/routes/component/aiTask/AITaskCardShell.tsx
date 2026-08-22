@@ -4,7 +4,7 @@ import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { LogViewer } from "./LogViewer";
-import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskStatus, AITaskType } from "../../../lib/aiTaskTypes";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -85,7 +85,13 @@ export function actionButtonStyle(tone: CardAction["tone"], disabled = false) {
 
 type Props = {
   /** The raw task record — used for id, timestamps, and LogViewer. */
-  task: AITaskItem;
+  task: {
+    id: string;
+    createdAt: string;
+    completedAt: string | null;
+    taskType?: AITaskType;
+    startedAt?: string | null;
+  };
   locationSearch: string;
 
   /** Live status (may differ from task.status while LogViewer is polling). */
@@ -387,7 +393,7 @@ export function AITaskCardShell({
       </div>
 
       {/* ── Live log viewer ── */}
-      {showLogViewer ? (
+      {showLogViewer && task.taskType && task.startedAt ? (
         <LogViewer
           taskId={task.id}
           taskType={task.taskType}

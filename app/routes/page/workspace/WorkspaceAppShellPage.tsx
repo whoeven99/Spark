@@ -61,7 +61,6 @@ import {
   mobileTopBarStyle,
   mobileTopBarTitleStyle,
   mobileTopBarTitleWrapStyle,
-  mutedMetaStyle,
   navButtonStyle,
   navGroupStyle,
   navIconStyle,
@@ -131,40 +130,72 @@ function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
 }
 
 // 工作台左栏只保留 首页（其余 看板/技能/自动化/任务列表 已上升为顶级目的地 经营/创作/任务）。
-const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string }> = [
-  { key: "home", label: "首页" },
+const panelItems: Array<{
+  key: Exclude<WorkspacePanel, "chat">;
+  labelKey: "workspace.shell.panels.home";
+}> = [
+  { key: "home", labelKey: "workspace.shell.panels.home" },
 ];
+
+function isLaunchContextTool(value: string | null): value is ContextTool {
+  return (
+    value === "product" ||
+    value === "article" ||
+    value === "order" ||
+    value === "file" ||
+    value === "media" ||
+    value === "constraint"
+  );
+}
 
 // ── 左栏会话列表：时间分组与相对时间 ─────────────────────────────────────────
 
 /** 账户展示名兜底（无 session 在线用户信息时，退回到店铺名/通用名，由 loader 传入 accountName）。 */
-const DEFAULT_ACCOUNT_DISPLAY_NAME = "Spark 用户";
+const CONVERSATION_GROUP_ORDER = ["today", "yesterday", "last7Days", "earlier"] as const;
 
-const CONVERSATION_GROUP_ORDER = ["今天", "昨天", "7 天内", "更早"] as const;
+type ConversationGroupKey = (typeof CONVERSATION_GROUP_ORDER)[number];
 
-function conversationGroupLabel(iso: string): (typeof CONVERSATION_GROUP_ORDER)[number] {
+function conversationGroupKey(iso: string): ConversationGroupKey {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "更早";
+  if (Number.isNaN(date.getTime())) return "earlier";
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const t = date.getTime();
-  if (t >= startOfToday) return "今天";
-  if (t >= startOfToday - 24 * 60 * 60 * 1000) return "昨天";
-  if (t >= startOfToday - 6 * 24 * 60 * 60 * 1000) return "7 天内";
-  return "更早";
+  if (t >= startOfToday) return "today";
+  if (t >= startOfToday - 24 * 60 * 60 * 1000) return "yesterday";
+  if (t >= startOfToday - 6 * 24 * 60 * 60 * 1000) return "last7Days";
+  return "earlier";
 }
 
-const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+function conversationGroupLabel(
+  group: "pinned" | ConversationGroupKey,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const map = {
+    pinned: "workspace.shell.groups.pinned",
+    today: "workspace.shell.groups.today",
+    yesterday: "workspace.shell.groups.yesterday",
+    last7Days: "workspace.shell.groups.last7Days",
+    earlier: "workspace.shell.groups.earlier",
+  } as const;
+  return t(map[group]);
+}
 
-function conversationTimeLabel(iso: string): string {
+function conversationTimeLabel(
+  iso: string,
+  t: ReturnType<typeof useTranslation>["t"],
+  locale: string,
+): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  const group = conversationGroupLabel(iso);
-  if (group === "今天") {
+  const group = conversationGroupKey(iso);
+  if (group === "today") {
     return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   }
-  if (group === "昨天") return "昨天";
-  if (group === "7 天内") return WEEKDAY_LABELS[date.getDay()];
+  if (group === "yesterday") return t("workspace.shell.groups.yesterday");
+  if (group === "last7Days") {
+    return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date);
+  }
   return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
@@ -300,9 +331,14 @@ const sidebarQuotaRowStyle = {
 } as const;
 
 const DRAFT_CONVERSATION_PREFIX = "draft-";
+const UNTITLED_CONVERSATION_TITLES = new Set(["新对话", "New chat", "New conversation"]);
 
 function isDraftConversationId(id: string): boolean {
   return id.startsWith(DRAFT_CONVERSATION_PREFIX);
+}
+
+function isUntitledConversationTitle(title: string): boolean {
+  return UNTITLED_CONVERSATION_TITLES.has(title.trim());
 }
 
 function createDraftConversationId(): string {
@@ -330,46 +366,63 @@ function listEmptyDraftConversationIds(
     .map((conversation) => conversation.id);
 }
 
-const fallbackDashboardSnapshot: WorkspaceDashboardSnapshot = {
-  hasData: false,
-  metrics: [
-    { label: "销售额", value: "—", delta: "—", tone: "neutral" },
-    { label: "订单数", value: "—", delta: "—", tone: "neutral" },
-    { label: "转化率", value: "—", delta: "—", tone: "neutral", pendingIntegration: true },
-    { label: "客单价", value: "—", delta: "—", tone: "neutral" },
-    { label: "退款率", value: "—", delta: "—", tone: "neutral" },
-    { label: "库存风险 SKU", value: "—", delta: "—", tone: "neutral" },
-  ],
-  alerts: [],
-  suggestions: [],
-  recentTaskSummaries: [],
-};
-
 export function WorkspaceAppShellPage({
   initialConversationList = [],
-  dashboardSnapshot = fallbackDashboardSnapshot,
+  dashboardSnapshot,
   accountName,
+  defaultPanel = "home",
+  autoCreateConversation = false,
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
   accountName?: string;
+  defaultPanel?: WorkspacePanel;
+  autoCreateConversation?: boolean;
 }) {
-  const displayName = accountName?.trim() || DEFAULT_ACCOUNT_DISPLAY_NAME;
   const shopify = useAppBridge();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useEmbeddedNavigate();
+  const locale = i18n.resolvedLanguage || i18n.language || "en";
+  const defaultDashboardSnapshot = useMemo<WorkspaceDashboardSnapshot>(
+    () => ({
+      hasData: false,
+      metrics: [
+        { label: t("workspace.dashboard.metrics.sales"), value: "—", delta: "—", tone: "neutral" },
+        { label: t("workspace.dashboard.metrics.orders"), value: "—", delta: "—", tone: "neutral" },
+        {
+          label: t("workspace.dashboard.metrics.conversionRate"),
+          value: "—",
+          delta: "—",
+          tone: "neutral",
+          pendingIntegration: true,
+        },
+        { label: t("workspace.dashboard.metrics.aov"), value: "—", delta: "—", tone: "neutral" },
+        { label: t("workspace.dashboard.metrics.refundRate"), value: "—", delta: "—", tone: "neutral" },
+        { label: t("workspace.dashboard.metrics.riskSku"), value: "—", delta: "—", tone: "neutral" },
+      ],
+      alerts: [],
+      suggestions: [],
+      recentTaskSummaries: [],
+    }),
+    [t],
+  );
+  const effectiveDashboardSnapshot = dashboardSnapshot ?? defaultDashboardSnapshot;
+  const displayName = accountName?.trim() || t("workspace.shell.defaultAccountName");
+  const newConversationTitle = t("workspace.shell.newConversationTitle");
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const { isMobile } = useResponsiveLayout();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    initialConversationList.length > 0 ? initialConversationList[0].id : null,
+    autoCreateConversation ? null : (initialConversationList[0]?.id ?? null),
   );
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
+  const createConversationRef = useRef<((options?: { draft?: string; assistantText?: string }) => void) | null>(null);
   const processedPrefillPromptRef = useRef<string | null>(null);
+  const initializedAssistantLandingRef = useRef(false);
   const [runningTaskCount, setRunningTaskCount] = useState(0);
   const [conversationSearch, setConversationSearch] = useState("");
   // 置顶与折叠均为本机偏好（localStorage），不进数据库
@@ -462,7 +515,7 @@ export function WorkspaceAppShellPage({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (err) {
       console.error("[WorkspaceAppShellPage] rename conversation failed:", err);
-      shopify.toast.show("重命名失败");
+      shopify.toast.show(t("workspace.shell.toast.renameFailed"));
       setConversationList((current) =>
         current.map((item) =>
           item.id === conversationId ? { ...item, title: existing.title } : item,
@@ -506,7 +559,7 @@ export function WorkspaceAppShellPage({
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
-  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "home";
+  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : defaultPanel;
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
 
@@ -615,7 +668,7 @@ export function WorkspaceAppShellPage({
       pruneEmptyDraftConversations();
     }
     const next = new URLSearchParams(searchParams);
-    if (panel === "home") {
+    if (panel === defaultPanel) {
       next.delete("panel");
     } else {
       next.set("panel", panel);
@@ -646,7 +699,7 @@ export function WorkspaceAppShellPage({
             switchPanel("home");
           }
         }
-        shopify.toast.show("对话已删除");
+        shopify.toast.show(t("workspace.shell.toast.deleted"));
         return;
       }
 
@@ -654,7 +707,7 @@ export function WorkspaceAppShellPage({
         method: "DELETE",
       });
       if (!res.ok) {
-        shopify.toast.show("删除对话失败");
+        shopify.toast.show(t("workspace.shell.toast.deleteFailed"));
         return;
       }
 
@@ -682,11 +735,11 @@ export function WorkspaceAppShellPage({
           switchPanel("home");
         }
       }
-      shopify.toast.show("对话已删除");
+      shopify.toast.show(t("workspace.shell.toast.deleted"));
       if (isMobile) setSidebarOpen(false);
     } catch (err) {
       console.error("[WorkspaceAppShellPage] delete conversation failed:", err);
-      shopify.toast.show("删除对话失败");
+      shopify.toast.show(t("workspace.shell.toast.deleteFailed"));
     }
   };
 
@@ -697,11 +750,11 @@ export function WorkspaceAppShellPage({
     const nextDraft = options?.draft ?? "";
     const assistantText =
       options?.assistantText ??
-      "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。";
+      t("workspace.shell.conversation.welcome");
     // 已存在空会话（草稿或落库的"新对话"）时直接复用，避免列表里堆积重复空会话
     const existingEmpty = conversationList.find(
       (conversation) =>
-        conversation.title === "新对话" &&
+        isUntitledConversationTitle(conversation.title) &&
         !conversation.preview?.trim() &&
         !(messagesByConversation[conversation.id] ?? []).some((m) => m.role === "user"),
     );
@@ -716,7 +769,7 @@ export function WorkspaceAppShellPage({
     const now = new Date().toISOString();
     const conv: ConversationSummary = {
       id: createDraftConversationId(),
-      title: "新对话",
+      title: newConversationTitle,
       preview: "",
       updatedAt: now,
     };
@@ -735,19 +788,54 @@ export function WorkspaceAppShellPage({
     if (isMobile) setSidebarOpen(false);
   };
 
+  createConversationRef.current = createConversation;
+  const prefillWelcomeText = t("workspace.shell.conversation.prefillWelcome");
+
   useEffect(() => {
     const prefillPrompt = searchParams.get("prefillTaskPrompt");
-    if (!prefillPrompt) return;
-    if (processedPrefillPromptRef.current === prefillPrompt) return;
-    processedPrefillPromptRef.current = prefillPrompt;
-    createConversation({
-      draft: prefillPrompt,
-      assistantText: "已根据经营任务生成新对话，你可以直接发送或继续补充上下文。",
+    const prefillConstraints = searchParams.getAll("prefillConstraint");
+    const openContextTool = isLaunchContextTool(searchParams.get("openContextTool"))
+      ? searchParams.get("openContextTool")
+      : null;
+    const prefillSignature = JSON.stringify({
+      prompt: prefillPrompt ?? "",
+      constraints: prefillConstraints,
+      openContextTool: openContextTool ?? "",
     });
+    if (!prefillPrompt && prefillConstraints.length === 0 && !openContextTool) {
+      processedPrefillPromptRef.current = null;
+      return;
+    }
+    if (processedPrefillPromptRef.current === prefillSignature) return;
+    processedPrefillPromptRef.current = prefillSignature;
+    if (openContextTool) {
+      pendingHomeContextToolRef.current = openContextTool;
+    }
+    createConversationRef.current?.({
+      draft: prefillPrompt ?? "",
+      assistantText: prefillWelcomeText,
+    });
+    for (const constraint of prefillConstraints) {
+      workspaceContext.addConstraint(constraint);
+    }
     const next = new URLSearchParams(searchParams);
     next.delete("prefillTaskPrompt");
+    next.delete("prefillConstraint");
+    next.delete("openContextTool");
     setSearchParams(next);
-  }, [searchParams, setSearchParams]);
+  }, [prefillWelcomeText, searchParams, setSearchParams, workspaceContext.addConstraint]);
+
+  useEffect(() => {
+    if (!autoCreateConversation) return;
+    if (initializedAssistantLandingRef.current) return;
+    if (activeConversationId) return;
+    if (searchParams.get("prefillTaskPrompt")) return;
+    if (searchParams.getAll("prefillConstraint").length > 0) return;
+    if (isLaunchContextTool(searchParams.get("openContextTool"))) return;
+
+    initializedAssistantLandingRef.current = true;
+    createConversationRef.current?.();
+  }, [activeConversationId, autoCreateConversation, searchParams]);
 
   const sendMessage = async () => {
     if (!activeConversation) return;
@@ -766,7 +854,7 @@ export function WorkspaceAppShellPage({
           body: JSON.stringify({}),
         });
         if (!res.ok) {
-          shopify.toast.show("创建对话失败，请稍后重试");
+          shopify.toast.show(t("workspace.shell.toast.createFailed"));
           return;
         }
         const data = (await res.json()) as { conversation: ConversationSummary };
@@ -775,7 +863,7 @@ export function WorkspaceAppShellPage({
         conversationTitle = data.conversation.title;
       } catch (err) {
         console.error("[WorkspaceAppShellPage] persist draft conversation failed:", err);
-        shopify.toast.show("创建对话失败，请稍后重试");
+        shopify.toast.show(t("workspace.shell.toast.createFailed"));
         return;
       }
     }
@@ -783,7 +871,7 @@ export function WorkspaceAppShellPage({
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
-    const isNewTitle = conversationTitle === "新对话";
+    const isNewTitle = isUntitledConversationTitle(conversationTitle);
     const nextTitle = isNewTitle
       ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
       : conversationTitle;
@@ -833,10 +921,10 @@ export function WorkspaceAppShellPage({
 
           const assistantText =
             payload.httpStatus !== undefined
-              ? `请求失败（${payload.httpStatus}），请稍后重试。`
+              ? t("workspace.shell.chat.requestFailed", { status: payload.httpStatus })
               : payload.aborted && !payload.reply.trim()
-                ? "回复已停止。"
-                : payload.reply.trim() || "AI Assistant 未返回有效内容，请重试。";
+                ? t("workspace.shell.chat.replyStopped")
+                : payload.reply.trim() || t("workspace.shell.chat.invalidReply");
 
           flushSync(() => {
             setMessagesByConversation((current) => ({
@@ -875,7 +963,11 @@ export function WorkspaceAppShellPage({
         ...current,
         [conversationId]: [
           ...(current[conversationId] ?? []),
-          { role: "assistant", text: "抱歉，发送失败，请稍后重试。", time: "刚刚" },
+          {
+            role: "assistant",
+            text: t("workspace.shell.chat.sendFailed"),
+            time: t("workspace.shell.chat.justNow"),
+          },
         ],
       }));
     }
@@ -888,20 +980,26 @@ export function WorkspaceAppShellPage({
   const handleTaskProposalExecuted = (conversationId: string, run: TaskRunPayload) => {
     // 导航徽章乐观更新（30s 轮询会校正）
     setRunningTaskCount((current) => current + run.taskIds.length);
-    const userText = `开始执行：${run.title}（${run.taskIds.length} 个任务）`;
+    const userText = t("workspace.shell.taskRun.userText", {
+      title: run.title,
+      count: run.taskIds.length,
+    });
     const assistantText =
       run.errors.length > 0
-        ? `已创建 ${run.taskIds.length} 个任务（${run.errors.length} 个对象创建失败），进度见下方卡片与任务列表。`
-        : `已创建 ${run.taskIds.length} 个任务，进度见下方卡片与任务列表。`;
+        ? t("workspace.shell.taskRun.assistantTextPartial", {
+            count: run.taskIds.length,
+            failed: run.errors.length,
+          })
+        : t("workspace.shell.taskRun.assistantText", { count: run.taskIds.length });
     const userMessage: WorkspaceConversationMessage = {
       role: "user",
       text: userText,
-      time: "刚刚",
+      time: t("workspace.shell.chat.justNow"),
     };
     const assistantMessage: WorkspaceConversationMessage = {
       role: "assistant",
       text: assistantText,
-      time: "刚刚",
+      time: t("workspace.shell.chat.justNow"),
       taskRun: run,
     };
 
@@ -975,8 +1073,11 @@ export function WorkspaceAppShellPage({
   }, [accountMenuOpen]);
 
   const activePanelLabel = activePanel === "chat"
-    ? activeConversation?.title ?? "新对话"
-    : panelItems.find((item) => item.key === activePanel)?.label ?? "工作台";
+    ? activeConversation?.title ?? newConversationTitle
+    : t(
+        panelItems.find((item) => item.key === activePanel)?.labelKey ??
+          "workspace.shell.workspaceTitle",
+      );
 
   const sidebarContent = (
     <>
@@ -992,8 +1093,8 @@ export function WorkspaceAppShellPage({
               type="button"
               style={collapseToggleStyle}
               onClick={toggleSidebarCollapsed}
-              title="折叠侧栏"
-              aria-label="折叠侧栏"
+              title={t("workspace.shell.actions.collapseSidebar")}
+              aria-label={t("workspace.shell.actions.collapseSidebar")}
             >
               «
             </button>
@@ -1007,7 +1108,7 @@ export function WorkspaceAppShellPage({
           onClick={() => createConversation()}
         >
           <span style={newChatPlusBadgeStyle}>+</span>
-          <span>新建对话</span>
+          <span>{t("workspace.shell.actions.newChat")}</span>
         </button>
 
         <div style={navGroupStyle}>
@@ -1022,14 +1123,17 @@ export function WorkspaceAppShellPage({
               <span style={{ ...navIconStyle(activePanel === item.key), display: "inline-flex", alignItems: "center" }}>
                 <NavIcon name={item.key} />
               </span>
-              <span>{item.label}</span>
+              <span>{t(item.labelKey)}</span>
               {item.key === "tasks" && runningTaskCount > 0 ? (
-                <span style={navBadgeStyle} title={`${runningTaskCount} 个任务进行中`}>
+                <span
+                  style={navBadgeStyle}
+                  title={t("workspace.shell.status.runningTasksCount", { count: runningTaskCount })}
+                >
                   {runningTaskCount}
                 </span>
               ) : null}
-              {item.key === "dashboard" && dashboardSnapshot.automation?.status === "attention" ? (
-                <span style={navDotStyle} title="今日巡检发现需关注项" />
+              {item.key === "dashboard" && effectiveDashboardSnapshot.automation?.status === "attention" ? (
+                <span style={navDotStyle} title={t("workspace.shell.status.attentionItems")} />
               ) : null}
             </button>
           ))}
@@ -1039,12 +1143,12 @@ export function WorkspaceAppShellPage({
 
         <div style={sidebarSectionStyle}>
           <div style={sidebarSectionHeadStyle}>
-            <span>最近对话</span>
+            <span>{t("workspace.shell.recentConversations")}</span>
           </div>
           <input
             value={conversationSearch}
             onChange={(event) => setConversationSearch(event.target.value)}
-            placeholder="搜索对话"
+            placeholder={t("workspace.shell.searchPlaceholder")}
             style={conversationSearchInputStyle}
           />
           <div style={conversationListStyle}>
@@ -1061,7 +1165,9 @@ export function WorkspaceAppShellPage({
               if (filtered.length === 0) {
                 return (
                   <div style={{ fontSize: 12, color: "#8c9196", padding: "8px 10px" }}>
-                    {keyword ? "没有匹配的对话" : "暂无对话"}
+                    {keyword
+                      ? t("workspace.shell.noMatchingConversations")
+                      : t("workspace.shell.noConversations")}
                   </div>
                 );
               }
@@ -1069,9 +1175,9 @@ export function WorkspaceAppShellPage({
               const pinned = filtered.filter((conversation) => pinnedSet.has(conversation.id));
               const rest = filtered.filter((conversation) => !pinnedSet.has(conversation.id));
               const groups = new Map<string, typeof filtered>();
-              if (pinned.length > 0) groups.set("置顶", pinned);
+              if (pinned.length > 0) groups.set("pinned", pinned);
               for (const conversation of rest) {
-                const label = conversationGroupLabel(conversation.updatedAt);
+                const label = conversationGroupKey(conversation.updatedAt);
                 const bucket = groups.get(label);
                 if (bucket) bucket.push(conversation);
                 else groups.set(label, [conversation]);
@@ -1089,7 +1195,6 @@ export function WorkspaceAppShellPage({
                   >
                     {isRenaming ? (
                       <input
-                        autoFocus
                         value={renameDraft}
                         onChange={(event) => setRenameDraft(event.target.value)}
                         onBlur={() => void commitRenameConversation()}
@@ -1113,7 +1218,10 @@ export function WorkspaceAppShellPage({
                           title={conversation.title}
                         >
                           {isPinned ? (
-                            <span style={pinnedStarStyle} aria-label="已置顶">
+                            <span
+                              style={pinnedStarStyle}
+                              aria-label={t("workspace.shell.actions.pinned")}
+                            >
                               ★
                             </span>
                           ) : null}
@@ -1128,7 +1236,7 @@ export function WorkspaceAppShellPage({
                             {conversation.title}
                           </span>
                           <span style={conversationTimeStyle}>
-                            {conversationTimeLabel(conversation.updatedAt)}
+                            {conversationTimeLabel(conversation.updatedAt, t, locale)}
                           </span>
                         </button>
                         <div className="sidebar-conv-menu" style={{ position: "relative" }}>
@@ -1139,8 +1247,10 @@ export function WorkspaceAppShellPage({
                               ...historyDeleteButtonStyle,
                               ...(conversationMenuId === conversation.id ? { opacity: 1 } : {}),
                             }}
-                            aria-label={`对话操作：${conversation.title}`}
-                            title="更多操作"
+                            aria-label={t("workspace.shell.actions.conversationMenuAria", {
+                              title: conversation.title,
+                            })}
+                            title={t("workspace.shell.actions.moreActions")}
                             onClick={() =>
                               setConversationMenuId((current) =>
                                 current === conversation.id ? null : conversation.id,
@@ -1159,7 +1269,9 @@ export function WorkspaceAppShellPage({
                                   setConversationMenuId(null);
                                 }}
                               >
-                                {isPinned ? "取消置顶" : "置顶"}
+                                {isPinned
+                                  ? t("workspace.shell.actions.unpin")
+                                  : t("workspace.shell.actions.pin")}
                               </button>
                               <button
                                 type="button"
@@ -1169,7 +1281,7 @@ export function WorkspaceAppShellPage({
                                   setConversationMenuId(null);
                                 }}
                               >
-                                重命名
+                                {t("workspace.shell.actions.rename")}
                               </button>
                               <button
                                 type="button"
@@ -1179,7 +1291,7 @@ export function WorkspaceAppShellPage({
                                   void removeConversation(conversation.id);
                                 }}
                               >
-                                删除
+                                {t("workspace.shell.actions.delete")}
                               </button>
                             </div>
                           ) : null}
@@ -1189,11 +1301,13 @@ export function WorkspaceAppShellPage({
                   </div>
                 );
               };
-              return ["置顶", ...CONVERSATION_GROUP_ORDER]
+              return (["pinned", ...CONVERSATION_GROUP_ORDER] as const)
                 .filter((label) => groups.has(label))
                 .map((label) => (
                   <div key={label}>
-                    <div style={conversationGroupLabelStyle}>{label}</div>
+                    <div style={conversationGroupLabelStyle}>
+                      {conversationGroupLabel(label, t)}
+                    </div>
                     {groups.get(label)!.map(renderRow)}
                   </div>
                 ));
@@ -1201,14 +1315,16 @@ export function WorkspaceAppShellPage({
           </div>
           <div style={sidebarQuotaRowStyle}>
             <span>
-              对话{" "}
-              {Math.min(
-                conversationList.filter((conversation) => conversation.preview?.trim()).length,
-                50,
-              )}
-              /50
+              {t("workspace.shell.conversationsQuota", {
+                count: Math.min(
+                  conversationList.filter((conversation) => conversation.preview?.trim()).length,
+                  50,
+                ),
+              })}
             </span>
-            {runningTaskCount > 0 ? <span>任务进行中 {runningTaskCount}</span> : null}
+            {runningTaskCount > 0 ? (
+              <span>{t("workspace.shell.status.runningTasksCount", { count: runningTaskCount })}</span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1217,7 +1333,7 @@ export function WorkspaceAppShellPage({
         {accountMenuOpen ? (
           <div style={accountMenuStyle}>
             <div style={accountMenuSectionStyle}>
-              <div style={accountMenuLabelStyle}>语言</div>
+              <div style={accountMenuLabelStyle}>{t("workspace.shell.account.language")}</div>
               <LanguageSelector />
             </div>
             <button
@@ -1236,9 +1352,9 @@ export function WorkspaceAppShellPage({
         <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
           <div>
             <div style={brandTitleStyle}>{displayName}</div>
-            <div style={brandMetaStyle}>Spark Workspace</div>
+            <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
           </div>
-          <div style={footerTagStyle}>在线</div>
+          <div style={footerTagStyle}>{t("workspace.shell.status.online")}</div>
         </button>
       </div>
     </>
@@ -1252,8 +1368,8 @@ export function WorkspaceAppShellPage({
           type="button"
           style={collapsedIconButtonStyle(false)}
           onClick={toggleSidebarCollapsed}
-          title="展开侧栏"
-          aria-label="展开侧栏"
+          title={t("workspace.shell.actions.expandSidebar")}
+          aria-label={t("workspace.shell.actions.expandSidebar")}
         >
           »
         </button>
@@ -1267,8 +1383,8 @@ export function WorkspaceAppShellPage({
             fontSize: 18,
           }}
           onClick={() => createConversation()}
-          title="新建对话"
-          aria-label="新建对话"
+          title={t("workspace.shell.actions.newChat")}
+          aria-label={t("workspace.shell.actions.newChat")}
         >
           +
         </button>
@@ -1279,15 +1395,21 @@ export function WorkspaceAppShellPage({
             type="button"
             style={collapsedIconButtonStyle(activePanel === item.key)}
             onClick={() => switchPanel(item.key)}
-            title={item.label}
-            aria-label={item.label}
+            title={t(item.labelKey)}
+            aria-label={t(item.labelKey)}
           >
             <NavIcon name={item.key} />
             {item.key === "tasks" && runningTaskCount > 0 ? (
-              <span style={collapsedDotStyle("#4070f4")} title={`${runningTaskCount} 个任务进行中`} />
+              <span
+                style={collapsedDotStyle("#4070f4")}
+                title={t("workspace.shell.status.runningTasksCount", { count: runningTaskCount })}
+              />
             ) : null}
-            {item.key === "dashboard" && dashboardSnapshot.automation?.status === "attention" ? (
-              <span style={collapsedDotStyle("#f0a01d")} title="今日巡检发现需关注项" />
+            {item.key === "dashboard" && effectiveDashboardSnapshot.automation?.status === "attention" ? (
+              <span
+                style={collapsedDotStyle("#f0a01d")}
+                title={t("workspace.shell.status.attentionItems")}
+              />
             ) : null}
           </button>
         ))}
@@ -1296,8 +1418,8 @@ export function WorkspaceAppShellPage({
         type="button"
         style={{ ...collapsedIconButtonStyle(false), borderRadius: "50%" }}
         onClick={toggleSidebarCollapsed}
-        title="展开侧栏查看账户"
-        aria-label="展开侧栏查看账户"
+        title={t("workspace.shell.actions.expandSidebarAccount")}
+        aria-label={t("workspace.shell.actions.expandSidebarAccount")}
       >
         {displayName.slice(0, 1).toUpperCase()}
       </button>
@@ -1324,28 +1446,42 @@ export function WorkspaceAppShellPage({
               type="button"
               style={mobileTopBarButtonStyle}
               onClick={() => setSidebarOpen(true)}
-              aria-label="打开导航菜单"
+              aria-label={t("workspace.shell.actions.openNavigation")}
             >
               ☰
             </button>
             <div style={mobileTopBarTitleWrapStyle}>
-              <div style={brandMetaStyle}>Spark Workspace</div>
+              <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
               <div style={mobileTopBarTitleStyle}>{activePanelLabel}</div>
             </div>
             <button
               type="button"
               style={mobileTopBarButtonStyle}
               onClick={() => createConversation()}
-              aria-label="新建对话"
+              aria-label={t("workspace.shell.actions.newChat")}
             >
               +
             </button>
           </div>
           {sidebarOpen ? (
-            <div style={mobileSidebarBackdropStyle} onClick={() => setSidebarOpen(false)}>
+            <div
+              style={mobileSidebarBackdropStyle}
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSidebarOpen(false);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSidebarOpen(false);
+                }
+              }}
+            >
               <aside
                 style={{ ...sidebarStyle, ...mobileSidebarStyle }}
-                onClick={(event) => event.stopPropagation()}
               >
                 {sidebarContent}
               </aside>
@@ -1368,7 +1504,7 @@ export function WorkspaceAppShellPage({
         {activePanel === "home" ? (
           <HomePanel
             displayName={displayName}
-            snapshot={dashboardSnapshot}
+            snapshot={effectiveDashboardSnapshot}
             runningTaskCount={runningTaskCount}
             onSubmitPrompt={(prompt) => createConversation({ draft: prompt })}
             onOpenContextTool={(tool) => {
@@ -1380,7 +1516,7 @@ export function WorkspaceAppShellPage({
               createConversation();
             }}
             onOpenDashboard={() => navigate("/app/today")}
-            onOpenDailyOps={() => navigate("/app/today/diagnosis")}
+            onOpenDailyOps={() => navigate("/app/health-monitor")}
             onOpenTasks={() => navigate("/app/tasks")}
           />
         ) : null}

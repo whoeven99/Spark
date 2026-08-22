@@ -1,17 +1,15 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect, useLoaderData } from "react-router";
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import {
-  buildEmbeddedAppPath,
-} from "../config/appEntry.server";
+import { TitleBar } from "@shopify/app-bridge-react";
+import { boundary } from "@shopify/shopify-app-react-router/server";
+import { buildEmbeddedAppPath } from "../config/appEntry.server";
+import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { buildWorkspaceAssistantPath } from "../lib/workspaceChatPrefill";
 import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
 } from "../server/billing/buildBillingReturnUrl.server";
-import { authenticate } from "../shopify.server";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { TitleBar } from "@shopify/app-bridge-react";
-import { listConversations } from "../server/conversation/conversationStore.server";
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
 import {
   buildWorkspaceDashboardFromDailyOps,
@@ -19,16 +17,11 @@ import {
 } from "../server/operations/workspaceDashboard.server";
 import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
 import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
-import { useFeatureView } from "../lib/featureTrack";
-import { RoutePageFallback } from "./component/RoutePageFallback";
+import { authenticate } from "../shopify.server";
+import { HomePanel } from "./page/workspace/HomePanel";
+import { contentStyle, mobileContentStyle } from "./page/workspace/styles";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
-
-const WorkspaceAppShellPage = lazy(() =>
-  import("./page/workspace/WorkspaceAppShellPage").then((m) => ({
-    default: m.WorkspaceAppShellPage,
-  })),
-);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -37,8 +30,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
-  const conversations = await listConversations(session.shop);
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
+  let runningTaskCount = 0;
   try {
     const [dailyOps, recentTaskEntries] = await Promise.all([
       ensureDailySnapshotOverview(session.shop),
@@ -50,6 +43,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ...buildWorkspaceDashboardFromDailyOps(dailyOps),
       recentTaskSummaries: buildWorkspaceTaskSummaries(recentTaskEntries),
     };
+    runningTaskCount = recentTaskEntries.filter((entry) => {
+      if (entry.entryType === "ai_task") {
+        return entry.task.status === "running";
+      }
+      if (entry.entryType === "operation_task") {
+        return entry.task.status === "in_progress";
+      }
+      return false;
+    }).length;
   } catch (error) {
     console.error("[app._index] dashboard snapshot failed:", error);
   }
@@ -67,34 +69,41 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .join(" ")
       .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
-  return { conversations, dashboardSnapshot, accountName };
+  return {
+    dashboardSnapshot,
+    accountName,
+    runningTaskCount,
+    homeRenderTimeIso: new Date().toISOString(),
+  };
 };
-
-/** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
-function ClientMount({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) {
-    return <RoutePageFallback />;
-  }
-  return children;
-}
 
 export default function Index() {
   const data = useLoaderData<typeof loader>();
-  useFeatureView("chat");
+  const navigate = useEmbeddedNavigate();
+  const { isMobile } = useResponsiveLayout();
+
   return (
-    <ClientMount>
-      {/* 工作台不用 PageHeaderNav，这里单独重置标题栏，避免残留子页面标题 */}
+    <>
       <TitleBar title="Spark" />
-      <Suspense fallback={<RoutePageFallback />}>
-        <WorkspaceAppShellPage
-          initialConversationList={data?.conversations ?? []}
-          dashboardSnapshot={data?.dashboardSnapshot}
-          accountName={data?.accountName}
+      <main style={isMobile ? mobileContentStyle : contentStyle}>
+        <HomePanel
+          displayName={data.accountName}
+          snapshot={data.dashboardSnapshot}
+          runningTaskCount={data.runningTaskCount}
+          initialRenderTimeIso={data.homeRenderTimeIso}
+          onSubmitPrompt={(prompt) => navigate(buildWorkspaceAssistantPath({ prompt }))}
+          onOpenContextTool={(tool) =>
+            navigate(buildWorkspaceAssistantPath({ openContextTool: tool }))
+          }
+          onMoreContext={() =>
+            navigate(buildWorkspaceAssistantPath({ openContextTool: "media" }))
+          }
+          onOpenDashboard={() => navigate("/app/today")}
+          onOpenDailyOps={() => navigate("/app/health-monitor")}
+          onOpenTasks={() => navigate("/app/tasks")}
         />
-      </Suspense>
-    </ClientMount>
+      </main>
+    </>
   );
 }
 

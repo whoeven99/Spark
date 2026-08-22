@@ -93,6 +93,7 @@ function baseResult(overrides: Partial<DailyOperationsResult> = {}): DailyOperat
     tasks: [
       {
         id: "task-1",
+        dedupeKey: "inventory_risk:risk_skus:inventory_loss:today",
         sourceKey: "inventory_risk",
         title: "补货止损",
         quadrant: "q1",
