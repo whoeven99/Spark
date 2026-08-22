@@ -22,6 +22,11 @@ function extractUtm(landingSite: string | null): {
   }
 }
 
+function normalizeCode(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized ? normalized : null;
+}
+
 export async function syncOrder(
   shop: string,
   payload: ShopifyOrderPayload,
@@ -31,6 +36,12 @@ export async function syncOrder(
     ? String(payload.customer.id)
     : null;
   const utm = extractUtm(payload.landing_site ?? null);
+  const shippingCountryCode = normalizeCode(payload.shipping_address?.country_code);
+  const shippingProvinceCode = normalizeCode(payload.shipping_address?.province_code);
+  const billingCountryCode = normalizeCode(payload.billing_address?.country_code);
+  const billingProvinceCode = normalizeCode(payload.billing_address?.province_code);
+  const customerLocale = payload.customer_locale?.trim() || null;
+  const presentmentCurrencyCode = normalizeCode(payload.presentment_currency);
 
   const totalPrice = parseFloat(payload.total_price ?? "0") || 0;
   const subtotalPrice = parseFloat(payload.subtotal_price ?? "0") || 0;
@@ -91,6 +102,12 @@ export async function syncOrder(
       sourceName: payload.source_name ?? null,
       landingSite: payload.landing_site ?? null,
       referringSite: payload.referring_site ?? null,
+      presentmentCurrencyCode,
+      customerLocale,
+      shippingCountryCode,
+      shippingProvinceCode,
+      billingCountryCode,
+      billingProvinceCode,
       ...utm,
       isFirstOrder,
     },
@@ -117,6 +134,12 @@ export async function syncOrder(
       customerLastName: payload.customer?.last_name ?? null,
       customerEmail: payload.customer?.email ?? null,
       tags: payload.tags ?? null,
+      presentmentCurrencyCode,
+      customerLocale,
+      shippingCountryCode,
+      shippingProvinceCode,
+      billingCountryCode,
+      billingProvinceCode,
       syncedAt: new Date(),
     },
   });

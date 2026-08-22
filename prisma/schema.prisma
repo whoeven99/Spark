@@ -466,6 +466,12 @@ model ShopOrder {
   utmSource         String?
   utmMedium         String?
   utmCampaign       String?
+  presentmentCurrencyCode String?
+  customerLocale    String?
+  shippingCountryCode String?
+  shippingProvinceCode String?
+  billingCountryCode String?
+  billingProvinceCode String?
   isFirstOrder      Boolean   @default(false)
   syncedAt          DateTime  @default(now())
 
@@ -479,6 +485,8 @@ model ShopOrder {
   @@index([shop, paidAt])
   @@index([shop, financialStatus])
   @@index([shop, shopifyCustomerId])
+  @@index([shop, shippingCountryCode])
+  @@index([shop, billingCountryCode])
 }
 
 /// 订单行项目（每个 SKU 一条）。
