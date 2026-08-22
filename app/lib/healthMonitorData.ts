@@ -67,8 +67,10 @@ type HealthMonitorSnapshotOverview = {
 type HealthMonitorDetailOverdueOrder = {
   orderNumber: string;
   ageHours: number;
-  customerName: string;
-  createdAt: string;
+  fulfillmentStatus?: string;
+  customer?: string;
+  customerName?: string;
+  createdAt?: string;
 };
 
 type HealthMonitorDetailCarrierIssue = {
@@ -109,6 +111,7 @@ type HealthMonitorDetailRefundOrder = {
 
 type HealthMonitorSnapshotDetail = {
   overdueOrders?: HealthMonitorDetailOverdueOrder[];
+  routineUnfulfilledOrders?: HealthMonitorDetailOverdueOrder[];
   carrierIssues?: HealthMonitorDetailCarrierIssue[];
   inventoryRisks?: HealthMonitorDetailInventoryRisk[];
   topRefundSkus?: HealthMonitorDetailRefundSku[];
@@ -775,7 +778,7 @@ function buildOverdueOrderObjects(
   return (orders ?? []).slice(0, 2).map((order) => ({
     type: "order",
     name: order.orderNumber,
-    summary: `${order.customerName}｜已等待 ${stripTrailingZero(order.ageHours)} 小时发货`,
+    summary: `${order.customerName ?? order.customer ?? "客户待识别"}｜已等待 ${stripTrailingZero(order.ageHours)} 小时发货`,
   }));
 }
 

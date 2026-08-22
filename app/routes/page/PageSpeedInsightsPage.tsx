@@ -8,6 +8,7 @@ import {
   defaultPageSpeedLocaleFromApp,
   pageSpeedLocaleNativeLabel,
   PAGE_SPEED_LOCALES,
+  resolvePageSpeedLocale,
   type PageSpeedLocaleCode,
 } from "../../lib/pageSpeedLocales";
 import type {
@@ -48,27 +49,84 @@ type SummaryAction = {
 };
 
 export function PageSpeedInsightsPage() {
-  const { t, i18n } = useTranslation();
-  const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<PageSpeedSettingsLoaderData>();
   const locationSearch = useEmbeddedLocationSearch();
   const searchParams = useMemo(() => new URLSearchParams(locationSearch), [locationSearch]);
-  const fetcher = useFetcher<AnalyzeFetcherData>();
+  const source = searchParams.get("source")?.trim() || null;
   useFeatureView("settings");
 
-  const [url, setUrl] = useState(searchParams.get("url")?.trim() || loaderData.defaultUrl);
-  const [strategy, setStrategy] = useState<PageSpeedStrategy>(
-    searchParams.get("strategy") === "desktop" ? "desktop" : "mobile",
+  return (
+    <PageSpeedInsightsContent
+      defaultUrl={searchParams.get("url")?.trim() || loaderData.defaultUrl}
+      defaultReportLocale={resolvePageSpeedLocale(
+        searchParams.get("locale"),
+        loaderData.defaultReportLocale,
+      )}
+      initialStrategy={searchParams.get("strategy") === "desktop" ? "desktop" : "mobile"}
+      source={source}
+      label={searchParams.get("label")?.trim() || null}
+      returnTo={searchParams.get("returnTo")?.trim() || null}
+      autorun={searchParams.get("autorun") === "1"}
+      hideUrlInput={source === "health-monitor"}
+      hideLocaleInput={source === "health-monitor"}
+    />
   );
-  const [reportLocale, setReportLocale] = useState<PageSpeedLocaleCode>(() =>
-    defaultPageSpeedLocaleFromApp(i18n.language),
-  );
+}
+
+export function PageSpeedInsightsContent({
+  defaultUrl,
+  defaultReportLocale,
+  initialStrategy = "mobile",
+  source = null,
+  label = null,
+  returnTo = null,
+  showHeader = true,
+  showHint = true,
+  embedded = false,
+  hideUrlInput = false,
+  hideLocaleInput = false,
+  autorun = false,
+}: {
+  defaultUrl: string;
+  defaultReportLocale: PageSpeedLocaleCode;
+  initialStrategy?: PageSpeedStrategy;
+  source?: string | null;
+  label?: string | null;
+  returnTo?: string | null;
+  showHeader?: boolean;
+  showHint?: boolean;
+  embedded?: boolean;
+  hideUrlInput?: boolean;
+  hideLocaleInput?: boolean;
+  autorun?: boolean;
+}) {
+  const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
+  const locationSearch = useEmbeddedLocationSearch();
+  const fetcher = useFetcher<AnalyzeFetcherData>();
+  const [url, setUrl] = useState(defaultUrl);
+  const [strategy, setStrategy] = useState<PageSpeedStrategy>(initialStrategy);
+  const [reportLocale, setReportLocale] = useState<PageSpeedLocaleCode>(defaultReportLocale);
   const [activeCategory, setActiveCategory] = useState<PageSpeedCategoryId>("performance");
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const analyzing = fetcher.state !== "idle";
   const report = fetcher.data?.ok ? fetcher.data.report : null;
   const summary = useMemo(() => (report ? buildPageSpeedSummary(report, t) : null), [report, t]);
+  const isHealthMonitorSource = source === "health-monitor" || source === "daily-insights";
+  const shouldAutorun = autorun || isHealthMonitorSource;
+
+  useEffect(() => {
+    setUrl(defaultUrl || "");
+  }, [defaultUrl]);
+
+  useEffect(() => {
+    setReportLocale(defaultReportLocale || defaultPageSpeedLocaleFromApp(i18n.language));
+  }, [defaultReportLocale, i18n.language]);
+
+  useEffect(() => {
+    setStrategy(initialStrategy);
+  }, [initialStrategy]);
 
   useEffect(() => {
     if (!fetcher.data) return;
@@ -96,26 +154,29 @@ export function PageSpeedInsightsPage() {
   );
 
   const reportLocaleStale = Boolean(report && report.locale !== reportLocale);
-  const shouldAutorun = searchParams.get("autorun") === "1";
-  const returnTo = searchParams.get("returnTo")?.trim() || null;
-  const source = searchParams.get("source")?.trim() || null;
-  const label = searchParams.get("label")?.trim() || null;
-  const isHealthMonitorSource = source === "health-monitor" || source === "daily-insights";
 
   useEffect(() => {
     if (!shouldAutorun || fetcher.data || fetcher.state !== "idle" || !url.trim()) return;
     handleAnalyze();
   }, [fetcher.data, fetcher.state, handleAnalyze, shouldAutorun, url]);
 
+  const containerStyle: CSSProperties = embedded
+    ? { display: "flex", flexDirection: "column", gap: "0.85rem" }
+    : isMobile
+      ? mobilePageContentStyle
+      : pageContentStyle;
+
   return (
-    <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
-      <PageHeaderNav
-        title={t("pageSpeed.title")}
-        subtitle={t("pageSpeed.subtitle")}
-        backLabel={returnTo ? (isHealthMonitorSource ? "返回健康度监测" : "返回上一级") : t("settingsShell.back")}
-        fallbackPath={returnTo ?? "/app/settings"}
-        returnTo={returnTo ?? undefined}
-      />
+    <div style={containerStyle}>
+      {showHeader ? (
+        <PageHeaderNav
+          title={t("pageSpeed.title")}
+          subtitle={t("pageSpeed.subtitle")}
+          backLabel={returnTo ? (isHealthMonitorSource ? "返回健康度监测" : "返回上一级") : t("settingsShell.back")}
+          fallbackPath={returnTo ?? "/app/settings"}
+          returnTo={returnTo ?? undefined}
+        />
+      ) : null}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
         {isHealthMonitorSource ? (
@@ -127,13 +188,20 @@ export function PageSpeedInsightsPage() {
             }
           />
         ) : null}
-        <p style={{ ...pageSpeedMutedTextStyle, margin: 0 }}>{t("pageSpeed.hint")}</p>
+        {hideUrlInput || hideLocaleInput ? (
+          <StatusBanner
+            message={`分析对象：${url || "当前店铺"}${hideLocaleInput ? ` · 报告语言：${pageSpeedLocaleNativeLabel(reportLocale)}` : ""}`}
+          />
+        ) : null}
+        {showHint ? <p style={{ ...pageSpeedMutedTextStyle, margin: 0 }}>{t("pageSpeed.hint")}</p> : null}
         <AnalyzeForm
           url={url}
           strategy={strategy}
           reportLocale={reportLocale}
           analyzing={analyzing}
           isMobile={isMobile}
+          hideUrlInput={hideUrlInput}
+          hideLocaleInput={hideLocaleInput}
           onUrlChange={setUrl}
           onStrategyChange={setStrategy}
           onReportLocaleChange={setReportLocale}
@@ -454,6 +522,8 @@ function AnalyzeForm({
   reportLocale,
   analyzing,
   isMobile,
+  hideUrlInput,
+  hideLocaleInput,
   onUrlChange,
   onStrategyChange,
   onReportLocaleChange,
@@ -464,6 +534,8 @@ function AnalyzeForm({
   reportLocale: PageSpeedLocaleCode;
   analyzing: boolean;
   isMobile: boolean;
+  hideUrlInput: boolean;
+  hideLocaleInput: boolean;
   onUrlChange: (value: string) => void;
   onStrategyChange: (value: PageSpeedStrategy) => void;
   onReportLocaleChange: (value: PageSpeedLocaleCode) => void;
@@ -472,42 +544,46 @@ function AnalyzeForm({
   const { t } = useTranslation();
   return (
     <div style={pageSpeedCardStyle}>
-      <label
-        htmlFor="page-speed-url"
-        style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: pageColorTokens.textBody }}
-      >
-        {t("pageSpeed.urlLabel")}
-      </label>
-      <input
-        id="page-speed-url"
-        type="url"
-        value={url}
-        disabled={analyzing}
-        placeholder={t("pageSpeed.urlPlaceholder")}
-        onChange={(event) => onUrlChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !analyzing) onAnalyze();
-        }}
-        style={{
-          display: "block",
-          width: "100%",
-          marginTop: "0.4rem",
-          padding: "0.55rem 0.7rem",
-          fontSize: "0.875rem",
-          borderRadius: pageColorTokens.radiusControl,
-          border: `1px solid ${pageColorTokens.borderInput}`,
-          background: analyzing ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
-          color: pageColorTokens.textBody,
-          boxSizing: "border-box",
-        }}
-      />
+      {hideUrlInput ? null : (
+        <>
+          <label
+            htmlFor="page-speed-url"
+            style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: pageColorTokens.textBody }}
+          >
+            {t("pageSpeed.urlLabel")}
+          </label>
+          <input
+            id="page-speed-url"
+            type="url"
+            value={url}
+            disabled={analyzing}
+            placeholder={t("pageSpeed.urlPlaceholder")}
+            onChange={(event) => onUrlChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !analyzing) onAnalyze();
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              marginTop: "0.4rem",
+              padding: "0.55rem 0.7rem",
+              fontSize: "0.875rem",
+              borderRadius: pageColorTokens.radiusControl,
+              border: `1px solid ${pageColorTokens.borderInput}`,
+              background: analyzing ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+              color: pageColorTokens.textBody,
+              boxSizing: "border-box",
+            }}
+          />
+        </>
+      )}
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
           gap: "0.75rem",
           alignItems: isMobile ? "stretch" : "flex-end",
-          marginTop: "0.85rem",
+          marginTop: hideUrlInput ? 0 : "0.85rem",
           flexDirection: isMobile ? "column" : "row",
         }}
       >
@@ -526,43 +602,45 @@ function AnalyzeForm({
             ]}
           />
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.35rem",
-            minWidth: isMobile ? "100%" : "auto",
-            flex: isMobile ? "1 1 100%" : "0 0 auto",
-          }}
-        >
-          <label
-            htmlFor="page-speed-locale"
-            style={{ fontSize: "0.75rem", fontWeight: 600, color: pageColorTokens.textSecondary }}
-          >
-            {t("pageSpeed.reportLanguage")}
-          </label>
-          <select
-            id="page-speed-locale"
-            value={reportLocale}
-            disabled={analyzing}
-            onChange={(event) => onReportLocaleChange(event.target.value as PageSpeedLocaleCode)}
+        {hideLocaleInput ? null : (
+          <div
             style={{
-              ...pageSelectCompactStyle(analyzing),
-              flex: "none",
-              width: isMobile ? "100%" : "auto",
-              minWidth: isMobile ? "100%" : "10rem",
-              maxWidth: isMobile ? "100%" : "14rem",
-              padding: "0.55rem 0.7rem",
-              fontSize: "0.875rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.35rem",
+              minWidth: isMobile ? "100%" : "auto",
+              flex: isMobile ? "1 1 100%" : "0 0 auto",
             }}
           >
-            {PAGE_SPEED_LOCALES.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.nativeLabel}
-              </option>
-            ))}
-          </select>
-        </div>
+            <label
+              htmlFor="page-speed-locale"
+              style={{ fontSize: "0.75rem", fontWeight: 600, color: pageColorTokens.textSecondary }}
+            >
+              {t("pageSpeed.reportLanguage")}
+            </label>
+            <select
+              id="page-speed-locale"
+              value={reportLocale}
+              disabled={analyzing}
+              onChange={(event) => onReportLocaleChange(event.target.value as PageSpeedLocaleCode)}
+              style={{
+                ...pageSelectCompactStyle(analyzing),
+                flex: "none",
+                width: isMobile ? "100%" : "auto",
+                minWidth: isMobile ? "100%" : "10rem",
+                maxWidth: isMobile ? "100%" : "14rem",
+                padding: "0.55rem 0.7rem",
+                fontSize: "0.875rem",
+              }}
+            >
+              {PAGE_SPEED_LOCALES.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.nativeLabel}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           type="button"
           disabled={analyzing || !url.trim()}

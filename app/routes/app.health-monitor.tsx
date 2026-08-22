@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { resolveHealthMonitorDetail } from "../lib/healthMonitorAiDetail";
+import { resolvePageSpeedLocale } from "../lib/pageSpeedLocales";
 import { buildWorkspaceChatPrefillPath } from "../lib/workspaceChatPrefill";
 import {
   HEALTH_MONITORS,
@@ -18,7 +19,10 @@ import {
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
+import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
+import { PageSpeedInsightsContent } from "./page/PageSpeedInsightsPage";
 import {
   mobilePageContentStyle,
   pageContentStyle,
@@ -35,7 +39,17 @@ type HealthMonitorFollowupAction = {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const [shopInfo, shopLocales] = await Promise.all([
+    fetchShopBasicInfo(admin).catch(() => null),
+    fetchShopLocalesPayload(admin, `[HealthMonitor] shop=${session.shop}`),
+  ]);
+  const myshopifyDomain = shopInfo?.myshopifyDomain?.trim() || session.shop;
+  const pageSpeedDefaults = {
+    defaultUrl: `https://${myshopifyDomain}`,
+    defaultReportLocale: resolvePageSpeedLocale(shopLocales.defaultTargetLanguage),
+  };
+
   try {
     const snapshot = await ensureDailySnapshot(session.shop);
     return {
@@ -50,6 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         items: snapshot.items,
         detail: snapshot.detail,
       }),
+      pageSpeedDefaults,
       usingFallback: false,
       fallbackMessage: null,
     };
@@ -60,6 +75,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
     return {
       monitors: buildHealthMonitorRecords(),
+      pageSpeedDefaults,
       usingFallback: true,
       fallbackMessage: "当前展示的是演示数据，真实健康度快照暂时不可用。",
     };
@@ -109,14 +125,6 @@ function resolveHealthMonitorFollowupActions(params: {
 
   if (monitor.id === "page-performance") {
     return [
-      {
-        label: "进入页面性能分析",
-        path: `/app/settings/pagespeed?${new URLSearchParams({
-          source: "health-monitor",
-          label: monitor.title,
-          returnTo: currentPath,
-        }).toString()}`,
-      },
       {
         label: "查看转化承接详情",
         path: buildPathWithReturnTo("/app/today/conversion", currentPath),
@@ -273,7 +281,7 @@ function resolveHealthMonitorFollowupActions(params: {
 }
 
 export default function AppHealthMonitor() {
-  const { monitors, usingFallback, fallbackMessage } = useLoaderData<typeof loader>();
+  const { monitors, pageSpeedDefaults, usingFallback, fallbackMessage } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
@@ -409,6 +417,7 @@ export default function AppHealthMonitor() {
           <DetailSection
             monitor={selectedMonitor}
             detail={selectedDetail}
+            pageSpeedDefaults={pageSpeedDefaults}
             onBackToRun={() => syncHealthMonitorSearch({ view: "run" })}
             followupActions={followupActions}
             onOpenFollowup={(path) => navigate(path)}
@@ -571,6 +580,7 @@ function RunSection({
 function DetailSection({
   monitor,
   detail,
+  pageSpeedDefaults,
   onBackToRun,
   followupActions,
   onOpenFollowup,
@@ -578,6 +588,10 @@ function DetailSection({
 }: {
   monitor: HealthMonitorRecord;
   detail: ReturnType<typeof resolveHealthMonitorDetail>;
+  pageSpeedDefaults: {
+    defaultUrl: string;
+    defaultReportLocale: ReturnType<typeof resolvePageSpeedLocale>;
+  };
   onBackToRun: () => void;
   followupActions: HealthMonitorFollowupAction[];
   onOpenFollowup: (path: string) => void;
@@ -646,6 +660,27 @@ function DetailSection({
               </div>
             ))}
           </div>
+        </PageSurface>
+      ) : null}
+
+      {monitor.id === "page-performance" ? (
+        <PageSurface
+          title="页面性能实验室分析"
+          subtitle="这里直接复用 PageSpeed 分析，不再额外输入 URL 和语言，默认分析当前店铺的 myshopify 地址。"
+        >
+          <PageSpeedInsightsContent
+            defaultUrl={pageSpeedDefaults.defaultUrl}
+            defaultReportLocale={pageSpeedDefaults.defaultReportLocale}
+            initialStrategy="mobile"
+            source="health-monitor"
+            label={monitor.title}
+            showHeader={false}
+            showHint={false}
+            embedded
+            hideUrlInput
+            hideLocaleInput
+            autorun
+          />
         </PageSurface>
       ) : null}
 
