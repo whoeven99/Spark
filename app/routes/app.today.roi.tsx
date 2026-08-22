@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { ActionFunctionArgs } from "react-router";
 import { useFetcher, useSearchParams } from "react-router";
-import { getTodayMetricDetail } from "../lib/todayMetricModules";
+import { getTodayMetricDetail, getTodayRoiMonitor, type TodayRoiFactor } from "../lib/todayMetricModules";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
 import { upsertShopCostConfig } from "../server/operations/roi/costConfig.server";
 import type { ValueLayerResponse } from "./api.today-value-layer";
@@ -13,6 +13,7 @@ import {
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import { TodayMetricDetailPage } from "./page/TodayMetricDetailPage";
+import { PageSurface, pageColorTokens, pageHintTextStyle, pageMetricLabelStyle } from "./page/pageUiStyles";
 
 type ActionData = { ok: true } | { ok: false; error: string };
 
@@ -53,6 +54,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function TodayRoiPage() {
   const detail = useMemo(() => getTodayMetricDetail("roi"), []);
+  const roiMonitor = useMemo(() => getTodayRoiMonitor(), []);
   const { isMobile } = useResponsiveLayout();
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
@@ -95,15 +97,110 @@ export default function TodayRoiPage() {
       data={detail}
       returnTo={returnTo}
       extraSections={
-        <TodayRoiValueLayerSection
-          value={value}
-          valueLoading={valueLoading}
-          valueFailed={valueFailed}
-          isMobile={isMobile}
-          activeTab={activeValueTab}
-          onTabChange={handleValueTabChange}
-        />
+        <>
+          <TodayRoiFactorsSection factors={roiMonitor.factors} isMobile={isMobile} />
+          <TodayRoiValueLayerSection
+            value={value}
+            valueLoading={valueLoading}
+            valueFailed={valueFailed}
+            isMobile={isMobile}
+            activeTab={activeValueTab}
+            onTabChange={handleValueTabChange}
+          />
+        </>
       }
     />
   );
 }
+
+function TodayRoiFactorsSection({ factors, isMobile }: { factors: TodayRoiFactor[]; isMobile: boolean }) {
+  return (
+    <PageSurface
+      title="影响 ROI 的 Top 3 因子"
+      subtitle="首页只先告诉你 ROI 结果，真正拖累或支撑 ROI 的关键因子放到详情页里展开。"
+    >
+      <div style={factorListStyle}>
+        {factors.map((factor) => (
+          <div key={factor.title} style={factorItemStyle}>
+            <span style={{ ...roiBadgeBaseStyle, ...roiBadgeStyle(factor.tone) }}>
+              {factor.tone === "critical" ? "优先处理" : "继续跟进"}
+            </span>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <div style={factorHeaderStyle(isMobile)}>
+                <div style={factorTitleStyle}>{factor.title}</div>
+              </div>
+              <div style={pageHintTextStyle}>{factor.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={factorHintStyle}>
+        <div style={pageMetricLabelStyle}>怎么用这 3 个因子</div>
+        <div style={pageHintTextStyle}>先判断哪一项在直接拖累短期 ROI，再回到下面的价值层、对象和建议动作里继续排查。</div>
+      </div>
+    </PageSurface>
+  );
+}
+
+function roiBadgeStyle(tone: TodayRoiFactor["tone"]): CSSProperties {
+  if (tone === "critical") {
+    return {
+      color: pageColorTokens.criticalText,
+      background: pageColorTokens.criticalBg,
+      border: "1px solid #f2b8ae",
+    };
+  }
+  return {
+    color: "#9a5b00",
+    background: pageColorTokens.warningBg,
+    border: "1px solid #f1d58d",
+  };
+}
+
+function factorHeaderStyle(isMobile: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: isMobile ? "flex-start" : "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    flexDirection: isMobile ? "column" : "row",
+  };
+}
+
+const roiBadgeBaseStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0.22rem 0.6rem",
+  borderRadius: "999px",
+  fontSize: "0.75rem",
+  fontWeight: 700,
+};
+
+const factorListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.85rem",
+};
+
+const factorItemStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "0.85rem",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const factorTitleStyle: CSSProperties = {
+  fontSize: "0.9rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const factorHintStyle: CSSProperties = {
+  marginTop: "1rem",
+  paddingTop: "1rem",
+  borderTop: `1px solid ${pageColorTokens.divider}`,
+};

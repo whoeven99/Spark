@@ -105,8 +105,38 @@ export default function TodayOverview() {
         isMobile={isMobile}
       >
         <PageSurface
+          title="核心指标"
+          subtitle="首页顶部先看 ROI 结果，先判断今天赚钱效率是在承压、稳定，还是已经回到健康区间。"
+        >
+          <div style={moduleGridStyle(isMobile, 2)}>
+            {roiMonitor.metrics.map((metric) => (
+              <div key={metric.key} style={pageStatusCardStyle}>
+                <div style={cardHeaderStyle}>
+                  <div style={pageMetricLabelStyle}>{metric.title}</div>
+                  <span style={{ ...roiBadgeBaseStyle, ...roiBadgeStyle(metric.tone) }}>{metric.deltaValue}</span>
+                </div>
+                <div style={metricPairStyle}>
+                  <div>
+                    <div style={miniHintStyle}>{metric.currentLabel}</div>
+                    <div style={pageMetricValueStyle}>{metric.currentValue}</div>
+                  </div>
+                  <div>
+                    <div style={miniHintStyle}>{metric.baselineLabel}</div>
+                    <div style={secondaryMetricValueStyle}>{metric.baselineValue}</div>
+                  </div>
+                </div>
+                <p style={summaryTextStyle}>{metric.summary}</p>
+              </div>
+            ))}
+          </div>
+          <div style={cardActionRowStyle(isMobile)}>
+            <SurfaceButton label="查看 ROI 详情" onClick={() => navigate(roiMonitor.chartPath)} />
+          </div>
+        </PageSurface>
+
+        <PageSurface
           title="经营模块"
-          subtitle="今天先收敛成 3 个解释赚钱的经营模块：收入与订单、流量质量、转化承接。"
+          subtitle="接着再收敛成 3 个解释 ROI 变化的经营模块：收入与订单、流量质量、转化承接。"
         >
           <div style={moduleGridStyle(isMobile, 3)}>
             {modules.map((module) => (
@@ -135,59 +165,6 @@ export default function TodayOverview() {
             ))}
           </div>
         </PageSurface>
-
-        <PageSurface
-          title="ROI"
-          subtitle="ROI 是 Today 里最核心的赚钱结果，这里直接看短期和长期表现，再决定往哪个经营模块继续深钻。"
-        >
-          <div style={moduleGridStyle(isMobile, 2)}>
-            {roiMonitor.metrics.map((metric) => (
-              <div key={metric.key} style={pageStatusCardStyle}>
-                <div style={cardHeaderStyle}>
-                  <div style={pageMetricLabelStyle}>{metric.title}</div>
-                  <span style={{ ...roiBadgeBaseStyle, ...roiBadgeStyle(metric.tone) }}>{metric.deltaValue}</span>
-                </div>
-                <div style={metricPairStyle}>
-                  <div>
-                    <div style={miniHintStyle}>{metric.currentLabel}</div>
-                    <div style={pageMetricValueStyle}>{metric.currentValue}</div>
-                  </div>
-                  <div>
-                    <div style={miniHintStyle}>{metric.baselineLabel}</div>
-                    <div style={secondaryMetricValueStyle}>{metric.baselineValue}</div>
-                  </div>
-                </div>
-                <p style={summaryTextStyle}>{metric.summary}</p>
-              </div>
-            ))}
-          </div>
-
-          <div style={factorBlockStyle}>
-            <div style={factorHeaderStyle(isMobile)}>
-              <div>
-                <div style={pageMetricLabelStyle}>影响 ROI 的 Top 3 因子</div>
-                <div style={pageHintTextStyle}>先告诉你当前 ROI 是被哪些环节拖住，而不是把经营判断拆散到多个入口。</div>
-              </div>
-              <div style={cardActionRowStyle(isMobile)}>
-                <SurfaceButton label="查看 ROI 详情" onClick={() => navigate(roiMonitor.chartPath)} />
-              </div>
-            </div>
-
-            <div style={factorListStyle}>
-              {roiMonitor.factors.map((factor) => (
-                <div key={factor.title} style={factorItemStyle}>
-                  <span style={{ ...roiBadgeBaseStyle, ...roiBadgeStyle(factor.tone) }}>
-                    {factor.tone === "critical" ? "优先处理" : "继续跟进"}
-                  </span>
-                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={factorTitleStyle}>{factor.title}</div>
-                    <div style={pageHintTextStyle}>{factor.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </PageSurface>
       </DestinationPage>
     </div>
   );
@@ -202,17 +179,6 @@ function moduleGridStyle(isMobile: boolean, columns: number): CSSProperties {
     display: "grid",
     gridTemplateColumns: isMobile ? "1fr" : `repeat(${columns}, minmax(0, 1fr))`,
     gap: "1rem",
-  };
-}
-
-function factorHeaderStyle(isMobile: boolean): CSSProperties {
-  return {
-    display: "flex",
-    alignItems: isMobile ? "flex-start" : "center",
-    justifyContent: "space-between",
-    flexDirection: isMobile ? "column" : "row",
-    gap: "1rem",
-    marginBottom: "1rem",
   };
 }
 
@@ -279,32 +245,4 @@ const roiBadgeBaseStyle: CSSProperties = {
   borderRadius: "999px",
   fontSize: "0.75rem",
   fontWeight: 700,
-};
-
-const factorBlockStyle: CSSProperties = {
-  marginTop: "1.25rem",
-  paddingTop: "1.25rem",
-  borderTop: `1px solid ${pageColorTokens.divider}`,
-};
-
-const factorListStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.85rem",
-};
-
-const factorItemStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "0.85rem",
-  padding: "0.95rem 1rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
-};
-
-const factorTitleStyle: CSSProperties = {
-  fontSize: "0.9rem",
-  fontWeight: 700,
-  color: pageColorTokens.textPrimary,
 };

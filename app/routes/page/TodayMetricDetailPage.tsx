@@ -1,10 +1,11 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { buildTodayAiDrilldownContext } from "../../lib/todayMetricAiDetail";
 import { useFeatureView } from "../../lib/featureTrack";
-import type { TodayMetricDetail, TodayMetricStatus } from "../../lib/todayMetricModules";
+import type { TodayMetricAction, TodayMetricDetail, TodayMetricStatus } from "../../lib/todayMetricModules";
 import { buildWorkspaceChatPrefillPath } from "../../lib/workspaceChatPrefill";
+import { DialogShell } from "../component/shared/DialogShell";
 import {
   mobilePageContentStyle,
   pageAccentBadgeStyle,
@@ -133,13 +134,30 @@ export function TodayMetricDetailPage({
   useFeatureView("today");
   const aiContext = buildTodayAiDrilldownContext(data);
   const [trendTable, objectTable, ...extraTables] = data.tables;
-  const aiChatPath = buildWorkspaceChatPrefillPath({
-    prompt: aiContext.chatPrompt,
-    constraints: [
-      `当前 AI 语境：Today / ${data.title}`,
-      "只回答和赚钱结果相关的问题，不切回通用助手语境。",
-    ],
-  });
+  const [selectedAction, setSelectedAction] = useState<TodayMetricAction | null>(null);
+  const aiDialogPrompt = useMemo(() => {
+    if (!selectedAction) return aiContext.chatPrompt;
+    return [
+      aiContext.chatPrompt,
+      "",
+      "当前想继续展开的建议动作：",
+      `- [${selectedAction.priority}] ${selectedAction.title}: ${selectedAction.detail}`,
+      "",
+      "请围绕这条动作继续拆解：先解释为什么它应该优先处理，再给出更具体的排查顺序、判断标准和下一步动作。",
+    ].join("\n");
+  }, [aiContext.chatPrompt, selectedAction]);
+  const aiChatPath = useMemo(
+    () =>
+      buildWorkspaceChatPrefillPath({
+        prompt: aiDialogPrompt,
+        constraints: [
+          `当前 AI 语境：Today / ${data.title}`,
+          selectedAction ? `当前聚焦动作：${selectedAction.title}` : null,
+          "只回答和赚钱结果相关的问题，不切回通用助手语境。",
+        ],
+      }),
+    [aiDialogPrompt, data.title, selectedAction],
+  );
 
   return (
     <>
@@ -294,43 +312,79 @@ export function TodayMetricDetailPage({
           <div style={actionListStyle}>
             {data.actions.map((action) => (
               <div key={action.title} style={actionItemStyle}>
-                <strong style={actionTitleStyle}>
-                  {action.title}
-                  <span style={actionPriorityStyle}>{action.priority}</span>
-                </strong>
+                <div style={actionHeaderStyle(isMobile)}>
+                  <strong style={actionTitleStyle}>
+                    {action.title}
+                    <span style={actionPriorityStyle}>{action.priority}</span>
+                  </strong>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAction(action)}
+                    style={actionAiButtonStyle}
+                  >
+                    和 AI 聊聊
+                  </button>
+                </div>
                 <span style={actionDetailStyle}>{action.detail}</span>
               </div>
             ))}
           </div>
         </PageSurface>
+      </div>
 
-        <PageSurface
-          title="和 AI 聊聊"
-          subtitle="这里的 AI 只继续围绕当前 Today 模块分析赚钱结果，不跳回通用聊天语境。"
-        >
-          <div style={aiPanelStyle}>
+      <DialogShell
+        open={Boolean(selectedAction)}
+        onClose={() => setSelectedAction(null)}
+        width={720}
+        title="和 AI 聊聊"
+        description={
+          selectedAction
+            ? `围绕「${selectedAction.title}」继续拆解优先级、排查顺序和下一步动作。`
+            : "继续围绕当前 Today 模块分析赚钱结果。"
+        }
+        footer={
+          <div style={chartActionRowStyle(isMobile)}>
+            <SurfaceButton
+              label="带着这条动作去和 AI 聊"
+              onClick={() => {
+                navigate(aiChatPath);
+                setSelectedAction(null);
+              }}
+            />
+            <SurfaceButton label="关闭" tone="subtle" onClick={() => setSelectedAction(null)} />
+          </div>
+        }
+      >
+        <div style={aiPanelStyle}>
+          {selectedAction ? (
             <div style={aiMetaPanelStyle}>
-              <strong style={pageMetricLabelStyle}>AiDrilldownContext</strong>
-              <pre style={aiPromptStyle}>{JSON.stringify(aiContext, null, 2)}</pre>
-            </div>
-            <div style={aiMetaPanelStyle}>
-              <strong style={pageMetricLabelStyle}>AI Chat Prompt</strong>
-              <pre style={aiPromptStyle}>{aiContext.chatPrompt}</pre>
-            </div>
-            <div style={chartEntryStyle}>
-              <div style={{ flex: "1 1 20rem", minWidth: 0 }}>
-                <div style={pageMetricLabelStyle}>当前模块</div>
-                <div style={pageMetricValueStyle}>{data.title}</div>
-                <div style={pageHintTextStyle}>{data.chartHint}</div>
+              <strong style={pageMetricLabelStyle}>当前动作</strong>
+              <div style={selectedActionCardStyle}>
+                <strong style={actionTitleStyle}>
+                  {selectedAction.title}
+                  <span style={actionPriorityStyle}>{selectedAction.priority}</span>
+                </strong>
+                <span style={actionDetailStyle}>{selectedAction.detail}</span>
               </div>
-              <div style={chartActionRowStyle(isMobile)}>
-                <SurfaceButton label="带着这个模块去和 AI 聊" onClick={() => navigate(aiChatPath)} />
-                <SurfaceButton label="返回经营首页" tone="subtle" onClick={() => navigate("/app/today")} />
-              </div>
+            </div>
+          ) : null}
+          <div style={aiMetaPanelStyle}>
+            <strong style={pageMetricLabelStyle}>AiDrilldownContext</strong>
+            <pre style={aiPromptStyle}>{JSON.stringify(aiContext, null, 2)}</pre>
+          </div>
+          <div style={aiMetaPanelStyle}>
+            <strong style={pageMetricLabelStyle}>AI Chat Prompt</strong>
+            <pre style={aiPromptStyle}>{aiDialogPrompt}</pre>
+          </div>
+          <div style={chartEntryStyle}>
+            <div style={{ flex: "1 1 20rem", minWidth: 0 }}>
+              <div style={pageMetricLabelStyle}>当前模块</div>
+              <div style={pageMetricValueStyle}>{data.title}</div>
+              <div style={pageHintTextStyle}>{data.chartHint}</div>
             </div>
           </div>
-        </PageSurface>
-      </div>
+        </div>
+      </DialogShell>
     </>
   );
 }
@@ -358,6 +412,16 @@ const actionListStyle: CSSProperties = {
   gap: "0.75rem",
 };
 
+function actionHeaderStyle(isMobile: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: isMobile ? "flex-start" : "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    flexDirection: isMobile ? "column" : "row",
+  };
+}
+
 const actionItemStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -371,8 +435,24 @@ const actionItemStyle: CSSProperties = {
 const actionTitleStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
+  flexWrap: "wrap",
   gap: "0.5rem",
   color: pageColorTokens.textBody,
+};
+
+const actionAiButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0.45rem 0.75rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.brandBlue,
+  cursor: "pointer",
+  fontSize: "0.8125rem",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 
 const actionPriorityStyle: CSSProperties = {
@@ -391,6 +471,16 @@ const actionPriorityStyle: CSSProperties = {
 const actionDetailStyle: CSSProperties = {
   color: pageColorTokens.textSecondary,
   lineHeight: 1.5,
+};
+
+const selectedActionCardStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
+  padding: "0.9rem 1rem",
+  borderRadius: pageColorTokens.radiusCard,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceSubtle,
 };
 
 const aiPanelStyle: CSSProperties = {
