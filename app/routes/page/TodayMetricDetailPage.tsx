@@ -121,12 +121,14 @@ export function TodayMetricDetailPage({
   backLabel = "返回经营",
   fallbackPath = "/app/today",
   returnTo,
+  topSection,
   extraSections,
 }: {
   data: TodayMetricDetail;
   backLabel?: string;
   fallbackPath?: string;
   returnTo?: string;
+  topSection?: ReactNode;
   extraSections?: ReactNode;
 }) {
   const { isMobile } = useResponsiveLayout();
@@ -172,6 +174,8 @@ export function TodayMetricDetailPage({
           fallbackPath={fallbackPath}
           returnTo={returnTo}
         />
+
+        {topSection ?? null}
 
         <section>
           <div

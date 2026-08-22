@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { ActionFunctionArgs } from "react-router";
-import { useFetcher, useSearchParams } from "react-router";
-import { getTodayMetricDetail } from "../lib/todayMetricModules";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { hasReadReportsScope } from "../lib/shopifyReports";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
 import { upsertShopCostConfig } from "../server/operations/roi/costConfig.server";
+import { loadTodayDetailData, TODAY_ALL_COUNTRIES } from "../server/operations/todayGeo.server";
 import type { ValueLayerResponse } from "./api.today-value-layer";
 import {
   TodayRoiValueLayerSection,
@@ -12,6 +13,7 @@ import {
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import { TodayMetricDetailPage } from "./page/TodayMetricDetailPage";
+import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
 type ActionData = { ok: true } | { ok: false; error: string };
 
@@ -46,9 +48,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function TodayRoiPage() {
-  const detail = useMemo(() => getTodayMetricDetail("roi"), []);
   const { isMobile } = useResponsiveLayout();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const data = useLoaderData<typeof loader>();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const costConfigFetcher = useFetcher<ActionData>({
@@ -56,31 +58,66 @@ export default function TodayRoiPage() {
   });
   const valueRequestedRef = useRef(false);
   const costMutatingRef = useRef(false);
+  const lastValuePathRef = useRef<string | null>(null);
+  const valuePath = useMemo(() => {
+    const params = new URLSearchParams();
+    if (data.filters.selectedCountry !== TODAY_ALL_COUNTRIES) {
+      params.set("country", data.filters.selectedCountry);
+    }
+    const query = params.toString();
+    return query ? `/api/today-value-layer?${query}` : "/api/today-value-layer";
+  }, [data.filters.selectedCountry]);
 
   useEffect(() => {
     const wasMutating = costMutatingRef.current;
     const isMutating = costConfigFetcher.state !== "idle";
     costMutatingRef.current = isMutating;
+    const pathChanged = lastValuePathRef.current !== valuePath;
+    lastValuePathRef.current = valuePath;
 
     if (!valueRequestedRef.current) {
       valueRequestedRef.current = true;
-      valueFetcher.load("/api/today-value-layer");
+      valueFetcher.load(valuePath);
+      return;
+    }
+
+    if (pathChanged) {
+      valueFetcher.load(valuePath);
       return;
     }
 
     if (wasMutating && !isMutating && costConfigFetcher.data?.ok) {
-      valueFetcher.load("/api/today-value-layer");
+      valueFetcher.load(valuePath);
     }
-  }, [costConfigFetcher.data, costConfigFetcher.state, valueFetcher]);
+  }, [costConfigFetcher.data, costConfigFetcher.state, valueFetcher, valuePath]);
 
   const value = valueFetcher.data?.ok ? valueFetcher.data.value : null;
   const valueLoading = !valueFetcher.data || valueFetcher.state !== "idle";
   const valueFailed = valueFetcher.data?.ok === false;
 
+  const handleCountryChange = (country: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (country === TODAY_ALL_COUNTRIES) {
+      params.delete("country");
+    } else {
+      params.set("country", country);
+    }
+    setSearchParams(params, { replace: true, preventScrollReset: true });
+  };
+
   return (
     <TodayMetricDetailPage
-      data={detail}
+      data={data.detail}
       returnTo={returnTo}
+      topSection={
+        <TodayCountryFilterCard
+          options={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
+          activeCountry={data.filters.selectedCountry}
+          onChange={handleCountryChange}
+          summary={`当前范围：${data.filters.selectedCountryLabel}。这里先看不同地区的经营回报、折扣与退款结构。`}
+          notes={data.filters.dataNotes}
+        />
+      }
       extraSections={
         <TodayRoiValueLayerSection
           value={value}
@@ -92,3 +129,15 @@ export default function TodayRoiPage() {
     />
   );
 }
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  return loadTodayDetailData({
+    shop: session.shop,
+    admin,
+    hasReadReports: hasReadReportsScope(session.scope),
+    requestedCountry: url.searchParams.get("country"),
+    metric: "roi",
+  });
+};

@@ -28,6 +28,7 @@ import {
   pageContentStyle,
   pageHintTextStyle,
   pageColorTokens,
+  PageHeaderNav,
   PageSurface,
 } from "./page/pageUiStyles";
 
@@ -310,6 +311,13 @@ export default function AppHealthMonitor() {
     const query = searchParams.toString();
     return `/app/health-monitor${query ? `?${query}` : ""}`;
   }, [searchParams]);
+  const overviewReturnPath = useMemo(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set("view", "overview");
+    params.delete("monitor");
+    const query = params.toString();
+    return `/app/health-monitor${query ? `?${query}` : ""}`;
+  }, [searchParams]);
   const followupActions = useMemo(
     () =>
       resolveHealthMonitorFollowupActions({
@@ -360,41 +368,54 @@ export default function AppHealthMonitor() {
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
-      <DestinationPage
-        title={t("nav.healthMonitor")}
-        subtitle="Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。"
-        titleBarTitle={t("nav.healthMonitor")}
-        backLabel={returnTo ? "返回上一级" : "返回首页"}
-        fallbackPath="/app"
-        returnTo={returnTo}
-        isMobile={isMobile}
-        actions={actions}
-      >
-        {usingFallback ? (
-          <PageSurface
-            title="当前为演示数据"
-            subtitle={fallbackMessage ?? "真实健康度快照暂时不可用，页面已自动切换到兜底数据。"}
-          >
-            <div style={fallbackBannerStyle}>
-              <strong style={fallbackBannerTitleStyle}>已跳过实时数据加载</strong>
-              <p style={fallbackBannerTextStyle}>
-                当前先保证 Health Monitor 页面可访问，后续再继续处理数据库或快照链路。
-              </p>
-            </div>
-          </PageSurface>
-        ) : null}
-
-        {viewMode === "overview" ? (
-          <OverviewSection
-            groups={groupedMonitors}
-            summary={monitoringSummary}
-            onOpenDetail={(monitorId) => {
-              syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
-            }}
+      {viewMode === "detail" ? (
+        <>
+          <PageHeaderNav
+            title={selectedMonitor.title}
+            subtitle="这是 Health Monitor 的统一详情模板。你可以在这里切换不同健康项，查看同一套结构化结论。"
+            eyebrow={selectedMonitor.group}
+            titleBarTitle={`${t("nav.healthMonitor")} · ${selectedMonitor.title}`}
+            backLabel="返回健康度总览"
+            fallbackPath="/app/health-monitor?view=overview"
+            returnTo={overviewReturnPath}
+            rightAction={
+              <label style={detailSwitcherWrapStyle}>
+                <span style={detailSwitcherLabelStyle}>切换健康项</span>
+                <select
+                  value={selectedMonitorId}
+                  onChange={(event) =>
+                    syncHealthMonitorSearch({ view: "detail", monitor: event.target.value })
+                  }
+                  style={detailSwitcherSelectStyle}
+                >
+                  {groupedMonitors.map((group) => (
+                    <optgroup key={group.title} label={group.title}>
+                      {group.items.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title} · {statusLabel(item.status)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            }
           />
-        ) : null}
 
-        {viewMode === "detail" ? (
+          {usingFallback ? (
+            <PageSurface
+              title="当前为演示数据"
+              subtitle={fallbackMessage ?? "真实健康度快照暂时不可用，页面已自动切换到兜底数据。"}
+            >
+              <div style={fallbackBannerStyle}>
+                <strong style={fallbackBannerTitleStyle}>已跳过实时数据加载</strong>
+                <p style={fallbackBannerTextStyle}>
+                  当前先保证 Health Monitor 页面可访问，后续再继续处理数据库或快照链路。
+                </p>
+              </div>
+            </PageSurface>
+          ) : null}
+
           <DetailSection
             monitor={selectedMonitor}
             detail={selectedDetail}
@@ -414,8 +435,41 @@ export default function AppHealthMonitor() {
               )
             }
           />
-        ) : null}
-      </DestinationPage>
+        </>
+      ) : (
+        <DestinationPage
+          title={t("nav.healthMonitor")}
+          subtitle="Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。"
+          titleBarTitle={t("nav.healthMonitor")}
+          backLabel={returnTo ? "返回上一级" : "返回首页"}
+          fallbackPath="/app"
+          returnTo={returnTo}
+          isMobile={isMobile}
+          actions={actions}
+        >
+          {usingFallback ? (
+            <PageSurface
+              title="当前为演示数据"
+              subtitle={fallbackMessage ?? "真实健康度快照暂时不可用，页面已自动切换到兜底数据。"}
+            >
+              <div style={fallbackBannerStyle}>
+                <strong style={fallbackBannerTitleStyle}>已跳过实时数据加载</strong>
+                <p style={fallbackBannerTextStyle}>
+                  当前先保证 Health Monitor 页面可访问，后续再继续处理数据库或快照链路。
+                </p>
+              </div>
+            </PageSurface>
+          ) : null}
+
+          <OverviewSection
+            groups={groupedMonitors}
+            summary={monitoringSummary}
+            onOpenDetail={(monitorId) => {
+              syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
+            }}
+          />
+        </DestinationPage>
+      )}
     </div>
   );
 }
@@ -515,40 +569,136 @@ function DetailSection({
 }) {
   return (
     <div style={stackStyle}>
+      <div style={detailActionBarStyle}>
+        <button type="button" style={secondaryButtonStyle} onClick={onBackToOverview}>
+          返回健康度总览
+        </button>
+        {followupActions.map((action) => (
+          <button
+            key={action.path}
+            type="button"
+            style={action.tone === "subtle" ? secondaryButtonStyle : primaryButtonStyle}
+            onClick={() => onOpenFollowup(action.path)}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+
       <PageSurface
-        title={monitor.title}
-        subtitle="详情页只回答这个健康项当前是否异常、证据是什么、应该先做什么，而不是重复经营总览。"
+        title="报告内容"
+        subtitle="先看这份健康度报告本身：观察窗口、核心指标、基准比较和数据可信度。"
       >
-        <div style={detailHeroStyle}>
-          <span style={statusBadgeStyle(monitor.status)}>{statusLabel(monitor.status)}</span>
-          <div style={detailHeroMainStyle}>
-            <div style={detailMetaStyle}>{monitor.group}</div>
-            <h3 style={detailIssueTitleStyle}>{detail.result.problem}</h3>
-            <div style={detailValueStyle}>当前关键数据：{monitor.value}</div>
-            <div style={detailMetaStyle}>影响经营模块：{monitor.relatedModule}</div>
+        <div style={reportSummaryGridStyle}>
+          <div style={reportSummaryCardStyle}>
+            <span style={reportSummaryLabelStyle}>当前状态</span>
+            <div style={reportSummaryValueRowStyle}>
+              <span style={statusBadgeStyle(monitor.status)}>{statusLabel(monitor.status)}</span>
+            </div>
+          </div>
+          <div style={reportSummaryCardStyle}>
+            <span style={reportSummaryLabelStyle}>{detail.input.coreMetric.label}</span>
+            <strong style={reportSummaryValueStyle}>{detail.input.coreMetric.value}</strong>
+          </div>
+          <div style={reportSummaryCardStyle}>
+            <span style={reportSummaryLabelStyle}>{detail.input.benchmark.label}</span>
+            <strong style={reportSummaryValueStyle}>{detail.input.benchmark.value}</strong>
+            {detail.input.benchmark.delta ? (
+              <span style={reportSummaryHintStyle}>
+                {benchmarkDirectionLabel(detail.input.benchmark.direction)} {detail.input.benchmark.delta}
+              </span>
+            ) : null}
+          </div>
+          <div style={reportSummaryCardStyle}>
+            <span style={reportSummaryLabelStyle}>观察窗口</span>
+            <strong style={reportSummaryValueStyle}>{detail.input.timeWindow.label}</strong>
+          </div>
+          <div style={reportSummaryCardStyle}>
+            <span style={reportSummaryLabelStyle}>数据质量</span>
+            <strong style={reportSummaryValueStyle}>{scoringLabel(detail.input.scoring.dataQuality)}</strong>
+          </div>
+          <div style={reportSummaryCardStyle}>
+            <span style={reportSummaryLabelStyle}>结论可信度</span>
+            <strong style={reportSummaryValueStyle}>{scoringLabel(detail.input.scoring.confidence)}</strong>
           </div>
         </div>
-        <div style={buttonRowStyle}>
-          <button type="button" style={secondaryButtonStyle} onClick={onBackToOverview}>
-            返回总体判断
-          </button>
-          {followupActions.map((action) => (
-            <button
-              key={action.path}
-              type="button"
-              style={action.tone === "subtle" ? secondaryButtonStyle : primaryButtonStyle}
-              onClick={() => onOpenFollowup(action.path)}
-            >
-              {action.label}
-            </button>
-          ))}
+
+        <div style={reportSummaryNarrativeStyle}>
+          <strong style={reportSummaryNarrativeTitleStyle}>报告摘要</strong>
+          <p style={reportSummaryNarrativeTextStyle}>{monitor.summary}</p>
         </div>
+
+        <div style={reportSectionGridStyle}>
+          <section style={reportSectionCardStyle}>
+            <strong style={reportSectionTitleStyle}>核心信号</strong>
+            <div style={reportFactListStyle}>
+              {detail.input.facts.slice(0, 3).map((fact) => (
+                <div key={fact.label} style={reportFactItemStyle}>
+                  <span style={reportFactLabelStyle}>{fact.label}</span>
+                  <span style={reportFactValueStyle}>{fact.value}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={reportSectionCardStyle}>
+            <strong style={reportSectionTitleStyle}>判断依据</strong>
+            <div style={reportTraceListStyle}>
+              {detail.input.generationTrace.rulesApplied.map((entry) => (
+                <div key={entry} style={reportTraceItemStyle}>
+                  {entry}
+                </div>
+              ))}
+              {detail.input.generationTrace.benchmarkComparisons.map((entry) => (
+                <div key={entry} style={reportTraceItemStyle}>
+                  {entry}
+                </div>
+              ))}
+              {detail.input.possibleCauses?.slice(0, 1).map((entry) => (
+                <div key={entry} style={reportTraceItemStyle}>
+                  初步判断：{entry}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {detail.input.affectedObjects && detail.input.affectedObjects.length > 0 ? (
+          <div style={reportObjectPreviewStyle}>
+            <strong style={reportSectionTitleStyle}>重点影响对象</strong>
+            <div style={reportObjectChipRowStyle}>
+              {detail.input.affectedObjects.slice(0, 4).map((object) => (
+                <span key={`${object.type}-${object.name}`} style={reportObjectChipStyle}>
+                  {objectTypeLabel(object.type)} · {object.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {monitor.id === "page-performance" ? (
+          <div style={reportEmbeddedSectionStyle}>
+            <strong style={reportSummaryNarrativeTitleStyle}>报告明细</strong>
+            <PageSpeedInsightsContent
+              defaultUrl={pageSpeedDefaults.defaultUrl}
+              defaultReportLocale={pageSpeedDefaults.defaultReportLocale}
+              initialStrategy="mobile"
+              source="health-monitor"
+              label={monitor.title}
+              showHeader={false}
+              showHint={false}
+              embedded
+              hideUrlInput
+              hideLocaleInput
+              autorun
+            />
+          </div>
+        ) : null}
       </PageSurface>
 
       <PageSurface title="问题是什么" subtitle="只保留一句判断，让用户先知道结论。">
         <div style={detailCalloutStyle}>
           <p style={detailLeadStyle}>{detail.result.problem}</p>
-          <p style={detailSupportTextStyle}>{monitor.summary}</p>
         </div>
       </PageSurface>
 
@@ -574,45 +724,6 @@ function DetailSection({
                 </div>
                 <p style={objectSummaryStyle}>{object.summary ?? "—"}</p>
               </div>
-            ))}
-          </div>
-        </PageSurface>
-      ) : null}
-
-      {monitor.id === "page-performance" ? (
-        <PageSurface
-          title="页面性能实验室分析"
-          subtitle="这里直接复用 PageSpeed 分析，不再额外输入 URL 和语言，默认分析当前店铺的 myshopify 地址。"
-        >
-          <PageSpeedInsightsContent
-            defaultUrl={pageSpeedDefaults.defaultUrl}
-            defaultReportLocale={pageSpeedDefaults.defaultReportLocale}
-            initialStrategy="mobile"
-            source="health-monitor"
-            label={monitor.title}
-            showHeader={false}
-            showHint={false}
-            embedded
-            hideUrlInput
-            hideLocaleInput
-            autorun
-          />
-        </PageSurface>
-      ) : null}
-
-      {followupActions.length > 0 ? (
-        <PageSurface title="下一步入口" subtitle="从当前健康项直接进入已有工作流，不重复造一套新页面。">
-          <div style={followupListStyle}>
-            {followupActions.map((action) => (
-              <button
-                key={action.path}
-                type="button"
-                style={action.tone === "subtle" ? followupSecondaryCardStyle : followupPrimaryCardStyle}
-                onClick={() => onOpenFollowup(action.path)}
-              >
-                <strong style={followupCardTitleStyle}>{action.label}</strong>
-                <span style={followupCardTextStyle}>继续查看关联对象、任务或报表。</span>
-              </button>
             ))}
           </div>
         </PageSurface>
@@ -663,6 +774,18 @@ function objectTypeLabel(type: string): string {
   if (type === "campaign") return "广告";
   if (type === "channel") return "渠道";
   return "对象";
+}
+
+function scoringLabel(value: "high" | "medium" | "low") {
+  if (value === "high") return "高";
+  if (value === "medium") return "中";
+  return "低";
+}
+
+function benchmarkDirectionLabel(value: "better" | "worse" | "flat") {
+  if (value === "better") return "相对更好";
+  if (value === "worse") return "相对更差";
+  return "基本持平";
 }
 
 function statusBadgeStyle(status: HealthMonitorStatus): CSSProperties {
@@ -763,6 +886,29 @@ const baseStatusBadgeStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+const detailSwitcherWrapStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+  minWidth: 220,
+};
+
+const detailSwitcherLabelStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+};
+
+const detailSwitcherSelectStyle: CSSProperties = {
+  minHeight: 40,
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.borderInput}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textPrimary,
+  fontSize: "0.875rem",
+  padding: "0 0.75rem",
+  fontFamily: "inherit",
+};
+
 const buttonRowStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -833,35 +979,156 @@ const overviewMetricRowStyle: CSSProperties = {
   gap: "0.75rem",
 };
 
-const detailHeroStyle: CSSProperties = {
+const detailActionBarStyle: CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
-  gap: "0.9rem",
   flexWrap: "wrap",
+  gap: "0.75rem",
 };
 
-const detailHeroMainStyle: CSSProperties = {
-  flex: "1 1 18rem",
-  minWidth: 0,
+const reportSummaryGridStyle: CSSProperties = {
   display: "grid",
-  gap: "0.45rem",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "0.75rem",
 };
 
-const detailMetaStyle: CSSProperties = {
+const reportSummaryCardStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const reportSummaryLabelStyle: CSSProperties = {
   fontSize: "0.75rem",
   color: pageColorTokens.textSecondary,
 };
 
-const detailIssueTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "1.15rem",
-  fontWeight: 800,
+const reportSummaryValueStyle: CSSProperties = {
+  fontSize: "1rem",
+  fontWeight: 760,
   color: pageColorTokens.textPrimary,
-  lineHeight: 1.35,
 };
 
-const detailValueStyle: CSSProperties = {
-  fontSize: "0.875rem",
+const reportSummaryValueRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+};
+
+const reportSummaryHintStyle: CSSProperties = {
+  fontSize: "0.8rem",
+  color: pageColorTokens.textSecondary,
+};
+
+const reportSummaryNarrativeStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+  marginTop: "1rem",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surface,
+};
+
+const reportSummaryNarrativeTitleStyle: CSSProperties = {
+  fontSize: "0.82rem",
+  color: pageColorTokens.textSecondary,
+};
+
+const reportSummaryNarrativeTextStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.9rem",
+  lineHeight: 1.6,
+  color: pageColorTokens.textBody,
+};
+
+const reportEmbeddedSectionStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.75rem",
+  marginTop: "1rem",
+};
+
+const reportSectionGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: "0.75rem",
+  marginTop: "1rem",
+};
+
+const reportSectionCardStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.65rem",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surface,
+};
+
+const reportSectionTitleStyle: CSSProperties = {
+  fontSize: "0.82rem",
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const reportFactListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.6rem",
+};
+
+const reportFactItemStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.2rem",
+};
+
+const reportFactLabelStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+};
+
+const reportFactValueStyle: CSSProperties = {
+  fontSize: "0.88rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textBody,
+};
+
+const reportTraceListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.5rem",
+};
+
+const reportTraceItemStyle: CSSProperties = {
+  fontSize: "0.84rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textBody,
+};
+
+const reportObjectPreviewStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.65rem",
+  marginTop: "1rem",
+  padding: "0.95rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surface,
+};
+
+const reportObjectChipRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+};
+
+const reportObjectChipStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.38rem 0.65rem",
+  borderRadius: 999,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+  fontSize: "0.78rem",
   color: pageColorTokens.textBody,
 };
 
@@ -962,44 +1229,6 @@ const evidenceValueStyle: CSSProperties = {
 const actionListStyle: CSSProperties = {
   display: "grid",
   gap: "0.75rem",
-};
-
-const followupListStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "0.75rem",
-};
-
-const followupBaseCardStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.35rem",
-  textAlign: "left",
-  padding: "0.95rem 1rem",
-  borderRadius: pageColorTokens.radiusControl,
-  cursor: "pointer",
-};
-
-const followupPrimaryCardStyle: CSSProperties = {
-  ...followupBaseCardStyle,
-  border: `1px solid ${pageColorTokens.brandBlue}`,
-  background: pageColorTokens.surface,
-};
-
-const followupSecondaryCardStyle: CSSProperties = {
-  ...followupBaseCardStyle,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
-};
-
-const followupCardTitleStyle: CSSProperties = {
-  fontSize: "0.9rem",
-  color: pageColorTokens.textPrimary,
-};
-
-const followupCardTextStyle: CSSProperties = {
-  fontSize: "0.82rem",
-  lineHeight: 1.55,
-  color: pageColorTokens.textSecondary,
 };
 
 const actionItemStyle: CSSProperties = {

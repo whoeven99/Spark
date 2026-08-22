@@ -123,7 +123,7 @@ function RoiSettingsSummary({
   onToggleSettings: () => void;
 }) {
   const { t } = useTranslation();
-  const { channels, costConfig } = value;
+  const { channels, costConfig, scope } = value;
 
   return (
     <div style={settingsGridStyle(isMobile)}>
@@ -137,6 +137,12 @@ function RoiSettingsSummary({
         <div style={settingsTileHintStyle}>
           {t("todayRoi.settingChannelHint", { share: channels.attributedRevenueShare })}
         </div>
+        <div style={settingsTileHintStyle}>{scope.summary}</div>
+        {scope.notes.map((note) => (
+          <div key={note} style={settingsTileHintStyle}>
+            {note}
+          </div>
+        ))}
       </div>
 
       <div style={settingsTileStyle}>

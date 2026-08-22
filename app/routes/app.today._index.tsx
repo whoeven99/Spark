@@ -1,11 +1,14 @@
 import type { CSSProperties } from "react";
-import type { HeadersFunction } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, useLocation, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { useFeatureView } from "../lib/featureTrack";
-import { getTodayOverviewModules, getTodayRoiMonitor } from "../lib/todayMetricModules";
+import { hasReadReportsScope } from "../lib/shopifyReports";
+import { authenticate } from "../shopify.server";
+import { loadTodayOverviewData, TODAY_ALL_COUNTRIES } from "../server/operations/todayGeo.server";
 import {
   mobilePageContentStyle,
   pageColorTokens,
@@ -17,6 +20,7 @@ import {
   pageStatusCardStyle,
 } from "./page/pageUiStyles";
 import { DestinationPage } from "./component/shared/DestinationPage";
+import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
 type RoiTone = "positive" | "warning" | "critical";
 
@@ -90,9 +94,30 @@ export default function TodayOverview() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
-  const modules = getTodayOverviewModules();
-  const roiMonitor = getTodayRoiMonitor();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const data = useLoaderData<typeof loader>();
+  const { modules, roiMonitor, filters } = data;
   useFeatureView("today");
+
+  const handleCountryChange = (country: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (country === TODAY_ALL_COUNTRIES) {
+      params.delete("country");
+    } else {
+      params.set("country", country);
+    }
+    setSearchParams(params, { replace: true, preventScrollReset: true });
+  };
+
+  const buildDetailPath = (path: string) => {
+    const params = new URLSearchParams();
+    params.set("returnTo", `${location.pathname}${location.search}`);
+    if (filters.selectedCountry !== TODAY_ALL_COUNTRIES) {
+      params.set("country", filters.selectedCountry);
+    }
+    return `${path}?${params.toString()}`;
+  };
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -104,9 +129,17 @@ export default function TodayOverview() {
         fallbackPath="/app"
         isMobile={isMobile}
       >
+        <TodayCountryFilterCard
+          options={filters.countries.map((item) => ({ key: item.key, label: item.label }))}
+          activeCountry={filters.selectedCountry}
+          onChange={handleCountryChange}
+          summary={`当前范围：${filters.selectedCountryLabel}。这一版先支持总览 + 按国家/地区切换，帮助客户直接比较不同地区的赚钱结果。`}
+          notes={filters.dataNotes}
+        />
+
         <PageSurface
           title="核心指标"
-          subtitle="首页顶部先看 ROI 结果，先判断今天赚钱效率是在承压、稳定，还是已经回到健康区间。"
+          subtitle="首页顶部先看地区维度的赚钱效率，先判断当前范围是在承压、稳定，还是已经回到健康区间。"
         >
           <div style={moduleGridStyle(isMobile, 2)}>
             {roiMonitor.metrics.map((metric) => (
@@ -130,13 +163,13 @@ export default function TodayOverview() {
             ))}
           </div>
           <div style={cardActionRowStyle(isMobile)}>
-            <SurfaceButton label="查看 ROI 详情" onClick={() => navigate(roiMonitor.chartPath)} />
+            <SurfaceButton label="查看 ROI 详情" onClick={() => navigate(buildDetailPath(roiMonitor.chartPath))} />
           </div>
         </PageSurface>
 
         <PageSurface
           title="经营模块"
-          subtitle="接着再收敛成 3 个解释 ROI 变化的经营模块：收入与订单、流量质量、转化承接。"
+          subtitle="接着再收敛成 3 个解释地区赚钱结果的经营模块：收入与订单、流量质量、转化承接。"
         >
           <div style={moduleGridStyle(isMobile, 3)}>
             {modules.map((module) => (
@@ -159,7 +192,7 @@ export default function TodayOverview() {
                 <p style={summaryTextStyle}>{module.summary}</p>
                 <p style={pageHintTextStyle}>{module.chartHint}</p>
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="查看模块详情" onClick={() => navigate(module.detailPath)} />
+                  <SurfaceButton label="查看模块详情" onClick={() => navigate(buildDetailPath(module.detailPath))} />
                 </div>
               </div>
             ))}
@@ -169,6 +202,17 @@ export default function TodayOverview() {
     </div>
   );
 }
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  return loadTodayOverviewData({
+    shop: session.shop,
+    admin,
+    hasReadReports: hasReadReportsScope(session.scope),
+    requestedCountry: url.searchParams.get("country"),
+  });
+};
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

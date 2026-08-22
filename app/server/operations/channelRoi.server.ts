@@ -58,6 +58,10 @@ export type ChannelRoiResult = {
   caveats: string[];
 };
 
+export type ChannelRoiScope = {
+  countryCode?: string | null;
+};
+
 // ── 渠道归类 ────────────────────────────────
 
 const REFERRER_CHANNELS: Array<{ pattern: RegExp; key: string }> = [
@@ -124,12 +128,25 @@ export async function computeChannelRoi(
   shop: string,
   costConfig: ShopCostConfigView,
   now: Date = new Date(),
+  scope: ChannelRoiScope = {},
 ): Promise<ChannelRoiResult> {
   const since = new Date(now.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const normalizedCountry = scope.countryCode?.trim().toUpperCase() || null;
+  const orderWhere = normalizedCountry
+    ? {
+        shop,
+        createdAt: { gte: since },
+        status: { not: "cancelled" },
+        OR: [
+          { shippingCountryCode: normalizedCountry },
+          { billingCountryCode: normalizedCountry },
+        ],
+      }
+    : { shop, createdAt: { gte: since }, status: { not: "cancelled" } };
 
   const [orders, refunds, skuCostMap, customerValueMap] = await Promise.all([
     prisma.shopOrder.findMany({
-      where: { shop, createdAt: { gte: since }, status: { not: "cancelled" } },
+      where: orderWhere,
       select: {
         shopifyOrderId: true,
         totalPrice: true,
@@ -339,6 +356,12 @@ export async function computeChannelRoi(
       `贡献利润为估算口径：逐 SKU 成本优先，缺失部分按默认毛利率 ${costConfig.defaultGrossMarginPercent}% 估算；支付手续费按 ${costConfig.paymentFeePercent}% + ${costConfig.paymentFeeFixed}/单估算；未含运费补贴`,
       "投放成本未接入，Business ROI 暂不评级（接入广告数据后自动启用 S~D 等级）",
       "渠道归因为 last-click 口径（订单 UTM / 引荐来源）",
+      ...(normalizedCountry
+        ? [
+            `当前仅统计 ${normalizedCountry} 地区近 ${WINDOW_DAYS} 天订单。`,
+            "渠道内客户质量指标沿用全店客户价值标签，仅筛出该地区订单涉及客户。",
+          ]
+        : []),
     ],
   };
 }
