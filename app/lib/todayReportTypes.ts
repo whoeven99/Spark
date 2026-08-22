@@ -29,13 +29,17 @@ export type TodayHeader = {
 };
 
 export type TodayMetricCard = {
-  key: "revenue" | "cost" | "profit" | "profit_margin" | "orders" | "aov";
+  key: "growth" | "profit" | "efficiency";
   label: string;
   value: string;
   delta: string;
   tone: TodayMetricTone;
   source: "realized" | "estimated";
   summary: string;
+  subMetrics: {
+    label: string;
+    value: string;
+  }[];
   href: string;
 };
 

@@ -54,8 +54,7 @@ export default function TodayRoiPage() {
   const data = useLoaderData<typeof loader>();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const rawFocus = searchParams.get("focus");
-  const focus =
-    rawFocus === "channels" || rawFocus === "loss" || rawFocus === "layers" ? rawFocus : "roi";
+  const focus = rawFocus === "channels" || rawFocus === "loss" ? rawFocus : "overview";
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const costConfigFetcher = useFetcher<ActionData>({
     key: TODAY_ROI_COST_CONFIG_FETCHER_KEY,
@@ -111,7 +110,7 @@ export default function TodayRoiPage() {
 
   const handleFocusChange = (nextFocus: string) => {
     const params = new URLSearchParams(searchParams);
-    if (nextFocus === "roi") {
+    if (nextFocus === "overview") {
       params.delete("focus");
     } else {
       params.set("focus", nextFocus);
@@ -124,9 +123,7 @@ export default function TodayRoiPage() {
       ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断哪些渠道真的值得继续投，哪些渠道只是把收入做出来却留不住利润。`
       : focus === "loss"
         ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断折扣、退款和高损耗订单如何继续吞掉经营回报。`
-        : focus === "layers"
-          ? `当前范围：${data.filters.selectedCountryLabel}。这里优先从价值层、客户质量和复购信号判断 ROI 是否有持续支撑。`
-          : `当前范围：${data.filters.selectedCountryLabel}。这里先看不同地区的经营回报、折扣与退款结构。`;
+        : `当前范围：${data.filters.selectedCountryLabel}。这里先总览渠道回报和损耗压力，再决定下一步先看哪组对象。`;
 
   return (
     <TodayMetricReportPage
@@ -138,10 +135,9 @@ export default function TodayRoiPage() {
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
           focusOptions={[
-            { key: "roi", label: "总览" },
+            { key: "overview", label: "总览" },
             { key: "channels", label: "渠道" },
             { key: "loss", label: "损耗" },
-            { key: "layers", label: "价值层" },
           ]}
           activeFocus={focus}
           onFocusChange={handleFocusChange}

@@ -1395,6 +1395,9 @@ function buildTodayMetricCards(orderScope: OrderScopeData): TodayMetricCard[] {
   const profitValue = estimatedProfit(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
   const profitMarginValue = safeDivide(profitValue, revenueValue || 1);
   const aovValue = safeDivide(revenueValue, orderScope.sevenDayTotals.orders || 1);
+  const shortTermReturn = estimatedReturnMultiple(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
+  const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, revenueValue || 1);
+  const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, revenueValue || 1);
 
   const baselineRevenue = comparableBaseline(orderScope.baselineTotals.revenue);
   const baselineCost = comparableBaseline(estimatedCost(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent));
@@ -1402,6 +1405,10 @@ function buildTodayMetricCards(orderScope: OrderScopeData): TodayMetricCard[] {
   const baselineProfitMargin = safeDivide(estimatedProfit(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent), orderScope.baselineTotals.revenue || 1);
   const baselineOrders = comparableBaseline(orderScope.baselineTotals.orders);
   const baselineAov = safeDivide(baselineRevenue, baselineOrders || 1);
+  const baselineReturn = estimatedReturnMultiple(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent);
+  const revenueDelta = safeDivide(revenueValue - baselineRevenue, baselineRevenue || 1);
+  const profitDelta = safeDivide(profitValue - baselineProfit, baselineProfit || 1);
+  const returnDelta = safeDivide((shortTermReturn ?? 0) - (baselineReturn ?? 0), baselineReturn || 1);
 
   const buildTone = (delta: number, inverse = false): TodayMetricCard["tone"] => {
     if (inverse) {
@@ -1416,80 +1423,83 @@ function buildTodayMetricCards(orderScope: OrderScopeData): TodayMetricCard[] {
 
   return [
     {
-      key: "revenue",
-      label: "收入",
+      key: "growth",
+      label: "增长质量",
       value: formatCurrency(revenueValue, orderScope.currency),
-      delta: formatDeltaPercent(safeDivide(revenueValue - baselineRevenue, baselineRevenue || 1)),
-      tone: buildTone(safeDivide(revenueValue - baselineRevenue, baselineRevenue || 1)),
+      delta: formatDeltaPercent(revenueDelta),
+      tone: buildTone(revenueDelta),
       source: "realized",
-      summary: "先看最近 7 天收入增长里，哪些对象在制造健康增长，哪些对象只是把规模做大。",
+      summary: "先判断最近 7 天的增长是不是健康增长，再继续拆到商品和订单对象。",
+      subMetrics: [
+        { label: "订单数", value: formatInteger(orderScope.sevenDayTotals.orders) },
+        { label: "客单价", value: formatCurrency(aovValue, orderScope.currency) },
+      ],
       href: "/app/today/revenue",
     },
     {
-      key: "cost",
-      label: "成本",
-      value: formatCurrency(costValue, orderScope.currency),
-      delta: formatDeltaPercent(safeDivide(costValue - baselineCost, baselineCost || 1)),
-      tone: buildTone(safeDivide(costValue - baselineCost, baselineCost || 1), true),
-      source: "estimated",
-      summary: "当前先用商品成本、折扣、支付手续费与退款损耗估算，判断成本有没有跑到收入前面。",
-      href: "/app/today/profit?focus=cost",
-    },
-    {
       key: "profit",
-      label: "利润",
+      label: "利润结果",
       value: formatCurrency(profitValue, orderScope.currency),
-      delta: formatDeltaPercent(safeDivide(profitValue - baselineProfit, baselineProfit || 1)),
-      tone: buildTone(safeDivide(profitValue - baselineProfit, baselineProfit || 1)),
+      delta: formatDeltaPercent(profitDelta),
+      tone: buildTone(profitDelta),
       source: "estimated",
-      summary: "利润页要回答的不是有没有卖出去，而是卖出去的钱最后留下了多少。",
+      summary: "利润页只回答一件事: 卖出去的钱最后留下了多少，以及是谁在吞利润。",
+      subMetrics: [
+        { label: "成本", value: formatCurrency(costValue, orderScope.currency) },
+        { label: "利润率", value: formatPercent(profitMarginValue) },
+      ],
       href: "/app/today/profit?focus=profit",
     },
     {
-      key: "profit_margin",
-      label: "利润率",
-      value: formatPercent(profitMarginValue),
-      delta: formatPercentPoints(profitMarginValue - baselineProfitMargin),
-      tone: buildTone(profitMarginValue - baselineProfitMargin),
+      key: "efficiency",
+      label: "回报效率",
+      value: formatMultiple(shortTermReturn),
+      delta: formatDeltaPercent(returnDelta),
+      tone: buildTone(returnDelta),
       source: "estimated",
-      summary: "利润率最适合识别哪些对象正在用规模掩盖低质量增长。",
-      href: "/app/today/profit?focus=margin",
-    },
-    {
-      key: "orders",
-      label: "订单数",
-      value: formatInteger(orderScope.sevenDayTotals.orders),
-      delta: formatDeltaPercent(safeDivide(orderScope.sevenDayTotals.orders - baselineOrders, baselineOrders || 1)),
-      tone: buildTone(safeDivide(orderScope.sevenDayTotals.orders - baselineOrders, baselineOrders || 1)),
-      source: "realized",
-      summary: "订单数只回答规模，进入收入页后必须继续看订单质量与对象结构。",
-      href: "/app/today/revenue?focus=orders",
-    },
-    {
-      key: "aov",
-      label: "客单价",
-      value: formatCurrency(aovValue, orderScope.currency),
-      delta: formatDeltaPercent(safeDivide(aovValue - baselineAov, baselineAov || 1)),
-      tone: buildTone(safeDivide(aovValue - baselineAov, baselineAov || 1)),
-      source: "realized",
-      summary: "客单价要继续拆到商品组合和高价值订单，判断高客单是不是健康样本。",
-      href: "/app/today/revenue?focus=aov",
+      summary: "回报效率页重点看渠道值不值得继续投，以及折扣和退款有没有吞掉结果。",
+      subMetrics: [
+        { label: "折扣占比", value: formatPercent(discountShare) },
+        { label: "退款占比", value: formatPercent(refundShare) },
+      ],
+      href: "/app/today/roi",
     },
   ];
 }
 
 function buildTodayReasonCards(orderScope: OrderScopeData, sessionScope: SessionScopeData | null): TodayReasonCard[] {
+  const revenueDelta = safeDivide(
+    orderScope.sevenDayTotals.revenue - comparableBaseline(orderScope.baselineTotals.revenue),
+    comparableBaseline(orderScope.baselineTotals.revenue) || 1,
+  );
+  const ordersDelta = safeDivide(
+    orderScope.sevenDayTotals.orders - comparableBaseline(orderScope.baselineTotals.orders),
+    comparableBaseline(orderScope.baselineTotals.orders) || 1,
+  );
   const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, orderScope.sevenDayTotals.revenue || 1);
   const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, orderScope.sevenDayTotals.revenue || 1);
   const shortTermReturn = estimatedReturnMultiple(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
-  const trafficSummary = sessionScope
-    ? `近 7 天会话 ${formatInteger(sessionScope.summary.sessions)}，转化率 ${formatPercent(sessionScope.summary.conversionRate)}。`
-    : "当前未接入地区维度的 Storefront sessions。";
+  const conversionMeta = sessionScope
+    ? `会话 ${formatInteger(sessionScope.summary.sessions)} / 转化率 ${formatPercent(sessionScope.summary.conversionRate)}`
+    : `订单变化 ${formatDeltaPercent(ordersDelta)} / 订单数 ${formatInteger(orderScope.sevenDayTotals.orders)}`;
 
   return [
     {
+      key: "growth-change",
+      title: "增长为什么变化",
+      value: formatDeltaPercent(revenueDelta),
+      label: revenueDelta >= 0 ? "增长质量" : "增长承压",
+      meta: conversionMeta,
+      summary:
+        revenueDelta >= 0
+          ? "增长还在继续，但要先确认是健康对象在支撑，还是只把规模做大。"
+          : "增长已经变弱，下一步先到增长质量页看是哪些商品和订单在拖累结果。",
+      tone: revenueDelta >= 0 ? "blue" : "orange",
+      href: "/app/today/revenue",
+    },
+    {
       key: "profit-erosion",
-      title: "利润被什么侵蚀",
+      title: "利润被谁侵蚀",
       value: formatPercent(Math.max(refundShare, discountShare)),
       label: refundShare >= discountShare ? "退款损耗" : "折扣占比",
       meta: refundShare >= discountShare ? "成交后利润继续流失" : "成交前利润先被让掉",
@@ -1498,32 +1508,23 @@ function buildTodayReasonCards(orderScope: OrderScopeData, sessionScope: Session
           ? "退款问题优先级更高，它会直接吞掉已经成交的利润。"
           : "当前先别把折扣带来的规模增长误判成真实经营改善。",
       tone: refundShare > 0.08 || discountShare > 0.15 ? "red" : "orange",
-      href: refundShare >= discountShare ? "/app/today/roi" : "/app/today/profit?focus=cost",
+      href: "/app/today/profit",
     },
     {
-      key: "growth-quality",
-      title: "当前增长质量",
+      key: "efficiency-shift",
+      title: "回报为什么变弱",
       value: formatMultiple(shortTermReturn),
       label: "短期经营回报",
-      meta: "收入 / 估算经营成本",
+      meta:
+        refundShare >= discountShare
+          ? `退款占比 ${formatPercent(refundShare)} / 回报先被售后损耗拖弱`
+          : `折扣占比 ${formatPercent(discountShare)} / 回报先被售前让利拖弱`,
       summary:
         (shortTermReturn ?? 0) >= 1.5
-          ? "最近 7 天的增长质量还在健康区，更值得继续找可以放大的对象。"
-          : "当前增长仍然为正，但增长质量已经走弱，应该优先排查低效对象。",
-      tone: (shortTermReturn ?? 0) >= 1.5 ? "green" : "orange",
+          ? "当前回报效率还在健康区，但仍要继续看哪些渠道和对象值得继续放大。"
+          : "回报效率已经走弱，下一步应该直接去看低效渠道和高损耗订单。",
+      tone: (shortTermReturn ?? 0) >= 1.5 ? "green" : "red",
       href: "/app/today/roi",
-    },
-    {
-      key: "current-priority",
-      title: "当前最值得先看",
-      value: sessionScope ? formatPercent(sessionScope.summary.conversionRate) : formatInteger(orderScope.sevenDayTotals.orders),
-      label: sessionScope ? "转化率" : "订单规模",
-      meta: sessionScope ? trafficSummary : "当前先按订单质量继续看对象。",
-      summary: sessionScope
-        ? "如果流量和转化已经承压，就不应该继续把注意力放在冲量上。"
-        : "当前先用收入、利润和 ROI 三条主线判断哪些对象值得继续处理。",
-      tone: sessionScope ? "blue" : "blue",
-      href: sessionScope ? "/app/today/traffic" : "/app/today/revenue",
     },
   ];
 }
@@ -1536,31 +1537,31 @@ function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
     cards: [
       {
         key: "short_term",
-        label: "短期经营回报",
+        label: "短期结果",
         statusLabel:
           (shortTermReturn ?? 0) >= 1.5 ? "强" : (shortTermReturn ?? 0) >= 1 ? "稳定" : "偏弱",
         value: formatMultiple(shortTermReturn),
-        summary: "最近 7 天先用订单、折扣、退款和支付成本的估算口径判断有没有在赚钱。",
+        summary: "先看最近 7 天有没有留下正向经营结果，这一层只回答短期是否在赚钱。",
         dataQuality: "estimated",
         confidence: "medium",
         href: "/app/today/roi",
       },
       {
         key: "payback",
-        label: "回收期 ROI",
+        label: "回收期数据状态",
         statusLabel: "待接入",
-        value: "待接入",
-        summary: "缺少 CAC 与 cohort 回收窗口，当前阶段不输出伪造回收 ROI。",
+        value: "缺 CAC",
+        summary: "缺少 CAC 与 cohort 回收窗口，当前只保留数据状态，不输出伪造回收期 ROI。",
         dataQuality: "pending",
         confidence: "low",
         href: "/app/today/roi",
       },
       {
         key: "lifetime",
-        label: "长期价值状态",
+        label: "长期价值信号",
         statusLabel: firstOrderShare > 0.6 ? "新增偏重" : "结构较稳",
         value: `首单占比 ${formatPercent(firstOrderShare)}`,
-        summary: "当前先用新增结构代替长期 ROI，等 CAC 接入后再升级为正式长期 ROI。",
+        summary: "当前先用新增结构代替长期 ROI，作为长期质量补充，而不是正式长期回报结论。",
         dataQuality: "estimated",
         confidence: "low",
         href: "/app/today/roi",
@@ -1596,94 +1597,79 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
     },
     metricCards: [
       {
-        key: "revenue",
-        label: "收入",
+        key: "growth",
+        label: "增长质量",
         value: ordersModule?.averageValue ?? "—",
         delta: ordersModule?.deltaValue ?? "—",
         tone: "warning",
         source: "estimated",
-        summary: "先看订单和收入是不是健康增长，再继续拆到商品与订单对象。",
+        summary: "先看增长是不是健康，再继续拆到商品和订单对象。",
+        subMetrics: [
+          { label: "订单数", value: ordersModule?.yesterdayValue ?? "—" },
+          {
+            label: "客单价",
+            value: getTodayMetricDetail("orders").metrics.find((metric) => metric.label === "平均客单价")?.value ?? "—",
+          },
+        ],
         href: "/app/today/revenue",
       },
       {
-        key: "cost",
-        label: "成本",
-        value: "待恢复",
-        delta: "—",
-        tone: "warning",
-        source: "estimated",
-        summary: "成本页优先回答利润被什么吞掉，而不是继续堆规模。",
-        href: "/app/today/profit?focus=cost",
-      },
-      {
         key: "profit",
-        label: "利润",
+        label: "利润结果",
         value: "待恢复",
         delta: "—",
         tone: "warning",
         source: "estimated",
         summary: "利润页会继续看哪些商品和订单真的留下了结果。",
+        subMetrics: [
+          { label: "成本", value: "待恢复" },
+          { label: "利润率", value: "待恢复" },
+        ],
         href: "/app/today/profit?focus=profit",
       },
       {
-        key: "profit_margin",
-        label: "利润率",
-        value: "待恢复",
-        delta: "—",
+        key: "efficiency",
+        label: "回报效率",
+        value: shortTermMetric?.currentValue ?? "—",
+        delta: shortTermMetric?.deltaValue ?? "—",
         tone: "warning",
         source: "estimated",
-        summary: "利润率用于识别是不是有低质量增长在掩盖真实经营问题。",
-        href: "/app/today/profit?focus=margin",
-      },
-      {
-        key: "orders",
-        label: "订单数",
-        value: ordersModule?.yesterdayValue ?? "—",
-        delta: ordersModule?.deltaValue ?? "—",
-        tone: "neutral",
-        source: "realized",
-        summary: "订单数只回答规模，下一步必须继续看订单质量。",
-        href: "/app/today/revenue?focus=orders",
-      },
-      {
-        key: "aov",
-        label: "客单价",
-        value: getTodayMetricDetail("orders").metrics.find((metric) => metric.label === "平均客单价")?.value ?? "—",
-        delta: "—",
-        tone: "neutral",
-        source: "realized",
-        summary: "高客单不等于高质量，还要继续看高价值订单能不能留下利润。",
-        href: "/app/today/revenue?focus=aov",
+        summary: "回报效率页会继续收敛到渠道和损耗，不再把长期价值混在同一层里。",
+        subMetrics: [
+          { label: "折扣占比", value: "待恢复" },
+          { label: "退款占比", value: "待恢复" },
+        ],
+        href: "/app/today/roi",
       },
     ],
     reasonCards: [
       {
-        key: "traffic-quality",
-        title: "流量质量仍需继续确认",
+        key: "growth-change",
+        title: "增长为什么变化",
         value: trafficModule?.deltaValue ?? "—",
-        label: "流量承接",
+        label: "增长质量",
         meta: trafficModule?.summary ?? "默认分析文案",
-        summary: "当前先沿用最近一版默认判断，后续恢复真实快照后再替换成正式对象证据。",
+        summary: "当前先沿用最近一版默认判断，主链路恢复后会替换为正式增长对象证据。",
         tone: "blue",
-        href: "/app/today/traffic",
+        href: "/app/today/revenue",
       },
       {
-        key: "conversion-risk",
-        title: "转化承接仍在影响赚钱效率",
+        key: "profit-erosion",
+        title: "利润被谁侵蚀",
         value: conversionModule?.deltaValue ?? "—",
-        label: "转化承接",
+        label: "利润侵蚀",
         meta: conversionModule?.summary ?? "默认分析文案",
-        summary: "现阶段先保留方向判断，避免首页直接空白。",
+        summary: "现阶段先保留方向判断，后续恢复真实快照后会替换成正式利润对象证据。",
         tone: "orange",
-        href: "/app/today/conversion",
+        href: "/app/today/profit",
       },
       {
-        key: "roi-pressure",
-        title: "短期 ROI 仍需重点关注",
+        key: "efficiency-shift",
+        title: "回报为什么变弱",
         value: shortTermMetric?.deltaValue ?? "—",
-        label: "短期回报",
+        label: "回报效率",
         meta: shortTermMetric?.summary ?? "默认分析文案",
-        summary: "恢复正式数据后，应该继续拆到渠道和损耗对象。",
+        summary: "恢复正式数据后，应该继续拆到渠道和损耗对象，而不是继续停在总回报口径。",
         tone: "red",
         href: "/app/today/roi",
       },
@@ -1692,7 +1678,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
       cards: [
         {
           key: "short_term",
-          label: shortTermMetric?.title ?? "短期经营回报",
+          label: "短期结果",
           statusLabel: "默认判断",
           value: shortTermMetric?.currentValue ?? "—",
           summary: shortTermMetric?.summary ?? "默认分析文案",
@@ -1702,9 +1688,9 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
         },
         {
           key: "payback",
-          label: "回收期 ROI",
+          label: "回收期数据状态",
           statusLabel: "待接入",
-          value: "待接入",
+          value: "缺 CAC",
           summary: "当前先保留回收期占位，不让首页断层。",
           dataQuality: "pending",
           confidence: "low",
@@ -1712,7 +1698,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
         },
         {
           key: "lifetime",
-          label: longTermMetric?.title ?? "长期价值状态",
+          label: "长期价值信号",
           statusLabel: "默认判断",
           value: longTermMetric?.currentValue ?? "—",
           summary: longTermMetric?.summary ?? "默认分析文案",
@@ -1764,7 +1750,7 @@ function buildFallbackDecisionReport(metric: TodayDecisionReportKey): TodayDecis
   }));
 
   const metricTitle =
-    metric === "revenue" ? "收入分析" : metric === "profit" ? "利润分析" : "ROI 分析";
+    metric === "revenue" ? "增长质量分析" : metric === "profit" ? "利润分析" : "回报效率分析";
 
   return {
     key: metric,
@@ -2155,7 +2141,7 @@ type RevenueFocus = "revenue" | "orders" | "aov";
 
 type ProfitFocus = "profit" | "cost" | "margin";
 
-type RoiFocus = "roi" | "channels" | "loss" | "layers";
+type RoiFocus = "overview" | "channels" | "loss";
 
 function normalizeRevenueFocus(focus?: string | null): RevenueFocus {
   return focus === "orders" || focus === "aov" ? focus : "revenue";
@@ -2166,7 +2152,7 @@ function normalizeProfitFocus(focus?: string | null): ProfitFocus {
 }
 
 function normalizeRoiFocus(focus?: string | null): RoiFocus {
-  return focus === "channels" || focus === "loss" || focus === "layers" ? focus : "roi";
+  return focus === "channels" || focus === "loss" ? focus : "overview";
 }
 
 function buildRevenueReport(
@@ -2247,7 +2233,7 @@ function buildRevenueReport(
 
   const report: TodayDecisionReport = {
     key: "revenue",
-    title: "收入分析",
+    title: "增长质量分析",
     subtitle: `当前查看范围：${selectedCountryLabel}。先区分真增长和假增长，再继续看哪些商品和订单值得跟。`,
     accent: `${selectedCountryLabel} / 近 7 天`,
     primaryQuestion: "最近的收入增长到底是不是健康增长，哪些商品和订单在支撑或拖累结果？",
@@ -2354,7 +2340,7 @@ function buildRevenueReport(
   if (normalizedFocus === "orders") {
     return {
       ...report,
-      title: "订单分析",
+      title: "订单规模分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断订单规模背后，哪些订单结构值得继续复制。`,
       accent: "焦点：订单数",
       primaryQuestion: "最近订单数的变化，是由健康订单在支撑，还是由低质量成交在堆规模？",
@@ -2416,7 +2402,7 @@ function buildRevenueReport(
   if (normalizedFocus === "aov") {
     return {
       ...report,
-      title: "客单价分析",
+      title: "客单质量分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断高客单是不是健康样本，而不是一次性的虚高订单。`,
       accent: "焦点：客单价",
       primaryQuestion: "最近客单价的变化，到底来自更健康的商品组合，还是来自少量不可复制的订单样本？",
@@ -2858,13 +2844,13 @@ async function buildRoiDecisionReport(
 
   const report: TodayDecisionReport = {
     key: "roi",
-    title: "ROI 分析",
-    subtitle: `当前查看范围：${selectedCountryLabel}。这里先判断哪些来源和对象真的在产生经营回报。`,
+    title: "回报效率分析",
+    subtitle: `当前查看范围：${selectedCountryLabel}。这里先看哪些渠道值得继续投，以及哪些损耗正在吞掉回报。`,
     accent: `${selectedCountryLabel} / 近 7 天 vs 前 30 天`,
-    primaryQuestion: "最近的经营回报是被哪些渠道和对象支撑住的，哪些地方已经需要先止损？",
+    primaryQuestion: "最近的回报效率是被哪些渠道支撑住的，哪些损耗对象已经需要先止损？",
     summary:
       (shortTermReturn ?? 0) >= 1
-        ? "当前仍然在赚钱，但 ROI 页最重要的是继续拆到渠道和损耗对象，而不是停在一个总倍数上。"
+        ? "当前仍然在赚钱，但下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
         : "当前短期经营回报已经偏弱，应该优先排查低效渠道和高损耗订单。",
     statuses: [
       {
@@ -2892,9 +2878,15 @@ async function buildRoiDecisionReport(
     ],
     summaryMetrics: [
       toSummaryMetric("短期经营回报", formatMultiple(shortTermReturn)),
-      toSummaryMetric("前 30 天基准", formatMultiple(baselineReturn)),
-      toSummaryMetric("折扣损耗", formatCurrency(orderScope.sevenDayTotals.discounts, orderScope.currency)),
-      toSummaryMetric("退款损耗", formatCurrency(orderScope.sevenDayTotals.refundLoss, orderScope.currency)),
+      toSummaryMetric(
+        "健康渠道收入占比",
+        formatPercent(safeDivide(paidChannelRevenue, channelResult.totalRevenue || 1)),
+      ),
+      toSummaryMetric(
+        "低效渠道收入占比",
+        formatPercent(safeDivide(weakChannelRevenue, channelResult.totalRevenue || 1)),
+      ),
+      toSummaryMetric("总损耗占比", formatPercent(discountShare + refundShare)),
     ],
     breakdowns: [
       {
@@ -2990,7 +2982,7 @@ async function buildRoiDecisionReport(
   if (normalizedFocus === "channels") {
     return {
       ...report,
-      title: "渠道 ROI 分析",
+      title: "渠道回报分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断哪些渠道值得继续投，哪些渠道只是把收入做出来却留不住利润。`,
       accent: "焦点：渠道",
       primaryQuestion: "最近的经营回报主要由哪些渠道支撑，哪些渠道已经进入低质量投入？",
@@ -3054,7 +3046,7 @@ async function buildRoiDecisionReport(
   if (normalizedFocus === "loss") {
     return {
       ...report,
-      title: "ROI 损耗分析",
+      title: "回报损耗分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点看折扣、退款和高损耗订单如何继续吞掉经营回报。`,
       accent: "焦点：损耗",
       primaryQuestion: "最近的 ROI 被哪些损耗对象拖弱，问题更多发生在成交前还是成交后？",
@@ -3113,68 +3105,6 @@ async function buildRoiDecisionReport(
         {
           title: "联动渠道复核",
           detail: "别把损耗问题完全归因为投放，渠道和售后要一起看。",
-          priority: "P2",
-        },
-      ],
-    };
-  }
-
-  if (normalizedFocus === "layers") {
-    return {
-      ...report,
-      title: "价值层 ROI 分析",
-      subtitle: `当前查看范围：${selectedCountryLabel}。这里重点看价值层、客户结构和长期价值信号，而不只是一条短期回报曲线。`,
-      accent: "焦点：价值层",
-      primaryQuestion: "最近的 ROI 改善有没有价值层支撑，还是只停留在短期收入结果？",
-      summary:
-        (shortTermReturn ?? 0) >= 1
-          ? "短期回报仍为正，但是否值得继续放大，还要看客户价值和复购质量有没有跟上。"
-          : "短期回报已经走弱，这时更需要借价值层判断是渠道问题，还是客户质量在变差。",
-      statuses: [
-        {
-          label: "短期经营回报",
-          status: report.statuses[0]!.status,
-          detail: report.statuses[0]!.detail,
-        },
-        {
-          label: "价值层信号",
-          status: "watch",
-          detail: "这一层更适合结合渠道、客户价值和复购信号一起判断是否值得继续投。",
-        },
-        {
-          label: "数据口径",
-          status: "watch",
-          detail: "当前价值层结论仍以估算和预测为主，适合做方向判断，不适合做精确归因。",
-        },
-      ],
-      summaryMetrics: [
-        toSummaryMetric("短期经营回报", formatMultiple(shortTermReturn)),
-        toSummaryMetric("前 30 天基准", formatMultiple(baselineReturn)),
-        toSummaryMetric("可归因收入占比", `${channelResult.attributedRevenueShare}%`),
-        toSummaryMetric("价值层结论", "继续看下方价值层卡片"),
-      ],
-      breakdowns: [
-        {
-          ...report.breakdowns[0]!,
-          title: "价值层对应的渠道结构",
-          summary: "价值层判断依然需要回到渠道，确认当前支撑 ROI 的来源是否能持续带来高质量客户。",
-        },
-      ],
-      supplementaryGroups: report.groups,
-      actions: [
-        {
-          title: "结合价值层再决定加码",
-          detail: "短期 ROI 还不够，继续投之前先确认客户质量和复购信号。",
-          priority: "P0",
-        },
-        {
-          title: "优先看客户价值与复购",
-          detail: "如果高价值客户和复购没有跟上，短期回报改善未必能持续。",
-          priority: "P1",
-        },
-        {
-          title: "把短期和长期一起看",
-          detail: "当前先用价值层做方向判断，等长期 ROI 数据接入后再做更完整决策。",
           priority: "P2",
         },
       ],

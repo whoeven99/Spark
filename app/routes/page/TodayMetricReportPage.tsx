@@ -5,6 +5,7 @@ import { useFeatureView } from "../../lib/featureTrack";
 import { buildTodayPageAiDrilldownContext } from "../../lib/todayReportAi";
 import type { TodayDecisionReport, TodayEvidenceGroup, TodayObjectCard } from "../../lib/todayReportTypes";
 import { buildWorkspaceChatPrefillPath } from "../../lib/workspaceChatPrefill";
+import { TodayObjectGroupDialog } from "../component/today/TodayObjectGroupDialog";
 import { TodayObjectReportDialog } from "../component/today/TodayObjectReportDialog";
 import {
   mobilePageContentStyle,
@@ -73,6 +74,7 @@ export function TodayMetricReportPage({
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
   const [activeObject, setActiveObject] = useState<TodayObjectCard | null>(null);
+  const [activeGroup, setActiveGroup] = useState<TodayEvidenceGroup | null>(null);
   useFeatureView("today");
   const aiContext = useMemo(() => buildTodayPageAiDrilldownContext(report), [report]);
   const aiChatPath = useMemo(
@@ -85,6 +87,11 @@ export function TodayMetricReportPage({
   );
 
   const findGroup = (groupKey: string) => report.groups.find((group) => group.key === groupKey) ?? null;
+  const previewItems = (group: TodayEvidenceGroup) => group.items.slice(0, 3);
+  const openObjectFromGroup = (objectCard: TodayObjectCard) => {
+    setActiveGroup(null);
+    setActiveObject(objectCard);
+  };
 
   return (
     <>
@@ -168,14 +175,19 @@ export function TodayMetricReportPage({
                     .filter((group): group is TodayEvidenceGroup => Boolean(group))
                     .map((group) => (
                       <section key={group.key} style={groupSectionStyle}>
-                        <div style={groupHeaderStyle}>
-                          <span style={{ ...groupToneBadgeStyle, ...resolveGroupToneStyle(group.tone) }}>
-                            {group.title}
-                          </span>
-                          <p style={summaryTextStyle}>{group.summary}</p>
+                        <div style={groupHeaderRowStyle}>
+                          <div style={groupHeaderStyle}>
+                            <span style={{ ...groupToneBadgeStyle, ...resolveGroupToneStyle(group.tone) }}>
+                              {group.title}
+                            </span>
+                            <p style={summaryTextStyle}>{group.summary}</p>
+                          </div>
+                          <button type="button" style={groupLinkButtonStyle} onClick={() => setActiveGroup(group)}>
+                            查看全部
+                          </button>
                         </div>
                         <div style={objectCardListStyle}>
-                          {group.items.map((item) => (
+                          {previewItems(group).map((item) => (
                             <button
                               key={item.id}
                               type="button"
@@ -211,14 +223,19 @@ export function TodayMetricReportPage({
             <div style={evidenceGroupStackStyle}>
               {report.supplementaryGroups.map((group) => (
                 <section key={group.key} style={groupSectionStyle}>
-                  <div style={groupHeaderStyle}>
-                    <span style={{ ...groupToneBadgeStyle, ...resolveGroupToneStyle(group.tone) }}>
-                      {group.title}
-                    </span>
-                    <p style={summaryTextStyle}>{group.summary}</p>
+                  <div style={groupHeaderRowStyle}>
+                    <div style={groupHeaderStyle}>
+                      <span style={{ ...groupToneBadgeStyle, ...resolveGroupToneStyle(group.tone) }}>
+                        {group.title}
+                      </span>
+                      <p style={summaryTextStyle}>{group.summary}</p>
+                    </div>
+                    <button type="button" style={groupLinkButtonStyle} onClick={() => setActiveGroup(group)}>
+                      查看全部
+                    </button>
                   </div>
                   <div style={objectCardListStyle}>
-                    {group.items.map((item) => (
+                    {previewItems(group).map((item) => (
                       <button
                         key={item.id}
                         type="button"
@@ -278,6 +295,13 @@ export function TodayMetricReportPage({
         onClose={() => setActiveObject(null)}
         report={report}
         objectCard={activeObject}
+      />
+      <TodayObjectGroupDialog
+        open={Boolean(activeGroup)}
+        onClose={() => setActiveGroup(null)}
+        report={report}
+        group={activeGroup}
+        onSelectObject={openObjectFromGroup}
       />
     </>
   );
@@ -431,6 +455,13 @@ const groupHeaderStyle: CSSProperties = {
   gap: "0.45rem",
 };
 
+const groupHeaderRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "0.75rem",
+};
+
 const groupToneBadgeStyle: CSSProperties = {
   display: "inline-flex",
   width: "fit-content",
@@ -444,6 +475,18 @@ const groupToneBadgeStyle: CSSProperties = {
 const objectCardListStyle: CSSProperties = {
   display: "grid",
   gap: "0.7rem",
+};
+
+const groupLinkButtonStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.brandBlue,
+  borderRadius: 999,
+  padding: "0.35rem 0.75rem",
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
 };
 
 const objectCardButtonStyle: CSSProperties = {

@@ -31,13 +31,13 @@ export function TodayRoiValueLayerSection({
   valueLoading,
   valueFailed,
   isMobile,
-  focus = "roi",
+  focus = "overview",
 }: {
   value: ValueLayerData | null;
   valueLoading: boolean;
   valueFailed: boolean;
   isMobile: boolean;
-  focus?: "roi" | "channels" | "loss" | "layers";
+  focus?: "overview" | "channels" | "loss";
 }) {
   const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -63,11 +63,11 @@ export function TodayRoiValueLayerSection({
   return (
     <div style={sectionStackStyle}>
       <PageSurface
-        title={t("todayRoi.settingsTitle")}
+        title="长期质量补充"
         subtitle={
-          focus === "layers"
-            ? "当前焦点在价值层。先确认口径和成本设置，再往下看客户价值、复购和渠道结构。"
-            : t("todayRoi.settingsSubtitle")
+          focus === "overview"
+            ? "这块只作为回报效率页的长期质量补充，用来辅助判断客户价值、复购和渠道结构能不能支撑继续加码。"
+            : "当前焦点不在长期质量上，这里只作为补充判断，不和上面的渠道/损耗主结论抢层级。"
         }
       >
         <RoiSettingsSummary
@@ -102,18 +102,15 @@ export function TodayRoiValueLayerSection({
 
 function resolveCardHighlight(
   cardKey: string,
-  focus: "roi" | "channels" | "loss" | "layers",
+  focus: "overview" | "channels" | "loss",
 ): boolean {
-  if (focus === "layers") {
-    return cardKey === "customer-value" || cardKey === "repeat" || cardKey === "mix";
-  }
   if (focus === "channels") {
     return cardKey === "paid-traffic" || cardKey === "mix";
   }
   if (focus === "loss") {
     return cardKey === "coupon" || cardKey === "paid-traffic";
   }
-  return false;
+  return cardKey === "customer-value" || cardKey === "repeat" || cardKey === "mix";
 }
 
 function SourceTag({ source }: { source: DataSource }) {

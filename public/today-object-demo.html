@@ -372,6 +372,13 @@
           border-top: 1px solid var(--border);
         }
 
+        .evidence-row-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
         .evidence-row:first-child {
           padding-top: 0;
           border-top: 0;
@@ -392,6 +399,10 @@
         .evidence-action {
           color: var(--text);
           font-weight: 600;
+        }
+
+        .evidence-row button {
+          flex-shrink: 0;
         }
 
       .metric-card,
@@ -2352,17 +2363,27 @@
               </div>
               <p>${group.summary}</p>
               <div>
-                <button type="button" class="more-link" data-c-report-index="${groupIndex}">查看对象详情</button>
+                <button type="button" class="more-link" data-c-report-group-index="${groupIndex}">查看全部</button>
               </div>
             </div>
             <div class="evidence-list">
               ${items
-                .map((item) => {
+                .map((item, itemIndex) => {
                   const leadMetric = item.metrics[0];
                   const primaryAction = item.actions[0]?.label ?? "继续观察";
                   return `
                     <div class="evidence-row">
-                      <strong>${item.title}</strong>
+                      <div class="evidence-row-top">
+                        <strong>${item.title}</strong>
+                        <button
+                          type="button"
+                          class="more-link"
+                          data-c-report-group-index="${groupIndex}"
+                          data-c-report-item-index="${itemIndex}"
+                        >
+                          查看详情
+                        </button>
+                      </div>
                       <div class="evidence-meta">${leadMetric ? `${leadMetric.label} ${leadMetric.value}` : item.summary}</div>
                       <div class="evidence-action">${primaryAction}</div>
                     </div>
@@ -2395,7 +2416,53 @@
                 </div>
               </div>
             <div class="showcase-list">
-              ${items.map(renderShowcaseRow).join("")}
+              ${items.map((item, itemIndex) => renderShowcaseRow(item, itemIndex, index)).join("")}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderItemReport(page, group, item) {
+        return `
+          <section class="showcase-card">
+            <div class="group-head">
+              <div>
+                <div class="card-label">对象详情 / 单对象 C 报告</div>
+                <h3>${item.title}</h3>
+                <div class="group-meta">${page.title} / ${group.title}</div>
+              </div>
+            </div>
+            <div class="object-metrics">
+              ${item.metrics
+                .map(
+                  (metric) => `
+                    <div class="mini">
+                      <span>${metric.label}</span>
+                      <strong>${metric.value}</strong>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+            <div class="report-section">
+              <div class="report-conclusion">
+                <div class="chip blue">对象判断</div>
+                <strong>${buildItemConclusion(item)}</strong>
+              </div>
+              <div class="analysis-list">
+                <div class="analysis-item"><strong>分析 1</strong> 这条对象来自“${group.title}”，说明它已经是当前页面里最值得先处理或继续放大的对象之一。</div>
+                <div class="analysis-item"><strong>分析 2</strong> 关键数据为 ${item.metrics
+                  .map((metric) => `${metric.label} ${metric.value}`)
+                  .join(" / ")}，当前最需要结合这组数据判断动作优先级。</div>
+                <div class="analysis-item"><strong>分析 3</strong> 优先动作建议是 ${item.actions
+                  .map((current) => current.label)
+                  .join(" / ")}，不需要再回到抽象指标层重复读报告。</div>
+              </div>
+            </div>
+            <div class="action-row">
+              ${item.actions
+                .map((current) => `<span class="action ${current.tone}">${current.label}</span>`)
+                .join("")}
             </div>
           </section>
         `;
@@ -2432,7 +2499,7 @@
         `;
       }
 
-      function renderShowcaseRow(item, index) {
+      function renderShowcaseRow(item, index, groupIndex) {
         return `
           <div class="showcase-row">
             <div><span class="showcase-rank">${index + 1}</span></div>
@@ -2446,7 +2513,19 @@
                 .join("")}
             </div>
             <div class="showcase-conclusion-text">${buildItemConclusion(item)}</div>
-            <div class="showcase-suggestion">${item.actions.map((current) => current.label).join(" / ")}</div>
+            <div class="showcase-suggestion">
+              ${item.actions.map((current) => current.label).join(" / ")}
+              <div style="margin-top: 8px">
+                <button
+                  type="button"
+                  class="more-link"
+                  data-c-report-group-index="${groupIndex}"
+                  data-c-report-item-index="${index}"
+                >
+                  查看详情
+                </button>
+              </div>
+            </div>
           </div>
         `;
       }
@@ -2548,6 +2627,31 @@
             `请基于这组 ${group.title} 的对象详情继续帮我判断：哪些对象应该继续放量，哪些对象应该止损或排查？请输出按对象分组的判断和建议动作。`,
           assistant:
             "我已经收到这组对象详情的上下文。接下来可以继续帮你逐个对象判断该放量、止损、排查还是继续观察。",
+        };
+      }
+
+      function buildItemAiPayload(page, group, item) {
+        return {
+          eyebrow: "AI 对话 / 单对象详情",
+          title: `${item.title} 对象上下文`,
+          subtitle: `来自 ${page.title} / ${group.title}，聚焦单对象的完整数据和建议动作。`,
+          tags: ["单对象", group.title, item.kind, page.navTitle],
+          contextItems: [
+            { label: "对象归属", text: `${page.title} / ${group.title}` },
+            {
+              label: "关键数据",
+              text: item.metrics.map((metric) => `${metric.label} ${metric.value}`).join(" / "),
+            },
+            { label: "对象判断", text: buildItemConclusion(item) },
+            {
+              label: "建议动作",
+              text: item.actions.map((current) => current.label).join(" / "),
+            },
+          ],
+          prompt:
+            `请基于对象 ${item.title} 的详情继续帮我判断：它现在更应该继续放量、止损、排查还是观察？请给出原因、风险点和下一步动作。`,
+          assistant:
+            "我已经收到这个单对象的上下文。接下来可以继续帮你判断这条对象该怎么处理，并把动作拆成更具体的执行建议。",
         };
       }
 
@@ -2721,10 +2825,12 @@
           });
         });
 
-        document.querySelectorAll("[data-c-report-index]").forEach((button) => {
+        document.querySelectorAll("[data-c-report-group-index]").forEach((button) => {
           button.addEventListener("click", () => {
-            const index = Number(button.dataset.cReportIndex);
-            openCReportModal(index);
+            const groupIndex = Number(button.dataset.cReportGroupIndex);
+            const itemIndex =
+              button.dataset.cReportItemIndex === undefined ? null : Number(button.dataset.cReportItemIndex);
+            openCReportModal(groupIndex, itemIndex);
           });
         });
 
@@ -2735,15 +2841,32 @@
         });
       }
 
-      function openCReportModal(groupIndex) {
+      function bindCReportBodyActions() {
+        cReportBody.querySelectorAll("[data-c-report-group-index]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const groupIndex = Number(button.dataset.cReportGroupIndex);
+            const itemIndex =
+              button.dataset.cReportItemIndex === undefined ? null : Number(button.dataset.cReportItemIndex);
+            openCReportModal(groupIndex, itemIndex);
+          });
+        });
+      }
+
+      function openCReportModal(groupIndex, itemIndex = null) {
         const page = pages[activeKey];
         const group = page.groups?.[groupIndex];
         if (!group) return;
+        const items = withTopTen(group.items);
+        const item = itemIndex == null ? null : items[itemIndex];
 
-        cReportTitle.textContent = group.title;
-        cReportSubtitle.textContent = `${page.title} / ${group.summary}`;
-        cReportBody.innerHTML = renderDataShowcase(group, groupIndex);
+        cReportTitle.textContent = item ? item.title : group.title;
+        cReportSubtitle.textContent = item
+          ? `${page.title} / ${group.title} / ${item.summary}`
+          : `${page.title} / ${group.summary}`;
+        cReportBody.innerHTML = item ? renderItemReport(page, group, item) : renderDataShowcase(group, groupIndex);
+        bindCReportBodyActions();
         openCReportAi.dataset.groupIndex = String(groupIndex);
+        openCReportAi.dataset.itemIndex = itemIndex == null ? "" : String(itemIndex);
         cReportModal.classList.add("is-open");
         cReportModal.setAttribute("aria-hidden", "false");
         syncBodyScrollLock();
@@ -2754,6 +2877,7 @@
         cReportModal.setAttribute("aria-hidden", "true");
         cReportBody.innerHTML = "";
         openCReportAi.dataset.groupIndex = "";
+        openCReportAi.dataset.itemIndex = "";
         syncBodyScrollLock();
       }
 
@@ -2769,7 +2893,9 @@
           const groupIndex = Number(openCReportAi.dataset.groupIndex);
           const group = page.groups?.[groupIndex];
           if (!group) return;
-          payload = buildGroupAiPayload(page, group);
+          const itemIndex = openCReportAi.dataset.itemIndex === "" ? null : Number(openCReportAi.dataset.itemIndex);
+          const item = itemIndex == null ? null : withTopTen(group.items)[itemIndex];
+          payload = item ? buildItemAiPayload(page, group, item) : buildGroupAiPayload(page, group);
         }
 
         if (!payload) return;

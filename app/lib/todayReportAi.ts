@@ -2,7 +2,7 @@ import {
   aiDrilldownContextSchema,
   type AiDrilldownContext,
 } from "./aiDrilldownContext";
-import type { TodayDecisionReport, TodayObjectCard } from "./todayReportTypes";
+import type { TodayDecisionReport, TodayEvidenceGroup, TodayObjectCard } from "./todayReportTypes";
 
 export function buildTodayPageAiDrilldownContext(report: TodayDecisionReport): AiDrilldownContext {
   const context: AiDrilldownContext = {
@@ -57,6 +57,41 @@ export function buildTodayObjectAiDrilldownContext(
   };
 }
 
+export function buildTodayGroupAiDrilldownContext(
+  report: TodayDecisionReport,
+  group: TodayEvidenceGroup,
+): AiDrilldownContext {
+  const sampleItems = group.items.slice(0, 4);
+  const metrics = sampleItems.flatMap((item) => item.metrics.slice(0, 1)).slice(0, 6);
+  const suggestedActions =
+    sampleItems
+      .flatMap((item) => item.report.actions.slice(0, 1))
+      .slice(0, 3) || report.actions;
+
+  const context: AiDrilldownContext = {
+    version: "v1",
+    contextType: "today",
+    pageKey: `${report.key}:group:${group.key}`,
+    title: group.title,
+    summary: group.summary,
+    primaryQuestion: `${report.title} 中「${group.title}」这组对象应该先处理谁？`,
+    metrics: metrics.length > 0 ? metrics : report.summaryMetrics.slice(0, 3),
+    statuses: report.statuses.slice(0, 3),
+    suggestedActions: suggestedActions.length > 0 ? suggestedActions : report.actions,
+    chatPrompt: buildTodayGroupAiChatPrompt(report, group),
+  };
+
+  const parsed = aiDrilldownContextSchema.safeParse(context);
+  if (parsed.success) return parsed.data;
+
+  console.error("[today-report] invalid group AI drilldown context:", parsed.error.flatten());
+  return {
+    ...context,
+    metrics: (metrics.length > 0 ? metrics : report.summaryMetrics).slice(0, 3),
+    suggestedActions: (suggestedActions.length > 0 ? suggestedActions : report.actions).slice(0, 2),
+  };
+}
+
 function buildTodayPageAiChatPrompt(report: TodayDecisionReport): string {
   const metricLines = report.summaryMetrics
     .slice(0, 4)
@@ -107,5 +142,28 @@ function buildTodayObjectAiChatPrompt(report: TodayDecisionReport, objectCard: T
     actionLines,
     "",
     "请围绕赚钱结果继续分析：判断这个对象是应该继续放大、先止损、还是继续观察，并给出今天最优先的处理顺序。",
+  ].join("\n");
+}
+
+function buildTodayGroupAiChatPrompt(report: TodayDecisionReport, group: TodayEvidenceGroup): string {
+  const sampleItems = group.items.slice(0, 5);
+  const itemLines = sampleItems
+    .map((item) => {
+      const leadMetrics = item.metrics
+        .slice(0, 2)
+        .map((metric) => `${metric.label} ${metric.value}${metric.unit ? metric.unit : ""}`)
+        .join(" / ");
+      return `- ${item.title}: ${leadMetrics || item.summary}`;
+    })
+    .join("\n");
+
+  return [
+    `我们正在查看 Today 的「${report.title}」报告页中的对象组「${group.title}」。`,
+    `对象组判断：${group.summary}`,
+    "",
+    "当前对象样本：",
+    itemLines,
+    "",
+    "请围绕赚钱结果继续分析：判断这组对象里哪些应该优先放大，哪些应该先止损或排查，并给出今天最优先的处理顺序。",
   ].join("\n");
 }
