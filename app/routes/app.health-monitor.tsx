@@ -31,7 +31,7 @@ import {
   PageSurface,
 } from "./page/pageUiStyles";
 
-type ViewMode = "overview" | "run" | "detail";
+type ViewMode = "overview" | "detail";
 type HealthMonitorFollowupAction = {
   label: string;
   path: string;
@@ -83,7 +83,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 function resolveHealthMonitorView(value: string | null): ViewMode {
-  if (value === "run" || value === "detail") return value;
+  if (value === "detail") return value;
   return "overview";
 }
 
@@ -341,19 +341,11 @@ export default function AppHealthMonitor() {
   const actions: DestinationActionCard[] = [
     {
       key: "overview",
-      title: "一级概览",
-      detail: "先看可信度健康与目标健康的整体状态。",
+      title: "总体判断",
+      detail: "直接看本次检查进度和全部健康项，不再拆额外一层。",
       badge: "首页",
       active: viewMode === "overview",
       onClick: () => syncHealthMonitorSearch({ view: "overview" }),
-    },
-    {
-      key: "run",
-      title: "监测进度",
-      detail: "查看本次监测进度与每个指标当前有没有问题。",
-      badge: `${monitoringSummary.completed}/${monitoringSummary.total}`,
-      active: viewMode === "run",
-      onClick: () => syncHealthMonitorSearch({ view: "run" }),
     },
     {
       key: "detail",
@@ -395,18 +387,7 @@ export default function AppHealthMonitor() {
         {viewMode === "overview" ? (
           <OverviewSection
             groups={groupedMonitors}
-            onOpenRun={() => syncHealthMonitorSearch({ view: "run" })}
-            onOpenDetail={(monitorId) => {
-              syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
-            }}
-          />
-        ) : null}
-
-        {viewMode === "run" ? (
-          <RunSection
-            groups={groupedMonitors}
             summary={monitoringSummary}
-            onBackToOverview={() => syncHealthMonitorSearch({ view: "overview" })}
             onOpenDetail={(monitorId) => {
               syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
             }}
@@ -418,7 +399,7 @@ export default function AppHealthMonitor() {
             monitor={selectedMonitor}
             detail={selectedDetail}
             pageSpeedDefaults={pageSpeedDefaults}
-            onBackToRun={() => syncHealthMonitorSearch({ view: "run" })}
+            onBackToOverview={() => syncHealthMonitorSearch({ view: "overview" })}
             followupActions={followupActions}
             onOpenFollowup={(path) => navigate(path)}
             onOpenAi={() =>
@@ -441,19 +422,45 @@ export default function AppHealthMonitor() {
 
 function OverviewSection({
   groups,
-  onOpenRun,
+  summary,
   onOpenDetail,
 }: {
   groups: Array<{ title: string; items: HealthMonitorRecord[] }>;
-  onOpenRun: () => void;
+  summary: ReturnType<typeof getHealthMonitorSummary>;
   onOpenDetail: (monitorId: string) => void;
 }) {
   return (
     <PageSurface
-      title="今日健康度概览"
-      subtitle="一级页面只保留两类摘要：可信度健康与目标健康。每项只展示当前状态、关键数据和受影响经营模块。"
+      title="总体判断"
+      subtitle="概览页直接包含本次检查进度和全部健康项。监测项不多时，留在同一页更顺手。"
     >
       <div style={stackStyle}>
+        <div style={summaryGridStyle}>
+          <section style={summaryTileStyle}>
+            <div style={groupHeaderStyle}>
+              <h3 style={groupTitleStyle}>检查进度</h3>
+              <span style={pageHintTextStyle}>{summary.progress}%</span>
+            </div>
+            <div style={summaryTileValueStyle}>
+              {summary.completed}/{summary.total}
+            </div>
+          </section>
+
+          {summary.groups.map((group) => (
+            <section key={group.title} style={summaryTileStyle}>
+              <div style={groupHeaderStyle}>
+                <h3 style={groupTitleStyle}>{group.title}</h3>
+                <span style={statusBadgeStyle(group.status)}>{statusLabel(group.status)}</span>
+              </div>
+              <div style={overviewMetricRowStyle}>
+                <span style={summaryTileLabelStyle}>风险 {group.riskCount}</span>
+                <span style={summaryTileLabelStyle}>关注 {group.watchCount}</span>
+                <span style={summaryTileLabelStyle}>正常 {group.goodCount}</span>
+              </div>
+            </section>
+          ))}
+        </div>
+
         {groups.map((group) => (
           <section key={group.title} style={groupCardStyle}>
             <div style={groupHeaderStyle}>
@@ -465,7 +472,7 @@ function OverviewSection({
                 <div key={item.id} style={dashboardRowStyle}>
                   <div>
                     <div style={dashboardTitleStyle}>{item.title}</div>
-                    <div style={dashboardMetaStyle}>影响模块：{item.relatedModule}</div>
+                    <div style={dashboardMetaStyle}>{item.summary}</div>
                   </div>
                   <div style={dashboardValueStyle}>{item.value}</div>
                   <span style={statusBadgeStyle(item.status)}>{statusLabel(item.status)}</span>
@@ -481,99 +488,8 @@ function OverviewSection({
             </div>
           </section>
         ))}
-        <div style={buttonRowStyle}>
-          <button type="button" style={primaryButtonStyle} onClick={onOpenRun}>
-            进入健康度监测
-          </button>
-        </div>
       </div>
     </PageSurface>
-  );
-}
-
-function RunSection({
-  groups,
-  summary,
-  onBackToOverview,
-  onOpenDetail,
-}: {
-  groups: Array<{ title: string; items: HealthMonitorRecord[] }>;
-  summary: {
-    total: number;
-    completed: number;
-    progress: number;
-    riskCount: number;
-    watchCount: number;
-    goodCount: number;
-  };
-  onBackToOverview: () => void;
-  onOpenDetail: (monitorId: string) => void;
-}) {
-  return (
-    <div style={stackStyle}>
-      <PageSurface
-        title="本次健康度监测"
-        subtitle="二级页面按健康判定来读：先看本次运行进度，再看每项监测当前是否可信、是否达标。"
-      >
-        <div style={summaryGridStyle}>
-          <div style={summaryTileStyle}>
-            <span style={summaryTileLabelStyle}>监测进度</span>
-            <strong style={summaryTileValueStyle}>{summary.progress}%</strong>
-          </div>
-          <div style={summaryTileStyle}>
-            <span style={summaryTileLabelStyle}>风险项</span>
-            <strong style={summaryTileValueStyle}>{summary.riskCount}</strong>
-          </div>
-          <div style={summaryTileStyle}>
-            <span style={summaryTileLabelStyle}>关注项</span>
-            <strong style={summaryTileValueStyle}>{summary.watchCount}</strong>
-          </div>
-          <div style={summaryTileStyle}>
-            <span style={summaryTileLabelStyle}>正常项</span>
-            <strong style={summaryTileValueStyle}>{summary.goodCount}</strong>
-          </div>
-        </div>
-        <div style={progressTrackStyle}>
-          <div style={{ ...progressFillStyle, width: `${summary.progress}%` }} />
-        </div>
-        <div style={buttonRowStyle}>
-          <button type="button" style={secondaryButtonStyle} onClick={onBackToOverview}>
-            返回一级概览
-          </button>
-        </div>
-      </PageSurface>
-
-      {groups.map((group) => (
-        <PageSurface
-          key={group.title}
-          title={group.title}
-          subtitle="每个健康项都可以点进去，进入固定的四段式诊断详情页。"
-        >
-          <div style={monitorCardGridStyle}>
-            {group.items.map((item) => (
-              <article key={item.id} style={monitorCardStyle}>
-                <div style={monitorCardHeaderStyle}>
-                  <div>
-                    <h3 style={monitorCardTitleStyle}>{item.title}</h3>
-                    <p style={monitorCardValueStyle}>{item.value}</p>
-                    <p style={monitorCardMetaStyle}>影响模块：{item.relatedModule}</p>
-                  </div>
-                  <span style={statusBadgeStyle(item.status)}>{statusLabel(item.status)}</span>
-                </div>
-                <p style={monitorCardSummaryStyle}>{item.summary}</p>
-                <button
-                  type="button"
-                  style={linkButtonStyle}
-                  onClick={() => onOpenDetail(item.id)}
-                >
-                  查看结论结果
-                </button>
-              </article>
-            ))}
-          </div>
-        </PageSurface>
-      ))}
-    </div>
   );
 }
 
@@ -581,7 +497,7 @@ function DetailSection({
   monitor,
   detail,
   pageSpeedDefaults,
-  onBackToRun,
+  onBackToOverview,
   followupActions,
   onOpenFollowup,
   onOpenAi,
@@ -592,7 +508,7 @@ function DetailSection({
     defaultUrl: string;
     defaultReportLocale: ReturnType<typeof resolvePageSpeedLocale>;
   };
-  onBackToRun: () => void;
+  onBackToOverview: () => void;
   followupActions: HealthMonitorFollowupAction[];
   onOpenFollowup: (path: string) => void;
   onOpenAi: () => void;
@@ -613,8 +529,8 @@ function DetailSection({
           </div>
         </div>
         <div style={buttonRowStyle}>
-          <button type="button" style={secondaryButtonStyle} onClick={onBackToRun}>
-            返回监测进度
+          <button type="button" style={secondaryButtonStyle} onClick={onBackToOverview}>
+            返回总体判断
           </button>
           {followupActions.map((action) => (
             <button
@@ -847,12 +763,6 @@ const baseStatusBadgeStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const monitorCardMetaStyle: CSSProperties = {
-  margin: "0.25rem 0 0",
-  fontSize: "0.75rem",
-  color: pageColorTokens.textSecondary,
-};
-
 const buttonRowStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -917,60 +827,10 @@ const summaryTileValueStyle: CSSProperties = {
   color: pageColorTokens.textPrimary,
 };
 
-const progressTrackStyle: CSSProperties = {
-  width: "100%",
-  height: 10,
-  borderRadius: 999,
-  background: pageColorTokens.surfaceMuted,
-  overflow: "hidden",
-  marginTop: "1rem",
-};
-
-const progressFillStyle: CSSProperties = {
-  height: "100%",
-  background: pageColorTokens.brandBlue,
-  borderRadius: 999,
-};
-
-const monitorCardGridStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.75rem",
-};
-
-const monitorCardStyle: CSSProperties = {
-  border: `1px solid ${pageColorTokens.border}`,
-  borderRadius: pageColorTokens.radiusControl,
-  padding: "1rem",
-  background: pageColorTokens.surface,
-  display: "grid",
-  gap: "0.75rem",
-};
-
-const monitorCardHeaderStyle: CSSProperties = {
+const overviewMetricRowStyle: CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
+  flexWrap: "wrap",
   gap: "0.75rem",
-};
-
-const monitorCardTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "0.95rem",
-  fontWeight: 760,
-  color: pageColorTokens.textPrimary,
-};
-
-const monitorCardValueStyle: CSSProperties = {
-  margin: "0.35rem 0 0",
-  fontSize: "0.8125rem",
-  color: pageColorTokens.textSecondary,
-};
-
-const monitorCardSummaryStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "0.875rem",
-  lineHeight: 1.55,
-  color: pageColorTokens.textBody,
 };
 
 const detailHeroStyle: CSSProperties = {
