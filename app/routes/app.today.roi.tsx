@@ -19,7 +19,8 @@ type ActionData = { ok: true } | { ok: false; error: string };
 
 function resolveValueTab(value: string | null): TodayRoiValueTab {
   if (value === "customers" || value === "channels" || value === "cost") return value;
-  return "framework";
+  if (value === "framework" || value === "dimensions") return "dimensions";
+  return "dimensions";
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {

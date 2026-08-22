@@ -13,7 +13,7 @@ import {
 
 export const TODAY_ROI_COST_CONFIG_FETCHER_KEY = "today-roi-cost-config";
 
-export type TodayRoiValueTab = "framework" | "customers" | "channels" | "cost";
+export type TodayRoiValueTab = "dimensions" | "customers" | "channels" | "cost";
 
 export function TodayRoiValueLayerSection({
   value,
@@ -32,19 +32,20 @@ export function TodayRoiValueLayerSection({
 }) {
   const { t } = useTranslation();
   const tabLabels: Record<TodayRoiValueTab, string> = {
-    framework: t("todayRoi.tabs.framework"),
+    dimensions: t("todayRoi.tabs.dimensions"),
     customers: t("todayRoi.tabs.customers"),
     channels: t("todayRoi.tabs.channels"),
     cost: t("todayRoi.tabs.cost"),
   };
+  const overviewMetrics = value ? buildOverviewMetrics(value, t) : [];
 
   return (
     <div style={sectionStackStyle}>
       <section>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-          <h2 style={pageSectionMajorTitleStyle}>价值层</h2>
+          <h2 style={pageSectionMajorTitleStyle}>{t("todayRoi.sectionTitle")}</h2>
           <p style={sectionDescriptionStyle}>
-            ROI 页里的价值层统一承接客户价值、渠道表现和成本口径，不再挂在 diagnosis 兼容页下。
+            {t("todayRoi.sectionDescription")}
           </p>
         </div>
       </section>
@@ -56,7 +57,7 @@ export function TodayRoiValueLayerSection({
         <SegmentedPageTabs
           activeTab={activeTab}
           items={[
-            { key: "framework", label: tabLabels.framework },
+            { key: "dimensions", label: tabLabels.dimensions },
             { key: "customers", label: tabLabels.customers },
             { key: "channels", label: tabLabels.channels },
             { key: "cost", label: tabLabels.cost },
@@ -73,23 +74,7 @@ export function TodayRoiValueLayerSection({
             title={tabLabels[activeTab]}
             subtitle={t("todayRoi.valueSubtitle")}
           >
-            <PageMetricCard
-              metrics={[
-                {
-                  label: t("todayRoi.customerTitle"),
-                  value: `${value.customers.averageDynamicLtv} ${value.channels.currency}`,
-                  unit: "",
-                },
-                {
-                  label: t("todayRoi.channelTitle", { days: value.channels.windowDays }),
-                  value: String(value.channels.channels.length),
-                },
-                {
-                  label: t("todayRoi.costTitle"),
-                  value: `${value.costConfig.defaultGrossMarginPercent}%`,
-                },
-              ]}
-            />
+            <PageMetricCard metrics={overviewMetrics} />
           </PageSurface>
           <ValueLayerSections value={value} isMobile={isMobile} activeTab={activeTab} />
         </>
@@ -198,107 +183,241 @@ function SourceTag({ source }: { source: DataSource }) {
   );
 }
 
-const layerCardStyle = (accent: string): CSSProperties => ({
-  flex: "1 1 200px",
-  border: `1px solid ${pageColorTokens.border}`,
-  borderTop: `3px solid ${accent}`,
-  borderRadius: pageColorTokens.radiusCard,
-  padding: "0.85rem 0.95rem",
-  background: pageColorTokens.surface,
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.45rem",
-});
-
-const layerTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "0.875rem",
-  fontWeight: 800,
-  color: pageColorTokens.textBody,
+type ActionLens = {
+  key: string;
+  title: string;
+  headline: string;
+  statusLabel: string;
+  statusTone: "success" | "warning" | "neutral";
+  source: DataSource;
+  formula: string;
+  insight: string;
+  nextStep: string;
 };
 
-function LayerLegend() {
-  const { t } = useTranslation();
-  const layers: Array<{ accent: string; title: string; desc: string; source: DataSource }> = [
-    {
-      accent: pageColorTokens.brandGreen,
-      title: t("todayRoi.layerRevenue"),
-      desc: t("todayRoi.layerRevenueDesc"),
-      source: "real",
-    },
-    {
-      accent: pageColorTokens.progress,
-      title: t("todayRoi.layerProfit"),
-      desc: t("todayRoi.layerProfitDesc"),
-      source: "estimated",
-    },
-    {
-      accent: pageColorTokens.neutralStatus,
-      title: t("todayRoi.layerInvestment"),
-      desc: t("todayRoi.layerInvestmentDesc"),
-      source: "pending",
-    },
-  ];
-  return (
-    <PageSurface title={t("todayRoi.layerLegendTitle")}>
-      <p style={{ ...taskSecondaryTextStyle, marginTop: 0, marginBottom: "0.75rem" }}>
-        {t("todayRoi.layerLegendIntro")}
-      </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-        {layers.map((layer) => (
-          <div key={layer.title} style={layerCardStyle(layer.accent)}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <h4 style={layerTitleStyle}>{layer.title}</h4>
-              <SourceTag source={layer.source} />
-            </div>
-            <p style={{ ...taskSecondaryTextStyle, margin: 0 }}>{layer.desc}</p>
-          </div>
-        ))}
-      </div>
-    </PageSurface>
-  );
+const PAID_CHANNEL_KEYS = new Set(["facebook", "instagram", "tiktok", "youtube", "pinterest", "x", "bing"]);
+
+function formatCurrency(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return `${Math.round(value)}`;
+  }
 }
 
-function InvestmentLayerCard() {
-  const { t } = useTranslation();
-  const items = [
-    t("todayRoi.investmentAdSpend"),
-    t("todayRoi.investmentSeoCost"),
-    t("todayRoi.investmentToolCost"),
+function formatPercent(value: number, digits = 1): string {
+  return `${Number(value.toFixed(digits))}%`;
+}
+
+function sumBy<T>(items: T[], getter: (item: T) => number): number {
+  return items.reduce((total, item) => total + getter(item), 0);
+}
+
+function averageBy<T>(items: T[], getter: (item: T) => number): number {
+  if (items.length === 0) return 0;
+  return sumBy(items, getter) / items.length;
+}
+
+function buildOverviewMetrics(
+  value: ValueLayerData,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const { channels, customers, costConfig } = value;
+  const paidChannels = channels.channels.filter((channel) => PAID_CHANNEL_KEYS.has(channel.channelKey));
+  const paidRevenue = sumBy(paidChannels, (channel) => channel.revenue);
+  const discountCost = sumBy(channels.channels, (channel) => channel.discountCost);
+  const paidRevenueShare = channels.totalRevenue > 0 ? (paidRevenue / channels.totalRevenue) * 100 : 0;
+
+  return [
+    {
+      label: t("todayRoi.summaryPaidTraffic"),
+      value: formatPercent(paidRevenueShare),
+    },
+    {
+      label: t("todayRoi.summaryCouponCost"),
+      value: formatCurrency(discountCost, channels.currency),
+    },
+    {
+      label: t("todayRoi.summaryRepeatRate"),
+      value: formatPercent(customers.repeatPurchaseRate),
+    },
+    {
+      label: t("todayRoi.summaryMargin"),
+      value: `${costConfig.defaultGrossMarginPercent}%`,
+    },
   ];
+}
+
+function buildActionLenses(
+  value: ValueLayerData,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ActionLens[] {
+  const { channels, customers } = value;
+  const paidChannels = channels.channels.filter((channel) => PAID_CHANNEL_KEYS.has(channel.channelKey));
+  const paidRevenue = sumBy(paidChannels, (channel) => channel.revenue);
+  const paidProfit = sumBy(paidChannels, (channel) => channel.contributionProfit);
+  const paidShare = channels.totalRevenue > 0 ? (paidRevenue / channels.totalRevenue) * 100 : 0;
+  const discountCost = sumBy(channels.channels, (channel) => channel.discountCost);
+  const discountRate = channels.totalRevenue > 0 ? (discountCost / channels.totalRevenue) * 100 : 0;
+  const topChannel = [...channels.channels].sort((left, right) => right.contributionProfit - left.contributionProfit)[0] ?? null;
+  const lowMarginChannel =
+    [...channels.channels]
+      .filter((channel) => channel.contributionMarginPercent !== null)
+      .sort((left, right) => (left.contributionMarginPercent ?? 0) - (right.contributionMarginPercent ?? 0))[0] ?? null;
+  const repeatDrivenChannels = channels.channels.filter((channel) => channel.customers.repeatCustomerShare >= 35);
+  const averageRepeatShare = averageBy(repeatDrivenChannels, (channel) => channel.customers.repeatCustomerShare);
+  const repeatValue = customers.averageDynamicLtv;
+  const customerHealthTone =
+    customers.highValueShare >= 30 && customers.segmentCounts.at_risk <= customers.segmentCounts.vip
+      ? "success"
+      : "warning";
+
+  return [
+    {
+      key: "paid-traffic",
+      title: t("todayRoi.lenses.paidTraffic.title"),
+      headline:
+        paidChannels.length > 0
+          ? t("todayRoi.lenses.paidTraffic.headlineReady", {
+              share: formatPercent(paidShare),
+              profit: formatCurrency(paidProfit, channels.currency),
+            })
+          : t("todayRoi.lenses.paidTraffic.headlinePending"),
+      statusLabel: t("todayRoi.lenses.paidTraffic.status"),
+      statusTone: paidChannels.length > 0 ? "warning" : "neutral",
+      source: paidChannels.length > 0 ? "estimated" : "pending",
+      formula: t("todayRoi.lenses.paidTraffic.formula"),
+      insight:
+        paidChannels.length > 0
+          ? t("todayRoi.lenses.paidTraffic.insightReady", {
+              count: paidChannels.length,
+              share: formatPercent(paidShare),
+            })
+          : t("todayRoi.lenses.paidTraffic.insightPending"),
+      nextStep: t("todayRoi.lenses.paidTraffic.nextStep"),
+    },
+    {
+      key: "coupon",
+      title: t("todayRoi.lenses.coupon.title"),
+      headline: t("todayRoi.lenses.coupon.headline", {
+        cost: formatCurrency(discountCost, channels.currency),
+        rate: formatPercent(discountRate),
+      }),
+      statusLabel: t("todayRoi.lenses.coupon.status"),
+      statusTone: discountCost > 0 ? "warning" : "neutral",
+      source: discountCost > 0 ? "estimated" : "pending",
+      formula: t("todayRoi.lenses.coupon.formula"),
+      insight: t("todayRoi.lenses.coupon.insight", {
+        discountSensitive: customers.tagCounts.discount_sensitive,
+      }),
+      nextStep: t("todayRoi.lenses.coupon.nextStep"),
+    },
+    {
+      key: "customer-value",
+      title: t("todayRoi.lenses.customerValue.title"),
+      headline: t("todayRoi.lenses.customerValue.headline", {
+        highValueShare: formatPercent(customers.highValueShare),
+        score: customers.averageScore,
+      }),
+      statusLabel: t("todayRoi.lenses.customerValue.status"),
+      statusTone: customerHealthTone,
+      source: "estimated",
+      formula: t("todayRoi.lenses.customerValue.formula"),
+      insight: t("todayRoi.lenses.customerValue.insight", {
+        vip: customers.segmentCounts.vip,
+        atRisk: customers.segmentCounts.at_risk,
+        ltv: formatCurrency(customers.averageDynamicLtv, channels.currency),
+      }),
+      nextStep: t("todayRoi.lenses.customerValue.nextStep"),
+    },
+    {
+      key: "repeat",
+      title: t("todayRoi.lenses.repeat.title"),
+      headline: t("todayRoi.lenses.repeat.headline", {
+        repeatRate: formatPercent(customers.repeatPurchaseRate),
+        ltv: formatCurrency(repeatValue, channels.currency),
+      }),
+      statusLabel: t("todayRoi.lenses.repeat.status"),
+      statusTone: customers.repeatPurchaseRate >= 25 ? "success" : "warning",
+      source: "estimated",
+      formula: t("todayRoi.lenses.repeat.formula"),
+      insight:
+        repeatDrivenChannels.length > 0
+          ? t("todayRoi.lenses.repeat.insightReady", {
+              count: repeatDrivenChannels.length,
+              share: formatPercent(averageRepeatShare),
+            })
+          : t("todayRoi.lenses.repeat.insightPending"),
+      nextStep: t("todayRoi.lenses.repeat.nextStep"),
+    },
+    {
+      key: "mix",
+      title: t("todayRoi.lenses.mix.title"),
+      headline:
+        topChannel && lowMarginChannel
+          ? t("todayRoi.lenses.mix.headlineReady", {
+              top: topChannel.label,
+              low: lowMarginChannel.label,
+            })
+          : t("todayRoi.lenses.mix.headlinePending"),
+      statusLabel: t("todayRoi.lenses.mix.status"),
+      statusTone: topChannel ? "success" : "neutral",
+      source: topChannel ? "estimated" : "pending",
+      formula: t("todayRoi.lenses.mix.formula"),
+      insight:
+        topChannel && lowMarginChannel
+          ? t("todayRoi.lenses.mix.insightReady", {
+              topProfit: formatCurrency(topChannel.contributionProfit, channels.currency),
+              lowMargin:
+                lowMarginChannel.contributionMarginPercent === null
+                  ? "—"
+                  : formatPercent(lowMarginChannel.contributionMarginPercent),
+            })
+          : t("todayRoi.lenses.mix.insightPending"),
+      nextStep: t("todayRoi.lenses.mix.nextStep"),
+    },
+  ];
+}
+
+function ActionRoiDimensionsSection({ value }: { value: ValueLayerData }) {
+  const { t } = useTranslation();
+  const lenses = buildActionLenses(value, t);
+
   return (
     <PageSurface
-      title={t("todayRoi.investmentTitle")}
-      subtitle={t("todayRoi.investmentSubtitle")}
+      title={t("todayRoi.dimensionsTitle")}
+      subtitle={t("todayRoi.dimensionsSubtitle")}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          marginBottom: "0.75rem",
-        }}
-      >
-        <SourceTag source="pending" />
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        {items.map((item) => (
-          <div
-            key={item}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.5rem 0.75rem",
-              border: `1px dashed ${pageColorTokens.border}`,
-              borderRadius: pageColorTokens.radiusControl,
-              fontSize: "0.8125rem",
-              color: pageColorTokens.textSecondary,
-              background: pageColorTokens.surfaceMuted,
-            }}
-          >
-            <span>{item}</span>
-            <s-badge tone="neutral">{t("todayRoi.investmentNotConnected")}</s-badge>
+      <div style={dimensionGridStyle}>
+        {lenses.map((lens) => (
+          <div key={lens.key} style={dimensionCardStyle}>
+            <div style={dimensionHeaderStyle}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                <h4 style={dimensionTitleStyle}>{lens.title}</h4>
+                <s-badge tone={lens.statusTone}>{lens.statusLabel}</s-badge>
+                <SourceTag source={lens.source} />
+              </div>
+              <div style={dimensionHeadlineStyle}>{lens.headline}</div>
+            </div>
+
+            <div style={dimensionMetaGridStyle}>
+              <div style={dimensionMetaItemStyle}>
+                <div style={dimensionMetaLabelStyle}>{t("todayRoi.dimensionFormulaLabel")}</div>
+                <div style={dimensionMetaValueStyle}>{lens.formula}</div>
+              </div>
+              <div style={dimensionMetaItemStyle}>
+                <div style={dimensionMetaLabelStyle}>{t("todayRoi.dimensionInsightLabel")}</div>
+                <div style={dimensionMetaValueStyle}>{lens.insight}</div>
+              </div>
+              <div style={dimensionMetaItemStyle}>
+                <div style={dimensionMetaLabelStyle}>{t("todayRoi.dimensionNextStepLabel")}</div>
+                <div style={dimensionMetaValueStyle}>{lens.nextStep}</div>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -309,7 +428,7 @@ function InvestmentLayerCard() {
 function ValueLayerSections({
   value,
   isMobile,
-  activeTab = "framework",
+  activeTab = "dimensions",
 }: {
   value: ValueLayerData;
   isMobile: boolean;
@@ -321,9 +440,9 @@ function ValueLayerSections({
 
   return (
     <>
-      {activeTab === "framework" ? <LayerLegend /> : null}
+      {activeTab === "dimensions" ? <ActionRoiDimensionsSection value={value} /> : null}
 
-      {activeTab === "framework" || activeTab === "customers" ? (
+      {activeTab === "dimensions" || activeTab === "customers" ? (
         <PageSurface
           title={t("todayRoi.customerTitle")}
           subtitle={t("todayRoi.customerSubtitle", {
@@ -361,7 +480,7 @@ function ValueLayerSections({
         </PageSurface>
       ) : null}
 
-      {activeTab === "framework" || activeTab === "channels" ? (
+      {activeTab === "dimensions" || activeTab === "channels" ? (
         <PageSurface
           title={t("todayRoi.channelTitle", { days: channels.windowDays })}
           subtitle={t("todayRoi.channelSubtitle", {
@@ -444,8 +563,7 @@ function ValueLayerSections({
         </PageSurface>
       ) : null}
 
-      {activeTab === "framework" ? <InvestmentLayerCard /> : null}
-      {activeTab === "framework" || activeTab === "cost" ? (
+      {activeTab === "dimensions" || activeTab === "cost" ? (
         <CostConfigCard costConfig={value.costConfig} isMobile={isMobile} />
       ) : null}
     </>
@@ -595,6 +713,62 @@ const caveatPanelStyle: CSSProperties = {
 const valueCardSectionStyle: CSSProperties = {
   display: "grid",
   gap: "1rem",
+};
+
+const dimensionGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: "0.9rem",
+};
+
+const dimensionCardStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.9rem",
+  padding: "1rem",
+  borderRadius: pageColorTokens.radiusCard,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const dimensionHeaderStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.55rem",
+};
+
+const dimensionTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.9rem",
+  fontWeight: 800,
+  color: pageColorTokens.textPrimary,
+};
+
+const dimensionHeadlineStyle: CSSProperties = {
+  fontSize: "0.95rem",
+  fontWeight: 700,
+  lineHeight: 1.5,
+  color: pageColorTokens.textBody,
+};
+
+const dimensionMetaGridStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.65rem",
+};
+
+const dimensionMetaItemStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.2rem",
+};
+
+const dimensionMetaLabelStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+};
+
+const dimensionMetaValueStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textBody,
 };
 
 const costFormWrapStyle: CSSProperties = {

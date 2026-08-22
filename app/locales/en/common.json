@@ -2354,18 +2354,76 @@
     "selectTargetLocale": "No target languages available. Enable more locales in Shopify admin."
   },
   "todayRoi": {
-    "surfaceTitle": "ROI value layer",
-    "surfaceSubtitle": "Keep explaining the profit result through customer quality, channel mix, and cost assumptions.",
+    "sectionTitle": "ROI dimensions",
+    "sectionDescription": "The lower half of the ROI page should not stop at framework explanation. It now breaks ROI into action and customer-value dimensions so you can tell what deserves more budget and what should be tightened first.",
+    "surfaceTitle": "Action ROI view",
+    "surfaceSubtitle": "Breaking ROI into paid traffic, coupons, customer value, repeat purchase, and channel scaling is more actionable than staring at one blended number.",
     "statusTitle": "Value layer status",
-    "valueSubtitle": "Place channel performance, customer value, and investment placeholders inside one operating framework so the lower half feels like the same workspace.",
+    "valueSubtitle": "This section surfaces the most important ROI clue for the current dimension so you can decide whether to keep investing, optimize, or pull back.",
     "valueUnavailable": "No value-layer data is available yet.",
     "valueLoading": "Calculating value-layer data…",
     "valueLoadFailed": "Could not load value-layer data. Please try again shortly.",
     "tabs": {
-      "framework": "Framework",
-      "customers": "Customers",
-      "channels": "Channels",
+      "dimensions": "Action ROI",
+      "customers": "Customer value",
+      "channels": "Channel performance",
       "cost": "Cost assumptions"
+    },
+    "summaryPaidTraffic": "Paid traffic share",
+    "summaryCouponCost": "Discount cost",
+    "summaryRepeatRate": "Repeat rate",
+    "summaryMargin": "Default margin",
+    "dimensionsTitle": "Key ROI dimensions",
+    "dimensionsSubtitle": "Judge these five dimensions first, then decide whether deeper drill-down is worth the time.",
+    "dimensionFormulaLabel": "Formula",
+    "dimensionInsightLabel": "Current clue",
+    "dimensionNextStepLabel": "Next step",
+    "lenses": {
+      "paidTraffic": {
+        "title": "Paid traffic ROI",
+        "headlineReady": "{{share}} of revenue comes from paid-candidate channels, with about {{profit}} in contribution profit",
+        "headlinePending": "There is not enough channel data yet to form a rough paid traffic ROI view",
+        "status": "Need ad spend",
+        "formula": "(Attributed revenue - COGS - payment fees - refund loss - ad spend) / ad spend",
+        "insightReady": "{{count}} paid-candidate channels already contribute revenue, so you can start separating profitable channels from channels that only add volume.",
+        "insightPending": "Once ad spend is connected, this will move from 'did it drive revenue' to 'did it actually pay back'.",
+        "nextStep": "Connect Meta / Google spend first, then isolate high-revenue low-profit channels and review their landing pages plus conversion funnel."
+      },
+      "coupon": {
+        "title": "Coupon ROI",
+        "headline": "{{cost}} discount cost in the last 30 days, about {{rate}} of revenue",
+        "status": "Promotion pressure visible",
+        "formula": "(Incremental contribution profit from the promotion - coupon cost) / coupon cost",
+        "insight": "You already have discount cost and discount-sensitive customer counts ({{discountSensitive}}), which is enough to judge whether promotions are eroding profit, but coupon-code attribution is still missing.",
+        "nextStep": "Once coupon code, campaign batch, and promotion type are connected, this can separate high-value discounts from discounts that only buy low-quality orders."
+      },
+      "customerValue": {
+        "title": "Customer value",
+        "headline": "{{highValueShare}} high-value customer share and {{score}} average value score",
+        "status": "Judge customer quality",
+        "formula": "Use high-value share, dynamic LTV, at-risk customers, and refund risk to judge whether revenue is coming from customers worth keeping",
+        "insight": "You currently have {{vip}} VIP customers, {{atRisk}} at-risk customers, and {{ltv}} average dynamic LTV, which is enough for a first judgment on whether customer quality is supporting ROI or eroding future value.",
+        "nextStep": "Review changes in high-value and at-risk customer mix first, then decide whether today needs acquisition, activation, or experience repair."
+      },
+      "repeat": {
+        "title": "Repeat-purchase ROI",
+        "headline": "{{repeatRate}} repeat rate and {{ltv}} average dynamic LTV",
+        "status": "Roughly readable",
+        "formula": "(Incremental contribution profit from repeat purchase - CRM / loyalty / outreach cost) / outreach cost",
+        "insightReady": "{{count}} channels already show higher repeat-customer mix, averaging {{share}}, which means repeat behavior is already helping explain long-term ROI.",
+        "insightPending": "Customer value is connected, but outreach-cost data is still needed before repeat-purchase ROI can be judged cleanly.",
+        "nextStep": "Connect SMS, email, and loyalty costs so this view can tell whether retention work is adding profit or only holding up superficial order counts."
+      },
+      "mix": {
+        "title": "Channel scaling ROI",
+        "headlineReady": "{{top}} looks scalable, while {{low}} should be tightened first",
+        "headlinePending": "Channel samples are still too thin to rank scaling priorities confidently",
+        "status": "Can rank next moves",
+        "formula": "Scale channels with stronger contribution profit and limit budget on weak-margin channels",
+        "insightReady": "The strongest channel contributes about {{topProfit}}, while the weakest-margin channel is only at {{lowMargin}}, which is enough to support a first scale-vs-cut ranking.",
+        "insightPending": "As channel samples fill in, this will become a steadier guide for who to scale and who to pause.",
+        "nextStep": "Drill further into products and creatives behind high-profit channels, then review bidding, pages, and discount depth for the weak ones."
+      }
     },
     "layerLegendTitle": "Data layers & sources",
     "layerLegendIntro": "Every analysis is split into three layers: Revenue → Profit → Investment (ROI). The tags below mark where each metric comes from so you can judge its reliability.",

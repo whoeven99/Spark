@@ -2354,18 +2354,76 @@
     "selectTargetLocale": "暂无可选目标语言，请在 Shopify 后台启用更多语言"
   },
   "todayRoi": {
-    "surfaceTitle": "ROI 价值层",
-    "surfaceSubtitle": "这里继续解释赚钱结果：利润质量来自哪些客户、渠道和成本口径。",
+    "sectionTitle": "ROI 维度",
+    "sectionDescription": "ROI 页下半区不再只讲分析框架，而是继续拆成关键经营动作与客户价值维度，先判断哪类动作值得继续投、哪类要先止损。",
+    "surfaceTitle": "动作 ROI 视图",
+    "surfaceSubtitle": "把 ROI 拆成付费流量、优惠券、客户价值、复购和渠道放量几个维度来看，比只看一个总数更容易落动作。",
     "statusTitle": "价值层状态",
-    "valueSubtitle": "把渠道表现、客户价值和投入占位统一放到同一层经营判断框架里，减少页面风格割裂。",
+    "valueSubtitle": "这里先给当前维度最重要的 ROI 线索，帮助你判断接下来该继续投、优化，还是先收口。",
     "valueUnavailable": "当前还没有可展示的价值层数据。",
     "valueLoading": "正在计算价值层数据…",
     "valueLoadFailed": "价值层数据加载失败，请稍后重试。",
     "tabs": {
-      "framework": "框架",
-      "customers": "客户",
-      "channels": "渠道",
+      "dimensions": "动作 ROI",
+      "customers": "客户价值",
+      "channels": "渠道经营",
       "cost": "成本口径"
+    },
+    "summaryPaidTraffic": "付费流量占比",
+    "summaryCouponCost": "折扣成本",
+    "summaryRepeatRate": "复购率",
+    "summaryMargin": "默认毛利率",
+    "dimensionsTitle": "关键动作 ROI",
+    "dimensionsSubtitle": "先看这 5 个维度的 ROI 线索是否支持继续加码，再决定要不要往更深的数据页钻。",
+    "dimensionFormulaLabel": "怎么算",
+    "dimensionInsightLabel": "当前线索",
+    "dimensionNextStepLabel": "下一步",
+    "lenses": {
+      "paidTraffic": {
+        "title": "付费流量 ROI",
+        "headlineReady": "{{share}} 收入来自付费候选渠道，当前贡献利润约 {{profit}}",
+        "headlinePending": "当前还没有足够渠道数据来粗判付费流量 ROI",
+        "status": "待补投放成本",
+        "formula": "(归因收入 - 商品成本 - 支付费 - 退款损耗 - 广告花费) / 广告花费",
+        "insightReady": "近 30 天已有 {{count}} 个付费候选渠道开始贡献收入，至少可以先判断哪些渠道在赚钱、哪些渠道只是带量不带利。",
+        "insightPending": "等广告花费接入后，这里会从“带来收入”升级为“真的赚回来了没有”。",
+        "nextStep": "优先补 Meta / Google 花费，再把高收入低利润渠道单独拉出来看落地页和转化漏斗。"
+      },
+      "coupon": {
+        "title": "优惠券 ROI",
+        "headline": "近 30 天折扣成本 {{cost}}，约占收入 {{rate}}",
+        "status": "可先看促销压力",
+        "formula": "(活动带来的新增贡献利润 - 优惠券成本) / 优惠券成本",
+        "insight": "当前已有折扣成本和折扣敏感客户数（{{discountSensitive}} 人），可以先判断促销是不是正在透支利润，但还缺券码和活动归因。",
+        "nextStep": "补券码、活动批次和优惠类型后，这里就能拆出“哪类优惠券最值、哪类只是换来低质量订单”。"
+      },
+      "customerValue": {
+        "title": "客户价值分析",
+        "headline": "高价值客户占比 {{highValueShare}}，平均价值分 {{score}}",
+        "status": "判断客户质量",
+        "formula": "看高价值客户占比、动态 LTV、流失预警和退款风险，判断今天的收入是不是来自值得经营的客户",
+        "insight": "当前 VIP 客户 {{vip}} 人、流失预警客户 {{atRisk}} 人，平均动态 LTV {{ltv}}，已经足够先判断客户质量是在支撑 ROI，还是开始透支未来价值。",
+        "nextStep": "先看高价值客户和流失预警客户的占比变化，再决定今天更该做拉新、促活，还是先修复售后和体验。"
+      },
+      "repeat": {
+        "title": "复购 ROI",
+        "headline": "当前复购率 {{repeatRate}}，平均动态 LTV {{ltv}}",
+        "status": "已可粗判",
+        "formula": "(复购带来的新增贡献利润 - CRM / 会员 / 触达成本) / 触达成本",
+        "insightReady": "已有 {{count}} 个渠道的复购客占比较高，平均复购客占比 {{share}}，说明老客经营已经能开始解释长期 ROI。",
+        "insightPending": "客户价值层已接通，但还需要更多触达成本数据来判断复购动作值不值得继续加码。",
+        "nextStep": "把短信、邮件、会员权益等触达成本接进来后，这里就能判断复购运营到底是在赚利润还是只是在维持表面订单数。"
+      },
+      "mix": {
+        "title": "渠道放量 ROI",
+        "headlineReady": "{{top}} 更像可继续放量的渠道，{{low}} 需要先收口",
+        "headlinePending": "当前渠道样本不足，暂时还不能给出明确的放量顺序",
+        "status": "可排放量顺序",
+        "formula": "优先放大高贡献利润渠道，限制低利润率渠道的预算和流量承接",
+        "insightReady": "当前最强渠道的贡献利润约 {{topProfit}}，而最低利润率渠道只有 {{lowMargin}}，已经足够支撑一轮放量 / 收口排序。",
+        "insightPending": "等渠道样本再完整一些，这里会更稳定地告诉你先放大谁、先停谁。",
+        "nextStep": "把高利润渠道对应的商品页和创意继续深钻，再把低利润渠道的出价、页面和优惠力度一起复盘。"
+      }
     },
     "layerLegendTitle": "数据分层与来源说明",
     "layerLegendIntro": "所有经营分析统一拆成三层：收入层 → 利润层 → 投入层（ROI）。下方标签标注每块数据的来源，便于判断可信度。",

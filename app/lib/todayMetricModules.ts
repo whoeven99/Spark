@@ -165,10 +165,10 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
   roi: {
     key: "roi",
     title: "ROI 详情",
-    subtitle: "ROI 在 Today 里代表全店经营的赚钱结果，要一起看收入、投入、转化承接和利润损耗。",
-    intro: "这个页面用来回答今天到底赚没赚钱，以及最主要的支撑项和拖累项分别是什么。",
+    subtitle: "ROI 详情不只看总结果，还要继续拆到付费流量、优惠券、复购等关键动作，判断钱该投在哪。",
+    intro: "这个页面用来回答今天哪些经营动作真的在产生回报，哪些动作虽然带来了单量，但还没有带来足够的 ROI。",
     accent: "近 7 天 vs 前 30 天基准",
-    primaryQuestion: "今天全店的赚钱结果到底有没有变差，最主要的拖累项和支撑项分别是什么？",
+    primaryQuestion: "今天最值得继续投的动作是什么，是付费流量、优惠券、复购运营，还是该先止损收口？",
     chartHref: "/app/today/roi",
     chartLabel: "查看 ROI 详情",
     chartHint: "先在当前详情页收敛整体判断，再决定是否继续深钻到具体模块。",
@@ -237,9 +237,9 @@ const DETAIL_MAP: Record<TodayBusinessModuleKey, TodayMetricDetail> = {
       },
     ],
     conclusions: [
-      "Today 里的 ROI 不是广告 ROI，而是全店经营是否赚钱的总结果。",
+      "Today 里的 ROI 不是只看一个总数，而是继续拆到关键动作，判断哪类经营动作值得继续投入。",
       "今天最值得优先处理的是高成本低效率流量，以及转化承接偏弱的关键页面。",
-      "如果要继续深钻，优先进入流量质量和转化承接两个模块，而不是继续分散看其他入口。",
+      "如果要继续深钻，优先看付费流量 ROI、优惠券 ROI 和复购支撑，再决定去流量质量或转化承接页。",
     ],
   },
   traffic: {
