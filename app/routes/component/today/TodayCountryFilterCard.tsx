@@ -11,19 +11,40 @@ export function TodayCountryFilterCard({
   options,
   activeCountry,
   onChange,
+  focusOptions,
+  activeFocus,
+  onFocusChange,
   summary,
   notes = [],
 }: {
   options: TodayCountryFilterOption[];
   activeCountry: string;
   onChange: (country: string) => void;
+  focusOptions?: Array<{ key: string; label: string }>;
+  activeFocus?: string;
+  onFocusChange?: (focus: string) => void;
   summary: string;
   notes?: string[];
 }) {
   return (
-    <PageSurface title="地区视角" subtitle="先在这里切换总览或单地区，再往下看对应的数据结论。">
+    <PageSurface
+      title={focusOptions && focusOptions.length > 0 ? "地区与焦点" : "地区视角"}
+      subtitle={
+        focusOptions && focusOptions.length > 0
+          ? "先切换地区和当前分析焦点，再往下看对应的数据结论。"
+          : "先在这里切换总览或单地区，再往下看对应的数据结论。"
+      }
+    >
       <div style={filterWrapStyle}>
         <DestinationFilterBar label="经营范围" items={options} active={activeCountry} onChange={onChange} />
+        {focusOptions && focusOptions.length > 0 && activeFocus && onFocusChange ? (
+          <DestinationFilterBar
+            label="当前焦点"
+            items={focusOptions}
+            active={activeFocus}
+            onChange={onFocusChange}
+          />
+        ) : null}
         <div style={summaryStyle}>{summary}</div>
         {notes.length > 0 ? (
           <div style={notesWrapStyle}>

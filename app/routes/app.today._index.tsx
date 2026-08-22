@@ -9,7 +9,7 @@ import { useFeatureView } from "../lib/featureTrack";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
-import { loadTodayOverviewData } from "../server/operations/todayGeo.server";
+import { loadTodayOverviewReportData } from "../server/operations/todayGeo.server";
 import {
   mobilePageContentStyle,
   pageColorTokens,
@@ -23,30 +23,13 @@ import {
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
-type RoiTone = "positive" | "warning" | "critical";
-
 function SurfaceButton({
   label,
   onClick,
-  tone = "primary",
 }: {
   label: string;
   onClick: () => void;
-  tone?: "primary" | "subtle";
 }) {
-  const style: CSSProperties =
-    tone === "primary"
-      ? {
-          border: `1px solid ${pageColorTokens.brandBlue}`,
-          background: pageColorTokens.brandBlue,
-          color: "#ffffff",
-        }
-      : {
-          border: `1px solid ${pageColorTokens.border}`,
-          background: pageColorTokens.surface,
-          color: pageColorTokens.textBody,
-        };
-
   return (
     <button
       type="button"
@@ -58,10 +41,12 @@ function SurfaceButton({
         minHeight: 36,
         padding: "0.55rem 0.9rem",
         borderRadius: pageColorTokens.radiusControl,
+        border: `1px solid ${pageColorTokens.brandBlue}`,
+        background: pageColorTokens.brandBlue,
+        color: "#ffffff",
         fontSize: "0.8125rem",
         fontWeight: 700,
         cursor: "pointer",
-        ...style,
       }}
     >
       {label}
@@ -69,15 +54,15 @@ function SurfaceButton({
   );
 }
 
-function roiBadgeStyle(tone: RoiTone): CSSProperties {
-  if (tone === "critical") {
+function badgeStyle(status: "healthy" | "watch" | "risk"): CSSProperties {
+  if (status === "risk") {
     return {
       color: pageColorTokens.criticalText,
       background: pageColorTokens.criticalBg,
       border: "1px solid #f2b8ae",
     };
   }
-  if (tone === "warning") {
+  if (status === "watch") {
     return {
       color: "#9a5b00",
       background: pageColorTokens.warningBg,
@@ -91,6 +76,13 @@ function roiBadgeStyle(tone: RoiTone): CSSProperties {
   };
 }
 
+function reasonToneStyle(tone: "blue" | "green" | "orange" | "red"): CSSProperties {
+  if (tone === "red") return { background: pageColorTokens.criticalBg, color: pageColorTokens.criticalText };
+  if (tone === "orange") return { background: pageColorTokens.warningBg, color: "#9a5b00" };
+  if (tone === "green") return { background: pageColorTokens.brandGreenLight, color: pageColorTokens.brandGreenDark };
+  return { background: pageColorTokens.brandBlueLight, color: pageColorTokens.brandBlueDark };
+}
+
 export default function TodayOverview() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -98,7 +90,7 @@ export default function TodayOverview() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
-  const { modules, roiMonitor, filters } = data;
+  const { filters, report } = data;
   useFeatureView("today");
 
   const handleCountryChange = (country: string) => {
@@ -117,83 +109,122 @@ export default function TodayOverview() {
     if (filters.selectedCountry !== TODAY_ALL_COUNTRIES) {
       params.set("country", filters.selectedCountry);
     }
-    return `${path}?${params.toString()}`;
+    const query = params.toString();
+    return query ? `${path}?${query}` : path;
   };
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title={t("todayDashboard.title")}
-        subtitle="Today 只讨论赚钱：先看 ROI 和关键经营模块，再进入详情页判断今天是哪里在支撑或拖累赚钱结果。"
+        subtitle="Today 先回答赚没赚钱、为什么会这样、下一步先看哪个对象。"
         titleBarTitle={t("nav.today")}
         backLabel={t("todayDashboard.back")}
         fallbackPath="/app"
         isMobile={isMobile}
+        chromeless
       >
         <TodayCountryFilterCard
           options={filters.countries.map((item) => ({ key: item.key, label: item.label }))}
           activeCountry={filters.selectedCountry}
           onChange={handleCountryChange}
-          summary={`当前范围：${filters.selectedCountryLabel}。这一版先支持总览 + 按国家/地区切换，帮助客户直接比较不同地区的赚钱结果。`}
+          summary={`当前范围：${filters.selectedCountryLabel}。这一版首页先统一回答赚钱状态、经营指标和 ROI 状态。`}
           notes={filters.dataNotes}
         />
 
-        <PageSurface
-          title="核心指标"
-          subtitle="首页顶部先看地区维度的赚钱效率，先判断当前范围是在承压、稳定，还是已经回到健康区间。"
-        >
-          <div style={moduleGridStyle(isMobile, 2)}>
-            {roiMonitor.metrics.map((metric) => (
-              <div key={metric.key} style={pageStatusCardStyle}>
-                <div style={cardHeaderStyle}>
-                  <div style={pageMetricLabelStyle}>{metric.title}</div>
-                  <span style={{ ...roiBadgeBaseStyle, ...roiBadgeStyle(metric.tone) }}>{metric.deltaValue}</span>
-                </div>
-                <div style={metricPairStyle}>
-                  <div>
-                    <div style={miniHintStyle}>{metric.currentLabel}</div>
-                    <div style={pageMetricValueStyle}>{metric.currentValue}</div>
-                  </div>
-                  <div>
-                    <div style={miniHintStyle}>{metric.baselineLabel}</div>
-                    <div style={secondaryMetricValueStyle}>{metric.baselineValue}</div>
-                  </div>
-                </div>
-                <p style={summaryTextStyle}>{metric.summary}</p>
+        <PageSurface title="经营状态头部" subtitle="先判断最近 7 天是在健康增长、需要关注，还是已经进入盈利压力。">
+          <div style={headerGridStyle(isMobile)}>
+            <div style={headerMainCardStyle}>
+              <span style={{ ...statusBadgeStyle, ...badgeStyle(report.header.status) }}>{report.header.statusLabel}</span>
+              <div style={headerTitleStyle}>{report.header.summary}</div>
+              <div style={headerNotesStyle}>
+                <strong>主要瓶颈：</strong>
+                {report.header.primaryBottleneck}
               </div>
-            ))}
+              <div style={headerNotesStyle}>
+                <strong>最大机会：</strong>
+                {report.header.biggestOpportunity}
+              </div>
+            </div>
+
+            <div style={headerMetricGridStyle}>
+              <div style={headerMetricTileStyle}>
+                <div style={pageMetricLabelStyle}>收入</div>
+                <div style={pageMetricValueStyle}>{report.header.metrics.revenue}</div>
+              </div>
+              <div style={headerMetricTileStyle}>
+                <div style={pageMetricLabelStyle}>估算利润</div>
+                <div style={pageMetricValueStyle}>{report.header.metrics.estimatedProfit}</div>
+              </div>
+              <div style={headerMetricTileStyle}>
+                <div style={pageMetricLabelStyle}>估算利润率</div>
+                <div style={pageMetricValueStyle}>{report.header.metrics.estimatedProfitMargin}</div>
+              </div>
+              <div style={headerMetricTileStyle}>
+                <div style={pageMetricLabelStyle}>短期经营回报</div>
+                <div style={pageMetricValueStyle}>{report.header.metrics.shortTermReturn}</div>
+              </div>
+            </div>
           </div>
-          <div style={cardActionRowStyle(isMobile)}>
-            <SurfaceButton label="查看 ROI 详情" onClick={() => navigate(buildDetailPath(roiMonitor.chartPath))} />
+          <div style={headerMetaRowStyle}>
+            <span style={pageHintTextStyle}>数据新鲜度：{report.header.dataFreshness}</span>
+            <span style={pageHintTextStyle}>数据置信度：{report.header.dataConfidence}</span>
           </div>
         </PageSurface>
 
-        <PageSurface
-          title="经营模块"
-          subtitle="接着再收敛成 3 个解释地区赚钱结果的经营模块：收入与订单、流量质量、转化承接。"
-        >
-          <div style={moduleGridStyle(isMobile, 3)}>
-            {modules.map((module) => (
-              <div key={module.key} style={pageStatusCardStyle}>
+        <PageSurface title="核心经营指标" subtitle="每一张卡都作为正式 B 报告入口，直接从问题进入分析。">
+          <div style={cardGridStyle(isMobile, 3)}>
+            {report.metricCards.map((card) => (
+              <div key={card.key} style={pageStatusCardStyle}>
                 <div style={cardHeaderStyle}>
-                  <div style={pageMetricLabelStyle}>{module.title}</div>
-                  <div style={miniHintStyle}>{module.deltaLabel}</div>
+                  <div style={pageMetricLabelStyle}>{card.label}</div>
+                  <span style={metricSourceStyle}>{card.source === "estimated" ? "估算" : "已实现"}</span>
                 </div>
-                <div style={metricPairStyle}>
-                  <div>
-                    <div style={miniHintStyle}>{module.yesterdayLabel}</div>
-                    <div style={pageMetricValueStyle}>{module.yesterdayValue}</div>
-                  </div>
-                  <div>
-                    <div style={miniHintStyle}>{module.averageLabel}</div>
-                    <div style={secondaryMetricValueStyle}>{module.averageValue}</div>
-                  </div>
-                </div>
-                <div style={deltaPillStyle}>{module.deltaValue}</div>
-                <p style={summaryTextStyle}>{module.summary}</p>
-                <p style={pageHintTextStyle}>{module.chartHint}</p>
+                <div style={pageMetricValueStyle}>{card.value}</div>
+                <div style={deltaTextStyle(card.tone)}>{card.delta}</div>
+                <p style={summaryTextStyle}>{card.summary}</p>
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="查看模块详情" onClick={() => navigate(buildDetailPath(module.detailPath))} />
+                  <SurfaceButton label="查看详情" onClick={() => navigate(buildDetailPath(card.href))} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </PageSurface>
+
+        <PageSurface title="为什么会这样" subtitle="这一层不展开长报告，只给出当前最需要记住的三条判断。">
+          <div style={cardGridStyle(isMobile, 3)}>
+            {report.reasonCards.map((card) => (
+              <div key={card.key} style={reasonCardStyle}>
+                <span style={{ ...reasonLabelStyle, ...reasonToneStyle(card.tone) }}>{card.label}</span>
+                <strong style={reasonTitleStyle}>{card.title}</strong>
+                <div style={reasonValueStyle}>{card.value}</div>
+                <div style={reasonMetaStyle}>{card.meta}</div>
+                <p style={summaryTextStyle}>{card.summary}</p>
+                {card.href ? (
+                  <div style={cardActionRowStyle(isMobile)}>
+                    <SurfaceButton label="继续看对象" onClick={() => navigate(buildDetailPath(card.href!))} />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </PageSurface>
+
+        <PageSurface title="ROI 三层摘要" subtitle="短期层先给真实结果；缺数据的回收期和长期层明确显示为待接入。">
+          <div style={cardGridStyle(isMobile, 3)}>
+            {report.roiSummary.cards.map((card) => (
+              <div key={card.key} style={pageStatusCardStyle}>
+                <div style={cardHeaderStyle}>
+                  <div style={pageMetricLabelStyle}>{card.label}</div>
+                  <span style={metricSourceStyle}>{card.statusLabel}</span>
+                </div>
+                <div style={pageMetricValueStyle}>{card.value}</div>
+                <div style={roiMetaStyle}>
+                  数据质量：{card.dataQuality} / 置信度：{card.confidence}
+                </div>
+                <p style={summaryTextStyle}>{card.summary}</p>
+                <div style={cardActionRowStyle(isMobile)}>
+                  <SurfaceButton label="查看 ROI 报告" onClick={() => navigate(buildDetailPath(card.href))} />
                 </div>
               </div>
             ))}
@@ -207,7 +238,7 @@ export default function TodayOverview() {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
-  return loadTodayOverviewData({
+  return loadTodayOverviewReportData({
     shop: session.shop,
     admin,
     hasReadReports: hasReadReportsScope(session.scope),
@@ -219,10 +250,18 @@ export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
 
-function moduleGridStyle(isMobile: boolean, columns: number): CSSProperties {
+function cardGridStyle(isMobile: boolean, columns: number): CSSProperties {
   return {
     display: "grid",
     gridTemplateColumns: isMobile ? "1fr" : `repeat(${columns}, minmax(0, 1fr))`,
+    gap: "1rem",
+  };
+}
+
+function headerGridStyle(isMobile: boolean): CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
     gap: "1rem",
   };
 }
@@ -232,62 +271,136 @@ function cardActionRowStyle(isMobile: boolean): CSSProperties {
     display: "flex",
     flexDirection: isMobile ? "column" : "row",
     gap: "0.75rem",
-    marginTop: "1rem",
+    marginTop: "0.85rem",
   };
 }
+
+const statusBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  width: "fit-content",
+  alignItems: "center",
+  padding: "0.28rem 0.6rem",
+  borderRadius: 999,
+  fontSize: "0.75rem",
+  fontWeight: 700,
+};
+
+const headerMainCardStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.8rem",
+  padding: "1rem",
+  borderRadius: pageColorTokens.radiusCard,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceSubtle,
+};
+
+const headerTitleStyle: CSSProperties = {
+  fontSize: "1.2rem",
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.35,
+};
+
+const headerNotesStyle: CSSProperties = {
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.875rem",
+  lineHeight: 1.65,
+};
+
+const headerMetricGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "0.75rem",
+};
+
+const headerMetricTileStyle: CSSProperties = {
+  padding: "0.9rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceSubtle,
+};
+
+const headerMetaRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.75rem 1rem",
+  marginTop: "0.9rem",
+};
 
 const cardHeaderStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "0.75rem",
-  marginBottom: "0.85rem",
+  marginBottom: "0.5rem",
 };
 
-const metricPairStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "0.9rem",
-  alignItems: "end",
-};
-
-const miniHintStyle: CSSProperties = {
-  fontSize: "0.75rem",
-  color: pageColorTokens.textSecondary,
-};
-
-const secondaryMetricValueStyle: CSSProperties = {
-  margin: "0.2rem 0 0",
-  fontSize: "1.05rem",
-  fontWeight: 700,
-  color: pageColorTokens.textBody,
-};
-
-const deltaPillStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  marginTop: "0.85rem",
-  padding: "0.22rem 0.6rem",
-  borderRadius: "999px",
+const metricSourceStyle: CSSProperties = {
+  color: pageColorTokens.textFootnote,
   fontSize: "0.75rem",
   fontWeight: 700,
-  color: pageColorTokens.brandBlue,
-  background: pageColorTokens.brandBlueLight,
 };
 
 const summaryTextStyle: CSSProperties = {
-  margin: "0.85rem 0 0",
-  fontSize: "0.875rem",
-  lineHeight: 1.55,
-  color: pageColorTokens.textBody,
+  margin: 0,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.84rem",
+  lineHeight: 1.6,
 };
 
-const roiBadgeBaseStyle: CSSProperties = {
+function deltaTextStyle(tone: "positive" | "neutral" | "warning" | "negative"): CSSProperties {
+  return {
+    marginTop: "0.35rem",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    color:
+      tone === "negative"
+        ? pageColorTokens.critical
+        : tone === "warning"
+          ? pageColorTokens.warning
+          : tone === "positive"
+            ? pageColorTokens.brandGreen
+            : pageColorTokens.textSecondary,
+  };
+}
+
+const reasonCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surfaceSubtle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.5rem",
+};
+
+const reasonLabelStyle: CSSProperties = {
   display: "inline-flex",
+  width: "fit-content",
   alignItems: "center",
-  justifyContent: "center",
-  padding: "0.22rem 0.6rem",
-  borderRadius: "999px",
+  padding: "0.28rem 0.6rem",
+  borderRadius: 999,
   fontSize: "0.75rem",
   fontWeight: 700,
+};
+
+const reasonTitleStyle: CSSProperties = {
+  fontSize: "0.95rem",
+  color: pageColorTokens.textPrimary,
+};
+
+const reasonValueStyle: CSSProperties = {
+  fontSize: "1.35rem",
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const reasonMetaStyle: CSSProperties = {
+  color: pageColorTokens.textFootnote,
+  fontSize: "0.78rem",
+};
+
+const roiMetaStyle: CSSProperties = {
+  color: pageColorTokens.textFootnote,
+  fontSize: "0.78rem",
+  marginTop: "0.35rem",
 };

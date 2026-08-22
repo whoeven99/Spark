@@ -1,0 +1,2824 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark Today 对象决策页 Demo</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --sidebar: #eef1f4;
+        --surface: #ffffff;
+        --surface-subtle: #fafbfb;
+        --border: #e1e3e5;
+        --border-strong: #c9cdd2;
+        --text: #1f2124;
+        --text-subtle: #61666c;
+        --text-muted: #8c9196;
+        --blue: #005bd3;
+        --blue-bg: #eef4ff;
+        --green: #008060;
+        --green-bg: #e9f7ef;
+        --orange: #b98900;
+        --orange-bg: #fff7e0;
+        --red: #d82c0d;
+        --red-bg: #fff0ee;
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+        --radius-xl: 20px;
+        --radius-lg: 16px;
+        --radius-md: 12px;
+        --radius-sm: 10px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      button {
+        font: inherit;
+      }
+
+        .app {
+          min-height: 100vh;
+        }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+        background: #111827;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        font-size: 14px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .brand p,
+      .muted {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+        .panel,
+        .page-card,
+      .summary-banner,
+      .object-card,
+      .metric-card,
+      .roi-card,
+      .next-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        border-radius: var(--radius-lg);
+      }
+
+      .panel {
+        padding: 14px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+        .top-intro {
+          padding: 24px 24px 0;
+          display: grid;
+          gap: 16px;
+        }
+
+        .top-intro-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+          gap: 16px;
+        }
+
+      .chip {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .chip.green {
+        background: var(--green-bg);
+        color: var(--green);
+      }
+
+      .chip.orange {
+        background: var(--orange-bg);
+        color: #8a6500;
+      }
+
+      .chip.red {
+        background: var(--red-bg);
+        color: var(--red);
+      }
+
+      .chip.blue {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+        .main {
+          padding: 24px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .page-head {
+        display: grid;
+        gap: 8px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .page-head h2 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.15;
+      }
+
+      .page-head p {
+        margin: 0;
+        color: var(--text-subtle);
+        line-height: 1.7;
+        max-width: 900px;
+      }
+
+      .page-card {
+        padding: 20px;
+      }
+
+      .overview-layout,
+      .status-grid,
+      .compare-grid,
+      .reason-grid,
+      .detail-top,
+      .detail-metrics,
+      .hint-strip,
+      .metrics-grid,
+      .roi-grid,
+      .next-grid,
+      .group-grid,
+      .object-metrics {
+        display: grid;
+        gap: 14px;
+      }
+
+      .overview-layout {
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      }
+
+      .summary-banner {
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .summary-banner h3 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .summary-banner strong {
+        font-size: 15px;
+      }
+
+      .summary-banner p,
+      .group-meta,
+      .object-card p {
+        margin: 0;
+        color: var(--text-subtle);
+        line-height: 1.7;
+      }
+
+      .metrics-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .status-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .reason-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .detail-top {
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.75fr);
+      }
+
+      .detail-metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .hint-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+        .breakdown-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
+
+        .breakdown-section {
+          display: grid;
+          grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+          gap: 14px;
+          align-items: start;
+        }
+
+        .breakdown-related {
+          display: grid;
+          gap: 14px;
+        }
+
+        .breakdown-card {
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          background: var(--surface-subtle);
+          padding: 16px;
+          display: grid;
+          gap: 12px;
+        }
+
+        .breakdown-card h4 {
+          margin: 0;
+          font-size: 15px;
+        }
+
+        .breakdown-card p {
+          margin: 0;
+          font-size: 12px;
+          color: var(--text-subtle);
+          line-height: 1.7;
+        }
+
+        .breakdown-list {
+          display: grid;
+          gap: 8px;
+        }
+
+        .breakdown-row {
+          display: grid;
+          grid-template-columns: minmax(120px, 1fr) auto;
+          gap: 10px;
+          padding-top: 8px;
+          border-top: 1px solid var(--border);
+        }
+
+        .breakdown-row:first-child {
+          padding-top: 0;
+          border-top: 0;
+        }
+
+        .breakdown-row strong {
+          display: block;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .breakdown-row span {
+          display: block;
+          font-size: 11px;
+          color: var(--text-muted);
+          line-height: 1.6;
+          margin-top: 3px;
+        }
+
+        .breakdown-value {
+          font-size: 13px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .evidence-card {
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          background: #fcfcfd;
+          padding: 14px;
+          display: grid;
+          gap: 12px;
+        }
+
+        .evidence-head {
+          display: grid;
+          gap: 6px;
+        }
+
+        .evidence-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .evidence-title strong {
+          font-size: 14px;
+          line-height: 1.4;
+        }
+
+        .evidence-head p {
+          margin: 0;
+          font-size: 12px;
+          color: var(--text-subtle);
+          line-height: 1.6;
+        }
+
+        .evidence-list {
+          display: grid;
+          gap: 8px;
+        }
+
+        .evidence-row {
+          display: grid;
+          gap: 4px;
+          padding-top: 8px;
+          border-top: 1px solid var(--border);
+        }
+
+        .evidence-row:first-child {
+          padding-top: 0;
+          border-top: 0;
+        }
+
+        .evidence-row strong {
+          font-size: 13px;
+          line-height: 1.4;
+        }
+
+        .evidence-meta,
+        .evidence-action {
+          font-size: 12px;
+          color: var(--text-subtle);
+          line-height: 1.6;
+        }
+
+        .evidence-action {
+          color: var(--text);
+          font-weight: 600;
+        }
+
+      .metric-card,
+      .roi-card,
+      .next-card {
+        padding: 16px;
+      }
+
+      .metric-card-head,
+      .roi-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .metric-label,
+      .roi-label,
+      .card-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+      }
+
+      .metric-value,
+      .roi-value,
+      .object-title {
+        font-size: 24px;
+        font-weight: 800;
+        line-height: 1.15;
+      }
+
+      .metric-meta,
+      .roi-meta {
+        font-size: 12px;
+        color: var(--text-subtle);
+        margin-top: 8px;
+      }
+
+      .metric-jump {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--blue);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .roi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .next-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .next-card strong {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 6px;
+      }
+
+      .status-panel {
+        display: grid;
+        gap: 14px;
+      }
+
+      .status-big {
+        font-size: 30px;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+
+      .status-item {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 14px;
+        background: var(--surface-subtle);
+      }
+
+      .status-item span,
+      .compare-item span {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .status-item strong,
+      .compare-item strong {
+        display: block;
+        font-size: 20px;
+        line-height: 1.15;
+      }
+
+      .compare-item {
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-md);
+        padding: 12px 14px;
+        background: #fcfcfd;
+      }
+
+      .data-annotation {
+        padding-top: 12px;
+        border-top: 1px dashed var(--border);
+        font-size: 12px;
+        color: var(--text-subtle);
+        line-height: 1.7;
+      }
+
+      .data-annotation strong {
+        color: var(--text);
+      }
+
+      .reason-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        background: var(--surface-subtle);
+        display: grid;
+        gap: 10px;
+      }
+
+      .reason-card strong {
+        font-size: 15px;
+      }
+
+      .reason-card p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-subtle);
+        line-height: 1.7;
+      }
+
+      .reason-metric {
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+
+      .reason-meta {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .detail-metric-card {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-subtle);
+      }
+
+      .detail-metric-card strong {
+        display: block;
+        font-size: 22px;
+        line-height: 1.1;
+      }
+
+      .detail-metric-card span {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .detail-metric-card .compare-meta {
+        margin-top: 6px;
+      }
+
+      .report-section {
+        display: grid;
+        gap: 14px;
+      }
+
+      .report-conclusion {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+      }
+
+      .report-conclusion strong {
+        display: block;
+        font-size: 18px;
+        line-height: 1.4;
+        margin-bottom: 8px;
+      }
+
+      .report-conclusion p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-subtle);
+        line-height: 1.8;
+      }
+
+      .analysis-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .analysis-item {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-subtle);
+        font-size: 13px;
+        color: var(--text-subtle);
+        line-height: 1.8;
+      }
+
+      .analysis-item strong {
+        color: var(--text);
+      }
+
+      .hint-item {
+        padding: 10px 12px;
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-md);
+        background: #fbfcfd;
+        font-size: 12px;
+        color: var(--text-subtle);
+        line-height: 1.6;
+      }
+
+      .light-entry {
+        padding: 12px 14px;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-md);
+        background: #fcfcfd;
+        font-size: 13px;
+        color: var(--text-subtle);
+        line-height: 1.6;
+      }
+
+      .light-entry strong {
+        color: var(--text);
+        margin-right: 6px;
+      }
+
+      .compare-meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--text-subtle);
+      }
+
+      .metric-delta {
+        font-weight: 700;
+      }
+
+      .metric-delta.positive {
+        color: var(--green);
+      }
+
+      .metric-delta.negative {
+        color: var(--red);
+      }
+
+      .group-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .group-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .object-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 14px;
+        background: var(--surface-subtle);
+        display: grid;
+        gap: 10px;
+      }
+
+      .object-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .object-title {
+        font-size: 17px;
+      }
+
+      .object-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .mini {
+        display: grid;
+        gap: 4px;
+      }
+
+      .mini span {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .mini strong {
+        font-size: 14px;
+      }
+
+      .action-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid transparent;
+      }
+
+      .action.primary {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .action.warning {
+        background: var(--orange-bg);
+        color: #8a6500;
+      }
+
+      .action.danger {
+        background: var(--red-bg);
+        color: var(--red);
+      }
+
+      .modal-shell {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(15, 23, 42, 0.4);
+        z-index: 1000;
+      }
+
+      .modal-shell.is-open {
+        display: flex;
+      }
+
+      .modal-panel {
+        width: min(1280px, 100%);
+        max-height: calc(100vh - 48px);
+        overflow: auto;
+        padding: 20px;
+        border-radius: 24px;
+        background: #f3f5f9;
+        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18);
+      }
+
+      .modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+
+      .modal-head h3 {
+        margin: 6px 0 0;
+        font-size: 26px;
+        line-height: 1.2;
+      }
+
+      .modal-head p {
+        margin: 8px 0 0;
+        color: var(--text-subtle);
+        line-height: 1.6;
+      }
+
+      .modal-close {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .modal-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .ai-link {
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        background: #eff6ff;
+        color: var(--blue);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .ai-panel {
+        width: min(920px, 100%);
+      }
+
+      .ai-layout {
+        display: grid;
+        gap: 16px;
+      }
+
+      .ai-context-card,
+      .ai-thread {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+
+      .ai-context-card {
+        display: grid;
+        gap: 12px;
+      }
+
+      .ai-tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .ai-tag {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #eef2ff;
+        color: #4338ca;
+      }
+
+      .ai-context-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .ai-context-item {
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        background: #fcfcfd;
+        display: grid;
+        gap: 6px;
+      }
+
+      .ai-context-item strong {
+        font-size: 13px;
+      }
+
+      .ai-context-item p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-subtle);
+        line-height: 1.7;
+      }
+
+      .ai-thread {
+        display: grid;
+        gap: 12px;
+      }
+
+      .ai-message {
+        display: grid;
+        gap: 6px;
+      }
+
+      .ai-message span {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .ai-bubble {
+        border-radius: 18px;
+        padding: 14px 16px;
+        font-size: 13px;
+        line-height: 1.8;
+        white-space: pre-wrap;
+      }
+
+      .ai-bubble.user {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+
+      .ai-bubble.assistant {
+        background: #f8fafc;
+        color: var(--text);
+      }
+
+      .showcase-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .showcase-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .showcase-intro {
+        margin-top: 12px;
+      }
+
+      .showcase-header {
+        display: grid;
+        grid-template-columns: 44px minmax(180px, 1fr) minmax(220px, 1.1fr) minmax(220px, 1.2fr) minmax(180px, 0.9fr);
+        gap: 12px;
+        padding: 0 0 6px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .showcase-row {
+        display: grid;
+        grid-template-columns: 44px minmax(180px, 1fr) minmax(220px, 1.1fr) minmax(220px, 1.2fr) minmax(180px, 0.9fr);
+        gap: 12px;
+        align-items: start;
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+      }
+
+      .showcase-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .showcase-rank {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--text-subtle);
+      }
+
+      .showcase-name strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .showcase-name span,
+      .showcase-suggestion {
+        font-size: 12px;
+        color: var(--text-subtle);
+        line-height: 1.6;
+      }
+
+      .showcase-conclusion-text {
+        font-size: 12px;
+        color: var(--text-subtle);
+        line-height: 1.7;
+      }
+
+      .showcase-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .showcase-pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--text-subtle);
+      }
+
+      .more-link {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--blue);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .jump-link {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--blue);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      @media (max-width: 1200px) {
+        .overview-layout,
+        .status-grid,
+        .reason-grid,
+        .detail-top,
+        .detail-metrics,
+        .breakdown-section,
+          .breakdown-grid,
+          .breakdown-related,
+        .hint-strip,
+        .group-grid,
+        .metrics-grid,
+        .roi-grid,
+        .next-grid,
+        .object-metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+
+        @media (max-width: 900px) {
+          .top-intro-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .modal-shell {
+            padding: 12px;
+          }
+
+          .modal-panel {
+            max-height: calc(100vh - 24px);
+            padding: 16px;
+          }
+
+          .modal-head {
+            flex-direction: column;
+          }
+
+          .ai-context-grid {
+            grid-template-columns: 1fr;
+          }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+        <section class="top-intro"></section>
+
+      <main class="main">
+        <section class="page-head" id="page-head"></section>
+        <section id="page-content"></section>
+      </main>
+    </div>
+
+    <div class="modal-shell" id="c-report-modal" aria-hidden="true">
+      <div class="modal-panel">
+        <div class="modal-head">
+          <div>
+            <div class="eyebrow">对象详情 / 决策建议</div>
+            <h3 id="c-report-title">对象完整数据</h3>
+            <p id="c-report-subtitle">在弹窗里查看对象级完整数据、分析结论和建议动作。</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ai-link" id="open-c-report-ai">和 AI 聊聊</button>
+            <button type="button" class="modal-close" id="c-report-close">关闭</button>
+          </div>
+        </div>
+        <div id="c-report-body"></div>
+      </div>
+    </div>
+
+    <div class="modal-shell" id="ai-chat-modal" aria-hidden="true">
+      <div class="modal-panel ai-panel">
+        <div class="modal-head">
+          <div>
+            <div class="eyebrow" id="ai-chat-eyebrow">AI 对话 / 当前页面上下文</div>
+            <h3 id="ai-chat-title">和 AI 聊聊</h3>
+            <p id="ai-chat-subtitle">把当前页面的关键信息带进 AI 对话窗口。</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="modal-close" id="ai-chat-close">关闭</button>
+          </div>
+        </div>
+        <div class="ai-layout" id="ai-chat-body"></div>
+      </div>
+    </div>
+
+    <script>
+      const pages = {
+        overview: {
+          navTitle: "经营总览",
+          navDetail: "先判断赚没赚钱，再决定进入哪类对象页。",
+          eyebrow: "Today / 概览",
+          title: "经营总览先做粗判断，再落对象",
+          subtitle:
+            "首页不铺长报告，只回答三个问题：现在赚不赚钱、利润为什么变、下一步该去商品、渠道，还是页面继续看。",
+          render: renderOverview,
+        },
+        revenue: {
+          navTitle: "收入分析",
+          navDetail: "先看收入是否健康，再落到商品和订单。",
+          eyebrow: "Today / 收入分析",
+          title: "收入分析先看真假增长，再看对象",
+          subtitle:
+            "这一页不再只看收入数字，而是直接告诉用户哪些商品和订单在贡献收入，哪些对象在制造假增长。",
+          question: "钱主要从哪些商品和订单来，哪些收入看起来在增长但质量并不好？",
+          status: "watch",
+          summary:
+            "近 7 天收入仍在增长，但利润没有同步增长。问题主要集中在两类对象：低利润热卖商品，以及退款损耗偏高的高金额订单。",
+            conclusion:
+              "收入还在增长，但这不是一份完全健康的增长。当前增长里已经混入了利润质量偏弱的商品和退款损耗偏高的订单，所以规模看起来变大了，真正留下来的经营结果却没有同步改善。",
+            analysisPoints: [
+              "第一，收入增长主要由少数热卖商品拉动，但其中一部分商品的利润率已经贴近盈亏线，继续放量可能只会放大低质量增长。",
+              "第二，高金额订单里出现了更高的退款损耗，说明问题不只发生在售前转化，也发生在成交后的履约和售后阶段。",
+              "第三，这一页应该先把商品和订单分开看：商品回答“值不值得继续卖”，订单回答“成交后利润为什么没有留下来”。",
+            ],
+            breakdowns: [
+              breakdown(
+                "收入拆到商品",
+                "先看收入由哪些商品组成，再判断哪些商品是在带来健康增长，哪些商品只是把规模做大。",
+                [
+                  breakdownRow("Top 赚钱商品", "$33,320", "Classic Tote Bag + Travel Bottle，利润质量健康"),
+                  breakdownRow("低质量增长商品", "$16,820", "Summer Sandals + Canvas Set，收入有了但利润偏弱"),
+                  breakdownRow("长尾商品收入", "$6,160", "分散贡献，适合继续观察"),
+                ],
+                  ["Top 赚钱商品", "Top 亏钱商品"],
+              ),
+              breakdown(
+                "收入拆到订单",
+                "订单维度更适合看收入质量，确认哪些订单值得复制，哪些订单成交后也留不住价值。",
+                [
+                  breakdownRow("高价值订单收入", "$9,860", "高金额、组合健康、来源清晰"),
+                  breakdownRow("高退款损耗订单", "$3,420", "表面有收入，实际会继续吞利润"),
+                  breakdownRow("复购订单收入", "$14,100", "老客收入仍然较稳"),
+                ],
+                  ["Top 高价值订单", "Top 高退款损耗订单"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("近 7 天收入", "$56,300", "规模还在增长"),
+              detailMetric("收入增幅", "+8%", "相比上一周期"),
+              detailMetric("高利润商品数", "6", "适合继续放量"),
+              detailMetric("高退款订单", "12", "优先排查"),
+            ],
+            decisionHints: [
+              "先区分真增长和假增长，不要只看订单数和收入。",
+              "优先盯低利润热卖商品，它们最容易把规模增长伪装成经营改善。",
+              "高退款订单不是规模问题，而是利润留不住的问题。",
+            ],
+          groups: [
+            {
+              title: "Top 赚钱商品",
+              chip: ["green", "适合继续放量"],
+              summary: "这组商品既带收入，也能留下较稳定的贡献利润，适合作为接下来继续放量的主对象。",
+              items: [
+                item("Classic Tote Bag", "商品", [
+                  mini("收入", "$18,400"),
+                  mini("贡献利润", "$7,320"),
+                  mini("利润率", "39.8%"),
+                ], "这款商品收入和利润都稳定，折扣占比低，退款也较轻，属于可以继续放量的健康对象。", [
+                  action("继续放量", "primary"),
+                  action("看商品详情", "warning"),
+                ]),
+                item("Travel Bottle", "商品", [
+                  mini("收入", "$14,920"),
+                  mini("贡献利润", "$5,180"),
+                  mini("利润率", "34.7%"),
+                ], "表现稳定，适合继续承接自然流量和广告流量，不需要额外加深折扣。", [
+                  action("继续承接流量", "primary"),
+                  action("控制折扣", "warning"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 亏钱商品",
+              chip: ["red", "需要先止损"],
+              summary: "这组商品表面上有销量，但利润质量差，应该先识别是折扣、退款还是成本结构在拖累。",
+              items: [
+                item("Summer Sandals", "商品", [
+                  mini("收入", "$9,600"),
+                  mini("贡献利润", "-$860"),
+                  mini("利润率", "-9.0%"),
+                ], "销量还在，但折扣和退款一起把利润吃掉了，属于典型的假增长商品。", [
+                  action("暂停放量", "danger"),
+                  action("检查退款", "warning"),
+                ]),
+                item("Canvas Set", "商品", [
+                  mini("收入", "$7,220"),
+                  mini("贡献利润", "$120"),
+                  mini("利润率", "1.7%"),
+                ], "目前只是勉强不亏，继续做大规模没有意义，先把折扣和成本结构看清楚。", [
+                  action("控制折扣", "warning"),
+                  action("复核成本", "danger"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 高价值订单",
+              chip: ["blue", "值得跟进"],
+              summary: "这组订单代表了当前收入里的高价值对象，适合继续看来源和商品结构是否可复制。",
+              items: [
+                item("#10481", "订单", [
+                  mini("订单金额", "$642"),
+                  mini("商品数", "5"),
+                  mini("渠道", "Google"),
+                ], "高金额订单来自高利润商品组合，值得继续追溯对应渠道和商品包。", [
+                  action("查看订单组合", "primary"),
+                  action("追溯来源", "warning"),
+                ]),
+                item("#10467", "订单", [
+                  mini("订单金额", "$588"),
+                  mini("商品数", "4"),
+                  mini("渠道", "Email"),
+                ], "这类订单说明老客复购仍然健康，可以作为收入质量的正向样本。", [
+                  action("看复购路径", "primary"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 高退款损耗订单",
+              chip: ["orange", "优先排查"],
+              summary: "这组订单更像收入质量问题，不一定影响规模，但会直接吞掉利润。",
+              items: [
+                item("#10432", "订单", [
+                  mini("订单金额", "$420"),
+                  mini("退款损耗", "$280"),
+                  mini("商品", "Summer Sandals"),
+                ], "退款损耗过高，已经明显侵蚀利润，优先排查商品描述、尺码和物流体验。", [
+                  action("检查退款原因", "danger"),
+                  action("看关联商品", "warning"),
+                ]),
+                item("#10418", "订单", [
+                  mini("订单金额", "$376"),
+                  mini("退款损耗", "$210"),
+                  mini("支付状态", "已完成"),
+                ], "这类订单不是支付问题，而是成交后利润留不住的问题。", [
+                  action("跟进售后", "warning"),
+                ]),
+              ],
+            },
+          ],
+        },
+          cost: {
+            navTitle: "成本分析",
+            navDetail: "先看钱花在哪，再看哪些成本最该先动。",
+            eyebrow: "Today / 成本分析",
+            title: "成本分析要把成本组成和异常成本讲清楚",
+            subtitle:
+              "这一页不是只给一个总成本数字，而是拆出广告、折扣、退款、支付手续费等组成部分，判断哪些成本是必要投入，哪些已经开始不成比例地吞利润。",
+            question: "钱主要花在哪些部分，哪些成本正在不成比例地吞掉利润？",
+            status: "watch",
+            summary:
+              "过去 7 天总成本增速高于收入增速，最明显的压力来自广告获客、折扣放大和退款损耗三块。问题不是成本本身存在，而是部分成本增长已经跑在收入前面。",
+            conclusion:
+              "当前成本问题更像结构问题，而不是单一成本项失控。广告仍然需要投，但部分渠道成本回收变弱；折扣仍然能带订单，但正在透支利润；退款损耗则说明成交后的质量开始出问题。",
+            analysisPoints: [
+              "第一，先分清楚哪些成本是为了增长必须承担的，哪些成本已经开始不成比例地吞掉利润，这比盯总成本数字更有用。",
+              "第二，广告、折扣和退款需要一起看，因为它们往往会串成一条链路：为了拉增长加大投放和折扣，最后又在退款阶段继续损失利润。",
+              "第三，这页的动作不一定是简单降成本，而是优先降低低质量成本，把预算挪回能留下利润的地方。",
+            ],
+            breakdowns: [
+              breakdown(
+                "成本拆到成本结构",
+                "先确认钱到底花在什么地方，再决定哪些成本继续承担、哪些优先收缩。",
+                [
+                  breakdownRow("商品成本", "$14,600", "成本基底，仍随收入正常波动"),
+                  breakdownRow("流量成本", "$21,800", "广告投入最大，也是当前最需要复盘的部分"),
+                  breakdownRow("营销成本", "$8,000", "折扣和优惠正在透支利润空间"),
+                ],
+                  ["Top 成本组成", "Top 异常渠道成本", "Top 折扣放大商品"],
+              ),
+              breakdown(
+                "成本拆到履约与基础费用",
+                "成交之后的成本也要拆清楚，不然很容易误以为问题都在投放前段。",
+                [
+                  breakdownRow("物流与履约", "$4,300", "未异常，但需要继续观察"),
+                  breakdownRow("基础费用", "$1,900", "支付手续费等基础支出，规模可控"),
+                  breakdownRow("售后成本", "$3,200", "退款和售后损耗已经开始放大"),
+                ],
+                  ["Top 退款损耗对象"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("总成本", "$41,800", "较基准 +19%"),
+              detailMetric("广告成本", "$21,800", "当前最大成本项"),
+              detailMetric("折扣 + 退款", "$11,200", "正在吞利润"),
+              detailMetric("异常成本项", "3", "需要优先处理"),
+            ],
+            decisionHints: [
+              "先看成本组成，再判断哪些成本值得继续承担。",
+              "折扣和退款不能只当作运营问题，它们直接决定利润能不能留下来。",
+              "成本分析的目标不是单纯省钱，而是把钱花回有效的地方。",
+            ],
+            groups: [
+              {
+                title: "Top 成本组成",
+                chip: ["blue", "先拆结构"],
+                summary: "先把成本拆成可理解的几块，确认压力主要来自哪里。",
+                items: [
+                  item("广告获客成本", "成本项", [mini("金额", "$21,800"), mini("占总成本", "52%"), mini("变化", "+22%")], "广告仍是必要投入，但增速已经明显快于收入增速。", [action("看渠道成本", "warning"), action("继续分解", "primary")]),
+                  item("折扣成本", "成本项", [mini("金额", "$8,000"), mini("占收入", "6.4%"), mini("变化", "+18%")], "折扣正在拉动成交，但边际回报已经开始变弱。", [action("复核折扣策略", "warning")]),
+                ],
+              },
+              {
+                title: "Top 异常渠道成本",
+                chip: ["red", "优先压缩"],
+                summary: "这组对象说明成本问题已经落到具体渠道，而不是抽象成本项。",
+                items: [
+                  item("Meta Ads", "渠道", [mini("投放成本", "$9,800"), mini("收入", "$19,400"), mini("利润率", "2.1%")], "投入不低，但利润几乎没留下来，已经接近低质量成本。", [action("限制预算", "danger"), action("复核创意", "warning")]),
+                  item("TikTok", "渠道", [mini("投放成本", "$5,200"), mini("收入", "$8,900"), mini("利润率", "-4.3%")], "已经出现轻度亏损，继续放量只会把问题放大。", [action("先止损", "danger")]),
+                ],
+              },
+              {
+                title: "Top 折扣放大商品",
+                chip: ["orange", "先控折扣"],
+                summary: "这组商品说明折扣正在制造增长，但没有制造足够利润。",
+                items: [
+                  item("Summer Sandals", "商品", [mini("折扣额", "$1,620"), mini("收入", "$9,600"), mini("利润率", "-9.0%")], "这类商品的成交越来越依赖折扣，继续放量意义有限。", [action("控制折扣", "warning"), action("暂停放量", "danger")]),
+                  item("Canvas Set", "商品", [mini("折扣额", "$980"), mini("收入", "$7,220"), mini("利润率", "1.7%")], "折扣一停成交就弱，属于需要重算价值的对象。", [action("重算价格带", "warning")]),
+                ],
+              },
+              {
+                title: "Top 退款损耗对象",
+                chip: ["orange", "优先排查"],
+                summary: "这组对象解释了为什么成交之后利润还是留不住。",
+                items: [
+                  item("#10432", "订单", [mini("订单金额", "$420"), mini("退款损耗", "$280"), mini("商品", "Summer Sandals")], "这不是前端流量问题，而是成交后价值没有留下来的问题。", [action("排查退款原因", "danger")]),
+                  item("#10418", "订单", [mini("订单金额", "$376"), mini("退款损耗", "$210"), mini("售后状态", "处理中")], "优先跟售后和履约链路一起看，避免继续扩大损耗。", [action("跟进售后", "warning")]),
+                ],
+              },
+            ],
+          },
+          profit: {
+            navTitle: "利润分析",
+            navDetail: "先看留下多少，再看利润被谁拿走了。",
+            eyebrow: "Today / 利润分析",
+            title: "利润分析要回答卖出去的钱最后留下多少",
+            subtitle:
+              "这一页把利润拆成能直接决策的对象视角，告诉用户哪些商品和订单真的在留下利润，哪些对象虽然有收入但并没有带来经营改善。",
+            question: "卖出去的钱，真正留下了多少，利润主要被谁留下或吞掉了？",
+            status: "watch",
+            summary:
+              "利润仍为正，但利润增长已经显著落后于收入增长。当前最重要的不是继续放大规模，而是找出真正留下利润的对象和正在吞利润的对象。",
+            conclusion:
+              "当前利润不是整体恶化，而是好对象和坏对象同时存在。少数商品和订单仍然是正向利润样本，但部分低利润商品、异常订单和高退款对象，正在把新增收入的价值吃掉。",
+            analysisPoints: [
+              "第一，利润页的任务不是重复展示利润数字，而是回答利润到底由哪些对象留下来。",
+              "第二，收入增长但利润不跟，通常意味着规模里已经混入低利润对象，所以必须直接落到商品和订单。",
+              "第三，利润分析最适合和收入分析联动看：一个回答卖得多不多，一个回答最后留下来多少。",
+            ],
+            breakdowns: [
+              breakdown(
+                "利润拆到商品",
+                "利润先拆到商品，最容易看清哪些商品真的在留下经营结果。",
+                [
+                  breakdownRow("高利润商品", "$12,500", "主力商品仍然健康，值得继续放量"),
+                  breakdownRow("低利润商品", "-$740", "少数商品已经开始吞利润"),
+                  breakdownRow("长尾商品利润", "$2,940", "分散贡献，影响有限"),
+                ],
+                  ["Top 留下利润的商品", "Top 吞利润商品"],
+              ),
+              breakdown(
+                "利润拆到订单",
+                "订单维度更适合看利润是在成交前丢掉，还是成交后继续流失。",
+                [
+                  breakdownRow("高利润订单", "$3,840", "高客单 + 健康来源 + 低退款"),
+                  breakdownRow("低利润订单", "$420", "几乎不留下利润，值得复盘"),
+                  breakdownRow("异常损耗订单", "-$320", "退款和折扣继续侵蚀结果"),
+                ],
+                  ["Top 高利润订单", "Top 低利润订单"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("估算利润", "$32,600", "仍为正，但承压"),
+              detailMetric("利润变化", "-6%", "低于收入增幅"),
+              detailMetric("高利润商品", "6", "值得继续放量"),
+              detailMetric("低利润对象", "9", "需要先处理"),
+            ],
+            decisionHints: [
+              "先找留下利润的对象，再找吞利润的对象。",
+              "利润问题不要只盯总数，要看对象层的结构变化。",
+              "高收入不等于高利润，这页更看重质量而不是规模。",
+            ],
+            groups: [
+              {
+                title: "Top 留下利润的商品",
+                chip: ["green", "继续放量"],
+                summary: "这些商品是利润页里的正向样本，说明哪些增长是值得继续做大的。",
+                items: [
+                  item("Classic Tote Bag", "商品", [mini("贡献利润", "$7,320"), mini("利润率", "39.8%"), mini("退款率", "2.1%")], "这是当前最稳的利润样本，收入和利润同步健康。", [action("继续放量", "primary")]),
+                  item("Travel Bottle", "商品", [mini("贡献利润", "$5,180"), mini("利润率", "34.7%"), mini("折扣占比", "4.2%")], "利润结构健康，适合继续作为承接流量的主商品。", [action("继续承接", "primary")]),
+                ],
+              },
+              {
+                title: "Top 吞利润商品",
+                chip: ["red", "优先止损"],
+                summary: "这组商品告诉你为什么收入增长了，利润却没有一起长。",
+                items: [
+                  item("Summer Sandals", "商品", [mini("贡献利润", "-$860"), mini("利润率", "-9.0%"), mini("退款率", "12.4%")], "收入看起来不差，但已经在持续吞利润。", [action("暂停放量", "danger"), action("排查退款", "warning")]),
+                  item("Canvas Set", "商品", [mini("贡献利润", "$120"), mini("利润率", "1.7%"), mini("折扣占比", "13%")], "几乎不留下利润，规模越大，经营改善越有限。", [action("控制折扣", "warning")]),
+                ],
+              },
+              {
+                title: "Top 高利润订单",
+                chip: ["blue", "值得复制"],
+                summary: "利润高的订单能帮助你看清哪些商品组合和来源值得继续复制。",
+                items: [
+                  item("#10481", "订单", [mini("订单利润", "$214"), mini("订单金额", "$642"), mini("渠道", "Google")], "高利润订单说明渠道、商品组合和价格带都是健康的。", [action("复用组合", "primary")]),
+                  item("#10467", "订单", [mini("订单利润", "$188"), mini("订单金额", "$588"), mini("渠道", "Email")], "复购路径健康，是利润质量好的正向样本。", [action("追溯复购路径", "primary")]),
+                ],
+              },
+              {
+                title: "Top 低利润订单",
+                chip: ["orange", "先排查"],
+                summary: "这组对象说明利润并不是在成交前丢掉，而是在成交后继续流失。",
+                items: [
+                  item("#10432", "订单", [mini("订单利润", "-$94"), mini("退款损耗", "$280"), mini("商品", "Summer Sandals")], "成交之后利润直接被退款吃掉了。", [action("排查售后", "warning")]),
+                  item("#10418", "订单", [mini("订单利润", "$12"), mini("折扣", "$48"), mini("支付费", "$11")], "勉强保本，属于需要复盘的低质量成交。", [action("复盘订单结构", "warning")]),
+                ],
+              },
+            ],
+          },
+          margin: {
+            navTitle: "利润率分析",
+            navDetail: "先看利润空间，再看是谁把利润率压下来了。",
+            eyebrow: "Today / 利润率分析",
+            title: "利润率分析要看盈利空间被谁压缩了",
+            subtitle:
+              "利润率页不是重复利润页，而是专门回答盈利空间为什么变窄，哪些对象还能保持健康利润率，哪些对象已经接近或跌破盈亏线。",
+            question: "利润率为什么在收窄，哪些对象还能保持健康盈利空间？",
+            status: "watch",
+            summary:
+              "整体利润率仍在健康区间，但已经出现明显收窄。主要问题不是所有对象都变差，而是部分低利润率对象占比正在变高。",
+            conclusion:
+              "利润率页最重要的发现是：并不是店铺整体不会赚钱，而是低利润率对象在增长结构里的占比上升了。继续扩大这类对象，只会让规模增长掩盖盈利空间恶化。",
+            analysisPoints: [
+              "第一，利润率问题本质上是结构问题，看的是哪些对象把整体盈利空间往下拉。",
+              "第二，高利润率对象通常也是更适合继续放量的对象，因为它们给经营留下了足够缓冲。",
+              "第三，低利润率对象要继续拆原因，常见就是折扣过深、退款过高或获客成本过重。",
+            ],
+            breakdowns: [
+              breakdown(
+                "利润率拆到商品层",
+                "先看商品层的利润率结构，判断哪些对象在拉高或拉低整体盈利空间。",
+                [
+                  breakdownRow("高利润率商品", "34%+", "还能提供足够缓冲"),
+                  breakdownRow("低利润率商品", "0%~5%", "规模增长价值有限"),
+                  breakdownRow("负利润率商品", "<0%", "继续放量会直接恶化结构"),
+                ],
+                  ["Top 高利润率商品", "Top 低利润率商品"],
+              ),
+              breakdown(
+                "利润率拆到原因",
+                "利润率下降通常不是一个原因造成，而是多个因子一起作用。",
+                [
+                  breakdownRow("折扣侵蚀", "-2.1pp", "优惠力度正在压缩盈利空间"),
+                  breakdownRow("退款侵蚀", "-1.4pp", "成交后利润继续流失"),
+                  breakdownRow("获客成本侵蚀", "-1.3pp", "部分流量质量变差"),
+                ],
+                  ["Top 折扣侵蚀对象", "Top 退款侵蚀对象"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("整体利润率", "26.1%", "较基准 -4.8pp"),
+              detailMetric("高利润率商品", "5", "值得扩大占比"),
+              detailMetric("低利润率商品", "7", "拉低整体空间"),
+              detailMetric("利润率风险对象", "4", "接近盈亏线"),
+            ],
+            decisionHints: [
+              "先找健康利润率对象，再找接近盈亏线的对象。",
+              "利润率页更适合判断结构，而不是判断规模。",
+              "看到低利润率对象时，要继续回到折扣、退款和投放上找原因。",
+            ],
+            groups: [
+              {
+                title: "Top 高利润率商品",
+                chip: ["green", "扩大占比"],
+                summary: "这些商品说明当前仍然存在很健康的盈利空间。",
+                items: [
+                  item("Classic Tote Bag", "商品", [mini("利润率", "39.8%"), mini("收入", "$18,400"), mini("退款率", "2.1%")], "这是利润率页里的标准健康样本。", [action("扩大占比", "primary")]),
+                  item("Travel Bottle", "商品", [mini("利润率", "34.7%"), mini("收入", "$14,920"), mini("折扣占比", "4.2%")], "规模和利润率较均衡，适合作为主力承接对象。", [action("继续主推", "primary")]),
+                ],
+              },
+              {
+                title: "Top 低利润率商品",
+                chip: ["red", "控制占比"],
+                summary: "这组对象正在明显拉低整体盈利空间。",
+                items: [
+                  item("Summer Sandals", "商品", [mini("利润率", "-9.0%"), mini("收入", "$9,600"), mini("退款率", "12.4%")], "利润率已经为负，不能再用规模掩盖问题。", [action("控制占比", "danger")]),
+                  item("Canvas Set", "商品", [mini("利润率", "1.7%"), mini("收入", "$7,220"), mini("折扣占比", "13%")], "虽然没明显亏损，但也几乎没有盈利空间。", [action("重算毛利", "warning")]),
+                ],
+              },
+              {
+                title: "Top 折扣侵蚀对象",
+                chip: ["orange", "先控折扣"],
+                summary: "折扣不是不能给，而是要避免折扣直接把利润率打穿。",
+                items: [
+                  item("Canvas Set", "商品", [mini("折扣占比", "13%"), mini("利润率", "1.7%"), mini("订单数", "124")], "这类对象继续靠折扣拉量并不划算。", [action("收窄折扣", "warning")]),
+                  item("#10418", "订单", [mini("折扣", "$48"), mini("订单利润率", "3.2%"), mini("渠道", "Meta")], "单笔订单已经很接近盈亏线。", [action("复盘折扣来源", "warning")]),
+                ],
+              },
+              {
+                title: "Top 退款侵蚀对象",
+                chip: ["orange", "排查履约"],
+                summary: "利润率不只是售前问题，成交后的退款同样会快速拉低利润空间。",
+                items: [
+                  item("#10432", "订单", [mini("退款损耗", "$280"), mini("订单利润率", "-22%"), mini("商品", "Summer Sandals")], "退款已经直接把订单利润率打穿。", [action("排查履约", "danger")]),
+                  item("Summer Sandals", "商品", [mini("退款率", "12.4%"), mini("利润率", "-9.0%"), mini("售后工单", "18")], "问题已经从商品表现延伸到售后体验。", [action("复盘商品页", "warning")]),
+                ],
+              },
+            ],
+          },
+          orders: {
+            navTitle: "订单分析",
+            navDetail: "先看订单质量，再看哪些订单值得复用。",
+            eyebrow: "Today / 订单分析",
+            title: "订单分析应该回答订单多不多，以及订单好不好",
+            subtitle:
+              "订单数不是越多越好，真正重要的是哪些订单来自健康来源、能留下利润，哪些订单虽然成交了，但后续质量并不好。",
+            question: "订单数为什么变化，这些订单的质量到底好不好？",
+            status: "watch",
+            summary:
+              "订单数仍在增长，但订单质量已经出现分化。高价值订单和复购订单依然健康，但部分低质量订单和异常订单正在拖累经营结果。",
+            conclusion:
+              "当前订单问题不是成交能力完全走弱，而是订单质量变得不均衡。好的订单依然存在，但低利润、易退款、异常状态的订单占比正在上升。",
+            analysisPoints: [
+              "第一，订单页不能只看数量，而要同时看订单金额、利润质量和后续状态。",
+              "第二，高质量订单能帮助你反推有效的来源和商品组合，低质量订单则告诉你问题落在什么环节。",
+              "第三，订单分析很适合作为收入、利润和转化之间的桥梁页。",
+            ],
+            breakdowns: [
+              breakdown(
+                "订单数拆到订单质量",
+                "订单数量不是越多越好，先拆出哪些订单值得复制，哪些订单只会制造规模错觉。",
+                [
+                  breakdownRow("高价值订单", "42", "金额高、利润好、适合继续追溯"),
+                  breakdownRow("低质量订单", "67", "成交了，但几乎不留下利润"),
+                  breakdownRow("异常订单", "18", "支付失败或高退款风险"),
+                ],
+                  ["Top 高价值订单", "Top 低质量订单", "Top 异常订单"],
+              ),
+              breakdown(
+                "订单数拆到来源结构",
+                "来源维度能帮助判断这些订单是健康增长，还是低质量扩量。",
+                [
+                  breakdownRow("Google 订单", "318", "量和质量相对均衡"),
+                  breakdownRow("Email 订单", "142", "复购质量好"),
+                  breakdownRow("Meta 订单", "206", "量不低，但质量偏弱"),
+                ],
+                  ["Top 订单来源"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("订单数", "1,284", "较基准 +8%"),
+              detailMetric("高价值订单", "42", "适合复制"),
+              detailMetric("异常订单", "18", "需要排查"),
+              detailMetric("复购订单占比", "31%", "仍较健康"),
+            ],
+            decisionHints: [
+              "先分出高质量订单和异常订单。",
+              "订单不是越多越好，要看成交后结果是否健康。",
+              "订单页很适合反查来源、商品组合和售后问题。",
+            ],
+            groups: [
+              {
+                title: "Top 订单来源",
+                chip: ["blue", "看质量来源"],
+                summary: "先看哪些来源在送来高质量订单，而不是只看量。",
+                items: [
+                  item("Google", "来源", [mini("订单数", "318"), mini("平均订单额", "$126"), mini("订单利润率", "24%")], "来源规模和订单质量都较健康。", [action("继续承接", "primary")]),
+                  item("Email", "来源", [mini("订单数", "142"), mini("平均订单额", "$118"), mini("复购占比", "37%")], "老客驱动的订单质量较高。", [action("复用老客策略", "primary")]),
+                ],
+              },
+              {
+                title: "Top 高价值订单",
+                chip: ["green", "值得复制"],
+                summary: "这些订单能帮助你理解什么样的组合更值得继续做大。",
+                items: [
+                  item("#10481", "订单", [mini("订单金额", "$642"), mini("订单利润", "$214"), mini("商品数", "5")], "高客单且能留下利润，是理想样本。", [action("复用商品组合", "primary")]),
+                  item("#10467", "订单", [mini("订单金额", "$588"), mini("订单利润", "$188"), mini("来源", "Email")], "说明复购客仍然有很强价值。", [action("追溯复购路径", "primary")]),
+                ],
+              },
+              {
+                title: "Top 低质量订单",
+                chip: ["orange", "先复盘"],
+                summary: "这类订单会拉高规模感，但不一定带来经营改善。",
+                items: [
+                  item("#10418", "订单", [mini("订单金额", "$376"), mini("订单利润", "$12"), mini("折扣", "$48")], "勉强保本，质量偏低。", [action("复盘优惠来源", "warning")]),
+                  item("#10432", "订单", [mini("订单金额", "$420"), mini("退款损耗", "$280"), mini("售后", "处理中")], "成交后损耗过高，不是优质订单。", [action("排查退款", "warning")]),
+                ],
+              },
+              {
+                title: "Top 异常订单",
+                chip: ["red", "优先跟进"],
+                summary: "异常订单往往是最容易直接采取动作的对象。",
+                items: [
+                  item("#10491", "订单", [mini("订单金额", "$268"), mini("状态", "支付失败"), mini("原因", "3DS timeout")], "这是最直接可处理的订单异常。", [action("跟进支付失败", "danger")]),
+                  item("#10475", "订单", [mini("订单金额", "$312"), mini("状态", "高退款风险"), mini("商品", "Summer Sandals")], "订单异常和商品问题已经开始叠加。", [action("人工复核", "danger")]),
+                ],
+              },
+            ],
+          },
+          aov: {
+            navTitle: "客单价分析",
+            navDetail: "先看为什么客单价变，再看哪些组合拉高了客单。",
+            eyebrow: "Today / 客单价分析",
+            title: "客单价分析要回答用户为什么买得更多或更少",
+            subtitle:
+              "客单价页不是只看平均数，而是拆出哪些商品组合、订单结构和来源在拉高客单价，哪些来源虽然有订单，但客单明显偏低。",
+            question: "客单价为什么变化，哪些对象在拉高或拉低客单价？",
+            status: "healthy",
+            summary:
+              "客单价仍在小幅提升，但提升主要来自少数高价值订单和商品组合，不代表整体结构已经完全改善。",
+            conclusion:
+              "客单价的好消息是真的，但还不够均匀。少数高价值对象正在把平均数抬高，而低客单来源和低组合深度的订单，仍然在稀释整体客单价表现。",
+            analysisPoints: [
+              "第一，客单价页要拆开看组合，不然一个平均值很容易掩盖结构差异。",
+              "第二，高客单价不一定意味着高利润，但它通常能帮助你找到更强的商品组合和更高价值的用户。",
+              "第三，低客单来源并不是一定要停掉，但需要确认它们是否还有后续价值。",
+            ],
+            breakdowns: [
+              breakdown(
+                "客单价拆到购物篮结构",
+                "先看客单价是由哪些商品组合和加购行为拉起来的。",
+                [
+                  breakdownRow("高组合深度订单", "$142", "商品包和加购都比较健康"),
+                  breakdownRow("普通单品订单", "$88", "是当前大多数订单的基础盘"),
+                  breakdownRow("低组合深度订单", "$69", "容易稀释平均客单"),
+                ],
+                  ["Top 高客单商品组合", "Top 带动加购的商品"],
+              ),
+              breakdown(
+                "客单价拆到来源",
+                "来源不同，客单价和后续价值也会明显不同。",
+                [
+                  breakdownRow("Email", "$118", "老客更容易形成高客单"),
+                  breakdownRow("Google", "$126", "高价值搜索流量仍在支撑客单"),
+                  breakdownRow("Meta / TikTok", "$69~74", "低客单来源在拉低均值"),
+                ],
+                  ["Top 高客单订单", "Top 低客单来源"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("客单价", "$97", "较基准 +3%"),
+              detailMetric("高客单订单", "38", "抬升均值"),
+              detailMetric("高组合深度商品", "4", "值得复制"),
+              detailMetric("低客单来源", "2", "拉低均值"),
+            ],
+            decisionHints: [
+              "先找出拉高客单价的组合，再看低客单对象。",
+              "客单价页更适合看购物篮结构，而不只是平均值。",
+              "高客单对象可以反向帮助你设计推荐和加购策略。",
+            ],
+            groups: [
+              {
+                title: "Top 高客单商品组合",
+                chip: ["green", "值得复制"],
+                summary: "这些组合最能解释为什么客单价还能维持增长。",
+                items: [
+                  item("Classic Tote Bag + Travel Bottle", "商品组合", [mini("平均客单", "$142"), mini("组合订单数", "96"), mini("利润率", "31%")], "组合深度和利润都较健康，是很好的提客单样本。", [action("复制搭配", "primary")]),
+                  item("Canvas Set + Accessories", "商品组合", [mini("平均客单", "$128"), mini("组合订单数", "72"), mini("加购率", "11%")], "说明附加推荐仍然有效。", [action("强化推荐位", "primary")]),
+                ],
+              },
+              {
+                title: "Top 高客单订单",
+                chip: ["blue", "值得追溯"],
+                summary: "高客单订单能帮助你看清楚哪些来源和组合最有效。",
+                items: [
+                  item("#10481", "订单", [mini("订单金额", "$642"), mini("商品数", "5"), mini("来源", "Google")], "这类订单非常适合反查商品包和来源。", [action("追溯来源", "primary")]),
+                  item("#10467", "订单", [mini("订单金额", "$588"), mini("商品数", "4"), mini("来源", "Email")], "说明复购用户更容易形成高客单。", [action("强化老客推荐", "primary")]),
+                ],
+              },
+              {
+                title: "Top 低客单来源",
+                chip: ["orange", "限制放量"],
+                summary: "这组来源会拉低整体客单价，值得看是不是还值得继续扩量。",
+                items: [
+                  item("Meta Ads", "来源", [mini("平均客单", "$74"), mini("订单数", "206"), mini("利润率", "2.1%")], "不仅客单偏低，利润质量也一般。", [action("限制放量", "warning")]),
+                  item("TikTok", "来源", [mini("平均客单", "$69"), mini("订单数", "118"), mini("复购率", "8%")], "低客单且长期价值一般。", [action("重看投放人群", "warning")]),
+                ],
+              },
+              {
+                title: "Top 带动加购的商品",
+                chip: ["green", "适合搭配"],
+                summary: "这组商品虽然不一定自己最赚钱，但很能拉高购物篮深度。",
+                items: [
+                  item("Travel Bottle", "商品", [mini("加购关联率", "18%"), mini("带动客单", "+$21"), mini("主搭商品", "Classic Tote Bag")], "很适合做推荐位和组合售卖。", [action("加强推荐位", "primary")]),
+                  item("Accessory Kit", "商品", [mini("加购关联率", "14%"), mini("带动客单", "+$17"), mini("退款率", "1.8%")], "作为附加商品很健康。", [action("保留加购入口", "primary")]),
+                ],
+              },
+            ],
+          },
+        roi: {
+          navTitle: "投入回报分析",
+          navDetail: "先看经营回报，再落到渠道和广告。",
+          eyebrow: "Today / 投入回报分析",
+          title: "投入回报分析应该直接落到渠道对象",
+          subtitle:
+            "这页不只给一个 ROI 数字，而是直接指出哪些渠道在赚钱、哪些渠道低利润，以及哪些数据还不够可信，不能急着拍板。",
+          question: "哪些投入确实值得继续，哪些渠道虽然有收入但实际在拖累经营回报？",
+          status: "watch",
+          summary:
+            "短期经营回报仍为正，但结构分化很明显。Google 和 Email 继续贡献利润，Meta 流量收入还在，但利润质量已经明显变差。",
+            conclusion:
+              "当前投放不是整体失效，而是进入了明显分化阶段。少数渠道依然值得继续加码，但部分渠道已经出现“有收入、没利润”的低质量回报，预算分配需要更谨慎。",
+            analysisPoints: [
+              "第一，判断渠道好坏不能只看归因收入，必须同时看贡献利润和客户质量，否则很容易把低质量增长误判成高回报。",
+              "第二，当前 Google 和 Email 仍然是正向样本，说明需求并没有消失，问题更像预算分配不均，而不是整体投放策略失效。",
+              "第三，低置信度渠道不能直接下结论，这类对象需要先补齐投入数据，再决定是否继续保留预算。",
+            ],
+            breakdowns: [
+              breakdown(
+                "ROI 拆到渠道回报",
+                "先看不同渠道的回报结构，确认哪些渠道是真正值得继续投的。",
+                [
+                  breakdownRow("Google", "1.8x", "收入、利润和客户质量都较均衡"),
+                  breakdownRow("Email", "2.2x", "规模不大，但回报质量最好"),
+                  breakdownRow("Meta / TikTok", "0.9x~1.0x", "收入有了，利润质量偏弱"),
+                ],
+                  ["Top 赚钱渠道", "Top 低利润渠道"],
+              ),
+              breakdown(
+                "ROI 拆到价值层",
+                "短期回报之外，还要看客户价值和数据置信度，避免过早下结论。",
+                [
+                  breakdownRow("短期经营回报", "1.3x", "最近 7 天仍然为正"),
+                  breakdownRow("长期价值样本", "Email / Google", "高价值客户占比更好"),
+                  breakdownRow("低置信度渠道", "Affiliate", "投入成本还没完全接进来"),
+                ],
+                  ["高价值客户占比高的渠道", "低置信度但需要复核的渠道"],
+              ),
+            ],
+            headlineMetrics: [
+              detailMetric("短期经营回报", "1.3x", "仍为正，但低于基准"),
+              detailMetric("高利润渠道", "2", "适合继续放量"),
+              detailMetric("低利润渠道", "2", "需要先复核"),
+              detailMetric("低置信度渠道", "1", "先别急着拍板"),
+            ],
+            decisionHints: [
+              "先看贡献利润，再看客户质量，不要只用收入判断渠道好坏。",
+              "数据置信度低的渠道先补数，再做预算决策。",
+              "这页更像预算分配页，不只是 ROI 报表页。",
+            ],
+          groups: [
+            {
+              title: "Top 赚钱渠道",
+              chip: ["green", "适合放量"],
+              summary: "这些渠道同时满足收入、利润和客户质量都较好，可以继续放量。",
+              items: [
+                item("Google", "渠道", [
+                  mini("归因收入", "$28,200"),
+                  mini("贡献利润", "$8,140"),
+                  mini("利润率", "28.9%"),
+                ], "利润和客户质量都健康，是当前最值得继续放大的付费渠道。", [
+                  action("继续放量", "primary"),
+                  action("看渠道明细", "warning"),
+                ]),
+                item("Email", "渠道", [
+                  mini("归因收入", "$11,600"),
+                  mini("贡献利润", "$4,980"),
+                  mini("高价值客占比", "41%"),
+                ], "老客贡献稳定，虽然规模不大，但回报质量很好。", [
+                  action("复制打法", "primary"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 低利润渠道",
+              chip: ["red", "限制预算"],
+              summary: "这些渠道看起来有收入，但利润或客户质量已经明显承压。",
+              items: [
+                item("Meta Ads", "渠道", [
+                  mini("归因收入", "$19,400"),
+                  mini("贡献利润", "$420"),
+                  mini("利润率", "2.1%"),
+                ], "收入不低，但几乎没有留下利润，继续盲目放量意义不大。", [
+                  action("限制预算", "danger"),
+                  action("复核创意", "warning"),
+                ]),
+                item("TikTok", "渠道", [
+                  mini("归因收入", "$8,900"),
+                  mini("贡献利润", "-$380"),
+                  mini("利润率", "-4.3%"),
+                ], "已经开始轻度亏损，且客户质量一般，应先止损再查原因。", [
+                  action("先止损", "danger"),
+                ]),
+              ],
+            },
+            {
+              title: "高价值客户占比高的渠道",
+              chip: ["blue", "值得追溯"],
+              summary: "这组渠道不一定规模最大，但更容易带来长期价值，适合作为长期 ROI 观察对象。",
+              items: [
+                item("Email", "渠道", [
+                  mini("高价值客占比", "41%"),
+                  mini("复购客户占比", "37%"),
+                  mini("平均 LTV", "$286"),
+                ], "长期价值质量明显高于平均水平，可以作为长期 ROI 样本重点看。", [
+                  action("看客户价值", "primary"),
+                ]),
+                item("Google", "渠道", [
+                  mini("高价值客占比", "34%"),
+                  mini("复购客户占比", "29%"),
+                  mini("平均 LTV", "$248"),
+                ], "既有规模也有较好的客户质量，是短期和长期都相对均衡的渠道。", [
+                  action("继续放量", "primary"),
+                ]),
+              ],
+            },
+            {
+              title: "低置信度但需要复核的渠道",
+              chip: ["orange", "先别拍板"],
+              summary: "这些渠道不是一定差，而是当前数据缺口较大，先复核再做预算决策更稳。",
+              items: [
+                item("Affiliate", "渠道", [
+                  mini("贡献利润", "$1,260"),
+                  mini("置信度", "low"),
+                  mini("缺口", "投放成本未接入"),
+                ], "当前只看得到贡献利润，看不到完整广告投入，先不要直接当成高 ROI 渠道。", [
+                  action("等待补数", "warning"),
+                  action("人工复核", "danger"),
+                ]),
+              ],
+            },
+          ],
+        },
+        traffic: {
+          navTitle: "流量分析",
+          navDetail: "先看来源和页面，再判断流量质量。",
+          eyebrow: "Today / 流量分析",
+          title: "流量问题最后也要落到来源和页面",
+          subtitle:
+            "流量页不只是看 sessions 变化，更要让用户马上知道：是哪个来源在送低质流量，还是哪个页面根本接不住流量。",
+          question: "哪些来源有量但没质量，哪些页面承接不住流量？",
+          status: "watch",
+          summary:
+            "过去 7 天会话仍在增长，但有效流量没有同步提升。当前更像是两件事叠加：高流量来源质量下滑，以及部分落地页承接明显偏弱。",
+            conclusion:
+              "当前流量问题不是单纯的流量不足，而是流量质量和页面承接同时在变差。继续加大流量并不能直接解决问题，先找到低质量来源和接不住流量的页面更关键。",
+            analysisPoints: [
+              "第一，高流量来源里已经出现明显低转化对象，说明部分新增流量只是把会话做大了，没有真正带来经营结果。",
+              "第二，高流量页面一旦承接变差，会快速放大整体转化问题，所以页面优先级通常高于继续买量。",
+              "第三，来源问题和页面问题需要拆开判断，避免把页面承接问题误认为渠道问题，或者反过来误判。",
+            ],
+            headlineMetrics: [
+              detailMetric("近 7 天会话", "38,600", "流量仍在增长"),
+              detailMetric("高质量来源", "2", "继续保留"),
+              detailMetric("低质来源", "1", "限制放量"),
+              detailMetric("高流量低承接页", "2", "优先修页面"),
+            ],
+            decisionHints: [
+              "流量问题最后一定要落到来源或页面，不然很难直接行动。",
+              "高流量低承接页面通常比“继续买量”更值得先处理。",
+              "来源质量和页面承接要分开判断，避免误判。",
+            ],
+          groups: [
+            {
+              title: "Top 高流量来源",
+              chip: ["blue", "继续观察"],
+              summary: "先看谁在送流量，再判断这些来源是不是值得继续买量或放量。",
+              items: [
+                item("Google / Search", "来源", [
+                  mini("会话", "12,420"),
+                  mini("转化率", "2.4%"),
+                  mini("收入/会话", "$3.18"),
+                ], "规模大、效率也不差，是健康来源。", [
+                  action("继续保留", "primary"),
+                ]),
+                item("Meta / Paid Social", "来源", [
+                  mini("会话", "9,180"),
+                  mini("转化率", "0.9%"),
+                  mini("收入/会话", "$1.04"),
+                ], "流量量级不错，但质量已经明显掉下来了。", [
+                  action("降低低效流量", "danger"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 高流量低转化来源",
+              chip: ["red", "优先处理"],
+              summary: "这组来源最容易造成“看起来流量不错，但并没有带来经营结果”的错觉。",
+              items: [
+                item("Meta / Paid Social", "来源", [
+                  mini("会话", "9,180"),
+                  mini("页/会话", "1.3"),
+                  mini("转化率", "0.9%"),
+                ], "来源本身质量偏弱，且用户停留深度低，先不要继续放量。", [
+                  action("限制投放", "danger"),
+                  action("检查入口页", "warning"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 高流量页面",
+              chip: ["green", "优先承接"],
+              summary: "流量最大的页面最值得优先看，因为一旦承接变差，对整体影响会非常直接。",
+              items: [
+                item("/products/classic-tote-bag", "页面", [
+                  mini("会话", "5,420"),
+                  mini("加购率", "8.2%"),
+                  mini("转化率", "2.8%"),
+                ], "高流量且承接稳定，是健康样本页面。", [
+                  action("复用结构", "primary"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 高流量低承接页面",
+              chip: ["orange", "先修页面"],
+              summary: "真正可执行的流量问题通常不是“流量差”，而是“高流量页面接不住”。",
+              items: [
+                item("/products/summer-sandals", "页面", [
+                  mini("会话", "4,980"),
+                  mini("加购率", "2.1%"),
+                  mini("转化率", "0.5%"),
+                ], "高流量但承接很弱，先修这个页面，比继续买流量更直接。", [
+                  action("优化页面", "warning"),
+                  action("看商品质量", "danger"),
+                ]),
+              ],
+            },
+          ],
+        },
+        conversion: {
+          navTitle: "转化分析",
+          navDetail: "先找掉点，再落到页面和异常订单。",
+          eyebrow: "Today / 转化分析",
+          title: "转化分析应该直接告诉用户卡在哪一段",
+          subtitle:
+            "转化页的目标不是给更多漏斗数字，而是告诉用户该先修哪个页面、跟哪批支付失败订单，才能最快恢复转化。",
+          question: "用户具体卡在哪一段，是页面承接问题，还是支付链路问题？",
+          status: "risk",
+          summary:
+            "总体转化仍然承压，当前掉点主要出现在中后段。部分页面加购还可以，但到达结账和完成支付明显偏弱，支付失败订单也需要单独跟进。",
+            conclusion:
+              "当前转化问题已经不是前段流量问题，而是明显落在中后段承接和支付链路。也就是说，用户并不是完全不想买，而是在快成交的时候掉下来了。",
+            analysisPoints: [
+              "第一，部分页面加购率并不差，说明用户兴趣仍在，问题更像结账前信任信息、运费预期或流程承接不足。",
+              "第二，到达结账高但完成支付低的对象非常关键，这类对象最能直接暴露支付链路或末段体验问题。",
+              "第三，支付失败订单属于最直接的可执行对象，优先跟进这批订单通常比继续读漏斗数字更有效。",
+            ],
+            headlineMetrics: [
+              detailMetric("总体转化率", "1.2%", "低于稳定区间"),
+              detailMetric("中段掉点页", "1", "检查承接"),
+              detailMetric("末段掉点页", "1", "检查支付链路"),
+              detailMetric("支付失败订单", "8", "优先跟进"),
+            ],
+            decisionHints: [
+              "先判断问题卡在前段、中段还是末段，再决定去修页面还是查支付。",
+              "支付失败订单是最直接的对象线索，值得单独拿出来看。",
+              "这页的动作应该很明确，不需要再读长报告。",
+            ],
+          groups: [
+            {
+              title: "Top 高会话低转化页面",
+              chip: ["red", "优先修复"],
+              summary: "这组页面最容易造成整体 CVR 下滑，应优先修复。",
+              items: [
+                item("/products/summer-sandals", "页面", [
+                  mini("会话", "4,980"),
+                  mini("转化率", "0.5%"),
+                  mini("收入/会话", "$0.62"),
+                ], "高流量但几乎不转化，先修这个页面的收益最大。", [
+                  action("优化页面", "danger"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 加购高但到达结账低的页面",
+              chip: ["orange", "检查中段承接"],
+              summary: "说明用户有购买意愿，但从商品页进入结账之前已经掉下来了。",
+              items: [
+                item("/products/travel-bottle", "页面", [
+                  mini("加购率", "9.1%"),
+                  mini("到达结账率", "1.6%"),
+                  mini("完成支付率", "0.9%"),
+                ], "问题更像商品页到结账之间的承接或信任信息不足。", [
+                  action("检查商品页信息", "warning"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 到达结账高但完成支付低的页面",
+              chip: ["orange", "检查末段链路"],
+              summary: "这类页面说明用户愿意下单，但在支付环节流失较重。",
+              items: [
+                item("/checkout/shipping", "页面", [
+                  mini("到达结账率", "3.2%"),
+                  mini("完成支付率", "1.1%"),
+                  mini("流失差值", "-2.1pp"),
+                ], "明显是结账末段的问题，优先看支付、运费和信任信息。", [
+                  action("排查支付链路", "danger"),
+                ]),
+              ],
+            },
+            {
+              title: "Top 支付失败订单",
+              chip: ["red", "需要跟进"],
+              summary: "支付失败订单是最直接的对象级线索，适合立即进入排查与补救。",
+              items: [
+                item("#10491", "订单", [
+                  mini("订单金额", "$268"),
+                  mini("支付状态", "failed"),
+                  mini("失败原因", "3DS timeout"),
+                ], "这是可直接处理的对象，不需要再读一份抽象报告。", [
+                  action("跟进支付失败", "danger"),
+                  action("查看订单", "warning"),
+                ]),
+                item("#10488", "订单", [
+                  mini("订单金额", "$198"),
+                  mini("支付状态", "failed"),
+                  mini("失败原因", "card declined"),
+                ], "需要区分是支付方式问题还是用户侧问题，避免误判为页面问题。", [
+                  action("复核支付原因", "warning"),
+                ]),
+              ],
+            },
+          ],
+        },
+      };
+
+      const pageHead = document.getElementById("page-head");
+      const pageContent = document.getElementById("page-content");
+      const cReportModal = document.getElementById("c-report-modal");
+      const cReportTitle = document.getElementById("c-report-title");
+      const cReportSubtitle = document.getElementById("c-report-subtitle");
+      const cReportBody = document.getElementById("c-report-body");
+      const cReportClose = document.getElementById("c-report-close");
+      const openCReportAi = document.getElementById("open-c-report-ai");
+      const aiChatModal = document.getElementById("ai-chat-modal");
+      const aiChatEyebrow = document.getElementById("ai-chat-eyebrow");
+      const aiChatTitle = document.getElementById("ai-chat-title");
+      const aiChatSubtitle = document.getElementById("ai-chat-subtitle");
+      const aiChatBody = document.getElementById("ai-chat-body");
+      const aiChatClose = document.getElementById("ai-chat-close");
+
+      let activeKey = "overview";
+
+      function mini(label, value) {
+        return { label, value };
+      }
+
+      function action(label, tone) {
+        return { label, tone };
+      }
+
+      function item(title, kind, metrics, summary, actions) {
+        return { title, kind, metrics, summary, actions };
+      }
+
+      function breakdown(title, summary, rows, relatedGroupTitles = []) {
+        return { title, summary, rows, relatedGroupTitles };
+      }
+
+      function breakdownRow(label, value, meta) {
+        return { label, value, meta };
+      }
+
+      function withTopTen(items) {
+        const base = [...items];
+        if (base.length >= 10) return base.slice(0, 10);
+        const result = [...base];
+        let index = 0;
+        while (result.length < 10) {
+          const source = base[index % base.length];
+          const cloneIndex = result.length + 1;
+          result.push({
+            ...source,
+            title: `${source.title} ${cloneIndex}`,
+            summary: source.summary,
+            metrics: source.metrics.map((metric, metricIndex) => ({
+              label: metric.label,
+              value:
+                metricIndex === 0
+                  ? `${metric.value}`
+                  : metric.value,
+            })),
+            actions: [...source.actions],
+          });
+          index += 1;
+        }
+        return result;
+      }
+
+      function slugify(value) {
+        return value
+          .toLowerCase()
+          .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      }
+
+      function chipClass(status) {
+        if (status === "healthy") return "green";
+        if (status === "watch") return "orange";
+        if (status === "risk") return "red";
+        return "blue";
+      }
+
+      function statusLabel(status) {
+        if (status === "healthy") return "健康";
+        if (status === "watch") return "关注";
+        if (status === "risk") return "风险";
+        return "信息";
+      }
+
+      function renderOverview() {
+        const overviewConclusion =
+          "最近 30 天店铺仍然是赚钱的，但经营质量已经开始分化。收入、订单和客单价都还在支撑增长，可利润、利润率和短期经营回报没有同步改善，说明问题更像成本和对象结构，而不是需求突然消失。";
+        const overviewAnalysisPoints = [
+          "第一，收入和订单仍在增长，说明店铺前端需求没有明显塌掉，重点不是证明有没有生意，而是判断这份增长值不值得继续放大。",
+          "第二，利润率和短期经营回报在走弱，说明新增增长里已经混入了低质量收入，接下来需要继续拆出到底是商品、渠道还是页面的问题。",
+          "第三，这一页先给出方向判断，不直接替代最终动作；把结论讲清楚之后，再进入对应的收入、投入回报、流量或转化分析继续看。",
+        ];
+        return `
+          <div class="overview-layout"></div>
+
+            <div class="page-card">
+              <div class="group-head">
+                <div>
+                  <div class="card-label">经营总览 / 核心判断</div>
+                </div>
+                <button type="button" class="ai-link" data-ai-scope="overview">和 AI 聊聊</button>
+              </div>
+              <div class="report-section">
+                <div class="report-conclusion">
+                  <div class="chip blue">AI 判断</div>
+                  <strong>${overviewConclusion}</strong>
+                </div>
+                <div class="analysis-list">
+                  ${overviewAnalysisPoints.map(renderAnalysisItem).join("")}
+                </div>
+              </div>
+            </div>
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                  <div class="card-label">经营总览 / 经营状态</div>
+              </div>
+              <div class="chip green">过去 30 天</div>
+            </div>
+            <div class="status-panel">
+              <div class="summary-banner" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+                <div class="status-big">健康增长，但利润空间在收窄</div>
+                  <p>过去 30 天收入还在增长，订单规模也没有掉，但广告、折扣和退款一起把利润增长压住了。这里先给判断，不重复展开具体数值，详细数据放到下面的核心经营指标里。</p>
+              </div>
+              <div class="status-grid">
+                <div class="status-item">
+                    <span>当前判断</span>
+                    <strong>收入增长但利润承压</strong>
+                    <div class="compare-meta">现在不是没有生意，而是增长质量开始变差。</div>
+                </div>
+                <div class="status-item">
+                    <span>主要瓶颈</span>
+                    <strong>广告、折扣、退款一起挤压利润</strong>
+                    <div class="compare-meta">问题更像成本和损耗结构，而不是前端需求突然消失。</div>
+                </div>
+                <div class="status-item">
+                    <span>当前机会</span>
+                    <strong>先找出能留下利润的商品和渠道</strong>
+                    <div class="compare-meta">下一步优先看收入分析和投入回报分析。</div>
+                </div>
+              </div>
+              <div class="data-annotation">
+                <strong>数据说明：</strong>更新到今天 08:30，订单、退款和费用口径已同步到最近一轮快照；当前短期经营结果可信，但长期 ROI 和完整广告投入还在补数。
+              </div>
+            </div>
+          </div>
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                  <div class="card-label">经营总览 / 核心指标</div>
+              </div>
+            </div>
+            <div class="metrics-grid">
+                ${metricCard("收入", "$125,000", "较基准 +12%", "已实现，规模仍在增长", "revenue", "查看收入分析")}
+                ${metricCard("成本", "$92,400", "较基准 +19%", "估算，成本增速快于收入", "cost", "查看成本分析")}
+                ${metricCard("利润", "$32,600", "较基准 -6%", "估算，利润已开始承压", "profit", "查看利润分析")}
+                ${metricCard("利润率", "26.1%", "较基准 -4.8pp", "估算，盈利空间在收窄", "margin", "查看利润率分析")}
+                ${metricCard("订单数", "1,284", "较基准 +8%", "已实现，订单还在增长", "orders", "查看订单分析")}
+                ${metricCard("客单价", "$97", "较基准 +3%", "已实现，客单价小幅抬升", "aov", "查看客单价分析")}
+            </div>
+          </div>
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                  <div class="card-label">经营总览 / 关键原因</div>
+              </div>
+                ${jumpLink("查看收入分析", "revenue")}
+            </div>
+            <div class="reason-grid">
+              ${reasonCard(
+                "广告花费增加，但利润没有同步增长",
+                "$21,800",
+                "广告与获客相关支出",
+                "相比上一周期 +22%",
+                "规模还在涨，但投进去的钱涨得更快。现在更像是投放效率问题，不是需求问题。",
+                "先去投入回报分析看渠道对象",
+                "orange",
+              )}
+              ${reasonCard(
+                "折扣和退款正在吞掉利润",
+                "$11,200",
+                "折扣 + 退款损耗",
+                "占收入 9.0%",
+                "有一部分增长是靠折扣硬拉出来的，成交后的退款又继续把利润吃掉了。",
+                "先去收入分析看亏钱商品和高退款订单",
+                "red",
+              )}
+              ${reasonCard(
+                "新增流量没有带来足够订单",
+                "0.9%",
+                "高流量来源转化率",
+                "Meta 来源",
+                "流量并不算少，但高流量来源的转化很弱，说明问题落在来源质量或页面承接。",
+                "再去流量 / 转化分析看页面对象",
+                "blue",
+              )}
+            </div>
+          </div>
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                  <div class="card-label">经营总览 / 投入回报</div>
+              </div>
+                ${jumpLink("查看投入回报分析", "roi")}
+            </div>
+            <div class="roi-grid">
+                ${roiCard("短期经营回报", "1.3x", "稳定", "最近 7 天仍在赚钱，但已经低于前 30 天基准。", "orange", "roi", "查看投入回报分析")}
+                ${roiCard("回收期 ROI", "待接入", "不可读", "当前缺少 CAC 与 cohort 回收口径，先不伪造数字。", "blue", "roi", "查看投入回报分析")}
+                ${roiCard("长期 ROI", "待接入", "不可读", "客户价值层已具备基础，但缺少稳定 CAC 前不直接展示倍数。", "blue", "roi", "查看投入回报分析")}
+            </div>
+          </div>
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                  <div class="card-label">经营总览 / 下一步建议</div>
+              </div>
+            </div>
+            <div class="hint-strip">
+                <div class="light-entry"><strong>收入分析</strong>去看赚钱商品、亏钱商品和高退款订单。</div>
+                <div class="light-entry"><strong>投入回报分析</strong>去看高利润渠道、低利润渠道和低置信度渠道。</div>
+                <div class="light-entry"><strong>流量 / 转化分析</strong>去看高流量低承接页面和支付失败订单。</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderDetail(page) {
+        return `
+          <div class="detail-top">
+            <div class="summary-banner">
+              <div class="chip ${chipClass(page.status)}">当前判断：${statusLabel(page.status)}</div>
+              <h3>${page.question}</h3>
+              <p>${page.summary}</p>
+            </div>
+          </div>
+
+            <div class="page-card">
+              <div class="group-head">
+                <div>
+                  <div class="card-label">当前分析 / 核心判断</div>
+                </div>
+                <button type="button" class="ai-link" data-ai-scope="page">和 AI 聊聊</button>
+              </div>
+              <div class="report-section">
+                <div class="report-conclusion">
+                  <div class="chip blue">AI 判断</div>
+                  <strong>${page.conclusion}</strong>
+                </div>
+                <div class="analysis-list">
+                  ${page.analysisPoints.map(renderAnalysisItem).join("")}
+                </div>
+              </div>
+            </div>
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                  <div class="card-label">当前分析 / 关键指标</div>
+              </div>
+            </div>
+            <div class="detail-metrics">
+              ${page.headlineMetrics.map(renderDetailMetric).join("")}
+            </div>
+          </div>
+
+            ${
+              page.breakdowns?.length
+                ? `
+            <div class="page-card">
+              <div class="group-head">
+                <div>
+                    <div class="card-label">当前分析 / 拆解与对象</div>
+                </div>
+              </div>
+              <div class="report-section">
+                ${page.breakdowns.map((block) => renderBreakdownSection(block, page.groups)).join("")}
+              </div>
+            </div>`
+                : ""
+            }
+
+          <div class="page-card">
+            <div class="group-head">
+              <div>
+                    <div class="card-label">当前分析 / 建议动作</div>
+              </div>
+            </div>
+            <div class="hint-strip">
+              ${page.decisionHints.map((hint) => `<div class="hint-item">${hint}</div>`).join("")}
+            </div>
+          </div>
+
+        `;
+      }
+
+      function renderEvidenceCard(group, groupIndex) {
+        const items = withTopTen(group.items).slice(0, 3);
+        return `
+          <section class="evidence-card">
+            <div class="evidence-head">
+              <div class="evidence-title">
+                <strong>${group.title}</strong>
+              </div>
+              <p>${group.summary}</p>
+              <div>
+                <button type="button" class="more-link" data-c-report-index="${groupIndex}">查看对象详情</button>
+              </div>
+            </div>
+            <div class="evidence-list">
+              ${items
+                .map((item) => {
+                  const leadMetric = item.metrics[0];
+                  const primaryAction = item.actions[0]?.label ?? "继续观察";
+                  return `
+                    <div class="evidence-row">
+                      <strong>${item.title}</strong>
+                      <div class="evidence-meta">${leadMetric ? `${leadMetric.label} ${leadMetric.value}` : item.summary}</div>
+                      <div class="evidence-action">${primaryAction}</div>
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderDataShowcase(group, index) {
+        const items = withTopTen(group.items);
+        return `
+          <section class="showcase-card">
+            <div class="group-head">
+              <div>
+                <div class="card-label">对象详情 / 完整数据</div>
+                <h3>${group.title}</h3>
+                <div class="group-meta">${group.summary}</div>
+              </div>
+            </div>
+              <div class="showcase-intro">
+                <div class="showcase-header">
+                  <div>#</div>
+                  <div>对象</div>
+                  <div>关键数据</div>
+                  <div>分析结论</div>
+                  <div>建议动作</div>
+                </div>
+              </div>
+            <div class="showcase-list">
+              ${items.map(renderShowcaseRow).join("")}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderItem(item) {
+        return `
+          <article class="object-card">
+            <div class="object-top">
+              <div>
+                <div class="card-label">${item.kind}</div>
+                <div class="object-title">${item.title}</div>
+              </div>
+            </div>
+            <div class="object-metrics">
+              ${item.metrics
+                .map(
+                  (metric) => `
+                    <div class="mini">
+                      <span>${metric.label}</span>
+                      <strong>${metric.value}</strong>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+            <p>${item.summary}</p>
+            <div class="action-row">
+              ${item.actions
+                .map((current) => `<span class="action ${current.tone}">${current.label}</span>`)
+                .join("")}
+            </div>
+          </article>
+        `;
+      }
+
+      function renderShowcaseRow(item, index) {
+        return `
+          <div class="showcase-row">
+            <div><span class="showcase-rank">${index + 1}</span></div>
+            <div class="showcase-name">
+              <strong>${item.title}</strong>
+              <span>${item.kind}</span>
+            </div>
+            <div class="showcase-metrics">
+              ${item.metrics
+                .map((metric) => `<span class="showcase-pill">${metric.label} ${metric.value}</span>`)
+                .join("")}
+            </div>
+            <div class="showcase-conclusion-text">${buildItemConclusion(item)}</div>
+            <div class="showcase-suggestion">${item.actions.map((current) => current.label).join(" / ")}</div>
+          </div>
+        `;
+      }
+
+      function renderAnalysisItem(content, index) {
+        return `<div class="analysis-item"><strong>分析 ${index + 1}</strong> ${content}</div>`;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function formatDeltaText(value) {
+        return escapeHtml(value).replace(
+          /([+-])(\d+(?:\.\d+)?)(%|pp)/g,
+          (_, sign, number, unit) =>
+            `<span class="metric-delta ${sign === "+" ? "positive" : "negative"}">${sign}${Number(number).toFixed(2)}${unit}</span>`,
+        );
+      }
+
+      function buildItemConclusion(item) {
+        const primaryAction = item.actions[0]?.label ?? "继续观察";
+        return `${item.summary} 当前更适合的处理方式是“${primaryAction}”，这也是这条对象现在更值得优先执行的动作。`;
+      }
+
+      function buildOverviewAiPayload() {
+        return {
+          eyebrow: "AI 对话 / 经营总览",
+          title: "经营总览上下文",
+          subtitle: "把总览页面里的判断、原因和下一步方向带进 AI 对话。",
+          tags: ["经营总览", "总结论", "下一步判断"],
+          contextItems: [
+            {
+              label: "当前判断",
+              text: "最近 30 天店铺仍然是赚钱的，但经营质量已经开始分化。",
+            },
+            {
+              label: "主要问题",
+              text: "利润、利润率和短期经营回报没有同步改善，问题更像成本和对象结构。",
+            },
+            {
+              label: "建议继续看",
+              text: "优先进入收入分析和投入回报分析，确认是商品、渠道还是页面在拖累利润。",
+            },
+          ],
+          prompt:
+            "请基于这份经营总览继续帮我拆解：现在最值得优先进入哪个分析页面？请给出判断理由、要重点看的对象类型，以及我下一步最该问的问题。",
+          assistant:
+            "我已经收到这份经营总览的上下文。接下来可以直接继续帮你判断先看收入、投入回报、流量还是转化，并把需要追问的对象范围一起列出来。",
+        };
+      }
+
+      function buildPageAiPayload(page) {
+        return {
+          eyebrow: "AI 对话 / 当前分析页",
+          title: `${page.title} 上下文`,
+          subtitle: "把当前分析页的结论、关键指标和对象方向带进 AI 对话。",
+          tags: ["当前分析页", page.navTitle, "指标分析"],
+          contextItems: [
+            { label: "当前问题", text: page.question },
+            { label: "页面总结", text: page.summary },
+            { label: "AI 结论", text: page.conclusion },
+            {
+              label: "关键指标",
+              text: page.headlineMetrics.map((metric) => `${metric.label} ${metric.value}`).join(" / "),
+            },
+          ],
+          prompt:
+            `请基于这份 ${page.navTitle} 分析继续判断：最值得先处理的对象组是哪一组？为什么？请按优先级列出 3 个对象或对象组，并说明建议动作。`,
+          assistant:
+            "我已经收到这页分析的上下文。接下来我可以继续帮你从对象组里排优先级，或者把这页结论转成更直接的经营动作。",
+        };
+      }
+
+      function buildGroupAiPayload(page, group) {
+        const items = withTopTen(group.items).slice(0, 3);
+        return {
+          eyebrow: "AI 对话 / 对象详情",
+          title: `${group.title} 对象上下文`,
+          subtitle: `来自 ${page.title}，聚焦当前对象组的完整数据和动作建议。`,
+          tags: ["对象详情", group.title, page.navTitle],
+          contextItems: [
+            { label: "对象组判断", text: group.summary },
+            {
+              label: "核心对象",
+              text: items.map((item) => item.title).join(" / "),
+            },
+            {
+              label: "推荐动作",
+              text: items.map((item) => `${item.title}: ${item.actions[0]?.label ?? "继续观察"}`).join(" / "),
+            },
+          ],
+          prompt:
+            `请基于这组 ${group.title} 的对象详情继续帮我判断：哪些对象应该继续放量，哪些对象应该止损或排查？请输出按对象分组的判断和建议动作。`,
+          assistant:
+            "我已经收到这组对象详情的上下文。接下来可以继续帮你逐个对象判断该放量、止损、排查还是继续观察。",
+        };
+      }
+
+      function renderAiChatBody(payload) {
+        return `
+          <section class="ai-context-card">
+            <div class="ai-tag-row">
+              ${payload.tags.map((tag) => `<span class="ai-tag">${escapeHtml(tag)}</span>`).join("")}
+            </div>
+            <div class="ai-context-grid">
+              ${payload.contextItems
+                .map(
+                  (item) => `
+                    <div class="ai-context-item">
+                      <strong>${escapeHtml(item.label)}</strong>
+                      <p>${escapeHtml(item.text)}</p>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+          </section>
+          <section class="ai-thread">
+            <div class="ai-message">
+              <span>预填消息</span>
+              <div class="ai-bubble user">${escapeHtml(payload.prompt)}</div>
+            </div>
+            <div class="ai-message">
+              <span>AI 已收到的上下文</span>
+              <div class="ai-bubble assistant">${escapeHtml(payload.assistant)}</div>
+            </div>
+          </section>
+        `;
+      }
+
+      function metricCard(label, value, meta, summary, target, jumpLabel) {
+        return `
+          <div class="metric-card">
+            <div class="metric-card-head">
+              <div class="metric-label">${label}</div>
+              <button type="button" class="metric-jump" data-target-page="${target}">${jumpLabel}</button>
+            </div>
+            <div class="metric-value">${value}</div>
+            <div class="metric-meta">${formatDeltaText(meta)}</div>
+            <div class="metric-meta">${formatDeltaText(summary)}</div>
+          </div>
+        `;
+      }
+
+      function roiCard(label, value, status, summary, tone, target, jumpLabel) {
+        return `
+          <div class="roi-card">
+            <div class="roi-card-head">
+              <div class="roi-label">${label}</div>
+              <button type="button" class="metric-jump" data-target-page="${target}">${jumpLabel}</button>
+            </div>
+            <div class="roi-value">${value}</div>
+            <div class="chip ${tone}" style="margin-top: 10px">${status}</div>
+            <div class="roi-meta">${formatDeltaText(summary)}</div>
+          </div>
+        `;
+      }
+
+      function nextCard(title, summary) {
+        return `
+          <div class="next-card">
+            <strong>${title}</strong>
+            <div class="muted">${summary}</div>
+          </div>
+        `;
+      }
+
+      function jumpLink(label, target) {
+        return `<button type="button" class="jump-link" data-target-page="${target}">${label}</button>`;
+      }
+
+      function detailMetric(label, value, meta) {
+        return { label, value, meta };
+      }
+
+      function renderDetailMetric(metric) {
+        return `
+          <div class="detail-metric-card">
+            <span>${metric.label}</span>
+            <strong>${formatDeltaText(metric.value)}</strong>
+            <div class="compare-meta">${formatDeltaText(metric.meta)}</div>
+          </div>
+        `;
+      }
+
+      function renderBreakdownCard(block) {
+        return `
+          <section class="breakdown-card">
+            <div>
+              <h4>${block.title}</h4>
+              <p>${block.summary}</p>
+            </div>
+            <div class="breakdown-list">
+              ${block.rows.map(renderBreakdownRow).join("")}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderBreakdownSection(block, groups) {
+        const relatedGroups = (block.relatedGroupTitles || [])
+          .map((title) => {
+            const groupIndex = groups.findIndex((group) => group.title === title);
+            return groupIndex >= 0 ? { group: groups[groupIndex], groupIndex } : null;
+          })
+          .filter(Boolean);
+
+        return `
+          <section class="breakdown-section">
+            ${renderBreakdownCard(block)}
+            ${
+              relatedGroups.length
+                ? `<div class="breakdown-related">
+              ${relatedGroups.map(({ group, groupIndex }) => renderEvidenceCard(group, groupIndex)).join("")}
+            </div>`
+                : ""
+            }
+          </section>
+        `;
+      }
+
+      function renderBreakdownRow(row) {
+        return `
+          <div class="breakdown-row">
+            <div>
+              <strong>${row.label}</strong>
+              <span>${formatDeltaText(row.meta)}</span>
+            </div>
+            <div class="breakdown-value">${formatDeltaText(row.value)}</div>
+          </div>
+        `;
+      }
+
+      function reasonCard(title, value, label, meta, summary, nextStep, tone) {
+        return `
+          <div class="reason-card">
+            <div class="chip ${tone}">${label}</div>
+            <strong>${title}</strong>
+            <div class="reason-metric">${formatDeltaText(value)}</div>
+            <div class="reason-meta">${formatDeltaText(meta)}</div>
+            <p>${formatDeltaText(summary)}</p>
+            <div class="action-row">
+              <span class="action ${tone === "red" ? "danger" : tone === "orange" ? "warning" : "primary"}">${nextStep}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      function render() {
+        const page = pages[activeKey];
+        const pageRenderer = page.render ?? renderDetail;
+        pageHead.innerHTML = `
+          <div class="eyebrow">${page.eyebrow}</div>
+          <h2>${page.title}</h2>
+          <p>${page.subtitle}</p>
+        `;
+        pageContent.innerHTML = pageRenderer(page);
+        bindJumpLinks();
+      }
+
+      function bindJumpLinks() {
+        document.querySelectorAll("[data-target-page]").forEach((button) => {
+          button.addEventListener("click", () => {
+            activeKey = button.dataset.targetPage;
+            render();
+          });
+        });
+
+        document.querySelectorAll("[data-c-report-index]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const index = Number(button.dataset.cReportIndex);
+            openCReportModal(index);
+          });
+        });
+
+        document.querySelectorAll("[data-ai-scope]").forEach((button) => {
+          button.addEventListener("click", () => {
+            openAiChatModal(button.dataset.aiScope);
+          });
+        });
+      }
+
+      function openCReportModal(groupIndex) {
+        const page = pages[activeKey];
+        const group = page.groups?.[groupIndex];
+        if (!group) return;
+
+        cReportTitle.textContent = group.title;
+        cReportSubtitle.textContent = `${page.title} / ${group.summary}`;
+        cReportBody.innerHTML = renderDataShowcase(group, groupIndex);
+        openCReportAi.dataset.groupIndex = String(groupIndex);
+        cReportModal.classList.add("is-open");
+        cReportModal.setAttribute("aria-hidden", "false");
+        syncBodyScrollLock();
+      }
+
+      function closeCReportModal() {
+        cReportModal.classList.remove("is-open");
+        cReportModal.setAttribute("aria-hidden", "true");
+        cReportBody.innerHTML = "";
+        openCReportAi.dataset.groupIndex = "";
+        syncBodyScrollLock();
+      }
+
+      function openAiChatModal(scope) {
+        const page = pages[activeKey];
+        let payload = null;
+
+        if (scope === "overview") {
+          payload = buildOverviewAiPayload();
+        } else if (scope === "page") {
+          payload = buildPageAiPayload(page);
+        } else if (scope === "group") {
+          const groupIndex = Number(openCReportAi.dataset.groupIndex);
+          const group = page.groups?.[groupIndex];
+          if (!group) return;
+          payload = buildGroupAiPayload(page, group);
+        }
+
+        if (!payload) return;
+
+        aiChatEyebrow.textContent = payload.eyebrow;
+        aiChatTitle.textContent = payload.title;
+        aiChatSubtitle.textContent = payload.subtitle;
+        aiChatBody.innerHTML = renderAiChatBody(payload);
+        aiChatModal.classList.add("is-open");
+        aiChatModal.setAttribute("aria-hidden", "false");
+        syncBodyScrollLock();
+      }
+
+      function closeAiChatModal() {
+        aiChatModal.classList.remove("is-open");
+        aiChatModal.setAttribute("aria-hidden", "true");
+        aiChatBody.innerHTML = "";
+        syncBodyScrollLock();
+      }
+
+      function syncBodyScrollLock() {
+        const hasOpenModal =
+          cReportModal.classList.contains("is-open") || aiChatModal.classList.contains("is-open");
+        document.body.style.overflow = hasOpenModal ? "hidden" : "";
+      }
+
+      cReportClose.addEventListener("click", closeCReportModal);
+      openCReportAi.addEventListener("click", () => openAiChatModal("group"));
+      cReportModal.addEventListener("click", (event) => {
+        if (event.target === cReportModal) {
+          closeCReportModal();
+        }
+      });
+      aiChatClose.addEventListener("click", closeAiChatModal);
+      aiChatModal.addEventListener("click", (event) => {
+        if (event.target === aiChatModal) {
+          closeAiChatModal();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && cReportModal.classList.contains("is-open")) {
+          closeCReportModal();
+        }
+        if (event.key === "Escape" && aiChatModal.classList.contains("is-open")) {
+          closeAiChatModal();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
