@@ -1569,6 +1569,238 @@ function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
   };
 }
 
+function buildFallbackOverviewReport(): TodayOverviewReport {
+  const modules = getTodayOverviewModules();
+  const roiMonitor = getTodayRoiMonitor();
+  const ordersModule = modules.find((module) => module.key === "orders") ?? modules[0];
+  const trafficModule = modules.find((module) => module.key === "traffic") ?? modules[1] ?? modules[0];
+  const conversionModule = modules.find((module) => module.key === "conversion") ?? modules[2] ?? modules[0];
+  const shortTermMetric = roiMonitor.metrics.find((metric) => metric.key === "short_term") ?? roiMonitor.metrics[0];
+  const longTermMetric = roiMonitor.metrics.find((metric) => metric.key === "long_term") ?? roiMonitor.metrics[1] ?? roiMonitor.metrics[0];
+
+  return {
+    header: {
+      status: "watch",
+      statusLabel: "需要关注",
+      summary: "Today 总览数据暂时加载失败，当前先展示最近一版默认经营判断，避免首页出现空白。",
+      primaryBottleneck: "短期赚钱效率和承接质量正在走弱，需要继续看订单质量与 ROI。",
+      biggestOpportunity: "先从收入、利润和 ROI 三条主线收敛问题，再决定具体对象优先级。",
+      dataFreshness: "默认分析文案",
+      dataConfidence: "low",
+      metrics: {
+        revenue: ordersModule?.averageValue ?? "—",
+        estimatedProfit: "待恢复",
+        estimatedProfitMargin: "待恢复",
+        shortTermReturn: shortTermMetric?.currentValue ?? "—",
+      },
+    },
+    metricCards: [
+      {
+        key: "revenue",
+        label: "收入",
+        value: ordersModule?.averageValue ?? "—",
+        delta: ordersModule?.deltaValue ?? "—",
+        tone: "warning",
+        source: "estimated",
+        summary: "先看订单和收入是不是健康增长，再继续拆到商品与订单对象。",
+        href: "/app/today/revenue",
+      },
+      {
+        key: "cost",
+        label: "成本",
+        value: "待恢复",
+        delta: "—",
+        tone: "warning",
+        source: "estimated",
+        summary: "成本页优先回答利润被什么吞掉，而不是继续堆规模。",
+        href: "/app/today/profit?focus=cost",
+      },
+      {
+        key: "profit",
+        label: "利润",
+        value: "待恢复",
+        delta: "—",
+        tone: "warning",
+        source: "estimated",
+        summary: "利润页会继续看哪些商品和订单真的留下了结果。",
+        href: "/app/today/profit?focus=profit",
+      },
+      {
+        key: "profit_margin",
+        label: "利润率",
+        value: "待恢复",
+        delta: "—",
+        tone: "warning",
+        source: "estimated",
+        summary: "利润率用于识别是不是有低质量增长在掩盖真实经营问题。",
+        href: "/app/today/profit?focus=margin",
+      },
+      {
+        key: "orders",
+        label: "订单数",
+        value: ordersModule?.yesterdayValue ?? "—",
+        delta: ordersModule?.deltaValue ?? "—",
+        tone: "neutral",
+        source: "realized",
+        summary: "订单数只回答规模，下一步必须继续看订单质量。",
+        href: "/app/today/revenue?focus=orders",
+      },
+      {
+        key: "aov",
+        label: "客单价",
+        value: getTodayMetricDetail("orders").metrics.find((metric) => metric.label === "平均客单价")?.value ?? "—",
+        delta: "—",
+        tone: "neutral",
+        source: "realized",
+        summary: "高客单不等于高质量，还要继续看高价值订单能不能留下利润。",
+        href: "/app/today/revenue?focus=aov",
+      },
+    ],
+    reasonCards: [
+      {
+        key: "traffic-quality",
+        title: "流量质量仍需继续确认",
+        value: trafficModule?.deltaValue ?? "—",
+        label: "流量承接",
+        meta: trafficModule?.summary ?? "默认分析文案",
+        summary: "当前先沿用最近一版默认判断，后续恢复真实快照后再替换成正式对象证据。",
+        tone: "blue",
+        href: "/app/today/traffic",
+      },
+      {
+        key: "conversion-risk",
+        title: "转化承接仍在影响赚钱效率",
+        value: conversionModule?.deltaValue ?? "—",
+        label: "转化承接",
+        meta: conversionModule?.summary ?? "默认分析文案",
+        summary: "现阶段先保留方向判断，避免首页直接空白。",
+        tone: "orange",
+        href: "/app/today/conversion",
+      },
+      {
+        key: "roi-pressure",
+        title: "短期 ROI 仍需重点关注",
+        value: shortTermMetric?.deltaValue ?? "—",
+        label: "短期回报",
+        meta: shortTermMetric?.summary ?? "默认分析文案",
+        summary: "恢复正式数据后，应该继续拆到渠道和损耗对象。",
+        tone: "red",
+        href: "/app/today/roi",
+      },
+    ],
+    roiSummary: {
+      cards: [
+        {
+          key: "short_term",
+          label: shortTermMetric?.title ?? "短期经营回报",
+          statusLabel: "默认判断",
+          value: shortTermMetric?.currentValue ?? "—",
+          summary: shortTermMetric?.summary ?? "默认分析文案",
+          dataQuality: "pending",
+          confidence: "low",
+          href: "/app/today/roi",
+        },
+        {
+          key: "payback",
+          label: "回收期 ROI",
+          statusLabel: "待接入",
+          value: "待接入",
+          summary: "当前先保留回收期占位，不让首页断层。",
+          dataQuality: "pending",
+          confidence: "low",
+          href: "/app/today/roi",
+        },
+        {
+          key: "lifetime",
+          label: longTermMetric?.title ?? "长期价值状态",
+          statusLabel: "默认判断",
+          value: longTermMetric?.currentValue ?? "—",
+          summary: longTermMetric?.summary ?? "默认分析文案",
+          dataQuality: "pending",
+          confidence: "low",
+          href: "/app/today/roi",
+        },
+      ],
+    },
+  };
+}
+
+function buildFallbackDecisionReport(metric: TodayDecisionReportKey): TodayDecisionReport {
+  const fallbackDetail =
+    metric === "roi"
+      ? getTodayMetricDetail("roi")
+      : getTodayMetricDetail("orders");
+
+  const fallbackGroups: TodayEvidenceGroup[] = fallbackDetail.tables.map((table, index) => ({
+    key: `${metric}-fallback-group-${index + 1}`,
+    title: table.title,
+    tone: index === 0 ? "neutral" : "warning",
+    summary: `当前先展示默认分析表格，正式对象证据会在主数据链路恢复后替换。`,
+    items: table.rows.slice(0, 3).map((row, rowIndex) => ({
+      id: `${metric}-fallback-item-${index + 1}-${rowIndex + 1}`,
+      title: row[0] ?? `对象 ${rowIndex + 1}`,
+      objectType: metric === "roi" ? "channel" : "order",
+      metrics: table.columns.slice(1, 4).map((column, columnIndex) => ({
+        label: column,
+        value: row[columnIndex + 1] ?? "—",
+      })),
+      summary: "当前先保留默认分析对象，避免报告页出现空白。",
+      primaryActionLabel: "查看详情",
+      report: {
+        title: row[0] ?? `对象 ${rowIndex + 1}`,
+        subtitle: `${fallbackDetail.title} / 默认分析对象`,
+        headlineMetrics: table.columns.slice(1, 4).map((column, columnIndex) => ({
+          label: column,
+          value: row[columnIndex + 1] ?? "—",
+        })),
+        conclusion: "当前先保留默认分析对象，等正式对象链路恢复后再替换成真实对象证据。",
+        analysisPoints: [
+          fallbackDetail.intro,
+          fallbackDetail.conclusions[rowIndex % fallbackDetail.conclusions.length] ?? "默认分析文案",
+        ],
+        actions: fallbackDetail.actions,
+      },
+    })),
+  }));
+
+  const metricTitle =
+    metric === "revenue" ? "收入分析" : metric === "profit" ? "利润分析" : "ROI 分析";
+
+  return {
+    key: metric,
+    title: metricTitle,
+    subtitle: "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
+    accent: "默认分析文案",
+    primaryQuestion:
+      metric === "roi"
+        ? "当前哪些经营动作值得继续投，哪些动作应该先止损？"
+        : "当前哪些对象在支撑结果，哪些对象正在拖累经营判断？",
+    summary:
+      metric === "roi"
+        ? "ROI 主链路恢复前，先沿用默认经营判断，至少保证决策页仍然可读。"
+        : "对象化主链路恢复前，先沿用最近一版默认分析，避免页面只剩空壳。",
+    statuses: fallbackDetail.statuses as TodayReportStatus[],
+    summaryMetrics: fallbackDetail.metrics.slice(0, 4).map((metricItem) => ({
+      label: metricItem.label,
+      value: metricItem.value,
+      unit: metricItem.unit,
+    })),
+    breakdowns: fallbackDetail.tables.map((table, index) => ({
+      key: `${metric}-fallback-breakdown-${index + 1}`,
+      title: table.title,
+      summary: `当前先保留默认分析结构，正式对象证据恢复后会替换为“拆解 + 对象证据”双栏。`,
+      rows: table.rows.slice(0, 3).map((row) => ({
+        label: row[0] ?? "对象",
+        value: row[1] ?? "—",
+        meta: row.slice(2).join(" / ") || "默认分析文案",
+      })),
+      relatedGroupKeys: [`${metric}-fallback-group-${index + 1}`],
+    })),
+    groups: fallbackGroups,
+    actions: fallbackDetail.actions,
+  };
+}
+
 async function loadDecisionObjectData(
   shop: string,
   selectedCountry: string,
@@ -2961,12 +3193,13 @@ export async function loadTodayOverviewReportData(params: {
 }): Promise<TodayOverviewReportData> {
   const now = params.now ?? new Date();
   try {
-    const [orderCounts, sessionCounts] = await Promise.all([
-      loadOrderCountryCounts(params.shop, now),
-      params.hasReadReports
-        ? loadSessionCountryCounts(params.admin)
-        : Promise.resolve(new Map<string, number>()),
-    ]);
+    const sessionCounts = params.hasReadReports
+      ? await loadSessionCountryCounts(params.admin).catch((error) => {
+          console.warn("[todayGeo] loadSessionCountryCounts failed in overview:", error);
+          return new Map<string, number>();
+        })
+      : new Map<string, number>();
+    const orderCounts = await loadOrderCountryCounts(params.shop, now);
     const filters = buildCountryOptions(
       normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
       orderCounts,
@@ -2975,16 +3208,17 @@ export async function loadTodayOverviewReportData(params: {
     if (!params.hasReadReports) {
       filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化暂时无法按地区读取 Storefront sessions。");
     }
-    const [orderScope, sessionScope] = await Promise.all([
-      loadOrderScopeData(params.shop, filters.selectedCountry, now),
-      params.hasReadReports
-        ? loadSessionScope(
-            params.admin,
-            filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
-            false,
-          )
-        : Promise.resolve(null),
-    ]);
+    const orderScope = await loadOrderScopeData(params.shop, filters.selectedCountry, now);
+    const sessionScope = params.hasReadReports
+      ? await loadSessionScope(
+          params.admin,
+          filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
+          false,
+        ).catch((error) => {
+          console.warn("[todayGeo] loadSessionScope failed in overview:", error);
+          return null;
+        })
+      : null;
     if (params.hasReadReports && sessionScope === null) {
       filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，流量与转化先显示为空值。");
     }
@@ -3001,28 +3235,9 @@ export async function loadTodayOverviewReportData(params: {
     console.error("[todayGeo] loadTodayOverviewReportData failed:", error);
     return {
       filters: buildFallbackFilters(params.requestedCountry, [
-        "Today 总览数据暂时加载失败，当前先展示基础驾驶舱结构。",
+        "Today 总览数据暂时加载失败，当前先展示最近一版默认分析文案，避免首页空白。",
       ]),
-      report: {
-        header: {
-          status: "watch",
-          statusLabel: "需要关注",
-          summary: "Today 总览数据暂时加载失败，当前先保留驾驶舱骨架。",
-          primaryBottleneck: "等待订单与退款快照恢复。",
-          biggestOpportunity: "恢复后优先看收入、利润和 ROI 三条主线。",
-          dataFreshness: "待恢复",
-          dataConfidence: "low",
-          metrics: {
-            revenue: "—",
-            estimatedProfit: "—",
-            estimatedProfitMargin: "—",
-            shortTermReturn: "—",
-          },
-        },
-        metricCards: [],
-        reasonCards: [],
-        roiSummary: { cards: [] },
-      },
+      report: buildFallbackOverviewReport(),
     };
   }
 }
@@ -3038,12 +3253,13 @@ export async function loadTodayDecisionReportData(params: {
 }): Promise<TodayDecisionReportData> {
   const now = params.now ?? new Date();
   try {
-    const [orderCounts, sessionCounts] = await Promise.all([
-      loadOrderCountryCounts(params.shop, now),
-      params.hasReadReports
-        ? loadSessionCountryCounts(params.admin)
-        : Promise.resolve(new Map<string, number>()),
-    ]);
+    const sessionCounts = params.hasReadReports
+      ? await loadSessionCountryCounts(params.admin).catch((error) => {
+          console.warn(`[todayGeo] loadSessionCountryCounts failed for metric=${params.metric}:`, error);
+          return new Map<string, number>();
+        })
+      : new Map<string, number>();
+    const orderCounts = await loadOrderCountryCounts(params.shop, now);
     const filters = buildCountryOptions(
       normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
       orderCounts,
@@ -3074,33 +3290,9 @@ export async function loadTodayDecisionReportData(params: {
     console.error(`[todayGeo] loadTodayDecisionReportData failed metric=${params.metric}:`, error);
     return {
       filters: buildFallbackFilters(params.requestedCountry, [
-        "Today 报告数据暂时加载失败，当前先展示空白报告骨架。",
+        "Today 报告数据暂时加载失败，当前先展示最近一版默认分析内容，避免报告页空白。",
       ]),
-      report: {
-        key: params.metric,
-        title: params.metric === "revenue" ? "收入分析" : params.metric === "profit" ? "利润分析" : "ROI 分析",
-        subtitle: "当前报告数据暂时不可用。",
-        accent: "待恢复",
-        primaryQuestion: "等待报告数据恢复后再继续分析对象。",
-        summary: "当前先保留正式报告结构，等数据恢复后继续补齐对象与拆解。",
-        statuses: [
-          {
-            label: "数据状态",
-            status: "watch",
-            detail: "Today 报告数据暂时不可用。",
-          },
-        ],
-        summaryMetrics: [toSummaryMetric("当前状态", "待恢复")],
-        breakdowns: [],
-        groups: [],
-        actions: [
-          {
-            title: "等待数据恢复",
-            detail: "恢复后优先继续看对象级经营结果。",
-            priority: "P0",
-          },
-        ],
-      },
+      report: buildFallbackDecisionReport(params.metric),
     };
   }
 }

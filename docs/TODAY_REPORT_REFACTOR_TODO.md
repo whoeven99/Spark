@@ -1856,6 +1856,7 @@ buildProfitDetailPageData()
 - 第一阶段已实现 `orders / aov / cost / margin` 的语义化变体，不再只是同一页面换标题
 - 第一阶段已在 `revenue / profit` 页补上显式焦点切换条，支持页内横向切换
 - 第一阶段已在 `roi` 页补上 `总览 / 渠道 / 损耗 / 价值层` 焦点切换
+- 第一阶段已补主链路容错：`shopCostConfig` 缺失回退默认配置，`Storefront sessions` 查询失败不再拖垮首页与报告页
 
 ### 11.2 第一阶段路由规划
 
