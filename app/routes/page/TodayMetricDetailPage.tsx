@@ -1,21 +1,18 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { buildTodayAiDrilldownContext } from "../../lib/todayMetricAiDetail";
 import { useFeatureView } from "../../lib/featureTrack";
-import type { TodayMetricAction, TodayMetricDetail, TodayMetricStatus } from "../../lib/todayMetricModules";
+import type { TodayMetricDetail, TodayMetricStatus } from "../../lib/todayMetricModules";
 import { buildWorkspaceChatPrefillPath } from "../../lib/workspaceChatPrefill";
-import { DialogShell } from "../component/shared/DialogShell";
 import {
   mobilePageContentStyle,
   pageAccentBadgeStyle,
   pageColorTokens,
   pageContentStyle,
-  pageHintTextStyle,
   pageIntroBannerStyle,
   pageMetaTextStyle,
   pageMetricLabelStyle,
-  pageMetricValueStyle,
   PageHeaderNav,
   PageMetricCard,
   PageSurface,
@@ -136,29 +133,16 @@ export function TodayMetricDetailPage({
   useFeatureView("today");
   const aiContext = buildTodayAiDrilldownContext(data);
   const [trendTable, objectTable, ...extraTables] = data.tables;
-  const [selectedAction, setSelectedAction] = useState<TodayMetricAction | null>(null);
-  const aiDialogPrompt = useMemo(() => {
-    if (!selectedAction) return aiContext.chatPrompt;
-    return [
-      aiContext.chatPrompt,
-      "",
-      "当前想继续展开的建议动作：",
-      `- [${selectedAction.priority}] ${selectedAction.title}: ${selectedAction.detail}`,
-      "",
-      "请围绕这条动作继续拆解：先解释为什么它应该优先处理，再给出更具体的排查顺序、判断标准和下一步动作。",
-    ].join("\n");
-  }, [aiContext.chatPrompt, selectedAction]);
   const aiChatPath = useMemo(
     () =>
       buildWorkspaceChatPrefillPath({
-        prompt: aiDialogPrompt,
+        prompt: aiContext.chatPrompt,
         constraints: [
           `当前 AI 语境：Today / ${data.title}`,
-          selectedAction ? `当前聚焦动作：${selectedAction.title}` : null,
           "只回答和赚钱结果相关的问题，不切回通用助手语境。",
         ],
       }),
-    [aiDialogPrompt, data.title, selectedAction],
+    [aiContext.chatPrompt, data.title],
   );
 
   return (
@@ -177,23 +161,23 @@ export function TodayMetricDetailPage({
 
         {topSection ?? null}
 
-        <section>
-          <div
-            style={
-              isMobile
-                ? { ...pageSectionHeaderRowStyle, flexDirection: "column", alignItems: "flex-start", gap: "0.65rem" }
-                : pageSectionHeaderRowStyle
-            }
-          >
-            <h2 style={pageSectionMajorTitleStyle}>结论</h2>
-            <span style={pageAccentBadgeStyle}>{data.accent}</span>
-          </div>
-          <PageSurface
-            title="今天先回答什么"
-            subtitle="Today 详情页固定先给结论：这个模块今天对赚钱结果意味着什么。"
-          >
+        <PageSurface
+          title="经营报告"
+          subtitle="Today 详情页统一按一份报告来读：先看今天要回答什么，再看支撑赚钱结果的指标、趋势、对象和建议动作。"
+        >
+          <section style={reportSectionStyle}>
+            <div
+              style={
+                isMobile
+                  ? { ...pageSectionHeaderRowStyle, flexDirection: "column", alignItems: "flex-start", gap: "0.65rem" }
+                  : pageSectionHeaderRowStyle
+              }
+            >
+              <h2 style={pageSectionMajorTitleStyle}>报告结论</h2>
+              <span style={pageAccentBadgeStyle}>{data.accent}</span>
+            </div>
             <p style={{ ...pageMetaTextStyle, marginTop: 0 }}>{data.primaryQuestion}</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1rem" }}>
+            <div style={reportStatusListStyle}>
               {data.statuses.map((item) => (
                 <div key={item.label} style={pageStatusCardStyle}>
                   <s-stack direction={isMobile ? "block" : "inline"} gap="base" alignItems="center">
@@ -210,185 +194,151 @@ export function TodayMetricDetailPage({
                 <s-list-item key={line}>{line}</s-list-item>
               ))}
             </s-unordered-list>
-          </PageSurface>
-        </section>
+          </section>
 
-        <PageSurface title="关键指标" subtitle="只保留支撑判断的关键指标，不把 Today 做回一个分散的数据入口。">
-          <PageMetricCard metrics={data.metrics} footer={data.chartHint} />
-        </PageSurface>
+          <div style={reportBlockStyle}>
+            <div style={reportBlockTitleStyle}>关键指标</div>
+            <PageMetricCard metrics={data.metrics} footer={data.chartHint} />
+          </div>
 
-        {trendTable ? (
-          <PageSurface
-            title="趋势图表"
-            subtitle="这里先用结构化表格收住趋势判断，后续继续补真实图表和更深的趋势分析。"
-          >
-            <TableWrap>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    {trendTable.columns.map((column) => (
-                      <th key={column} style={thStyle}>
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {trendTable.rows.map((row, rowIndex) => (
-                    <tr key={`${trendTable.title}-${rowIndex}`}>
-                      {row.map((cell, cellIndex) => (
-                        <td key={`${trendTable.title}-${rowIndex}-${cellIndex}`} style={tdStyle}>
-                          {cell}
-                        </td>
+          {trendTable ? (
+            <div style={reportBlockStyle}>
+              <div style={reportBlockTitleStyle}>趋势拆解</div>
+              <TableWrap>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      {trendTable.columns.map((column) => (
+                        <th key={column} style={thStyle}>
+                          {column}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
-          </PageSurface>
-        ) : null}
-
-        {objectTable ? (
-          <PageSurface
-            title="关键对象拆解"
-            subtitle="这里聚焦最值得继续深挖的对象，而不是再铺一层泛化报表。"
-          >
-            <TableWrap>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    {objectTable.columns.map((column) => (
-                      <th key={column} style={thStyle}>
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {objectTable.rows.map((row, rowIndex) => (
-                    <tr key={`${objectTable.title}-${rowIndex}`}>
-                      {row.map((cell, cellIndex) => (
-                        <td key={`${objectTable.title}-${rowIndex}-${cellIndex}`} style={tdStyle}>
-                          {cell}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
-            {extraTables.map((table) => (
-              <div key={table.title} style={{ marginTop: "1rem" }}>
-                <div style={{ ...pageMetricLabelStyle, marginBottom: "0.5rem" }}>{table.title}</div>
-                <TableWrap>
-                  <table style={tableStyle}>
-                    <thead>
-                      <tr>
-                        {table.columns.map((column) => (
-                          <th key={column} style={thStyle}>
-                            {column}
-                          </th>
+                  </thead>
+                  <tbody>
+                    {trendTable.rows.map((row, rowIndex) => (
+                      <tr key={`${trendTable.title}-${rowIndex}`}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={`${trendTable.title}-${rowIndex}-${cellIndex}`} style={tdStyle}>
+                            {cell}
+                          </td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {table.rows.map((row, rowIndex) => (
-                        <tr key={`${table.title}-${rowIndex}`}>
-                          {row.map((cell, cellIndex) => (
-                            <td key={`${table.title}-${rowIndex}-${cellIndex}`} style={tdStyle}>
-                              {cell}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </TableWrap>
-              </div>
-            ))}
-          </PageSurface>
-        ) : null}
-
-        {extraSections ?? null}
-
-        <PageSurface title="建议动作" subtitle="每条动作都应该能直接承接今天要先做什么。">
-          <div style={actionListStyle}>
-            {data.actions.map((action) => (
-              <div key={action.title} style={actionItemStyle}>
-                <div style={actionHeaderStyle(isMobile)}>
-                  <strong style={actionTitleStyle}>
-                    {action.title}
-                    <span style={actionPriorityStyle}>{action.priority}</span>
-                  </strong>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAction(action)}
-                    style={actionAiButtonStyle}
-                  >
-                    和 AI 聊聊
-                  </button>
-                </div>
-                <span style={actionDetailStyle}>{action.detail}</span>
-              </div>
-            ))}
-          </div>
-        </PageSurface>
-      </div>
-
-      <DialogShell
-        open={Boolean(selectedAction)}
-        onClose={() => setSelectedAction(null)}
-        width={720}
-        title="和 AI 聊聊"
-        description={
-          selectedAction
-            ? `围绕「${selectedAction.title}」继续拆解优先级、排查顺序和下一步动作。`
-            : "继续围绕当前 Today 模块分析赚钱结果。"
-        }
-        footer={
-          <div style={chartActionRowStyle(isMobile)}>
-            <SurfaceButton
-              label="带着这条动作去和 AI 聊"
-              onClick={() => {
-                navigate(aiChatPath);
-                setSelectedAction(null);
-              }}
-            />
-            <SurfaceButton label="关闭" tone="subtle" onClick={() => setSelectedAction(null)} />
-          </div>
-        }
-      >
-        <div style={aiPanelStyle}>
-          {selectedAction ? (
-            <div style={aiMetaPanelStyle}>
-              <strong style={pageMetricLabelStyle}>当前动作</strong>
-              <div style={selectedActionCardStyle}>
-                <strong style={actionTitleStyle}>
-                  {selectedAction.title}
-                  <span style={actionPriorityStyle}>{selectedAction.priority}</span>
-                </strong>
-                <span style={actionDetailStyle}>{selectedAction.detail}</span>
-              </div>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
             </div>
           ) : null}
-          <div style={aiMetaPanelStyle}>
-            <strong style={pageMetricLabelStyle}>AiDrilldownContext</strong>
-            <pre style={aiPromptStyle}>{JSON.stringify(aiContext, null, 2)}</pre>
-          </div>
-          <div style={aiMetaPanelStyle}>
-            <strong style={pageMetricLabelStyle}>AI Chat Prompt</strong>
-            <pre style={aiPromptStyle}>{aiDialogPrompt}</pre>
-          </div>
-          <div style={chartEntryStyle}>
-            <div style={{ flex: "1 1 20rem", minWidth: 0 }}>
-              <div style={pageMetricLabelStyle}>当前模块</div>
-              <div style={pageMetricValueStyle}>{data.title}</div>
-              <div style={pageHintTextStyle}>{data.chartHint}</div>
+
+          {objectTable ? (
+            <div style={reportBlockStyle}>
+              <div style={reportBlockTitleStyle}>关键对象</div>
+              <TableWrap>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      {objectTable.columns.map((column) => (
+                        <th key={column} style={thStyle}>
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {objectTable.rows.map((row, rowIndex) => (
+                      <tr key={`${objectTable.title}-${rowIndex}`}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={`${objectTable.title}-${rowIndex}-${cellIndex}`} style={tdStyle}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+              {extraTables.map((table) => (
+                <div key={table.title} style={reportSubtableStyle}>
+                  <div style={reportSubtableTitleStyle}>{table.title}</div>
+                  <TableWrap>
+                    <table style={tableStyle}>
+                      <thead>
+                        <tr>
+                          {table.columns.map((column) => (
+                            <th key={column} style={thStyle}>
+                              {column}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {table.rows.map((row, rowIndex) => (
+                          <tr key={`${table.title}-${rowIndex}`}>
+                            {row.map((cell, cellIndex) => (
+                              <td key={`${table.title}-${rowIndex}-${cellIndex}`} style={tdStyle}>
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </TableWrap>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div style={reportBlockStyle}>
+            <div style={reportBlockTitleStyle}>建议动作</div>
+            <div style={actionListStyle}>
+              {data.actions.map((action) => (
+                <div key={action.title} style={actionItemStyle}>
+                  <div style={actionHeaderStyle(isMobile)}>
+                    <strong style={actionTitleStyle}>
+                      {action.title}
+                      <span style={actionPriorityStyle}>{action.priority}</span>
+                    </strong>
+                  </div>
+                  <span style={actionDetailStyle}>{action.detail}</span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      </DialogShell>
+
+          <div style={reportBlockStyle}>
+            <div style={reportBlockTitleStyle}>报告操作</div>
+            <div style={reportAiPanelStyle}>
+              <div style={aiMetaPanelStyle}>
+                <strong style={pageMetricLabelStyle}>和 AI 聊聊</strong>
+                <p style={aiSummaryTextStyle}>
+                  AI 会自动带上这份经营报告里的结论、关键指标、状态判断和建议动作，
+                  继续帮你判断今天最值得优先处理的赚钱问题。
+                </p>
+              </div>
+              <div style={chartActionRowStyle(isMobile)}>
+                <SurfaceButton
+                  label="带着这份报告去和 AI 聊"
+                  onClick={() => navigate(aiChatPath)}
+                />
+              </div>
+            </div>
+          </div>
+        </PageSurface>
+
+        {extraSections ? (
+          <section style={appendixSectionStyle}>
+            <div style={appendixHeaderStyle}>
+              <h2 style={pageSectionMajorTitleStyle}>补充分析</h2>
+              <p style={appendixSubtitleStyle}>
+                这里放补充判断和更细的经营拆解，作为这份报告的附录，不和主报告混在一起。
+              </p>
+            </div>
+            {extraSections}
+          </section>
+        ) : null}
+      </div>
     </>
   );
 }
@@ -402,12 +352,36 @@ function chartActionRowStyle(isMobile: boolean): CSSProperties {
   };
 }
 
-const chartEntryStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  alignItems: "center",
-  justifyContent: "space-between",
+const reportSectionStyle: CSSProperties = {
+  display: "grid",
   gap: "1rem",
+};
+
+const reportBlockStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.75rem",
+  marginTop: "1rem",
+};
+
+const reportBlockTitleStyle: CSSProperties = {
+  fontSize: "0.88rem",
+  fontWeight: 760,
+  color: pageColorTokens.textBody,
+};
+
+const reportSubtableStyle: CSSProperties = {
+  marginTop: "1rem",
+};
+
+const reportSubtableTitleStyle: CSSProperties = {
+  ...pageMetricLabelStyle,
+  marginBottom: "0.5rem",
+};
+
+const reportStatusListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
 };
 
 const actionListStyle: CSSProperties = {
@@ -444,21 +418,6 @@ const actionTitleStyle: CSSProperties = {
   color: pageColorTokens.textBody,
 };
 
-const actionAiButtonStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0.45rem 0.75rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surface,
-  color: pageColorTokens.brandBlue,
-  cursor: "pointer",
-  fontSize: "0.8125rem",
-  fontWeight: 700,
-  whiteSpace: "nowrap",
-};
-
 const actionPriorityStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -477,17 +436,7 @@ const actionDetailStyle: CSSProperties = {
   lineHeight: 1.5,
 };
 
-const selectedActionCardStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.5rem",
-  padding: "0.9rem 1rem",
-  borderRadius: pageColorTokens.radiusCard,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceSubtle,
-};
-
-const aiPanelStyle: CSSProperties = {
+const reportAiPanelStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "1rem",
@@ -499,16 +448,26 @@ const aiMetaPanelStyle: CSSProperties = {
   gap: "0.5rem",
 };
 
-const aiPromptStyle: CSSProperties = {
+const aiSummaryTextStyle: CSSProperties = {
   margin: 0,
-  padding: "0.9rem 1rem",
-  borderRadius: pageColorTokens.radiusCard,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceSubtle,
-  color: pageColorTokens.textBody,
-  fontSize: "0.8125rem",
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.875rem",
+  lineHeight: 1.6,
+};
+
+const appendixSectionStyle: CSSProperties = {
+  display: "grid",
+  gap: "1rem",
+};
+
+const appendixHeaderStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.35rem",
+};
+
+const appendixSubtitleStyle: CSSProperties = {
+  margin: 0,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.84rem",
   lineHeight: 1.5,
-  whiteSpace: "pre-wrap",
-  wordBreak: "break-word",
-  overflowX: "auto",
 };

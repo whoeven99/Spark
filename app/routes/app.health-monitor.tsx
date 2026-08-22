@@ -33,12 +33,6 @@ import {
 } from "./page/pageUiStyles";
 
 type ViewMode = "overview" | "detail";
-type HealthMonitorFollowupAction = {
-  label: string;
-  path: string;
-  tone?: "primary" | "subtle";
-};
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const [shopInfo, shopLocales] = await Promise.all([
@@ -96,191 +90,6 @@ function resolveHealthMonitorId(
   return monitors[0]?.id ?? "conversion-health";
 }
 
-function buildPathWithReturnTo(path: string, returnTo: string) {
-  const [pathname, rawQuery = ""] = path.split("?");
-  const params = new URLSearchParams(rawQuery);
-  params.set("returnTo", returnTo);
-  const query = params.toString();
-  return `${pathname}${query ? `?${query}` : ""}`;
-}
-
-function buildTaskCenterPath(params: {
-  returnTo: string;
-  operationSources?: string[];
-}) {
-  const next = new URLSearchParams();
-  next.set("returnTo", params.returnTo);
-  next.set("unifiedType", "operation_task");
-  if (params.operationSources && params.operationSources.length > 0) {
-    next.set("unifiedOperationSource", params.operationSources.join(","));
-  }
-  const query = next.toString();
-  return `/app/tasks${query ? `?${query}` : ""}`;
-}
-
-function resolveHealthMonitorFollowupActions(params: {
-  monitor: HealthMonitorRecord;
-  currentPath: string;
-}): HealthMonitorFollowupAction[] {
-  const { monitor, currentPath } = params;
-
-  if (monitor.id === "page-performance") {
-    return [
-      {
-        label: "查看转化承接详情",
-        path: buildPathWithReturnTo("/app/today/conversion", currentPath),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (monitor.id === "seo-health") {
-    return [
-      {
-        label: "进入 Search Console",
-        path: buildPathWithReturnTo("/app/settings/google-search-console", currentPath),
-      },
-      {
-        label: "查看流量质量详情",
-        path: buildPathWithReturnTo("/app/today/traffic", currentPath),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (monitor.id === "payment-health") {
-    return [
-      {
-        label: "查看结账漏斗报表",
-        path: buildPathWithReturnTo("/app/settings/shopify-reports?tab=storefront&range=7d", currentPath),
-      },
-      {
-        label: "去任务中心跟进",
-        path: buildTaskCenterPath({
-          returnTo: currentPath,
-          operationSources: ["payment_chain_review"],
-        }),
-        tone: "subtle",
-      },
-      {
-        label: "查看转化承接详情",
-        path: buildPathWithReturnTo("/app/today/conversion", currentPath),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (monitor.id === "roi-health" || monitor.id === "ads-health" || monitor.id === "pricing-health") {
-    return [
-      {
-        label: "查看 ROI 详情",
-        path: buildPathWithReturnTo("/app/today/roi", currentPath),
-      },
-      {
-        label: "去任务中心跟进",
-        path: buildTaskCenterPath({
-          returnTo: currentPath,
-          operationSources:
-            monitor.id === "roi-health" || monitor.id === "ads-health"
-              ? ["sales_decline", "traffic_conversion_drop"]
-              : [],
-        }),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (monitor.id === "revenue-health" || monitor.id === "refund-health") {
-    return [
-      {
-        label: "查看收入与订单详情",
-        path: buildPathWithReturnTo("/app/today/orders", currentPath),
-      },
-      {
-        label: "去任务中心跟进",
-        path: buildTaskCenterPath({
-          returnTo: currentPath,
-          operationSources:
-            monitor.id === "revenue-health"
-              ? ["sales_decline"]
-              : ["refund_spike", "after_sales_timeout"],
-        }),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (monitor.id === "traffic-health") {
-    return [
-      {
-        label: "查看流量质量详情",
-        path: buildPathWithReturnTo("/app/today/traffic", currentPath),
-      },
-    ];
-  }
-
-  if (monitor.id === "conversion-health") {
-    return [
-      {
-        label: "查看转化承接详情",
-        path: buildPathWithReturnTo("/app/today/conversion", currentPath),
-      },
-      {
-        label: "去任务中心跟进",
-        path: buildTaskCenterPath({
-          returnTo: currentPath,
-          operationSources: ["traffic_conversion_drop"],
-        }),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (
-    monitor.id === "product-readiness-health" ||
-    monitor.id === "inventory-health" ||
-    monitor.id === "fulfillment-health"
-  ) {
-    return [
-      {
-        label: "去任务中心跟进",
-        path: buildTaskCenterPath({
-          returnTo: currentPath,
-          operationSources:
-            monitor.id === "product-readiness-health"
-              ? ["launch_failure_review", "product_incomplete"]
-              : monitor.id === "inventory-health"
-                ? ["inventory_risk", "inventory_replenish_plan"]
-                : monitor.id === "fulfillment-health"
-                  ? ["fulfillment_overdue", "logistics_stale", "routine_shipping"]
-                  : [],
-        }),
-      },
-      {
-        label: "查看收入与订单详情",
-        path: buildPathWithReturnTo("/app/today/orders", currentPath),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  if (monitor.id === "risk-control-health") {
-    return [
-      {
-        label: "补齐监测输入",
-        path: buildPathWithReturnTo("/app/settings/data", currentPath),
-      },
-      {
-        label: "查看结账漏斗报表",
-        path: buildPathWithReturnTo("/app/settings/shopify-reports?tab=storefront&range=7d", currentPath),
-        tone: "subtle",
-      },
-    ];
-  }
-
-  return [];
-}
-
 export default function AppHealthMonitor() {
   const { monitors, pageSpeedDefaults, usingFallback, fallbackMessage } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
@@ -307,10 +116,6 @@ export default function AppHealthMonitor() {
   const selectedDetail = useMemo(() => resolveHealthMonitorDetail(selectedMonitor), [selectedMonitor]);
 
   const monitoringSummary = useMemo(() => getHealthMonitorSummary(monitors), [monitors]);
-  const currentHealthMonitorPath = useMemo(() => {
-    const query = searchParams.toString();
-    return `/app/health-monitor${query ? `?${query}` : ""}`;
-  }, [searchParams]);
   const overviewReturnPath = useMemo(() => {
     const params = new URLSearchParams(searchParams);
     params.set("view", "overview");
@@ -318,14 +123,6 @@ export default function AppHealthMonitor() {
     const query = params.toString();
     return `/app/health-monitor${query ? `?${query}` : ""}`;
   }, [searchParams]);
-  const followupActions = useMemo(
-    () =>
-      resolveHealthMonitorFollowupActions({
-        monitor: selectedMonitor,
-        currentPath: currentHealthMonitorPath,
-      }),
-    [currentHealthMonitorPath, selectedMonitor],
-  );
 
   useEffect(() => {
     setViewMode(resolveHealthMonitorView(searchParams.get("view")));
@@ -420,9 +217,6 @@ export default function AppHealthMonitor() {
             monitor={selectedMonitor}
             detail={selectedDetail}
             pageSpeedDefaults={pageSpeedDefaults}
-            onBackToOverview={() => syncHealthMonitorSearch({ view: "overview" })}
-            followupActions={followupActions}
-            onOpenFollowup={(path) => navigate(path)}
             onOpenAi={() =>
               navigate(
                 buildWorkspaceChatPrefillPath({
@@ -551,9 +345,6 @@ function DetailSection({
   monitor,
   detail,
   pageSpeedDefaults,
-  onBackToOverview,
-  followupActions,
-  onOpenFollowup,
   onOpenAi,
 }: {
   monitor: HealthMonitorRecord;
@@ -562,29 +353,10 @@ function DetailSection({
     defaultUrl: string;
     defaultReportLocale: ReturnType<typeof resolvePageSpeedLocale>;
   };
-  onBackToOverview: () => void;
-  followupActions: HealthMonitorFollowupAction[];
-  onOpenFollowup: (path: string) => void;
   onOpenAi: () => void;
 }) {
   return (
     <div style={stackStyle}>
-      <div style={detailActionBarStyle}>
-        <button type="button" style={secondaryButtonStyle} onClick={onBackToOverview}>
-          返回健康度总览
-        </button>
-        {followupActions.map((action) => (
-          <button
-            key={action.path}
-            type="button"
-            style={action.tone === "subtle" ? secondaryButtonStyle : primaryButtonStyle}
-            onClick={() => onOpenFollowup(action.path)}
-          >
-            {action.label}
-          </button>
-        ))}
-      </div>
-
       <PageSurface
         title="报告内容"
         subtitle="先看这份健康度报告本身：观察窗口、核心指标、基准比较和数据可信度。"
@@ -663,19 +435,6 @@ function DetailSection({
           </section>
         </div>
 
-        {detail.input.affectedObjects && detail.input.affectedObjects.length > 0 ? (
-          <div style={reportObjectPreviewStyle}>
-            <strong style={reportSectionTitleStyle}>重点影响对象</strong>
-            <div style={reportObjectChipRowStyle}>
-              {detail.input.affectedObjects.slice(0, 4).map((object) => (
-                <span key={`${object.type}-${object.name}`} style={reportObjectChipStyle}>
-                  {objectTypeLabel(object.type)} · {object.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         {monitor.id === "page-performance" ? (
           <div style={reportEmbeddedSectionStyle}>
             <strong style={reportSummaryNarrativeTitleStyle}>报告明细</strong>
@@ -694,64 +453,66 @@ function DetailSection({
             />
           </div>
         ) : null}
-      </PageSurface>
-
-      <PageSurface title="问题是什么" subtitle="只保留一句判断，让用户先知道结论。">
-        <div style={detailCalloutStyle}>
-          <p style={detailLeadStyle}>{detail.result.problem}</p>
+        <div style={reportBlockStyle}>
+          <strong style={reportSectionTitleStyle}>问题判断</strong>
+          <div style={detailCalloutStyle}>
+            <p style={detailLeadStyle}>{detail.result.problem}</p>
+          </div>
         </div>
-      </PageSurface>
 
-      <PageSurface title="数据论据" subtitle="用结构化证据支撑结论，而不是铺解释性散文。">
-        <div style={evidenceListStyle}>
-          {detail.result.evidenceSummary.map((entry) => (
-            <div key={entry.label} style={evidenceItemStyle}>
-              <strong style={evidenceLabelStyle}>{entry.label}</strong>
-              <span style={evidenceValueStyle}>{entry.summary}</span>
-            </div>
-          ))}
-        </div>
-      </PageSurface>
-
-      {detail.input.affectedObjects && detail.input.affectedObjects.length > 0 ? (
-        <PageSurface title="关键对象" subtitle="优先展示这次监测里真正受到影响的订单、SKU 或页面对象。">
-          <div style={objectListStyle}>
-            {detail.input.affectedObjects.map((object) => (
-              <div key={`${object.type}-${object.name}`} style={objectItemStyle}>
-                <div style={objectHeaderStyle}>
-                  <strong style={objectNameStyle}>{object.name}</strong>
-                  <span style={objectTypeStyle}>{objectTypeLabel(object.type)}</span>
-                </div>
-                <p style={objectSummaryStyle}>{object.summary ?? "—"}</p>
+        <div style={reportBlockStyle}>
+          <strong style={reportSectionTitleStyle}>数据论据</strong>
+          <div style={evidenceListStyle}>
+            {detail.result.evidenceSummary.map((entry) => (
+              <div key={entry.label} style={evidenceItemStyle}>
+                <strong style={evidenceLabelStyle}>{entry.label}</strong>
+                <span style={evidenceValueStyle}>{entry.summary}</span>
               </div>
             ))}
           </div>
-        </PageSurface>
-      ) : null}
-
-      <PageSurface title="解决办法" subtitle="每条动作都应该可以进一步转进现有 Tasks。">
-        <div style={actionListStyle}>
-          {detail.result.actions.map((action) => (
-            <div key={action.title} style={actionItemStyle}>
-              <strong style={actionTitleStyle}>
-                {action.title}
-                <span style={actionPriorityStyle}>{action.priority}</span>
-              </strong>
-              <span style={actionDetailStyle}>{action.detail}</span>
-            </div>
-          ))}
         </div>
-      </PageSurface>
 
-      <PageSurface title="和 AI 聊聊" subtitle="继续围绕这个健康项下钻原因、排序动作和明确优先级。">
-        <div style={aiPanelStyle}>
+        {detail.input.affectedObjects && detail.input.affectedObjects.length > 0 ? (
+          <div style={reportBlockStyle}>
+            <strong style={reportSectionTitleStyle}>关键对象</strong>
+            <div style={objectListStyle}>
+              {detail.input.affectedObjects.map((object) => (
+                <div key={`${object.type}-${object.name}`} style={objectItemStyle}>
+                  <div style={objectHeaderStyle}>
+                    <strong style={objectNameStyle}>{object.name}</strong>
+                    <span style={objectTypeStyle}>{objectTypeLabel(object.type)}</span>
+                  </div>
+                  <p style={objectSummaryStyle}>{object.summary ?? "—"}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div style={reportBlockStyle}>
+          <strong style={reportSectionTitleStyle}>解决办法</strong>
+          <div style={actionListStyle}>
+            {detail.result.actions.map((action) => (
+              <div key={action.title} style={actionItemStyle}>
+                <strong style={actionTitleStyle}>
+                  {action.title}
+                  <span style={actionPriorityStyle}>{action.priority}</span>
+                </strong>
+                <span style={actionDetailStyle}>{action.detail}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={reportBlockStyle}>
+          <strong style={reportSectionTitleStyle}>报告操作</strong>
           <div style={aiMetaPanelStyle}>
-            <strong style={evidenceLabelStyle}>当前语境</strong>
+            <strong style={evidenceLabelStyle}>和 AI 聊聊</strong>
             <pre style={aiPromptStyle}>{detail.result.aiChatPrompt}</pre>
           </div>
           <div style={buttonRowStyle}>
             <button type="button" style={primaryButtonStyle} onClick={onOpenAi}>
-              带着这个健康项去和 AI 聊
+              带着这份报告去和 AI 聊
             </button>
           </div>
         </div>
@@ -979,12 +740,6 @@ const overviewMetricRowStyle: CSSProperties = {
   gap: "0.75rem",
 };
 
-const detailActionBarStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.75rem",
-};
-
 const reportSummaryGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
@@ -1051,6 +806,12 @@ const reportEmbeddedSectionStyle: CSSProperties = {
   marginTop: "1rem",
 };
 
+const reportBlockStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.75rem",
+  marginTop: "1rem",
+};
+
 const reportSectionGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
@@ -1102,33 +863,6 @@ const reportTraceListStyle: CSSProperties = {
 const reportTraceItemStyle: CSSProperties = {
   fontSize: "0.84rem",
   lineHeight: 1.55,
-  color: pageColorTokens.textBody,
-};
-
-const reportObjectPreviewStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.65rem",
-  marginTop: "1rem",
-  padding: "0.95rem 1rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surface,
-};
-
-const reportObjectChipRowStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.5rem",
-};
-
-const reportObjectChipStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "0.38rem 0.65rem",
-  borderRadius: 999,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
-  fontSize: "0.78rem",
   color: pageColorTokens.textBody,
 };
 
