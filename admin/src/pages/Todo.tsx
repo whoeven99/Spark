@@ -3,6 +3,7 @@ import {
   Typography,
   Button,
   Modal,
+  Drawer,
   Form,
   Input,
   InputNumber,
@@ -20,7 +21,12 @@ import {
   createTodo,
   updateTodo,
   deleteTodo,
+  fetchTodoComments,
+  createTodoComment,
+  getAdminUserId,
+  getAdminUserLabel,
   type TodoRow,
+  type TodoComment,
   type TodoStatus,
   type TodoPriority,
   type TodoAssignee,
@@ -51,10 +57,6 @@ const PRI: Record<TodoPriority, { label: string; color: string; soft: string }> 
   low:    { label: "低", color: "#6b7280", soft: "#f1f0ee" },
 };
 
-const ME_KEY = "spark_admin_me";
-const getMe = () => localStorage.getItem(ME_KEY) ?? MEMBERS[0].key;
-const setMe = (v: string) => localStorage.setItem(ME_KEY, v);
-
 const FONT = "Manrope, system-ui, sans-serif";        // add a <link> in index.html, or drop this line
 const MONO = "'Geist Mono', ui-monospace, monospace";
 
@@ -64,8 +66,24 @@ type FormValues = {
   assignee?: TodoAssignee;
   priority: TodoPriority;
   status: TodoStatus;
-  createdBy: string;
+  followers?: TodoAssignee[];
 };
+
+function normalizeTodo(row: TodoRow): TodoRow {
+  return { ...row, followers: Array.isArray(row.followers) ? row.followers : [] };
+}
+
+function todoPayload(todo: Pick<TodoRow, "title" | "description" | "assignee" | "status" | "priority" | "etaDays" | "followers">) {
+  return {
+    title: todo.title,
+    description: todo.description,
+    assignee: todo.assignee ?? null,
+    status: todo.status,
+    priority: todo.priority,
+    etaDays: todo.etaDays ?? null,
+    followers: todo.followers ?? [],
+  };
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -76,7 +94,15 @@ export default function Todo() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<TodoRow | null>(null);
   const [saving, setSaving] = useState(false);
-  const [me, setMeState] = useState<string>(getMe());
+  const me = getAdminUserId() ?? MEMBERS[0].key;
+  const meLabel = getAdminUserLabel();
+
+  // detail drawer (progress comments + followers)
+  const [detailTodo, setDetailTodo] = useState<TodoRow | null>(null);
+  const [comments, setComments] = useState<TodoComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentBody, setCommentBody] = useState("");
+  const [commentSaving, setCommentSaving] = useState(false);
 
   // drag-and-drop UI state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -87,18 +113,46 @@ export default function Todo() {
   const load = useCallback(() => {
     setLoading(true);
     fetchTodos()
-      .then((r) => setTodos(r.todos))
+      .then((r) => setTodos(r.todos.map(normalizeTodo)))
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const loadComments = useCallback(async (todoId: string) => {
+    setCommentsLoading(true);
+    try {
+      const r = await fetchTodoComments(todoId);
+      setComments(r.comments);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, []);
+
+  function openDetail(todo: TodoRow) {
+    setDetailTodo(todo);
+    setCommentBody("");
+    void loadComments(todo.id);
+  }
+
+  function closeDetail() {
+    setDetailTodo(null);
+    setComments([]);
+    setCommentBody("");
+  }
 
   /* ---- create / edit modal (kept from the original) ---- */
 
   function openCreate() {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ priority: "medium", status: "todo", createdBy: me });
+    form.setFieldsValue({
+      priority: "medium",
+      status: "todo",
+      followers: [],
+    });
     setModalOpen(true);
   }
   function openEdit(todo: TodoRow) {
@@ -109,7 +163,7 @@ export default function Todo() {
       assignee: todo.assignee ?? undefined,
       priority: todo.priority,
       status: todo.status,
-      createdBy: todo.createdBy,
+      followers: todo.followers ?? [],
     });
     setModalOpen(true);
   }
@@ -118,27 +172,40 @@ export default function Todo() {
     try {
       if (editing) {
         await updateTodo(editing.id, {
-          title: values.title,
-          description: values.description ?? null,
-          assignee: values.assignee ?? null,
-          status: values.status,
-          priority: values.priority,
-          etaDays: editing.etaDays ?? null,
+          ...todoPayload({
+            ...editing,
+            title: values.title,
+            description: values.description ?? null,
+            assignee: values.assignee ?? null,
+            status: values.status,
+            priority: values.priority,
+            followers: values.followers ?? editing.followers ?? [],
+          }),
         });
-      } else {
-        if (!values.createdBy) {
-          form.setFields([{ name: "createdBy", errors: ["请选择创建人"] }]);
-          return;
+        if (detailTodo?.id === editing.id) {
+          setDetailTodo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  title: values.title,
+                  description: values.description ?? null,
+                  assignee: values.assignee ?? null,
+                  status: values.status,
+                  priority: values.priority,
+                  followers: values.followers ?? prev.followers ?? [],
+                }
+              : prev,
+          );
         }
-        setMe(values.createdBy);
-        setMeState(values.createdBy);
+      } else {
         await createTodo({
           title: values.title,
           description: values.description,
           assignee: values.assignee,
           priority: values.priority,
           etaDays: null,
-          createdBy: values.createdBy,
+          followers: values.followers ?? [],
+          createdBy: me,
         });
       }
       setModalOpen(false);
@@ -152,6 +219,7 @@ export default function Todo() {
 
   async function handleDelete(id: string) {
     setTodos((ts) => ts.filter((t) => t.id !== id)); // optimistic
+    if (detailTodo?.id === id) closeDetail();
     try { await deleteTodo(id); }
     catch (e) { setError(String(e)); load(); }
   }
@@ -162,15 +230,11 @@ export default function Todo() {
     if (todo.status === status && (todo.assignee ?? null) === assignee) return;
     // optimistic update — no full reload, no flicker
     setTodos((ts) => ts.map((t) => (t.id === todo.id ? { ...t, status, assignee } : t)));
+    if (detailTodo?.id === todo.id) {
+      setDetailTodo((prev) => (prev ? { ...prev, status, assignee } : prev));
+    }
     try {
-      await updateTodo(todo.id, {
-        title: todo.title,
-        description: todo.description,
-        assignee,
-        status,
-        priority: todo.priority,
-        etaDays: todo.etaDays ?? null,
-      });
+      await updateTodo(todo.id, todoPayload({ ...todo, status, assignee }));
     } catch (e) {
       setError(String(e));
       load(); // roll back to server truth on failure
@@ -179,22 +243,40 @@ export default function Todo() {
 
   async function patchTodo(
     todo: TodoRow,
-    patch: Partial<Pick<TodoRow, "priority" | "assignee" | "etaDays">>,
+    patch: Partial<Pick<TodoRow, "priority" | "assignee" | "etaDays" | "followers">>,
   ) {
     const next = { ...todo, ...patch };
     setTodos((ts) => ts.map((t) => (t.id === todo.id ? next : t)));
+    if (detailTodo?.id === todo.id) setDetailTodo(next);
     try {
-      await updateTodo(todo.id, {
-        title: next.title,
-        description: next.description,
-        assignee: next.assignee ?? null,
-        status: next.status,
-        priority: next.priority,
-        etaDays: next.etaDays ?? null,
-      });
+      await updateTodo(todo.id, todoPayload(next));
     } catch (e) {
       setError(String(e));
       load();
+    }
+  }
+
+  async function submitComment() {
+    if (!detailTodo) return;
+    const body = commentBody.trim();
+    if (!body) return;
+    const author = me;
+    setCommentSaving(true);
+    try {
+      const r = await createTodoComment(detailTodo.id, { author, body });
+      setComments((cs) => [...cs, r.comment]);
+      setCommentBody("");
+      setTodos((ts) =>
+        ts.map((t) =>
+          t.id === detailTodo.id
+            ? { ...t, updatedAt: r.comment.createdAt }
+            : t,
+        ),
+      );
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCommentSaving(false);
     }
   }
 
@@ -229,12 +311,14 @@ export default function Todo() {
             <Typography.Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: "-.02em" }}>Team Todo</Typography.Title>
           </div>
           <p style={{ margin: "6px 0 0 38px", fontSize: 13, color: "#78716c" }}>
-            拖动卡片即可流转 — 横向换人，纵向改状态。
+            拖动卡片流转；点击卡片打开详情、更新进度与跟进人。
           </p>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ borderRadius: 10, fontWeight: 700 }}>
-          新建任务
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ borderRadius: 10, fontWeight: 700 }}>
+            新建任务
+          </Button>
+        </div>
       </div>
 
       {/* board */}
@@ -307,6 +391,7 @@ export default function Todo() {
                               dragging={dragId === todo.id}
                               onDragStart={() => setDragId(todo.id)}
                               onDragEnd={() => { setDragId(null); setOverCell(null); }}
+                              onOpen={() => openDetail(todo)}
                               onEdit={() => openEdit(todo)}
                               onDelete={() => handleDelete(todo.id)}
                               onPriorityChange={(p) => patchTodo(todo, { priority: p })}
@@ -360,6 +445,13 @@ export default function Todo() {
               </Select>
             </Form.Item>
           </div>
+          <Form.Item name="followers" label="跟进人">
+            <Select mode="multiple" allowClear placeholder="可选，多人关注此任务">
+              {MEMBERS.map((m) => (
+                <Select.Option key={m.key} value={m.key}>{m.label}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
           {editing && (
             <Form.Item name="status" label="状态" rules={[{ required: true }]}>
               <Select>
@@ -369,17 +461,32 @@ export default function Todo() {
               </Select>
             </Form.Item>
           )}
-          {!editing && (
-            <Form.Item name="createdBy" label="创建人" rules={[{ required: true, message: "请选择创建人" }]}>
-              <Select placeholder="选择你是谁">
-                {MEMBERS.map((m) => (
-                  <Select.Option key={m.key} value={m.key}>{m.label}</Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
         </Form>
       </Modal>
+
+      <Drawer
+        title={null}
+        open={!!detailTodo}
+        onClose={closeDetail}
+        width={440}
+        destroyOnClose
+        styles={{ body: { padding: "20px 22px 24px" } }}
+      >
+        {detailTodo && (
+          <TodoDetail
+            todo={detailTodo}
+            meLabel={meLabel}
+            comments={comments}
+            commentsLoading={commentsLoading}
+            commentBody={commentBody}
+            commentSaving={commentSaving}
+            onCommentBodyChange={setCommentBody}
+            onSubmitComment={() => void submitComment()}
+            onEdit={() => openEdit(detailTodo)}
+            onFollowersChange={(followers) => patchTodo(detailTodo, { followers })}
+          />
+        )}
+      </Drawer>
     </div>
   );
 }
@@ -405,13 +512,14 @@ function Avatar({ memKey, size = 22 }: { memKey: TodoAssignee | null; size?: num
 }
 
 function TaskCard({
-  todo, dragging, onDragStart, onDragEnd, onEdit, onDelete,
+  todo, dragging, onDragStart, onDragEnd, onOpen, onEdit, onDelete,
   onPriorityChange, onAssigneeChange, onEtaDaysChange,
 }: {
   todo: TodoRow;
   dragging: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onPriorityChange: (p: TodoPriority) => void;
@@ -423,6 +531,7 @@ function TaskCard({
   const wasDragged = useRef(false);
   const [etaOpen, setEtaOpen] = useState(false);
   const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays);
+  const followers = todo.followers ?? [];
 
   const priorityMenu: MenuProps = {
     items: (["high", "medium", "low"] as TodoPriority[]).map((p) => ({
@@ -466,7 +575,7 @@ function TaskCard({
       }}
       onDrag={() => { wasDragged.current = true; }}
       onDragEnd={() => { onDragEnd(); }}
-      onClick={() => { if (!wasDragged.current) onEdit(); }}
+      onClick={() => { if (!wasDragged.current) onOpen(); }}
       onMouseEnter={(e) => { if (!dragging) e.currentTarget.style.boxShadow = "0 6px 18px rgba(28,27,26,.1)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = rest; }}
       style={{
@@ -573,9 +682,165 @@ function TaskCard({
           </span>
         </Dropdown>
 
+        {followers.length > 0 && (
+          <div style={{ display: "inline-flex", marginLeft: 2 }}>
+            {followers.slice(0, 3).map((f, i) => (
+              <div key={f} style={{ marginLeft: i === 0 ? 0 : -6, border: "1.5px solid #fff", borderRadius: "50%" }}>
+                <Avatar memKey={f} size={18} />
+              </div>
+            ))}
+          </div>
+        )}
+
         <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 10.5, color: "#b3ada4" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </span>
+      </div>
+    </div>
+  );
+}
+
+function TodoDetail({
+  todo,
+  meLabel,
+  comments,
+  commentsLoading,
+  commentBody,
+  commentSaving,
+  onCommentBodyChange,
+  onSubmitComment,
+  onEdit,
+  onFollowersChange,
+}: {
+  todo: TodoRow;
+  meLabel: string;
+  comments: TodoComment[];
+  commentsLoading: boolean;
+  commentBody: string;
+  commentSaving: boolean;
+  onCommentBodyChange: (v: string) => void;
+  onSubmitComment: () => void;
+  onEdit: () => void;
+  onFollowersChange: (followers: TodoAssignee[]) => void;
+}) {
+  const st = STATUS[todo.status];
+  const pri = PRI[todo.priority];
+
+  return (
+    <div style={{ fontFamily: FONT, color: "#1c1b1a" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.35, letterSpacing: "-.02em" }}>
+            {todo.title}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: st.hue, background: st.soft, borderRadius: 6, padding: "2px 8px" }}>
+              {st.icon} {st.label}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: pri.color, background: pri.soft, borderRadius: 6, padding: "2px 8px" }}>
+              {pri.label}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#78716c", background: "#f5f3f0", borderRadius: 6, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <Avatar memKey={todo.assignee} size={14} />
+              {todo.assignee ? (MEMBERS.find((m) => m.key === todo.assignee)?.label ?? todo.assignee) : "未分配"}
+            </span>
+          </div>
+        </div>
+        <Button icon={<EditOutlined />} onClick={onEdit} style={{ borderRadius: 8 }}>
+          编辑
+        </Button>
+      </div>
+
+      {todo.description ? (
+        <div style={{ fontSize: 13, color: "#57534e", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 16, padding: "12px 14px", background: "#fbfaf9", border: "1px solid #ece8e3", borderRadius: 12 }}>
+          {todo.description}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: "#a8a29a", marginBottom: 16 }}>暂无描述</div>
+      )}
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#78716c", marginBottom: 8 }}>跟进人</div>
+        <Select
+          mode="multiple"
+          allowClear
+          style={{ width: "100%" }}
+          placeholder="选择关注此任务的人"
+          value={todo.followers ?? []}
+          onChange={(v) => onFollowersChange(v as TodoAssignee[])}
+          options={MEMBERS.map((m) => ({ value: m.key, label: m.label }))}
+        />
+      </div>
+
+      <div style={{ borderTop: "1px solid #ece8e3", paddingTop: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>进度更新</div>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: "#b3ada4" }}>{comments.length}</span>
+        </div>
+
+        <Spin spinning={commentsLoading}>
+          {comments.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#a8a29a", padding: "16px 0 8px" }}>
+              还没有进度，写一条进展吧。
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+              {comments.map((c) => {
+                const authorLabel = MEMBERS.find((m) => m.key === c.author)?.label ?? c.author;
+                return (
+                  <div key={c.id} style={{ display: "flex", gap: 10 }}>
+                    <Avatar memKey={c.author} size={28} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700 }}>{authorLabel}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 10.5, color: "#b3ada4" }}>
+                          {new Date(c.createdAt).toLocaleString("zh-CN", {
+                            month: "numeric",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, color: "#3c3935", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                        {c.body}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Spin>
+
+        <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid #f3f0ec" }}>
+          <div style={{ fontSize: 12, color: "#78716c", marginBottom: 8 }}>
+            以 <span style={{ fontWeight: 700, color: "#3c3935" }}>{meLabel}</span> 身份更新
+          </div>
+          <Input.TextArea
+            value={commentBody}
+            onChange={(e) => onCommentBodyChange(e.target.value)}
+            autoSize={{ minRows: 3, maxRows: 8 }}
+            placeholder="写一条进度更新…"
+            onPressEnter={(e) => {
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                onSubmitComment();
+              }
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <Button
+              type="primary"
+              loading={commentSaving}
+              disabled={!commentBody.trim()}
+              onClick={onSubmitComment}
+              style={{ borderRadius: 8, fontWeight: 700 }}
+            >
+              发布更新
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

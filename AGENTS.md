@@ -223,7 +223,7 @@ npm run build     # Vite client + tsc server
 - API 入口：`admin/server/index.ts`、`admin/server/routes/`。
 - 前端入口：`admin/src/App.tsx`、`admin/src/pages/`、`admin/src/api.ts`。
 - 外部存储连接：`admin/server/lib/`。
-- 鉴权边界：`admin/server/middleware/auth.ts`；收入、Pixel logs、TSF billing/revenue/ROI、OpenRouter 探测等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。
+- 鉴权边界：`admin/server/middleware/auth.ts`；收入、Pixel logs、TSF billing/revenue/ROI、OpenRouter 探测等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。登录为三人身份（Yewen / Allen / Zhuangze）+ 各人密码（`ADMIN_SECRET_YEWEN` / `_ALLEN` / `_ZHUANGZE`）；Yewen、Allen 为 owner，Zhuangze 为 user。顶栏显示姓名，不展示 Owner/User 字样。
 - 主要 API 路由族：Spark 运营（overview/shops/usage/capabilities/subscriptions/revenue/agent-runs/billing-rules/pricing-workbench/todos/ops-checklist/visit-source/support/app-logs/pixel-logs/shop-profile）、TSF 观测（`/api/tsf/*`：overview/shops/usage/subscriptions/packs/billing/shop-profiles/language-coverage/revenue/roi/credits）、翻译运维只读/修复（`/api/translations`、`/api/translation-ops`、`/api/shopify-translation`）、Redis Explorer、OpenRouter 探测。`admin/server/routes/` 下所有路由文件都在 `admin/server/index.ts` 挂载，没有孤儿路由。
 - 前端页面路由见 `admin/src/App.tsx`；除下文详述的几个页面外还有 `/translations`、`/shop-translation`、`/translation-ops`、`/shopify-translation`、`/translate-v4-support`、`/tsf/billing`、`/tsf/packs`、`/tsf/shop-profiles/:shop`、`/redis-explorer`。改 Admin 导航前先读该文件，不要凭本节清单推断。
 - Admin 没有配置测试框架；改动后必须在 `admin/` 中运行 `npm run build`。
