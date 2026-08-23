@@ -32,7 +32,7 @@ import {
   WalletOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
-import { clearToken, isOwner, getRole } from "../api";
+import { clearToken, isOwner, getAdminUserLabel } from "../api";
 
 const { Sider, Content, Header } = AntLayout;
 
@@ -266,9 +266,7 @@ export default function Layout() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <Tag color={owner ? "gold" : "blue"}>
-              {getRole() === "owner" ? "Owner" : "User"}
-            </Tag>
+            <Tag color="blue">{getAdminUserLabel()}</Tag>
             <Button icon={<LogoutOutlined />} type="text" onClick={logout}>
               退出
             </Button>

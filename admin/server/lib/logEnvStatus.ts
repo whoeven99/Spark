@@ -3,6 +3,7 @@ import { isSparkDbConfigured } from "./db.js";
 import { isTsfDbConfigured } from "./tsfDb.js";
 import { isCosmosConfigured } from "./cosmos.js";
 import { isBlobConfigured } from "./blob.js";
+import { ADMIN_USERS } from "../middleware/auth.js";
 
 const LOG = "[admin:env]";
 
@@ -51,9 +52,11 @@ export function logAdminEnvStatus(): void {
   line(redisOk, "Redis");
   field("RENDER_KV", getEnv("RENDER_KV") || undefined);
 
-  const authOk = Boolean(getEnv("ADMIN_USER_SECRET"));
-  line(authOk, "Admin auth");
-  field("ADMIN_USER_SECRET", getEnv("ADMIN_USER_SECRET") || undefined);
+  const authOk = ADMIN_USERS.every((u) => Boolean(getEnv(u.envKey)));
+  line(authOk, "Admin auth (per-user)");
+  for (const u of ADMIN_USERS) {
+    field(u.envKey, getEnv(u.envKey) || undefined);
+  }
 
   console.info(`${LOG} =================`);
 }
