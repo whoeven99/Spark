@@ -14,6 +14,7 @@ import type { ChatMessage } from "../../../lib/chatMessage";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
+import { normalizeWorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { useChatStream } from "../chat/useChatStream";
 import { ChatPanel } from "./ChatPanel";
 import { HomePanel } from "./HomePanel";
@@ -406,16 +407,25 @@ export function WorkspaceAppShellPage({
     }),
     [t],
   );
-  const effectiveDashboardSnapshot = dashboardSnapshot ?? defaultDashboardSnapshot;
+  const effectiveDashboardSnapshot = normalizeWorkspaceDashboardSnapshot(
+    dashboardSnapshot,
+    defaultDashboardSnapshot,
+  );
   const displayName = accountName?.trim() || t("workspace.shell.defaultAccountName");
   const newConversationTitle = t("workspace.shell.newConversationTitle");
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const { isMobile } = useResponsiveLayout();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
+  const [conversationList, setConversationList] = useState<Conversation[]>(
+    Array.isArray(initialConversationList) ? initialConversationList : [],
+  );
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    autoCreateConversation ? null : (initialConversationList[0]?.id ?? null),
+    autoCreateConversation
+      ? null
+      : Array.isArray(initialConversationList)
+        ? initialConversationList[0]?.id ?? null
+        : null,
   );
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
@@ -644,9 +654,12 @@ export function WorkspaceAppShellPage({
           if (existing.length > 0) {
             return current;
           }
+          const rawMessages = Array.isArray(data.messages) ? data.messages : [];
           return {
             ...current,
-            [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
+            [activeConversationId]: (rawMessages as Parameters<typeof dbMessageToUiMessage>[0][]).map(
+              dbMessageToUiMessage,
+            ),
           };
         });
       })
@@ -794,8 +807,9 @@ export function WorkspaceAppShellPage({
   useEffect(() => {
     const prefillPrompt = searchParams.get("prefillTaskPrompt");
     const prefillConstraints = searchParams.getAll("prefillConstraint");
-    const openContextTool = isLaunchContextTool(searchParams.get("openContextTool"))
-      ? searchParams.get("openContextTool")
+    const rawOpenContextTool = searchParams.get("openContextTool");
+    const openContextTool = isLaunchContextTool(rawOpenContextTool)
+      ? rawOpenContextTool
       : null;
     const prefillSignature = JSON.stringify({
       prompt: prefillPrompt ?? "",

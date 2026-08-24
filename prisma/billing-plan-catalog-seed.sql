@@ -3,6 +3,7 @@ DELETE FROM "PlanCatalog" WHERE "planKey" LIKE 'gd_%' OR "planKey" LIKE 'pi_%';
 
 INSERT INTO "PlanCatalog" (
     "planKey",
+    "appName",
     "kind",
     "billingInterval",
     "displayName",
@@ -18,6 +19,7 @@ INSERT INTO "PlanCatalog" (
 ) VALUES
     (
         'spark_base_monthly',
+        'spark',
         'SUBSCRIPTION',
         'MONTHLY',
         'Basic (Monthly)',
@@ -33,6 +35,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_base_annual',
+        'spark',
         'SUBSCRIPTION',
         'ANNUAL',
         'Basic (Annual)',
@@ -48,6 +51,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_pro_monthly',
+        'spark',
         'SUBSCRIPTION',
         'MONTHLY',
         'Pro (Monthly)',
@@ -63,6 +67,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_pro_annual',
+        'spark',
         'SUBSCRIPTION',
         'ANNUAL',
         'Pro (Annual)',
@@ -78,6 +83,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_premium_monthly',
+        'spark',
         'SUBSCRIPTION',
         'MONTHLY',
         'Premium (Monthly)',
@@ -93,6 +99,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_premium_annual',
+        'spark',
         'SUBSCRIPTION',
         'ANNUAL',
         'Premium (Annual)',
@@ -108,6 +115,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_pack_100k',
+        'spark',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 100K',
@@ -123,6 +131,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_pack_500k',
+        'spark',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 500K',
@@ -138,6 +147,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_pack_1m',
+        'spark',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 1M',
@@ -153,6 +163,7 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'spark_pack_2m',
+        'spark',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 2M',
@@ -167,6 +178,7 @@ INSERT INTO "PlanCatalog" (
         CURRENT_TIMESTAMP
     )
 ON CONFLICT("planKey") DO UPDATE SET
+    "appName" = excluded."appName",
     "kind" = excluded."kind",
     "billingInterval" = excluded."billingInterval",
     "displayName" = excluded."displayName",

@@ -6,6 +6,7 @@ import { buildEmbeddedAppPath } from "../config/appEntry.server";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { buildWorkspaceAssistantPath } from "../lib/workspaceChatPrefill";
+import { normalizeWorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
@@ -70,7 +71,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
   return {
-    dashboardSnapshot,
+    dashboardSnapshot: normalizeWorkspaceDashboardSnapshot(
+      dashboardSnapshot,
+      emptyWorkspaceDashboardSnapshot(),
+    ),
     accountName,
     runningTaskCount,
     homeRenderTimeIso: new Date().toISOString(),

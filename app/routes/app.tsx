@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -43,6 +44,13 @@ import {
 } from "../lib/embeddedLocationSearch";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
+import {
+  describeValueShape,
+  logClientDiagnostic,
+  logClientRenderError,
+  warnIfLegacySpringRequests,
+} from "../lib/clientDiagnostics.client";
+import { getSparkBuildInfo } from "../lib/sparkBuildInfo.server";
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -96,9 +104,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sessionLocale: readShopifySessionLocale(session),
   });
   const { nav, home } = getAppEntryConfig();
+  const buildInfo = getSparkBuildInfo();
+  const safeNav = Array.isArray(nav) ? nav : [];
+
+  if (!Array.isArray(nav)) {
+    console.warn("[SparkDiag] app_shell_loader invalid_nav", {
+      shop: session.shop,
+      navType: typeof nav,
+      build: buildInfo.gitCommit,
+    });
+  }
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
+  return {
+    apiKey: process.env.SHOPIFY_API_KEY || "",
+    locale,
+    nav: safeNav,
+    home,
+    buildInfo,
+  };
 };
 
 /** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用。 */
@@ -148,9 +172,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function App() {
-  const { apiKey, locale, nav } = useLoaderData<typeof loader>();
+  const { apiKey, locale, nav, buildInfo } = useLoaderData<typeof loader>();
   // 尽早缓存 shop/host，供客户端 navigate / fetch 在 query 丢失后兜底。
   useEmbeddedLocationSearch();
+
+  useEffect(() => {
+    warnIfLegacySpringRequests();
+    logClientDiagnostic("app_shell_mount", {
+      buildInfo,
+      navShape: describeValueShape(nav),
+      href: window.location.href,
+      origin: window.location.origin,
+    });
+
+    fetch("/api/build-info")
+      .then((res) => res.json())
+      .then((json) => {
+        logClientDiagnostic("build_info_verify", json);
+      })
+      .catch((error) => {
+        logClientDiagnostic("build_info_verify_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }, [buildInfo, nav]);
 
   return (
     <AppI18nProvider locale={locale}>
@@ -188,11 +233,13 @@ function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const location = useLocation();
   const embeddedSearch = resolveEmbeddedLocationSearch(location.search);
   const navigate = useEmbeddedNavigate();
+  const navItems: NavItemKey[] = Array.isArray(nav) ? [...nav] : [];
 
   return (
     <s-app-nav>
-      {nav.map((item) => {
+      {navItems.map((item) => {
         const config = NAV_ITEMS[item];
+        if (!config) return null;
         const target = appendEmbeddedSearchToPath(config.href, embeddedSearch);
         return (
           <s-link
@@ -213,7 +260,13 @@ function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
 
 // Shopify needs React Router to catch some thrown responses, so that their headers are included in the response.
 export function ErrorBoundary() {
-  return boundary.error(useRouteError());
+  const error = useRouteError();
+
+  useEffect(() => {
+    logClientRenderError(error);
+  }, [error]);
+
+  return boundary.error(error);
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

@@ -113,14 +113,29 @@ async function shouldSkipMigrationStatement(client, statement) {
 }
 
 /** SQLite/Turso 不支持 ADD COLUMN IF NOT EXISTS；列已存在时跳过 ALTER。 */
+function stripLeadingSqlComments(statement) {
+  return statement
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*--/.test(line))
+    .join("\n")
+    .trim();
+}
+
 async function executeMigrationStatement(client, statement) {
   try {
     return await executeWithRetry(client, statement);
   } catch (error) {
     const msg = String(error.message || error);
-    const isAlterAdd = /^\s*ALTER\s+TABLE\b/i.test(statement) && /\bADD\s+COLUMN\b/i.test(statement);
+    const executable = stripLeadingSqlComments(statement);
+    const isAlterAdd =
+      /^\s*ALTER\s+TABLE\b/i.test(executable) && /\bADD\s+COLUMN\b/i.test(executable);
     if (isAlterAdd && /duplicate column name/i.test(msg)) {
-      console.log(`[turso:migrate] 跳过已存在列 (${statement.split(/\s+/).slice(-3).join(" ")})`);
+      console.log(`[turso:migrate] 跳过已存在列 (${executable.split(/\s+/).slice(-3).join(" ")})`);
+      return;
+    }
+    const isCreateIndex = /^\s*CREATE\s+(UNIQUE\s+)?INDEX\b/i.test(executable);
+    if (isCreateIndex && /already exists/i.test(msg)) {
+      console.log("[turso:migrate] 跳过已存在索引");
       return;
     }
     if (

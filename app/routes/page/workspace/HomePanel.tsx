@@ -7,6 +7,11 @@ import type {
   AutomationOverviewResponse,
   PlaybookSurfaceItem,
 } from "../../../lib/automationOverviewTypes";
+import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
+import {
+  describeValueShape,
+  logClientDiagnostic,
+} from "../../../lib/clientDiagnostics.client";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
 import {
@@ -122,18 +127,25 @@ function localizeDashboardSnapshot(
   snapshot: WorkspaceDashboardSnapshot,
   t: ReturnType<typeof useTranslation>["t"],
 ): WorkspaceDashboardSnapshot {
+  const metrics = Array.isArray(snapshot.metrics) ? snapshot.metrics : [];
+  const alerts = Array.isArray(snapshot.alerts) ? snapshot.alerts : [];
+  const suggestions = Array.isArray(snapshot.suggestions) ? snapshot.suggestions : [];
+  const recentTaskSummaries = Array.isArray(snapshot.recentTaskSummaries)
+    ? snapshot.recentTaskSummaries
+    : [];
   return {
     ...snapshot,
     emptyMessage: snapshot.emptyMessage
       ? localizeDashboardText(snapshot.emptyMessage, t)
       : snapshot.emptyMessage,
-    metrics: snapshot.metrics.map((metric) => ({
+    metrics: metrics.map((metric) => ({
       ...metric,
       label: localizeDashboardMetricLabel(metric.label, t),
       delta: localizeDashboardText(metric.delta, t),
     })),
-    suggestions: snapshot.suggestions.map((item) => localizeDashboardText(item, t)),
-    recentTaskSummaries: snapshot.recentTaskSummaries.map((task) => ({
+    alerts,
+    suggestions: suggestions.map((item) => localizeDashboardText(item, t)),
+    recentTaskSummaries: recentTaskSummaries.map((task) => ({
       ...task,
       result: localizeDashboardText(task.result, t),
     })),
@@ -656,11 +668,25 @@ export function HomePanel({
     [snapshot, t],
   );
   const needsAttention = localizedSnapshot.automation?.status === "attention";
-  const suggestionItems = localizedSnapshot.suggestions.slice(0, 3);
-  const topMetrics = localizedSnapshot.metrics.slice(0, 5);
-  const topAlerts = localizedSnapshot.alerts.slice(0, 3);
-  const recentTasks = localizedSnapshot.recentTaskSummaries.slice(0, 3);
-  const recommendedPlaybooks = automationOverview?.recommendedPlaybooks ?? [];
+  const suggestionItems = (Array.isArray(localizedSnapshot.suggestions)
+    ? localizedSnapshot.suggestions
+    : []
+  ).slice(0, 3);
+  const topMetrics = (Array.isArray(localizedSnapshot.metrics)
+    ? localizedSnapshot.metrics
+    : []
+  ).slice(0, 5);
+  const topAlerts = (Array.isArray(localizedSnapshot.alerts)
+    ? localizedSnapshot.alerts
+    : []
+  ).slice(0, 3);
+  const recentTasks = (Array.isArray(localizedSnapshot.recentTaskSummaries)
+    ? localizedSnapshot.recentTaskSummaries
+    : []
+  ).slice(0, 3);
+  const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
+    ? automationOverview.recommendedPlaybooks
+    : [];
   const locale = i18n.resolvedLanguage || i18n.language || "en";
   const quickPrompts = useMemo(
     () => [
@@ -699,10 +725,29 @@ export function HomePanel({
       .then((res) => res.json() as Promise<AutomationOverviewResponse>)
       .then((json) => {
         if (cancelled) return;
-        if (json.ok) setAutomationOverview(json.overview);
+        if (!json.ok) {
+          logClientDiagnostic("automation_overview_error", {
+            ok: json.ok,
+            error: json.error,
+          });
+          return;
+        }
+        const overview = json.overview;
+        logClientDiagnostic("automation_overview_shape", {
+          configured: describeValueShape(overview?.configured),
+          history: describeValueShape(overview?.history),
+          recommendedPlaybooks: describeValueShape(overview?.recommendedPlaybooks),
+          templates: describeValueShape(overview?.templates),
+        });
+        setAutomationOverview(normalizeAutomationOverview(overview));
       })
-      .catch(() => {
-        if (!cancelled) setAutomationOverview(null);
+      .catch((error) => {
+        if (!cancelled) {
+          logClientDiagnostic("automation_overview_fetch_failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setAutomationOverview(null);
+        }
       });
     return () => {
       cancelled = true;

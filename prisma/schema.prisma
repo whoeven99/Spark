@@ -218,6 +218,7 @@ model Account {
 /// 套餐目录（订阅 / 按量包 / 内置试用定义）。
 model PlanCatalog {
   planKey          String   @id
+  appName          String   @default("spark")
   /// SUBSCRIPTION | ONE_TIME_PACK | INTERNAL_TRIAL
   kind             String
   /// MONTHLY | ANNUAL；一次性包为 null
@@ -287,6 +288,8 @@ model AccountPeriodUsage {
 model CommonEventLog {
   id          String   @id @default(cuid())
   shop        String
+  /// 与 BillingLog 等一致，当前固定为 spark
+  appName     String
   /// APP_INSTALLED | APP_UNINSTALLED | SCOPES_UPDATE
   eventType   String
   /// Shopify webhook topic，如 app/uninstalled
@@ -297,6 +300,7 @@ model CommonEventLog {
   metadata    Json?
   createdAt   DateTime @default(now())
 
+  @@unique([shop, eventType, referenceId])
   @@index([shop, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
