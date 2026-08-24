@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Typography,
   Button,
@@ -13,9 +14,10 @@ import {
   Popconfirm,
   Tooltip,
   Dropdown,
+  message,
 } from "antd";
 import type { MenuProps } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, LinkOutlined } from "@ant-design/icons";
 import {
   fetchTodos,
   createTodo,
@@ -88,6 +90,7 @@ function todoPayload(todo: Pick<TodoRow, "title" | "description" | "assignee" | 
 /* ------------------------------------------------------------------ */
 
 export default function Todo() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [todos, setTodos] = useState<TodoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -103,6 +106,7 @@ export default function Todo() {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
+  const [deepLinkMissing, setDeepLinkMissing] = useState(false);
 
   // drag-and-drop UI state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -131,17 +135,53 @@ export default function Todo() {
     }
   }, []);
 
+  function setTodoIdInUrl(todoId: string | null) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (todoId) next.set("id", todoId);
+        else next.delete("id");
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  /** Click opens via URL; the effect below owns drawer state. */
   function openDetail(todo: TodoRow) {
-    setDetailTodo(todo);
-    setCommentBody("");
-    void loadComments(todo.id);
+    setDeepLinkMissing(false);
+    setTodoIdInUrl(todo.id);
   }
 
   function closeDetail() {
+    setTodoIdInUrl(null);
+  }
+
+  // Deep link: /todo?id=<uuid> opens the detail drawer after list loads.
+  useEffect(() => {
+    if (loading) return;
+    const id = searchParams.get("id")?.trim() ?? "";
+    if (!id) {
+      setDeepLinkMissing(false);
+      setDetailTodo(null);
+      setComments([]);
+      setCommentBody("");
+      return;
+    }
+    if (detailTodo?.id === id) return;
+    const hit = todos.find((t) => t.id === id);
+    if (hit) {
+      setDeepLinkMissing(false);
+      setDetailTodo(hit);
+      setCommentBody("");
+      void loadComments(hit.id);
+      return;
+    }
+    setDeepLinkMissing(true);
     setDetailTodo(null);
     setComments([]);
     setCommentBody("");
-  }
+  }, [loading, todos, searchParams, detailTodo?.id, loadComments]);
 
   /* ---- create / edit modal (kept from the original) ---- */
 
@@ -219,7 +259,7 @@ export default function Todo() {
 
   async function handleDelete(id: string) {
     setTodos((ts) => ts.filter((t) => t.id !== id)); // optimistic
-    if (detailTodo?.id === id) closeDetail();
+    if (searchParams.get("id") === id) closeDetail();
     try { await deleteTodo(id); }
     catch (e) { setError(String(e)); load(); }
   }
@@ -287,6 +327,7 @@ export default function Todo() {
     todos.filter((t) => t.status === status && (t.assignee ?? null) === col);
 
   const colTmpl = `150px repeat(${COLS.length}, minmax(0, 1fr))`;
+  const deepLinkId = searchParams.get("id")?.trim() ?? "";
 
   return (
     <div style={{ fontFamily: FONT, color: "#1c1b1a" }}>
@@ -300,6 +341,18 @@ export default function Todo() {
         .td-card:hover .td-actions { opacity: 1; }
         .td-iconbtn:hover { background: #f0eeec !important; }
       `}</style>
+
+      {deepLinkMissing && deepLinkId && (
+        <Alert
+          type="warning"
+          showIcon
+          closable
+          onClose={() => setTodoIdInUrl(null)}
+          message="找不到该需求"
+          description={`链接中的任务 id 不存在或已删除：${deepLinkId}`}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, marginBottom: 18 }}>
@@ -484,6 +537,13 @@ export default function Todo() {
             onSubmitComment={() => void submitComment()}
             onEdit={() => openEdit(detailTodo)}
             onFollowersChange={(followers) => patchTodo(detailTodo, { followers })}
+            onCopyLink={() => {
+              const url = `${window.location.origin}${window.location.pathname}?id=${encodeURIComponent(detailTodo.id)}`;
+              void navigator.clipboard.writeText(url).then(
+                () => message.success("链接已复制"),
+                () => message.error("复制失败，请手动复制地址栏"),
+              );
+            }}
           />
         )}
       </Drawer>
@@ -711,6 +771,7 @@ function TodoDetail({
   onSubmitComment,
   onEdit,
   onFollowersChange,
+  onCopyLink,
 }: {
   todo: TodoRow;
   meLabel: string;
@@ -722,6 +783,7 @@ function TodoDetail({
   onSubmitComment: () => void;
   onEdit: () => void;
   onFollowersChange: (followers: TodoAssignee[]) => void;
+  onCopyLink: () => void;
 }) {
   const st = STATUS[todo.status];
   const pri = PRI[todo.priority];
@@ -746,9 +808,14 @@ function TodoDetail({
             </span>
           </div>
         </div>
-        <Button icon={<EditOutlined />} onClick={onEdit} style={{ borderRadius: 8 }}>
-          编辑
-        </Button>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <Tooltip title="复制链接">
+            <Button icon={<LinkOutlined />} onClick={onCopyLink} style={{ borderRadius: 8 }} />
+          </Tooltip>
+          <Button icon={<EditOutlined />} onClick={onEdit} style={{ borderRadius: 8 }}>
+            编辑
+          </Button>
+        </div>
       </div>
 
       {todo.description ? (
