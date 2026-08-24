@@ -824,12 +824,12 @@ export async function computeOperationsDiagnosis(
     if (productOpsData.draftProductCount > 5) {
       pStatus = "risk";
       pReasoning.push(
-        `有 ${productOpsData.draftProductCount} 个商品仍处于草稿（DRAFT）状态，占用库存但未上架，优先处理`,
+        `有 ${productOpsData.draftProductCount} 个商品仍处于草稿（DRAFT）状态，占用库存但未上架，优先复盘上新卡点`,
       );
     } else if (productOpsData.draftProductCount > 0) {
       pStatus = "watch";
       pReasoning.push(
-        `有 ${productOpsData.draftProductCount} 个商品草稿待上架，需要完成审核流程`,
+        `有 ${productOpsData.draftProductCount} 个商品草稿待上架，需要复盘上新流程并完成审核发布`,
       );
     }
 
@@ -850,7 +850,7 @@ export async function computeOperationsDiagnosis(
     if (pStatus === "healthy") {
       pReasoning.push("商品信息完整度良好，无待处理项");
     } else {
-      pReasoning.push("建议优先通过自动化工具补充素材或触发商品改进任务");
+      pReasoning.push("建议先区分是上架卡点还是素材缺口，再决定走上新复盘还是商品改进任务");
     }
 
     items.push({

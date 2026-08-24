@@ -203,7 +203,7 @@ export function GoogleAttributionPage() {
             </StatusPill>
             {!loaderData.adsConnected ? (
               <div style={{ marginTop: 10 }}>
-                <Link to={`/app/ads-catalog${locationSearch}`} style={{ fontSize: 13 }}>
+                <Link to={`/app/settings/connections/google${locationSearch}`} style={{ fontSize: 13 }}>
                   {t("googleAttribution.connectAds")}
                 </Link>
               </div>

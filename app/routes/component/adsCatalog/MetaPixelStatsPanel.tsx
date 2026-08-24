@@ -276,7 +276,7 @@ function StatsBody({
         ) : null}
         {stats.needsMetaAdsConnect ? (
           <p style={{ margin: "8px 0 0" }}>
-            <Link to={`/app/ads-catalog${locationSearch}`}>{t("metaPixelData.connectMetaAds")}</Link>
+            <Link to={`/app/settings/connections/meta${locationSearch}`}>{t("metaPixelData.connectMetaAds")}</Link>
           </p>
         ) : null}
       </div>

@@ -134,6 +134,7 @@ export function MetaPixelDataPage() {
   const data = useLoaderData<MetaPixelDataLoaderData>();
   const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
+  const connectionPath = `/app/settings/connections/meta${locationSearch}`;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [embed, setEmbed] = useState(data.embed);
@@ -184,16 +185,16 @@ export function MetaPixelDataPage() {
           title={t("metaPixelData.pageTitle")}
           subtitle={t("metaPixelData.pageSubtitle")}
           backLabel={t("metaPixelData.back")}
-          fallbackPath="/app/ads-catalog"
+          fallbackPath="/app/settings/connections/meta"
           preserveSearch
         />
         <div style={cardStyle}>
           <p style={{ margin: 0, fontSize: 14 }}>{t("metaPixelData.emptyBody")}</p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link to={`/app/ads-catalog${locationSearch}`} style={primaryBtn}>
+            <Link to={connectionPath} style={primaryBtn}>
               {t("metaPixelData.configureInCatalog")}
             </Link>
-            <Link to={`/app/ads-catalog${locationSearch}`} style={secondaryBtn}>
+            <Link to={connectionPath} style={secondaryBtn}>
               {t("metaPixelData.back")}
             </Link>
           </div>
@@ -216,12 +217,12 @@ export function MetaPixelDataPage() {
         title={t("metaPixelData.pageTitle")}
         subtitle={t("metaPixelData.pageSubtitle")}
         backLabel={t("metaPixelData.back")}
-        fallbackPath="/app/ads-catalog"
+        fallbackPath="/app/settings/connections/meta"
         preserveSearch
       />
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Link to={`/app/ads-catalog${locationSearch}`} style={primaryBtn}>
+        <Link to={connectionPath} style={primaryBtn}>
           {t("metaPixelData.editConfig")}
         </Link>
         {themeEditorUrl ? (
@@ -232,9 +233,6 @@ export function MetaPixelDataPage() {
         <a href={eventsManagerUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
           {t("metaPixelData.openEventsManager")}
         </a>
-        <Link to={`/app/insights/performance${locationSearch}`} style={secondaryBtn}>
-          {t("metaPixelData.openInsights")}
-        </Link>
       </div>
 
       <MetaPixelStatsPanel

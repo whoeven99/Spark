@@ -1,7 +1,18 @@
 const TOKEN_KEY = "spark_admin_token";
 const ROLE_KEY = "spark_admin_role";
+const USER_ID_KEY = "spark_admin_user_id";
 
 export type AdminRole = "owner" | "user";
+export type AdminUserId = "yewen" | "allen" | "zhuangze";
+
+export const ADMIN_USER_OPTIONS: ReadonlyArray<{
+  id: AdminUserId;
+  label: string;
+}> = [
+  { id: "yewen", label: "Yewen" },
+  { id: "allen", label: "Allen" },
+  { id: "zhuangze", label: "Zhuangze" },
+];
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
@@ -14,6 +25,8 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
+  localStorage.removeItem(USER_ID_KEY);
+  localStorage.removeItem("spark_admin_me");
 }
 
 export function getRole(): AdminRole | null {
@@ -26,6 +39,21 @@ export function setRole(role: AdminRole): void {
 
 export function isOwner(): boolean {
   return getRole() === "owner";
+}
+
+export function getAdminUserId(): AdminUserId | null {
+  const v = localStorage.getItem(USER_ID_KEY);
+  if (v === "yewen" || v === "allen" || v === "zhuangze") return v;
+  return null;
+}
+
+export function setAdminUserId(userId: AdminUserId): void {
+  localStorage.setItem(USER_ID_KEY, userId);
+}
+
+export function getAdminUserLabel(): string {
+  const id = getAdminUserId();
+  return ADMIN_USER_OPTIONS.find((u) => u.id === id)?.label ?? "—";
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -955,9 +983,18 @@ export type TodoRow = {
   status: TodoStatus;
   priority: TodoPriority;
   etaDays: number | null;
+  followers: TodoAssignee[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type TodoComment = {
+  id: string;
+  todoId: string;
+  author: TodoAssignee;
+  body: string;
+  createdAt: string;
 };
 
 export function fetchTodos(): Promise<{ todos: TodoRow[] }> {
@@ -970,6 +1007,7 @@ export function createTodo(data: {
   assignee?: TodoAssignee;
   priority?: TodoPriority;
   etaDays?: number | null;
+  followers?: TodoAssignee[];
   createdBy: string;
 }): Promise<{ ok: boolean; id: string }> {
   return apiFetch("/todos", { method: "POST", body: JSON.stringify(data) });
@@ -984,6 +1022,7 @@ export function updateTodo(
     status: TodoStatus;
     priority: TodoPriority;
     etaDays?: number | null;
+    followers?: TodoAssignee[];
   },
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, {
@@ -994,6 +1033,22 @@ export function updateTodo(
 
 export function deleteTodo(id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function fetchTodoComments(
+  todoId: string,
+): Promise<{ comments: TodoComment[] }> {
+  return apiFetch(`/todos/${encodeURIComponent(todoId)}/comments`);
+}
+
+export function createTodoComment(
+  todoId: string,
+  data: { author: TodoAssignee; body: string },
+): Promise<{ ok: boolean; comment: TodoComment }> {
+  return apiFetch(`/todos/${encodeURIComponent(todoId)}/comments`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 // --- Pixel Logs（webpixel 阿里云日志，owner only） ---

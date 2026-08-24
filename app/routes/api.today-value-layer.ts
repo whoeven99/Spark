@@ -12,8 +12,11 @@ export type ValueLayerResponse =
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
   try {
-    const value = await loadValueLayer(admin, session.shop);
+    const value = await loadValueLayer(admin, session.shop, {
+      countryCode: url.searchParams.get("country"),
+    });
     return Response.json({ ok: true, value } satisfies ValueLayerResponse);
   } catch (error) {
     console.error("[daily-operations] value layer failed:", error);

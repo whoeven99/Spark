@@ -1,6 +1,10 @@
 import type { AITaskItem, AITaskStatus, AITaskType } from "../../lib/aiTaskTypes";
 import type { WorkspaceDashboardTaskSummary } from "../../lib/workspaceDashboardTypes";
-import type { UnifiedTaskEntry } from "../../lib/unifiedTaskTypes";
+import type {
+  ScheduledAutomationTaskView,
+  UnifiedTaskEntry,
+} from "../../lib/unifiedTaskTypes";
+import type { OperationTaskView } from "./dailyInspection.server";
 
 const AI_TASK_TYPE_LABELS: Record<AITaskType, string> = {
   product_improve: "商品文案优化",
@@ -61,12 +65,39 @@ function summarizeAITask(task: AITaskItem): WorkspaceDashboardTaskSummary {
   };
 }
 
+const OPERATION_STATUS_LABELS: Record<string, string> = {
+  open: "待处理",
+  in_progress: "进行中",
+  done: "已完成",
+  ignored: "已忽略",
+  auto_closed: "已自动关闭",
+};
+
+function summarizeOperationTask(task: OperationTaskView): WorkspaceDashboardTaskSummary {
+  const statusLabel = OPERATION_STATUS_LABELS[task.status] ?? task.status;
+  const actionHint = task.suggestedActions[0] ?? task.triggerReason;
+  return {
+    id: task.id,
+    title: task.title,
+    result: [task.priority, statusLabel, actionHint].filter(Boolean).join(" · "),
+  };
+}
+
+function summarizeAutomationTask(task: ScheduledAutomationTaskView): WorkspaceDashboardTaskSummary {
+  return {
+    id: task.id,
+    title: task.title,
+    result: [task.schedule, task.defaultQuestion].filter(Boolean).join(" · "),
+  };
+}
+
 export function buildWorkspaceTaskSummaries(
   entries: UnifiedTaskEntry[],
 ): WorkspaceDashboardTaskSummary[] {
   return entries
-    .filter((entry): entry is Extract<UnifiedTaskEntry, { entryType: "ai_task" }> =>
-      entry.entryType === "ai_task",
-    )
-    .map((entry) => summarizeAITask(entry.task));
+    .map((entry) => {
+      if (entry.entryType === "ai_task") return summarizeAITask(entry.task);
+      if (entry.entryType === "automation_task") return summarizeAutomationTask(entry.task);
+      return summarizeOperationTask(entry.task);
+    });
 }

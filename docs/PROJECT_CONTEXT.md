@@ -20,12 +20,18 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 | 目的地 | URL | 实现 |
 | --- | --- | --- |
 | Ask | `/app` | `app._index.tsx` + `page/workspace/WorkspaceAppShellPage.tsx` |
-| Today | `/app/today` | `app.today._index.tsx`、`app.today.diagnosis.tsx`、`app.today.orders.tsx` |
+| Today | `/app/today` | `app.today._index.tsx`、`app.today.roi.tsx`、`app.today.orders.tsx`、`app.today.traffic.tsx`、`app.today.conversion.tsx` |
+| Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx` |
 | Studio | `/app/studio` | `app.studio.copy.tsx`、`app.studio.image.tsx`；`app.studio.translate.tsx` 重定向到 copy |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
 | Settings | `/app/settings` | `billing`、`channels`、`logistics`、`data`、`feedback` |
 
 React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路由时必须先核对文件名到 URL 的映射。
+
+兼容层约定：
+
+- `app.today.diagnosis.tsx` 是历史深链兼容路由，只负责重定向到 Today、Health Monitor、Tasks 等正式目的地，不再承载正式 UI 或业务逻辑。
+- `app.today.insights.tsx` 是历史 Today Insights 兼容路由，只负责跳转到 Today 正式详情页。
 
 ## 3. 关键 HTTP 入口
 
@@ -59,7 +65,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 | PageSpeed Insights | `app/server/pageSpeed/` |
 | AI 任务和任务估算 | `app/server/aiTask/` |
 | 统一任务列表 | `app/server/unifiedTask/` |
-| Today、诊断、ROI、自动化 | `app/server/operations/`、`app/server/automation/` |
+| Today、Health Monitor、Tasks、ROI、自动化 | `app/server/operations/`、`app/server/automation/` |
 | Shopify 同步和历史回补 | `app/server/shopify/sync/`、`app/routes/app.settings.data.tsx` |
 | 计费、订阅、购包、token | `app/server/billing/`、`app/server/tokenUsage/` |
 | 会话、文件上下文 | `app/server/conversation/`、`app/server/fileContext/` |

@@ -1,5 +1,6 @@
 /** 工作台首页 — 对齐 Spark 首页实装预览：问候、AI 输入、店铺概览、任务监控。 */
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type {
   AutomationOverview,
@@ -26,43 +27,129 @@ import {
   textButtonStyle,
 } from "./styles";
 
-const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-
-const QUICK_PROMPTS: Array<{ label: string; prompt: string }> = [
-  { label: "诊断本周经营", prompt: "帮我诊断本周经营情况，找出需要优先处理的问题，并给出 3 条可执行建议。" },
-  { label: "处理今日风险", prompt: "根据今日经营巡检结果，帮我按影响从高到低列出今天最该处理的 3 件事。" },
-  { label: "优化商品文案", prompt: "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。" },
-  { label: "查看待处理订单", prompt: "帮我查看当前待处理、异常或高风险订单，并给出处理建议。" },
-];
-
-const CONTEXT_CHIPS: Array<{ tool: ContextTool; label: string; icon: string }> = [
-  { tool: "product", label: "商品", icon: "◫" },
-  { tool: "order", label: "订单", icon: "◎" },
-  { tool: "file", label: "文件", icon: "↑" },
-];
-
-function greetingForHour(hour: number): string {
-  if (hour < 6) return "夜深了";
-  if (hour < 12) return "早上好";
-  if (hour < 18) return "下午好";
-  return "晚上好";
+function greetingForHour(
+  hour: number,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (hour < 6) return t("workspace.home.greeting.lateNight");
+  if (hour < 12) return t("workspace.home.greeting.morning");
+  if (hour < 18) return t("workspace.home.greeting.afternoon");
+  return t("workspace.home.greeting.evening");
 }
 
-function formatHomeDate(now: Date): string {
-  return `${WEEKDAY_LABELS[now.getDay()]} · ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
+function formatHomeDate(
+  now: Date,
+  locale: string,
+): string {
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(now);
+  if (locale.startsWith("zh")) {
+    return `${weekday} · ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
+  }
+  return `${weekday} · ${now.getMonth() + 1}/${now.getDate()}`;
 }
 
-function formatInspectionTime(iso: string | null | undefined): string {
-  if (!iso) return "今日";
+function formatInspectionTime(
+  iso: string | null | undefined,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (!iso) return t("workspace.home.today");
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "今日";
-  return `今日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (Number.isNaN(d.getTime())) return t("workspace.home.today");
+  return t("workspace.home.inspectionAt", {
+    time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+  });
 }
 
-function alertToneLabel(tone: "warning" | "info" | "critical"): string {
-  if (tone === "critical") return "风险";
-  if (tone === "warning") return "关注";
-  return "提示";
+function alertToneLabel(
+  tone: "warning" | "info" | "critical",
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (tone === "critical") return t("workspace.home.alertTone.critical");
+  if (tone === "warning") return t("workspace.home.alertTone.warning");
+  return t("workspace.home.alertTone.info");
+}
+
+function localizeDashboardMetricLabel(
+  label: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const map: Record<string, string> = {
+    "销售额": "workspace.dashboard.metrics.sales",
+    "订单数": "workspace.dashboard.metrics.orders",
+    "转化率": "workspace.dashboard.metrics.conversionRate",
+    "客单价": "workspace.dashboard.metrics.aov",
+    "退款率": "workspace.dashboard.metrics.refundRate",
+    "库存风险 SKU": "workspace.dashboard.metrics.riskSku",
+  };
+  const key = map[label];
+  return key ? t(key) : label;
+}
+
+function localizeDashboardText(
+  text: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const exactMap: Record<string, string> = {
+    "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。":
+      t("workspace.dashboard.empty.orders"),
+    "暂无可用经营数据": t("workspace.home.command.noData"),
+    "完成数据回补后会生成今日经营摘要": t("workspace.home.command.snapshotPending"),
+    "当前未发现紧急风险，可在健康度监测查看完整诊断，并到任务中心跟进待办。":
+      t("workspace.home.command.noUrgentRisk"),
+    "需 Shopify 弃购或 Analytics": t("workspace.dashboard.metrics.pendingSource"),
+    "无上期数据": t("workspace.dashboard.metrics.noPreviousData"),
+    "暂无需要优先处理的风险。": t("workspace.home.command.noPriorityRisk"),
+    "暂无经营数据。": t("workspace.home.command.noBusinessData"),
+  };
+  if (exactMap[text]) {
+    return exactMap[text];
+  }
+
+  const watchSkuMatch = text.match(/^关注 SKU (\d+)$/);
+  if (watchSkuMatch) {
+    return t("workspace.dashboard.metrics.watchSku", { count: Number(watchSkuMatch[1]) });
+  }
+
+  return text
+    .replace(/^执行中/, t("workspace.dashboard.taskStatus.running"))
+    .replace(/^已完成/, t("workspace.dashboard.taskStatus.succeeded"))
+    .replace(/^失败/, t("workspace.dashboard.taskStatus.failed"))
+    .replace(/^已取消/, t("workspace.dashboard.taskStatus.cancelled"))
+    .replace(/^待审核/, t("workspace.dashboard.taskStatus.pendingReview"))
+    .replace(/^已应用/, t("workspace.dashboard.taskStatus.applied"))
+    .replace(/^已评分/, t("workspace.dashboard.taskStatus.scored"))
+    .replace(/(\d+) 个商品/g, (_, count: string) =>
+      t("workspace.dashboard.count.products", { count: Number(count) }),
+    );
+}
+
+function localizeDashboardSnapshot(
+  snapshot: WorkspaceDashboardSnapshot,
+  t: ReturnType<typeof useTranslation>["t"],
+): WorkspaceDashboardSnapshot {
+  const metrics = Array.isArray(snapshot.metrics) ? snapshot.metrics : [];
+  const alerts = Array.isArray(snapshot.alerts) ? snapshot.alerts : [];
+  const suggestions = Array.isArray(snapshot.suggestions) ? snapshot.suggestions : [];
+  const recentTaskSummaries = Array.isArray(snapshot.recentTaskSummaries)
+    ? snapshot.recentTaskSummaries
+    : [];
+  return {
+    ...snapshot,
+    emptyMessage: snapshot.emptyMessage
+      ? localizeDashboardText(snapshot.emptyMessage, t)
+      : snapshot.emptyMessage,
+    metrics: metrics.map((metric) => ({
+      ...metric,
+      label: localizeDashboardMetricLabel(metric.label, t),
+      delta: localizeDashboardText(metric.delta, t),
+    })),
+    alerts,
+    suggestions: suggestions.map((item) => localizeDashboardText(item, t)),
+    recentTaskSummaries: recentTaskSummaries.map((task) => ({
+      ...task,
+      result: localizeDashboardText(task.result, t),
+    })),
+  };
 }
 
 function alertToneStyle(tone: "warning" | "info" | "critical") {
@@ -547,6 +634,7 @@ export function HomePanel({
   displayName,
   snapshot,
   runningTaskCount,
+  initialRenderTimeIso,
   onSubmitPrompt,
   onOpenContextTool,
   onMoreContext,
@@ -557,6 +645,7 @@ export function HomePanel({
   displayName: string;
   snapshot: WorkspaceDashboardSnapshot;
   runningTaskCount: number;
+  initialRenderTimeIso?: string;
   onSubmitPrompt: (prompt: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
   onMoreContext: () => void;
@@ -564,19 +653,70 @@ export function HomePanel({
   onOpenDailyOps: () => void;
   onOpenTasks: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const [draft, setDraft] = useState("");
   const [automationOverview, setAutomationOverview] =
     useState<AutomationOverview | null>(null);
-  const now = useMemo(() => new Date(), []);
-  const needsAttention = snapshot.automation?.status === "attention";
-  const suggestionItems = (Array.isArray(snapshot.suggestions) ? snapshot.suggestions : []).slice(0, 3);
-  const topMetrics = (Array.isArray(snapshot.metrics) ? snapshot.metrics : []).slice(0, 5);
-  const topAlerts = (Array.isArray(snapshot.alerts) ? snapshot.alerts : []).slice(0, 3);
-  const recentTasks = (Array.isArray(snapshot.recentTaskSummaries) ? snapshot.recentTaskSummaries : []).slice(0, 3);
+  const now = useMemo(() => {
+    if (!initialRenderTimeIso) return new Date();
+    const parsed = new Date(initialRenderTimeIso);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [initialRenderTimeIso]);
+  const localizedSnapshot = useMemo(
+    () => localizeDashboardSnapshot(snapshot, t),
+    [snapshot, t],
+  );
+  const needsAttention = localizedSnapshot.automation?.status === "attention";
+  const suggestionItems = (Array.isArray(localizedSnapshot.suggestions)
+    ? localizedSnapshot.suggestions
+    : []
+  ).slice(0, 3);
+  const topMetrics = (Array.isArray(localizedSnapshot.metrics)
+    ? localizedSnapshot.metrics
+    : []
+  ).slice(0, 5);
+  const topAlerts = (Array.isArray(localizedSnapshot.alerts)
+    ? localizedSnapshot.alerts
+    : []
+  ).slice(0, 3);
+  const recentTasks = (Array.isArray(localizedSnapshot.recentTaskSummaries)
+    ? localizedSnapshot.recentTaskSummaries
+    : []
+  ).slice(0, 3);
   const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
     ? automationOverview.recommendedPlaybooks
     : [];
+  const locale = i18n.resolvedLanguage || i18n.language || "en";
+  const quickPrompts = useMemo(
+    () => [
+      {
+        label: t("workspace.home.quickPrompts.diagnoseWeek.label"),
+        prompt: t("workspace.home.quickPrompts.diagnoseWeek.prompt"),
+      },
+      {
+        label: t("workspace.home.quickPrompts.handleRisks.label"),
+        prompt: t("workspace.home.quickPrompts.handleRisks.prompt"),
+      },
+      {
+        label: t("workspace.home.quickPrompts.optimizeCopy.label"),
+        prompt: t("workspace.home.quickPrompts.optimizeCopy.prompt"),
+      },
+      {
+        label: t("workspace.home.quickPrompts.reviewOrders.label"),
+        prompt: t("workspace.home.quickPrompts.reviewOrders.prompt"),
+      },
+    ],
+    [t],
+  );
+  const contextChips = useMemo(
+    () => [
+      { tool: "product" as const, label: t("workspace.home.context.product"), icon: "◫" },
+      { tool: "order" as const, label: t("workspace.home.context.order"), icon: "◎" },
+      { tool: "file" as const, label: t("workspace.home.context.file"), icon: "↑" },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -633,20 +773,25 @@ export function HomePanel({
       <header style={homeStyles.pageHeader}>
         <div>
           <h1 style={homeStyles.greetingTitle}>
-            {greetingForHour(now.getHours())}，{displayName}
+            {t("workspace.home.greeting.title", {
+              greeting: greetingForHour(now.getHours(), t),
+              name: displayName,
+            })}
           </h1>
-          <div style={homeStyles.greetingDate}>{formatHomeDate(now)}</div>
+          <div style={homeStyles.greetingDate}>{formatHomeDate(now, locale)}</div>
         </div>
         {snapshot.hasData || needsAttention ? (
           <div style={homeStyles.statusPill(needsAttention)}>
             <span style={homeStyles.statusDot(needsAttention)} aria-hidden="true" />
-            {needsAttention ? "今日巡检有需关注事项" : "今日巡检正常"}
+            {needsAttention
+              ? t("workspace.home.status.needsAttention")
+              : t("workspace.home.status.healthy")}
           </div>
         ) : null}
       </header>
 
       <CommandCenter
-        snapshot={snapshot}
+        snapshot={localizedSnapshot}
         topMetrics={topMetrics}
         topAlerts={topAlerts}
         suggestionItems={suggestionItems}
@@ -664,20 +809,20 @@ export function HomePanel({
       <section style={homeStyles.assistantCard}>
         <div style={homeStyles.assistantBadge}>
           <span aria-hidden="true">■</span>
-          <span>ASK SPARK</span>
+          <span>{t("workspace.home.askSpark")}</span>
         </div>
-        <h2 style={homeStyles.assistantTitle}>继续追问，或直接发起一个任务</h2>
+        <h2 style={homeStyles.assistantTitle}>{t("workspace.home.assistantTitle")}</h2>
         <div style={homeStyles.composerShell}>
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleComposerKeyDown}
-            placeholder="例如：把上面的库存风险拆成可执行清单，并告诉我先处理哪 3 个 SKU…"
+            placeholder={t("workspace.home.composerPlaceholder")}
             style={homeStyles.composerInput}
           />
           <div style={homeStyles.composerFooter}>
             <div style={homeStyles.chipRow}>
-              {CONTEXT_CHIPS.map((chip) => (
+              {contextChips.map((chip) => (
                 <button
                   key={chip.tool}
                   type="button"
@@ -688,7 +833,7 @@ export function HomePanel({
                 </button>
               ))}
               <button type="button" style={homeStyles.contextChip} onClick={onMoreContext}>
-                + 更多
+                + {t("workspace.home.moreContext")}
               </button>
             </div>
             <button
@@ -696,14 +841,14 @@ export function HomePanel({
               style={homeStyles.sendButton(!draft.trim())}
               disabled={!draft.trim()}
               onClick={submitDraft}
-              aria-label="发送"
+              aria-label={t("workspace.home.send")}
             >
               ↑
             </button>
           </div>
         </div>
         <div style={homeStyles.quickPillRow}>
-          {QUICK_PROMPTS.map((item) => (
+          {quickPrompts.map((item) => (
             <button
               key={item.label}
               type="button"
@@ -748,20 +893,23 @@ function CommandCenter({
   onOpenDailyOps: () => void;
   onOpenTasks: () => void;
 }) {
+  const { t } = useTranslation();
   const statusCopy = snapshot.hasData
     ? needsAttention
-      ? "今天有需要优先处理的经营风险"
-      : "今日经营状态整体正常"
-    : snapshot.emptyMessage ?? "暂无可用经营数据";
+      ? t("workspace.home.command.needsAttention")
+      : t("workspace.home.command.healthy")
+    : snapshot.emptyMessage ?? t("workspace.home.command.noData");
   const metaCopy = snapshot.generatedAt
-    ? `数据更新于 ${formatInspectionTime(snapshot.generatedAt)}`
+    ? t("workspace.home.command.updatedAt", {
+        time: formatInspectionTime(snapshot.generatedAt, t),
+      })
     : snapshot.snapshotDate
-      ? `快照 ${snapshot.snapshotDate}`
-      : "完成数据回补后会生成今日经营摘要";
+      ? t("workspace.home.command.snapshotDate", { date: snapshot.snapshotDate })
+      : t("workspace.home.command.snapshotPending");
   const fallbackActions = [
-    "帮我生成今日经营体检报告",
-    "帮我检查哪些数据还没有同步",
-    "帮我列出今天最值得处理的运营动作",
+    t("workspace.home.fallbackActions.report"),
+    t("workspace.home.fallbackActions.sync"),
+    t("workspace.home.fallbackActions.actions"),
   ];
   const actionItems =
     recommendedPlaybooks.length > 0
@@ -777,42 +925,66 @@ function CommandCenter({
           detail: "",
           prompt,
         }));
+  const metricColumns = isMobile ? 2 : 3;
 
   return (
-    <section style={homeStyles.commandGrid(isMobile)}>
+    <section style={panelStackStyle}>
       <div style={homeStyles.commandMain}>
         <div style={homeStyles.sectionHead}>
           <div>
-            <div style={homeStyles.commandEyebrow}>TODAY COMMAND CENTER</div>
+            <div style={homeStyles.commandEyebrow}>{t("workspace.home.command.eyebrow")}</div>
             <h2 style={homeStyles.commandTitle}>{statusCopy}</h2>
             <div style={homeStyles.commandMeta}>{metaCopy}</div>
           </div>
           <button type="button" style={textButtonStyle} onClick={onOpenDashboard}>
-            经营看板 →
+            {t("workspace.home.links.dashboard")} →
           </button>
         </div>
+      </div>
 
-        <div style={homeStyles.summaryGrid(isMobile)}>
-          {topMetrics.map((metric) => (
-            <div key={metric.label} style={homeStyles.summaryMetric}>
-              <div style={metricLabelStyle}>
-                {metric.label}
-                {metric.pendingIntegration ? <span style={homeStyles.pendingBadge}>待接入</span> : null}
-              </div>
-              <div style={{ ...metricValueStyle, fontSize: 22, marginTop: 8 }}>{metric.value}</div>
-              <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
-            </div>
-          ))}
-        </div>
-
-        <div>
+      <div style={homeStyles.metricsGrid(isMobile ? 1 : 3)}>
+        <section style={homeStyles.sectionCard}>
           <div style={homeStyles.sectionHead}>
             <div>
-              <h3 style={homeStyles.sectionTitle}>最重要的风险</h3>
-              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>最多展示 3 条，完整列表在每日待办里</div>
+              <h3 style={homeStyles.sectionTitle}>
+                {t("workspace.home.sections.businessMetrics")}
+              </h3>
+              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
+                {t("workspace.home.sections.businessMetricsHint")}
+              </div>
+            </div>
+            <button type="button" style={textButtonStyle} onClick={onOpenDashboard}>
+              {t("workspace.home.links.dashboard")} →
+            </button>
+          </div>
+          <div style={homeStyles.metricsGrid(metricColumns)}>
+            {topMetrics.map((metric) => (
+              <div key={metric.label} style={homeStyles.summaryMetric}>
+                <div style={metricLabelStyle}>
+                  {metric.label}
+                  {metric.pendingIntegration ? (
+                    <span style={homeStyles.pendingBadge}>
+                      {t("workspace.home.pendingIntegration")}
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ ...metricValueStyle, fontSize: 22, marginTop: 8 }}>{metric.value}</div>
+                <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section style={homeStyles.sectionCard}>
+          <div style={homeStyles.sectionHead}>
+            <div>
+              <h3 style={homeStyles.sectionTitle}>{t("workspace.home.sections.topRisks")}</h3>
+              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
+                {t("workspace.home.sections.topRisksHint")}
+              </div>
             </div>
             <button type="button" style={textButtonStyle} onClick={onOpenDailyOps}>
-              每日待办 →
+              {t("workspace.home.links.dailyOps")} →
             </button>
           </div>
           <div style={homeStyles.alertList}>
@@ -821,32 +993,28 @@ function CommandCenter({
                 <button
                   key={`${alert.title}-${alert.detail}`}
                   type="button"
-                  style={{ ...homeStyles.alertItem(alert.tone), textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
+                  style={{
+                    ...homeStyles.alertItem(alert.tone),
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
                   onClick={onOpenDailyOps}
                 >
-                  <span style={homeStyles.alertBadge(alert.tone)}>{alertToneLabel(alert.tone)}</span>
+                  <span style={homeStyles.alertBadge(alert.tone)}>
+                    {alertToneLabel(alert.tone, t)}
+                  </span>
                   <span style={sectionTitleSmallStyle}>{alert.title}</span>
                   <span style={sectionTextStyle}>{alert.detail}</span>
                 </button>
               ))
             ) : (
               <div style={{ ...homeStyles.alertItem("info"), color: shopifyUi.textSecondary }}>
-                {snapshot.hasData ? "暂无需要优先处理的风险。" : snapshot.emptyMessage ?? "暂无经营数据。"}
+                {snapshot.hasData
+                  ? t("workspace.home.command.noPriorityRisk")
+                  : snapshot.emptyMessage ?? t("workspace.home.command.noBusinessData")}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-
-      <aside style={homeStyles.commandSide}>
-        <section style={homeStyles.sectionCard}>
-          <div style={homeStyles.sectionHead}>
-            <div>
-              <h3 style={homeStyles.sectionTitle}>推荐动作</h3>
-              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
-                基于今日诊断直接进入下一步
-              </div>
-            </div>
           </div>
           <div style={homeStyles.actionList}>
             {actionItems.slice(0, 3).map((item) => (
@@ -858,7 +1026,14 @@ function CommandCenter({
               >
                 {item.label}
                 {item.detail ? (
-                  <span style={{ display: "block", marginTop: 3, color: shopifyUi.textSecondary, fontWeight: 500 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: 3,
+                      color: shopifyUi.textSecondary,
+                      fontWeight: 500,
+                    }}
+                  >
                     {item.detail}
                   </span>
                 ) : null}
@@ -880,22 +1055,40 @@ function CommandCenter({
         <section style={homeStyles.sectionCard}>
           <div style={homeStyles.sectionHead}>
             <div>
-              <h3 style={homeStyles.sectionTitle}>最近任务</h3>
+              <h3 style={homeStyles.sectionTitle}>{t("workspace.home.sections.recentTasks")}</h3>
               <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
-                {runningTaskCount > 0 ? `${runningTaskCount} 个任务进行中` : "当前没有进行中任务"}
+                {runningTaskCount > 0
+                  ? t("workspace.home.sections.runningTasks", { count: runningTaskCount })
+                  : t("workspace.home.sections.noRunningTasks")}
               </div>
             </div>
             <button type="button" style={textButtonStyle} onClick={onOpenTasks}>
-              任务中心 →
+              {t("workspace.home.links.tasks")} →
             </button>
           </div>
+          {snapshot.automation ? (
+            <div style={{ ...homeStyles.taskItem, marginBottom: 10 }}>
+              <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
+              <span style={sectionTextStyle}>{snapshot.automation.detail}</span>
+              {snapshot.automation.lastRunAt ? (
+                <span style={mutedMetaStyle}>
+                  {formatInspectionTime(snapshot.automation.lastRunAt, t)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div style={homeStyles.taskList}>
             {recentTasks.length > 0 ? (
               recentTasks.map((task) => (
                 <button
                   key={task.id}
                   type="button"
-                  style={{ ...homeStyles.taskItem, textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
+                  style={{
+                    ...homeStyles.taskItem,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
                   onClick={onOpenTasks}
                 >
                   <span style={sectionTitleSmallStyle}>{task.title}</span>
@@ -904,12 +1097,12 @@ function CommandCenter({
               ))
             ) : (
               <div style={homeStyles.taskItem}>
-                <span style={sectionTextStyle}>暂无近期任务。创建文案或图片任务后会显示在这里。</span>
+                <span style={sectionTextStyle}>{t("workspace.home.sections.noRecentTasks")}</span>
               </div>
             )}
           </div>
         </section>
-      </aside>
+      </div>
     </section>
   );
 }

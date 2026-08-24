@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
@@ -71,6 +71,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function BackfillPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const { shop, checkpoints, counts } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -121,8 +123,9 @@ export default function BackfillPage() {
       <PageHeaderNav
         title={t("settingsData.pageTitle")}
         subtitle={t("settingsData.pageSubtitle", { shop })}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        backLabel={returnTo ? "返回上一级" : t("settingsShell.back")}
+        fallbackPath={returnTo ?? "/app/settings"}
+        returnTo={returnTo}
       />
 
       <PageSurface>

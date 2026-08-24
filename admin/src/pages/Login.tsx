@@ -1,15 +1,27 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Form, Input, Button, Card, Typography, Alert } from "antd";
-import { LockOutlined } from "@ant-design/icons";
-import { setToken, setRole, type AdminRole } from "../api";
+import { Form, Input, Button, Card, Typography, Alert, Select } from "antd";
+import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import {
+  setToken,
+  setRole,
+  setAdminUserId,
+  ADMIN_USER_OPTIONS,
+  type AdminRole,
+  type AdminUserId,
+} from "../api";
+
+type LoginValues = {
+  userId: AdminUserId;
+  secret: string;
+};
 
 export default function Login() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function onFinish({ secret }: { secret: string }) {
+  async function onFinish({ userId, secret }: LoginValues) {
     setLoading(true);
     setError("");
     try {
@@ -20,9 +32,18 @@ export default function Login() {
         setError("密码错误");
         return;
       }
-      const { role } = await res.json() as { role: AdminRole };
+      const data = (await res.json()) as {
+        role: AdminRole;
+        userId: AdminUserId;
+        label: string;
+      };
+      if (data.userId !== userId) {
+        setError("身份与密码不匹配，请确认选对了自己");
+        return;
+      }
       setToken(secret);
-      setRole(role);
+      setRole(data.role);
+      setAdminUserId(data.userId);
       navigate("/", { replace: true });
     } catch {
       setError("连接失败，请重试");
@@ -48,11 +69,33 @@ export default function Login() {
         {error && (
           <Alert type="error" message={error} style={{ marginBottom: 16 }} />
         )}
-        <Form onFinish={onFinish} layout="vertical">
-          <Form.Item name="secret" rules={[{ required: true, message: "请输入管理员密码" }]}>
+        <Form
+          onFinish={onFinish}
+          layout="vertical"
+          initialValues={{ userId: "yewen" }}
+        >
+          <Form.Item
+            name="userId"
+            label="身份"
+            rules={[{ required: true, message: "请选择身份" }]}
+          >
+            <Select
+              size="large"
+              options={ADMIN_USER_OPTIONS.map((u) => ({
+                value: u.id,
+                label: u.label,
+              }))}
+              suffixIcon={<UserOutlined />}
+            />
+          </Form.Item>
+          <Form.Item
+            name="secret"
+            label="密码"
+            rules={[{ required: true, message: "请输入密码" }]}
+          >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder="管理员密码"
+              placeholder="个人密码"
               size="large"
             />
           </Form.Item>

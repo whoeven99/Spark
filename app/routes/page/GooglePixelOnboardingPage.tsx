@@ -253,7 +253,7 @@ export function GooglePixelOnboardingPage() {
         title={t("googlePixelOnboarding.pageTitle")}
         subtitle={t("googlePixelOnboarding.pageSubtitle")}
         backLabel={t("googlePixelOnboarding.back")}
-        fallbackPath="/app/ads-catalog"
+        fallbackPath="/app/settings/connections/google"
         preserveSearch
       />
 

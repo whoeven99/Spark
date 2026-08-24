@@ -508,6 +508,30 @@
         gap: 10px;
       }
 
+      .group-stack,
+      .boundary-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .boundary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .group-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .tool-meta {
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
       .progress {
         height: 8px;
         border-radius: 999px;
@@ -559,7 +583,8 @@
 
         .chat-layout,
         .grid-2,
-        .grid-3 {
+        .grid-3,
+        .boundary-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -582,7 +607,7 @@
           <div class="nav">
             <button class="active" data-panel="dashboard"><span>经营看板</span><span class="muted">看板</span></button>
             <button data-panel="chat"><span>对话</span><span class="muted">对话</span></button>
-            <button data-panel="skills"><span>技能</span><span class="muted">技能</span></button>
+            <button data-panel="skills"><span>创作工作台</span><span class="muted">工具</span></button>
             <button data-panel="automation"><span>自动化</span><span class="muted">自动化</span></button>
             <button data-panel="tasks"><span>任务列表</span><span class="muted">任务</span></button>
           </div>
@@ -760,24 +785,142 @@
         </section>
 
         <section class="panel" id="panel-skills">
-          <section class="surface">
-            <div class="section-head">
-              <div>
-                <h2>常用工具</h2>
-                <p class="subtitle" style="margin-top:6px">将已有 tools 作为可直接进入的应用入口。</p>
+          <div class="group-stack">
+            <section class="surface">
+              <div class="section-head">
+                <div>
+                  <h2>创作工作台</h2>
+                  <p class="subtitle" style="margin-top:6px">把 app 和 skill 统一收成可调用能力；连接中心负责接入与健康，创作工作台负责使用与执行。</p>
+                </div>
+                <button class="ghost-btn">打开连接中心</button>
               </div>
-              <button class="ghost-btn">管理排序</button>
-            </div>
 
-            <div class="grid-3">
-              <article class="skill-card"><div class="muted">内容</div><h3>商品文案优化</h3><div>批量生成和优化商品标题、卖点与描述。</div><div class="row"><span class="badge badge-neutral">最近使用</span><button class="link-btn">进入</button></div></article>
-              <article class="skill-card"><div class="muted">翻译</div><h3>多语言翻译</h3><div>支持商品内容、页面文案与术语统一翻译。</div><div class="row"><span class="badge badge-neutral">可用</span><button class="link-btn">进入</button></div></article>
-              <article class="skill-card"><div class="muted">分析</div><h3>店铺诊断</h3><div>汇总经营指标并给出异常原因和建议。</div><div class="row"><span class="badge badge-blue">推荐</span><button class="link-btn">进入</button></div></article>
-              <article class="skill-card"><div class="muted">视觉</div><h3>图片工具</h3><div>处理商品图翻译、文生图和素材优化。</div><div class="row"><span class="badge badge-neutral">可用</span><button class="link-btn">进入</button></div></article>
-              <article class="skill-card"><div class="muted">营销</div><h3>广告素材建议</h3><div>结合商品和活动目标生成广告文案建议。</div><div class="row"><span class="badge badge-orange">内测</span><button class="link-btn">进入</button></div></article>
-              <article class="skill-card"><div class="muted">运营</div><h3>邮件运营助手</h3><div>根据商品和分群生成邮件主题与正文。</div><div class="row"><span class="badge badge-neutral">可用</span><button class="link-btn">进入</button></div></article>
-            </div>
-          </section>
+              <div class="boundary-grid">
+                <div class="side-card">
+                  <h3>连接中心负责什么</h3>
+                  <div class="list" style="margin-top:12px">
+                    <div>渠道授权、账号绑定和基础凭证配置</div>
+                    <div>健康检查、快照、事件回传与渠道诊断</div>
+                    <div>先把能力接进来，再交给工作台调用</div>
+                  </div>
+                </div>
+                <div class="side-card">
+                  <h3>创作工作台负责什么</h3>
+                  <div class="list" style="margin-top:12px">
+                    <div>广告创建、Catalog 管理、Feed / 商品分发</div>
+                    <div>商品文案、图片工具、后续落地页和素材生产</div>
+                    <div>AI 助手、批处理和自动化 skill 的统一入口</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="surface">
+              <div class="group-head">
+                <div>
+                  <h2>投放与分发</h2>
+                  <p class="subtitle" style="margin-top:6px">把广告创建、 Catalog 管理和商品分发放进同一组入口。</p>
+                </div>
+                <span class="badge badge-green">已可用</span>
+              </div>
+              <div class="grid-3">
+                <article class="skill-card">
+                  <div class="muted">投放</div>
+                  <h3>广告创建</h3>
+                  <div>进入 Meta / TikTok / Google 的广告创建流程，继续完成 campaign、ad set 和 ad 配置。</div>
+                  <div class="tool-meta">这是能力使用入口，不再作为创作页的唯一职责。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">优化</div>
+                  <h3>广告编辑</h3>
+                  <div>进入已有投放对象的编辑流程，逐级选择 campaign、ad set 和 ad 后继续修改。</div>
+                  <div class="tool-meta">适合作为投放优化和问题修正的后续动作入口。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">分发</div>
+                  <h3>Catalog 管理</h3>
+                  <div>进入跨渠道 Catalog 管理台，统一处理商品展示、同步、审核和任务。</div>
+                  <div class="tool-meta">Catalog 回收到创作工作台；渠道绑定仍保留在连接中心。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">同步</div>
+                  <h3>Feed / 商品分发</h3>
+                  <div>直接进入商品同步与投递链路，处理 TikTok / Google / Meta 的商品分发任务。</div>
+                  <div class="tool-meta">当前先复用 Catalog 同步链路，后续可以独立成分发面板。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="surface">
+              <div class="group-head">
+                <div>
+                  <h2>内容与素材</h2>
+                  <p class="subtitle" style="margin-top:6px">面向商品内容、视觉素材和页面资产的生产工具。</p>
+                </div>
+                <span class="badge badge-blue">持续扩展</span>
+              </div>
+              <div class="grid-3">
+                <article class="skill-card">
+                  <div class="muted">内容</div>
+                  <h3>商品文案</h3>
+                  <div>面向单商品或批次商品生成标题、卖点和详情文案，并保留任务追踪。</div>
+                  <div class="tool-meta">适合作为内容生产的默认入口。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">视觉</div>
+                  <h3>图片工具</h3>
+                  <div>统一承接文生图、图片翻译和结果复用，形成素材生产工作区。</div>
+                  <div class="tool-meta">当前已支持生成、翻译和任务列表。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">页面</div>
+                  <h3>落地页生成</h3>
+                  <div>后续用于承接页面生成、页面改写和页面级素材编排。</div>
+                  <div class="tool-meta">先把组挂好，后面新增能力时不需要再调整 IA。</div>
+                  <div class="row"><span class="badge badge-orange">规划中</span><button class="link-btn">查看定义</button></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="surface">
+              <div class="group-head">
+                <div>
+                  <h2>AI / 自动化 Skill</h2>
+                  <p class="subtitle" style="margin-top:6px">承接 AI 助手、批处理和后续自动化工作流。</p>
+                </div>
+                <span class="badge badge-neutral">统一入口</span>
+              </div>
+              <div class="grid-3">
+                <article class="skill-card">
+                  <div class="muted">助手</div>
+                  <h3>AI 助手</h3>
+                  <div>从对话发起一次性执行、分析和 skill 调用，适合承接开放式需求。</div>
+                  <div class="tool-meta">把 app 和 skill 都视为可调用能力，再由助手做编排。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">执行</div>
+                  <h3>任务工作台</h3>
+                  <div>查看当前与历史任务，承接批处理结果、审核动作和后续执行。</div>
+                  <div class="tool-meta">作为 AI / 自动化 skill 的执行落点，而不是单独的信息架构层。</div>
+                  <div class="row"><span class="badge badge-green">已可用</span><button class="link-btn">进入工具</button></div>
+                </article>
+                <article class="skill-card">
+                  <div class="muted">自动化</div>
+                  <h3>自动化 Skill</h3>
+                  <div>后续用于沉淀可复用的批处理模板、自动巡检和跨工具执行流。</div>
+                  <div class="tool-meta">先定义位置，之后新增 skill 可以直接并入这一组。</div>
+                  <div class="row"><span class="badge badge-orange">规划中</span><button class="link-btn">查看定义</button></div>
+                </article>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="panel" id="panel-automation">
@@ -826,7 +969,7 @@
       const pageTitles = {
         dashboard: ["经营看板", "默认首页展示店铺经营概况、核心指标、自动化结果和经营建议。"],
         chat: ["对话工作区", "对话页承接单次任务与上下文协作，每个会话都可以继续展开。"],
-        skills: ["常用工具", "技能页作为已有 tools 的聚合入口，每个工具进入独立工作流。"],
+        skills: ["创作工作台", "先按投放与分发、内容与素材、AI / 自动化 skill 三组组织工具，再把具体能力挂进来。"],
         automation: ["自动化", "自动化页聚焦配置、执行历史与模板，不与其他页混排。"],
         tasks: ["任务列表", "任务列表统一承载自动化任务和单次任务，再按类型和状态过滤。"],
       };

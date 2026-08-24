@@ -1,5 +1,5 @@
 /**
- * 洞察总览只读接口：一次返回跨平台广告汇总，供 `/app/insights` 与外部只读消费复用。
+ * 广告汇总只读接口：一次返回跨平台广告聚合，供 Ads Catalog 等只读页面复用。
  * 纯库内聚合，不回源平台 API，也不下发任何凭证明文。
  */
 import type { LoaderFunctionArgs } from "react-router";

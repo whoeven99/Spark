@@ -1,4 +1,5 @@
 import "./styles/app.css";
+import { useEffect, useState } from "react";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 import { ConfigProvider } from "antd";
 import { DEFAULT_LOCALE } from "./i18n/config";
@@ -6,6 +7,7 @@ import { antdTheme } from "./styles/antdTheme";
 
 export default function App() {
   const matches = useMatches();
+  const [antdReady, setAntdReady] = useState(false);
   const appMatch = matches.find((match) => match.id === "routes/app");
   const lang =
     typeof appMatch?.data === "object" &&
@@ -14,6 +16,10 @@ export default function App() {
     typeof appMatch.data.locale === "string"
       ? appMatch.data.locale
       : DEFAULT_LOCALE;
+
+  useEffect(() => {
+    setAntdReady(true);
+  }, []);
 
   return (
     <html lang={lang}>
@@ -31,9 +37,13 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <ConfigProvider theme={antdTheme}>
+        {antdReady ? (
+          <ConfigProvider theme={antdTheme}>
+            <Outlet />
+          </ConfigProvider>
+        ) : (
           <Outlet />
-        </ConfigProvider>
+        )}
         <ScrollRestoration />
         <Scripts />
       </body>

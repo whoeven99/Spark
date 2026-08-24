@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import type { ReportTaskCandidate } from "./reportTaskCandidate.shared";
 import {
   computeOperationsDiagnosis,
   PAYMENT_SUCCESS_RISK_PERCENT,
@@ -12,6 +13,7 @@ import type { ShopifyAdminGraphqlClient } from "./productOperationsQuery.server"
 import {
   dueWindowToDate,
   evaluateDiagnosisRules,
+  RULE_MANAGED_SOURCE_KEYS,
   type TaskDueWindow,
   type TaskPriority,
   type TaskQuadrant,
@@ -30,12 +32,21 @@ const STALE_TASK_AUTO_CLOSE_DAYS = 14;
 
 export type OperationTaskView = {
   id: string;
+  dedupeKey: string;
   sourceKey: string;
+  sourceType: "rule" | "ai" | "hybrid";
   title: string;
   quadrant: TaskQuadrant;
   priority: TaskPriority;
   status: string;
   triggerReason: string;
+  objective: string | null;
+  impactMetrics: string[];
+  estimatedLift: string | null;
+  roiImpactSummary: string | null;
+  confidence: "high" | "medium" | "low" | null;
+  riskEnvironment: string | null;
+  aiContextPayload: unknown;
   relatedObjects: unknown;
   suggestedActions: string[];
   ownerRole: string | null;
@@ -154,12 +165,21 @@ function toDateKey(date: Date, timeZone: string = DEFAULT_SNAPSHOT_TIMEZONE): st
 
 function toTaskView(task: {
   id: string;
+  dedupeKey: string;
   sourceKey: string;
+  sourceType: string;
   title: string;
   quadrant: string;
   priority: string;
   status: string;
   triggerReason: string;
+  objective: string | null;
+  impactMetrics: unknown;
+  estimatedLift: string | null;
+  roiImpactSummary: string | null;
+  confidence: string | null;
+  riskEnvironment: string | null;
+  aiContextPayload: unknown;
   relatedObjects: unknown;
   suggestedActions: unknown;
   ownerRole: string | null;
@@ -170,12 +190,25 @@ function toTaskView(task: {
 }): OperationTaskView {
   return {
     id: task.id,
+    dedupeKey: task.dedupeKey,
     sourceKey: task.sourceKey,
+    sourceType:
+      task.sourceType === "ai" || task.sourceType === "hybrid" ? task.sourceType : "rule",
     title: task.title,
     quadrant: task.quadrant as TaskQuadrant,
     priority: task.priority as TaskPriority,
     status: task.status,
     triggerReason: task.triggerReason,
+    objective: task.objective,
+    impactMetrics: Array.isArray(task.impactMetrics) ? (task.impactMetrics as string[]) : [],
+    estimatedLift: task.estimatedLift,
+    roiImpactSummary: task.roiImpactSummary,
+    confidence:
+      task.confidence === "high" || task.confidence === "medium" || task.confidence === "low"
+        ? task.confidence
+        : null,
+    riskEnvironment: task.riskEnvironment,
+    aiContextPayload: task.aiContextPayload ?? null,
     relatedObjects: task.relatedObjects,
     suggestedActions: Array.isArray(task.suggestedActions)
       ? (task.suggestedActions as string[])
@@ -185,6 +218,253 @@ function toTaskView(task: {
     dueAt: task.dueAt?.toISOString() ?? null,
     createdAt: task.createdAt.toISOString(),
     resolvedAt: task.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+function buildFallbackOperationTasks(now: Date = new Date()): OperationTaskView[] {
+  const createdAt = now.toISOString();
+  const dueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+  return [
+    {
+      id: "fallback-payment-chain-review",
+      dedupeKey: "fallback:payment_chain_review",
+      sourceKey: "payment_chain_review",
+      sourceType: "rule",
+      title: "排查移动端支付链路异常",
+      quadrant: "q1",
+      priority: "P0",
+      status: "open",
+      triggerReason: "演示环境下检测到支付成功率波动，先优先复核移动端结账流程。",
+      objective: "先确认支付失败集中在哪个设备、支付方式和结账步骤。",
+      impactMetrics: ["支付成功率", "订单完成率"],
+      estimatedLift: "预计先回收结账末段流失。",
+      roiImpactSummary: "减少支付失败带来的直接订单损失。",
+      confidence: "medium",
+      riskEnvironment: "payments",
+      aiContextPayload: {
+        diagnosisKey: "conversion_health",
+        objectType: "order",
+      },
+      relatedObjects: {
+        orders: [
+          { orderNumber: "#1001", reason: "移动端信用卡支付失败" },
+          { orderNumber: "#1002", reason: "回跳超时" },
+        ],
+      },
+      suggestedActions: ["按设备和支付方式拆失败订单", "优先复核移动端结账页与回跳链路"],
+      ownerRole: "运营",
+      dueWindow: "today",
+      dueAt,
+      createdAt,
+      resolvedAt: null,
+    },
+    {
+      id: "fallback-launch-failure-review",
+      dedupeKey: "fallback:launch_failure_review",
+      sourceKey: "launch_failure_review",
+      sourceType: "rule",
+      title: "复盘上新失败商品",
+      quadrant: "q2",
+      priority: "P1",
+      status: "open",
+      triggerReason: "演示环境下发现上新商品存在待上架和素材缺失，建议先做上新复盘。",
+      objective: "确认主推新品是卡在上架、图片，还是商品描述完整度。",
+      impactMetrics: ["上新完成率", "商品就绪度"],
+      estimatedLift: "预计缩短新品进入可投放状态的时间。",
+      roiImpactSummary: "减少新品无法承接流量造成的投放浪费。",
+      confidence: "medium",
+      riskEnvironment: "new-arrivals",
+      aiContextPayload: {
+        diagnosisKey: "product_operations",
+        objectType: "sku",
+      },
+      relatedObjects: {
+        skus: [
+          { sku: "NEW-TSHIRT-001", issue: "缺主图" },
+          { sku: "NEW-BAG-002", issue: "仍是草稿状态" },
+        ],
+      },
+      suggestedActions: ["优先处理近期要投放的商品", "把缺图、缺描述、待上架拆开跟进"],
+      ownerRole: "商品运营",
+      dueWindow: "48h",
+      dueAt,
+      createdAt,
+      resolvedAt: null,
+    },
+    {
+      id: "fallback-after-sales-timeout",
+      dedupeKey: "fallback:after_sales_timeout",
+      sourceKey: "after_sales_timeout",
+      sourceType: "rule",
+      title: "处理超时售后工单",
+      quadrant: "q1",
+      priority: "P1",
+      status: "in_progress",
+      triggerReason: "演示环境下发现售后响应时效偏慢，已开始影响退款与体验。",
+      objective: "先清掉超时工单，再识别高频售后原因。",
+      impactMetrics: ["售后响应时长", "退款率"],
+      estimatedLift: "预计先压住因超时升级带来的退款。",
+      roiImpactSummary: "减少售后拖延对利润和复购的侵蚀。",
+      confidence: "low",
+      riskEnvironment: "after-sales",
+      aiContextPayload: {
+        diagnosisKey: "refund_health",
+        objectType: "order",
+      },
+      relatedObjects: {
+        tickets: [
+          { orderNumber: "#1008", ageHours: 31 },
+          { orderNumber: "#1012", ageHours: 28 },
+        ],
+      },
+      suggestedActions: ["先处理超 24 小时未响应工单", "按退款原因聚类高频问题"],
+      ownerRole: "客服",
+      dueWindow: "today",
+      dueAt,
+      createdAt,
+      resolvedAt: null,
+    },
+  ];
+}
+
+function findFallbackOperationTask(taskId: string, now: Date = new Date()): OperationTaskView | null {
+  return buildFallbackOperationTasks(now).find((task) => task.id === taskId) ?? null;
+}
+
+function applyOperationTaskAction(
+  task: OperationTaskView,
+  action: OperationTaskAction,
+  now: Date = new Date(),
+): OperationTaskView {
+  const nextStatus = TASK_ACTION_TO_STATUS[action];
+  return {
+    ...task,
+    status: nextStatus,
+    resolvedAt:
+      action === "done" || action === "ignore"
+        ? now.toISOString()
+        : action === "reopen"
+          ? null
+          : task.resolvedAt,
+  };
+}
+
+type ReportTaskPresentationEffect = "revenue" | "conversion" | "retention" | "efficiency";
+
+type CreateOperationTaskFromReportCandidateInput = {
+  title: string;
+  taskCandidate: ReportTaskCandidate;
+  now?: Date;
+};
+
+type CreateOperationTaskFromReportCandidateResult = {
+  created: boolean;
+  task: OperationTaskView;
+};
+
+function inferReportTaskPresentationEffect(
+  candidate: ReportTaskCandidate,
+): ReportTaskPresentationEffect {
+  switch (candidate.problemKey) {
+    case "inventory_risk":
+    case "growth_focus":
+    case "ad_burn":
+    case "budget_reallocation":
+      return "revenue";
+    case "after_sales_risk":
+      return "retention";
+    case "site_experience":
+    case "landing_experience":
+    case "conversion_repair":
+      return "conversion";
+    default:
+      return "efficiency";
+  }
+}
+
+function buildReportTaskSourceKey(problemKey: string): string {
+  return `report:${problemKey}`;
+}
+
+export async function createOperationTaskFromReportCandidate(
+  shop: string,
+  input: CreateOperationTaskFromReportCandidateInput,
+): Promise<CreateOperationTaskFromReportCandidateResult> {
+  const now = input.now ?? new Date();
+  const { title, taskCandidate } = input;
+  const activeStatuses = ["open", "in_progress"] as const;
+  const canReuseRuleTask = RULE_MANAGED_SOURCE_KEYS.includes(taskCandidate.problemKey);
+
+  const existing = await prisma.operationTask.findFirst({
+    where: {
+      shop,
+      status: { in: [...activeStatuses] },
+      OR: [
+        { dedupeKey: taskCandidate.dedupeKey },
+        ...(canReuseRuleTask ? [{ sourceKey: taskCandidate.problemKey }] : []),
+      ],
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+  if (existing) {
+    return {
+      created: false,
+      task: toTaskView(existing),
+    };
+  }
+
+  const created = await prisma.operationTask.create({
+    data: {
+      shop,
+      snapshotId: null,
+      sourceKey: buildReportTaskSourceKey(taskCandidate.problemKey),
+      sourceType: taskCandidate.sourceType,
+      dedupeKey: taskCandidate.dedupeKey,
+      title,
+      quadrant: taskCandidate.quadrant,
+      priority: taskCandidate.priority,
+      status: "open",
+      triggerReason: taskCandidate.whyNow,
+      objective: taskCandidate.objective,
+      impactMetrics: taskCandidate.impactMetrics,
+      estimatedLift: taskCandidate.estimatedLift ?? null,
+      roiImpactSummary: taskCandidate.roiImpactSummary,
+      confidence: taskCandidate.confidence,
+      riskEnvironment: taskCandidate.riskEnvironment,
+      aiContextPayload: {
+        aiExecutionPrompt: taskCandidate.aiExecutionPrompt,
+        primaryObjectId: taskCandidate.primaryObjectId ?? null,
+        primaryObjectType: taskCandidate.primaryObjectType ?? null,
+      },
+      relatedObjects: {
+        reportTask: {
+          origin: "insights_report",
+          problemKey: taskCandidate.problemKey,
+          sourceType: taskCandidate.sourceType,
+          objective: taskCandidate.objective,
+          impactMetrics: taskCandidate.impactMetrics,
+          estimatedLift: taskCandidate.estimatedLift ?? null,
+          roiImpactSummary: taskCandidate.roiImpactSummary,
+          riskEnvironment: taskCandidate.riskEnvironment,
+          whyNow: taskCandidate.whyNow,
+          primaryObjectId: taskCandidate.primaryObjectId ?? null,
+          primaryObjectType: taskCandidate.primaryObjectType ?? null,
+          confidence: taskCandidate.confidence,
+          aiExecutionPrompt: taskCandidate.aiExecutionPrompt,
+          effect: inferReportTaskPresentationEffect(taskCandidate),
+        },
+      },
+      suggestedActions: [taskCandidate.action],
+      ownerRole: taskCandidate.ownerRole,
+      dueWindow: taskCandidate.dueWindow,
+      dueAt: dueWindowToDate(taskCandidate.dueWindow, now),
+    },
+  });
+
+  return {
+    created: true,
+    task: toTaskView(created),
   };
 }
 
@@ -216,11 +496,11 @@ const INSIGHT_TASK_SOURCE_KEYS: Record<
 > = {
   sales_trend: ["sales_decline"],
   traffic_anomaly: ["traffic_conversion_drop"],
-  conversion_health: ["traffic_conversion_drop"],
-  product_operations: ["product_incomplete"],
+  conversion_health: ["traffic_conversion_drop", "payment_chain_review"],
+  product_operations: ["launch_failure_review", "product_incomplete"],
   fulfillment_health: ["fulfillment_overdue", "routine_shipping"],
   logistics_anomaly: ["logistics_stale"],
-  refund_health: ["refund_spike"],
+  refund_health: ["refund_spike", "after_sales_timeout"],
   inventory_health: ["inventory_risk", "inventory_replenish_plan"],
 };
 
@@ -293,7 +573,7 @@ function buildProductOpsSummary(
   }
   const parts: string[] = [];
   if (metrics.draftProductCount > 0) {
-    parts.push(`${metrics.draftProductCount} 个商品草稿待上架`);
+    parts.push(`${metrics.draftProductCount} 个商品草稿待上架，建议先复盘上新卡点`);
   }
   if (metrics.noImagesProductCount > 0) {
     parts.push(`${metrics.noImagesProductCount} 个商品缺少图片`);
@@ -357,7 +637,7 @@ function buildEnvironments(
   return [
     {
       key: "new-arrivals",
-      titleKey: "dailyOps.riskEnvNewArrivals",
+      titleKey: "healthMonitor.environmentNewArrivals",
       status: products?.status ?? deriveProductOpsStatus(metrics),
       source: hasProductOps ? "real" : "pending",
       summary: buildProductOpsSummary(metrics, products),
@@ -371,7 +651,7 @@ function buildEnvironments(
     },
     {
       key: "inventory",
-      titleKey: "dailyOps.riskEnvInventory",
+      titleKey: "healthMonitor.environmentInventory",
       status: inventory?.status ?? "watch",
       source: "real",
       summary: inventory?.reasoning[0] ?? "优先确认高动销 SKU 的可售天数与补货节奏。",
@@ -383,7 +663,7 @@ function buildEnvironments(
     },
     {
       key: "fulfillment",
-      titleKey: "dailyOps.riskEnvFulfillment",
+      titleKey: "healthMonitor.environmentFulfillment",
       status: fulfillmentStatus,
       source: "real",
       summary:
@@ -398,7 +678,7 @@ function buildEnvironments(
     },
     {
       key: "payments",
-      titleKey: "dailyOps.riskEnvPayments",
+      titleKey: "healthMonitor.environmentPayments",
       status: derivePaymentStatus(metrics),
       source: hasPaymentData ? "real" : "pending",
       summary: hasPaymentData
@@ -415,7 +695,7 @@ function buildEnvironments(
     },
     {
       key: "risk-control",
-      titleKey: "dailyOps.riskEnvRiskControl",
+      titleKey: "healthMonitor.environmentRiskControl",
       status: "watch",
       source: "pending",
       summary: "待接入误杀率、拒付率和高风险订单占比后，再独立判断风控是否阻碍真实转化。",
@@ -423,7 +703,7 @@ function buildEnvironments(
     },
     {
       key: "after-sales",
-      titleKey: "dailyOps.riskEnvAfterSales",
+      titleKey: "healthMonitor.environmentAfterSales",
       status: refund?.status ?? "watch",
       source: "real",
       summary: refund?.reasoning[0] ?? "售后、商品质量和履约问题会共同推高退款率。",
@@ -434,7 +714,7 @@ function buildEnvironments(
     },
     {
       key: "conversion",
-      titleKey: "dailyOps.riskEnvConversion",
+      titleKey: "healthMonitor.environmentConversion",
       status: conversion?.status ?? traffic?.status ?? "watch",
       source: metrics.hasPixelData ? "real" : "pending",
       summary:
@@ -551,6 +831,7 @@ async function syncTasks(
   generated: ReturnType<typeof evaluateDiagnosisRules>,
   now: Date,
 ): Promise<void> {
+  const ruleManagedSourceKeys = new Set(RULE_MANAGED_SOURCE_KEYS);
   const generatedKeys = new Set(generated.map((t) => t.dedupeKey));
   const activeTasks = await prisma.operationTask.findMany({
     where: { shop, status: { in: ["open", "in_progress"] } },
@@ -577,6 +858,14 @@ async function syncTasks(
           quadrant: task.quadrant,
           priority: task.priority,
           triggerReason: task.triggerReason,
+          sourceType: task.sourceType,
+          objective: task.objective,
+          impactMetrics: task.impactMetrics,
+          estimatedLift: task.estimatedLift,
+          roiImpactSummary: task.roiImpactSummary,
+          confidence: task.confidence,
+          riskEnvironment: task.riskEnvironment,
+          aiContextPayload: task.aiContextPayload as object | null,
           relatedObjects: task.relatedObjects as object,
           suggestedActions: task.suggestedActions,
           ownerRole: task.ownerRole,
@@ -591,12 +880,20 @@ async function syncTasks(
         shop,
         snapshotId,
         sourceKey: task.sourceKey,
+        sourceType: task.sourceType,
         dedupeKey: task.dedupeKey,
         title: task.title,
         quadrant: task.quadrant,
         priority: task.priority,
         status: "open",
         triggerReason: task.triggerReason,
+        objective: task.objective,
+        impactMetrics: task.impactMetrics,
+        estimatedLift: task.estimatedLift,
+        roiImpactSummary: task.roiImpactSummary,
+        confidence: task.confidence,
+        riskEnvironment: task.riskEnvironment,
+        aiContextPayload: task.aiContextPayload as object | null,
         relatedObjects: task.relatedObjects as object,
         suggestedActions: task.suggestedActions,
         ownerRole: task.ownerRole,
@@ -611,6 +908,7 @@ async function syncTasks(
     now.getTime() - STALE_TASK_AUTO_CLOSE_DAYS * 24 * 60 * 60 * 1000,
   );
   for (const task of activeTasks) {
+    if (!ruleManagedSourceKeys.has(task.sourceKey)) continue;
     const conditionGone = !generatedKeys.has(task.dedupeKey);
     const tooOld = task.createdAt < staleBefore;
     if (conditionGone || (tooOld && task.status === "open")) {
@@ -776,21 +1074,29 @@ export async function listOperationTasks(
   shop: string,
   now: Date = new Date(),
 ): Promise<OperationTaskView[]> {
-  const recentClosedSince = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-  const tasks = await prisma.operationTask.findMany({
-    where: {
+  try {
+    const recentClosedSince = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const tasks = await prisma.operationTask.findMany({
+      where: {
+        shop,
+        OR: [
+          { status: { in: ["open", "in_progress"] } },
+          {
+            status: { in: ["done", "ignored", "auto_closed"] },
+            updatedAt: { gte: recentClosedSince },
+          },
+        ],
+      },
+      orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
+    });
+    return tasks.map(toTaskView);
+  } catch (error) {
+    console.error("[daily-inspection] Failed to list operation tasks, falling back to demo tasks.", {
       shop,
-      OR: [
-        { status: { in: ["open", "in_progress"] } },
-        {
-          status: { in: ["done", "ignored", "auto_closed"] },
-          updatedAt: { gte: recentClosedSince },
-        },
-      ],
-    },
-    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
-  });
-  return tasks.map(toTaskView);
+      error,
+    });
+    return buildFallbackOperationTasks(now);
+  }
 }
 
 export type OperationTaskAction = "start" | "done" | "ignore" | "reopen";
@@ -808,6 +1114,11 @@ export async function updateOperationTaskStatus(
   taskId: string,
   action: OperationTaskAction,
 ): Promise<OperationTaskView | null> {
+  const fallbackTask = findFallbackOperationTask(taskId);
+  if (fallbackTask) {
+    return applyOperationTaskAction(fallbackTask, action);
+  }
+
   const task = await prisma.operationTask.findUnique({ where: { id: taskId } });
   if (!task || task.shop !== shop) return null;
   const status = TASK_ACTION_TO_STATUS[action];
@@ -815,7 +1126,12 @@ export async function updateOperationTaskStatus(
     where: { id: taskId },
     data: {
       status,
-      resolvedAt: action === "done" ? new Date() : action === "reopen" ? null : task.resolvedAt,
+      resolvedAt:
+        action === "done" || action === "ignore"
+          ? new Date()
+          : action === "reopen"
+            ? null
+            : task.resolvedAt,
     },
   });
   return toTaskView(updated);

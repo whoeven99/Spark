@@ -294,7 +294,7 @@ export function buildGoogleAdsSandboxOAuthStartUrl(params: {
   return { ok: true, authUrl };
 }
 
-/** Google Ads 测试账号 OAuth 完成后跳回广告洞察页。 */
+/** Google Ads 测试账号 OAuth 完成后跳回广告连接与配置页。 */
 export function buildGoogleAdsSandboxOAuthReturnUrl(params: {
   shop: string;
   host?: string;
@@ -303,10 +303,10 @@ export function buildGoogleAdsSandboxOAuthReturnUrl(params: {
   request?: Request;
 }): string {
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/insights/performance",
+    path: "/app/ads-catalog",
     shop: params.shop,
     request: params.request,
-    query: { platform: "google", sandbox: "1", ...params.query },
+    query: { ...params.query, tab: "credentials", platform: "google", sandbox: "1" },
   });
   if (adminUrl) return adminUrl;
 
@@ -315,15 +315,16 @@ export function buildGoogleAdsSandboxOAuthReturnUrl(params: {
     readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/insights/performance", base.replace(/\/$/, "") || base);
+  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  target.searchParams.set("platform", "google");
-  target.searchParams.set("sandbox", "1");
   for (const [key, value] of Object.entries(params.query ?? {})) {
     target.searchParams.set(key, value);
   }
+  target.searchParams.set("tab", "credentials");
+  target.searchParams.set("platform", "google");
+  target.searchParams.set("sandbox", "1");
   return target.toString();
 }
 

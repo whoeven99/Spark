@@ -1,15 +1,15 @@
 /**
  * 一级目的地（新信息架构，docs 见迁移方案 PR1）。
  * 旧的 per-tool 入口（product-improve / image-studio / order-monitor 等）已收敛进
- * today / studio / settings 三个目的地。insights 是广告数据的只读分析目的地，
- * 由 `/app/settings/ads-insights` 升格而来。
+ * today / studio / settings 三个目的地。旧的 insights 相关路径仅保留兼容层，
+ * 正式经营判断回到 Today，连接与授权回到 Settings。
  * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
  */
 export type NavItemKey =
   | "ask"
   | "today"
+  | "health-monitor"
   | "studio"
-  | "insights"
   | "tasks"
   | "settings"
   | "ads-catalog";
@@ -21,7 +21,7 @@ type AppShellConfig = {
 
 const DEFAULT_APP_SHELL_CONFIG = {
   home: "/app",
-  nav: ["ask", "today", "studio", "insights", "tasks", "settings"],
+  nav: ["ask", "today", "health-monitor", "studio", "tasks", "settings"],
 } as const satisfies AppShellConfig;
 
 export function getAppEntryConfig(): AppShellConfig {

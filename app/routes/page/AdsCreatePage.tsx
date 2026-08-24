@@ -6,7 +6,6 @@ import {
   PageSurface,
   pageColorTokens,
   pageContentStyle,
-  pageHintTextStyle,
 } from "./pageUiStyles";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { MetaAdsForm } from "../component/adsCreate/MetaAdsForm";
@@ -57,8 +56,10 @@ export function AdsCreatePage() {
     <PageSurface>
       <PageHeaderNav
         workspaceOnly={false}
-        backLabel={t("settingsShell.back")}
-        fallbackPath="/app/settings"
+        titleBarTitle={t("nav.studio")}
+        backLabel={t("common.backToPrevious")}
+        fallbackPath="/app/studio"
+        eyebrow={t("studioWorkbench.groups.delivery.title")}
         title={t("adsCreate.pageTitle")}
         subtitle={t("adsCreate.pageSubtitle")}
       />
@@ -131,6 +132,13 @@ interface ConnectionStatusProps {
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
 
+function buildConnectionCenterPath(platform: Platform, locationSearch: string): string {
+  const platformParam = platform === "meta" ? "meta" : platform;
+  return locationSearch
+    ? `/app/settings/connections/${platformParam}${locationSearch}`
+    : `/app/settings/connections/${platformParam}`;
+}
+
 function ConnectionStatus({ platform, loaderData, locationSearch, t }: ConnectionStatusProps) {
   const { meta, tiktok, google } = loaderData;
 
@@ -139,7 +147,7 @@ function ConnectionStatus({ platform, loaderData, locationSearch, t }: Connectio
       return (
         <NotConnectedBanner
           msg={t("adsCreate.meta.notConnected")}
-          linkTo={`/app/insights/performance${locationSearch}`}
+          linkTo={buildConnectionCenterPath("meta", locationSearch)}
           linkLabel={t("adsCreate.goConnectMeta")}
         />
       );
@@ -158,7 +166,7 @@ function ConnectionStatus({ platform, loaderData, locationSearch, t }: Connectio
       return (
         <NotConnectedBanner
           msg={t("adsCreate.tiktok.notConnected")}
-          linkTo={`/app/ads-catalog${locationSearch}`}
+          linkTo={buildConnectionCenterPath("tiktok", locationSearch)}
           linkLabel={t("adsCreate.goConnectTiktok")}
         />
       );
@@ -179,7 +187,7 @@ function ConnectionStatus({ platform, loaderData, locationSearch, t }: Connectio
       return (
         <NotConnectedBanner
           msg={t("adsCreate.google.notConnected")}
-          linkTo={`/app/ads-catalog${locationSearch}`}
+          linkTo={buildConnectionCenterPath("google", locationSearch)}
           linkLabel={t("adsCreate.goConnectGoogle")}
         />
       );

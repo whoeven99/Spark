@@ -30,6 +30,11 @@ import {
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
 } from "../server/adsCatalog/credentialStore.server";
+import {
+  buildAdsOverview,
+  type AdsOverviewPlatform,
+  type AdsOverviewReview,
+} from "../server/adsInsights/overview.server";
 import { getGa4Credential, getGa4Pending } from "../server/googleAnalytics/ga4Credentials.server";
 import { getGscCredential, getGscPending } from "../server/googleSearchConsole/gscCredentials.server";
 import { getFedexCredential, getSfCredential } from "../server/logisticsCredentialStore.server";
@@ -60,6 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     gscPending,
     fedex,
     sf,
+    connectionOverview,
   ] = await Promise.all([
     loadBillingContext(shop),
     getFacebookCatalogCredential(shop),
@@ -79,6 +85,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getGscPending(shop),
     getFedexCredential(shop),
     getSfCredential(shop),
+    buildAdsOverview({ shop, rangeDays: 7 }).catch((error) => {
+      console.error("[settings._index] buildAdsOverview failed:", error);
+      return null;
+    }),
   ]);
 
   const currentPlan =
@@ -129,6 +139,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         hasReadReports: hasReadReportsScope(session.scope),
       },
     },
+    connectionOverview,
   };
 };
 
@@ -275,10 +286,86 @@ type ConnectionChannelCardProps = {
   onNavigate: (to: string) => void;
 };
 
+type ConnectionChannelCardData = Omit<ConnectionChannelCardProps, "onNavigate">;
+
+function formatInteger(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function minutesSince(iso: string, baseIso: string): number {
+  return Math.max(0, Math.round((Date.parse(baseIso) - Date.parse(iso)) / 60000));
+}
+
+function buildPlatformSnapshotCapability(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  overview: Awaited<ReturnType<typeof loader>>["connectionOverview"];
+  platform: AdsOverviewPlatform["platform"];
+}): ConnectionCapability | null {
+  const platform = params.overview?.platforms.find((item) => item.platform === params.platform);
+  if (!platform) return null;
+  return {
+    label: params.t("settingsShell.platformSnapshot"),
+    value: platform.snapshot
+      ? platform.snapshot.stale
+        ? params.t("settingsShell.snapshotStale")
+        : params.t("settingsShell.snapshotFresh", {
+            minutes: minutesSince(platform.snapshot.fetchedAt, params.overview!.generatedAt),
+          })
+      : params.t("settingsShell.snapshotNone"),
+    tone: platform.snapshot ? (platform.snapshot.stale ? "attention" : "ready") : "needs_setup",
+  };
+}
+
+function buildPlatformHealthCapability(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  overview: Awaited<ReturnType<typeof loader>>["connectionOverview"];
+  platform: AdsOverviewPlatform["platform"];
+}): ConnectionCapability | null {
+  const issueCount =
+    params.overview?.health.filter((item) => item.platform === params.platform && item.state !== "ok").length ?? 0;
+  return {
+    label: params.t("settingsShell.platformHealth"),
+    value:
+      issueCount > 0
+        ? params.t("settingsShell.platformHealthIssues", { count: issueCount })
+        : params.t("settingsShell.platformHealthOk"),
+    tone: issueCount > 0 ? "attention" : "ready",
+  };
+}
+
+function buildPlatformReadinessCapability(params: {
+  t: ReturnType<typeof useTranslation>["t"];
+  overview: Awaited<ReturnType<typeof loader>>["connectionOverview"];
+  channel: AdsOverviewReview["channel"];
+}): ConnectionCapability | null {
+  const review = params.overview?.reviews.find((item) => item.channel === params.channel);
+  if (!review || review.total <= 0) return null;
+  if (review.disapproved > 0) {
+    return {
+      label: params.t("settingsShell.platformReadiness"),
+      value: params.t("settingsShell.platformReadinessDisapproved", { count: review.disapproved }),
+      tone: "attention",
+    };
+  }
+  if (review.pending > 0) {
+    return {
+      label: params.t("settingsShell.platformReadiness"),
+      value: params.t("settingsShell.platformReadinessPending", { count: review.pending }),
+      tone: "pending",
+    };
+  }
+  return {
+    label: params.t("settingsShell.platformReadiness"),
+    value: params.t("settingsShell.platformReadinessHealthy"),
+    tone: "ready",
+  };
+}
+
 function buildGoogleSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   const capabilities: ConnectionCapability[] = [
     {
       label: t("settingsShell.googleCapabilityMerchant"),
@@ -338,7 +425,10 @@ function buildGoogleSummary(
           ? "pending"
           : "needs_setup",
     },
-  ];
+    buildPlatformSnapshotCapability({ t, overview: connectionOverview, platform: "google" }),
+    buildPlatformHealthCapability({ t, overview: connectionOverview, platform: "google" }),
+    buildPlatformReadinessCapability({ t, overview: connectionOverview, channel: "gmc" }),
+  ].filter(Boolean) as ConnectionCapability[];
 
   const readyCount = capabilities.filter((item) => item.tone === "ready").length;
   const hasPending = capabilities.some((item) => item.tone === "pending");
@@ -372,9 +462,13 @@ function buildGoogleSummary(
     capabilities,
     links: [
       {
+        label: t("settingsShell.openChannelDetail"),
+        to: "/app/settings/connections/google",
+        tone: "primary",
+      },
+      {
         label: t("settingsShell.googleManageAdsCatalog"),
         to: "/app/ads-catalog?tab=credentials",
-        tone: "primary",
       },
       {
         label: t("settingsShell.googleManageAnalytics"),
@@ -384,18 +478,15 @@ function buildGoogleSummary(
         label: t("settingsShell.googleManageSearchConsole"),
         to: "/app/settings/google-search-console",
       },
-      {
-        label: t("settingsShell.openInsights"),
-        to: "/app/insights",
-      },
     ] satisfies ConnectionLink[],
   };
 }
 
 function buildMetaSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   const capabilities: ConnectionCapability[] = [
     {
       label: t("settingsShell.metaCapabilityCatalog"),
@@ -423,7 +514,10 @@ function buildMetaSummary(
           ? "pending"
           : "needs_setup",
     },
-  ];
+    buildPlatformSnapshotCapability({ t, overview: connectionOverview, platform: "meta" }),
+    buildPlatformHealthCapability({ t, overview: connectionOverview, platform: "meta" }),
+    buildPlatformReadinessCapability({ t, overview: connectionOverview, channel: "meta" }),
+  ].filter(Boolean) as ConnectionCapability[];
   const readyCount = capabilities.filter((item) => item.tone === "ready").length;
   const hasPending = capabilities.some((item) => item.tone === "pending");
   return {
@@ -452,13 +546,13 @@ function buildMetaSummary(
     capabilities,
     links: [
       {
-        label: t("settingsShell.metaManageCatalog"),
-        to: "/app/ads-catalog?tab=credentials",
+        label: t("settingsShell.openChannelDetail"),
+        to: "/app/settings/connections/meta",
         tone: "primary",
       },
       {
-        label: t("settingsShell.openInsights"),
-        to: "/app/insights/performance?platform=meta",
+        label: t("settingsShell.metaManageCatalog"),
+        to: "/app/ads-catalog?tab=credentials",
       },
     ] satisfies ConnectionLink[],
   };
@@ -466,8 +560,9 @@ function buildMetaSummary(
 
 function buildTiktokSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
+  connectionOverview: Awaited<ReturnType<typeof loader>>["connectionOverview"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   const capabilities: ConnectionCapability[] = [
     {
       label: t("settingsShell.tiktokCapabilityCatalog"),
@@ -489,7 +584,9 @@ function buildTiktokSummary(
         : t("settingsShell.statusNeedsSetup"),
       tone: summaries.tiktok.adsConnected ? "ready" : "needs_setup",
     },
-  ];
+    buildPlatformSnapshotCapability({ t, overview: connectionOverview, platform: "tiktok" }),
+    buildPlatformHealthCapability({ t, overview: connectionOverview, platform: "tiktok" }),
+  ].filter(Boolean) as ConnectionCapability[];
   const readyCount = capabilities.filter((item) => item.tone === "ready").length;
   const hasPending = capabilities.some((item) => item.tone === "pending");
   return {
@@ -518,13 +615,13 @@ function buildTiktokSummary(
     capabilities,
     links: [
       {
-        label: t("settingsShell.tiktokManageCatalog"),
-        to: "/app/ads-catalog?tab=credentials",
+        label: t("settingsShell.openChannelDetail"),
+        to: "/app/settings/connections/tiktok",
         tone: "primary",
       },
       {
-        label: t("settingsShell.openInsights"),
-        to: "/app/insights/performance?platform=tiktok",
+        label: t("settingsShell.tiktokManageCatalog"),
+        to: "/app/ads-catalog?tab=credentials",
       },
     ] satisfies ConnectionLink[],
   };
@@ -533,7 +630,7 @@ function buildTiktokSummary(
 function buildLogisticsSummary(
   summaries: Awaited<ReturnType<typeof loader>>["summaries"],
   t: ReturnType<typeof useTranslation>["t"],
-) {
+): ConnectionChannelCardData {
   return {
     title: t("settingsShell.channelLogisticsTitle"),
     description: t("settingsShell.channelLogisticsSubtitle"),
@@ -583,15 +680,23 @@ export default function SettingsIndex() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
-  const { summaries } = useLoaderData<typeof loader>();
+  const { summaries, connectionOverview } = useLoaderData<typeof loader>();
   useFeatureView("settings");
 
   const connectionCards = [
-    buildGoogleSummary(summaries, t),
-    buildMetaSummary(summaries, t),
-    buildTiktokSummary(summaries, t),
+    buildGoogleSummary(summaries, connectionOverview, t),
+    buildMetaSummary(summaries, connectionOverview, t),
+    buildTiktokSummary(summaries, connectionOverview, t),
     buildLogisticsSummary(summaries, t),
   ];
+  const connectedPlatforms = connectionOverview?.platforms.filter((item) => item.connected).length ?? 0;
+  const freshSnapshots =
+    connectionOverview?.platforms.filter((item) => item.connected && item.snapshot && !item.snapshot.stale)
+      .length ?? 0;
+  const healthAttentionCount =
+    connectionOverview?.health.filter((item) => item.state !== "ok").length ?? 0;
+  const disapprovedProducts =
+    connectionOverview?.reviews.reduce((sum, review) => sum + review.disapproved, 0) ?? 0;
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -627,20 +732,83 @@ export default function SettingsIndex() {
           badge={<span style={hubBadgeStyle}>{t("settingsShell.sectionConnectionsHubBadge")}</span>}
         />
         <div style={hubHintStyle}>{t("settingsShell.sectionConnectionsHubFootnote")}</div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-            gap: "0.85rem",
-          }}
-        >
-          {connectionCards.map((card) => (
-            <ConnectionChannelCard
-              key={card.title}
-              {...card}
-              onNavigate={navigate}
-            />
-          ))}
+        {connectionOverview ? (
+          <div style={diagnosticsOverviewStyle}>
+            <div style={diagnosticsHeaderStyle}>
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={diagnosticsTitleStyle}>{t("settingsShell.diagnosticsTitle")}</div>
+                <div style={diagnosticsSubtitleStyle}>{t("settingsShell.diagnosticsSubtitle")}</div>
+              </div>
+              <span style={hubBadgeStyle}>{t("settingsShell.diagnosticsBadge")}</span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
+                gap: "0.75rem",
+              }}
+            >
+              <MetricCard
+                label={t("settingsShell.metricPlatforms")}
+                value={t("settingsShell.metricPlatformsValue", {
+                  connected: connectedPlatforms,
+                  total: connectionOverview.platforms.length,
+                })}
+              />
+              <MetricCard
+                label={t("settingsShell.metricSnapshots")}
+                value={t("settingsShell.metricSnapshotsValue", {
+                  ready: freshSnapshots,
+                  total: connectedPlatforms,
+                })}
+              />
+              <MetricCard
+                label={t("settingsShell.metricHealth")}
+                value={String(healthAttentionCount)}
+              />
+              <MetricCard
+                label={t("settingsShell.metricReadiness")}
+                value={formatInteger(disapprovedProducts)}
+              />
+            </div>
+            <div style={diagnosticsSummaryRowStyle}>
+              <div style={diagnosticsHeadlineStyle}>
+                {healthAttentionCount > 0 || disapprovedProducts > 0
+                  ? t("settingsShell.diagnosticsSummaryAttention", {
+                      health: healthAttentionCount,
+                      products: formatInteger(disapprovedProducts),
+                    })
+                  : t("settingsShell.diagnosticsSummaryHealthy", {
+                      connected: connectedPlatforms,
+                      total: connectionOverview.platforms.length,
+                    })}
+              </div>
+              <div style={diagnosticsSummaryCaptionStyle}>{t("settingsShell.channelSectionSubtitle")}</div>
+            </div>
+          </div>
+        ) : (
+          <div style={diagnosticsEmptyStyle}>{t("settingsShell.diagnosticsUnavailable")}</div>
+        )}
+
+        <div style={channelSectionStyle}>
+          <div style={diagnosticsTitleStyle}>{t("settingsShell.channelSectionTitle")}</div>
+          <div style={diagnosticsSubtitleStyle}>{t("settingsShell.channelSectionSubtitle")}</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              gap: "0.85rem",
+            }}
+          >
+            {connectionCards.map((card) => (
+              <ConnectionChannelCard
+                key={card.title}
+                {...card}
+                onNavigate={navigate}
+              />
+            ))}
+          </div>
         </div>
       </PageSurface>
 
@@ -706,6 +874,15 @@ function ConnectionChannelCard({
           </button>
         )) : null}
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={diagnosticMetricCardStyle}>
+      <div style={diagnosticMetricLabelStyle}>{label}</div>
+      <div style={diagnosticMetricValueStyle}>{value}</div>
     </div>
   );
 }
@@ -838,6 +1015,84 @@ const channelBadgeStyle = (
           : pageColorTokens.borderSubtle
   }`,
 });
+
+const diagnosticsOverviewStyle: CSSProperties = {
+  display: "grid",
+  gap: "1rem",
+  padding: "1rem",
+  marginBottom: "1rem",
+  borderRadius: 16,
+  border: `1px solid ${pageColorTokens.divider}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const diagnosticsHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "0.85rem",
+};
+
+const diagnosticsTitleStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const diagnosticsSubtitleStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
+};
+
+const diagnosticsSummaryRowStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.7rem",
+};
+
+const diagnosticsHeadlineStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const diagnosticsSummaryCaptionStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
+};
+
+const diagnosticsEmptyStyle: CSSProperties = {
+  padding: "0.85rem 0.95rem",
+  borderRadius: 12,
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textSecondary,
+  fontSize: 12,
+};
+
+const diagnosticMetricCardStyle: CSSProperties = {
+  ...destinationSurfaceStyle,
+  padding: "0.85rem 0.95rem",
+  display: "grid",
+  gap: "0.3rem",
+};
+
+const diagnosticMetricLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: pageColorTokens.textSecondary,
+};
+
+const diagnosticMetricValueStyle: CSSProperties = {
+  fontSize: 16,
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const channelSectionStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.85rem",
+};
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

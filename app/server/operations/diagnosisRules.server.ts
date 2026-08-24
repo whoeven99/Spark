@@ -1,6 +1,8 @@
 import type { OperationsDiagnosis } from "./diagnosis.server";
 import {
   CARRIER_STALE_DAYS,
+  PAYMENT_SUCCESS_RISK_PERCENT,
+  PAYMENT_SUCCESS_WATCH_PERCENT,
   REFUND_RATE_WATCH_PERCENT,
   REFUND_SPIKE_PERCENT_POINTS,
   SELLABLE_DAYS_RISK,
@@ -12,23 +14,33 @@ import {
  * 诊断 → 任务转换规则（docs/DAILY_OPERATIONS_WORKFLOWS.md §9 首批规则）。
  *
  * 规则以声明式数组组织，后续可平移到数据库规则表。
- * 阶段一覆盖：超时履约、物流异常、退款异常、库存止损、常规发货、销售趋势、
- * 流量/转化异常止损（工作流 5，依赖 Web Pixel 漏斗数据）。
+ * 阶段一覆盖：超时履约、物流异常、退款异常、售后超时处理、库存止损、常规发货、
+ * 支付链路排查、销售趋势、流量/转化异常止损（工作流 5，依赖 Web Pixel 漏斗数据）。
  */
 
 export type TaskQuadrant = "q1" | "q2" | "q3" | "q4";
 export type TaskPriority = "P0" | "P1" | "P2";
 export type TaskDueWindow = "today" | "48h" | "this_week" | "backlog";
+export type TaskSourceType = "rule" | "ai" | "hybrid";
+export type TaskConfidence = "high" | "medium" | "low";
 
 export type GeneratedTask = {
   /** 规则键，对应文档 diagnosisKey */
   sourceKey: string;
+  sourceType: TaskSourceType;
   /** 同一问题去重键（open/in_progress 状态下唯一） */
   dedupeKey: string;
   title: string;
   quadrant: TaskQuadrant;
   priority: TaskPriority;
   triggerReason: string;
+  objective: string;
+  impactMetrics: string[];
+  estimatedLift: string | null;
+  roiImpactSummary: string;
+  confidence: TaskConfidence;
+  riskEnvironment: string | null;
+  aiContextPayload: unknown;
   relatedObjects: unknown;
   suggestedActions: string[];
   ownerRole: string;
@@ -53,11 +65,19 @@ const RULES: RuleDefinition[] = [
       if (count <= 0) return null;
       return {
         sourceKey: "fulfillment_overdue",
+        sourceType: "rule",
         dedupeKey: "fulfillment_overdue",
         title: `处理 ${count} 单超时未发货订单`,
         quadrant: "q1",
         priority: "P0",
         triggerReason: `${count} 单订单创建超过 ${SLA_HOURS} 小时仍未发货，已触及履约 SLA 红线`,
+        objective: "优先消化超时未发货订单，避免履约问题继续传导到退款与投诉",
+        impactMetrics: ["overdueOrderCount", "fulfillmentRate30d"],
+        estimatedLift: "降低超时单与退款风险",
+        roiImpactSummary: "履约恢复会先改善客户体验与退款压力，再稳定短期收入质量。",
+        confidence: "high",
+        riskEnvironment: "fulfillment",
+        aiContextPayload: { diagnosisKey: "fulfillment_health", objectType: "order" },
         relatedObjects: { orders: d.detail.overdueOrders },
         suggestedActions: [
           "按订单年龄从老到新优先处理发货",
@@ -78,6 +98,7 @@ const RULES: RuleDefinition[] = [
       if (stale + failure <= 0) return null;
       return {
         sourceKey: "logistics_stale",
+        sourceType: "rule",
         dedupeKey: "logistics_stale",
         title: `跟进 ${stale + failure} 单物流轨迹异常`,
         quadrant: "q1",
@@ -88,6 +109,13 @@ const RULES: RuleDefinition[] = [
         ]
           .filter(Boolean)
           .join("，"),
+        objective: "尽快恢复异常物流订单，减少售后压力和二次补发成本",
+        impactMetrics: ["carrierIssueCount", "refundRate30d"],
+        estimatedLift: "降低异常订单升级概率",
+        roiImpactSummary: "物流异常减少后，可先压低退款与客服负担，减少利润损耗。",
+        confidence: "high",
+        riskEnvironment: "fulfillment",
+        aiContextPayload: { diagnosisKey: "logistics_anomaly", objectType: "order" },
         relatedObjects: { shipments: d.detail.carrierIssues },
         suggestedActions: [
           "向承运商发起轨迹核查，确认包裹是否丢失",
@@ -113,11 +141,19 @@ const RULES: RuleDefinition[] = [
       }
       return {
         sourceKey: "refund_spike",
+        sourceType: "rule",
         dedupeKey: "refund_spike",
         title: "复盘退款异常上升原因",
         quadrant: "q1",
         priority: "P1",
         triggerReason: `30 天退款率 ${m.refundRate30d}%（环比 ${m.refundRateDelta >= 0 ? "+" : ""}${m.refundRateDelta}pp），退款风险上升`,
+        objective: "定位退款异常上升的主因，优先压低高影响退款对象",
+        impactMetrics: ["refundRate30d", "refundRateDelta", "refundAmount30d"],
+        estimatedLift: "压缩退款损耗与售后成本",
+        roiImpactSummary: "退款治理会直接改善利润留存，并减少履约与售后链路的额外消耗。",
+        confidence: "high",
+        riskEnvironment: "after-sales",
+        aiContextPayload: { diagnosisKey: "refund_health", objectType: "sku" },
         relatedObjects: {
           topRefundSkus: d.detail.topRefundSkus,
           abnormalOrders: d.detail.abnormalRefundOrders,
@@ -133,6 +169,63 @@ const RULES: RuleDefinition[] = [
     },
   },
   {
+    key: "after_sales_timeout",
+    evaluate: (d) => {
+      const item = findItem(d, "refund_health");
+      if (!item || item.status === "healthy") return null;
+
+      const abnormalOrders = d.detail.abnormalRefundOrders;
+      if (abnormalOrders.length <= 0) return null;
+
+      const isRisk = item.status === "risk" || abnormalOrders.length >= 3;
+      const topReasons = Array.from(
+        new Set(abnormalOrders.map((order) => order.reason).filter(Boolean)),
+      ).slice(0, 3);
+
+      return {
+        sourceKey: "after_sales_timeout",
+        sourceType: "rule",
+        dedupeKey: "after_sales_timeout",
+        title: isRisk
+          ? `优先处理 ${abnormalOrders.length} 单高风险售后单`
+          : `跟进 ${abnormalOrders.length} 单异常售后单`,
+        quadrant: isRisk ? "q1" : "q2",
+        priority: isRisk ? "P0" : "P1",
+        triggerReason: [
+          `${abnormalOrders.length} 单退款金额偏高或涉及多件商品`,
+          topReasons.length > 0 ? `主要原因：${topReasons.join(" / ")}` : null,
+          "当前未接入客服响应 SLA，先用异常退款单作为售后超时代理信号",
+        ]
+          .filter(Boolean)
+          .join("；"),
+        objective: "优先消化异常售后单，避免高风险退款继续积压",
+        impactMetrics: ["abnormalRefundOrderCount", "refundRate30d"],
+        estimatedLift: "缩短异常售后处理链路",
+        roiImpactSummary: "售后积压下降后，可先减少退款扩大和客服拖延对用户体验的二次伤害。",
+        confidence: "medium",
+        riskEnvironment: "after-sales",
+        aiContextPayload: {
+          diagnosisKey: "refund_health",
+          proxySignal: "abnormal_refund_orders",
+          objectType: "order",
+        },
+        relatedObjects: {
+          abnormalOrders,
+          abnormalRefundOrderCount: abnormalOrders.length,
+          refundRate30d: item.metrics.refundRate30d ?? null,
+          refundRateDelta: item.metrics.refundRateDelta ?? null,
+        },
+        suggestedActions: [
+          "按退款金额和退款时间排序，优先处理高金额且原因集中的售后单",
+          "把商品问题、履约问题和售后响应问题拆开复盘，避免混成同一种异常",
+          "对重复出现的退款原因补齐标准回复与处理动作，避免售后继续积压",
+        ],
+        ownerRole: "售后/客服",
+        dueWindow: isRisk ? "today" : "48h",
+      };
+    },
+  },
+  {
     key: "inventory_risk",
     evaluate: (d) => {
       const m = d.summaryMetrics;
@@ -140,11 +233,19 @@ const RULES: RuleDefinition[] = [
       const riskSkus = d.detail.inventoryRisks.filter((i) => i.risk === "risk");
       return {
         sourceKey: "inventory_risk",
+        sourceType: "rule",
         dedupeKey: "inventory_risk",
         title: `为 ${m.riskSkuCount} 个高动销 SKU 补货止损`,
         quadrant: "q1",
         priority: "P0",
         triggerReason: `${m.riskSkuCount} 个 SKU 缺货或可售天数不足 ${SELLABLE_DAYS_RISK} 天，预估未来 7 天损失 ${m.estimatedInventoryLoss} ${m.currency}`,
+        objective: "优先保护高动销 SKU 不断货，避免收入和投放承接被直接打断",
+        impactMetrics: ["riskSkuCount", "estimatedInventoryLoss"],
+        estimatedLift: "降低缺货损失",
+        roiImpactSummary: "补货止损会直接保住高动销收入，并避免广告流量打到缺货商品上。",
+        confidence: "high",
+        riskEnvironment: "inventory",
+        aiContextPayload: { diagnosisKey: "inventory_health", objectType: "sku" },
         relatedObjects: { skus: riskSkus },
         suggestedActions: [
           "按预估损失从高到低安排补货或仓间调拨",
@@ -157,6 +258,66 @@ const RULES: RuleDefinition[] = [
     },
   },
   {
+    key: "payment_chain_review",
+    evaluate: (d) => {
+      const item = findItem(d, "conversion_health");
+      const successRate = Number(item?.metrics.paymentSuccessRate ?? NaN);
+      const attempts = Number(item?.metrics.paymentAttempts ?? 0);
+      const successful = Number(item?.metrics.paymentSuccessful ?? 0);
+      const paymentRate = Number(item?.metrics.paymentRate ?? NaN);
+      const shouldCreate =
+        (Number.isFinite(successRate) && successRate < PAYMENT_SUCCESS_WATCH_PERCENT) ||
+        attempts > successful;
+      if (!item || !shouldCreate) return null;
+
+      const isRisk =
+        Number.isFinite(successRate) && successRate < PAYMENT_SUCCESS_RISK_PERCENT;
+      const failureCount = Math.max(attempts - successful, 0);
+
+      return {
+        sourceKey: "payment_chain_review",
+        sourceType: "rule",
+        dedupeKey: "payment_chain_review",
+        title: isRisk ? "立即排查支付链路异常" : "复核支付链路与失败订单",
+        quadrant: isRisk ? "q1" : "q2",
+        priority: isRisk ? "P0" : "P1",
+        triggerReason: [
+          Number.isFinite(successRate)
+            ? `订单支付成功率 ${successRate}%（目标 ≥ ${PAYMENT_SUCCESS_WATCH_PERCENT}%）`
+            : null,
+          failureCount > 0 ? `${failureCount} 笔支付尝试未成功` : null,
+          Number.isFinite(paymentRate) ? `结账末端支付成功率 ${paymentRate}%` : null,
+        ]
+          .filter(Boolean)
+          .join("；"),
+        objective: "尽快找出支付失败集中场景，避免结账末端继续吞掉已形成的购买意图",
+        impactMetrics: ["paymentSuccessRate", "paymentAttempts", "paymentFailures"],
+        estimatedLift: "提升支付成功率与订单完成率",
+        roiImpactSummary: "支付恢复会直接改善转化漏斗末端，提升广告流量的真实回收效率。",
+        confidence: "medium",
+        riskEnvironment: "payments",
+        aiContextPayload: { diagnosisKey: "conversion_health", objectType: "order" },
+        relatedObjects: {
+          paymentSuccessRate: Number.isFinite(successRate) ? successRate : null,
+          paymentAttempts: attempts,
+          paymentSuccessful: successful,
+          paymentFailures: failureCount,
+          checkoutPaymentRate: Number.isFinite(paymentRate) ? paymentRate : null,
+          evidence: item.evidence,
+        },
+        suggestedActions: Array.from(
+          new Set([
+            "先按设备、支付方式和地区拆开失败订单，确认是否集中在单一场景",
+            "复核移动端结账页、支付回跳链路和最近的支付配置改动",
+            ...item.reasoning.filter((reason) => reason.includes("支付") || reason.includes("结账")),
+          ]),
+        ),
+        ownerRole: "运营/支付",
+        dueWindow: isRisk ? "today" : "48h",
+      };
+    },
+  },
+  {
     key: "sales_decline",
     evaluate: (d) => {
       const item = findItem(d, "sales_trend");
@@ -165,11 +326,19 @@ const RULES: RuleDefinition[] = [
       const isRisk = item.status === "risk";
       return {
         sourceKey: "sales_decline",
+        sourceType: "rule",
         dedupeKey: "sales_decline",
         title: isRisk ? "排查销售额大幅下滑原因" : "跟进销售额下滑趋势",
         quadrant: isRisk ? "q1" : "q3",
         priority: isRisk ? "P1" : "P2",
         triggerReason: `近 7 天销售额 ${m.salesAmount7d} ${m.currency}，环比 ${m.salesGrowthRate}%`,
+        objective: "先判断销售额下滑更偏流量、转化还是客单变化，再收口主要拖累源",
+        impactMetrics: ["salesAmount7d", "salesGrowthRate", "orderCount7d", "aov7d"],
+        estimatedLift: "恢复收入增速",
+        roiImpactSummary: "销售回升会直接改善 Today 的赚钱结果，也是 ROI 修复的最上游指标。",
+        confidence: isRisk ? "high" : "medium",
+        riskEnvironment: "conversion",
+        aiContextPayload: { diagnosisKey: "sales_trend", objectType: "other" },
         relatedObjects: {
           salesAmount7d: m.salesAmount7d,
           salesAmountPrev7d: m.salesAmountPrev7d,
@@ -216,6 +385,7 @@ const RULES: RuleDefinition[] = [
       );
       return {
         sourceKey: "traffic_conversion_drop",
+        sourceType: "rule",
         dedupeKey: "traffic_conversion_drop",
         title: trafficBad && conversionBad
           ? "排查流量与转化同步下滑"
@@ -225,6 +395,17 @@ const RULES: RuleDefinition[] = [
         quadrant: isRisk ? "q1" : "q3",
         priority: isRisk ? "P1" : "P2",
         triggerReason: reasonParts.join("；") || "流量或转化漏斗出现下滑",
+        objective: "尽快判断问题出在流量质量还是站内承接，避免继续盲目放量",
+        impactMetrics: ["sessions7d", "trafficChangeRate", "conversionRate7d"],
+        estimatedLift: "恢复有效流量承接与站内转化",
+        roiImpactSummary: "修复流量与转化漏斗后，能更直接地改善短期 ROI 与收入效率。",
+        confidence: isRisk ? "medium" : "low",
+        riskEnvironment: "conversion",
+        aiContextPayload: {
+          diagnosisKey: "traffic_anomaly",
+          secondaryDiagnosisKey: "conversion_health",
+          objectType: "landing_page",
+        },
         relatedObjects: {
           sessions7d: m.sessions7d,
           sessionsPrev7d: m.sessionsPrev7d,
@@ -249,11 +430,19 @@ const RULES: RuleDefinition[] = [
       if (count <= 0) return null;
       return {
         sourceKey: "routine_shipping",
+        sourceType: "rule",
         dedupeKey: "routine_shipping",
         title: `常规发货：${count} 单待发货（未超时）`,
         quadrant: "q2",
         priority: "P1",
         triggerReason: `${count} 单订单在 ${SLA_HOURS} 小时 SLA 内待发货，建议批量处理避免转为超时单`,
+        objective: "提前清掉待发货队列，避免常规单继续积压为超时单",
+        impactMetrics: ["pendingOrderCount", "overdueOrderCount"],
+        estimatedLift: "减少超时单转化",
+        roiImpactSummary: "提前清队列能减少履约问题后续演变成退款与差评的概率。",
+        confidence: "high",
+        riskEnvironment: "fulfillment",
+        aiContextPayload: { diagnosisKey: "fulfillment_health", objectType: "order" },
         relatedObjects: { orders: d.detail.routineUnfulfilledOrders },
         suggestedActions: ["按下单时间批量打单发货", "发货后批量回传运单号"],
         ownerRole: "履约/仓储",
@@ -262,6 +451,55 @@ const RULES: RuleDefinition[] = [
     },
   },
   // ── Q2 和 Q3 交界：商品问题（可快速处理）──
+  {
+    key: "launch_failure_review",
+    evaluate: (d) => {
+      const item = findItem(d, "product_operations");
+      if (!item || item.status === "healthy") return null;
+      const draftCount = Number(item.metrics.draftProductCount ?? 0);
+      const noImagesCount = Number(item.metrics.noImagesProductCount ?? 0);
+      const noDescCount = Number(item.metrics.noDescriptionProductCount ?? 0);
+      if (draftCount <= 0) return null;
+
+      const isRisk = draftCount > 5 || item.status === "risk";
+      const blockers: string[] = [`${draftCount} 个商品仍处于草稿待上架`];
+      if (noImagesCount > 0) blockers.push(`${noImagesCount} 个商品缺图`);
+      if (noDescCount > 0) blockers.push(`${noDescCount} 个商品缺描述`);
+
+      return {
+        sourceKey: "launch_failure_review",
+        sourceType: "rule",
+        dedupeKey: "launch_failure_review",
+        title: isRisk ? "立即复盘上新失败与待上架商品" : "复盘上新卡点与待上架商品",
+        quadrant: isRisk ? "q1" : "q2",
+        priority: isRisk ? "P0" : "P1",
+        triggerReason: blockers.join("；"),
+        objective: "先打通上新卡点，让计划主推商品按时进入可售状态",
+        impactMetrics: ["draftProductCount", "noImagesProductCount", "noDescriptionProductCount"],
+        estimatedLift: "提升新品就绪率",
+        roiImpactSummary: "上新按时完成后，才能承接流量与投放节奏，避免新品窗口浪费。",
+        confidence: "medium",
+        riskEnvironment: "new-arrivals",
+        aiContextPayload: { diagnosisKey: "product_operations", objectType: "sku" },
+        relatedObjects: {
+          draftCount,
+          noImagesCount,
+          noDescriptionCount: noDescCount,
+          evidence: item.evidence,
+        },
+        suggestedActions: Array.from(
+          new Set([
+            "先按计划主推商品优先级排队，确认哪些新品本应今日上架却仍停在草稿",
+            "逐个复核上架阻塞点：审核、定价、图片、描述和发布流程",
+            "对已确定要上的商品，先补齐最低可上线素材，再安排正式发布",
+            ...item.reasoning.filter((reason) => reason.includes("上新") || reason.includes("草稿")),
+          ]),
+        ),
+        ownerRole: "商品/运营",
+        dueWindow: isRisk ? "today" : "48h",
+      };
+    },
+  },
   {
     key: "product_incomplete",
     evaluate: (d) => {
@@ -290,6 +528,7 @@ const RULES: RuleDefinition[] = [
 
       return {
         sourceKey: "product_incomplete",
+        sourceType: "rule",
         dedupeKey: "product_incomplete",
         title:
           total > 0
@@ -298,6 +537,13 @@ const RULES: RuleDefinition[] = [
         quadrant: isRisk ? "q2" : "q3",
         priority: isRisk ? "P1" : "P2",
         triggerReason: issues.join("；"),
+        objective: "优先补齐高影响商品的信息缺口，减少因素材不完整造成的承接损耗",
+        impactMetrics: ["draftProductCount", "noImagesProductCount", "noDescriptionProductCount"],
+        estimatedLift: "提升商品页承接与转化准备度",
+        roiImpactSummary: "商品信息补齐会改善流量承接质量，也能减少因信息缺失造成的退款与低转化。",
+        confidence: "medium",
+        riskEnvironment: "new-arrivals",
+        aiContextPayload: { diagnosisKey: "product_operations", objectType: "sku" },
         relatedObjects: {
           draftCount,
           noImagesCount,
@@ -326,11 +572,19 @@ const RULES: RuleDefinition[] = [
       const watchSkus = d.detail.inventoryRisks.filter((i) => i.risk === "watch");
       return {
         sourceKey: "inventory_replenish_plan",
+        sourceType: "rule",
         dedupeKey: "inventory_replenish_plan",
         title: `制定 ${m.watchSkuCount} 个 SKU 的本周补货计划`,
         quadrant: "q3",
         priority: "P2",
         triggerReason: `${m.watchSkuCount} 个 SKU 可售天数在 ${SELLABLE_DAYS_RISK}-${SELLABLE_DAYS_WATCH} 天之间，尚未紧急但需提前排产`,
+        objective: "提前安排补货计划，避免关注级库存问题升级成缺货损失",
+        impactMetrics: ["watchSkuCount"],
+        estimatedLift: "降低未来缺货风险",
+        roiImpactSummary: "提前补货能减少未来一周因库存不足导致的收入损失与投放浪费。",
+        confidence: "high",
+        riskEnvironment: "inventory",
+        aiContextPayload: { diagnosisKey: "inventory_health", objectType: "sku" },
         relatedObjects: { skus: watchSkus },
         suggestedActions: [
           "结合供应商交期确定补货批次与数量",
@@ -342,6 +596,8 @@ const RULES: RuleDefinition[] = [
     },
   },
 ];
+
+export const RULE_MANAGED_SOURCE_KEYS = RULES.map((rule) => rule.key);
 
 /** 计算 dueWindow 对应的截止时间。 */
 export function dueWindowToDate(window: TaskDueWindow, now: Date): Date | null {

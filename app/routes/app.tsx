@@ -5,7 +5,12 @@ import type {
   LoaderFunctionArgs,
   ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
+import {
+  Outlet,
+  useLoaderData,
+  useLocation,
+  useRouteError,
+} from "react-router";
 import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -38,6 +43,7 @@ import {
   resolveEmbeddedLocationSearch,
 } from "../lib/embeddedLocationSearch";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
+import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import {
   describeValueShape,
   logClientDiagnostic,
@@ -53,17 +59,17 @@ const NAV_ITEMS: Record<
     labelKey:
       | "nav.ask"
       | "nav.today"
+      | "nav.healthMonitor"
       | "nav.studio"
-      | "nav.insights"
       | "nav.tasks"
       | "nav.settings"
       | "nav.adsCatalog";
   }
 > = {
-  ask: { href: "/app", labelKey: "nav.ask" },
+  ask: { href: "/app/assistant", labelKey: "nav.ask" },
   today: { href: "/app/today", labelKey: "nav.today" },
+  "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
-  insights: { href: "/app/insights", labelKey: "nav.insights" },
   tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
   settings: { href: "/app/settings", labelKey: "nav.settings" },
   "ads-catalog": { href: "/app/ads-catalog", labelKey: "nav.adsCatalog" },
@@ -203,12 +209,13 @@ export default function App() {
 }
 
 /**
- * 页面留白的唯一来源。工作台首页是整屏两栏布局，自带内边距，因此不套这层容器。
+ * 页面留白的唯一来源。主页与助手页都自带整屏布局，因此不套这层容器。
  */
 function AppShellContent() {
   const location = useLocation();
   const { isMobile } = useResponsiveLayout();
-  const isWorkspace = location.pathname.replace(/\/+$/, "") === "/app";
+  const normalizedPath = location.pathname.replace(/\/+$/, "");
+  const isWorkspace = normalizedPath === "/app" || normalizedPath === "/app/assistant";
 
   if (isWorkspace) {
     return <Outlet />;
@@ -225,15 +232,23 @@ function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const { t } = useTranslation();
   const location = useLocation();
   const embeddedSearch = resolveEmbeddedLocationSearch(location.search);
+  const navigate = useEmbeddedNavigate();
+  const navItems: NavItemKey[] = Array.isArray(nav) ? [...nav] : [];
 
   return (
     <s-app-nav>
-      {(Array.isArray(nav) ? nav : []).map((item) => {
-        const config = NAV_ITEMS[item as NavItemKey];
+      {navItems.map((item) => {
+        const config = NAV_ITEMS[item];
+        if (!config) return null;
+        const target = appendEmbeddedSearchToPath(config.href, embeddedSearch);
         return (
           <s-link
             key={item}
-            href={appendEmbeddedSearchToPath(config.href, embeddedSearch)}
+            href={target}
+            onClick={(event) => {
+              event.preventDefault();
+              void navigate(target);
+            }}
           >
             {t(config.labelKey)}
           </s-link>
