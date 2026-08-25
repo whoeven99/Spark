@@ -25,6 +25,38 @@ export function isEmbeddedAdminEntry(request: Request): boolean {
   return false;
 }
 
+/**
+ * Admin 点应用名或侧栏导航时，iframe 常整页载入目标路径并丢掉 shop/host。
+ * 只识别 document/iframe 导航；API / React Router data fetch（dest=empty）必须排除，
+ * 否则会把带 session token 的接口请求 302 成 HTML。
+ */
+export function shouldRecoverEmbeddedHome(request: Request): boolean {
+  const dest = request.headers.get("sec-fetch-dest")?.toLowerCase();
+  if (dest === "iframe") return true;
+  if (dest && dest !== "document") return false;
+
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
+  try {
+    return new URL(referer).hostname === "admin.shopify.com";
+  } catch {
+    return false;
+  }
+}
+
+/** 无 shop/host 时给当前路径补上 `embedded=1`，由 authenticate.admin 做 session token bounce。 */
+export function buildEmbeddedHomeRecoveryPath(
+  home: string,
+  request: Request,
+): string {
+  const target = new URL(home, new URL(request.url).origin);
+  target.search = new URL(request.url).search;
+  if (target.searchParams.get("embedded") !== "1") {
+    target.searchParams.set("embedded", "1");
+  }
+  return `${target.pathname}${target.search}`;
+}
+
 /** 解析嵌入式入口应跳转的 shop 查询值；无法解析时返回 null。 */
 export function resolveShopQueryFromRequest(request: Request): string | null {
   const url = new URL(request.url);

@@ -67,7 +67,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sf,
     connectionOverview,
   ] = await Promise.all([
-    loadBillingContext(shop),
+    loadBillingContext(shop).catch((error) => {
+      console.error("[settings._index] loadBillingContext failed:", error);
+      return null;
+    }),
     getFacebookCatalogCredential(shop),
     getGoogleMerchantCredential(shop),
     getGoogleMerchantPending(shop),
@@ -92,7 +95,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   ]);
 
   const currentPlan =
-    billing.subscription && billing.subscription.status
+    billing?.subscription && billing.subscription.status
       ? billing.plans.find((plan) => plan.planKey === billing.subscription?.planKey)?.displayName ??
         billing.subscription.planKey
       : null;
@@ -100,10 +103,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     summaries: {
       billing: {
-        subscriptionStatus: billing.subscription?.status ?? null,
+        subscriptionStatus: billing?.subscription?.status ?? null,
         currentPlan,
-        availableTokens: billing.availableTokens,
-        hasAccess: billing.hasAccess,
+        availableTokens: billing?.availableTokens ?? 0,
+        hasAccess: billing?.hasAccess ?? false,
       },
       google: {
         merchantConnected: Boolean(googleMerchant),

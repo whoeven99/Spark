@@ -4,6 +4,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   appendEmbeddedSearchToPath,
+  buildEmbeddedHomeRedirectPath,
   pickEmbeddedSearch,
   resolveEmbeddedLocationSearch,
 } from "../../../app/lib/embeddedLocationSearch";
@@ -50,5 +51,25 @@ describe("resolveEmbeddedLocationSearch", () => {
     expect(resolveEmbeddedLocationSearch("?shop=live.myshopify.com&host=live")).toBe(
       "?shop=live.myshopify.com&host=live",
     );
+  });
+});
+
+describe("buildEmbeddedHomeRedirectPath", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("restores cached shop/host onto /app", () => {
+    sessionStorage.setItem(
+      "spark:embedded-search",
+      "?shop=cached.myshopify.com&host=xyz&embedded=1",
+    );
+    expect(buildEmbeddedHomeRedirectPath("/app")).toBe(
+      "/app?shop=cached.myshopify.com&host=xyz&embedded=1",
+    );
+  });
+
+  it("falls back to embedded=1 when cache is empty", () => {
+    expect(buildEmbeddedHomeRedirectPath("/app")).toBe("/app?embedded=1");
   });
 });

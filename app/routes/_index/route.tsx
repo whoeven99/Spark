@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
@@ -7,10 +8,13 @@ import {
   isBillingReturnRequest,
 } from "../../server/billing/buildBillingReturnUrl.server";
 import {
+  buildEmbeddedHomeRecoveryPath,
   isEmbeddedAdminEntry,
   resolveShopQueryFromRequest,
+  shouldRecoverEmbeddedHome,
 } from "../../server/shopify/embeddedEntry.server";
 import { login, authenticate } from "../../shopify.server";
+import { buildEmbeddedHomeRedirectPath } from "../../lib/embeddedLocationSearch";
 
 import styles from "./styles.module.css";
 
@@ -38,11 +42,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(buildEmbeddedAppPath(path, new Request(targetUrl.toString(), request)));
   }
 
-  return { showForm: Boolean(login) };
+  if (shouldRecoverEmbeddedHome(request)) {
+    throw redirect(buildEmbeddedHomeRecoveryPath(home, request));
+  }
+
+  return { showForm: Boolean(login), home };
 };
 
 export default function App() {
-  const { showForm } = useLoaderData<typeof loader>();
+  const { showForm, home } = useLoaderData<typeof loader>();
+  const [iframeRecovering, setIframeRecovering] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.parent === window) return;
+    setIframeRecovering(true);
+    window.location.replace(buildEmbeddedHomeRedirectPath(home, window.location.search));
+  }, [home]);
+
+  if (iframeRecovering) {
+    return null;
+  }
 
   return (
     <div className={styles.index}>
