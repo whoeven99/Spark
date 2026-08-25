@@ -26,24 +26,19 @@ export function isEmbeddedAdminEntry(request: Request): boolean {
 }
 
 /**
- * Admin 点应用名或侧栏导航（设置/经营等）时，iframe 常整页载入目标路径并丢掉 shop/host。
- * 此时没有嵌入式 query，但请求仍来自 Admin iframe 或从 `/app` 同源跳转。
+ * Admin 点应用名或侧栏导航时，iframe 常整页载入目标路径并丢掉 shop/host。
+ * 只识别 document/iframe 导航；API / React Router data fetch（dest=empty）必须排除，
+ * 否则会把带 session token 的接口请求 302 成 HTML。
  */
 export function shouldRecoverEmbeddedHome(request: Request): boolean {
-  if (request.headers.get("sec-fetch-dest")?.toLowerCase() === "iframe") {
-    return true;
-  }
+  const dest = request.headers.get("sec-fetch-dest")?.toLowerCase();
+  if (dest === "iframe") return true;
+  if (dest && dest !== "document") return false;
 
   const referer = request.headers.get("referer");
   if (!referer) return false;
-
   try {
-    const ref = new URL(referer);
-    const current = new URL(request.url);
-    if (ref.origin === current.origin) {
-      return ref.pathname === "/app" || ref.pathname.startsWith("/app/");
-    }
-    return ref.hostname === "admin.shopify.com";
+    return new URL(referer).hostname === "admin.shopify.com";
   } catch {
     return false;
   }

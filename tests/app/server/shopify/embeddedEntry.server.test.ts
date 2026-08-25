@@ -57,14 +57,34 @@ describe("shouldRecoverEmbeddedHome", () => {
     expect(shouldRecoverEmbeddedHome(request)).toBe(true);
   });
 
-  it("detects same-origin navigation from /app", () => {
-    const request = new Request("https://app.example/", {
+  it("ignores same-origin /app referer so API fetches are not redirected", () => {
+    const request = new Request("https://app.example/api/unified-tasks", {
       headers: { referer: "https://app.example/app/today" },
+    });
+    expect(shouldRecoverEmbeddedHome(request)).toBe(false);
+  });
+
+  it("ignores React Router data fetches (sec-fetch-dest=empty)", () => {
+    const request = new Request("https://app.example/app/settings", {
+      headers: {
+        "sec-fetch-dest": "empty",
+        referer: "https://app.example/app",
+      },
+    });
+    expect(shouldRecoverEmbeddedHome(request)).toBe(false);
+  });
+
+  it("detects document navigation from admin.shopify.com", () => {
+    const request = new Request("https://app.example/app/settings", {
+      headers: {
+        "sec-fetch-dest": "document",
+        referer: "https://admin.shopify.com/store/demo/apps/aiassistant-test",
+      },
     });
     expect(shouldRecoverEmbeddedHome(request)).toBe(true);
   });
 
-  it("ignores top-level visits with no iframe or app referer", () => {
+  it("ignores top-level visits with no iframe or Admin referer", () => {
     const request = new Request("https://app.example/");
     expect(shouldRecoverEmbeddedHome(request)).toBe(false);
   });

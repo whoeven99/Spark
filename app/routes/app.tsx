@@ -7,7 +7,6 @@ import type {
 } from "react-router";
 import {
   Outlet,
-  redirect,
   useLoaderData,
   useLocation,
   useRouteError,
@@ -22,11 +21,6 @@ import {
   normalizeLocale,
 } from "../i18n/config";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
-import {
-  buildEmbeddedHomeRecoveryPath,
-  isEmbeddedAdminEntry,
-  shouldRecoverEmbeddedHome,
-} from "../server/shopify/embeddedEntry.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
@@ -84,12 +78,6 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  if (!isEmbeddedAdminEntry(request) && shouldRecoverEmbeddedHome(request)) {
-    throw redirect(
-      buildEmbeddedHomeRecoveryPath(new URL(request.url).pathname, request),
-    );
-  }
-
   const { admin, session } = await authenticate.admin(request);
 
   // fire-and-forget：不阻断页面切换（幂等 + 日志短路）
