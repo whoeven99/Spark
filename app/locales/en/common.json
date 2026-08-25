@@ -1228,7 +1228,7 @@
     "triggerTitle": "Run backfill",
     "triggerSubtitle": "Use this for first-time setup or missing historical data. It backfills orders together with customer and refund data.",
     "daysBackLabel": "Days to look back",
-    "daysBackHint": "By default this backfills the last 90 days of orders. For older stores on first sync, extend the time window as needed.",
+    "daysBackHint": "Defaults to the last {{days}} days (SPARK_ORDER_BACKFILL_DAYS, or 30 if unset). Extend the window for older stores on first sync; new orders after install arrive via webhooks.",
     "submitting": "Syncing...",
     "submitAction": "Backfill orders (with customers/refunds)",
     "errorPrefix": "Error",
@@ -4065,6 +4065,7 @@
       "links": {
         "dashboard": "Business metrics",
         "dailyOps": "Health Monitor",
+        "viewFullHealthReport": "View full health report",
         "tasks": "Todo"
       },
       "pendingIntegration": "Pending",

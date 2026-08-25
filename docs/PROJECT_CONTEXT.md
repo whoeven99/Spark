@@ -134,6 +134,7 @@ npm run turso:migrate:test
 ## 8. 关键环境变量分组
 
 - Shopify：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`。
+- 订单镜像回补：`SPARK_ORDER_BACKFILL_DAYS`（可选，默认 30，范围 1–365）。安装进 `/app` 时 GraphQL 历史回补与设置 › 数据手动回补共用此默认窗口；之后增量靠 Shopify webhook upsert 进同一套 Turso 表（`ShopOrder*` 等），不进 Cosmos/Blob。
 - Turso（主应用）：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`（测/产各自配值）；`DATABASE_URL` 仅 Prisma CLI / 本地 SQLite。
 - Turso（Admin）：`SPARK_DATABASE_URL` / `SPARK_DATABASE_AUTH_TOKEN`（Spark 库）；
   `TSF_DATABASE_URL` / `TSF_DATABASE_AUTH_TOKEN`（翻译库）；测/产分服务配值，无 TARGET。
