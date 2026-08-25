@@ -58,6 +58,18 @@ export function appendEmbeddedSearchToPath(path: string, locationSearch: string)
   return qs ? `${pathname}?${qs}` : pathname;
 }
 
+/**
+ * iframe 被载到 `/` 且 query 丢失时，用 sessionStorage 拼回 `/app`；
+ * 没有缓存则只带 `embedded=1`，交给 authenticate.admin bounce。
+ */
+export function buildEmbeddedHomeRedirectPath(home: string, rawSearch = ""): string {
+  const recovered = resolveEmbeddedLocationSearch(rawSearch);
+  if (hasEmbeddedAuthContext(recovered)) {
+    return appendEmbeddedSearchToPath(home, recovered);
+  }
+  return appendEmbeddedSearchToPath(home, "?embedded=1");
+}
+
 /** 构建带嵌入式鉴权参数的 App action URL（如 `/app?setLocale=1`）。 */
 export function buildAppActionUrl(path: string, extraParams?: Record<string, string>): string {
   const search = resolveEmbeddedLocationSearch(

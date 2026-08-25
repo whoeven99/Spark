@@ -25,6 +25,43 @@ export function isEmbeddedAdminEntry(request: Request): boolean {
   return false;
 }
 
+/**
+ * Admin 点应用名/首页时，iframe 会载到 App URL `/` 并丢掉 shop/host。
+ * 此时没有嵌入式 query，但请求仍来自 Admin iframe 或从 `/app` 同源跳转。
+ */
+export function shouldRecoverEmbeddedHome(request: Request): boolean {
+  if (request.headers.get("sec-fetch-dest")?.toLowerCase() === "iframe") {
+    return true;
+  }
+
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
+
+  try {
+    const ref = new URL(referer);
+    const current = new URL(request.url);
+    if (ref.origin === current.origin) {
+      return ref.pathname === "/app" || ref.pathname.startsWith("/app/");
+    }
+    return ref.hostname === "admin.shopify.com";
+  } catch {
+    return false;
+  }
+}
+
+/** 无 shop/host 时跳进 `/app?embedded=1`，由 authenticate.admin 做 session token bounce。 */
+export function buildEmbeddedHomeRecoveryPath(
+  home: string,
+  request: Request,
+): string {
+  const target = new URL(home, new URL(request.url).origin);
+  target.search = new URL(request.url).search;
+  if (target.searchParams.get("embedded") !== "1") {
+    target.searchParams.set("embedded", "1");
+  }
+  return `${target.pathname}${target.search}`;
+}
+
 /** 解析嵌入式入口应跳转的 shop 查询值；无法解析时返回 null。 */
 export function resolveShopQueryFromRequest(request: Request): string | null {
   const url = new URL(request.url);

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildShopifyAdminHostParam } from "../../../../app/server/billing/buildBillingReturnUrl.server";
 import {
+  buildEmbeddedHomeRecoveryPath,
   isEmbeddedAdminEntry,
   resolveShopQueryFromRequest,
   shopDomainFromHostParam,
+  shouldRecoverEmbeddedHome,
 } from "../../../../app/server/shopify/embeddedEntry.server";
 
 describe("shopDomainFromHostParam", () => {
@@ -44,5 +46,33 @@ describe("isEmbeddedAdminEntry", () => {
   it("detects embedded=1", () => {
     const request = new Request("https://app.example/?embedded=1");
     expect(isEmbeddedAdminEntry(request)).toBe(true);
+  });
+});
+
+describe("shouldRecoverEmbeddedHome", () => {
+  it("detects Admin iframe document request without shop query", () => {
+    const request = new Request("https://app.example/", {
+      headers: { "sec-fetch-dest": "iframe" },
+    });
+    expect(shouldRecoverEmbeddedHome(request)).toBe(true);
+  });
+
+  it("detects same-origin navigation from /app", () => {
+    const request = new Request("https://app.example/", {
+      headers: { referer: "https://app.example/app/today" },
+    });
+    expect(shouldRecoverEmbeddedHome(request)).toBe(true);
+  });
+
+  it("ignores top-level visits with no iframe or app referer", () => {
+    const request = new Request("https://app.example/");
+    expect(shouldRecoverEmbeddedHome(request)).toBe(false);
+  });
+});
+
+describe("buildEmbeddedHomeRecoveryPath", () => {
+  it("sends iframe home to /app with embedded=1", () => {
+    const request = new Request("https://app.example/");
+    expect(buildEmbeddedHomeRecoveryPath("/app", request)).toBe("/app?embedded=1");
   });
 });
