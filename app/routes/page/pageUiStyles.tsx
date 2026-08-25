@@ -1,7 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { resolveBackDestination } from "../../lib/pageBackNavigation";
 
 /**
  * 与工作台 `page/workspace/styles.ts` 的 `shopifyUi` 同源，保证工作台与工具页视觉一致。
@@ -540,37 +542,15 @@ type PageBackButtonProps = {
   returnTo?: string;
 };
 
-function resolveBackDestination(params: {
-  locationKey: string;
-  locationSearch: string;
-  navigate: ReturnType<typeof useNavigate>;
-  fallbackPath: string;
-  preserveSearch: boolean;
-  returnTo?: string;
-}) {
-  if (params.returnTo) {
-    params.navigate(params.returnTo);
-    return;
-  }
-
-  if (params.locationKey !== "default") {
-    params.navigate(-1);
-    return;
-  }
-
-  const search = params.preserveSearch ? params.locationSearch : "";
-  params.navigate(`${params.fallbackPath}${search}`);
-}
-
 export function PageBackButton({
   label,
   fallbackPath = "/app",
-  preserveSearch = true,
+  preserveSearch = false,
   workspaceOnly = false,
   style,
   returnTo,
 }: PageBackButtonProps) {
-  const navigate = useNavigate();
+  const navigate = useEmbeddedNavigate();
   const location = useLocation();
   const { isMobile } = useResponsiveLayout();
 
@@ -579,14 +559,13 @@ export function PageBackButton({
   }
 
   const handleBack = () => {
-    resolveBackDestination({
-      locationKey: location.key,
-      locationSearch: location.search,
-      navigate,
+    const destination = resolveBackDestination({
       fallbackPath,
+      locationSearch: location.search,
       preserveSearch,
       returnTo,
     });
+    navigate(destination.to, destination.replace ? { replace: true } : undefined);
   };
 
   return (
