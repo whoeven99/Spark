@@ -75,4 +75,11 @@ describe("buildEmbeddedHomeRecoveryPath", () => {
     const request = new Request("https://app.example/");
     expect(buildEmbeddedHomeRecoveryPath("/app", request)).toBe("/app?embedded=1");
   });
+
+  it("keeps Admin nav path such as /app/settings", () => {
+    const request = new Request("https://app.example/app/settings");
+    expect(buildEmbeddedHomeRecoveryPath("/app/settings", request)).toBe(
+      "/app/settings?embedded=1",
+    );
+  });
 });

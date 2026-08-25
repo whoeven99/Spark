@@ -26,7 +26,7 @@ export function isEmbeddedAdminEntry(request: Request): boolean {
 }
 
 /**
- * Admin 点应用名/首页时，iframe 会载到 App URL `/` 并丢掉 shop/host。
+ * Admin 点应用名或侧栏导航（设置/经营等）时，iframe 常整页载入目标路径并丢掉 shop/host。
  * 此时没有嵌入式 query，但请求仍来自 Admin iframe 或从 `/app` 同源跳转。
  */
 export function shouldRecoverEmbeddedHome(request: Request): boolean {
@@ -49,7 +49,7 @@ export function shouldRecoverEmbeddedHome(request: Request): boolean {
   }
 }
 
-/** 无 shop/host 时跳进 `/app?embedded=1`，由 authenticate.admin 做 session token bounce。 */
+/** 无 shop/host 时给当前路径补上 `embedded=1`，由 authenticate.admin 做 session token bounce。 */
 export function buildEmbeddedHomeRecoveryPath(
   home: string,
   request: Request,

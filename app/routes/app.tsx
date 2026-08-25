@@ -7,6 +7,7 @@ import type {
 } from "react-router";
 import {
   Outlet,
+  redirect,
   useLoaderData,
   useLocation,
   useRouteError,
@@ -21,6 +22,11 @@ import {
   normalizeLocale,
 } from "../i18n/config";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import {
+  buildEmbeddedHomeRecoveryPath,
+  isEmbeddedAdminEntry,
+  shouldRecoverEmbeddedHome,
+} from "../server/shopify/embeddedEntry.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
@@ -40,6 +46,8 @@ import {
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   appendEmbeddedSearchToPath,
+  buildEmbeddedHomeRedirectPath,
+  hasEmbeddedAuthContext,
   resolveEmbeddedLocationSearch,
 } from "../lib/embeddedLocationSearch";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
@@ -76,6 +84,12 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (!isEmbeddedAdminEntry(request) && shouldRecoverEmbeddedHome(request)) {
+    throw redirect(
+      buildEmbeddedHomeRecoveryPath(new URL(request.url).pathname, request),
+    );
+  }
+
   const { admin, session } = await authenticate.admin(request);
 
   // fire-and-forget：不阻断页面切换（幂等 + 日志短路）
@@ -142,6 +156,10 @@ export function shouldRevalidate({
     currentUrl.pathname !== nextUrl.pathname;
 
   if (isAppChildNavigation) {
+    // Admin 侧栏整页跳转若丢掉 shop/host，必须重跑壳层 loader 才能补回 embedded 会话。
+    if (!hasEmbeddedAuthContext(nextUrl.search)) {
+      return true;
+    }
     return false;
   }
 
@@ -264,6 +282,15 @@ export function ErrorBoundary() {
 
   useEffect(() => {
     logClientRenderError(error);
+    if (typeof window === "undefined" || window.parent === window) return;
+    const recovered = buildEmbeddedHomeRedirectPath(
+      window.location.pathname,
+      window.location.search,
+    );
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (recovered !== current) {
+      window.location.replace(recovered);
+    }
   }, [error]);
 
   return boundary.error(error);
