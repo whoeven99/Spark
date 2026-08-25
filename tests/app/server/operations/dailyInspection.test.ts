@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "../../../../app/db.server";
-import { createOperationTaskFromReportCandidate } from "../../../../app/server/operations/dailyInspection.server";
+import {
+  createOperationTaskFromReportCandidate,
+  getOperationTaskByIdForShop,
+} from "../../../../app/server/operations/dailyInspection.server";
 import type { ReportTaskCandidate } from "../../../../app/server/operations/businessReportSnapshot.shared";
 
 vi.mock("../../../../app/db.server", () => ({
@@ -160,6 +163,82 @@ describe("createOperationTaskFromReportCandidate", () => {
           { sourceKey: "inventory_risk" },
         ]),
       },
+    });
+  });
+});
+
+function createStoredOperationTask(overrides: Record<string, unknown> = {}) {
+  const now = new Date("2026-08-20T08:00:00.000Z");
+  return {
+    id: "task_lookup",
+    shop: "spark-test.myshopify.com",
+    dedupeKey: "inventory_risk:risk_skus:inventory_loss:today",
+    sourceKey: "inventory_risk",
+    sourceType: "rule",
+    title: "补货止损",
+    quadrant: "q1",
+    priority: "P0",
+    status: "done",
+    triggerReason: "库存风险上升",
+    objective: null,
+    impactMetrics: ["缺货率"],
+    estimatedLift: null,
+    roiImpactSummary: null,
+    confidence: "high",
+    riskEnvironment: "库存",
+    aiContextPayload: null,
+    relatedObjects: {},
+    suggestedActions: ["按预估损失排序补货"],
+    ownerRole: "供应链",
+    dueWindow: "today",
+    dueAt: null,
+    createdAt: now,
+    resolvedAt: now,
+    ...overrides,
+  };
+}
+
+describe("getOperationTaskByIdForShop", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.operationTask.findFirst).mockResolvedValue(null as never);
+  });
+
+  it("returns the task when it belongs to the shop", async () => {
+    vi.mocked(prisma.operationTask.findFirst).mockResolvedValue(
+      createStoredOperationTask() as never,
+    );
+
+    const result = await getOperationTaskByIdForShop(
+      "spark-test.myshopify.com",
+      "task_lookup",
+    );
+
+    expect(result?.id).toBe("task_lookup");
+    expect(result?.status).toBe("done");
+    expect(vi.mocked(prisma.operationTask.findFirst).mock.calls[0]?.[0]).toMatchObject({
+      where: { id: "task_lookup", shop: "spark-test.myshopify.com" },
+    });
+  });
+
+  it("returns null when the task does not exist", async () => {
+    const result = await getOperationTaskByIdForShop(
+      "spark-test.myshopify.com",
+      "missing_task",
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the task belongs to another shop", async () => {
+    const result = await getOperationTaskByIdForShop(
+      "other-shop.myshopify.com",
+      "task_lookup",
+    );
+
+    expect(result).toBeNull();
+    expect(vi.mocked(prisma.operationTask.findFirst).mock.calls[0]?.[0]).toMatchObject({
+      where: { id: "task_lookup", shop: "other-shop.myshopify.com" },
     });
   });
 });

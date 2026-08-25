@@ -1,14 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
+import { isOperationTaskHistory } from "../lib/operationTaskList";
 import { authenticate } from "../shopify.server";
 import {
-  ensureDailySnapshot,
+  getOperationTaskByIdForShop,
   type OperationTaskView,
 } from "../server/operations/dailyInspection.server";
-
-function isClosedOperationTaskStatus(status: OperationTaskView["status"]) {
-  return status === "done" || status === "ignored" || status === "auto_closed";
-}
 
 function resolveHealthMonitorFromDiagnosis(url: URL) {
   const riskTab =
@@ -87,7 +84,7 @@ function buildTaskCenterPath(params: {
   const next = new URLSearchParams();
   if (params.taskId) next.set("taskId", params.taskId);
   if (params.returnTo) next.set("returnTo", params.returnTo);
-  if (params.task && isClosedOperationTaskStatus(params.task.status)) {
+  if (params.task && isOperationTaskHistory(params.task)) {
     next.set("unifiedView", "history");
   }
   const query = next.toString();
@@ -139,16 +136,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (detail === "task") {
-    let result: Awaited<ReturnType<typeof ensureDailySnapshot>> | null = null;
-    try {
-      result = await ensureDailySnapshot(session.shop);
-    } catch (error) {
-      console.error("[app.today.diagnosis] failed to load daily snapshot, redirecting to task center without task lookup:", error);
-    }
     const taskId = url.searchParams.get("taskId")?.trim() || null;
-    const task = taskId
-      ? result?.tasks.find((item) => item.id === taskId) ?? null
-      : null;
+    let task: OperationTaskView | null = null;
+    if (taskId) {
+      try {
+        task = await getOperationTaskByIdForShop(session.shop, taskId);
+      } catch (error) {
+        console.error(
+          "[app.today.diagnosis] failed to load operation task, redirecting to task center without tab hint:",
+          error,
+        );
+      }
+    }
     throw redirect(
       buildTaskCenterPath({
         taskId,

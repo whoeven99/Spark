@@ -1,7 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
-import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
+import {
+  AI_TASK_VIEW_FETCH_LIMIT,
+  listTasksPageForShop,
+} from "../server/aiTask/aiTaskStore.server";
 import type { AITaskItem, AITaskListPageData } from "../lib/aiTaskTypes";
 import {
   listOperationTasks,
@@ -9,6 +12,7 @@ import {
   type OperationTaskAction,
 } from "../server/operations/dailyInspection.server";
 import { isOperationTaskCurrent, isOperationTaskHistory } from "../lib/operationTaskList";
+import { computeUnifiedTaskTabCounts } from "../lib/unifiedTaskCounts";
 import { listScheduledAutomationTasks } from "../server/automation/scheduledAutomationCatalog.server";
 import type {
   UnifiedTaskEntry,
@@ -19,7 +23,6 @@ import type {
 } from "../lib/unifiedTaskTypes";
 
 const DEFAULT_PAGE_SIZE = 10;
-const FETCH_ALL_SIZE = 200;
 
 function entryUpdatedAt(entry: UnifiedTaskEntry): string {
   if (entry.entryType === "ai_task") return entry.task.updatedAt;
@@ -155,16 +158,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop: session.shop,
       view,
       page: 1,
-      pageSize: FETCH_ALL_SIZE,
+      pageSize: AI_TASK_VIEW_FETCH_LIMIT,
+      maxPageSize: AI_TASK_VIEW_FETCH_LIMIT,
     }).catch((error) => {
       console.error("[api.unified-tasks] failed to load AI tasks, falling back to empty list:", error);
-      return buildEmptyAITaskPage(view, 1, FETCH_ALL_SIZE);
+      return buildEmptyAITaskPage(view, 1, AI_TASK_VIEW_FETCH_LIMIT);
     }),
     listOperationTasks(session.shop),
   ]);
+  const scheduledAutomationTasks = listScheduledAutomationTasks();
   const automationEntries: UnifiedTaskEntry[] =
     view === "current"
-      ? listScheduledAutomationTasks().map((task) => ({
+      ? scheduledAutomationTasks.map((task) => ({
           entryType: "automation_task",
           task,
         }))
@@ -201,6 +206,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const totalCount = merged.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const entries = merged.slice((page - 1) * pageSize, page * pageSize);
+  const { currentCount, historyCount } = computeUnifiedTaskTabCounts({
+    aiCurrentCount: aiTaskPage.metrics.currentCount,
+    aiHistoryCount: aiTaskPage.metrics.historyCount,
+    operationTasks,
+    scheduledAutomationCount: scheduledAutomationTasks.length,
+    operationSourceFilter,
+    now,
+  });
 
   return data<UnifiedTaskListResponse>({
     entries,
@@ -212,25 +225,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pageSize,
     totalCount,
     totalPages,
-    currentCount:
-      operationSourceFilter.length > 0
-        ? operationTasks.filter(
-            (task) =>
-              isOperationTaskCurrent(task, now) &&
-              operationSourceFilter.includes(task.sourceKey),
-          ).length
-        : aiTaskPage.metrics.currentCount +
-          operationTasks.filter((task) => isOperationTaskCurrent(task, now)).length +
-          automationEntries.length,
-    historyCount:
-      operationSourceFilter.length > 0
-        ? operationTasks.filter(
-            (task) =>
-              isOperationTaskHistory(task, now) &&
-              operationSourceFilter.includes(task.sourceKey),
-          ).length
-        : aiTaskPage.metrics.historyCount +
-          operationTasks.filter((task) => isOperationTaskHistory(task, now)).length,
+    currentCount,
+    historyCount,
   });
 };
 

@@ -20,7 +20,7 @@ import {
 type PrismaJson = any;
 
 const TASK_LIST_LIMIT = 20;
-const RECENT_TASK_FETCH_LIMIT = 200;
+export const AI_TASK_VIEW_FETCH_LIMIT = 200;
 const TASK_PAGE_SIZE = 4;
 
 function normalizeTaskPage(page: number | undefined): number {
@@ -28,9 +28,17 @@ function normalizeTaskPage(page: number | undefined): number {
   return Math.floor(page);
 }
 
-function normalizeTaskPageSize(pageSize: number | undefined): number {
+/** 分页接口默认最多 20 条；统一任务合并查询可通过 maxPageSize 放到 200。 */
+export function normalizeAiTaskPageSize(
+  pageSize: number | undefined,
+  maxPageSize: number = TASK_LIST_LIMIT,
+): number {
+  const cap = Math.min(
+    Math.max(1, Number.isFinite(maxPageSize) ? Math.floor(maxPageSize) : TASK_LIST_LIMIT),
+    AI_TASK_VIEW_FETCH_LIMIT,
+  );
   if (!Number.isFinite(pageSize) || !pageSize || pageSize < 1) return TASK_PAGE_SIZE;
-  return Math.min(Math.floor(pageSize), TASK_LIST_LIMIT);
+  return Math.min(Math.floor(pageSize), cap);
 }
 
 function buildTaskTypeWhere(params: {
@@ -352,7 +360,7 @@ export async function listRecentAITasksForShop(
   shop: string,
   limit: number,
 ): Promise<AITaskItem[]> {
-  const take = Math.min(Math.max(1, Math.floor(limit)), RECENT_TASK_FETCH_LIMIT);
+  const take = Math.min(Math.max(1, Math.floor(limit)), AI_TASK_VIEW_FETCH_LIMIT);
   const rows = await prisma.aITask.findMany({
     where: { shop },
     orderBy: { updatedAt: "desc" },
@@ -366,10 +374,11 @@ export async function listTasksPageForShop(params: {
   view: AITaskListView;
   page?: number;
   pageSize?: number;
+  maxPageSize?: number;
   taskType?: AITaskType;
   taskTypes?: AITaskType[];
 }): Promise<AITaskListPageData> {
-  const pageSize = normalizeTaskPageSize(params.pageSize);
+  const pageSize = normalizeAiTaskPageSize(params.pageSize, params.maxPageSize);
   const requestedPage = normalizeTaskPage(params.page);
   const baseWhere = buildTaskListWhere(params);
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);

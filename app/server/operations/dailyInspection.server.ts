@@ -1061,6 +1061,17 @@ export async function ensureDailySnapshot(
   };
 }
 
+/** 按店铺与任务 ID 读取单条经营任务（兼容跳转等轻量查询用）。 */
+export async function getOperationTaskByIdForShop(
+  shop: string,
+  taskId: string,
+): Promise<OperationTaskView | null> {
+  const task = await prisma.operationTask.findFirst({
+    where: { id: taskId, shop },
+  });
+  return task ? toTaskView(task) : null;
+}
+
 /** 当前任务列表：进行中的全部 + 近 3 天已关闭的（供页面展示处理痕迹）。 */
 export async function listOperationTasks(
   shop: string,
