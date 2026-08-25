@@ -186,6 +186,17 @@ export type HealthMonitorSnapshotInput = {
   signals?: HealthMonitorSignalsInput;
 };
 
+/** 邀请制内测不展示：风控链路、经营 ROI（短+长占位）。短期 ROI 仍在经营页。 */
+export const HIDDEN_HEALTH_MONITOR_IDS = new Set(["roi-health", "risk-control-health"]);
+
+export function isHealthMonitorVisible(id: string): boolean {
+  return !HIDDEN_HEALTH_MONITOR_IDS.has(id);
+}
+
+function visibleHealthMonitors(records: HealthMonitorRecord[]): HealthMonitorRecord[] {
+  return records.filter((record) => isHealthMonitorVisible(record.id));
+}
+
 export const HEALTH_MONITORS: HealthMonitorRecord[] = [
   {
     id: "page-performance",
@@ -519,10 +530,7 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
 const GROUP_ORDER: HealthMonitorRecord["group"][] = ["可信度健康", "目标健康"];
 
 export function getHealthMonitorGroups() {
-  return GROUP_ORDER.map((group) => ({
-    title: group,
-    items: HEALTH_MONITORS.filter((item) => item.group === group),
-  }));
+  return getHealthMonitorGroupsFromRecords(visibleHealthMonitors(HEALTH_MONITORS));
 }
 
 export function getHealthMonitorGroupsFromRecords(records: HealthMonitorRecord[]) {
@@ -532,7 +540,9 @@ export function getHealthMonitorGroupsFromRecords(records: HealthMonitorRecord[]
   }));
 }
 
-export function getHealthMonitorSummary(records: HealthMonitorRecord[] = HEALTH_MONITORS) {
+export function getHealthMonitorSummary(
+  records: HealthMonitorRecord[] = visibleHealthMonitors(HEALTH_MONITORS),
+) {
   const riskCount = records.filter((item) => item.status === "risk").length;
   const watchCount = records.filter((item) => item.status === "watch").length;
   const goodCount = records.filter((item) => item.status === "good").length;
@@ -563,7 +573,7 @@ export function getHealthMonitorSummary(records: HealthMonitorRecord[] = HEALTH_
 }
 
 export function getPriorityHealthMonitors(limit = 3) {
-  return [...HEALTH_MONITORS]
+  return [...visibleHealthMonitors(HEALTH_MONITORS)]
     .sort((a, b) => statusRank(b.status) - statusRank(a.status))
     .slice(0, limit);
 }
@@ -577,7 +587,7 @@ function statusRank(status: HealthMonitorStatus) {
 export function buildHealthMonitorRecords(
   snapshot?: HealthMonitorSnapshotInput,
 ): HealthMonitorRecord[] {
-  if (!snapshot) return HEALTH_MONITORS;
+  if (!snapshot) return visibleHealthMonitors(HEALTH_MONITORS);
 
   const metrics = snapshot.metrics ?? {};
   const overview = snapshot.overview;
@@ -971,7 +981,7 @@ export function buildHealthMonitorRecords(
       default:
         return record;
     }
-  });
+  }).filter((record) => isHealthMonitorVisible(record.id));
 }
 
 /** Search Console 观察窗口文案，与 healthMonitorSignals.server.ts 的取数窗口保持一致。 */

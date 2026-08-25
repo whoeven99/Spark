@@ -141,6 +141,7 @@
 | 卸载清理该店镜像 | P1 | 邀请制建议做；上架必做 |
 | GDPR 强制 webhook + 隐私政策 | P1 | 公开上架才变成 P0 |
 | 独立告警中心 / case 复盘 | P2 | 不挡首批邀请 |
+| 风控链路、回收期/长期 ROI | 本周期不做 | 页面不展示；短期 ROI 等产品公式 |
 | 写回治理 / 促销 / 竞品 / WMS | P2+ | 内测后 |
 
 ---
@@ -207,6 +208,12 @@ app/server/ai/playbooks/{name}/
 - [ ] 用 1–2 家店冒烟：安装 → 回补 → Today → Ask → Studio → 订阅/试用 → 卸载
 - [ ] （P1）卸载删除该店业务镜像
 - [ ] 不要把告警中心、writeBack、竞品、WMS、App Store 素材当成本周期门禁
+
+本周期明确**不做，页面也不展示**：
+
+- **风控链路**：Health Monitor 不渲染 `risk-control-health`；快照不再产出 `risk-control` 环境。
+- **回收期 ROI / 长期 ROI**：Today 首页只留短期 ROI 卡。
+- **短期 ROI**：现有估算先留着；**等产品给出简单公式后再改计算**。Health Monitor「ROI 情况（短期和长期）」本轮不展示。
 
 ---
 
