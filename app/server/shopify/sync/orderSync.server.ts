@@ -3,6 +3,11 @@ import type { ShopifyOrderPayload } from "./types";
 import { syncCustomer } from "./customerSync.server";
 import { sumDiscountedShippingFromLines } from "./refundSyncParse.server";
 
+/**
+ * 订单镜像写入 Turso（upsert）。
+ * 调用方：安装/手动 GraphQL 回补，以及 webhooks.orders.paid / orders.cancelled。
+ */
+
 function extractUtm(landingSite: string | null): {
   utmSource: string | null;
   utmMedium: string | null;

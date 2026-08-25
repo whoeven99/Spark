@@ -25,6 +25,7 @@ export function DestinationPage({
   actions,
   children,
   isMobile,
+  chromeless = false,
 }: {
   title: string;
   subtitle: string;
@@ -36,6 +37,7 @@ export function DestinationPage({
   actions?: DestinationActionCard[];
   children?: ReactNode;
   isMobile: boolean;
+  chromeless?: boolean;
 }) {
   return (
     <>
@@ -47,6 +49,7 @@ export function DestinationPage({
         backLabel={backLabel}
         fallbackPath={fallbackPath}
         returnTo={returnTo}
+        chromeless={chromeless}
       />
       {actions && actions.length > 0 ? (
         <DestinationActionGrid actions={actions} isMobile={isMobile} />

@@ -158,8 +158,24 @@ export const pageHeaderNavStyle: CSSProperties = {
   boxShadow: pageColorTokens.shadowCard,
 };
 
+export const pageHeaderNavPlainStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "0.95rem",
+  flexWrap: "wrap",
+  padding: "0.95rem 1rem",
+};
+
 export const pageHeaderNavMobileStyle: CSSProperties = {
   ...pageHeaderNavStyle,
+  gap: "0.75rem",
+  flexDirection: "column",
+  padding: "0.85rem 0.85rem",
+};
+
+export const pageHeaderNavMobilePlainStyle: CSSProperties = {
+  ...pageHeaderNavPlainStyle,
   gap: "0.75rem",
   flexDirection: "column",
   padding: "0.85rem 0.85rem",
@@ -594,6 +610,7 @@ type PageHeaderNavProps = {
   workspaceOnly?: boolean;
   returnTo?: string;
   rightAction?: ReactNode;
+  chromeless?: boolean;
 };
 
 export function PageHeaderNav({
@@ -607,11 +624,19 @@ export function PageHeaderNav({
   workspaceOnly,
   returnTo,
   rightAction,
+  chromeless = false,
 }: PageHeaderNavProps) {
   const { isMobile } = useResponsiveLayout();
+  const headerStyle = isMobile
+    ? chromeless
+      ? pageHeaderNavMobilePlainStyle
+      : pageHeaderNavMobileStyle
+    : chromeless
+      ? pageHeaderNavPlainStyle
+      : pageHeaderNavStyle;
 
   return (
-    <div style={isMobile ? pageHeaderNavMobileStyle : pageHeaderNavStyle}>
+    <div style={headerStyle}>
       {/* 同步 Shopify Admin 顶部标题栏，避免切换页面后残留上一页标题 */}
       <TitleBar title={titleBarTitle ?? title} />
       <div style={pageHeaderNavMainStyle}>

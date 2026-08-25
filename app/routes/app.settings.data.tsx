@@ -13,9 +13,11 @@ import {
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { backfillOrders } from "../server/shopify/sync/backfill.server";
+import { getOrderBackfillDays } from "../server/shopify/sync/orderBackfillConfig.server";
 import type { BackfillResult } from "../server/shopify/sync/types";
 
 // 历史订单回补工具（新 IA 下归入设置 › 数据工具，/app/settings/data）。
+// 安装自动回补与手动回补共用 Turso 镜像表；增量靠 webhook。
 
 const SYNC_RESOURCES = ["orders"] as const;
 
@@ -41,6 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       lastCursor: c.lastCursor,
     })),
     counts: { orderCount, customerCount, inventoryCount, fulfillmentCount },
+    defaultDaysBack: getOrderBackfillDays(),
   };
 };
 
@@ -51,7 +54,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const form = await request.formData();
   const resource = form.get("resource") as string;
-  const daysBack = parseInt(form.get("daysBack") as string, 10) || 90;
+  const daysBack =
+    parseInt(form.get("daysBack") as string, 10) || getOrderBackfillDays();
 
   if (!SYNC_RESOURCES.includes(resource as (typeof SYNC_RESOURCES)[number])) {
     return { error: `Unknown resource: ${resource}`, result: null };
@@ -73,7 +77,7 @@ export default function BackfillPage() {
   const { isMobile } = useResponsiveLayout();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
-  const { shop, checkpoints, counts } = useLoaderData<typeof loader>();
+  const { shop, checkpoints, counts, defaultDaysBack } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -253,7 +257,7 @@ export default function BackfillPage() {
               <input
                 name="daysBack"
                 type="number"
-                defaultValue={90}
+                defaultValue={defaultDaysBack}
                 min={1}
                 max={365}
                 style={{
@@ -273,7 +277,7 @@ export default function BackfillPage() {
                 lineHeight: 1.5,
               }}
             >
-              {t("settingsData.daysBackHint")}
+              {t("settingsData.daysBackHint", { days: defaultDaysBack })}
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-start" }}>

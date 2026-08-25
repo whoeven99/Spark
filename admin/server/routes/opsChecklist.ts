@@ -34,6 +34,16 @@ function buildServiceStatuses(): ServiceStatus[] {
       rechargeSignal: "连接接近上限、慢查询持续、写入延迟抬升",
     },
     {
+      key: "admin-ops-turso",
+      name: "Admin ops Turso",
+      category: "ops",
+      required: true,
+      configured: hasAllEnv("ADMIN_DATABASE_URL", "ADMIN_DATABASE_AUTH_TOKEN"),
+      note: "待办 / 定价工作台配置（ADMIN_DATABASE_URL / ADMIN_DATABASE_AUTH_TOKEN）",
+      costSignal: "连接数、写入量、存储量",
+      rechargeSignal: "连接接近上限、写入延迟抬升",
+    },
+    {
       key: "tsf-turso",
       name: "TSF Turso",
       category: "core",

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { getDb } from "../lib/db.js";
+import { getAdminOpsDb } from "../lib/adminOpsDb.js";
 
 export const todosRouter = Router();
 
@@ -36,7 +36,7 @@ function mapTodoRow(row: Record<string, unknown>) {
 }
 
 async function ensureTable() {
-  const db = getDb();
+  const db = getAdminOpsDb();
   await db.execute(`
     CREATE TABLE IF NOT EXISTS AdminTodo (
       id TEXT PRIMARY KEY,
@@ -95,7 +95,7 @@ function readyTable() {
 todosRouter.get("/", async (_req, res) => {
   try {
     await readyTable();
-    const result = await getDb().execute(
+    const result = await getAdminOpsDb().execute(
       "SELECT * FROM AdminTodo ORDER BY createdAt DESC",
     );
     res.json({
@@ -123,7 +123,7 @@ todosRouter.post("/", async (req, res) => {
       etaDays == null || etaDays === ""
         ? null
         : Math.max(0, Math.floor(Number(etaDays)));
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: `INSERT INTO AdminTodo (id, title, description, assignee, status, priority, etaDays, followers, createdBy, createdAt, updatedAt)
             VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?)`,
       args: [
@@ -155,7 +155,7 @@ todosRouter.put("/:id", async (req, res) => {
       etaDays == null || etaDays === ""
         ? null
         : Math.max(0, Math.floor(Number(etaDays)));
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: `UPDATE AdminTodo SET title=?, description=?, assignee=?, status=?, priority=?, etaDays=?, followers=?, updatedAt=? WHERE id=?`,
       args: [
         title,
@@ -178,7 +178,7 @@ todosRouter.put("/:id", async (req, res) => {
 todosRouter.delete("/:id", async (req, res) => {
   try {
     await readyTable();
-    const db = getDb();
+    const db = getAdminOpsDb();
     await db.execute({
       sql: "DELETE FROM AdminTodoComment WHERE todoId=?",
       args: [req.params.id],
@@ -196,7 +196,7 @@ todosRouter.delete("/:id", async (req, res) => {
 todosRouter.get("/:id/comments", async (req, res) => {
   try {
     await readyTable();
-    const result = await getDb().execute({
+    const result = await getAdminOpsDb().execute({
       sql: `SELECT id, todoId, author, body, createdAt
             FROM AdminTodoComment
             WHERE todoId=?
@@ -219,7 +219,7 @@ todosRouter.post("/:id/comments", async (req, res) => {
       return;
     }
 
-    const todo = await getDb().execute({
+    const todo = await getAdminOpsDb().execute({
       sql: "SELECT id FROM AdminTodo WHERE id=?",
       args: [req.params.id],
     });
@@ -230,12 +230,12 @@ todosRouter.post("/:id/comments", async (req, res) => {
 
     const id = randomUUID();
     const now = new Date().toISOString();
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: `INSERT INTO AdminTodoComment (id, todoId, author, body, createdAt)
             VALUES (?, ?, ?, ?, ?)`,
       args: [id, req.params.id, author, trimmed, now],
     });
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: "UPDATE AdminTodo SET updatedAt=? WHERE id=?",
       args: [now, req.params.id],
     });

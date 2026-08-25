@@ -3,6 +3,12 @@ import { syncOrder } from "./orderSync.server";
 import { syncRefund } from "./refundSync.server";
 import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import type { BackfillResult, ShopifyOrderPayload, ShopifyRefundPayload } from "./types";
+import { getOrderBackfillDays } from "./orderBackfillConfig.server";
+
+/**
+ * 历史订单回补（Admin GraphQL → Turso）。
+ * 与 webhook 增量共用 syncOrder / syncRefund；勿把镜像迁到 Cosmos/Blob。
+ */
 
 const ORDERS_BACKFILL_QUERY = `#graphql
   query BackfillOrders($first: Int!, $after: String, $query: String) {
@@ -334,7 +340,7 @@ export async function backfillOrders(
   admin: ShopifyAdminGraphqlClient,
   options: { daysBack?: number; maxPages?: number } = {},
 ): Promise<BackfillResult> {
-  const { daysBack = 90, maxPages = 100 } = options;
+  const { daysBack = getOrderBackfillDays(), maxPages = 100 } = options;
 
   const checkpoint = await prisma.shopSyncCheckpoint.findUnique({
     where: { shop_resource: { shop, resource: "orders" } },

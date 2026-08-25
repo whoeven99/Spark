@@ -24,6 +24,7 @@ import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import { ensureInstallOrderBackfill } from "../server/shopify/sync/ensureInstallOrderBackfill.server";
 import {
   syncSessionShopProfile,
   syncSessionUserProfileFromOnline,
@@ -81,14 +82,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
   // fire-and-forget：不阻断页面切换（幂等 + 日志短路）
-  void recordAppInstalled({
-    shop: session.shop,
-    sessionId: session.id,
-    scope: session.scope,
-    isOnline: session.isOnline,
-    source: "app_shell",
-  }).catch((error) => {
-    console.error("[CommonEvent] recordAppInstalled failed:", error);
+  void (async () => {
+    const isNewInstall = await recordAppInstalled({
+      shop: session.shop,
+      sessionId: session.id,
+      scope: session.scope,
+      isOnline: session.isOnline,
+      source: "app_shell",
+    });
+    // 新安装 / 重装：强制再跑一轮；否则仅在尚未 done 时补跑（含失败重试）。
+    await ensureInstallOrderBackfill(session.shop, admin, { force: isNewInstall });
+  })().catch((error) => {
+    console.error("[AppShell] install bootstrap failed:", error);
   });
 
   void syncSessionUserProfileFromOnline(session).catch((error) => {

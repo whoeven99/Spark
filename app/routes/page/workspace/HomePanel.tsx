@@ -1,17 +1,7 @@
 /** 工作台首页 — 对齐 Spark 首页实装预览：问候、AI 输入、店铺概览、任务监控。 */
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
-import type {
-  AutomationOverview,
-  AutomationOverviewResponse,
-  PlaybookSurfaceItem,
-} from "../../../lib/automationOverviewTypes";
-import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
-import {
-  describeValueShape,
-  logClientDiagnostic,
-} from "../../../lib/clientDiagnostics.client";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
 import {
@@ -496,6 +486,24 @@ const homeStyles = {
     fontFamily: "inherit",
     lineHeight: 1.35,
   },
+  inspectionFooter: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTop: `1px solid ${shopifyUi.border}`,
+    display: "grid",
+    gap: 4,
+    width: "100%",
+    textAlign: "left" as const,
+    background: "transparent",
+    borderLeft: "none",
+    borderRight: "none",
+    borderBottom: "none",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+  },
   taskList: {
     display: "flex",
     flexDirection: "column" as const,
@@ -633,31 +641,25 @@ const homeStyles = {
 export function HomePanel({
   displayName,
   snapshot,
-  runningTaskCount,
   initialRenderTimeIso,
   onSubmitPrompt,
   onOpenContextTool,
   onMoreContext,
   onOpenDashboard,
   onOpenDailyOps,
-  onOpenTasks,
 }: {
   displayName: string;
   snapshot: WorkspaceDashboardSnapshot;
-  runningTaskCount: number;
   initialRenderTimeIso?: string;
   onSubmitPrompt: (prompt: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
   onMoreContext: () => void;
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
-  onOpenTasks: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const [draft, setDraft] = useState("");
-  const [automationOverview, setAutomationOverview] =
-    useState<AutomationOverview | null>(null);
   const now = useMemo(() => {
     if (!initialRenderTimeIso) return new Date();
     const parsed = new Date(initialRenderTimeIso);
@@ -680,13 +682,6 @@ export function HomePanel({
     ? localizedSnapshot.alerts
     : []
   ).slice(0, 3);
-  const recentTasks = (Array.isArray(localizedSnapshot.recentTaskSummaries)
-    ? localizedSnapshot.recentTaskSummaries
-    : []
-  ).slice(0, 3);
-  const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
-    ? automationOverview.recommendedPlaybooks
-    : [];
   const locale = i18n.resolvedLanguage || i18n.language || "en";
   const quickPrompts = useMemo(
     () => [
@@ -717,42 +712,6 @@ export function HomePanel({
     ],
     [t],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    fetch(`/api/automation-overview${authQuery}`)
-      .then((res) => res.json() as Promise<AutomationOverviewResponse>)
-      .then((json) => {
-        if (cancelled) return;
-        if (!json.ok) {
-          logClientDiagnostic("automation_overview_error", {
-            ok: json.ok,
-            error: json.error,
-          });
-          return;
-        }
-        const overview = json.overview;
-        logClientDiagnostic("automation_overview_shape", {
-          configured: describeValueShape(overview?.configured),
-          history: describeValueShape(overview?.history),
-          recommendedPlaybooks: describeValueShape(overview?.recommendedPlaybooks),
-          templates: describeValueShape(overview?.templates),
-        });
-        setAutomationOverview(normalizeAutomationOverview(overview));
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          logClientDiagnostic("automation_overview_fetch_failed", {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          setAutomationOverview(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const submitDraft = () => {
     const text = draft.trim();
@@ -795,15 +754,10 @@ export function HomePanel({
         topMetrics={topMetrics}
         topAlerts={topAlerts}
         suggestionItems={suggestionItems}
-        recentTasks={recentTasks}
-        recommendedPlaybooks={recommendedPlaybooks}
-        runningTaskCount={runningTaskCount}
         needsAttention={needsAttention}
         isMobile={isMobile}
-        onSubmitPrompt={onSubmitPrompt}
         onOpenDashboard={onOpenDashboard}
         onOpenDailyOps={onOpenDailyOps}
-        onOpenTasks={onOpenTasks}
       />
 
       <section style={homeStyles.assistantCard}>
@@ -869,29 +823,19 @@ function CommandCenter({
   topMetrics,
   topAlerts,
   suggestionItems,
-  recentTasks,
-  recommendedPlaybooks,
-  runningTaskCount,
   needsAttention,
   isMobile,
-  onSubmitPrompt,
   onOpenDashboard,
   onOpenDailyOps,
-  onOpenTasks,
 }: {
   snapshot: WorkspaceDashboardSnapshot;
   topMetrics: WorkspaceDashboardSnapshot["metrics"];
   topAlerts: WorkspaceDashboardSnapshot["alerts"];
   suggestionItems: string[];
-  recentTasks: WorkspaceDashboardSnapshot["recentTaskSummaries"];
-  recommendedPlaybooks: PlaybookSurfaceItem[];
-  runningTaskCount: number;
   needsAttention: boolean;
   isMobile: boolean;
-  onSubmitPrompt: (prompt: string) => void;
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
-  onOpenTasks: () => void;
 }) {
   const { t } = useTranslation();
   const statusCopy = snapshot.hasData
@@ -906,25 +850,6 @@ function CommandCenter({
     : snapshot.snapshotDate
       ? t("workspace.home.command.snapshotDate", { date: snapshot.snapshotDate })
       : t("workspace.home.command.snapshotPending");
-  const fallbackActions = [
-    t("workspace.home.fallbackActions.report"),
-    t("workspace.home.fallbackActions.sync"),
-    t("workspace.home.fallbackActions.actions"),
-  ];
-  const actionItems =
-    recommendedPlaybooks.length > 0
-      ? recommendedPlaybooks.map((item) => ({
-          key: item.id,
-          label: item.title,
-          detail: item.recommendationReason ?? item.entrySubtitle ?? item.detail,
-          prompt: item.defaultPrompt,
-        }))
-      : fallbackActions.map((prompt) => ({
-          key: prompt,
-          label: prompt,
-          detail: "",
-          prompt,
-        }));
   const metricColumns = isMobile ? 2 : 3;
 
   return (
@@ -942,7 +867,7 @@ function CommandCenter({
         </div>
       </div>
 
-      <div style={homeStyles.metricsGrid(isMobile ? 1 : 3)}>
+      <div style={homeStyles.metricsGrid(isMobile ? 1 : 2)}>
         <section style={homeStyles.sectionCard}>
           <div style={homeStyles.sectionHead}>
             <div>
@@ -973,6 +898,20 @@ function CommandCenter({
               </div>
             ))}
           </div>
+          {snapshot.automation ? (
+            <button type="button" style={homeStyles.inspectionFooter} onClick={onOpenDailyOps}>
+              <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
+              <span style={sectionTextStyle}>{snapshot.automation.detail}</span>
+              <span style={{ ...mutedMetaStyle, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span>
+                  {snapshot.automation.lastRunAt
+                    ? formatInspectionTime(snapshot.automation.lastRunAt, t)
+                    : t("workspace.home.sections.dailyInspectionPending")}
+                </span>
+                <span>{t("workspace.home.links.dailyOps")} →</span>
+              </span>
+            </button>
+          ) : null}
         </section>
 
         <section style={homeStyles.sectionCard}>
@@ -1016,30 +955,13 @@ function CommandCenter({
               </div>
             )}
           </div>
-          <div style={homeStyles.actionList}>
-            {actionItems.slice(0, 3).map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                style={homeStyles.actionButton}
-                onClick={() => onSubmitPrompt(item.prompt)}
-              >
-                {item.label}
-                {item.detail ? (
-                  <span
-                    style={{
-                      display: "block",
-                      marginTop: 3,
-                      color: shopifyUi.textSecondary,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {item.detail}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            style={{ ...homeStyles.actionButton, marginTop: 8 }}
+            onClick={onOpenDailyOps}
+          >
+            {t("workspace.home.links.viewFullHealthReport")} →
+          </button>
           {suggestionItems.length > 0 ? (
             <ul style={homeStyles.activityList}>
               {suggestionItems.slice(0, 2).map((item) => (
@@ -1050,57 +972,6 @@ function CommandCenter({
               ))}
             </ul>
           ) : null}
-        </section>
-
-        <section style={homeStyles.sectionCard}>
-          <div style={homeStyles.sectionHead}>
-            <div>
-              <h3 style={homeStyles.sectionTitle}>{t("workspace.home.sections.recentTasks")}</h3>
-              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
-                {runningTaskCount > 0
-                  ? t("workspace.home.sections.runningTasks", { count: runningTaskCount })
-                  : t("workspace.home.sections.noRunningTasks")}
-              </div>
-            </div>
-            <button type="button" style={textButtonStyle} onClick={onOpenTasks}>
-              {t("workspace.home.links.tasks")} →
-            </button>
-          </div>
-          {snapshot.automation ? (
-            <div style={{ ...homeStyles.taskItem, marginBottom: 10 }}>
-              <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
-              <span style={sectionTextStyle}>{snapshot.automation.detail}</span>
-              {snapshot.automation.lastRunAt ? (
-                <span style={mutedMetaStyle}>
-                  {formatInspectionTime(snapshot.automation.lastRunAt, t)}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <div style={homeStyles.taskList}>
-            {recentTasks.length > 0 ? (
-              recentTasks.map((task) => (
-                <button
-                  key={task.id}
-                  type="button"
-                  style={{
-                    ...homeStyles.taskItem,
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                  onClick={onOpenTasks}
-                >
-                  <span style={sectionTitleSmallStyle}>{task.title}</span>
-                  <span style={sectionTextStyle}>{task.result}</span>
-                </button>
-              ))
-            ) : (
-              <div style={homeStyles.taskItem}>
-                <span style={sectionTextStyle}>{t("workspace.home.sections.noRecentTasks")}</span>
-              </div>
-            )}
-          </div>
         </section>
       </div>
     </section>

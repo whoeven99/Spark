@@ -22,8 +22,32 @@ export const DEFAULT_COST_CONFIG: ShopCostConfigView = {
   isConfigured: false,
 };
 
+function shouldFallbackToDefaultCostConfig(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeCode = "code" in error ? String(error.code ?? "") : "";
+  const maybeMessage = "message" in error ? String(error.message ?? "") : "";
+  const haystack = `${maybeCode} ${maybeMessage}`.toLowerCase();
+
+  return (
+    haystack.includes("p2021") ||
+    haystack.includes("p2022") ||
+    haystack.includes("shopcostconfig") ||
+    haystack.includes("table") && haystack.includes("does not exist") ||
+    haystack.includes("column") && haystack.includes("does not exist")
+  );
+}
+
 export async function getShopCostConfig(shop: string): Promise<ShopCostConfigView> {
-  const row = await prisma.shopCostConfig.findUnique({ where: { shop } });
+  let row;
+  try {
+    row = await prisma.shopCostConfig.findUnique({ where: { shop } });
+  } catch (error) {
+    if (!shouldFallbackToDefaultCostConfig(error)) {
+      throw error;
+    }
+    console.warn("[costConfig] falling back to default config:", error);
+    return DEFAULT_COST_CONFIG;
+  }
   if (!row) return DEFAULT_COST_CONFIG;
   return {
     defaultGrossMarginPercent: row.defaultGrossMarginPercent,

@@ -5,7 +5,7 @@ import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
 import { upsertShopCostConfig } from "../server/operations/roi/costConfig.server";
-import { loadTodayDetailData } from "../server/operations/todayGeo.server";
+import { loadTodayDecisionReportData } from "../server/operations/todayGeo.server";
 import type { ValueLayerResponse } from "./api.today-value-layer";
 import {
   TodayRoiValueLayerSection,
@@ -13,7 +13,7 @@ import {
 } from "./component/today/TodayRoiValueLayerSection";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
-import { TodayMetricDetailPage } from "./page/TodayMetricDetailPage";
+import { TodayMetricReportPage } from "./page/TodayMetricReportPage";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
 type ActionData = { ok: true } | { ok: false; error: string };
@@ -53,6 +53,8 @@ export default function TodayRoiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
+  const rawFocus = searchParams.get("focus");
+  const focus = rawFocus === "channels" || rawFocus === "loss" ? rawFocus : "overview";
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const costConfigFetcher = useFetcher<ActionData>({
     key: TODAY_ROI_COST_CONFIG_FETCHER_KEY,
@@ -106,16 +108,40 @@ export default function TodayRoiPage() {
     setSearchParams(params, { replace: true, preventScrollReset: true });
   };
 
+  const handleFocusChange = (nextFocus: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (nextFocus === "overview") {
+      params.delete("focus");
+    } else {
+      params.set("focus", nextFocus);
+    }
+    setSearchParams(params, { replace: true, preventScrollReset: true });
+  };
+
+  const summary =
+    focus === "channels"
+      ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断哪些渠道真的值得继续投，哪些渠道只是把收入做出来却留不住利润。`
+      : focus === "loss"
+        ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断折扣、退款和高损耗订单如何继续吞掉经营回报。`
+        : `当前范围：${data.filters.selectedCountryLabel}。这里先总览渠道回报和损耗压力，再决定下一步先看哪组对象。`;
+
   return (
-    <TodayMetricDetailPage
-      data={data.detail}
+    <TodayMetricReportPage
+      report={data.report}
       returnTo={returnTo}
       topSection={
         <TodayCountryFilterCard
           options={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
-          summary={`当前范围：${data.filters.selectedCountryLabel}。这里先看不同地区的经营回报、折扣与退款结构。`}
+          focusOptions={[
+            { key: "overview", label: "总览" },
+            { key: "channels", label: "渠道" },
+            { key: "loss", label: "损耗" },
+          ]}
+          activeFocus={focus}
+          onFocusChange={handleFocusChange}
+          summary={summary}
           notes={data.filters.dataNotes}
         />
       }
@@ -125,6 +151,7 @@ export default function TodayRoiPage() {
           valueLoading={valueLoading}
           valueFailed={valueFailed}
           isMobile={isMobile}
+          focus={focus}
         />
       }
     />
@@ -134,11 +161,12 @@ export default function TodayRoiPage() {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
-  return loadTodayDetailData({
+  return loadTodayDecisionReportData({
     shop: session.shop,
     admin,
     hasReadReports: hasReadReportsScope(session.scope),
     requestedCountry: url.searchParams.get("country"),
     metric: "roi",
+    focus: url.searchParams.get("focus"),
   });
 };

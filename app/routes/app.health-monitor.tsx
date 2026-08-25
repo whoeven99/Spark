@@ -19,9 +19,11 @@ import {
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import { loadHealthMonitorSignals } from "../server/operations/healthMonitorSignals.server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
+import { MetricHintLabel } from "./component/shared/MetricHintLabel";
 import { PageSpeedInsightsContent } from "./page/PageSpeedInsightsPage";
 import {
   mobilePageContentStyle,
@@ -45,28 +47,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     defaultReportLocale: resolvePageSpeedLocale(shopLocales.defaultTargetLanguage),
   };
 
-  try {
-    const snapshot = await ensureDailySnapshot(session.shop);
-    return {
-      monitors: buildHealthMonitorRecords({
-        metrics: snapshot.metrics,
-        overview: {
-          salesGrowthRate: snapshot.overview.salesGrowthRate,
-          sessions7d: snapshot.overview.sessions7d,
-          conversionRate7d: snapshot.overview.conversionRate7d,
-        },
-        environments: snapshot.environments,
-        items: snapshot.items,
-        detail: snapshot.detail,
-      }),
-      pageSpeedDefaults,
-      usingFallback: false,
-      fallbackMessage: null,
-    };
-  } catch (error) {
+  // 快照与外部信号并行取。signals 内部已逐项降级，不会整体 reject；
+  // 快照失败时走演示数据，此时不注入 signals，避免真实值和演示值混在一起。
+  const [snapshotResult, signals] = await Promise.all([
+    ensureDailySnapshot(session.shop).then(
+      (snapshot) => ({ ok: true as const, snapshot }),
+      (error: unknown) => ({ ok: false as const, error }),
+    ),
+    loadHealthMonitorSignals({ shop: session.shop }),
+  ]);
+
+  if (!snapshotResult.ok) {
     console.error(
       "[health-monitor] Failed to load daily snapshot, falling back to demo data.",
-      error,
+      snapshotResult.error,
     );
     return {
       monitors: buildHealthMonitorRecords(),
@@ -75,6 +69,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       fallbackMessage: "当前展示的是演示数据，真实健康度快照暂时不可用。",
     };
   }
+
+  const snapshot = snapshotResult.snapshot;
+  return {
+    monitors: buildHealthMonitorRecords({
+      metrics: snapshot.metrics,
+      overview: {
+        salesGrowthRate: snapshot.overview.salesGrowthRate,
+        sessions7d: snapshot.overview.sessions7d,
+        conversionRate7d: snapshot.overview.conversionRate7d,
+      },
+      environments: snapshot.environments,
+      items: snapshot.items,
+      detail: snapshot.detail,
+      signals,
+    }),
+    pageSpeedDefaults,
+    usingFallback: false,
+    fallbackMessage: null,
+  };
 };
 
 function resolveHealthMonitorView(value: string | null): ViewMode {
@@ -221,10 +234,6 @@ export default function AppHealthMonitor() {
               navigate(
                 buildWorkspaceChatPrefillPath({
                   prompt: selectedDetail.result.aiChatPrompt,
-                  constraints: [
-                    `当前 AI 语境：Health Monitor / ${selectedMonitor.title}`,
-                    "只回答可信度、达标性、异常原因和处理优先级，不切回经营总览语境。",
-                  ],
                 }),
               )
             }
@@ -286,7 +295,12 @@ function OverviewSection({
         <div style={summaryGridStyle}>
           <section style={summaryTileStyle}>
             <div style={groupHeaderStyle}>
-              <h3 style={groupTitleStyle}>检查进度</h3>
+              <MetricHintLabel
+                as="h3"
+                style={groupTitleStyle}
+                text="检查进度"
+                content="检查进度 = 已生成结论的监测项数量 / 全部监测项数量。"
+              />
               <span style={pageHintTextStyle}>{summary.progress}%</span>
             </div>
             <div style={summaryTileValueStyle}>
@@ -297,13 +311,33 @@ function OverviewSection({
           {summary.groups.map((group) => (
             <section key={group.title} style={summaryTileStyle}>
               <div style={groupHeaderStyle}>
-                <h3 style={groupTitleStyle}>{group.title}</h3>
+                <MetricHintLabel
+                  as="h3"
+                  style={groupTitleStyle}
+                  text={group.title}
+                  content={`${group.title} 状态 = 该组内只要有风险项就标记为风险，否则有关注项就标记为关注，其余为正常。`}
+                />
                 <span style={statusBadgeStyle(group.status)}>{statusLabel(group.status)}</span>
               </div>
               <div style={overviewMetricRowStyle}>
-                <span style={summaryTileLabelStyle}>风险 {group.riskCount}</span>
-                <span style={summaryTileLabelStyle}>关注 {group.watchCount}</span>
-                <span style={summaryTileLabelStyle}>正常 {group.goodCount}</span>
+                <MetricHintLabel
+                  as="span"
+                  style={summaryTileLabelStyle}
+                  text={`风险 ${group.riskCount}`}
+                  content="风险数量 = 当前分组内状态为 risk 的监测项数量。"
+                />
+                <MetricHintLabel
+                  as="span"
+                  style={summaryTileLabelStyle}
+                  text={`关注 ${group.watchCount}`}
+                  content="关注数量 = 当前分组内状态为 watch 的监测项数量。"
+                />
+                <MetricHintLabel
+                  as="span"
+                  style={summaryTileLabelStyle}
+                  text={`正常 ${group.goodCount}`}
+                  content="正常数量 = 当前分组内状态为 good 的监测项数量。"
+                />
               </div>
             </section>
           ))}
@@ -319,7 +353,12 @@ function OverviewSection({
               {group.items.map((item) => (
                 <div key={item.id} style={dashboardRowStyle}>
                   <div>
-                    <div style={dashboardTitleStyle}>{item.title}</div>
+                    <MetricHintLabel
+                      as="div"
+                      style={dashboardTitleStyle}
+                      text={item.title}
+                      content={getHealthMonitorMetricExplanation(item)}
+                    />
                     <div style={dashboardMetaStyle}>{item.summary}</div>
                   </div>
                   <div style={dashboardValueStyle}>{item.value}</div>
@@ -359,38 +398,70 @@ function DetailSection({
     <div style={stackStyle}>
       <PageSurface
         title="报告内容"
-        subtitle="先看这份健康度报告本身：观察窗口、核心指标、基准比较和数据可信度。"
+        subtitle="先看这份健康度报告本身：观察窗口、核心指标、数据可信度，以及有基准口径时的对比结果。"
       >
         <div style={reportSummaryGridStyle}>
           <div style={reportSummaryCardStyle}>
-            <span style={reportSummaryLabelStyle}>当前状态</span>
+            <MetricHintLabel
+              as="span"
+              style={reportSummaryLabelStyle}
+              text="当前状态"
+              content="当前状态 = 把当前值和该健康项的基准或阈值比较后，再按规则映射为 正常 / 关注 / 风险。"
+            />
             <div style={reportSummaryValueRowStyle}>
               <span style={statusBadgeStyle(monitor.status)}>{statusLabel(monitor.status)}</span>
             </div>
           </div>
           <div style={reportSummaryCardStyle}>
-            <span style={reportSummaryLabelStyle}>{detail.input.coreMetric.label}</span>
+            <MetricHintLabel
+              as="span"
+              style={reportSummaryLabelStyle}
+              text={detail.input.coreMetric.label}
+              content={getHealthMonitorMetricExplanation(monitor)}
+            />
             <strong style={reportSummaryValueStyle}>{detail.input.coreMetric.value}</strong>
           </div>
+          {detail.input.benchmark ? (
+            <div style={reportSummaryCardStyle}>
+              <MetricHintLabel
+                as="span"
+                style={reportSummaryLabelStyle}
+                text={detail.input.benchmark.label}
+                content={`${detail.input.benchmark.label} = 当前健康项用于对比判断的参考线；页面会把当前值与 ${detail.input.benchmark.value} 做比较后得出好坏方向。`}
+              />
+              <strong style={reportSummaryValueStyle}>{detail.input.benchmark.value}</strong>
+              {detail.input.benchmark.delta ? (
+                <span style={reportSummaryHintStyle}>
+                  {benchmarkDirectionLabel(detail.input.benchmark.direction)} {detail.input.benchmark.delta}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div style={reportSummaryCardStyle}>
-            <span style={reportSummaryLabelStyle}>{detail.input.benchmark.label}</span>
-            <strong style={reportSummaryValueStyle}>{detail.input.benchmark.value}</strong>
-            {detail.input.benchmark.delta ? (
-              <span style={reportSummaryHintStyle}>
-                {benchmarkDirectionLabel(detail.input.benchmark.direction)} {detail.input.benchmark.delta}
-              </span>
-            ) : null}
-          </div>
-          <div style={reportSummaryCardStyle}>
-            <span style={reportSummaryLabelStyle}>观察窗口</span>
+            <MetricHintLabel
+              as="span"
+              style={reportSummaryLabelStyle}
+              text="观察窗口"
+              content="观察窗口 = 这条健康判断取数的时间范围，例如今日、近 7 天或近 30 天。"
+            />
             <strong style={reportSummaryValueStyle}>{detail.input.timeWindow.label}</strong>
           </div>
           <div style={reportSummaryCardStyle}>
-            <span style={reportSummaryLabelStyle}>数据质量</span>
+            <MetricHintLabel
+              as="span"
+              style={reportSummaryLabelStyle}
+              text="数据质量"
+              content="数据质量 = 根据数据来源稳定性、口径完整度和缺失情况给出的质量等级。"
+            />
             <strong style={reportSummaryValueStyle}>{scoringLabel(detail.input.scoring.dataQuality)}</strong>
           </div>
           <div style={reportSummaryCardStyle}>
-            <span style={reportSummaryLabelStyle}>结论可信度</span>
+            <MetricHintLabel
+              as="span"
+              style={reportSummaryLabelStyle}
+              text="结论可信度"
+              content="结论可信度 = 综合数据质量、基准明确程度和异常证据一致性后给出的可信等级。"
+            />
             <strong style={reportSummaryValueStyle}>{scoringLabel(detail.input.scoring.confidence)}</strong>
           </div>
         </div>
@@ -547,6 +618,41 @@ function benchmarkDirectionLabel(value: "better" | "worse" | "flat") {
   if (value === "better") return "相对更好";
   if (value === "worse") return "相对更差";
   return "基本持平";
+}
+
+function getHealthMonitorMetricExplanation(monitor: HealthMonitorRecord): string {
+  switch (monitor.id) {
+    case "page-performance":
+      return "页面性能主指标看 LCP，LCP = 用户开始打开页面到最大内容元素完成渲染的耗时。";
+    case "seo-health":
+      return "SEO 情况主指标看 CTR，CTR = 点击量 / 曝光量。";
+    case "payment-health":
+      return "支付成功率 = 成功支付次数 / 支付尝试次数，默认观察近 7 天。";
+    case "roi-health":
+      return "ROI = 收入 / 投入成本；这里同时展示短期 ROI 和长期 ROI 两个观察窗口。";
+    case "revenue-health":
+      return "收入健康度 = 近 7 天收入相对上一可比观察窗口的增速。";
+    case "traffic-health":
+      return "流量健康度 = 近 7 天 Sessions 相对上一可比观察窗口的增速。";
+    case "ads-health":
+      return "广告投放健康度主指标看 ROAS，ROAS = 广告带来的收入 / 广告花费。";
+    case "product-readiness-health":
+      return "商品就绪度 = 草稿商品数 + 缺图商品数 + 缺描述商品数，优先看主推商品。";
+    case "conversion-health":
+      return "转化率健康度主指标看 CVR，CVR = 完成购买会话数 / 总会话数。";
+    case "refund-health":
+      return "退款健康度 = 退款订单或退款金额占成交结果的比重，默认观察近 30 天。";
+    case "inventory-health":
+      return "库存健康度 = 安全天数低于阈值的高动销 SKU 数量；安全天数 = 可售库存 / 日均销量。";
+    case "fulfillment-health":
+      return "履约健康度优先看超时单占比或超时单数量，用来判断发货异常是否开始影响经营结果。";
+    case "risk-control-health":
+      return "风控链路需要误杀率、拒付率和高风险订单占比等输入，当前仍在补齐监测口径。";
+    case "pricing-health":
+      return "商品成本和定价健康度主指标看毛利率，毛利率 = (收入 - 商品成本) / 收入。";
+    default:
+      return `${monitor.title} 会把当前值和对应基准比较后，再判断为正常、关注或风险。`;
+  }
 }
 
 function statusBadgeStyle(status: HealthMonitorStatus): CSSProperties {

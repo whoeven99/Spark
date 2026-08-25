@@ -14,6 +14,13 @@ export type HealthMonitorRelatedObject = {
   summary: string;
 };
 
+export type HealthMonitorBenchmark = {
+  label: string;
+  value: string;
+  delta?: string;
+  direction: "better" | "worse" | "flat";
+};
+
 export type HealthMonitorRecord = {
   id: string;
   group: "可信度健康" | "目标健康";
@@ -27,6 +34,16 @@ export type HealthMonitorRecord = {
   relatedObjects?: HealthMonitorRelatedObject[];
   actions: Array<{ title: string; detail: string }>;
   aiPrompt: string;
+  /**
+   * 可比基准线。只有真正取到基准口径时才有值；
+   * 为 null / 缺省表示「没有基准可比」，详情页不渲染基准卡，不要回退成常量。
+   */
+  benchmark?: HealthMonitorBenchmark | null;
+  /**
+   * 该监测项当前是否有可用数据源。显式 false 表示未连接 / 未配置 / 取数失败；
+   * 缺省视为可用（走每日诊断快照的真实指标）。
+   */
+  dataAvailable?: boolean;
 };
 
 type SnapshotStatus = "healthy" | "watch" | "risk";
@@ -118,12 +135,55 @@ type HealthMonitorSnapshotDetail = {
   abnormalRefundOrders?: HealthMonitorDetailRefundOrder[];
 };
 
+/**
+ * 快照之外的外部信号。结构与 `server/operations/healthMonitorSignals.server.ts`
+ * 的输出保持一致，这里本地声明以免 lib 层依赖服务端模块。
+ */
+type HealthMonitorAdsSignal = {
+  connected: boolean;
+  connectedPlatforms: string[];
+  roas: number | null;
+  spend: number;
+  conversionsValue: number;
+  currencyCode: string | null;
+  mixedCurrency: boolean;
+  grade: "S" | "A" | "B" | "C" | "D" | null;
+  gradeMeaning: string | null;
+  targetRoas: number;
+  dateStart: string;
+  dateEnd: string;
+};
+
+type HealthMonitorSeoSignal = {
+  connected: boolean;
+  siteUrl: string | null;
+  ctrPercent: number | null;
+  clicks: number;
+  impressions: number;
+  avgPosition: number | null;
+  startDate: string | null;
+  endDate: string | null;
+};
+
+type HealthMonitorPricingSignal = {
+  isConfigured: boolean;
+  defaultGrossMarginPercent: number;
+  skuCostCount: number;
+};
+
+export type HealthMonitorSignalsInput = {
+  ads?: HealthMonitorAdsSignal | null;
+  seo?: HealthMonitorSeoSignal | null;
+  pricing?: HealthMonitorPricingSignal | null;
+};
+
 export type HealthMonitorSnapshotInput = {
   metrics?: HealthMonitorSnapshotMetrics;
   overview?: HealthMonitorSnapshotOverview;
   environments?: HealthMonitorSnapshotEnvironment[];
   items?: HealthMonitorSnapshotItem[];
   detail?: HealthMonitorSnapshotDetail;
+  signals?: HealthMonitorSignalsInput;
 };
 
 export const HEALTH_MONITORS: HealthMonitorRecord[] = [
@@ -132,14 +192,19 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
     group: "可信度健康",
     relatedModule: "转化承接",
     title: "页面性能",
-    value: "LCP 4.8s",
+    value: "进详情检测",
     status: "watch",
-    summary: "首页与核心落地页仍偏慢，但问题已收敛到少数关键页面。",
-    issue: "移动端核心页面加载偏慢，已经开始影响落地页承接效率。",
+    dataAvailable: false,
+    benchmark: null,
+    summary: "LCP 需要实时检测，打开结论详情会自动运行一次 PageSpeed 分析。",
+    issue: "页面性能不在每日快照里，需要进入详情实时检测后才能判断。",
     evidence: [
-      { label: "核心指标", value: "移动端 LCP 4.8s，仍高于建议阈值 2.5s。" },
-      { label: "影响页面", value: "首页、爆款集合页、广告主落地页表现最弱。" },
-      { label: "业务关联", value: "这些页面对应的 CVR 比站内均值低 0.5 个百分点。" },
+      {
+        label: "检测方式",
+        value: "页面性能走 PageSpeed Insights 实时分析，结果不落库，因此概览层不展示历史数值。",
+      },
+      { label: "参考阈值", value: "Google Core Web Vitals 建议 LCP 低于 2.5s。" },
+      { label: "检测范围", value: "默认检测店铺主域首页的移动端表现。" },
     ],
     actions: [
       { title: "先缩小问题范围", detail: "只盯首页、爆款页和广告落地页，不先做全站优化。" },
@@ -154,14 +219,18 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
     group: "可信度健康",
     relatedModule: "流量质量",
     title: "SEO 情况",
-    value: "CTR 3.4%",
-    status: "good",
-    summary: "自然流量整体稳定，当前不是今天最优先的问题。",
-    issue: "SEO 侧整体稳定，没有出现需要立刻进入处理流程的异常。",
+    value: "待接入",
+    status: "watch",
+    dataAvailable: false,
+    benchmark: null,
+    summary: "尚未连接 Google Search Console，自然搜索表现暂时无法监测。",
+    issue: "缺少 Search Console 授权，SEO 侧没有可用数据源。",
     evidence: [
-      { label: "曝光趋势", value: "近 7 天 Search Console 曝光量基本持平。" },
-      { label: "点击率", value: "核心查询 CTR 3.4%，与近 30 天均值接近。" },
-      { label: "异常信号", value: "未发现大量索引丢失或排名突然下滑。" },
+      {
+        label: "数据来源",
+        value: "SEO 情况需要 Google Search Console 授权后读取点击、曝光与 CTR。",
+      },
+      { label: "接入位置", value: "在 设置 → Google Search Console 完成授权并选择站点。" },
     ],
     actions: [
       { title: "保持周频复盘", detail: "SEO 更适合看趋势，不需要日内频繁动作。" },
@@ -197,14 +266,22 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
     group: "目标健康",
     relatedModule: "ROI",
     title: "ROI 情况（短期和长期）",
-    value: "1.9x / 2.8x",
-    status: "risk",
-    summary: "短期 ROI 仍承压，虽然长期表现还在安全区，但今天需要优先处理。",
-    issue: "短期 ROI 已低于目标线，且拖累来源集中在投放承接与转化两端。",
+    value: "待接入",
+    status: "watch",
+    dataAvailable: false,
+    benchmark: null,
+    summary: "经营 ROI 需要完整投入成本口径，当前先不生成结论。",
+    issue: "缺少归因收入与完整投入成本，按 ROI 核算规范不做硬算。",
     evidence: [
-      { label: "短期 ROI", value: "近 7 天 ROI 1.9x，低于目标线 2.3x。" },
-      { label: "长期 ROI", value: "近 30 天 ROI 2.8x，尚未跌出健康区间。" },
-      { label: "拖累来源", value: "广告投放效率偏弱，转化率也在同步下滑。" },
+      {
+        label: "口径要求",
+        value: "Business ROI =（贡献利润 − 投入成本）/ 投入成本；投入成本未知时按规范不给结果。",
+      },
+      {
+        label: "可用替代",
+        value: "当前可算的短期经营回报在 经营 → ROI 页展示，含渠道回报与损耗拆解。",
+      },
+      { label: "长期口径", value: "长期 ROI 需要回收窗口与复购收益口径，目前尚未接入。" },
     ],
     actions: [
       { title: "先止损短期 ROI", detail: "聚焦最近 7 天回报最差的广告与落地页，优先收口。" },
@@ -260,14 +337,21 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
     group: "目标健康",
     relatedModule: "ROI",
     title: "广告投放健康度",
-    value: "ROAS 1.7x",
+    value: "待接入",
     status: "watch",
-    summary: "投放侧在拉低短期回报，但目前更像效率问题，不是彻底失控。",
-    issue: "广告投放效率偏弱，已开始拖累短期 ROI，需要继续跟进。",
+    dataAvailable: false,
+    benchmark: null,
+    summary: "尚未连接广告平台，投放回报暂时无法监测。",
+    issue: "缺少广告账户授权，投放侧没有可用数据源。",
     evidence: [
-      { label: "投放效率", value: "ROAS 1.7x，低于近 30 天均值 2.1x。" },
-      { label: "问题集中", value: "主要集中在少数高花费广告组。" },
-      { label: "结合转化", value: "落地页 CVR 同步偏低，说明不能只归因给广告本身。" },
+      {
+        label: "数据来源",
+        value: "投放回报读已落库的广告日指标，按 转化价值 / 花费 计算 ROAS。",
+      },
+      {
+        label: "接入位置",
+        value: "在 Ads Catalog 连接 Meta / Google / TikTok 广告账户后开始监测。",
+      },
     ],
     actions: [
       { title: "先找高花费低回报对象", detail: "按广告组和落地页组合看，而不是只看平台总览。" },
@@ -410,17 +494,22 @@ export const HEALTH_MONITORS: HealthMonitorRecord[] = [
     group: "目标健康",
     relatedModule: "ROI",
     title: "商品成本和定价健康度",
-    value: "毛利率 46%",
-    status: "good",
-    summary: "当前毛利结构稳定，暂未发现需要立刻调整定价的异常。",
-    issue: "定价与毛利结构整体稳定，目前不是今天要优先深入的问题。",
+    value: "待接入",
+    status: "watch",
+    dataAvailable: false,
+    benchmark: null,
+    summary: "尚未配置成本口径，毛利率暂时无法监测。",
+    issue: "缺少商品成本与成本口径配置，毛利率没有可信输入。",
     evidence: [
-      { label: "毛利率", value: "整体毛利率 46%，处于可接受区间。" },
-      { label: "异常检查", value: "未发现大规模低毛利或赔钱成交的商品群。" },
-      { label: "联动判断", value: "当前经营压力并不主要来自定价策略。" },
+      {
+        label: "数据来源",
+        value: "毛利率需要 Shopify 商品成本（inventoryItem 单位成本）与店铺成本口径配置。",
+      },
+      { label: "接入位置", value: "在 经营 → ROI 页配置默认毛利率、支付费率与固定成本。" },
     ],
     actions: [
-      { title: "保持例行监测", detail: "继续保留定价健康度监测，无需今天单独开专题。" },
+      { title: "先配置成本口径", detail: "在 经营 → ROI 页填默认毛利率、支付费率和固定成本。" },
+      { title: "回填商品成本", detail: "在 Shopify 商品的成本字段填单位成本，才能算实测毛利。" },
     ],
     aiPrompt:
       "请基于这份商品成本和定价健康度结果，说明为什么当前不是优先问题，并提醒我什么情况下需要重新看它。",
@@ -459,7 +548,7 @@ export function getHealthMonitorSummary(records: HealthMonitorRecord[] = HEALTH_
       const groupRiskCount = group.items.filter((item) => item.status === "risk").length;
       const groupWatchCount = group.items.filter((item) => item.status === "watch").length;
       const groupGoodCount = group.items.filter((item) => item.status === "good").length;
-      const status =
+      const status: HealthMonitorStatus =
         groupRiskCount > 0 ? "risk" : groupWatchCount > 0 ? "watch" : "good";
 
       return {
@@ -493,6 +582,7 @@ export function buildHealthMonitorRecords(
   const metrics = snapshot.metrics ?? {};
   const overview = snapshot.overview;
   const detail = snapshot.detail;
+  const signals = snapshot.signals;
   const environmentByKey = new Map(
     (snapshot.environments ?? []).map((environment) => [environment.key, environment]),
   );
@@ -720,10 +810,205 @@ export function buildHealthMonitorRecords(
           ]),
         };
       }
+      case "ads-health": {
+        const ads = signals?.ads;
+        if (!ads) return record;
+        if (!ads.connected) {
+          return {
+            ...record,
+            value: "未连接",
+            evidence: [
+              { label: "当前状态", value: "未检测到任何已连接的广告平台。" },
+              {
+                label: "接入位置",
+                value: "在 Ads Catalog 连接 Meta / Google / TikTok 广告账户后开始监测投放回报。",
+              },
+            ],
+          };
+        }
+
+        const platformLabel = ads.connectedPlatforms.map(adsPlatformLabel).join(" / ");
+        const windowLabel = `${ads.dateStart} 至 ${ads.dateEnd}`;
+        if (ads.roas === null) {
+          return {
+            ...record,
+            value: "暂无投放",
+            summary: `已连接 ${platformLabel}，但近 7 天没有广告花费记录，暂不生成投放回报判断。`,
+            issue: "广告账户已连接，但观察窗口内没有花费，无法计算投放回报。",
+            evidence: [
+              { label: "已连接平台", value: `${platformLabel}（${windowLabel}）。` },
+              { label: "当前状态", value: "窗口内广告花费为 0，ROAS 无法计算。" },
+            ],
+          };
+        }
+
+        return {
+          ...record,
+          value: `ROAS ${formatMultiple(ads.roas)}`,
+          status: gradeToHealthStatus(ads.grade),
+          dataAvailable: true,
+          benchmark: {
+            label: "达标线",
+            value: formatMultiple(ads.targetRoas),
+            delta: formatSignedMultiple(ads.roas - ads.targetRoas),
+            direction:
+              ads.roas > ads.targetRoas ? "better" : ads.roas < ads.targetRoas ? "worse" : "flat",
+          },
+          summary: ads.gradeMeaning
+            ? `近 7 天广告 ROAS ${formatMultiple(ads.roas)}，按 ROI 等级判定为「${ads.gradeMeaning}」。`
+            : `近 7 天广告 ROAS ${formatMultiple(ads.roas)}。`,
+          issue: `投放回报按 转化价值 / 花费 计算，当前 ${formatMultiple(ads.roas)}，达标线 ${formatMultiple(ads.targetRoas)}。`,
+          evidence: compactEvidence([
+            {
+              label: "花费与回报",
+              value: `${windowLabel} 花费 ${formatAmount(ads.spend, ads.currencyCode)}，平台上报转化价值 ${formatAmount(ads.conversionsValue, ads.currencyCode)}。`,
+            },
+            { label: "已连接平台", value: `${platformLabel}。` },
+            {
+              label: "口径提醒",
+              value:
+                "这是广告口径粗算，分子为平台上报转化价值，未扣商品成本、折扣与退款，因此不等于经营 ROI。",
+            },
+            ads.mixedCurrency
+              ? { label: "币种提醒", value: "已连接平台使用多种币种，合计金额未做汇率换算，仅作规模参考。" }
+              : null,
+          ]),
+        };
+      }
+      case "seo-health": {
+        const seo = signals?.seo;
+        if (!seo) return record;
+        if (!seo.connected) {
+          return {
+            ...record,
+            value: "未连接",
+            evidence: [
+              { label: "当前状态", value: "未检测到 Google Search Console 授权。" },
+              { label: "接入位置", value: "在 设置 → Google Search Console 完成授权并选择站点。" },
+            ],
+          };
+        }
+
+        const siteLabel = seo.siteUrl ?? "已授权站点";
+        if (seo.ctrPercent === null) {
+          return {
+            ...record,
+            value: "暂无数据",
+            summary: `已连接 ${siteLabel}，但近 ${SEO_WINDOW_LABEL} 没有搜索曝光数据。`,
+            issue: "Search Console 已连接，但观察窗口内没有曝光，CTR 无法计算。",
+            evidence: [
+              { label: "数据来源", value: `Google Search Console · ${siteLabel}。` },
+              { label: "当前状态", value: `近 ${SEO_WINDOW_LABEL} 曝光为 0，CTR 无法计算。` },
+            ],
+          };
+        }
+
+        return {
+          ...record,
+          value: `CTR ${formatPercent(seo.ctrPercent)}`,
+          dataAvailable: true,
+          benchmark: null,
+          summary: `近 ${SEO_WINDOW_LABEL}自然搜索 CTR ${formatPercent(seo.ctrPercent)}。当前只展示数值，未设达标线。`,
+          issue: "SEO 已接入真实数据，但尚未设定达标阈值，因此不做好坏判定。",
+          evidence: compactEvidence([
+            {
+              label: "点击与曝光",
+              value: `近 ${SEO_WINDOW_LABEL}点击 ${formatInteger(seo.clicks)} 次，曝光 ${formatInteger(seo.impressions)} 次。`,
+            },
+            seo.avgPosition !== null
+              ? { label: "平均排名", value: `平均排名 ${stripTrailingZero(seo.avgPosition)}。` }
+              : null,
+            {
+              label: "数据来源",
+              value:
+                seo.startDate && seo.endDate
+                  ? `Google Search Console · ${siteLabel}（${seo.startDate} 至 ${seo.endDate}）。`
+                  : `Google Search Console · ${siteLabel}。`,
+            },
+          ]),
+        };
+      }
+      case "pricing-health": {
+        const pricing = signals?.pricing;
+        if (!pricing) return record;
+
+        const marginLabel = formatPercent(pricing.defaultGrossMarginPercent);
+        const coverageEvidence =
+          pricing.skuCostCount > 0
+            ? `已同步 ${formatInteger(pricing.skuCostCount)} 个 SKU 的 Shopify 单位成本。`
+            : "尚未同步到任何 SKU 单位成本，实测毛利无法计算。";
+
+        if (!pricing.isConfigured) {
+          return {
+            ...record,
+            value: "未配置",
+            summary: `尚未配置成本口径，估算暂用默认毛利率 ${marginLabel}，未形成可信监测。`,
+            evidence: compactEvidence([
+              { label: "当前状态", value: `成本口径未配置，默认毛利率 ${marginLabel} 仅用于估算。` },
+              { label: "商品成本覆盖", value: coverageEvidence },
+              { label: "接入位置", value: "在 经营 → ROI 页配置默认毛利率、支付费率与固定成本。" },
+            ]),
+          };
+        }
+
+        return {
+          ...record,
+          value: `配置毛利率 ${marginLabel}`,
+          dataAvailable: true,
+          benchmark: null,
+          summary: `当前成本口径按默认毛利率 ${marginLabel} 估算。这是配置值，不是实测毛利率。`,
+          issue: "毛利率目前取自成本口径配置，实测毛利需要商品成本覆盖后才能给出。",
+          evidence: compactEvidence([
+            {
+              label: "口径说明",
+              value: `默认毛利率 ${marginLabel} 用于估算 COGS，实际毛利可能与之偏离。`,
+            },
+            { label: "商品成本覆盖", value: coverageEvidence },
+            { label: "实测入口", value: "渠道级实测毛利与贡献利润在 经营 → ROI 页的价值层展示。" },
+          ]),
+        };
+      }
       default:
         return record;
     }
   });
+}
+
+/** Search Console 观察窗口文案，与 healthMonitorSignals.server.ts 的取数窗口保持一致。 */
+const SEO_WINDOW_LABEL = "28 天";
+
+function adsPlatformLabel(platform: string): string {
+  if (platform === "meta") return "Meta";
+  if (platform === "google") return "Google";
+  if (platform === "tiktok") return "TikTok";
+  return platform;
+}
+
+/** ROI 等级 → 健康状态。等级缺失（投入成本未知）时不下好坏判断，落到关注。 */
+function gradeToHealthStatus(grade: "S" | "A" | "B" | "C" | "D" | null): HealthMonitorStatus {
+  if (grade === "S" || grade === "A") return "good";
+  if (grade === "C" || grade === "D") return "risk";
+  return "watch";
+}
+
+function compactEvidence(
+  entries: Array<{ label: string; value: string } | null>,
+): Array<{ label: string; value: string }> {
+  return entries.filter((entry): entry is { label: string; value: string } => Boolean(entry));
+}
+
+function formatMultiple(value: number): string {
+  return `${stripTrailingZero(value)}x`;
+}
+
+/** 金额格式化；币种未知时只给数值，不留下尾部空格。 */
+function formatAmount(value: number, currency: string | null): string {
+  return currency ? `${stripTrailingZero(value)} ${currency}` : stripTrailingZero(value);
+}
+
+function formatSignedMultiple(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${stripTrailingZero(value)}x`;
 }
 
 function mergeEvidence(

@@ -268,7 +268,6 @@ export function ChatContextSidebar({
   const {
     selectedObjectsByType,
     objectQuerySelectionByType,
-    constraints,
     fileRolesById,
     selectedFileIds,
     localFiles,
@@ -374,20 +373,8 @@ export function ChatContextSidebar({
           </div>
         ) : null}
 
-        {/* Constraints */}
-        {constraints.length > 0 ? (
-          <div style={ctxGroupStyle}>
-            <div style={ctxGroupLabelStyle}>约束 · {constraints.length} 条</div>
-            {constraints.map((constraint) => (
-              <div key={constraint} style={{ fontSize: 12, color: "#202223", lineHeight: 1.6 }}>
-                ⚐ {constraint}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
         {/* Empty state */}
-        {totalSelectedObjects === 0 && totalQuerySelections === 0 && selectedFileIds.length === 0 && constraints.length === 0 ? (
+        {totalSelectedObjects === 0 && totalQuerySelections === 0 && selectedFileIds.length === 0 ? (
           <div style={{ fontSize: 13, color: "#8c9196", lineHeight: 1.6 }}>
             在下方选择商品、文章或上传文件，它们会出现在这里并随消息一起发给 AI。
           </div>
