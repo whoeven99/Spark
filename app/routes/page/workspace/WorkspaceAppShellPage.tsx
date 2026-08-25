@@ -139,14 +139,7 @@ const panelItems: Array<{
 ];
 
 function isLaunchContextTool(value: string | null): value is ContextTool {
-  return (
-    value === "product" ||
-    value === "article" ||
-    value === "order" ||
-    value === "file" ||
-    value === "media" ||
-    value === "constraint"
-  );
+  return value === "product" || value === "article" || value === "order" || value === "file";
 }
 
 // ── 左栏会话列表：时间分组与相对时间 ─────────────────────────────────────────
@@ -806,17 +799,15 @@ export function WorkspaceAppShellPage({
 
   useEffect(() => {
     const prefillPrompt = searchParams.get("prefillTaskPrompt");
-    const prefillConstraints = searchParams.getAll("prefillConstraint");
     const rawOpenContextTool = searchParams.get("openContextTool");
     const openContextTool = isLaunchContextTool(rawOpenContextTool)
       ? rawOpenContextTool
       : null;
     const prefillSignature = JSON.stringify({
       prompt: prefillPrompt ?? "",
-      constraints: prefillConstraints,
       openContextTool: openContextTool ?? "",
     });
-    if (!prefillPrompt && prefillConstraints.length === 0 && !openContextTool) {
+    if (!prefillPrompt && !openContextTool) {
       processedPrefillPromptRef.current = null;
       return;
     }
@@ -829,22 +820,18 @@ export function WorkspaceAppShellPage({
       draft: prefillPrompt ?? "",
       assistantText: prefillWelcomeText,
     });
-    for (const constraint of prefillConstraints) {
-      workspaceContext.addConstraint(constraint);
-    }
     const next = new URLSearchParams(searchParams);
     next.delete("prefillTaskPrompt");
     next.delete("prefillConstraint");
     next.delete("openContextTool");
     setSearchParams(next);
-  }, [prefillWelcomeText, searchParams, setSearchParams, workspaceContext.addConstraint]);
+  }, [prefillWelcomeText, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!autoCreateConversation) return;
     if (initializedAssistantLandingRef.current) return;
     if (activeConversationId) return;
     if (searchParams.get("prefillTaskPrompt")) return;
-    if (searchParams.getAll("prefillConstraint").length > 0) return;
     if (isLaunchContextTool(searchParams.get("openContextTool"))) return;
 
     initializedAssistantLandingRef.current = true;
@@ -1519,19 +1506,17 @@ export function WorkspaceAppShellPage({
           <HomePanel
             displayName={displayName}
             snapshot={effectiveDashboardSnapshot}
-            runningTaskCount={runningTaskCount}
             onSubmitPrompt={(prompt) => createConversation({ draft: prompt })}
             onOpenContextTool={(tool) => {
               pendingHomeContextToolRef.current = tool;
               createConversation();
             }}
             onMoreContext={() => {
-              pendingHomeContextToolRef.current = "media";
+              pendingHomeContextToolRef.current = "article";
               createConversation();
             }}
             onOpenDashboard={() => navigate("/app/today")}
             onOpenDailyOps={() => navigate("/app/health-monitor")}
-            onOpenTasks={() => navigate("/app/tasks")}
           />
         ) : null}
         {activePanel === "chat" && activeConversation ? (

@@ -16,13 +16,9 @@ import {
   buildWorkspaceDashboardFromDailyOps,
   emptyWorkspaceDashboardSnapshot,
 } from "../server/operations/workspaceDashboard.server";
-import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
-import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
 import { authenticate } from "../shopify.server";
 import { HomePanel } from "./page/workspace/HomePanel";
 import { contentStyle, mobileContentStyle } from "./page/workspace/styles";
-
-const DASHBOARD_RECENT_TASK_LIMIT = 5;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -32,27 +28,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
-  let runningTaskCount = 0;
   try {
-    const [dailyOps, recentTaskEntries] = await Promise.all([
-      ensureDailySnapshotOverview(session.shop),
-      listMergedUnifiedTaskEntries(session.shop, {
-        limit: DASHBOARD_RECENT_TASK_LIMIT,
-      }),
-    ]);
-    dashboardSnapshot = {
-      ...buildWorkspaceDashboardFromDailyOps(dailyOps),
-      recentTaskSummaries: buildWorkspaceTaskSummaries(recentTaskEntries),
-    };
-    runningTaskCount = recentTaskEntries.filter((entry) => {
-      if (entry.entryType === "ai_task") {
-        return entry.task.status === "running";
-      }
-      if (entry.entryType === "operation_task") {
-        return entry.task.status === "in_progress";
-      }
-      return false;
-    }).length;
+    const dailyOps = await ensureDailySnapshotOverview(session.shop);
+    dashboardSnapshot = buildWorkspaceDashboardFromDailyOps(dailyOps);
   } catch (error) {
     console.error("[app._index] dashboard snapshot failed:", error);
   }
@@ -76,7 +54,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       emptyWorkspaceDashboardSnapshot(),
     ),
     accountName,
-    runningTaskCount,
     homeRenderTimeIso: new Date().toISOString(),
   };
 };
@@ -93,18 +70,16 @@ export default function Index() {
         <HomePanel
           displayName={data.accountName}
           snapshot={data.dashboardSnapshot}
-          runningTaskCount={data.runningTaskCount}
           initialRenderTimeIso={data.homeRenderTimeIso}
           onSubmitPrompt={(prompt) => navigate(buildWorkspaceAssistantPath({ prompt }))}
           onOpenContextTool={(tool) =>
             navigate(buildWorkspaceAssistantPath({ openContextTool: tool }))
           }
           onMoreContext={() =>
-            navigate(buildWorkspaceAssistantPath({ openContextTool: "media" }))
+            navigate(buildWorkspaceAssistantPath({ openContextTool: "article" }))
           }
           onOpenDashboard={() => navigate("/app/today")}
           onOpenDailyOps={() => navigate("/app/health-monitor")}
-          onOpenTasks={() => navigate("/app/tasks")}
         />
       </main>
     </>

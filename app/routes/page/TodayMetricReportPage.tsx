@@ -81,9 +81,8 @@ export function TodayMetricReportPage({
     () =>
       buildWorkspaceChatPrefillPath({
         prompt: aiContext.chatPrompt,
-        constraints: [`当前 AI 语境：Today / ${report.title}`, "只回答当前页面的赚钱结果问题。"],
       }),
-    [aiContext.chatPrompt, report.title],
+    [aiContext.chatPrompt],
   );
 
   const findGroup = (groupKey: string) => report.groups.find((group) => group.key === groupKey) ?? null;

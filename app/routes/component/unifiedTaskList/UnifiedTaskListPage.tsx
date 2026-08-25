@@ -644,10 +644,6 @@ function OperationTaskDetailPanel({
       dueWindowText: operationDueWindowLabel(task, t),
       t,
     }),
-    constraints: [
-      `当前 AI 语境：Tasks / ${task.title}`,
-      "只围绕当前经营任务的处理顺序、原因判断和执行动作回答，不切回通用助手语境。",
-    ],
   });
 
   return (

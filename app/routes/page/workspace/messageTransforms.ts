@@ -30,7 +30,6 @@ import {
   type LocalFileItem,
   type ObjectType,
   type QueryableObjectType,
-  type RichMediaItem,
   type WorkspaceConversationMessage,
 } from "./types";
 
@@ -198,11 +197,8 @@ export function buildWorkspaceContextBlock(params: {
   selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   objectQuerySelectionByType?: Record<QueryableObjectType, ObjectQuerySelection | null>;
   selectedFileIds: string[];
-  selectedMediaIds: string[];
   localFiles: LocalFileItem[];
-  richMediaItems: RichMediaItem[];
   fileRolesById?: Record<string, FileRole>;
-  constraints?: string[];
 }): string | null {
   const lines: string[] = [];
 
@@ -256,20 +252,6 @@ export function buildWorkspaceContextBlock(params: {
         const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
         lines.push(`    • ${file.name}${notePart}${sizePart}`);
       }
-    }
-  }
-
-  if (params.selectedMediaIds.length > 0) {
-    const names = params.selectedMediaIds.map(
-      (id) => params.richMediaItems.find((item) => item.id === id)?.title ?? id,
-    );
-    lines.push(`- 富媒体：${names.join("、")}（共 ${params.selectedMediaIds.length} 个）`);
-  }
-
-  if (params.constraints && params.constraints.length > 0) {
-    lines.push(`- 必须遵守的约束（执行任何任务时不得违反）：`);
-    for (const constraint of params.constraints) {
-      lines.push(`  • ${constraint}`);
     }
   }
 

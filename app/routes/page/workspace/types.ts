@@ -10,7 +10,7 @@ import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 export type WorkspacePanel = "home" | "dashboard" | "chat" | "skills" | "automation" | "tasks";
 export type AutomationView = "configured" | "history" | "templates";
 export type ObjectType = "product" | "article" | "order";
-export type ContextTool = ObjectType | "file" | "media" | "constraint";
+export type ContextTool = ObjectType | "file";
 
 /** 支持「按条件圈定」的对象类型（订单选择器走独立 API，暂不支持 query 形态） */
 export type QueryableObjectType = "product" | "article";
@@ -80,14 +80,6 @@ export type LocalFileItem = {
   charCount?: number;
   uploading?: boolean;
   uploadError?: string;
-};
-
-export type RichMediaItem = {
-  id: string;
-  title: string;
-  kind: "url" | "image" | "video";
-  value: string;
-  note: string;
 };
 
 export const objectTypeLabels: Record<ObjectType, string> = {

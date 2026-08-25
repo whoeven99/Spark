@@ -1,6 +1,6 @@
 /**
- * 上下文工具选择弹窗（商品/文章/订单/文件/富媒体），从 WorkspaceAppShellPage 的 ChatPanel 拆出。
- * 弹窗内的临时表单状态（待上传文件、富媒体表单、订单筛选）随弹窗关闭而重置。
+ * 上下文工具选择弹窗（商品/文章/订单/文件），从 WorkspaceAppShellPage 的 ChatPanel 拆出。
+ * 弹窗内的临时表单状态（待上传文件、订单筛选）随弹窗关闭而重置。
  */
 import { useEffect, useRef, useState } from "react";
 import { WorkspaceContextObjectPicker } from "../../component/chat/WorkspaceContextObjectPicker";
@@ -16,15 +16,12 @@ import {
   objectTypeLabels,
   type FileRole,
   type OrderFilterKey,
-  type RichMediaItem,
 } from "./types";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import {
-  compactFieldStyle,
   filterChipRowStyle,
   filterChipStyle,
   ghostButtonStyle,
-  inlineFieldRowStyle,
   mobileToolModalCardStyle,
   mockCreateBoxStyle,
   mutedMetaStyle,
@@ -56,14 +53,6 @@ const orderFilterLabels: Array<{ key: OrderFilterKey; label: string }> = [
   { key: "refunded", label: "退款中" },
 ];
 
-const CONSTRAINT_PRESETS = [
-  "不修改商品价格",
-  "不改动已发布的内容，仅生成草稿",
-  "保持品牌语气一致",
-  "标题不超过 60 个字符",
-  "不删除任何现有内容",
-];
-
 const FILE_ROLE_OPTIONS = (Object.keys(fileRoleLabels) as FileRole[]).map((role) => ({
   value: role,
   label: fileRoleLabels[role],
@@ -87,33 +76,21 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
     setObjectQuerySelection,
     fileRolesById,
     setFileRole,
-    constraints,
-    addConstraint,
-    removeConstraint,
     localFiles,
     workspaceFilesLoading,
     workspaceFilesError,
     loadWorkspaceFiles,
-    richMediaItems,
-    addRichMediaItem,
     selectedFileIds,
     toggleFileSelection,
     addLocalFile,
     deleteLocalFile,
-    selectedMediaIds,
-    toggleMediaSelection,
   } = context;
 
   const [orderFilter, setOrderFilter] = useState<OrderFilterKey>("all");
   const orderSort = "created_at:desc";
   const [selectionMode, setSelectionMode] = useState<"manual" | "query">("manual");
-  const [newConstraintText, setNewConstraintText] = useState("");
   const [newFileObj, setNewFileObj] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [newMediaTitle, setNewMediaTitle] = useState("");
-  const [newMediaValue, setNewMediaValue] = useState("");
-  const [newMediaNote, setNewMediaNote] = useState("");
-  const [newMediaKind, setNewMediaKind] = useState<RichMediaItem["kind"]>("url");
 
   const [orderSortKey, orderSortDirection] = orderSort.split(":") as [string, ContextResourceSortDirection];
   const {
@@ -145,18 +122,13 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
           ? selectedObjectsByType.order.length
           : activeContextTool === "file"
             ? selectedFileIds.length + (newFileObj ? 1 : 0)
-            : activeContextTool === "media"
-              ? selectedMediaIds.length
-              : activeContextTool === "constraint"
-                ? constraints.length
-                : 0;
+            : 0;
 
   // 打开商品/文章弹窗时：已有圈定条件则默认进入「按条件」模式
   useEffect(() => {
     if (isQueryableObjectType(activeContextTool)) {
       setSelectionMode(objectQuerySelectionByType[activeContextTool] ? "query" : "manual");
     }
-    setNewConstraintText("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeContextTool]);
 
@@ -202,20 +174,12 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
             <div style={sectionTitleSmallStyle}>
               {isObjectType(activeContextTool)
                 ? `${objectTypeLabels[activeContextTool]}选择器`
-                : activeContextTool === "file"
-                  ? "文件选择"
-                  : activeContextTool === "constraint"
-                    ? "约束条件"
-                    : "富媒体选择"}
+                : "文件选择"}
             </div>
             <div style={sectionTextStyle}>
               {isObjectType(activeContextTool)
                 ? "逐个勾选，或按条件圈定（执行时重新求值）。"
-                : activeContextTool === "file"
-                  ? "选择附加文件，并标注其角色（参考/数据/风格）。"
-                  : activeContextTool === "constraint"
-                    ? "设定 AI 执行任务时必须遵守的边界。"
-                    : "选择需要附加到这次对话的 URL、图片或视频。"}
+                : "选择附加文件，并标注其角色（参考/数据/风格）。"}
             </div>
           </div>
           <button type="button" style={toolModalCloseStyle} onClick={handleDismiss} aria-label="关闭">
@@ -446,7 +410,14 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                           </a>
                           <button
                             type="button"
-                            style={{ fontSize: 11, color: "#d72c0d", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                            style={{
+                              fontSize: 11,
+                              color: "#d72c0d",
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -461,161 +432,6 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                   </label>
                 );
               })}
-            </div>
-          </>
-        ) : null}
-
-        {activeContextTool === "media" ? (
-          <>
-            <div style={mockCreateBoxStyle}>
-              <div style={inlineFieldRowStyle}>
-                <select value={newMediaKind} onChange={(event) => setNewMediaKind(event.target.value as RichMediaItem["kind"])} style={selectFieldStyle}>
-                  <option value="url">URL</option>
-                  <option value="image">图片</option>
-                  <option value="video">视频</option>
-                </select>
-                <input
-                  value={newMediaTitle}
-                  onChange={(event) => setNewMediaTitle(event.target.value)}
-                  placeholder="输入标题"
-                  style={compactFieldStyle}
-                />
-              </div>
-              <input
-                value={newMediaValue}
-                onChange={(event) => setNewMediaValue(event.target.value)}
-                placeholder="输入 URL 或资源地址"
-                style={selectorSearchInputStyle}
-              />
-              <div style={inlineFieldRowStyle}>
-                <input
-                  value={newMediaNote}
-                  onChange={(event) => setNewMediaNote(event.target.value)}
-                  placeholder="补充备注"
-                  style={compactFieldStyle}
-                />
-                <button
-                  type="button"
-                  style={ghostButtonStyle}
-                  onClick={() => {
-                    const title = newMediaTitle.trim();
-                    const value = newMediaValue.trim();
-                    if (!title || !value) return;
-                    addRichMediaItem({
-                      title,
-                      value,
-                      kind: newMediaKind,
-                      note: newMediaNote.trim() || "新添加的富媒体资源",
-                    });
-                    setNewMediaTitle("");
-                    setNewMediaValue("");
-                    setNewMediaNote("");
-                    setNewMediaKind("url");
-                  }}
-                >
-                  添加资源
-                </button>
-              </div>
-            </div>
-            <div style={selectorListCompactStyle}>
-              {richMediaItems.map((item) => {
-                const checked = selectedMediaIds.includes(item.id);
-                return (
-                  <label key={item.id} style={selectorItemStyle(checked)}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleMediaSelection(item.id)} />
-                    <div style={selectorItemContentStyle}>
-                      <span style={sectionTitleSmallStyle}>{item.title}</span>
-                      <span style={sectionTextStyle}>{item.note}</span>
-                      <span style={mutedMetaStyle}>{item.kind} · {item.value}</span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </>
-        ) : null}
-
-        {activeContextTool === "constraint" ? (
-          <>
-            <div style={pickerInfoBoxStyle("neutral")}>
-              约束会随每条消息发给 AI，作为执行任务时必须遵守的边界。点击预设或输入自定义约束。
-            </div>
-            <div style={filterChipRowStyle}>
-              {CONSTRAINT_PRESETS.map((preset) => {
-                const active = constraints.includes(preset);
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    style={filterChipStyle(active)}
-                    onClick={() => (active ? removeConstraint(preset) : addConstraint(preset))}
-                  >
-                    {preset}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ ...inlineFieldRowStyle, marginTop: 12 }}>
-              <input
-                value={newConstraintText}
-                onChange={(event) => setNewConstraintText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-                  event.preventDefault();
-                  addConstraint(newConstraintText);
-                  setNewConstraintText("");
-                }}
-                placeholder="自定义约束，如：描述不超过 200 字"
-                style={compactFieldStyle}
-              />
-              <button
-                type="button"
-                style={ghostButtonStyle}
-                onClick={() => {
-                  addConstraint(newConstraintText);
-                  setNewConstraintText("");
-                }}
-              >
-                添加
-              </button>
-            </div>
-            <div style={selectorListCompactStyle}>
-              {constraints.length === 0 ? (
-                <div style={sectionTextStyle}>尚未添加约束。</div>
-              ) : (
-                constraints.map((constraint) => (
-                  <div
-                    key={constraint}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #e1e3e5",
-                      background: "#ffffff",
-                    }}
-                  >
-                    <span style={{ ...sectionTextStyle, flex: 1 }}>{constraint}</span>
-                    <button
-                      type="button"
-                      style={{
-                        fontSize: 12,
-                        color: "#d72c0d",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        flexShrink: 0,
-                      }}
-                      onClick={() => removeConstraint(constraint)}
-                    >
-                      移除
-                    </button>
-                  </div>
-                ))
-              )}
             </div>
           </>
         ) : null}

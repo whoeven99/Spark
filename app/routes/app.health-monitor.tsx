@@ -222,10 +222,6 @@ export default function AppHealthMonitor() {
               navigate(
                 buildWorkspaceChatPrefillPath({
                   prompt: selectedDetail.result.aiChatPrompt,
-                  constraints: [
-                    `当前 AI 语境：Health Monitor / ${selectedMonitor.title}`,
-                    "只回答可信度、达标性、异常原因和处理优先级，不切回经营总览语境。",
-                  ],
                 }),
               )
             }
