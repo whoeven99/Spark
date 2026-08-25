@@ -19,6 +19,7 @@ import {
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import { loadHealthMonitorSignals } from "../server/operations/healthMonitorSignals.server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
@@ -46,28 +47,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     defaultReportLocale: resolvePageSpeedLocale(shopLocales.defaultTargetLanguage),
   };
 
-  try {
-    const snapshot = await ensureDailySnapshot(session.shop);
-    return {
-      monitors: buildHealthMonitorRecords({
-        metrics: snapshot.metrics,
-        overview: {
-          salesGrowthRate: snapshot.overview.salesGrowthRate,
-          sessions7d: snapshot.overview.sessions7d,
-          conversionRate7d: snapshot.overview.conversionRate7d,
-        },
-        environments: snapshot.environments,
-        items: snapshot.items,
-        detail: snapshot.detail,
-      }),
-      pageSpeedDefaults,
-      usingFallback: false,
-      fallbackMessage: null,
-    };
-  } catch (error) {
+  // 快照与外部信号并行取。signals 内部已逐项降级，不会整体 reject；
+  // 快照失败时走演示数据，此时不注入 signals，避免真实值和演示值混在一起。
+  const [snapshotResult, signals] = await Promise.all([
+    ensureDailySnapshot(session.shop).then(
+      (snapshot) => ({ ok: true as const, snapshot }),
+      (error: unknown) => ({ ok: false as const, error }),
+    ),
+    loadHealthMonitorSignals({ shop: session.shop }),
+  ]);
+
+  if (!snapshotResult.ok) {
     console.error(
       "[health-monitor] Failed to load daily snapshot, falling back to demo data.",
-      error,
+      snapshotResult.error,
     );
     return {
       monitors: buildHealthMonitorRecords(),
@@ -76,6 +69,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       fallbackMessage: "当前展示的是演示数据，真实健康度快照暂时不可用。",
     };
   }
+
+  const snapshot = snapshotResult.snapshot;
+  return {
+    monitors: buildHealthMonitorRecords({
+      metrics: snapshot.metrics,
+      overview: {
+        salesGrowthRate: snapshot.overview.salesGrowthRate,
+        sessions7d: snapshot.overview.sessions7d,
+        conversionRate7d: snapshot.overview.conversionRate7d,
+      },
+      environments: snapshot.environments,
+      items: snapshot.items,
+      detail: snapshot.detail,
+      signals,
+    }),
+    pageSpeedDefaults,
+    usingFallback: false,
+    fallbackMessage: null,
+  };
 };
 
 function resolveHealthMonitorView(value: string | null): ViewMode {
@@ -386,7 +398,7 @@ function DetailSection({
     <div style={stackStyle}>
       <PageSurface
         title="报告内容"
-        subtitle="先看这份健康度报告本身：观察窗口、核心指标、基准比较和数据可信度。"
+        subtitle="先看这份健康度报告本身：观察窗口、核心指标、数据可信度，以及有基准口径时的对比结果。"
       >
         <div style={reportSummaryGridStyle}>
           <div style={reportSummaryCardStyle}>
@@ -409,20 +421,22 @@ function DetailSection({
             />
             <strong style={reportSummaryValueStyle}>{detail.input.coreMetric.value}</strong>
           </div>
-          <div style={reportSummaryCardStyle}>
-            <MetricHintLabel
-              as="span"
-              style={reportSummaryLabelStyle}
-              text={detail.input.benchmark.label}
-              content={`${detail.input.benchmark.label} = 当前健康项用于对比判断的参考线；页面会把当前值与 ${detail.input.benchmark.value} 做比较后得出好坏方向。`}
-            />
-            <strong style={reportSummaryValueStyle}>{detail.input.benchmark.value}</strong>
-            {detail.input.benchmark.delta ? (
-              <span style={reportSummaryHintStyle}>
-                {benchmarkDirectionLabel(detail.input.benchmark.direction)} {detail.input.benchmark.delta}
-              </span>
-            ) : null}
-          </div>
+          {detail.input.benchmark ? (
+            <div style={reportSummaryCardStyle}>
+              <MetricHintLabel
+                as="span"
+                style={reportSummaryLabelStyle}
+                text={detail.input.benchmark.label}
+                content={`${detail.input.benchmark.label} = 当前健康项用于对比判断的参考线；页面会把当前值与 ${detail.input.benchmark.value} 做比较后得出好坏方向。`}
+              />
+              <strong style={reportSummaryValueStyle}>{detail.input.benchmark.value}</strong>
+              {detail.input.benchmark.delta ? (
+                <span style={reportSummaryHintStyle}>
+                  {benchmarkDirectionLabel(detail.input.benchmark.direction)} {detail.input.benchmark.delta}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div style={reportSummaryCardStyle}>
             <MetricHintLabel
               as="span"

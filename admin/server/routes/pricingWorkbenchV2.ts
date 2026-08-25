@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
+import { getAdminOpsDb } from "../lib/adminOpsDb.js";
 import { getDb } from "../lib/db.js";
 import { requireOwner } from "../middleware/auth.js";
 
@@ -18,7 +19,7 @@ const V2_NUMERIC_KEYS = [
 ] as const;
 
 async function ensureTables() {
-  const db = getDb();
+  const db = getAdminOpsDb();
   await db.execute(`
     CREATE TABLE IF NOT EXISTS AdminPricingConfig (
       key TEXT PRIMARY KEY,
@@ -53,7 +54,7 @@ function readyTable() {
 
 async function readV2Settings() {
   const keys = [...V2_NUMERIC_KEYS, "v2_usageScenariosJson"];
-  const rows = await getDb().execute({
+  const rows = await getAdminOpsDb().execute({
     sql: `SELECT key, value FROM AdminPricingConfig WHERE key IN (${keys.map(() => "?").join(",")})`,
     args: keys,
   });
@@ -106,7 +107,7 @@ async function readPlanCatalog() {
 
 async function readSharedFixedCosts() {
   await readyTable();
-  const result = await getDb().execute(`
+  const result = await getAdminOpsDb().execute(`
     SELECT id, name, amountUsd, enabled, sortOrder, createdAt, updatedAt
     FROM AdminMonthlyFixedCost
     ORDER BY sortOrder ASC, createdAt ASC
@@ -171,7 +172,7 @@ pricingWorkbenchV2Router.put("/settings", requireOwner, async (req, res) => {
     }
 
     for (const [key, value] of entries) {
-      await getDb().execute({
+      await getAdminOpsDb().execute({
         sql: `
           INSERT INTO AdminPricingConfig (key, value, updatedAt)
           VALUES (?, ?, ?)
@@ -188,7 +189,7 @@ pricingWorkbenchV2Router.put("/settings", requireOwner, async (req, res) => {
         res.status(400).json({ error: "usageScenarios must be an array" });
         return;
       }
-      await getDb().execute({
+      await getAdminOpsDb().execute({
         sql: `
           INSERT INTO AdminPricingConfig (key, value, updatedAt)
           VALUES (?, ?, ?)
@@ -224,7 +225,7 @@ pricingWorkbenchV2Router.post("/fixed-costs", requireOwner, async (req, res) => 
 
     const id = randomUUID();
     const now = new Date().toISOString();
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: `
         INSERT INTO AdminMonthlyFixedCost
           (id, name, amountUsd, enabled, sortOrder, createdAt, updatedAt)
@@ -299,7 +300,7 @@ pricingWorkbenchV2Router.put("/fixed-costs/:id", requireOwner, async (req, res) 
     args.push(new Date().toISOString());
     args.push(String(req.params.id));
 
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: `UPDATE AdminMonthlyFixedCost SET ${sets.join(", ")} WHERE id = ?`,
       args,
     });
@@ -314,7 +315,7 @@ pricingWorkbenchV2Router.put("/fixed-costs/:id", requireOwner, async (req, res) 
 pricingWorkbenchV2Router.delete("/fixed-costs/:id", requireOwner, async (req, res) => {
   try {
     await readyTable();
-    await getDb().execute({
+    await getAdminOpsDb().execute({
       sql: "DELETE FROM AdminMonthlyFixedCost WHERE id = ?",
       args: [String(req.params.id)],
     });

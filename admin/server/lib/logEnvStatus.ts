@@ -1,6 +1,7 @@
 import { getEnv } from "./env.js";
 import { isSparkDbConfigured } from "./db.js";
 import { isTsfDbConfigured } from "./tsfDb.js";
+import { isAdminOpsDbConfigured } from "./adminOpsDb.js";
 import { isCosmosConfigured } from "./cosmos.js";
 import { isBlobConfigured } from "./blob.js";
 import { ADMIN_USERS } from "../middleware/auth.js";
@@ -33,6 +34,11 @@ export function logAdminEnvStatus(): void {
   line(sparkOk, "Spark Turso");
   field("SPARK_DATABASE_URL", getEnv("SPARK_DATABASE_URL") || undefined);
   field("SPARK_DATABASE_AUTH_TOKEN", getEnv("SPARK_DATABASE_AUTH_TOKEN") || undefined);
+
+  const adminOpsOk = isAdminOpsDbConfigured();
+  line(adminOpsOk, "Admin ops Turso");
+  field("ADMIN_DATABASE_URL", getEnv("ADMIN_DATABASE_URL") || undefined);
+  field("ADMIN_DATABASE_AUTH_TOKEN", getEnv("ADMIN_DATABASE_AUTH_TOKEN") || undefined);
 
   const tsfOk = isTsfDbConfigured();
   line(tsfOk, "TSF Turso");

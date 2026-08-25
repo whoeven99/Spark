@@ -35,12 +35,15 @@ export const monitorDetailInputSchema = z.object({
     unit: z.string().optional(),
     direction: z.enum(["up", "down", "flat"]).optional(),
   }),
-  benchmark: z.object({
-    label: nonEmptyStringSchema,
-    value: nonEmptyStringSchema,
-    delta: z.string().optional(),
-    direction: z.enum(["better", "worse", "flat"]),
-  }),
+  /** null = 没有可比基准口径。页面据此不渲染基准卡，禁止回退成常量。 */
+  benchmark: z
+    .object({
+      label: nonEmptyStringSchema,
+      value: nonEmptyStringSchema,
+      delta: z.string().optional(),
+      direction: z.enum(["better", "worse", "flat"]),
+    })
+    .nullable(),
   facts: z.array(
     z.object({
       label: nonEmptyStringSchema,
@@ -105,8 +108,8 @@ export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDe
       label: inferTimeWindowLabel(monitor),
     },
     scoring: {
-      dataQuality: inferDataQuality(monitor.status),
-      confidence: inferConfidence(monitor.status),
+      dataQuality: inferDataQuality(monitor),
+      confidence: inferConfidence(monitor),
     },
     coreMetric: {
       label: inferCoreMetricLabel(monitor),
@@ -222,9 +225,13 @@ export function resolveHealthMonitorDetail(monitor: HealthMonitorRecord) {
 }
 
 function buildProblem(input: MonitorDetailInput) {
-  const benchmarkDelta = input.benchmark.delta ? `，${input.benchmark.delta}` : "";
+  const benchmark = input.benchmark;
+  if (input.monitor.status === "risk" && benchmark) {
+    const benchmarkDelta = benchmark.delta ? `，${benchmark.delta}` : "";
+    return truncateText(`${input.monitor.label}已进入风险状态，当前${input.coreMetric.label}为 ${input.coreMetric.value}，相对${benchmark.label}${benchmarkDelta}，需要优先处理。`, 120);
+  }
   if (input.monitor.status === "risk") {
-    return truncateText(`${input.monitor.label}已进入风险状态，当前${input.coreMetric.label}为 ${input.coreMetric.value}，相对${input.benchmark.label}${benchmarkDelta}，需要优先处理。`, 120);
+    return truncateText(`${input.monitor.label}已进入风险状态，当前${input.coreMetric.label}为 ${input.coreMetric.value}，需要优先处理。`, 120);
   }
   if (input.monitor.status === "watch") {
     return truncateText(`${input.monitor.label}当前处于关注状态，${input.coreMetric.label}为 ${input.coreMetric.value}，建议继续跟进并准备处理动作。`, 120);
@@ -238,12 +245,15 @@ function buildAiChatPrompt(input: MonitorDetailInput) {
     .map((fact) => `- ${fact.label}: ${fact.value}`)
     .join("\n");
 
+  const benchmark = input.benchmark;
   return [
     `请基于以下${input.monitor.label}监测结果继续分析。`,
     "",
     `问题：${buildProblem(input)}`,
     `关键数据：${input.coreMetric.label} ${input.coreMetric.value}`,
-    `基准：${input.benchmark.label} ${input.benchmark.value}${input.benchmark.delta ? `（${input.benchmark.delta}）` : ""}`,
+    benchmark
+      ? `基准：${benchmark.label} ${benchmark.value}${benchmark.delta ? `（${benchmark.delta}）` : ""}`
+      : "基准：当前没有可比基准口径，请不要假设达标线。",
     "证据：",
     factLines,
     "",
@@ -251,35 +261,14 @@ function buildAiChatPrompt(input: MonitorDetailInput) {
   ].join("\n");
 }
 
+/**
+ * 可比基准线只取监测项自身携带的真实基准。
+ *
+ * 这里刻意不再提供任何兜底常量：基准缺失时返回 null，页面不渲染基准卡。
+ * 否则真实当前值会和写死的基准/差值同屏出现，得到互相矛盾的数字。
+ */
 function buildBenchmark(monitor: HealthMonitorRecord): MonitorDetailInput["benchmark"] {
-  if (monitor.id === "page-performance") {
-    return { label: "建议阈值", value: "2.5s", delta: "+2.3s", direction: "worse" };
-  }
-  if (monitor.id === "seo-health") {
-    return { label: "近30天均值", value: "3.3%", delta: "+0.1 pct", direction: "better" };
-  }
-  if (monitor.id === "roi-health") {
-    return { label: "目标线", value: "2.3x", delta: "-0.4x", direction: "worse" };
-  }
-  if (monitor.id === "revenue-health") {
-    return { label: "预期增长", value: "+5%", delta: "-3 pct", direction: "worse" };
-  }
-  if (monitor.id === "traffic-health") {
-    return { label: "近30天均值", value: "+8%", delta: "+3 pct", direction: "better" };
-  }
-  if (monitor.id === "ads-health") {
-    return { label: "近30天均值", value: "2.1x", delta: "-0.4x", direction: "worse" };
-  }
-  if (monitor.id === "conversion-health") {
-    return { label: "近30天均值", value: "1.9%", delta: "-0.5 pct", direction: "worse" };
-  }
-  if (monitor.id === "inventory-health") {
-    return { label: "安全线", value: "7天", delta: "-3天", direction: "worse" };
-  }
-  if (monitor.id === "fulfillment-health") {
-    return { label: "目标线", value: "2%", delta: "+2.6 pct", direction: "worse" };
-  }
-  return { label: "健康区间", value: "45%", delta: "+1 pct", direction: "better" };
+  return monitor.benchmark ?? null;
 }
 
 function inferAffectedObjects(monitor: HealthMonitorRecord): MonitorDetailInput["affectedObjects"] {
@@ -314,21 +303,31 @@ function inferSource(monitorId: string, label: string): z.infer<typeof sourceSch
 }
 
 function inferTimeWindowLabel(monitor: HealthMonitorRecord) {
-  if (monitor.id === "page-performance" || monitor.id === "seo-health") return "今日";
-  if (monitor.id === "roi-health" || monitor.id === "revenue-health" || monitor.id === "traffic-health") return "近7天";
+  if (monitor.id === "page-performance") return "实时检测";
+  if (monitor.id === "seo-health") return "近28天";
+  if (monitor.id === "refund-health") return "近30天";
   return "近7天";
 }
 
-function inferDataQuality(status: HealthMonitorStatus): z.infer<typeof scoringSchema> {
-  if (status === "risk") return "high";
-  if (status === "watch") return "medium";
-  return "high";
+/** 显式 false 才是未接入；缺省视为走每日快照的真实指标。 */
+function isDataAvailable(monitor: HealthMonitorRecord): boolean {
+  return monitor.dataAvailable !== false;
 }
 
-function inferConfidence(status: HealthMonitorStatus): z.infer<typeof scoringSchema> {
-  if (status === "risk") return "medium";
-  if (status === "watch") return "medium";
-  return "high";
+/**
+ * 数据质量按「是否真的有可用数据源」判定。
+ *
+ * 这里不能从状态反推（风险→中、正常→高）：那样只是把结论重新染色，
+ * 会把未接入的占位项标成可信数据。
+ */
+function inferDataQuality(monitor: HealthMonitorRecord): z.infer<typeof scoringSchema> {
+  return isDataAvailable(monitor) ? "high" : "low";
+}
+
+/** 结论可信度：有数据才谈可信；有明确基准可比时才给高。 */
+function inferConfidence(monitor: HealthMonitorRecord): z.infer<typeof scoringSchema> {
+  if (!isDataAvailable(monitor)) return "low";
+  return monitor.benchmark ? "high" : "medium";
 }
 
 function inferDirection(status: HealthMonitorStatus): "up" | "down" | "flat" {
@@ -366,6 +365,9 @@ function buildRuleTrace(status: HealthMonitorStatus, label: string) {
 
 function buildBenchmarkTrace(monitor: HealthMonitorRecord) {
   const benchmark = buildBenchmark(monitor);
+  if (!benchmark) {
+    return `当前值 ${monitor.value} 没有可比基准口径，因此只记录数值，不做达标判断。`;
+  }
   return `当前值 ${monitor.value} 相对 ${benchmark.label} ${benchmark.value}，判断为 ${benchmark.direction}。`;
 }
 
@@ -380,7 +382,11 @@ function toSnakeCase(value: string) {
     .toLowerCase();
 }
 
-function buildFallbackHealthMonitorDetail(monitor: HealthMonitorRecord) {
+function buildFallbackHealthMonitorDetail(monitor: HealthMonitorRecord): {
+  input: MonitorDetailInput;
+  prompt: ReturnType<typeof buildMonitorDetailPrompt>;
+  result: MonitorDetailResult;
+} {
   const input: MonitorDetailInput = {
     version: "v1",
     monitor: {
@@ -391,11 +397,12 @@ function buildFallbackHealthMonitorDetail(monitor: HealthMonitorRecord) {
       status: monitor.status,
     },
     timeWindow: {
-      label: "近7天",
+      label: inferTimeWindowLabel(monitor),
     },
+    // 走到兜底说明正常装配已失败，可信度固定压到 low。
     scoring: {
-      dataQuality: "medium",
-      confidence: "medium",
+      dataQuality: inferDataQuality(monitor),
+      confidence: "low",
     },
     coreMetric: {
       label: inferCoreMetricLabel(monitor),
