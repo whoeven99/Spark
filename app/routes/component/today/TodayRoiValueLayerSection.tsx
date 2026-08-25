@@ -31,11 +31,13 @@ export function TodayRoiValueLayerSection({
   valueLoading,
   valueFailed,
   isMobile,
+  focus = "overview",
 }: {
   value: ValueLayerData | null;
   valueLoading: boolean;
   valueFailed: boolean;
   isMobile: boolean;
+  focus?: "overview" | "channels" | "loss";
 }) {
   const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -60,7 +62,14 @@ export function TodayRoiValueLayerSection({
 
   return (
     <div style={sectionStackStyle}>
-      <PageSurface title={t("todayRoi.settingsTitle")} subtitle={t("todayRoi.settingsSubtitle")}>
+      <PageSurface
+        title="长期质量补充"
+        subtitle={
+          focus === "overview"
+            ? "这块只作为回报效率页的长期质量补充，用来辅助判断客户价值、复购和渠道结构能不能支撑继续加码。"
+            : "当前焦点不在长期质量上，这里只作为补充判断，不和上面的渠道/损耗主结论抢层级。"
+        }
+      >
         <RoiSettingsSummary
           value={value}
           isMobile={isMobile}
@@ -73,8 +82,9 @@ export function TodayRoiValueLayerSection({
       <div style={cardListStyle}>
         {cards.map((card) => (
           <PageSurface key={card.key} title={card.title}>
+            <div style={cardFocusWrapStyle(resolveCardHighlight(card.key, focus))}>
             <div style={cardBadgeRowStyle}>
-              <s-badge tone={card.statusTone}>{card.statusLabel}</s-badge>
+              <span style={badgeStyle(card.statusTone)}>{card.statusLabel}</span>
               <SourceTag source={card.source} />
             </div>
             <PageMetricCard metrics={card.metrics} />
@@ -82,11 +92,25 @@ export function TodayRoiValueLayerSection({
               <div style={conclusionLabelStyle}>{t("todayRoi.conclusionLabel")}</div>
               <p style={conclusionTextStyle}>{card.conclusion}</p>
             </div>
+            </div>
           </PageSurface>
         ))}
       </div>
     </div>
   );
+}
+
+function resolveCardHighlight(
+  cardKey: string,
+  focus: "overview" | "channels" | "loss",
+): boolean {
+  if (focus === "channels") {
+    return cardKey === "paid-traffic" || cardKey === "mix";
+  }
+  if (focus === "loss") {
+    return cardKey === "coupon" || cardKey === "paid-traffic";
+  }
+  return cardKey === "customer-value" || cardKey === "repeat" || cardKey === "mix";
 }
 
 function SourceTag({ source }: { source: DataSource }) {
@@ -105,9 +129,9 @@ function SourceTag({ source }: { source: DataSource }) {
         : t("todayRoi.sourcePendingTip");
 
   return (
-    <s-badge tone={dataSourceTone[source]}>
-      <span title={tip}>{label}</span>
-    </s-badge>
+    <span style={badgeStyle(dataSourceTone[source])} title={tip}>
+      {label}
+    </span>
   );
 }
 
@@ -503,6 +527,15 @@ const cardListStyle: CSSProperties = {
   gap: "1rem",
 };
 
+const cardFocusWrapStyle = (highlighted: boolean): CSSProperties => ({
+  display: "grid",
+  gap: "0.25rem",
+  borderRadius: pageColorTokens.radiusControl,
+  padding: highlighted ? "0.2rem" : 0,
+  background: highlighted ? pageColorTokens.brandBlueLight : "transparent",
+  boxShadow: highlighted ? `0 0 0 1px ${pageColorTokens.brandBlue}` : "none",
+});
+
 const cardBadgeRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -510,6 +543,36 @@ const cardBadgeRowStyle: CSSProperties = {
   flexWrap: "wrap",
   marginBottom: "0.85rem",
 };
+
+function badgeStyle(tone: "success" | "warning" | "neutral"): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    color:
+      tone === "success"
+        ? pageColorTokens.brandGreenDark
+        : tone === "warning"
+          ? "#9a5b00"
+          : pageColorTokens.textSecondary,
+    background:
+      tone === "success"
+        ? pageColorTokens.brandGreenLight
+        : tone === "warning"
+          ? pageColorTokens.warningBg
+          : pageColorTokens.surfaceMuted,
+    border: `1px solid ${
+      tone === "success"
+        ? "rgba(0, 128, 96, 0.2)"
+        : tone === "warning"
+          ? "#f1d58d"
+          : pageColorTokens.borderSubtle
+    }`,
+  };
+}
 
 const conclusionBlockStyle: CSSProperties = {
   marginTop: "0.85rem",

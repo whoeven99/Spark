@@ -7,9 +7,11 @@ import { loadTodayDecisionReportData } from "../server/operations/todayGeo.serve
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 import { TodayMetricReportPage } from "./page/TodayMetricReportPage";
 
-export default function TodayConversionPage() {
+export default function TodayRevenuePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
+  const rawFocus = searchParams.get("focus");
+  const focus = rawFocus === "orders" || rawFocus === "aov" ? rawFocus : "revenue";
   const data = useLoaderData<typeof loader>();
 
   const handleCountryChange = (country: string) => {
@@ -22,6 +24,23 @@ export default function TodayConversionPage() {
     setSearchParams(params, { replace: true, preventScrollReset: true });
   };
 
+  const handleFocusChange = (nextFocus: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (nextFocus === "revenue") {
+      params.delete("focus");
+    } else {
+      params.set("focus", nextFocus);
+    }
+    setSearchParams(params, { replace: true, preventScrollReset: true });
+  };
+
+  const summary =
+    focus === "orders"
+      ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断订单规模背后，哪些订单值得继续复制，哪些订单只是把单量做大。`
+      : focus === "aov"
+        ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断高客单是不是健康样本，而不是少量不可复制的虚高订单。`
+        : `当前范围：${data.filters.selectedCountryLabel}。这里先区分收入增长里哪些对象值得继续跟，哪些对象只是把规模做大。`;
+
   return (
     <TodayMetricReportPage
       report={data.report}
@@ -31,7 +50,14 @@ export default function TodayConversionPage() {
           options={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
-          summary={`当前范围：${data.filters.selectedCountryLabel}。这里先比较不同地区的漏斗承接和完成结账差异。`}
+          focusOptions={[
+            { key: "revenue", label: "收入" },
+            { key: "orders", label: "订单数" },
+            { key: "aov", label: "客单价" },
+          ]}
+          activeFocus={focus}
+          onFocusChange={handleFocusChange}
+          summary={summary}
           notes={data.filters.dataNotes}
         />
       }
@@ -47,6 +73,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     admin,
     hasReadReports: hasReadReportsScope(session.scope),
     requestedCountry: url.searchParams.get("country"),
-    metric: "conversion",
+    metric: "revenue",
+    focus: url.searchParams.get("focus"),
   });
 };

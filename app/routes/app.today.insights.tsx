@@ -6,7 +6,7 @@ function resolveLegacyTodayInsightsPath(moduleKey: string | null) {
   if (moduleKey === "roi") return "/app/today/roi";
   if (moduleKey === "traffic") return "/app/today/traffic";
   if (moduleKey === "conversion") return "/app/today/conversion";
-  if (moduleKey === "orders") return "/app/today/orders";
+  if (moduleKey === "orders") return "/app/today/revenue?focus=orders";
   return "/app/today";
 }
 
@@ -17,7 +17,17 @@ function resolveLegacyTodayInsightsPath(moduleKey: string | null) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
   const url = new URL(request.url);
-  throw redirect(`${resolveLegacyTodayInsightsPath(url.searchParams.get("module"))}${url.search}`);
+  const path = resolveLegacyTodayInsightsPath(url.searchParams.get("module"));
+  const [pathname, rawSearch] = path.split("?");
+  const params = new URLSearchParams(rawSearch ?? "");
+
+  url.searchParams.forEach((value, key) => {
+    if (key === "module") return;
+    params.set(key, value);
+  });
+
+  const query = params.toString();
+  throw redirect(query ? `${pathname}?${query}` : pathname);
 };
 
 export default function AppTodayInsightsCompatibilityRoute() {
