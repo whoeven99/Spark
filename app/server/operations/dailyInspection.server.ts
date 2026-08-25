@@ -694,14 +694,6 @@ function buildEnvironments(
         : {},
     },
     {
-      key: "risk-control",
-      titleKey: "healthMonitor.environmentRiskControl",
-      status: "watch",
-      source: "pending",
-      summary: "待接入误杀率、拒付率和高风险订单占比后，再独立判断风控是否阻碍真实转化。",
-      metrics: {},
-    },
-    {
       key: "after-sales",
       titleKey: "healthMonitor.environmentAfterSales",
       status: refund?.status ?? "watch",

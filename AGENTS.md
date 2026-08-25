@@ -29,8 +29,16 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
 - 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
 - Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。`/app/studio/translate` 当前只重定向到 `/app/studio/copy`，不要把图片翻译、兼容 Blob 读取或 Admin 运维页误判为整店翻译运行时。
-- Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。
+- Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。安装后自动回补（`ensureInstallOrderBackfill`，默认近 `SPARK_ORDER_BACKFILL_DAYS` 天）与 toml 里的 webhook **订阅**是两回事：路由在仓库里，未 `shopify app deploy` 订阅则增量进不了库。
 - 工作树中可能出现 `tmp-*` / `scripts/tmp-probe-*` 等未跟踪的临时排查脚本；除非用户明确要求，禁止删除、覆盖或纳入改动。
+
+发布姿态与 Partner 应用（邀请制内测，不是 App Store 公开）：
+
+- 仓库只有 `shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）。**没有** `shopify.app.prod.toml`。CI（`spark-deploy.yml`）只发 Spark Test / Admin，不发独立生产应用。
+- **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
+- Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
+- 卸载目前只删 Session、记日志、发通知，不清理该店 `ShopOrder*` / 广告凭证等镜像。公开上架前还缺 GDPR 强制 webhook（`customers/data_request`、`customers/redact`、`shop/redact`）和隐私政策页。
+- 邀请制内测**不展示**风控链路、回收期/长期 ROI，以及 Health Monitor「ROI 情况（短期和长期）」；短期 ROI 仍在经营页，等产品公式再改计算。详情见 `docs/ROADMAP.md` 第七节。
 
 ## 2. 仓库地图
 
@@ -180,6 +188,7 @@ AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assista
 | 任意任务（协作风格，§0 强制） | `.cursor/skills/deliberate-collab/SKILL.md` |
 | 项目架构、跨域改动、环境变量、部署 | `docs/PROJECT_CONTEXT.md`，并以当前代码复核过时路径 |
 | 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
+| 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节（分发选定后不可改；Custom 不能走 Shopify Billing） |
 | Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
 | 任意前端视觉、布局、组件样式 | `docs/DESIGN.md` |
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
@@ -361,6 +370,7 @@ npm run build
 - 一级导航、主要路由或服务边界变化；
 - Ask 工作台上下文工具清单（商品/订单/文章/文件）增减；
 - 新增/删除可部署应用、worker、扩展或外部存储；
+- Partner 应用 toml、webhook 订阅、分发方式（Public / Custom）或发布姿态变化；
 - package scripts、Node 版本或验证门禁变化；
 - 新增强制设计/交互/计费/迁移约束；
 - 领域文档重命名或迁移。

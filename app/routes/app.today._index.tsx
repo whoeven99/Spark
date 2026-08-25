@@ -242,7 +242,7 @@ export default function TodayOverview() {
           </div>
         </PageSurface>
 
-        <PageSurface title="ROI 三层摘要" subtitle="这里固定展示短期、回收期、长期三层，不再把长期价值混成首页补充块。">
+        <PageSurface title="短期 ROI" subtitle="回收期与长期 ROI 本轮不展示。短期口径仍用当前估算，公式确定后再改。">
           <div style={cardGridStyle(isMobile, 3)}>
             {report.roiSummary.cards.map((card) => (
               <div key={card.key} style={pageStatusCardStyle}>
