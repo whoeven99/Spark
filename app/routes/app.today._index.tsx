@@ -21,6 +21,7 @@ import {
   pageStatusCardStyle,
 } from "./page/pageUiStyles";
 import { DestinationPage } from "./component/shared/DestinationPage";
+import { MetricHintLabel } from "./component/shared/MetricHintLabel";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
 function SurfaceButton({
@@ -150,19 +151,39 @@ export default function TodayOverview() {
 
             <div style={headerMetricGridStyle}>
               <div style={headerMetricTileStyle}>
-                <div style={pageMetricLabelStyle}>收入</div>
+                <MetricHintLabel
+                  as="div"
+                  style={pageMetricLabelStyle}
+                  text="收入"
+                  content={getTodayHeaderMetricExplanation("revenue")}
+                />
                 <div style={pageMetricValueStyle}>{report.header.metrics.revenue}</div>
               </div>
               <div style={headerMetricTileStyle}>
-                <div style={pageMetricLabelStyle}>估算利润</div>
+                <MetricHintLabel
+                  as="div"
+                  style={pageMetricLabelStyle}
+                  text="估算利润"
+                  content={getTodayHeaderMetricExplanation("estimatedProfit")}
+                />
                 <div style={pageMetricValueStyle}>{report.header.metrics.estimatedProfit}</div>
               </div>
               <div style={headerMetricTileStyle}>
-                <div style={pageMetricLabelStyle}>估算利润率</div>
+                <MetricHintLabel
+                  as="div"
+                  style={pageMetricLabelStyle}
+                  text="估算利润率"
+                  content={getTodayHeaderMetricExplanation("estimatedProfitMargin")}
+                />
                 <div style={pageMetricValueStyle}>{report.header.metrics.estimatedProfitMargin}</div>
               </div>
               <div style={headerMetricTileStyle}>
-                <div style={pageMetricLabelStyle}>短期经营回报</div>
+                <MetricHintLabel
+                  as="div"
+                  style={pageMetricLabelStyle}
+                  text="短期经营回报"
+                  content={getTodayHeaderMetricExplanation("shortTermReturn")}
+                />
                 <div style={pageMetricValueStyle}>{report.header.metrics.shortTermReturn}</div>
               </div>
             </div>
@@ -178,7 +199,12 @@ export default function TodayOverview() {
             {report.metricCards.map((card) => (
               <div key={card.key} style={pageStatusCardStyle}>
                 <div style={cardHeaderStyle}>
-                  <div style={pageMetricLabelStyle}>{card.label}</div>
+                  <MetricHintLabel
+                    as="div"
+                    style={pageMetricLabelStyle}
+                    text={card.label}
+                    content={getTodayMetricCardExplanation(card.key)}
+                  />
                   <span style={metricSourceStyle}>{card.source === "estimated" ? "估算" : "已实现"}</span>
                 </div>
                 <div style={pageMetricValueStyle}>{card.value}</div>
@@ -196,7 +222,12 @@ export default function TodayOverview() {
           <div style={cardGridStyle(isMobile, 3)}>
             {report.reasonCards.map((card) => (
               <div key={card.key} style={reasonCardStyle}>
-                <span style={{ ...reasonLabelStyle, ...reasonToneStyle(card.tone) }}>{card.label}</span>
+                <MetricHintLabel
+                  as="span"
+                  style={{ ...reasonLabelStyle, ...reasonToneStyle(card.tone) }}
+                  text={card.label}
+                  content={getTodayReasonCardExplanation(card.key)}
+                />
                 <strong style={reasonTitleStyle}>{card.title}</strong>
                 <div style={reasonValueStyle}>{card.value}</div>
                 <div style={reasonMetaStyle}>{card.meta}</div>
@@ -216,7 +247,12 @@ export default function TodayOverview() {
             {report.roiSummary.cards.map((card) => (
               <div key={card.key} style={pageStatusCardStyle}>
                 <div style={cardHeaderStyle}>
-                  <div style={pageMetricLabelStyle}>{card.label}</div>
+                  <MetricHintLabel
+                    as="div"
+                    style={pageMetricLabelStyle}
+                    text={card.label}
+                    content={getTodayRoiSummaryExplanation(card.key)}
+                  />
                   <span style={metricSourceStyle}>{card.statusLabel}</span>
                 </div>
                 <div style={pageMetricValueStyle}>{card.value}</div>
@@ -394,6 +430,73 @@ const reasonValueStyle: CSSProperties = {
   fontWeight: 760,
   color: pageColorTokens.textPrimary,
 };
+
+function getTodayHeaderMetricExplanation(
+  key: "revenue" | "estimatedProfit" | "estimatedProfitMargin" | "shortTermReturn",
+): string {
+  if (key === "revenue") {
+    return "收入 = 近 7 天非取消订单的 totalPrice 求和。";
+  }
+  if (key === "estimatedProfit") {
+    return [
+      "估算利润 = 收入 - 估算成本。",
+      "估算成本 = 估算 COGS + 折扣 + 支付手续费 + 退款损耗。",
+      "估算 COGS = subtotal × (1 - 默认毛利率)。",
+    ].join("\n");
+  }
+  if (key === "estimatedProfitMargin") {
+    return "估算利润率 = 估算利润 / 收入。";
+  }
+  return "短期经营回报 = 收入 / 估算成本，用来看最近 7 天有没有留下正向经营结果。";
+}
+
+function getTodayMetricCardExplanation(
+  key: "revenue" | "cost" | "profit" | "profit_margin" | "orders" | "aov",
+): string {
+  if (key === "revenue") {
+    return "收入 = 近 7 天非取消订单的 totalPrice 求和。";
+  }
+  if (key === "cost") {
+    return [
+      "成本 = 估算成本。",
+      "估算成本 = 估算 COGS + 折扣 + 支付手续费 + 退款损耗。",
+      "估算 COGS = subtotal × (1 - 默认毛利率)。",
+    ].join("\n");
+  }
+  if (key === "profit") {
+    return [
+      "利润 = 收入 - 估算成本。",
+      "这里是经营估算口径，不是会计结账口径。",
+    ].join("\n");
+  }
+  if (key === "profit_margin") {
+    return "利润率 = 利润 / 收入，用来判断规模增长有没有真正转成赚钱质量。";
+  }
+  if (key === "orders") {
+    return "订单数 = 近 7 天非取消订单数量。";
+  }
+  return "客单价 = 收入 / 订单数。";
+}
+
+function getTodayReasonCardExplanation(key: string): string {
+  if (key === "growth-change") {
+    return "增长变化 = (近 7 天收入 - 可比基线收入) / 可比基线收入。";
+  }
+  if (key === "profit-erosion") {
+    return "利润侵蚀优先看两类损耗：退款占比 = 退款损耗 / 收入，折扣占比 = 折扣 / 收入；页面展示的是当前更值得优先盯的那一项。";
+  }
+  return "回报效率 = 短期经营回报 = 收入 / 估算成本。";
+}
+
+function getTodayRoiSummaryExplanation(key: "short_term" | "payback" | "lifetime"): string {
+  if (key === "short_term") {
+    return "短期 ROI = 近 7 天收入 / 近 7 天估算投入成本。";
+  }
+  if (key === "payback") {
+    return "回收期 ROI 需要 CAC 和 cohort 回收窗口。当前数据还没接入，所以先展示缺口而不伪造结果。";
+  }
+  return "长期 ROI 需要长期回收与复购收益口径。当前只保留说明，避免把不完整数据当成结论。";
+}
 
 const reasonMetaStyle: CSSProperties = {
   color: pageColorTokens.textFootnote,
