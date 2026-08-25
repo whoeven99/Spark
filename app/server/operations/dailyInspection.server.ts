@@ -974,7 +974,6 @@ export async function ensureDailySnapshotOverview(
   if (!options?.force) {
     const now = options?.now ?? new Date();
     const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
-    const lookupStartedAt = Date.now();
     const existing = await prisma.operationDiagnosisSnapshot.findUnique({
       where: {
         shop_snapshotDate: { shop, snapshotDate: toDateKey(now, timeZone) },
@@ -982,12 +981,7 @@ export async function ensureDailySnapshotOverview(
       include: { items: true },
     });
     if (existing) {
-      const result = buildOverviewFromSnapshot(shop, existing, now, timeZone);
-      console.info(
-        `[diagnosis] shop=${shop} source=overview snapshot=hit` +
-          ` elapsedMs=${Date.now() - lookupStartedAt}`,
-      );
-      return result;
+      return buildOverviewFromSnapshot(shop, existing, now, timeZone);
     }
   }
   return ensureDailySnapshot(shop, options);
@@ -1005,35 +999,25 @@ export async function ensureDailySnapshot(
   const now = options?.now ?? new Date();
   const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
   const dateKey = toDateKey(now, timeZone);
-  const startedAt = Date.now();
 
   const existing = await prisma.operationDiagnosisSnapshot.findUnique({
     where: { shop_snapshotDate: { shop, snapshotDate: dateKey } },
     include: { items: true },
   });
-  const lookupMs = Date.now() - startedAt;
 
   if (existing && !options?.force) {
-    const diagnosisStartedAt = Date.now();
     const [base, diagnosis] = await Promise.all([
       buildOverviewFromSnapshot(shop, existing, now, timeZone),
       computeOperationsDiagnosis(shop, now, {
         shopifyAdmin: options?.shopifyAdmin,
       }),
     ]);
-    console.info(
-      `[diagnosis] shop=${shop} source=snapshot snapshot=hit` +
-        ` lookupMs=${lookupMs} diagnosisMs=${Date.now() - diagnosisStartedAt}` +
-        ` elapsedMs=${Date.now() - startedAt} productOpsClient=${options?.shopifyAdmin ? 1 : 0}`,
-    );
     return { ...base, detail: diagnosis.detail };
   }
 
-  const diagnosisStartedAt = Date.now();
   const diagnosis = await computeOperationsDiagnosis(shop, now, {
     shopifyAdmin: options?.shopifyAdmin,
   });
-  const diagnosisMs = Date.now() - diagnosisStartedAt;
 
   if (existing) {
     // force 重算：级联删除旧诊断项，任务保留（snapshotId 置空后重新挂接）
@@ -1069,13 +1053,6 @@ export async function ensureDailySnapshot(
     buildReview(shop, diagnosis.summaryMetrics, now, timeZone),
   ]);
 
-  console.info(
-    `[diagnosis] shop=${shop} source=snapshot snapshot=miss` +
-      ` force=${options?.force ? 1 : 0} lookupMs=${lookupMs}` +
-      ` diagnosisMs=${diagnosisMs} elapsedMs=${Date.now() - startedAt}` +
-      ` productOpsClient=${options?.shopifyAdmin ? 1 : 0}`,
-  );
-
   return {
     shop,
     snapshotDate: dateKey,
@@ -1090,6 +1067,17 @@ export async function ensureDailySnapshot(
     tasks,
     review,
   };
+}
+
+/** 按店铺与任务 ID 读取单条经营任务（兼容跳转等轻量查询用）。 */
+export async function getOperationTaskByIdForShop(
+  shop: string,
+  taskId: string,
+): Promise<OperationTaskView | null> {
+  const task = await prisma.operationTask.findFirst({
+    where: { id: taskId, shop },
+  });
+  return task ? toTaskView(task) : null;
 }
 
 /** 当前任务列表：进行中的全部 + 近 3 天已关闭的（供页面展示处理痕迹）。 */

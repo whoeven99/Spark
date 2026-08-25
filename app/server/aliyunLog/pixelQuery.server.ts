@@ -189,22 +189,10 @@ export async function queryPixelFunnelWindow(
  */
 export const loadPixelFunnel: PixelFunnelLoader = async (shop, ranges) => {
   if (!getAliyunLogConfig()) return null;
-  const startedAt = Date.now();
-  const currentStartedAt = Date.now();
-  const previousStartedAt = Date.now();
   const [current, previous] = await Promise.all([
-    queryPixelFunnelWindow(shop, ranges.currentFrom, ranges.currentTo).then(
-      (value) => ({ value, ms: Date.now() - currentStartedAt }),
-    ),
-    queryPixelFunnelWindow(shop, ranges.prevFrom, ranges.prevTo).then(
-      (value) => ({ value, ms: Date.now() - previousStartedAt }),
-    ),
+    queryPixelFunnelWindow(shop, ranges.currentFrom, ranges.currentTo),
+    queryPixelFunnelWindow(shop, ranges.prevFrom, ranges.prevTo),
   ]);
-  console.info(
-    `[diagnosis] shop=${shop} source=pixel elapsedMs=${Date.now() - startedAt}` +
-      ` currentMs=${current.ms} previousMs=${previous.ms}` +
-      ` hasCurrent=${current.value ? 1 : 0} hasPrevious=${previous.value ? 1 : 0}`,
-  );
-  if (!current.value && !previous.value) return null;
-  return { current: current.value, previous: previous.value };
+  if (!current && !previous) return null;
+  return { current, previous };
 };

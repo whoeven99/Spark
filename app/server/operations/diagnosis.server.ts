@@ -256,16 +256,6 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
   };
 }
 
-const DIAGNOSIS_LOG = "[diagnosis]";
-
-async function withElapsedMs<T>(
-  task: Promise<T>,
-): Promise<{ value: T; ms: number }> {
-  const startedAt = Date.now();
-  const value = await task;
-  return { value, ms: Date.now() - startedAt };
-}
-
 // ──────────────────────────────────────────────
 // 主入口
 // ──────────────────────────────────────────────
@@ -278,7 +268,6 @@ export async function computeOperationsDiagnosis(
     shopifyAdmin?: ShopifyAdminGraphqlClient;
   },
 ): Promise<OperationsDiagnosis> {
-  const totalStartedAt = Date.now();
   const loadPixelFunnel = options?.loadPixelFunnel ?? defaultLoadPixelFunnel;
   const shopifyAdmin = options?.shopifyAdmin ?? null;
   const since7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -286,116 +275,69 @@ export async function computeOperationsDiagnosis(
   const since30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const since60Days = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-  const prismaStartedAt = Date.now();
   const [
-    ordersTimed,
-    previousOrderCountTimed,
-    refundsTimed,
-    previousRefundOrderRowsTimed,
-    refundLineItemsTimed,
-    inventoryRowsTimed,
-    orderLineItemsTimed,
-    totalOrdersAllTimeTimed,
-    currencyRowTimed,
+    orders,
+    previousOrderCount,
+    refunds,
+    previousRefundOrderRows,
+    refundLineItems,
+    inventoryRows,
+    orderLineItems,
+    totalOrdersAllTime,
+    currencyRow,
   ] = await Promise.all([
-    withElapsedMs(
-      prisma.shopOrder.findMany({
-        where: { shop, createdAt: { gte: since30Days } },
-        include: { fulfillments: true },
-      }),
-    ),
-    withElapsedMs(
-      prisma.shopOrder.count({
-        where: { shop, createdAt: { gte: since60Days, lt: since30Days } },
-      }),
-    ),
-    withElapsedMs(
-      prisma.shopRefund.findMany({
-        where: { shop, processedAt: { gte: since30Days } },
-        include: { order: true, lineItems: true },
-        orderBy: { processedAt: "desc" },
-      }),
-    ),
-    withElapsedMs(
-      prisma.shopRefund.findMany({
-        where: { shop, processedAt: { gte: since60Days, lt: since30Days } },
-        select: { shopifyOrderId: true },
-      }),
-    ),
-    withElapsedMs(
-      prisma.shopRefundLineItem.findMany({
-        where: { shop, refund: { processedAt: { gte: since30Days } } },
-      }),
-    ),
-    withElapsedMs(prisma.shopInventoryLevel.findMany({ where: { shop } })),
-    withElapsedMs(
-      prisma.shopOrderLineItem.findMany({
-        where: {
-          shop,
-          order: { createdAt: { gte: since30Days }, status: { not: "cancelled" } },
-        },
-      }),
-    ),
-    withElapsedMs(prisma.shopOrder.count({ where: { shop } })),
-    withElapsedMs(
-      prisma.shopOrder.findFirst({
-        where: { shop },
-        orderBy: { createdAt: "desc" },
-        select: { currency: true },
-      }),
-    ),
+    prisma.shopOrder.findMany({
+      where: { shop, createdAt: { gte: since30Days } },
+      include: { fulfillments: true },
+    }),
+    prisma.shopOrder.count({
+      where: { shop, createdAt: { gte: since60Days, lt: since30Days } },
+    }),
+    prisma.shopRefund.findMany({
+      where: { shop, processedAt: { gte: since30Days } },
+      include: { order: true, lineItems: true },
+      orderBy: { processedAt: "desc" },
+    }),
+    prisma.shopRefund.findMany({
+      where: { shop, processedAt: { gte: since60Days, lt: since30Days } },
+      select: { shopifyOrderId: true },
+    }),
+    prisma.shopRefundLineItem.findMany({
+      where: { shop, refund: { processedAt: { gte: since30Days } } },
+    }),
+    prisma.shopInventoryLevel.findMany({ where: { shop } }),
+    prisma.shopOrderLineItem.findMany({
+      where: {
+        shop,
+        order: { createdAt: { gte: since30Days }, status: { not: "cancelled" } },
+      },
+    }),
+    prisma.shopOrder.count({ where: { shop } }),
+    prisma.shopOrder.findFirst({
+      where: { shop },
+      orderBy: { createdAt: "desc" },
+      select: { currency: true },
+    }),
   ]);
-  const prismaMs = Date.now() - prismaStartedAt;
-  const orders = ordersTimed.value;
-  const previousOrderCount = previousOrderCountTimed.value;
-  const refunds = refundsTimed.value;
-  const previousRefundOrderRows = previousRefundOrderRowsTimed.value;
-  const refundLineItems = refundLineItemsTimed.value;
-  const inventoryRows = inventoryRowsTimed.value;
-  const orderLineItems = orderLineItemsTimed.value;
-  const totalOrdersAllTime = totalOrdersAllTimeTimed.value;
-  const currencyRow = currencyRowTimed.value;
-
-  const prismaQueryMs =
-    `orders=${ordersTimed.ms}` +
-    ` prevOrderCount=${previousOrderCountTimed.ms}` +
-    ` refunds=${refundsTimed.ms}` +
-    ` prevRefunds=${previousRefundOrderRowsTimed.ms}` +
-    ` refundLines=${refundLineItemsTimed.ms}` +
-    ` inventory=${inventoryRowsTimed.ms}` +
-    ` orderLines=${orderLineItemsTimed.ms}` +
-    ` totalCount=${totalOrdersAllTimeTimed.ms}` +
-    ` currency=${currencyRowTimed.ms}`;
 
   if (totalOrdersAllTime === 0) {
-    console.info(
-      `${DIAGNOSIS_LOG} shop=${shop} source=compute skipped=no-orders` +
-        ` prismaMs=${prismaMs} pixelMs=0 productOpsMs=0 computeMs=0` +
-        ` totalMs=${Date.now() - totalStartedAt}` +
-        ` productOpsClient=${shopifyAdmin ? 1 : 0} ${prismaQueryMs}`,
-    );
     return emptyDiagnosis(shop, now);
   }
 
   const currency = currencyRow?.currency ?? "USD";
 
   // ── Web Pixel 漏斗（流量 §7.2 / 转化 §7.3），缺失时静默降级 ──
-  const pixelStartedAt = Date.now();
   const pixelWindows = await loadPixelFunnel(shop, {
     currentFrom: since7Days,
     currentTo: now,
     prevFrom: since14Days,
     prevTo: since7Days,
   });
-  const pixelMs = Date.now() - pixelStartedAt;
   const pixelCurrent = pixelWindows?.current ?? null;
   const pixelPrevious = pixelWindows?.previous ?? null;
 
   // ── 商品运营状态（§7.9 商品运营诊断）──
-  const productOpsStartedAt = Date.now();
   const productOpsData = await defaultLoadProductOperations(shopifyAdmin);
-  const productOpsMs = Date.now() - productOpsStartedAt;
-  const computeStartedAt = Date.now();
 
   // ── 支付链路统计（§7.3 转化率补充）──
   // 从订单的 financialStatus 推断：pending/authorized → 支付尝试但未完成，paid 及以上 → 成功
@@ -1108,18 +1050,6 @@ export async function computeOperationsDiagnosis(
       ],
     });
   }
-
-  const computeMs = Date.now() - computeStartedAt;
-  console.info(
-    `${DIAGNOSIS_LOG} shop=${shop} source=compute` +
-      ` prismaMs=${prismaMs} pixelMs=${pixelMs} productOpsMs=${productOpsMs}` +
-      ` computeMs=${computeMs} totalMs=${Date.now() - totalStartedAt}` +
-      ` productOpsClient=${shopifyAdmin ? 1 : 0}` +
-      ` hasPixel=${pixelCurrent ? 1 : 0} hasProductOps=${productOpsData ? 1 : 0}` +
-      ` orders30d=${orders.length} refunds30d=${refunds.length}` +
-      ` refundLines=${refundLineItems.length} inventory=${inventoryRows.length}` +
-      ` orderLines=${orderLineItems.length} ${prismaQueryMs}`,
-  );
 
   return {
     shop,
