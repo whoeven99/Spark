@@ -1,7 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
-import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
+import {
+  AI_TASK_VIEW_FETCH_LIMIT,
+  listTasksPageForShop,
+} from "../server/aiTask/aiTaskStore.server";
 import type { AITaskItem, AITaskListPageData } from "../lib/aiTaskTypes";
 import {
   listOperationTasks,
@@ -20,7 +23,6 @@ import type {
 } from "../lib/unifiedTaskTypes";
 
 const DEFAULT_PAGE_SIZE = 10;
-const FETCH_ALL_SIZE = 200;
 
 function entryUpdatedAt(entry: UnifiedTaskEntry): string {
   if (entry.entryType === "ai_task") return entry.task.updatedAt;
@@ -156,10 +158,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop: session.shop,
       view,
       page: 1,
-      pageSize: FETCH_ALL_SIZE,
+      pageSize: AI_TASK_VIEW_FETCH_LIMIT,
+      maxPageSize: AI_TASK_VIEW_FETCH_LIMIT,
     }).catch((error) => {
       console.error("[api.unified-tasks] failed to load AI tasks, falling back to empty list:", error);
-      return buildEmptyAITaskPage(view, 1, FETCH_ALL_SIZE);
+      return buildEmptyAITaskPage(view, 1, AI_TASK_VIEW_FETCH_LIMIT);
     }),
     listOperationTasks(session.shop),
   ]);
