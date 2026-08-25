@@ -1,6 +1,6 @@
 import type { AiDrilldownAction, AiDrilldownMetric, AiDrilldownStatus } from "./aiDrilldownContext";
 
-export type TodayDecisionReportKey = "revenue" | "profit" | "roi";
+export type TodayDecisionReportKey = "revenue" | "profit" | "roi" | "traffic" | "conversion";
 
 export type TodayMetricTone = "positive" | "neutral" | "warning" | "negative";
 
@@ -29,17 +29,13 @@ export type TodayHeader = {
 };
 
 export type TodayMetricCard = {
-  key: "growth" | "profit" | "efficiency";
+  key: "revenue" | "cost" | "profit" | "profit_margin" | "orders" | "aov";
   label: string;
   value: string;
   delta: string;
   tone: TodayMetricTone;
   source: "realized" | "estimated";
-  summary: string;
-  subMetrics: {
-    label: string;
-    value: string;
-  }[];
+  summary?: string;
   href: string;
 };
 
@@ -102,7 +98,7 @@ export type TodayObjectReport = {
 export type TodayObjectCard = {
   id: string;
   title: string;
-  objectType: "product" | "order" | "channel";
+  objectType: "product" | "order" | "channel" | "page";
   metrics: TodaySummaryMetric[];
   summary: string;
   primaryActionLabel: string;
@@ -124,6 +120,7 @@ export type TodayDecisionReport = {
   accent: string;
   primaryQuestion: string;
   summary: string;
+  conclusionPoints?: string[];
   statuses: TodayMetricStatus[];
   summaryMetrics: TodaySummaryMetric[];
   breakdowns: TodayBreakdownBlock[];

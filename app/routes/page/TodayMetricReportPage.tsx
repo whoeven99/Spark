@@ -133,6 +133,19 @@ export function TodayMetricReportPage({
                 </div>
               ))}
             </div>
+
+            {report.conclusionPoints && report.conclusionPoints.length > 0 ? (
+              <div style={conclusionPanelStyle}>
+                <strong style={conclusionTitleStyle}>补充判断</strong>
+                <ul style={conclusionListStyle}>
+                  {report.conclusionPoints.map((item) => (
+                    <li key={item} style={conclusionListItemStyle}>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
         </PageSurface>
 
@@ -317,6 +330,28 @@ const summaryTextStyle: CSSProperties = {
   color: pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   lineHeight: 1.65,
+};
+
+const conclusionPanelStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.55rem",
+};
+
+const conclusionTitleStyle: CSSProperties = {
+  color: pageColorTokens.textPrimary,
+  fontSize: "0.9rem",
+};
+
+const conclusionListStyle: CSSProperties = {
+  margin: 0,
+  paddingLeft: "1.1rem",
+  color: pageColorTokens.textSecondary,
+  display: "grid",
+  gap: "0.4rem",
+};
+
+const conclusionListItemStyle: CSSProperties = {
+  lineHeight: 1.6,
 };
 
 const statusListStyle: CSSProperties = {

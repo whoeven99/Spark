@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
+import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
@@ -9,6 +10,7 @@ import { TodayMetricReportPage } from "./page/TodayMetricReportPage";
 
 export default function TodayProfitPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useEmbeddedNavigate();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const rawFocus = searchParams.get("focus");
   const focus = rawFocus === "cost" || rawFocus === "margin" ? rawFocus : "profit";
@@ -26,12 +28,17 @@ export default function TodayProfitPage() {
 
   const handleFocusChange = (nextFocus: string) => {
     const params = new URLSearchParams(searchParams);
-    if (nextFocus === "profit") {
-      params.delete("focus");
-    } else {
-      params.set("focus", nextFocus);
+    params.delete("focus");
+    const query = params.toString();
+    if (nextFocus === "cost") {
+      navigate(query ? `/app/today/cost?${query}` : "/app/today/cost");
+      return;
     }
-    setSearchParams(params, { replace: true, preventScrollReset: true });
+    if (nextFocus === "margin") {
+      params.set("focus", "margin");
+    }
+    const nextQuery = params.toString();
+    navigate(nextQuery ? `/app/today/profit?${nextQuery}` : "/app/today/profit");
   };
 
   const summary =

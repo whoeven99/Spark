@@ -7,6 +7,13 @@ import { buildWorkspaceChatPrefillPath } from "../../../lib/workspaceChatPrefill
 import { DialogShell } from "../shared/DialogShell";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
+function formatObjectTypeLabel(objectType: TodayObjectCard["objectType"]): string {
+  if (objectType === "product") return "商品";
+  if (objectType === "order") return "订单";
+  if (objectType === "channel") return "来源";
+  return "页面";
+}
+
 export function TodayObjectGroupDialog({
   open,
   onClose,
@@ -79,7 +86,7 @@ export function TodayObjectGroupDialog({
                 <div style={rankStyle}>{index + 1}</div>
                 <div style={nameCellStyle}>
                   <strong style={nameTitleStyle}>{item.title}</strong>
-                  <span style={nameMetaStyle}>{item.objectType}</span>
+                  <span style={nameMetaStyle}>{formatObjectTypeLabel(item.objectType)}</span>
                 </div>
                 <div style={metricPillWrapStyle}>
                   {item.metrics.map((metric) => (

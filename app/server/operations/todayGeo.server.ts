@@ -1,25 +1,11 @@
 import prisma from "../../db.server";
 import { TODAY_ALL_COUNTRIES } from "../../lib/todayGeo.shared";
 import type {
-  TodayBusinessModuleKey,
-  TodayMetricAction,
-  TodayMetricDetail,
-  TodayOverviewModule,
-  TodayRoiFactor,
-  TodayRoiMetric,
-  TodayMetricStatus,
-  TodayMetricTable,
-} from "../../lib/todayMetricModules";
-import {
-  getTodayMetricDetail,
-  getTodayOverviewModules,
-  getTodayRoiMonitor,
-} from "../../lib/todayMetricModules";
-import type {
   TodayDecisionReport,
   TodayDecisionReportKey,
   TodayEvidenceGroup,
   TodayHeader,
+  TodayMetricAction,
   TodayMetricCard,
   TodayMetricStatus as TodayReportStatus,
   TodayObjectCard,
@@ -30,6 +16,9 @@ import type {
 } from "../../lib/todayReportTypes";
 import { readNumericCell } from "../../lib/shopifyReports";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
+import { getAliyunLogConfig } from "../aliyunLog/config.server";
+import { PIXEL_FUNNEL_EVENTS } from "../aliyunLog/pixelQuery.server";
+import { getSlsClient } from "../aliyunLog/slsClient.server";
 import { executeShopifyqlQuery } from "../shopifyql/shopifyqlQuery.server";
 import { computeChannelRoi } from "./channelRoi.server";
 import { getShopCostConfig } from "./roi/costConfig.server";
@@ -49,22 +38,6 @@ export type TodayFilterState = {
   selectedCountryLabel: string;
   countries: TodayCountryOption[];
   dataNotes: string[];
-};
-
-export type TodayOverviewData = {
-  filters: TodayFilterState;
-  roiMonitor: {
-    metrics: TodayRoiMetric[];
-    factors: TodayRoiFactor[];
-    chartPath: string;
-    reportPath: string;
-  };
-  modules: TodayOverviewModule[];
-};
-
-export type TodayDetailData = {
-  filters: TodayFilterState;
-  detail: TodayMetricDetail;
 };
 
 export type TodayOverviewReportData = {
@@ -160,17 +133,6 @@ function buildFallbackFilters(
   );
   filters.dataNotes.push(...dataNotes);
   return filters;
-}
-
-function buildFallbackDetail(
-  metric: TodayBusinessModuleKey,
-  requestedCountry: string | null | undefined,
-  note: string,
-): TodayDetailData {
-  return {
-    filters: buildFallbackFilters(requestedCountry, [note]),
-    detail: getTodayMetricDetail(metric),
-  };
 }
 
 const COUNTRY_DISPLAY_NAMES = new Intl.DisplayNames(["zh-CN"], { type: "region" });
@@ -320,7 +282,7 @@ function toneFromDelta(delta: number, warning = -0.05, critical = -0.15): "posit
   return "positive";
 }
 
-function statusFromRatio(value: number, watch: number, risk: number): TodayMetricStatus["status"] {
+function statusFromRatio(value: number, watch: number, risk: number): TodayReportStatus["status"] {
   if (value <= risk) return "risk";
   if (value <= watch) return "watch";
   return "healthy";
@@ -634,639 +596,6 @@ async function loadOrderScopeData(
   };
 }
 
-function buildOverviewModules(
-  orderScope: OrderScopeData,
-  sessionScope: SessionScopeData | null,
-): TodayOverviewModule[] {
-  const yesterdayBucket = orderScope.sevenDayBuckets[orderScope.sevenDayBuckets.length - 1];
-  const avgSevenOrders = safeDivide(orderScope.sevenDayTotals.orders, Math.max(orderScope.sevenDayBuckets.length, 1));
-  const orderDelta = safeDivide(yesterdayBucket.orders - avgSevenOrders, avgSevenOrders || 1);
-
-  const trafficYesterday = sessionScope?.trend[sessionScope.trend.length - 1]?.sessions ?? 0;
-  const trafficAvg = sessionScope?.trend.length
-    ? safeDivide(sessionScope.trend.reduce((sum, item) => sum + item.sessions, 0), sessionScope.trend.length)
-    : 0;
-  const trafficDelta = safeDivide(trafficYesterday - trafficAvg, trafficAvg || 1);
-
-  const cvrYesterday = sessionScope?.trend[sessionScope.trend.length - 1]?.conversionRate ?? 0;
-  const cvrAvg = sessionScope?.trend.length
-    ? safeDivide(sessionScope.trend.reduce((sum, item) => sum + item.conversionRate, 0), sessionScope.trend.length)
-    : 0;
-
-  return [
-    {
-      key: "traffic",
-      title: "流量质量",
-      summary: sessionScope
-        ? `近 7 天会话 ${formatInteger(sessionScope.summary.sessions)}，当前更适合看不同地区有没有把流量带成有效承接，而不是只看总量。`
-        : "当前店铺未返回按地区的 Storefront sessions 数据，流量质量暂时先保留为待补口径。",
-      yesterdayLabel: "昨日会话",
-      yesterdayValue: formatInteger(trafficYesterday),
-      averageLabel: "7 日均值",
-      averageValue: formatInteger(trafficAvg),
-      deltaLabel: "较均值",
-      deltaValue: formatDeltaPercent(trafficAvg > 0 ? trafficDelta : null),
-      detailPath: "/app/today/traffic",
-      chartPath: "/app/today/traffic",
-      chartHint: "进入流量质量详情页，按地区继续看会话趋势、来源结构和有效承接。",
-    },
-    {
-      key: "conversion",
-      title: "转化承接",
-      summary: sessionScope
-        ? `近 7 天转化率 ${formatPercent(sessionScope.summary.conversionRate)}，现在重点是看不同地区的加购、到达结账和完成结账有没有显著掉点。`
-        : "当前店铺未返回按地区的转化口径，转化承接先保留为待补数据源。",
-      yesterdayLabel: "昨日转化率",
-      yesterdayValue: formatPercent(cvrYesterday),
-      averageLabel: "7 日均值",
-      averageValue: formatPercent(cvrAvg),
-      deltaLabel: "较均值",
-      deltaValue: formatPercentPoints(cvrYesterday - cvrAvg),
-      detailPath: "/app/today/conversion",
-      chartPath: "/app/today/conversion",
-      chartHint: "进入转化承接详情页，按地区继续看漏斗和结账完成情况。",
-    },
-    {
-      key: "orders",
-      title: "收入与订单",
-      summary: `近 7 天订单 ${formatInteger(orderScope.sevenDayTotals.orders)} 单、收入 ${formatCurrency(orderScope.sevenDayTotals.revenue, orderScope.currency)}，已经可以按地区看规模与质量差异。`,
-      yesterdayLabel: "昨日订单数",
-      yesterdayValue: formatInteger(yesterdayBucket.orders),
-      averageLabel: "7 日均值",
-      averageValue: formatInteger(avgSevenOrders),
-      deltaLabel: "较均值",
-      deltaValue: formatDeltaPercent(avgSevenOrders > 0 ? orderDelta : null),
-      detailPath: "/app/today/orders",
-      chartPath: "/app/today/orders",
-      chartHint: "进入收入与订单详情页，按地区继续看收入趋势、退款与渠道结构。",
-    },
-  ];
-}
-
-function buildRoiMonitor(orderScope: OrderScopeData): {
-  metrics: TodayRoiMetric[];
-  factors: TodayRoiFactor[];
-  chartPath: string;
-  reportPath: string;
-} {
-  const shortTermReturn = estimatedReturnMultiple(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
-  const baselineReturn = estimatedReturnMultiple(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent);
-  const baselineDelta =
-    shortTermReturn != null && baselineReturn != null ? safeDivide(shortTermReturn - baselineReturn, baselineReturn || 1) : null;
-  const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, orderScope.sevenDayTotals.revenue || 1);
-  const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, orderScope.sevenDayTotals.revenue || 1);
-  const firstOrderShare = safeDivide(orderScope.sevenDayTotals.firstOrders, orderScope.sevenDayTotals.orders || 1);
-
-  return {
-    metrics: [
-      {
-        key: "short_term",
-        title: "短期经营回报",
-        currentLabel: "近 7 天",
-        currentValue: formatMultiple(shortTermReturn),
-        baselineLabel: "前 30 天基准",
-        baselineValue: formatMultiple(baselineReturn),
-        deltaLabel: "变化",
-        deltaValue: baselineDelta == null ? "—" : formatDeltaPercent(baselineDelta),
-        summary: "这里先用订单、折扣、退款和支付成本的估算口径，判断不同地区短期赚钱效率有没有掉到警戒线。",
-        tone: toneFromDelta(baselineDelta ?? 0),
-      },
-      {
-        key: "long_term",
-        title: "首单占比",
-        currentLabel: "近 7 天",
-        currentValue: formatPercent(firstOrderShare),
-        baselineLabel: "退款占比",
-        baselineValue: formatPercent(refundShare),
-        deltaLabel: "折扣占比",
-        deltaValue: formatPercent(discountShare),
-        summary: "先看这个地区现在是靠新增订单在撑，还是已经被折扣和退款稀释了真实回报。",
-        tone: refundShare > 0.08 ? "critical" : refundShare > 0.04 ? "warning" : "positive",
-      },
-    ],
-    factors: [
-      {
-        title: "折扣对利润的吞噬",
-        detail: `近 7 天折扣占收入 ${formatPercent(discountShare)}，先看这个地区是不是在用折扣硬拉规模。`,
-        tone: discountShare > 0.15 ? "critical" : "warning",
-      },
-      {
-        title: "退款对回收的侵蚀",
-        detail: `近 7 天退款损耗 ${formatCurrency(orderScope.sevenDayTotals.refundLoss, orderScope.currency)}，需要结合地区差异看是不是集中爆在某些市场。`,
-        tone: refundShare > 0.08 ? "critical" : "warning",
-      },
-      {
-        title: "新增与复购结构",
-        detail: `近 7 天首单占比 ${formatPercent(firstOrderShare)}，要判断这个地区是短期拉新在支撑，还是复购基础已经足够稳。`,
-        tone: firstOrderShare > 0.6 ? "critical" : "warning",
-      },
-    ],
-    chartPath: "/app/today/roi",
-    reportPath: "/app/today/roi",
-  };
-}
-
-function buildOrdersDetail(orderScope: OrderScopeData, selectedCountryLabel: string): TodayMetricDetail {
-  const yesterday = orderScope.sevenDayBuckets[orderScope.sevenDayBuckets.length - 1];
-  const avgOrders = safeDivide(orderScope.sevenDayTotals.orders, orderScope.sevenDayBuckets.length || 1);
-  const aov = safeDivide(orderScope.sevenDayTotals.revenue, orderScope.sevenDayTotals.orders || 1);
-  const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, orderScope.sevenDayTotals.revenue || 1);
-  const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, orderScope.sevenDayTotals.revenue || 1);
-
-  const statuses: TodayMetricStatus[] = [
-    {
-      label: "订单规模",
-      status: statusFromRatio(safeDivide(yesterday.orders, avgOrders || 1), 0.9, 0.75),
-      detail: `昨日 ${formatInteger(yesterday.orders)} 单，近 7 日均值 ${formatInteger(avgOrders)} 单。`,
-    },
-    {
-      label: "收入质量",
-      status: discountShare > 0.16 ? "risk" : discountShare > 0.1 ? "watch" : "healthy",
-      detail: `近 7 天折扣占收入 ${formatPercent(discountShare)}，要防止把规模增长误判成赚钱改善。`,
-    },
-    {
-      label: "退款损耗",
-      status: refundShare > 0.08 ? "risk" : refundShare > 0.04 ? "watch" : "healthy",
-      detail: `近 7 天退款损耗 ${formatCurrency(orderScope.sevenDayTotals.refundLoss, orderScope.currency)}。`,
-    },
-  ];
-
-  const trendTable: TodayMetricTable = {
-    title: "近 7 天订单趋势",
-    columns: ["日期", "订单数", "收入", "AOV", "退款损耗"],
-    rows: orderScope.sevenDayBuckets.map((bucket) => [
-      shortDay(bucket.day),
-      formatInteger(bucket.orders),
-      formatCurrency(bucket.revenue, orderScope.currency),
-      formatCurrency(safeDivide(bucket.revenue, bucket.orders || 1), orderScope.currency),
-      formatCurrency(bucket.refundLoss, orderScope.currency),
-    ]),
-  };
-
-  const channelTable: TodayMetricTable = {
-    title: "渠道 / 来源拆解",
-    columns: ["来源", "订单", "收入", "首单占比", "估算回报"],
-    rows: orderScope.channelRows.map((row) => [
-      row.channel,
-      formatInteger(row.orders),
-      formatCurrency(row.revenue, orderScope.currency),
-      formatPercent(row.firstOrderShare),
-      formatMultiple(row.estimatedReturnMultiple),
-    ]),
-  };
-
-  const actions: TodayMetricAction[] = [
-    {
-      title: "先看高收入来源有没有被折扣稀释",
-      detail: `把 ${selectedCountryLabel} 收入前几位的来源单独拉出来看折扣与退款，先确认增长是不是健康增长。`,
-      priority: "P0",
-    },
-    {
-      title: "跟进退款损耗突出的来源",
-      detail: "优先处理退款损耗占比高的来源或活动，不要让局部问题持续侵蚀真实回收。",
-      priority: "P1",
-    },
-    {
-      title: "复核新增订单支撑项",
-      detail: "把首单占比较高的来源单独看，判断这个地区的新增是否可持续。",
-      priority: "P2",
-    },
-  ];
-
-  return {
-    key: "orders",
-    title: "收入与订单详情",
-    subtitle: `当前查看范围：${selectedCountryLabel}。这个页面先回答这个地区的订单增长是不是健康增长。`,
-    intro: "收入与订单页现在支持按地区切换，方便直接比较不同国家/地区的规模、折扣和退款质量。",
-    accent: `${selectedCountryLabel} / 近 7 天`,
-    primaryQuestion: "这个地区最近的订单和收入增长，到底是在放大利润，还是只是把规模堆上去了？",
-    chartHref: "/app/today/orders",
-    chartLabel: "查看收入与订单详情",
-    chartHint: "这里先看地区维度的订单质量，再决定要不要继续下钻到来源或对象。",
-    metrics: [
-      { label: "昨日订单数", value: formatInteger(yesterday.orders) },
-      { label: "7 日均值", value: formatInteger(avgOrders) },
-      { label: "近 7 天收入", value: formatCurrency(orderScope.sevenDayTotals.revenue, orderScope.currency) },
-      { label: "平均客单价", value: formatCurrency(aov, orderScope.currency) },
-      { label: "折扣占比", value: formatPercent(discountShare) },
-      { label: "退款占比", value: formatPercent(refundShare) },
-    ],
-    statuses,
-    tables: [trendTable, channelTable],
-    actions,
-    conclusions: [
-      "先用地区视角判断订单增长是不是健康增长，而不是把所有市场混成一个总数。",
-      "如果折扣和退款占比偏高，优先看这个地区的活动与履约问题。",
-      "下一步最值得继续深挖的是高收入来源和退款损耗高的局部来源。",
-    ],
-  };
-}
-
-function buildRoiDetail(orderScope: OrderScopeData, selectedCountryLabel: string): TodayMetricDetail {
-  const shortTermReturn = estimatedReturnMultiple(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
-  const baselineReturn = estimatedReturnMultiple(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent);
-  const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, orderScope.sevenDayTotals.revenue || 1);
-  const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, orderScope.sevenDayTotals.revenue || 1);
-  const firstOrderShare = safeDivide(orderScope.sevenDayTotals.firstOrders, orderScope.sevenDayTotals.orders || 1);
-  const statuses: TodayMetricStatus[] = [
-    {
-      label: "整体经营回报",
-      status:
-        shortTermReturn == null || baselineReturn == null
-          ? "watch"
-          : shortTermReturn < baselineReturn * 0.85
-            ? "risk"
-            : shortTermReturn < baselineReturn * 0.95
-              ? "watch"
-              : "healthy",
-      detail: `近 7 天估算经营回报 ${formatMultiple(shortTermReturn)}，前 30 天基准 ${formatMultiple(baselineReturn)}。`,
-    },
-    {
-      label: "折扣与退款",
-      status: refundShare > 0.08 || discountShare > 0.16 ? "risk" : refundShare > 0.04 || discountShare > 0.1 ? "watch" : "healthy",
-      detail: `折扣占比 ${formatPercent(discountShare)}，退款占比 ${formatPercent(refundShare)}。`,
-    },
-    {
-      label: "新增结构",
-      status: firstOrderShare > 0.65 ? "watch" : "healthy",
-      detail: `首单占比 ${formatPercent(firstOrderShare)}，需要判断当前回报更多来自拉新还是稳定复购。`,
-    },
-  ];
-
-  const trendTable: TodayMetricTable = {
-    title: "近 7 天经营回报趋势",
-    columns: ["日期", "收入", "折扣", "退款", "估算回报"],
-    rows: orderScope.sevenDayBuckets.map((bucket) => [
-      shortDay(bucket.day),
-      formatCurrency(bucket.revenue, orderScope.currency),
-      formatCurrency(bucket.discounts, orderScope.currency),
-      formatCurrency(bucket.refundLoss, orderScope.currency),
-      formatMultiple(estimatedReturnMultiple(bucket, orderScope.defaultGrossMarginPercent)),
-    ]),
-  };
-  const channelTable: TodayMetricTable = {
-    title: "主要来源回报",
-    columns: ["来源", "收入", "折扣", "退款", "估算回报"],
-    rows: orderScope.channelRows.map((row) => [
-      row.channel,
-      formatCurrency(row.revenue, orderScope.currency),
-      formatCurrency(row.discounts, orderScope.currency),
-      formatCurrency(row.refundLoss, orderScope.currency),
-      formatMultiple(row.estimatedReturnMultiple),
-    ]),
-  };
-
-  return {
-    key: "roi",
-    title: "ROI 详情",
-    subtitle: `当前查看范围：${selectedCountryLabel}。这里先用地区口径判断赚钱效率有没有明显分化。`,
-    intro: "ROI 详情这一版先用订单、折扣、退款和支付成本做地区估算口径，优先回答哪个地区的经营回报正在承压。",
-    accent: `${selectedCountryLabel} / 近 7 天 vs 前 30 天`,
-    primaryQuestion: "这个地区最近的赚钱效率是健康、承压，还是已经需要先止损？",
-    chartHref: "/app/today/roi",
-    chartLabel: "查看 ROI 详情",
-    chartHint: "这里先收住地区回报判断，后续再继续并到真实 market 维度。",
-    metrics: [
-      { label: "近 7 天经营回报", value: formatMultiple(shortTermReturn) },
-      { label: "前 30 天基准", value: formatMultiple(baselineReturn) },
-      { label: "近 7 天收入", value: formatCurrency(orderScope.sevenDayTotals.revenue, orderScope.currency) },
-      { label: "折扣损耗", value: formatCurrency(orderScope.sevenDayTotals.discounts, orderScope.currency) },
-      { label: "退款损耗", value: formatCurrency(orderScope.sevenDayTotals.refundLoss, orderScope.currency) },
-      { label: "首单占比", value: formatPercent(firstOrderShare) },
-    ],
-    statuses,
-    tables: [trendTable, channelTable],
-    actions: [
-      {
-        title: "先压住低回报来源",
-        detail: `优先看 ${selectedCountryLabel} 里收入高但估算回报偏低的来源，先把低效投入和低质订单分开。`,
-        priority: "P0",
-      },
-      {
-        title: "跟进退款与折扣双高来源",
-        detail: "退款和折扣一起偏高时，最容易把表面规模误判成赚钱改善。",
-        priority: "P1",
-      },
-      {
-        title: "复核新增结构是否过重",
-        detail: "如果首单占比过高，要确认这个地区是不是过度依赖短期拉新。",
-        priority: "P2",
-      },
-    ],
-    conclusions: [
-      "地区维度能更快看出总 ROI 被哪个国家/地区拉低或拉高。",
-      "当前版本是经营回报估算口径，先用于筛查，再决定是否往更深的成本层继续钻。",
-      "优先盯住收入高但折扣、退款也高的地区来源。",
-    ],
-  };
-}
-
-function buildTrafficDetail(sessionScope: SessionScopeData | null, selectedCountryLabel: string): TodayMetricDetail {
-  const sessionsYesterday = sessionScope?.trend[sessionScope.trend.length - 1]?.sessions ?? 0;
-  const avgSessions = sessionScope?.trend.length
-    ? safeDivide(sessionScope.trend.reduce((sum, item) => sum + item.sessions, 0), sessionScope.trend.length)
-    : 0;
-  const pageviewsPerSession = sessionScope ? safeDivide(sessionScope.summary.pageviews, sessionScope.summary.sessions || 1) : 0;
-  const cartRate = sessionScope ? safeDivide(sessionScope.summary.sessionsWithCartAdditions, sessionScope.summary.sessions || 1) : 0;
-  const checkoutReachRate = sessionScope ? safeDivide(sessionScope.summary.sessionsThatReachedCheckout, sessionScope.summary.sessions || 1) : 0;
-
-  return {
-    key: "traffic",
-    title: "流量质量详情",
-    subtitle: `当前查看范围：${selectedCountryLabel}。这个页面先看这个地区的会话质量和来源结构。`,
-    intro: "Traffic 详情现在支持按地区切换，核心是比较不同地区的会话量、页面深度和来源结构。",
-    accent: `${selectedCountryLabel} / Storefront sessions`,
-    primaryQuestion: "这个地区最近进来的流量，是真的在形成有效承接，还是只是在堆会话？",
-    chartHref: "/app/today/traffic",
-    chartLabel: "查看流量质量详情",
-    chartHint: "流量和转化口径来自 Shopify Storefront sessions。",
-    metrics: [
-      { label: "昨日会话", value: formatInteger(sessionsYesterday) },
-      { label: "7 日均值", value: formatInteger(avgSessions) },
-      { label: "近 7 天会话", value: formatInteger(sessionScope?.summary.sessions ?? 0) },
-      { label: "页/会话", value: pageviewsPerSession.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 2 }) },
-      { label: "加购触达率", value: formatPercent(cartRate) },
-      { label: "到达结账率", value: formatPercent(checkoutReachRate) },
-    ],
-    statuses: [
-      {
-        label: "流量规模",
-        status: statusFromRatio(safeDivide(sessionsYesterday, avgSessions || 1), 0.9, 0.75),
-        detail: `昨日会话 ${formatInteger(sessionsYesterday)}，近 7 日均值 ${formatInteger(avgSessions)}。`,
-      },
-      {
-        label: "页面深度",
-        status: pageviewsPerSession < 1.8 ? "risk" : pageviewsPerSession < 2.3 ? "watch" : "healthy",
-        detail: `当前页/会话 ${pageviewsPerSession.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}。`,
-      },
-      {
-        label: "流量承接",
-        status: cartRate < 0.03 ? "risk" : cartRate < 0.05 ? "watch" : "healthy",
-        detail: `近 7 天加购触达率 ${formatPercent(cartRate)}。`,
-      },
-    ],
-    tables: [
-      {
-        title: "近 7 天流量趋势",
-        columns: ["日期", "会话", "页面浏览", "转化率"],
-        rows:
-          sessionScope?.trend.map((item) => [
-            shortDay(item.day),
-            formatInteger(item.sessions),
-            formatInteger(item.pageviews),
-            formatPercent(item.conversionRate),
-          ]) ?? [],
-      },
-      {
-        title: "主要来源",
-        columns: ["来源", "会话", "转化率"],
-        rows:
-          sessionScope?.referrers.map((item) => [
-            item.referrer,
-            formatInteger(item.sessions),
-            formatPercent(item.conversionRate),
-          ]) ?? [],
-      },
-    ],
-    actions: [
-      {
-        title: "先复核高会话来源的质量",
-        detail: `把 ${selectedCountryLabel} 会话量最高的 2-3 个来源先拆出来，确认增长是不是来自真正有承接能力的流量。`,
-        priority: "P0",
-      },
-      {
-        title: "检查页面深度偏浅的地区流量",
-        detail: "如果页/会话偏低，先回头看是不是入口落地页和预期不匹配。",
-        priority: "P1",
-      },
-      {
-        title: "联动转化页一起看",
-        detail: "如果加购触达率偏低，直接去转化承接详情页核对漏斗掉点。",
-        priority: "P2",
-      },
-    ],
-    conclusions: [
-      "地区流量最先看的是会话质量和入口来源，而不是只看有没有涨。",
-      "如果某个地区会话高但页面深度和加购触达都偏弱，就值得优先处理。",
-      "需要继续深挖时，优先对照来源结构和转化承接页。",
-    ],
-  };
-}
-
-function buildConversionDetail(sessionScope: SessionScopeData | null, selectedCountryLabel: string): TodayMetricDetail {
-  const conversionRate = sessionScope?.summary.conversionRate ?? 0;
-  const cartRate = sessionScope ? safeDivide(sessionScope.summary.sessionsWithCartAdditions, sessionScope.summary.sessions || 1) : 0;
-  const checkoutReachRate = sessionScope ? safeDivide(sessionScope.summary.sessionsThatReachedCheckout, sessionScope.summary.sessions || 1) : 0;
-  const checkoutCompleteRate = sessionScope ? safeDivide(sessionScope.summary.sessionsThatCompletedCheckout, sessionScope.summary.sessions || 1) : 0;
-  const yesterdayCvr = sessionScope?.trend[sessionScope.trend.length - 1]?.conversionRate ?? 0;
-  const averageCvr = sessionScope?.trend.length
-    ? safeDivide(sessionScope.trend.reduce((sum, item) => sum + item.conversionRate, 0), sessionScope.trend.length)
-    : 0;
-
-  return {
-    key: "conversion",
-    title: "转化承接详情",
-    subtitle: `当前查看范围：${selectedCountryLabel}。这个页面先看这个地区的漏斗承接是不是稳定。`,
-    intro: "Conversion 详情这一版用 Storefront sessions 的漏斗口径，帮助比较不同地区的加购、到达结账和完成结账差异。",
-    accent: `${selectedCountryLabel} / Storefront sessions`,
-    primaryQuestion: "这个地区最近的转化承接，究竟卡在加购、到达结账，还是完成结账？",
-    chartHref: "/app/today/conversion",
-    chartLabel: "查看转化承接详情",
-    chartHint: "这里的漏斗数据来自 Shopify sessions 的 online store 口径。",
-    metrics: [
-      { label: "昨日转化率", value: formatPercent(yesterdayCvr) },
-      { label: "7 日均值", value: formatPercent(averageCvr) },
-      { label: "近 7 天转化率", value: formatPercent(conversionRate) },
-      { label: "加购触达率", value: formatPercent(cartRate) },
-      { label: "到达结账率", value: formatPercent(checkoutReachRate) },
-      { label: "完成结账率", value: formatPercent(checkoutCompleteRate) },
-    ],
-    statuses: [
-      {
-        label: "总体转化",
-        status: conversionRate < 0.012 ? "risk" : conversionRate < 0.02 ? "watch" : "healthy",
-        detail: `近 7 天转化率 ${formatPercent(conversionRate)}。`,
-      },
-      {
-        label: "加购到结账",
-        status: checkoutReachRate < 0.018 ? "risk" : checkoutReachRate < 0.03 ? "watch" : "healthy",
-        detail: `近 7 天到达结账率 ${formatPercent(checkoutReachRate)}。`,
-      },
-      {
-        label: "完成结账",
-        status: checkoutCompleteRate < 0.01 ? "risk" : checkoutCompleteRate < 0.018 ? "watch" : "healthy",
-        detail: `近 7 天完成结账率 ${formatPercent(checkoutCompleteRate)}。`,
-      },
-    ],
-    tables: [
-      {
-        title: "近 7 天漏斗趋势",
-        columns: ["日期", "会话", "加购", "到达结账", "完成结账"],
-        rows:
-          sessionScope?.trend.map((item) => [
-            shortDay(item.day),
-            formatInteger(item.sessions),
-            formatInteger(item.sessionsWithCartAdditions),
-            formatInteger(item.sessionsThatReachedCheckout),
-            formatInteger(item.sessionsThatCompletedCheckout),
-          ]) ?? [],
-      },
-      {
-        title: "主要来源转化",
-        columns: ["来源", "会话", "转化率"],
-        rows:
-          sessionScope?.referrers.map((item) => [
-            item.referrer,
-            formatInteger(item.sessions),
-            formatPercent(item.conversionRate),
-          ]) ?? [],
-      },
-    ],
-    actions: [
-      {
-        title: "先找高会话低转化来源",
-        detail: `把 ${selectedCountryLabel} 里会话高但转化率偏低的来源先圈出来，优先查落地页和结账链路。`,
-        priority: "P0",
-      },
-      {
-        title: "对照结账完成率排查末段流失",
-        detail: "如果到达结账不低但完成结账偏弱，优先看支付、运费和信任信息。",
-        priority: "P1",
-      },
-      {
-        title: "联动流量质量一起看",
-        detail: "如果前段会话质量本身就弱，要一起回看来源结构，避免继续把流量送到低效页面。",
-        priority: "P2",
-      },
-    ],
-    conclusions: [
-      "地区漏斗最有价值的是比较不同国家/地区卡在哪一段，而不是只盯整体 CVR。",
-      "如果某个地区高会话但完成结账率偏弱，就值得单独优先处理。",
-      "下一步优先联动高会话来源和高流量落地页去排查。",
-    ],
-  };
-}
-
-export async function loadTodayOverviewData(params: {
-  shop: string;
-  admin: ShopifyAdminGraphqlClient;
-  hasReadReports: boolean;
-  requestedCountry: string | null | undefined;
-  now?: Date;
-}): Promise<TodayOverviewData> {
-  const now = params.now ?? new Date();
-  try {
-    const [orderCounts, sessionCounts] = await Promise.all([
-      loadOrderCountryCounts(params.shop, now),
-      params.hasReadReports
-        ? loadSessionCountryCounts(params.admin)
-        : Promise.resolve(new Map<string, number>()),
-    ]);
-    const filters = buildCountryOptions(
-      normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
-      orderCounts,
-      sessionCounts,
-    );
-    if (!params.hasReadReports) {
-      filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化暂时无法按地区读取 Storefront sessions。");
-    }
-    const [orderScope, sessionScope] = await Promise.all([
-      loadOrderScopeData(params.shop, filters.selectedCountry, now),
-      params.hasReadReports
-        ? loadSessionScope(
-            params.admin,
-            filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
-            false,
-          )
-        : Promise.resolve(null),
-    ]);
-    if (params.hasReadReports && sessionScope === null) {
-      filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，流量与转化先显示为空值。");
-    }
-    return {
-      filters,
-      roiMonitor: buildRoiMonitor(orderScope),
-      modules: buildOverviewModules(orderScope, sessionScope),
-    };
-  } catch (error) {
-    console.error("[todayGeo] loadTodayOverviewData failed:", error);
-    return {
-      filters: buildFallbackFilters(params.requestedCountry, [
-        "Today 总览数据暂时加载失败，当前先展示最近一版默认分析文案。",
-      ]),
-      roiMonitor: getTodayRoiMonitor(),
-      modules: getTodayOverviewModules(),
-    };
-  }
-}
-
-export async function loadTodayDetailData(params: {
-  shop: string;
-  admin: ShopifyAdminGraphqlClient;
-  hasReadReports: boolean;
-  requestedCountry: string | null | undefined;
-  metric: TodayBusinessModuleKey;
-  now?: Date;
-}): Promise<TodayDetailData> {
-  const now = params.now ?? new Date();
-  try {
-    const [orderCounts, sessionCounts] = await Promise.all([
-      loadOrderCountryCounts(params.shop, now),
-      params.hasReadReports
-        ? loadSessionCountryCounts(params.admin)
-        : Promise.resolve(new Map<string, number>()),
-    ]);
-    const filters = buildCountryOptions(
-      normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
-      orderCounts,
-      sessionCounts,
-    );
-    if (!params.hasReadReports && (params.metric === "traffic" || params.metric === "conversion")) {
-      filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化详情暂时无法按地区读取 Storefront sessions。");
-    }
-
-    const selectedCountryLabel = filters.selectedCountryLabel;
-
-    if (params.metric === "orders" || params.metric === "roi") {
-      const orderScope = await loadOrderScopeData(params.shop, filters.selectedCountry, now);
-      return {
-        filters,
-        detail:
-          params.metric === "orders"
-            ? buildOrdersDetail(orderScope, selectedCountryLabel)
-            : buildRoiDetail(orderScope, selectedCountryLabel),
-      };
-    }
-
-    const sessionScope =
-      params.hasReadReports
-        ? await loadSessionScope(
-            params.admin,
-            filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
-            true,
-          )
-        : null;
-    if (params.hasReadReports && sessionScope === null) {
-      filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，当前详情页先保留空值。");
-    }
-
-    return {
-      filters,
-      detail:
-        params.metric === "traffic"
-          ? buildTrafficDetail(sessionScope, selectedCountryLabel)
-          : buildConversionDetail(sessionScope, selectedCountryLabel),
-    };
-  } catch (error) {
-    console.error(`[todayGeo] loadTodayDetailData failed metric=${params.metric}:`, error);
-    return buildFallbackDetail(
-      params.metric,
-      params.requestedCountry,
-      "Today 详情数据暂时加载失败，当前先展示默认报告模板。",
-    );
-  }
-}
-
 type DecisionOrderLine = {
   lineItemId: string;
   inventoryItemId: string | null;
@@ -1286,7 +615,9 @@ type DecisionOrder = {
   createdAt: Date;
   totalPrice: number;
   currency: string;
+  financialStatus: string | null;
   sourceName: string | null;
+  landingSite: string | null;
   referringSite: string | null;
   utmSource: string | null;
   isFirstOrder: boolean;
@@ -1316,13 +647,50 @@ type OrderAggregate = {
   estimatedMargin: number;
   itemCount: number;
   channelLabel: string;
+  financialStatus: string | null;
+  landingPageTitle: string | null;
   isFirstOrder: boolean;
 };
+
+type LandingPageAggregate = {
+  key: string;
+  title: string;
+  sessions: number | null;
+  pageViews: number | null;
+  addToCartCount: number | null;
+  checkoutStartedCount: number | null;
+  paymentSubmittedCount: number | null;
+  checkoutCompletedCount: number | null;
+  orderCount: number;
+  revenue: number;
+  refundLoss: number;
+  estimatedProfit: number;
+  estimatedMargin: number;
+  firstOrderShare: number;
+  paymentAttemptCount: number;
+  paymentSuccessCount: number;
+  paymentFailureCount: number;
+};
+
+type PaymentRiskOrderAggregate = {
+  key: string;
+  title: string;
+  revenue: number;
+  itemCount: number;
+  channelLabel: string;
+  financialStatus: string | null;
+  landingPageTitle: string | null;
+};
+
+type PageSignalStatus = "loaded" | "country_unavailable" | "not_configured" | "query_failed";
 
 type DecisionObjectData = {
   currency: string;
   products: ProductAggregate[];
   orders: OrderAggregate[];
+  landingPages: LandingPageAggregate[];
+  paymentRiskOrders: PaymentRiskOrderAggregate[];
+  pageSignalStatus: PageSignalStatus;
 };
 
 function estimatedCost(bucket: Pick<DayBucket, "subtotal" | "discounts" | "paymentFees" | "refundLoss">, defaultMarginPercent: number): number {
@@ -1391,13 +759,11 @@ function buildTodayHeader(orderScope: OrderScopeData): TodayHeader {
 
 function buildTodayMetricCards(orderScope: OrderScopeData): TodayMetricCard[] {
   const revenueValue = orderScope.sevenDayTotals.revenue;
+  const ordersValue = orderScope.sevenDayTotals.orders;
   const costValue = estimatedCost(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
   const profitValue = estimatedProfit(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
   const profitMarginValue = safeDivide(profitValue, revenueValue || 1);
   const aovValue = safeDivide(revenueValue, orderScope.sevenDayTotals.orders || 1);
-  const shortTermReturn = estimatedReturnMultiple(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
-  const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, revenueValue || 1);
-  const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, revenueValue || 1);
 
   const baselineRevenue = comparableBaseline(orderScope.baselineTotals.revenue);
   const baselineCost = comparableBaseline(estimatedCost(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent));
@@ -1405,10 +771,12 @@ function buildTodayMetricCards(orderScope: OrderScopeData): TodayMetricCard[] {
   const baselineProfitMargin = safeDivide(estimatedProfit(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent), orderScope.baselineTotals.revenue || 1);
   const baselineOrders = comparableBaseline(orderScope.baselineTotals.orders);
   const baselineAov = safeDivide(baselineRevenue, baselineOrders || 1);
-  const baselineReturn = estimatedReturnMultiple(orderScope.baselineTotals, orderScope.defaultGrossMarginPercent);
   const revenueDelta = safeDivide(revenueValue - baselineRevenue, baselineRevenue || 1);
+  const costDelta = safeDivide(costValue - baselineCost, baselineCost || 1);
   const profitDelta = safeDivide(profitValue - baselineProfit, baselineProfit || 1);
-  const returnDelta = safeDivide((shortTermReturn ?? 0) - (baselineReturn ?? 0), baselineReturn || 1);
+  const profitMarginDelta = profitMarginValue - baselineProfitMargin;
+  const ordersDelta = safeDivide(ordersValue - baselineOrders, baselineOrders || 1);
+  const aovDelta = safeDivide(aovValue - baselineAov, baselineAov || 1);
 
   const buildTone = (delta: number, inverse = false): TodayMetricCard["tone"] => {
     if (inverse) {
@@ -1421,48 +789,72 @@ function buildTodayMetricCards(orderScope: OrderScopeData): TodayMetricCard[] {
     return "positive";
   };
 
+  const buildMarginTone = (delta: number): TodayMetricCard["tone"] => {
+    if (delta <= -0.03) return "negative";
+    if (delta <= -0.01) return "warning";
+    return "positive";
+  };
+
   return [
     {
-      key: "growth",
-      label: "增长质量",
+      key: "revenue",
+      label: "收入",
       value: formatCurrency(revenueValue, orderScope.currency),
       delta: formatDeltaPercent(revenueDelta),
       tone: buildTone(revenueDelta),
       source: "realized",
-      summary: "先判断最近 7 天的增长是不是健康增长，再继续拆到商品和订单对象。",
-      subMetrics: [
-        { label: "订单数", value: formatInteger(orderScope.sevenDayTotals.orders) },
-        { label: "客单价", value: formatCurrency(aovValue, orderScope.currency) },
-      ],
+      summary: "先看盘子是否真正放大，再继续拆到具体收入对象。",
       href: "/app/today/revenue",
     },
     {
+      key: "cost",
+      label: "成本",
+      value: formatCurrency(costValue, orderScope.currency),
+      delta: formatDeltaPercent(costDelta),
+      tone: buildTone(costDelta, true),
+      source: "estimated",
+      summary: "成本页先回答成本有没有跑到收入前面，以及主要压在哪些对象上。",
+      href: "/app/today/cost",
+    },
+    {
       key: "profit",
-      label: "利润结果",
+      label: "利润",
       value: formatCurrency(profitValue, orderScope.currency),
       delta: formatDeltaPercent(profitDelta),
       tone: buildTone(profitDelta),
       source: "estimated",
-      summary: "利润页只回答一件事: 卖出去的钱最后留下了多少，以及是谁在吞利润。",
-      subMetrics: [
-        { label: "成本", value: formatCurrency(costValue, orderScope.currency) },
-        { label: "利润率", value: formatPercent(profitMarginValue) },
-      ],
+      summary: "利润页只回答卖出去的钱最后留下了多少，以及是谁在吞利润。",
       href: "/app/today/profit?focus=profit",
     },
     {
-      key: "efficiency",
-      label: "回报效率",
-      value: formatMultiple(shortTermReturn),
-      delta: formatDeltaPercent(returnDelta),
-      tone: buildTone(returnDelta),
+      key: "profit_margin",
+      label: "利润率",
+      value: formatPercent(profitMarginValue),
+      delta: formatPercentPoints(profitMarginDelta),
+      tone: buildMarginTone(profitMarginDelta),
       source: "estimated",
-      summary: "回报效率页重点看渠道值不值得继续投，以及折扣和退款有没有吞掉结果。",
-      subMetrics: [
-        { label: "折扣占比", value: formatPercent(discountShare) },
-        { label: "退款占比", value: formatPercent(refundShare) },
-      ],
-      href: "/app/today/roi",
+      summary: "利润率页先看赚钱质量有没有变薄，不把规模增长误判成经营改善。",
+      href: "/app/today/profit?focus=margin",
+    },
+    {
+      key: "orders",
+      label: "订单数",
+      value: formatInteger(ordersValue),
+      delta: formatDeltaPercent(ordersDelta),
+      tone: buildTone(ordersDelta),
+      source: "realized",
+      summary: "订单页先区分规模增长是否健康，再继续下钻到订单对象。",
+      href: "/app/today/revenue?focus=orders",
+    },
+    {
+      key: "aov",
+      label: "客单价",
+      value: formatCurrency(aovValue, orderScope.currency),
+      delta: formatDeltaPercent(aovDelta),
+      tone: buildTone(aovDelta),
+      source: "realized",
+      summary: "客单价页先确认高客单是不是可复制的健康样本。",
+      href: "/app/today/revenue?focus=aov",
     },
   ];
 }
@@ -1531,13 +923,12 @@ function buildTodayReasonCards(orderScope: OrderScopeData, sessionScope: Session
 
 function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
   const shortTermReturn = estimatedReturnMultiple(orderScope.sevenDayTotals, orderScope.defaultGrossMarginPercent);
-  const firstOrderShare = safeDivide(orderScope.sevenDayTotals.firstOrders, orderScope.sevenDayTotals.orders || 1);
 
   return {
     cards: [
       {
         key: "short_term",
-        label: "短期结果",
+        label: "短期 ROI",
         statusLabel:
           (shortTermReturn ?? 0) >= 1.5 ? "强" : (shortTermReturn ?? 0) >= 1 ? "稳定" : "偏弱",
         value: formatMultiple(shortTermReturn),
@@ -1548,7 +939,7 @@ function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
       },
       {
         key: "payback",
-        label: "回收期数据状态",
+        label: "回收期 ROI",
         statusLabel: "待接入",
         value: "缺 CAC",
         summary: "缺少 CAC 与 cohort 回收窗口，当前只保留数据状态，不输出伪造回收期 ROI。",
@@ -1558,11 +949,11 @@ function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
       },
       {
         key: "lifetime",
-        label: "长期价值信号",
-        statusLabel: firstOrderShare > 0.6 ? "新增偏重" : "结构较稳",
-        value: `首单占比 ${formatPercent(firstOrderShare)}`,
-        summary: "当前先用新增结构代替长期 ROI，作为长期质量补充，而不是正式长期回报结论。",
-        dataQuality: "estimated",
+        label: "长期 ROI",
+        statusLabel: "待接入",
+        value: "缺长期回收",
+        summary: "当前只有新增结构与复购信号，还没有长期回收口径，首页先明确展示缺口而不是伪造长期 ROI。",
+        dataQuality: "pending",
         confidence: "low",
         href: "/app/today/roi",
       },
@@ -1570,14 +961,323 @@ function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
   };
 }
 
+type FallbackMetricTable = {
+  title: string;
+  columns: string[];
+  rows: string[][];
+};
+
+type FallbackMetricDetail = {
+  title: string;
+  intro: string;
+  metrics: Array<{
+    label: string;
+    value: string;
+    unit?: string;
+  }>;
+  statuses: TodayReportStatus[];
+  tables: FallbackMetricTable[];
+  actions: TodayMetricAction[];
+  conclusions: string[];
+};
+
+const FALLBACK_DETAIL_MAP: Record<"roi" | "traffic" | "conversion" | "orders", FallbackMetricDetail> = {
+  roi: {
+    title: "ROI 详情",
+    intro: "这个页面用来回答今天哪些经营动作真的在产生回报，哪些动作虽然带来了单量，但还没有带来足够的 ROI。",
+    metrics: [
+      { label: "短期 ROI", value: "1.9x" },
+      { label: "长期 ROI", value: "2.8x" },
+      { label: "近 7 天收入", value: "$56,300" },
+      { label: "近 7 天投入", value: "$29,640" },
+      { label: "退款损耗", value: "$2,180" },
+      { label: "老客贡献", value: "24%" },
+    ],
+    statuses: [
+      {
+        label: "整体赚钱结果",
+        status: "watch",
+        detail: "长期 ROI 还在安全区，但短期 ROI 已明显偏离基准，说明赚钱效率正在走弱。",
+      },
+      {
+        label: "流量与转化",
+        status: "risk",
+        detail: "高成本流量占比抬升，同时商品页到结账页承接偏弱，短期 ROI 被双重拖累。",
+      },
+      {
+        label: "利润损耗",
+        status: "watch",
+        detail: "退款和售后成本没有失控，但仍在侵蚀利润空间，压缩最终回报。",
+      },
+    ],
+    tables: [
+      {
+        title: "ROI 结果拆解",
+        columns: ["指标", "当前", "基准", "变化"],
+        rows: [
+          ["短期 ROI", "1.9x", "2.3x", "-0.4x"],
+          ["长期 ROI", "2.8x", "2.6x", "+0.2x"],
+          ["收入", "$56,300", "$54,800", "+2.7%"],
+          ["投入", "$29,640", "$23,800", "+24.5%"],
+        ],
+      },
+      {
+        title: "影响 ROI 的关键因子",
+        columns: ["因子", "当前判断", "影响", "建议"],
+        rows: [
+          ["流量质量", "高成本渠道占比上升", "拖累 ROI", "先压低低效流量"],
+          ["转化承接", "详情页到结账偏弱", "直接影响回收", "优先修高流量页面"],
+          ["售后损耗", "退款集中在 2 个 SKU", "侵蚀利润", "跟进退款原因"],
+          ["老客复购", "仍有一定支撑", "稳定长期 ROI", "继续维护老客"],
+        ],
+      },
+    ],
+    actions: [
+      {
+        title: "先压低低效流量",
+        detail: "优先收紧高成本低回收渠道，避免短期 ROI 继续被无效获客拖累。",
+        priority: "P0",
+      },
+      {
+        title: "排查关键承接页",
+        detail: "先看高流量商品页和优惠页的承接掉点，确认是页面内容还是结账前链路在拖累回收。",
+        priority: "P1",
+      },
+      {
+        title: "跟进退款损耗对象",
+        detail: "把退款集中 SKU 单独拉出来看原因，避免利润继续被售后损耗侵蚀。",
+        priority: "P2",
+      },
+    ],
+    conclusions: [
+      "Today 里的 ROI 不是只看一个总数，而是继续拆到关键动作，判断哪类经营动作值得继续投入。",
+      "今天最值得优先处理的是高成本低效率流量，以及转化承接偏弱的关键页面。",
+      "如果要继续深钻，优先看付费流量 ROI、优惠券 ROI 和复购支撑，再决定去流量质量或转化承接页。",
+    ],
+  },
+  traffic: {
+    title: "流量质量详情",
+    intro: "流量质量页的重点不是继续看曝光和会话，而是判断这些流量值不值钱、能不能转成结果。",
+    metrics: [
+      { label: "昨日会话", value: "8,420" },
+      { label: "7 日均值", value: "7,950" },
+      { label: "自然流量占比", value: "41%" },
+      { label: "付费流量占比", value: "37%" },
+      { label: "跳出率", value: "38.4%" },
+      { label: "落地页收入", value: "$5,820" },
+    ],
+    statuses: [
+      {
+        label: "流量规模",
+        status: "healthy",
+        detail: "昨日会话高于 7 日均值 5.9%，当前规模没有掉到风险区间。",
+      },
+      {
+        label: "渠道结构",
+        status: "watch",
+        detail: "付费流量增速快于自然流量，质量需要继续结合转化页承接一起判断。",
+      },
+      {
+        label: "落地页承接",
+        status: "risk",
+        detail: "Top 落地页的跳出率偏高，新增流量没有被稳定接住。",
+      },
+    ],
+    tables: [
+      {
+        title: "渠道结构拆解",
+        columns: ["渠道", "昨日会话", "7 日均值", "变化"],
+        rows: [
+          ["Paid Social", "2,980", "2,540", "+17.3%"],
+          ["Organic Search", "2,410", "2,360", "+2.1%"],
+          ["Direct", "1,860", "1,940", "-4.1%"],
+          ["Email / CRM", "690", "610", "+13.1%"],
+        ],
+      },
+      {
+        title: "Top 落地页",
+        columns: ["页面", "昨日会话", "跳出率", "收入"],
+        rows: [
+          ["/products/hero-serum", "1,920", "42.1%", "$1,860"],
+          ["/collections/bestsellers", "1,360", "34.4%", "$1,120"],
+          ["/products/night-cream", "980", "47.8%", "$760"],
+          ["/pages/summer-offer", "760", "51.2%", "$420"],
+        ],
+      },
+    ],
+    actions: [
+      {
+        title: "优先修高流量落地页",
+        detail: "先处理跳出率高但会话量大的页面，避免新增流量继续低效流失。",
+        priority: "P0",
+      },
+      {
+        title: "复核渠道质量",
+        detail: "把 Paid Social 和 Organic Search 分开看，确认增长是不是来自真正能支撑转化的流量。",
+        priority: "P1",
+      },
+      {
+        title: "联动转化承接判断",
+        detail: "如果落地页问题持续存在，直接去转化承接模块核对加购到结账的掉点位置。",
+        priority: "P2",
+      },
+    ],
+    conclusions: [
+      "流量规模本身没有问题，今天先不要把注意力放在继续冲量上。",
+      "应该优先检查高流量落地页的承接与页面内容，避免新增流量继续低效消耗。",
+      "若要进一步判断问题来源，直接去图表页看 Storefront 趋势和 referrer 结构。",
+    ],
+  },
+  conversion: {
+    title: "转化承接详情",
+    intro: "转化承接页的重点是看漏斗掉点和页面承接，不是单独把订单结果再重复一遍。",
+    metrics: [
+      { label: "昨日转化率", value: "1.82%" },
+      { label: "7 日均值", value: "1.64%" },
+      { label: "加购率", value: "8.6%" },
+      { label: "到达结账率", value: "4.1%" },
+      { label: "完成结账率", value: "1.82%" },
+      { label: "平均客单价", value: "$64" },
+    ],
+    statuses: [
+      {
+        label: "总体转化",
+        status: "healthy",
+        detail: "昨日结果略高于近 7 日均值，说明转化没有继续下滑。",
+      },
+      {
+        label: "加购到结账",
+        status: "watch",
+        detail: "中段漏斗仍然偏弱，说明页面说服力和优惠触发还不够稳定。",
+      },
+      {
+        label: "结账完成",
+        status: "risk",
+        detail: "结账完成率受支付与运费展示影响，最后一步仍有明显流失。",
+      },
+    ],
+    tables: [
+      {
+        title: "漏斗拆解",
+        columns: ["阶段", "昨日", "7 日均值", "变化"],
+        rows: [
+          ["Sessions", "8,420", "7,950", "+5.9%"],
+          ["Add to Cart", "724", "671", "+7.9%"],
+          ["Reached Checkout", "346", "332", "+4.2%"],
+          ["Completed Checkout", "153", "130", "+17.7%"],
+        ],
+      },
+      {
+        title: "重点承接页",
+        columns: ["页面", "昨日 CVR", "7 日均值", "备注"],
+        rows: [
+          ["/products/hero-serum", "2.6%", "2.3%", "主推页，承接稳定"],
+          ["/products/night-cream", "1.4%", "1.8%", "详情页掉点偏多"],
+          ["/pages/summer-offer", "1.1%", "1.5%", "优惠说明不够清晰"],
+          ["/cart", "3.8%", "4.2%", "运费展示仍影响提交"],
+        ],
+      },
+    ],
+    actions: [
+      {
+        title: "优先修商品详情页承接",
+        detail: "先处理高流量但 CVR 走弱的商品页，把最明显的中段漏斗掉点止住。",
+        priority: "P0",
+      },
+      {
+        title: "复核结账页阻碍",
+        detail: "排查支付、运费展示和优惠说明，减少最后一步的流失。",
+        priority: "P1",
+      },
+      {
+        title: "对齐流量入口",
+        detail: "把流量质量模块里的高流量入口与当前漏斗掉点对照，避免继续把流量送到低效页面。",
+        priority: "P2",
+      },
+    ],
+    conclusions: [
+      "当前问题不是完全没有转化，而是中后段漏斗还不够稳。",
+      "需要优先处理商品详情页和结账页的承接问题，而不是继续盲目放大流量。",
+      "图表页更适合继续看 7 天 conversion_rate 趋势和 checkout 相关指标。",
+    ],
+  },
+  orders: {
+    title: "收入与订单详情",
+    intro: "收入与订单页不再只看订单数，而是一起看收入、客单、退款和折扣对真实赚钱结果的影响。",
+    metrics: [
+      { label: "昨日订单数", value: "126" },
+      { label: "7 日均值", value: "118" },
+      { label: "昨日销售额", value: "$8,064" },
+      { label: "平均客单价", value: "$64" },
+      { label: "取消率", value: "2.4%" },
+      { label: "退款率", value: "3.1%" },
+    ],
+    statuses: [
+      {
+        label: "订单规模",
+        status: "healthy",
+        detail: "订单量与销售额都高于 7 日均值，规模侧没有出现新的掉速。",
+      },
+      {
+        label: "收入质量",
+        status: "watch",
+        detail: "客单价稳定，但部分折扣订单占比抬升，需要继续观察利润质量。",
+      },
+      {
+        label: "售后风险",
+        status: "watch",
+        detail: "退款率没有失控，但退款原因仍集中在 2 个核心 SKU 上。",
+      },
+    ],
+    tables: [
+      {
+        title: "订单结果拆解",
+        columns: ["指标", "昨日", "7 日均值", "变化"],
+        rows: [
+          ["订单数", "126", "118", "+6.8%"],
+          ["销售额", "$8,064", "$7,510", "+7.4%"],
+          ["AOV", "$64", "$63", "+1.6%"],
+          ["退款率", "3.1%", "2.8%", "+0.3pp"],
+        ],
+      },
+      {
+        title: "重点订单对象",
+        columns: ["对象", "昨日值", "备注", "影响"],
+        rows: [
+          ["高客单订单", "18 单", "主要来自套装", "拉高收入"],
+          ["折扣订单", "42 单", "占比偏高", "影响利润"],
+          ["退款订单", "4 单", "集中在 2 个 SKU", "侵蚀短期 ROI"],
+          ["取消订单", "3 单", "支付失败为主", "轻度影响"],
+        ],
+      },
+    ],
+    actions: [
+      {
+        title: "先拆折扣订单占比",
+        detail: "确认订单增长是不是主要由折扣拉动，避免把规模增长误判成赚钱改善。",
+        priority: "P0",
+      },
+      {
+        title: "跟进退款集中对象",
+        detail: "把退款集中 SKU 和取消订单原因单独排查，减少对短期利润的侵蚀。",
+        priority: "P1",
+      },
+      {
+        title: "复核高客单支撑项",
+        detail: "确认高客单订单来自哪些商品或套装，判断这些增长是否可持续。",
+        priority: "P2",
+      },
+    ],
+    conclusions: [
+      "订单模块目前整体稳定，但利润质量还不能只看订单数。",
+      "下一步应该把折扣、退款和高客单对象一起看，判断订单增长是不是健康增长。",
+      "需要继续深钻时，直接进入 Sales 图表页查看订单和收入趋势。",
+    ],
+  },
+};
+
 function buildFallbackOverviewReport(): TodayOverviewReport {
-  const modules = getTodayOverviewModules();
-  const roiMonitor = getTodayRoiMonitor();
-  const ordersModule = modules.find((module) => module.key === "orders") ?? modules[0];
-  const trafficModule = modules.find((module) => module.key === "traffic") ?? modules[1] ?? modules[0];
-  const conversionModule = modules.find((module) => module.key === "conversion") ?? modules[2] ?? modules[0];
-  const shortTermMetric = roiMonitor.metrics.find((metric) => metric.key === "short_term") ?? roiMonitor.metrics[0];
-  const longTermMetric = roiMonitor.metrics.find((metric) => metric.key === "long_term") ?? roiMonitor.metrics[1] ?? roiMonitor.metrics[0];
+  const fallbackAov = FALLBACK_DETAIL_MAP.orders.metrics.find((metric) => metric.label === "平均客单价")?.value ?? "—";
 
   return {
     header: {
@@ -1589,66 +1289,81 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
       dataFreshness: "默认分析文案",
       dataConfidence: "low",
       metrics: {
-        revenue: ordersModule?.averageValue ?? "—",
+        revenue: "$7,510",
         estimatedProfit: "待恢复",
         estimatedProfitMargin: "待恢复",
-        shortTermReturn: shortTermMetric?.currentValue ?? "—",
+        shortTermReturn: "1.9x",
       },
     },
     metricCards: [
       {
-        key: "growth",
-        label: "增长质量",
-        value: ordersModule?.averageValue ?? "—",
-        delta: ordersModule?.deltaValue ?? "—",
+        key: "revenue",
+        label: "收入",
+        value: "$7,510",
+        delta: "+6.8%",
         tone: "warning",
-        source: "estimated",
-        summary: "先看增长是不是健康，再继续拆到商品和订单对象。",
-        subMetrics: [
-          { label: "订单数", value: ordersModule?.yesterdayValue ?? "—" },
-          {
-            label: "客单价",
-            value: getTodayMetricDetail("orders").metrics.find((metric) => metric.label === "平均客单价")?.value ?? "—",
-          },
-        ],
+        source: "realized",
+        summary: "收入页会继续拆哪些对象真的在支撑盘子。",
         href: "/app/today/revenue",
       },
       {
+        key: "cost",
+        label: "成本",
+        value: "待恢复",
+        delta: "—",
+        tone: "warning",
+        source: "estimated",
+        summary: "成本页会继续看成本主要压在哪些对象上。",
+        href: "/app/today/cost",
+      },
+      {
         key: "profit",
-        label: "利润结果",
+        label: "利润",
         value: "待恢复",
         delta: "—",
         tone: "warning",
         source: "estimated",
         summary: "利润页会继续看哪些商品和订单真的留下了结果。",
-        subMetrics: [
-          { label: "成本", value: "待恢复" },
-          { label: "利润率", value: "待恢复" },
-        ],
         href: "/app/today/profit?focus=profit",
       },
       {
-        key: "efficiency",
-        label: "回报效率",
-        value: shortTermMetric?.currentValue ?? "—",
-        delta: shortTermMetric?.deltaValue ?? "—",
+        key: "profit_margin",
+        label: "利润率",
+        value: "待恢复",
+        delta: "—",
         tone: "warning",
         source: "estimated",
-        summary: "回报效率页会继续收敛到渠道和损耗，不再把长期价值混在同一层里。",
-        subMetrics: [
-          { label: "折扣占比", value: "待恢复" },
-          { label: "退款占比", value: "待恢复" },
-        ],
-        href: "/app/today/roi",
+        summary: "利润率页会继续解释赚钱质量为什么变薄。",
+        href: "/app/today/profit?focus=margin",
+      },
+      {
+        key: "orders",
+        label: "订单数",
+        value: "126",
+        delta: "+6.8%",
+        tone: "warning",
+        source: "realized",
+        summary: "订单页会继续看哪些订单值得继续复制。",
+        href: "/app/today/revenue?focus=orders",
+      },
+      {
+        key: "aov",
+        label: "客单价",
+        value: fallbackAov,
+        delta: "—",
+        tone: "warning",
+        source: "realized",
+        summary: "客单价页会继续看高客单是不是健康样本。",
+        href: "/app/today/revenue?focus=aov",
       },
     ],
     reasonCards: [
       {
         key: "growth-change",
         title: "增长为什么变化",
-        value: trafficModule?.deltaValue ?? "—",
+        value: "+5.9%",
         label: "增长质量",
-        meta: trafficModule?.summary ?? "默认分析文案",
+        meta: "昨日流量高于 7 日均值，但高质量流量占比没有同步抬升，今天要继续盯住有效输入而不是单纯冲量。",
         summary: "当前先沿用最近一版默认判断，主链路恢复后会替换为正式增长对象证据。",
         tone: "blue",
         href: "/app/today/revenue",
@@ -1656,9 +1371,9 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
       {
         key: "profit-erosion",
         title: "利润被谁侵蚀",
-        value: conversionModule?.deltaValue ?? "—",
+        value: "+0.18pp",
         label: "利润侵蚀",
-        meta: conversionModule?.summary ?? "默认分析文案",
+        meta: "昨日转化率高于 7 日均值，但加购到结账阶段仍有掉点，赚钱效率仍在被中后段承接拖累。",
         summary: "现阶段先保留方向判断，后续恢复真实快照后会替换成正式利润对象证据。",
         tone: "orange",
         href: "/app/today/profit",
@@ -1666,9 +1381,9 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
       {
         key: "efficiency-shift",
         title: "回报为什么变弱",
-        value: shortTermMetric?.deltaValue ?? "—",
+        value: "-0.4x",
         label: "回报效率",
-        meta: shortTermMetric?.summary ?? "默认分析文案",
+        meta: "短期 ROI 明显承压，当前要优先盯住流量质量和落地页承接，避免继续放大获客浪费。",
         summary: "恢复正式数据后，应该继续拆到渠道和损耗对象，而不是继续停在总回报口径。",
         tone: "red",
         href: "/app/today/roi",
@@ -1678,17 +1393,17 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
       cards: [
         {
           key: "short_term",
-          label: "短期结果",
+          label: "短期 ROI",
           statusLabel: "默认判断",
-          value: shortTermMetric?.currentValue ?? "—",
-          summary: shortTermMetric?.summary ?? "默认分析文案",
+          value: "1.9x",
+          summary: "短期 ROI 明显承压，当前要优先盯住流量质量和落地页承接，避免继续放大获客浪费。",
           dataQuality: "pending",
           confidence: "low",
           href: "/app/today/roi",
         },
         {
           key: "payback",
-          label: "回收期数据状态",
+          label: "回收期 ROI",
           statusLabel: "待接入",
           value: "缺 CAC",
           summary: "当前先保留回收期占位，不让首页断层。",
@@ -1698,10 +1413,10 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
         },
         {
           key: "lifetime",
-          label: "长期价值信号",
-          statusLabel: "默认判断",
-          value: longTermMetric?.currentValue ?? "—",
-          summary: longTermMetric?.summary ?? "默认分析文案",
+          label: "长期 ROI",
+          statusLabel: "待接入",
+          value: "缺长期回收",
+          summary: "当前先保留长期 ROI 的缺口说明，不在首页输出半成立的长期回报结论。",
           dataQuality: "pending",
           confidence: "low",
           href: "/app/today/roi",
@@ -1714,8 +1429,12 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
 function buildFallbackDecisionReport(metric: TodayDecisionReportKey): TodayDecisionReport {
   const fallbackDetail =
     metric === "roi"
-      ? getTodayMetricDetail("roi")
-      : getTodayMetricDetail("orders");
+      ? FALLBACK_DETAIL_MAP.roi
+      : metric === "traffic"
+        ? FALLBACK_DETAIL_MAP.traffic
+        : metric === "conversion"
+          ? FALLBACK_DETAIL_MAP.conversion
+          : FALLBACK_DETAIL_MAP.orders;
 
   const fallbackGroups: TodayEvidenceGroup[] = fallbackDetail.tables.map((table, index) => ({
     key: `${metric}-fallback-group-${index + 1}`,
@@ -1750,7 +1469,15 @@ function buildFallbackDecisionReport(metric: TodayDecisionReportKey): TodayDecis
   }));
 
   const metricTitle =
-    metric === "revenue" ? "增长质量分析" : metric === "profit" ? "利润分析" : "回报效率分析";
+    metric === "revenue"
+      ? "收入分析"
+      : metric === "profit"
+        ? "利润分析"
+        : metric === "traffic"
+          ? "流量分析"
+          : metric === "conversion"
+            ? "转化分析"
+            : "回报效率分析";
 
   return {
     key: metric,
@@ -1760,6 +1487,10 @@ function buildFallbackDecisionReport(metric: TodayDecisionReportKey): TodayDecis
     primaryQuestion:
       metric === "roi"
         ? "当前哪些经营动作值得继续投，哪些动作应该先止损？"
+        : metric === "traffic"
+          ? "当前哪些来源在带来有效承接，哪些来源只是在堆会话？"
+          : metric === "conversion"
+            ? "当前转化问题主要卡在漏斗哪里，哪些来源需要先排查？"
         : "当前哪些对象在支撑结果，哪些对象正在拖累经营判断？",
     summary:
       metric === "roi"
@@ -1813,7 +1544,8 @@ async function loadDecisionObjectData(
           ],
         };
 
-  const [orders, refunds, refundLineItems] = await Promise.all([
+  const [{ status: pageSignalStatus, pages: pageEventAggregates }, orders, refunds, refundLineItems] = await Promise.all([
+    loadPageEventAggregates(shop, selectedCountry, now),
     prisma.shopOrder.findMany({
       where: orderWhere,
       select: {
@@ -1822,7 +1554,9 @@ async function loadDecisionObjectData(
         createdAt: true,
         totalPrice: true,
         currency: true,
+        financialStatus: true,
         sourceName: true,
+        landingSite: true,
         referringSite: true,
         utmSource: true,
         isFirstOrder: true,
@@ -1905,10 +1639,38 @@ async function loadDecisionObjectData(
   const paymentFeeFixed = costConfig.paymentFeeFixed;
   const productMap = new Map<string, ProductAggregate>();
   const orderRows: OrderAggregate[] = [];
+  const landingPageMap = new Map<
+    string,
+    Omit<LandingPageAggregate, "estimatedMargin" | "firstOrderShare"> & { firstOrderCount: number }
+  >();
+  const paymentRiskOrders: PaymentRiskOrderAggregate[] = [];
+
+  for (const page of pageEventAggregates) {
+    landingPageMap.set(page.key, {
+      key: page.key,
+      title: page.title,
+      sessions: page.sessions,
+      pageViews: page.pageViews,
+      addToCartCount: page.addToCartCount,
+      checkoutStartedCount: page.checkoutStartedCount,
+      paymentSubmittedCount: page.paymentSubmittedCount,
+      checkoutCompletedCount: page.checkoutCompletedCount,
+      orderCount: 0,
+      revenue: 0,
+      refundLoss: 0,
+      estimatedProfit: 0,
+      paymentAttemptCount: 0,
+      paymentSuccessCount: 0,
+      paymentFailureCount: 0,
+      firstOrderCount: 0,
+    });
+  }
 
   for (const order of orders as DecisionOrder[]) {
     const channel = classifyChannel(order);
     const channelLabel = String(channel);
+    const financialStatus = normalizeFinancialStatus(order.financialStatus);
+    const landingPage = normalizeLandingPage(order.landingSite);
     const paymentFees = order.totalPrice * paymentFeePercent + paymentFeeFixed;
     const lineRevenueTotal = order.lineItems.reduce(
       (sum, line) => sum + Math.max(0, line.price * line.quantity - line.totalDiscount),
@@ -1966,24 +1728,330 @@ async function loadDecisionObjectData(
       estimatedMargin: safeDivide(orderEstimatedProfit, order.totalPrice || 1),
       itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
       channelLabel,
+      financialStatus,
+      landingPageTitle: landingPage?.title ?? null,
       isFirstOrder: order.isFirstOrder,
     });
+
+    if (landingPage) {
+      const existing = landingPageMap.get(landingPage.key);
+      const next =
+        existing ??
+        {
+          key: landingPage.key,
+          title: landingPage.title,
+          sessions: null,
+          pageViews: null,
+          addToCartCount: null,
+          checkoutStartedCount: null,
+          paymentSubmittedCount: null,
+          checkoutCompletedCount: null,
+          orderCount: 0,
+          revenue: 0,
+          refundLoss: 0,
+          estimatedProfit: 0,
+          paymentAttemptCount: 0,
+          paymentSuccessCount: 0,
+          paymentFailureCount: 0,
+          firstOrderCount: 0,
+        };
+      next.orderCount += 1;
+      next.revenue += order.totalPrice;
+      next.refundLoss += refundLoss;
+      next.estimatedProfit += orderEstimatedProfit;
+      if (order.isFirstOrder) next.firstOrderCount += 1;
+      if (financialStatus !== null) next.paymentAttemptCount += 1;
+      if (isPaymentSuccessStatus(financialStatus)) next.paymentSuccessCount += 1;
+      if (isPaymentFailureStatus(financialStatus)) next.paymentFailureCount += 1;
+      landingPageMap.set(landingPage.key, next);
+    }
+
+    if (isPaymentFailureStatus(financialStatus)) {
+      paymentRiskOrders.push({
+        key: order.shopifyOrderId,
+        title: `#${order.orderNumber}`,
+        revenue: order.totalPrice,
+        itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
+        channelLabel,
+        financialStatus,
+        landingPageTitle: landingPage?.title ?? null,
+      });
+    }
   }
 
   const products = Array.from(productMap.values()).map((product) => ({
     ...product,
     estimatedMargin: safeDivide(product.estimatedProfit, product.revenue || 1),
   }));
+  const landingPages = Array.from(landingPageMap.values())
+    .map((page) => ({
+      key: page.key,
+      title: page.title,
+      sessions: page.sessions,
+      pageViews: page.pageViews,
+      addToCartCount: page.addToCartCount,
+      checkoutStartedCount: page.checkoutStartedCount,
+      paymentSubmittedCount: page.paymentSubmittedCount,
+      checkoutCompletedCount: page.checkoutCompletedCount,
+      orderCount: page.orderCount,
+      revenue: page.revenue,
+      refundLoss: page.refundLoss,
+      estimatedProfit: page.estimatedProfit,
+      estimatedMargin: safeDivide(page.estimatedProfit, page.revenue || 1),
+      firstOrderShare: safeDivide(page.firstOrderCount, page.orderCount || 1),
+      paymentAttemptCount: page.paymentAttemptCount,
+      paymentSuccessCount: page.paymentSuccessCount,
+      paymentFailureCount: page.paymentFailureCount,
+    }))
+    .sort((left, right) => right.orderCount - left.orderCount || right.revenue - left.revenue);
 
   return {
     currency: orders[0]?.currency ?? "USD",
     products: products.sort((left, right) => right.revenue - left.revenue),
     orders: orderRows.sort((left, right) => right.revenue - left.revenue),
+    landingPages,
+    paymentRiskOrders: paymentRiskOrders.sort((left, right) => right.revenue - left.revenue),
+    pageSignalStatus,
   };
 }
 
 function toSummaryMetric(label: string, value: string): TodaySummaryMetric {
   return { label, value };
+}
+
+function normalizeFinancialStatus(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLowerCase();
+  return normalized ? normalized : null;
+}
+
+function isPaymentSuccessStatus(value: string | null | undefined): boolean {
+  const normalized = normalizeFinancialStatus(value);
+  return normalized === "paid" || normalized?.includes("paid") === true;
+}
+
+function isPaymentFailureStatus(value: string | null | undefined): boolean {
+  const normalized = normalizeFinancialStatus(value);
+  return normalized === "voided" || normalized === "pending" || normalized === "authorized";
+}
+
+function formatFinancialStatusLabel(value: string | null | undefined): string {
+  const normalized = normalizeFinancialStatus(value);
+  if (normalized === "paid") return "已支付";
+  if (normalized === "partially_paid") return "部分支付";
+  if (normalized === "partially_refunded") return "部分退款";
+  if (normalized === "refunded") return "已退款";
+  if (normalized === "pending") return "待支付";
+  if (normalized === "authorized") return "已授权未完成";
+  if (normalized === "voided") return "支付已作废";
+  return normalized ?? "待确认";
+}
+
+function normalizeLandingPage(value: string | null | undefined): { key: string; title: string } | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, "https://placeholder.invalid");
+    const pathname = url.pathname.replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/";
+    return {
+      key: pathname,
+      title: pathname === "/" ? "首页 /" : pathname,
+    };
+  } catch {
+    const pathname = raw.replace(/^https?:\/\/[^/]+/i, "").split("?")[0]?.trim() || "/";
+    const normalized = pathname.replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/";
+    return {
+      key: normalized,
+      title: normalized === "/" ? "首页 /" : normalized,
+    };
+  }
+}
+
+type PageEventAggregate = {
+  key: string;
+  title: string;
+  sessions: number;
+  pageViews: number;
+  addToCartCount: number;
+  checkoutStartedCount: number;
+  paymentSubmittedCount: number;
+  checkoutCompletedCount: number;
+};
+
+function parseJsonObject(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function pickNestedValue(source: unknown, path: string[]): unknown {
+  let current: unknown = source;
+  for (const segment of path) {
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function extractPixelPagePath(payloadRaw: string | null | undefined): { key: string; title: string } | null {
+  const payload = parseJsonObject(payloadRaw);
+  const candidates = [
+    pickNestedValue(payload, ["context", "document", "location", "href"]),
+    pickNestedValue(payload, ["context", "document", "location", "pathname"]),
+    pickNestedValue(payload, ["context", "url"]),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      const normalized = normalizeLandingPage(candidate);
+      if (normalized) return normalized;
+    }
+  }
+  return null;
+}
+
+async function loadPageEventAggregates(
+  shop: string,
+  selectedCountry: string,
+  now: Date,
+): Promise<{ status: PageSignalStatus; pages: PageEventAggregate[] }> {
+  if (selectedCountry !== TODAY_ALL_COUNTRIES) {
+    return { status: "country_unavailable", pages: [] };
+  }
+  const cfg = getAliyunLogConfig();
+  if (!cfg) {
+    return { status: "not_configured", pages: [] };
+  }
+  const client = getSlsClient();
+  if (!client) {
+    return { status: "not_configured", pages: [] };
+  }
+
+  const todayStart = startOfUtcDay(now);
+  const since = addDays(todayStart, -7);
+  const safeShop = shop.trim().toLowerCase().replace(/"/g, '\\"');
+  const baseQuery = `shopName: "${safeShop}"`;
+  const eventConfigs = [
+    { topic: PIXEL_FUNNEL_EVENTS.pageViewed, kind: "page_view" as const },
+    { topic: PIXEL_FUNNEL_EVENTS.addedToCart, kind: "add_to_cart" as const },
+    { topic: PIXEL_FUNNEL_EVENTS.checkoutStarted, kind: "checkout_started" as const },
+    { topic: PIXEL_FUNNEL_EVENTS.paymentSubmitted, kind: "payment_submitted" as const },
+    { topic: PIXEL_FUNNEL_EVENTS.checkoutCompleted, kind: "checkout_completed" as const },
+  ];
+
+  try {
+    const results = await Promise.all(
+      eventConfigs.map(({ topic }) =>
+        client.getLogs(
+          cfg.project,
+          cfg.logstore,
+          since,
+          todayStart,
+          { query: baseQuery, topic, line: 5000 },
+        ),
+      ),
+    );
+
+    const pageMap = new Map<
+      string,
+      PageEventAggregate & {
+        sessionClientIds: Set<string>;
+      }
+    >();
+
+    const getPageAggregate = (page: { key: string; title: string }) => {
+      const existing = pageMap.get(page.key);
+      if (existing) return existing;
+      const next = {
+        key: page.key,
+        title: page.title,
+        sessions: 0,
+        pageViews: 0,
+        addToCartCount: 0,
+        checkoutStartedCount: 0,
+        paymentSubmittedCount: 0,
+        checkoutCompletedCount: 0,
+        sessionClientIds: new Set<string>(),
+      };
+      pageMap.set(page.key, next);
+      return next;
+    };
+
+    results.forEach((rows, index) => {
+      const kind = eventConfigs[index]?.kind;
+      for (const row of rows) {
+        const page = extractPixelPagePath(row.payload);
+        if (!page) continue;
+        const aggregate = getPageAggregate(page);
+        if (kind === "page_view") {
+          aggregate.pageViews += 1;
+          const clientId = row.clientId?.trim();
+          if (clientId) aggregate.sessionClientIds.add(clientId);
+        } else if (kind === "add_to_cart") {
+          aggregate.addToCartCount += 1;
+        } else if (kind === "checkout_started") {
+          aggregate.checkoutStartedCount += 1;
+        } else if (kind === "payment_submitted") {
+          aggregate.paymentSubmittedCount += 1;
+        } else if (kind === "checkout_completed") {
+          aggregate.checkoutCompletedCount += 1;
+        }
+      }
+    });
+
+    const pages = Array.from(pageMap.values())
+      .map(({ sessionClientIds, ...page }) => ({
+        ...page,
+        sessions: sessionClientIds.size,
+      }))
+      .sort((left, right) => right.sessions - left.sessions || right.pageViews - left.pageViews);
+
+    return { status: "loaded", pages };
+  } catch (error) {
+    console.warn("[todayGeo] loadPageEventAggregates failed:", error);
+    return { status: "query_failed", pages: [] };
+  }
+}
+
+function pageTrafficBase(page: LandingPageAggregate): number {
+  if ((page.sessions ?? 0) > 0) return page.sessions ?? 0;
+  return page.pageViews ?? 0;
+}
+
+function pageHasSignals(page: LandingPageAggregate): boolean {
+  return (page.sessions ?? 0) > 0 || (page.pageViews ?? 0) > 0 || (page.addToCartCount ?? 0) > 0;
+}
+
+function pageHasCheckoutCompletionSignals(page: LandingPageAggregate): boolean {
+  return (page.paymentSubmittedCount ?? 0) > 0 || (page.checkoutCompletedCount ?? 0) > 0;
+}
+
+function pageAddToCartRate(page: LandingPageAggregate): number {
+  return safeDivide(page.addToCartCount ?? 0, pageTrafficBase(page) || 1);
+}
+
+function pageCheckoutStartRate(page: LandingPageAggregate): number {
+  return safeDivide(page.checkoutStartedCount ?? 0, (page.addToCartCount ?? 0) || 1);
+}
+
+function pageCheckoutCompleteRate(page: LandingPageAggregate): number {
+  return safeDivide(page.checkoutCompletedCount ?? 0, (page.checkoutStartedCount ?? 0) || 1);
+}
+
+function pagePaymentCompletionRate(page: LandingPageAggregate): number {
+  const paymentSubmittedCount = page.paymentSubmittedCount ?? 0;
+  if (paymentSubmittedCount > 0) {
+    return safeDivide(page.checkoutCompletedCount ?? 0, paymentSubmittedCount);
+  }
+  return safeDivide(page.paymentSuccessCount, page.paymentAttemptCount || 1);
+}
+
+function pageOrderRateProxy(page: LandingPageAggregate): number {
+  return safeDivide(page.orderCount, pageTrafficBase(page) || 1);
 }
 
 function buildProductObjectCard(product: ProductAggregate, currency: string, reportTitle: string): TodayObjectCard {
@@ -2085,6 +2153,179 @@ function buildOrderObjectCard(order: OrderAggregate, currency: string, reportTit
   };
 }
 
+function buildLandingPageObjectCard(
+  page: LandingPageAggregate,
+  currency: string,
+  reportTitle: string,
+  mode: "traffic" | "conversion",
+): TodayObjectCard {
+  const hasPageSignals = pageHasSignals(page);
+  const hasCheckoutCompletionSignals = pageHasCheckoutCompletionSignals(page);
+  const paymentFailureRate = safeDivide(page.paymentFailureCount, page.paymentAttemptCount || 1);
+  const addToCartRate = pageAddToCartRate(page);
+  const checkoutStartRate = pageCheckoutStartRate(page);
+  const checkoutCompleteRate = pageCheckoutCompleteRate(page);
+  const paymentCompletionRate = pagePaymentCompletionRate(page);
+  const orderRateProxy = pageOrderRateProxy(page);
+  const stableTrafficPage = hasPageSignals
+    ? pageTrafficBase(page) >= 30 && addToCartRate >= 0.04
+    : page.estimatedProfit > 0 && page.estimatedMargin >= 0.1;
+  const stableConversionPage =
+    hasCheckoutCompletionSignals
+      ? addToCartRate >= 0.03 && checkoutStartRate >= 0.2 && checkoutCompleteRate >= 0.35
+      : page.paymentAttemptCount > 0
+        ? paymentFailureRate < 0.15 && orderRateProxy >= 0.01
+        : hasPageSignals
+          ? addToCartRate >= 0.03 && checkoutStartRate >= 0.2
+          : page.estimatedProfit > 0 && page.refundLoss <= 0;
+  const isHealthy = mode === "traffic" ? stableTrafficPage : stableConversionPage;
+
+  return {
+    id: page.key,
+    title: page.title,
+    objectType: "page",
+    metrics: [
+      toSummaryMetric(
+        hasPageSignals ? "会话" : "订单数",
+        hasPageSignals ? formatInteger(page.sessions ?? page.pageViews ?? 0) : formatInteger(page.orderCount),
+      ),
+      toSummaryMetric(
+        mode === "traffic" ? "加购触达率" : "结账触发率",
+        mode === "traffic" ? formatPercent(addToCartRate) : formatPercent(checkoutStartRate),
+      ),
+      toSummaryMetric(
+        mode === "traffic"
+          ? "订单转化代理"
+          : hasCheckoutCompletionSignals
+            ? "完成支付率"
+            : "支付风险率",
+        mode === "traffic"
+          ? formatPercent(orderRateProxy)
+          : hasCheckoutCompletionSignals
+            ? formatPercent(paymentCompletionRate)
+            : formatPercent(paymentFailureRate),
+      ),
+    ],
+    summary:
+      mode === "traffic"
+        ? isHealthy
+          ? "这个落地页最近承接出来的订单质量更稳，适合作为继续放量前的页面样本。"
+          : "这个落地页已经承接到订单，但质量偏弱，继续引流前要先看页面预期和内容匹配。"
+        : isHealthy
+          ? "这个页面最近的结账完成相对稳定，更适合作为当前转化承接的健康样本。"
+          : "这个页面已经出现明显支付或成交后风险，优先级应该放在先修承接与结账链路。",
+    primaryActionLabel:
+      mode === "traffic"
+        ? isHealthy
+          ? "查看页面样本"
+          : "查看承接问题"
+        : isHealthy
+          ? "查看承接样本"
+          : "查看支付风险",
+    report: {
+      title: page.title,
+      subtitle: `${reportTitle} / 页面对象`,
+      headlineMetrics: [
+        toSummaryMetric("会话", hasPageSignals ? formatInteger(page.sessions ?? page.pageViews ?? 0) : "待补"),
+        toSummaryMetric("加购触达率", hasPageSignals ? formatPercent(addToCartRate) : "待补"),
+        toSummaryMetric("结账触发率", hasPageSignals ? formatPercent(checkoutStartRate) : "待补"),
+        toSummaryMetric(
+          mode === "traffic" ? "订单转化代理" : "完成支付率",
+          mode === "traffic"
+            ? formatPercent(orderRateProxy)
+            : hasCheckoutCompletionSignals
+              ? formatPercent(paymentCompletionRate)
+              : "待补",
+        ),
+        toSummaryMetric("收入", formatCurrency(page.revenue, currency)),
+        toSummaryMetric("支付风险率", formatPercent(paymentFailureRate)),
+      ],
+      conclusion:
+        mode === "traffic"
+          ? isHealthy
+            ? "这个页面目前更像健康承接页，下一步适合确认它是否还能稳定接住更多有效流量。"
+            : "这个页面的问题不是没有流量，而是落地后的订单质量已经开始变弱。"
+          : isHealthy
+            ? "这个页面当前转化承接相对稳定，更适合作为可复制样本。"
+            : "这个页面已经暴露出支付或末端承接风险，应该先排查页面承诺、支付和信任信息。",
+      analysisPoints: [
+        `最近 7 天会话 ${hasPageSignals ? formatInteger(page.sessions ?? page.pageViews ?? 0) : "待补"}，订单 ${formatInteger(page.orderCount)}，收入 ${formatCurrency(page.revenue, currency)}。`,
+        mode === "traffic"
+          ? `当前加购触达率 ${formatPercent(addToCartRate)}，订单转化代理 ${formatPercent(orderRateProxy)}，首单占比 ${formatPercent(page.firstOrderShare)}。`
+          : hasCheckoutCompletionSignals
+            ? `当前结账触发率 ${formatPercent(checkoutStartRate)}，完成支付率 ${formatPercent(paymentCompletionRate)}，支付失败 ${formatInteger(page.paymentFailureCount)} 次。`
+            : `当前结账触发率 ${formatPercent(checkoutStartRate)}，支付失败 ${formatInteger(page.paymentFailureCount)} 次，风险率 ${formatPercent(paymentFailureRate)}。`,
+        hasPageSignals
+          ? hasCheckoutCompletionSignals
+            ? "当前页面对象已混入 page_viewed / product_added_to_cart / checkout_started / payment_info_submitted / checkout_completed 事件，再用 landingSite 订单结果补齐成交后风险。"
+            : "当前页面对象已混入 page_viewed / product_added_to_cart / checkout_started 事件，再用 landingSite 订单结果补齐后段结果。"
+          : "当前页面对象仍以订单 landingSite 聚合为主，待接入页面像素事件后再补会话与前段漏斗口径。",
+      ],
+      actions: [
+        {
+          title: mode === "traffic" ? "先复核页面预期是否匹配来源" : "先排查页面与支付链路",
+          detail:
+            mode === "traffic"
+              ? "不要只看流量进来没有，要确认页面承诺、内容和来源意图是否一致。"
+              : "优先复核运费、支付方式、信任信息和结账体验是否在末端制造掉点。",
+          priority: "P0",
+        },
+        {
+          title: mode === "traffic" ? "联动来源对象一起看" : "联动支付失败订单一起看",
+          detail:
+            mode === "traffic"
+              ? "页面解释承接质量，来源对象解释流量从哪里来。"
+              : "页面解释掉点位置，支付失败订单更适合解释异常是如何发生的。",
+          priority: "P1",
+        },
+      ],
+    },
+  };
+}
+
+function buildPaymentFailureOrderObjectCard(order: PaymentRiskOrderAggregate, currency: string): TodayObjectCard {
+  return {
+    id: order.key,
+    title: order.title,
+    objectType: "order",
+    metrics: [
+      toSummaryMetric("订单金额", formatCurrency(order.revenue, currency)),
+      toSummaryMetric("支付状态", formatFinancialStatusLabel(order.financialStatus)),
+      toSummaryMetric("来源", order.channelLabel),
+    ],
+    summary: "这笔订单已经进入支付风险区，优先级应该放在先确认支付链路和页面承诺是否一致。",
+    primaryActionLabel: "查看支付风险",
+    report: {
+      title: order.title,
+      subtitle: "转化分析 / 支付失败订单",
+      headlineMetrics: [
+        toSummaryMetric("订单金额", formatCurrency(order.revenue, currency)),
+        toSummaryMetric("商品件数", formatInteger(order.itemCount)),
+        toSummaryMetric("支付状态", formatFinancialStatusLabel(order.financialStatus)),
+        toSummaryMetric("落地页", order.landingPageTitle ?? "待补"),
+      ],
+      conclusion: "这笔订单说明用户已经走到支付末端，但仍然没有完成闭环，应该优先排查支付与结账链路。",
+      analysisPoints: [
+        `订单金额 ${formatCurrency(order.revenue, currency)}，商品件数 ${formatInteger(order.itemCount)}，来源 ${order.channelLabel}。`,
+        `当前支付状态 ${formatFinancialStatusLabel(order.financialStatus)}，落地页 ${order.landingPageTitle ?? "待补"}。`,
+        "建议把它和同页面、同来源的订单放在一起看，判断是个体异常还是结构性支付问题。",
+      ],
+      actions: [
+        {
+          title: "优先排查支付失败原因",
+          detail: "先确认支付方式、运费、风控校验或信任信息是否在结账末端制造阻碍。",
+          priority: "P0",
+        },
+        {
+          title: "联动页面对象一起看",
+          detail: "支付失败订单解释结果，页面对象更适合解释掉点更早是从哪里开始出现的。",
+          priority: "P1",
+        },
+      ],
+    },
+  };
+}
+
 function buildChannelObjectCard(
   channel: Awaited<ReturnType<typeof computeChannelRoi>>["channels"][number],
   currency: string,
@@ -2137,6 +2378,113 @@ function buildChannelObjectCard(
   };
 }
 
+type SessionSourceAggregate = {
+  key: string;
+  label: string;
+  sessions: number;
+  conversionRate: number;
+  sessionShare: number;
+  orders: number | null;
+  revenue: number | null;
+  estimatedReturnMultiple: number | null;
+};
+
+function normalizeSourceKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildSessionSourceAggregates(
+  sessionScope: SessionScopeData | null,
+  orderScope: OrderScopeData,
+): SessionSourceAggregate[] {
+  const channelMap = new Map(
+    orderScope.channelRows.map((row) => [normalizeSourceKey(row.channel), row] as const),
+  );
+  const totalSessions = sessionScope?.summary.sessions ?? 0;
+
+  return (sessionScope?.referrers ?? []).map((source) => {
+    const matchedChannel = channelMap.get(normalizeSourceKey(source.referrer));
+    return {
+      key: normalizeSourceKey(source.referrer),
+      label: source.referrer,
+      sessions: source.sessions,
+      conversionRate: source.conversionRate,
+      sessionShare: safeDivide(source.sessions, totalSessions || 1),
+      orders: matchedChannel?.orders ?? null,
+      revenue: matchedChannel?.revenue ?? null,
+      estimatedReturnMultiple: matchedChannel?.estimatedReturnMultiple ?? null,
+    };
+  });
+}
+
+function buildSessionSourceObjectCard(
+  source: SessionSourceAggregate,
+  overallConversionRate: number,
+  currency: string,
+  reportTitle: string,
+): TodayObjectCard {
+  const qualitySummary =
+    source.conversionRate >= overallConversionRate
+      ? "这个来源当前承接相对稳定，更适合继续看入口质量和放量空间。"
+      : "这个来源会话有了，但承接偏弱，继续放量前要先确认入口质量。";
+
+  return {
+    id: source.key,
+    title: source.label,
+    objectType: "channel",
+    metrics: [
+      toSummaryMetric("会话", formatInteger(source.sessions)),
+      toSummaryMetric("转化率", formatPercent(source.conversionRate)),
+      toSummaryMetric("会话占比", formatPercent(source.sessionShare)),
+    ],
+    summary: qualitySummary,
+    primaryActionLabel: source.conversionRate >= overallConversionRate ? "查看承接样本" : "查看低质量原因",
+    report: {
+      title: source.label,
+      subtitle: `${reportTitle} / 来源对象`,
+      headlineMetrics: [
+        toSummaryMetric("会话", formatInteger(source.sessions)),
+        toSummaryMetric("转化率", formatPercent(source.conversionRate)),
+        toSummaryMetric("会话占比", formatPercent(source.sessionShare)),
+        toSummaryMetric(
+          source.revenue != null ? "收入" : "订单数",
+          source.revenue != null
+            ? formatCurrency(source.revenue, currency)
+            : source.orders != null
+              ? formatInteger(source.orders)
+              : "待接入",
+        ),
+      ],
+      conclusion:
+        source.conversionRate >= overallConversionRate
+          ? "这个来源当前更像健康样本，适合继续看它能否稳定承接更多有效会话。"
+          : "这个来源的问题不是有没有量，而是会话进来后没有形成足够承接。",
+      analysisPoints: [
+        `最近 7 天会话 ${formatInteger(source.sessions)}，转化率 ${formatPercent(source.conversionRate)}，会话占比 ${formatPercent(source.sessionShare)}。`,
+        source.revenue != null
+          ? `当前已关联到收入 ${formatCurrency(source.revenue, currency)}，估算经营回报 ${formatMultiple(source.estimatedReturnMultiple)}。`
+          : "当前订单侧暂未能稳定关联同名来源，先保留流量口径判断。",
+        "建议先结合入口页、加购触达和后续订单质量一起看，不要只看会话规模。",
+      ],
+      actions: [
+        {
+          title: source.conversionRate >= overallConversionRate ? "继续放大前先看承接稳定性" : "先收紧低质量入口",
+          detail:
+            source.conversionRate >= overallConversionRate
+              ? "确认这个来源的承接质量是否可持续，再决定是否加码。"
+              : "避免继续把会话压在没有形成承接的来源上。",
+          priority: "P0",
+        },
+        {
+          title: "联动订单对象一起看",
+          detail: "来源对象解释输入质量，订单对象更适合解释成交后结果有没有留下来。",
+          priority: "P1",
+        },
+      ],
+    },
+  };
+}
+
 type RevenueFocus = "revenue" | "orders" | "aov";
 
 type ProfitFocus = "profit" | "cost" | "margin";
@@ -2153,6 +2501,497 @@ function normalizeProfitFocus(focus?: string | null): ProfitFocus {
 
 function normalizeRoiFocus(focus?: string | null): RoiFocus {
   return focus === "channels" || focus === "loss" ? focus : "overview";
+}
+
+function buildTrafficReport(
+  sessionScope: SessionScopeData | null,
+  orderScope: OrderScopeData,
+  objectData: DecisionObjectData,
+  selectedCountryLabel: string,
+): TodayDecisionReport {
+  const sessionsYesterday = sessionScope?.trend[sessionScope.trend.length - 1]?.sessions ?? 0;
+  const avgSessions = sessionScope?.trend.length
+    ? safeDivide(sessionScope.trend.reduce((sum, item) => sum + item.sessions, 0), sessionScope.trend.length)
+    : 0;
+  const pageviewsPerSession = sessionScope ? safeDivide(sessionScope.summary.pageviews, sessionScope.summary.sessions || 1) : 0;
+  const cartRate = sessionScope ? safeDivide(sessionScope.summary.sessionsWithCartAdditions, sessionScope.summary.sessions || 1) : 0;
+  const checkoutReachRate = sessionScope
+    ? safeDivide(sessionScope.summary.sessionsThatReachedCheckout, sessionScope.summary.sessions || 1)
+    : 0;
+  const overallConversionRate = sessionScope?.summary.conversionRate ?? 0;
+  const sources = buildSessionSourceAggregates(sessionScope, orderScope);
+  const topTrafficSources = [...sources].sort((left, right) => right.sessions - left.sessions).slice(0, 3);
+  const lowQualitySources = [...sources]
+    .filter(
+      (source) =>
+        source.sessions >= Math.max(30, safeDivide(sessionScope?.summary.sessions ?? 0, 20)) &&
+        source.conversionRate < Math.max(overallConversionRate * 0.75, 0.005),
+    )
+    .sort((left, right) => right.sessions - left.sessions)
+    .slice(0, 3);
+  const weakSourceSessionShare = lowQualitySources.reduce((sum, item) => sum + item.sessionShare, 0);
+  const pageSignalPages = objectData.landingPages.filter((page) => (page.sessions ?? 0) > 0 || (page.pageViews ?? 0) > 0);
+  const healthyLandingPages = [...objectData.landingPages]
+    .filter((page) =>
+      pageSignalPages.length > 0
+        ? pageTrafficBase(page) >= 30 && pageAddToCartRate(page) >= 0.04
+        : page.orderCount >= 1 && page.estimatedProfit > 0,
+    )
+    .sort((left, right) =>
+      pageSignalPages.length > 0
+        ? pageTrafficBase(right) - pageTrafficBase(left) || pageAddToCartRate(right) - pageAddToCartRate(left)
+        : right.orderCount - left.orderCount || right.revenue - left.revenue,
+    )
+    .slice(0, 3);
+  const weakLandingPages = [...objectData.landingPages]
+    .filter(
+      (page) =>
+        pageSignalPages.length > 0
+          ? pageTrafficBase(page) >= Math.max(30, safeDivide(sessionScope?.summary.sessions ?? 0, 30)) &&
+            pageAddToCartRate(page) < Math.max(cartRate * 0.6, 0.02)
+          : page.orderCount >= Math.max(2, safeDivide(objectData.orders.length, 12)) &&
+            (page.estimatedMargin < 0.08 || page.refundLoss > 0),
+    )
+    .sort((left, right) =>
+      pageSignalPages.length > 0
+        ? pageTrafficBase(right) - pageTrafficBase(left) || pageAddToCartRate(left) - pageAddToCartRate(right)
+        : right.orderCount - left.orderCount || right.refundLoss - left.refundLoss,
+    )
+    .slice(0, 3);
+  const weakLandingPageOrders = weakLandingPages.reduce((sum, page) => sum + page.orderCount, 0);
+  const weakLandingPageSessions = weakLandingPages.reduce((sum, page) => sum + pageTrafficBase(page), 0);
+  const groups: TodayEvidenceGroup[] = [
+    {
+      key: "high_traffic_sources",
+      title: "Top 高流量来源",
+      tone: "positive",
+      summary: "这些来源当前带来了主要会话，适合作为继续复核入口质量的主样本。",
+      items: topTrafficSources.map((source) =>
+        buildSessionSourceObjectCard(source, overallConversionRate, objectData.currency, "流量分析"),
+      ),
+    },
+    {
+      key: "low_quality_sources",
+      title: "Top 高流量低质量来源",
+      tone: "negative",
+      summary: "这些来源会话不低，但承接明显偏弱，优先级应该放在先修入口与承接。",
+      items: lowQualitySources.map((source) =>
+        buildSessionSourceObjectCard(source, overallConversionRate, objectData.currency, "流量分析"),
+      ),
+    },
+    {
+      key: "healthy_landing_pages",
+      title: "Top 承接较稳页面",
+      tone: "positive",
+      summary: "这些页面当前接住了更多订单，适合作为继续校验页面承接的主样本。",
+      items: healthyLandingPages.map((page) =>
+        buildLandingPageObjectCard(page, objectData.currency, "流量分析", "traffic"),
+      ),
+    },
+    {
+      key: "weak_landing_pages",
+      title: "Top 承接偏弱页面",
+      tone: "warning",
+      summary: "这些页面已经承接出订单，但订单质量偏弱，继续引流前应该先修页面承接。",
+      items: weakLandingPages.map((page) =>
+        buildLandingPageObjectCard(page, objectData.currency, "流量分析", "traffic"),
+      ),
+    },
+  ].filter((group) => group.items.length > 0);
+
+  return {
+    key: "traffic",
+    title: "流量分析",
+    subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断哪些来源真的带来了有效承接，哪些来源只是把会话堆上去。`,
+    accent: "焦点：来源与承接",
+    primaryQuestion: "最近进来的流量，是真的在形成有效承接，还是只是在堆会话？",
+    summary:
+      sessionScope === null
+        ? "当前缺少 Storefront sessions 口径，先保留订单侧证据和已有来源入口，避免流量页空白。"
+        : pageSignalPages.length > 0 && weakLandingPages.length > 0
+          ? "当前已经能定位到高会话但低承接页面，优先级应该先放在修页面，而不是继续冲量。"
+          : lowQualitySources.length > 0
+          ? "当前已经能定位到高会话但低质量的来源，优先级应该先放在修承接而不是继续冲量。"
+          : "当前主要来源的承接还算稳定，更适合继续识别哪些入口值得继续放大。",
+    statuses: [
+      {
+        label: "流量规模",
+        status: sessionScope === null ? "watch" : statusFromRatio(safeDivide(sessionsYesterday, avgSessions || 1), 0.9, 0.75),
+        detail:
+          sessionScope === null
+            ? "当前未取到 Storefront sessions 趋势，流量规模先保留为待补数据。"
+            : `昨日会话 ${formatInteger(sessionsYesterday)}，近 7 日均值 ${formatInteger(avgSessions)}。`,
+      },
+      {
+        label: "页面深度",
+        status: sessionScope === null ? "watch" : pageviewsPerSession < 1.8 ? "risk" : pageviewsPerSession < 2.3 ? "watch" : "healthy",
+        detail:
+          sessionScope === null
+            ? "当前未取到页/会话口径，先用来源和订单结果做代理判断。"
+            : `当前页/会话 ${pageviewsPerSession.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}。`,
+      },
+      {
+        label: "来源质量",
+        status: lowQualitySources.length >= 2 ? "risk" : lowQualitySources.length === 1 ? "watch" : "healthy",
+        detail:
+          sessionScope === null
+            ? "当前未取到来源级 sessions，来源质量先保留为待补口径。"
+            : `低质量来源会话占比 ${formatPercent(weakSourceSessionShare)}。`,
+      },
+    ],
+    summaryMetrics: [
+      toSummaryMetric("近 7 天会话", sessionScope ? formatInteger(sessionScope.summary.sessions) : "待补"),
+      toSummaryMetric(
+        "页/会话",
+        sessionScope
+          ? pageviewsPerSession.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+          : "待补",
+      ),
+      toSummaryMetric("加购触达率", sessionScope ? formatPercent(cartRate) : "待补"),
+      toSummaryMetric("到达结账率", sessionScope ? formatPercent(checkoutReachRate) : "待补"),
+    ],
+    breakdowns: [
+      {
+        key: "traffic-by-source",
+        title: "流量拆到来源",
+        summary: "先确认会话主要来自哪里，再判断这些来源有没有把流量带成有效承接。",
+        rows: [
+          {
+            label: "高流量来源会话",
+            value: formatInteger(topTrafficSources.reduce((sum, item) => sum + item.sessions, 0)),
+            meta: "当前会话占比最高的来源集合。",
+          },
+          {
+            label: "低质量来源会话",
+            value: formatInteger(lowQualitySources.reduce((sum, item) => sum + item.sessions, 0)),
+            meta: "会话有了，但来源转化率明显低于整体。",
+          },
+          {
+            label: "来源数量",
+            value: String(sources.length),
+            meta: "当前来源判断基于 Shopify sessions 的 referrer_source 口径。",
+          },
+        ],
+        relatedGroupKeys: ["high_traffic_sources", "low_quality_sources"],
+      },
+      {
+        key: "traffic-by-acceptance",
+        title: "流量承接信号",
+        summary: "当页深和加购触达开始走弱时，就不能再把会话增长直接当成健康增长。",
+        rows: [
+          {
+            label: "页/会话",
+            value: pageviewsPerSession.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 2 }),
+            meta: "页面深度越浅，越要回头看入口页是否接住了流量。",
+          },
+          {
+            label: "加购触达率",
+            value: formatPercent(cartRate),
+            meta: "这是判断流量有没有形成初步承接的第一道信号。",
+          },
+          {
+            label: pageSignalPages.length > 0 ? "承接偏弱页面会话" : "承接偏弱页面订单",
+            value: formatInteger(pageSignalPages.length > 0 ? weakLandingPageSessions : weakLandingPageOrders),
+            meta:
+              pageSignalPages.length > 0
+                ? "当前已按页面事件聚合会话与加购信号，再用订单结果补看后段承接。"
+                : "当前页面对象先按 landingSite 聚合，用订单质量先做代理承接判断。",
+          },
+          {
+            label: "到达结账率",
+            value: formatPercent(checkoutReachRate),
+            meta: "如果这里开始掉点，下一步更适合继续到转化页看页面和支付风险。",
+          },
+        ],
+        relatedGroupKeys: ["healthy_landing_pages", "weak_landing_pages"],
+      },
+    ],
+    groups,
+    actions: [
+      {
+        title: "先收紧高会话低质量来源",
+        detail: "别再把会话增长直接当成健康增长，先确认入口与承接为什么接不住。",
+        priority: "P0",
+      },
+      {
+        title: "优先修高流量入口承接",
+        detail: "页/会话和加购触达走弱时，应该先看入口页和落地预期是否匹配。",
+        priority: "P1",
+      },
+      {
+        title: "联动转化页复核掉点",
+        detail: "如果流量已经进来但到达结账率偏低，下一步直接去转化页看漏斗掉点。",
+        priority: "P2",
+      },
+    ],
+    conclusionPoints: [
+      "流量页最先回答的是来源质量和承接信号，而不是只看会话有没有涨。",
+      pageSignalPages.length > 0
+        ? "页面对象已经混入 page_viewed / product_added_to_cart / checkout_started 事件，不再只是订单代理。"
+        : "页面对象当前仍以 landingSite 订单代理为主，后续还要继续补 page-level sessions。",
+      "后续这里优先增强页面承接信号，而不是再回到只堆来源总表。",
+    ],
+  };
+}
+
+function buildConversionReport(
+  sessionScope: SessionScopeData | null,
+  _orderScope: OrderScopeData,
+  objectData: DecisionObjectData,
+  selectedCountryLabel: string,
+): TodayDecisionReport {
+  const conversionRate = sessionScope?.summary.conversionRate ?? 0;
+  const cartRate = sessionScope ? safeDivide(sessionScope.summary.sessionsWithCartAdditions, sessionScope.summary.sessions || 1) : 0;
+  const checkoutReachRate = sessionScope
+    ? safeDivide(sessionScope.summary.sessionsThatReachedCheckout, sessionScope.summary.sessions || 1)
+    : 0;
+  const checkoutCompleteRate = sessionScope
+    ? safeDivide(sessionScope.summary.sessionsThatCompletedCheckout, sessionScope.summary.sessions || 1)
+    : 0;
+  const pageSignalPages = objectData.landingPages.filter((page) => pageHasSignals(page));
+  const pageCompletionSignalPages = objectData.landingPages.filter((page) => pageHasCheckoutCompletionSignals(page));
+  const stableLandingPages = [...objectData.landingPages]
+    .filter((page) =>
+      pageHasCheckoutCompletionSignals(page)
+        ? pageTrafficBase(page) >= 30 &&
+          pageAddToCartRate(page) >= Math.max(cartRate * 0.7, 0.03) &&
+          pageCheckoutStartRate(page) >= 0.2 &&
+          pageCheckoutCompleteRate(page) >= 0.35
+        : pageHasSignals(page)
+          ? pageTrafficBase(page) >= 30 &&
+            pageAddToCartRate(page) >= Math.max(cartRate * 0.7, 0.03) &&
+            pageOrderRateProxy(page) >= Math.max(conversionRate * 0.7, 0.008)
+        : page.orderCount >= 1 && safeDivide(page.paymentFailureCount, page.paymentAttemptCount || 1) < 0.15,
+    )
+    .sort((left, right) =>
+      pageHasCheckoutCompletionSignals(left) !== pageHasCheckoutCompletionSignals(right)
+        ? Number(pageHasCheckoutCompletionSignals(right)) - Number(pageHasCheckoutCompletionSignals(left))
+      : pageHasCheckoutCompletionSignals(left)
+        ? pageCheckoutCompleteRate(right) - pageCheckoutCompleteRate(left) ||
+          pagePaymentCompletionRate(right) - pagePaymentCompletionRate(left) ||
+          pageAddToCartRate(right) - pageAddToCartRate(left)
+        : pageHasSignals(left) || pageHasSignals(right)
+          ? pageOrderRateProxy(right) - pageOrderRateProxy(left) || pageAddToCartRate(right) - pageAddToCartRate(left)
+        : right.paymentSuccessCount - left.paymentSuccessCount || right.orderCount - left.orderCount,
+    )
+    .slice(0, 3);
+  const paymentRiskPages = [...objectData.landingPages]
+    .filter((page) =>
+      pageHasCheckoutCompletionSignals(page)
+        ? pageTrafficBase(page) >= 30 &&
+          (pageAddToCartRate(page) < Math.max(cartRate * 0.6, 0.02) ||
+            pageCheckoutStartRate(page) < 0.15 ||
+            pageCheckoutCompleteRate(page) < 0.25 ||
+            pagePaymentCompletionRate(page) < 0.5 ||
+            page.paymentFailureCount > 0)
+        : pageHasSignals(page)
+        ? pageTrafficBase(page) >= 30 &&
+          (pageAddToCartRate(page) < Math.max(cartRate * 0.6, 0.02) ||
+            pageOrderRateProxy(page) < Math.max(conversionRate * 0.5, 0.004) ||
+            page.paymentFailureCount > 0)
+        : page.paymentFailureCount > 0,
+    )
+    .sort(
+      (left, right) =>
+        pageHasCheckoutCompletionSignals(left) !== pageHasCheckoutCompletionSignals(right)
+          ? Number(pageHasCheckoutCompletionSignals(right)) - Number(pageHasCheckoutCompletionSignals(left))
+        : pageHasCheckoutCompletionSignals(left)
+          ? pageTrafficBase(right) - pageTrafficBase(left) ||
+            pageCheckoutCompleteRate(left) - pageCheckoutCompleteRate(right) ||
+            pagePaymentCompletionRate(left) - pagePaymentCompletionRate(right) ||
+            right.paymentFailureCount - left.paymentFailureCount
+        : pageHasSignals(left) || pageHasSignals(right)
+          ? pageTrafficBase(right) - pageTrafficBase(left) ||
+            pageOrderRateProxy(left) - pageOrderRateProxy(right) ||
+            right.paymentFailureCount - left.paymentFailureCount
+          : right.paymentFailureCount - left.paymentFailureCount ||
+            right.orderCount - left.orderCount ||
+            right.revenue - left.revenue,
+    )
+    .slice(0, 3);
+  const paymentRiskOrders = [...objectData.paymentRiskOrders]
+    .sort((left, right) => right.revenue - left.revenue)
+    .slice(0, 3);
+  const pagePaymentSubmissions = objectData.landingPages.reduce((sum, page) => sum + (page.paymentSubmittedCount ?? 0), 0);
+  const pageCheckoutCompletions = objectData.landingPages.reduce((sum, page) => sum + (page.checkoutCompletedCount ?? 0), 0);
+  const pagePaymentCompletionRate = safeDivide(pageCheckoutCompletions, pagePaymentSubmissions || 1);
+  const paymentAttempts = objectData.landingPages.reduce((sum, page) => sum + page.paymentAttemptCount, 0);
+  const paymentFailures = objectData.landingPages.reduce((sum, page) => sum + page.paymentFailureCount, 0);
+  const paymentSuccessRate = safeDivide(paymentAttempts - paymentFailures, paymentAttempts || 1);
+  const groups: TodayEvidenceGroup[] = [
+    {
+      key: "stable_conversion_pages",
+      title: "Top 承接较稳页面",
+      tone: "positive",
+      summary: "这些页面最近在末端承接相对稳定，更适合作为当前可复制的页面样本。",
+      items: stableLandingPages.map((page) =>
+        buildLandingPageObjectCard(page, objectData.currency, "转化分析", "conversion"),
+      ),
+    },
+    {
+      key: "payment_risk_pages",
+      title: "Top 支付风险页面",
+      tone: "negative",
+      summary: "这些页面已经暴露出明显支付风险，优先级应该先查页面承接和结账末端问题。",
+      items: paymentRiskPages.map((page) =>
+        buildLandingPageObjectCard(page, objectData.currency, "转化分析", "conversion"),
+      ),
+    },
+    {
+      key: "payment_failed_orders",
+      title: "Top 支付失败订单",
+      tone: "warning",
+      summary: "这些订单已经进入支付失败代理口径，优先级应该放在先排查支付和结账链路。",
+      items: paymentRiskOrders.map((order) => buildPaymentFailureOrderObjectCard(order, objectData.currency)),
+    },
+  ].filter((group) => group.items.length > 0);
+
+  return {
+    key: "conversion",
+    title: "转化分析",
+    subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断转化问题卡在加购、结账，还是成交后的结果质量。`,
+    accent: "焦点：漏斗与成交后风险",
+    primaryQuestion: "最近的转化承接，究竟卡在加购、到达结账，还是完成结账之后？",
+    summary:
+      sessionScope === null
+        ? "当前缺少 Storefront sessions 漏斗口径，先保留订单侧异常证据，避免转化页空白。"
+        : pageSignalPages.length > 0 && paymentRiskPages.length > 0
+          ? "当前已经能定位到高会话低承接页面和支付末端风险，优先级应该放在先修掉点，而不是继续冲量。"
+          : paymentRiskPages.length > 0 || paymentRiskOrders.length > 0
+          ? "当前已经能定位到页面承接和支付末端风险，优先级应该放在先修掉点，而不是继续冲量。"
+          : "当前整体承接还算稳定，更值得继续识别哪些页面能复制健康转化。",
+    statuses: [
+      {
+        label: "总体转化",
+        status: sessionScope === null ? "watch" : conversionRate < 0.012 ? "risk" : conversionRate < 0.02 ? "watch" : "healthy",
+        detail:
+          sessionScope === null
+            ? "当前未取到 Storefront sessions 转化率，整体转化先保留为待补口径。"
+            : `近 7 天转化率 ${formatPercent(conversionRate)}。`,
+      },
+      {
+        label: "页面承接",
+        status: sessionScope === null ? "watch" : checkoutReachRate < 0.018 ? "risk" : checkoutReachRate < 0.03 ? "watch" : "healthy",
+        detail:
+          paymentRiskPages.length > 0
+            ? `当前已有 ${formatInteger(paymentRiskPages.length)} 个页面进入支付风险样本，近 7 天到达结账率 ${formatPercent(checkoutReachRate)}。`
+            : sessionScope === null
+              ? "当前未取到到达结账率，先用 landingSite 订单代理补看页面承接。"
+              : `近 7 天到达结账率 ${formatPercent(checkoutReachRate)}。`,
+      },
+      {
+        label: "支付完成",
+        status: sessionScope === null ? "watch" : checkoutCompleteRate < 0.01 ? "risk" : checkoutCompleteRate < 0.018 ? "watch" : "healthy",
+        detail:
+          pagePaymentSubmissions > 0
+            ? `当前页面像素完成支付率 ${formatPercent(pagePaymentCompletionRate)}，支付提交 ${formatInteger(pagePaymentSubmissions)} 次。`
+            : paymentAttempts > 0
+              ? `近 7 天订单支付成功率 ${formatPercent(paymentSuccessRate)}，支付失败 ${formatInteger(paymentFailures)} 单。`
+            : sessionScope === null
+              ? "当前未取到完成结账率，支付失败订单口径也还待接入。"
+              : `近 7 天完成结账率 ${formatPercent(checkoutCompleteRate)}。`,
+      },
+    ],
+    summaryMetrics: [
+      toSummaryMetric("近 7 天转化率", sessionScope ? formatPercent(conversionRate) : "待补"),
+      toSummaryMetric("加购触达率", sessionScope ? formatPercent(cartRate) : "待补"),
+      toSummaryMetric("到达结账率", sessionScope ? formatPercent(checkoutReachRate) : "待补"),
+      toSummaryMetric("完成结账率", sessionScope ? formatPercent(checkoutCompleteRate) : "待补"),
+    ],
+    breakdowns: [
+      {
+        key: "conversion-by-step",
+        title: "转化拆到漏斗节点",
+        summary: "先看掉点更多发生在加购前、结账前，还是完成结账前。",
+        rows: [
+          {
+            label: "加购触达率",
+            value: formatPercent(cartRate),
+            meta: "这是商品详情页和入口页是否接住流量的第一层信号。",
+          },
+          {
+            label: "到达结账率",
+            value: formatPercent(checkoutReachRate),
+            meta: "如果这里偏低，优先排查中后段承接和结账链路。",
+          },
+          {
+            label: "支付风险页面",
+            value: formatInteger(paymentRiskPages.length),
+            meta:
+              pageCompletionSignalPages.length > 0
+                ? "当前页面对象已经补进会话、加购、结账触发、支付提交和完成支付信号，再用支付失败订单补看成交后风险。"
+                : pageSignalPages.length > 0
+                  ? "当前页面对象已经补进会话、加购和结账触发信号，再用支付失败订单补看末端风险。"
+                : "当前先按 landingSite 聚合页面对象，用支付失败订单把页面风险补出来。",
+          },
+          {
+            label: "完成结账率",
+            value: formatPercent(checkoutCompleteRate),
+            meta: "这里偏低时，要重点怀疑支付与结账完成环节。",
+          },
+        ],
+        relatedGroupKeys: ["stable_conversion_pages", "payment_risk_pages"],
+      },
+      {
+        key: "conversion-after-checkout",
+        title: "成交后风险补充",
+        summary: "支付失败订单已经接入代理口径，优先用异常订单补看支付末端的真实后果。",
+        rows: [
+          {
+            label: "支付失败订单数",
+            value: formatInteger(paymentRiskOrders.length),
+            meta: "这些订单已经走到支付末端，但没有完成闭环。",
+          },
+          {
+            label: "支付失败率",
+            value: paymentAttempts > 0 ? formatPercent(safeDivide(paymentFailures, paymentAttempts)) : "待补",
+            meta: "当前先按订单 financialStatus 代理支付失败口径。",
+          },
+          {
+            label: "支付成功率",
+            value:
+              pagePaymentSubmissions > 0
+                ? formatPercent(pagePaymentCompletionRate)
+                : paymentAttempts > 0
+                  ? formatPercent(paymentSuccessRate)
+                  : "待补",
+            meta:
+              pagePaymentSubmissions > 0
+                ? "当前优先展示页面像素的 payment_info_submitted -> checkout_completed 完成率。"
+                : "当前先按订单 financialStatus 代理支付成功口径。",
+          },
+        ],
+        relatedGroupKeys: ["payment_failed_orders"],
+      },
+    ],
+    groups,
+    actions: [
+      {
+        title: "先收紧低转化来源",
+        detail: "不要继续把流量压在支付风险页面上，先排查是页面承接问题还是支付问题。",
+        priority: "P0",
+      },
+      {
+        title: "优先修结账与支付链路",
+        detail: "到达结账率和支付成功率偏低时，应该先看漏斗后半段、运费与支付流程。",
+        priority: "P1",
+      },
+      {
+        title: "跟进支付失败订单",
+        detail: "把异常订单和对应页面一起看，确认是个体失败还是结构性支付问题。",
+        priority: "P2",
+      },
+    ],
+    conclusionPoints: [
+      "转化页当前继续保留独立经营问题页语义，不会被弱化成 ROI 的附属页。",
+      pageCompletionSignalPages.length > 0
+        ? "页面对象已经混入 page_viewed / product_added_to_cart / checkout_started / payment_info_submitted / checkout_completed 事件，再由 landingSite 订单结果补齐成交后风险。"
+        : pageSignalPages.length > 0
+          ? "页面对象已经混入 page_viewed / product_added_to_cart / checkout_started 事件，再由 landingSite 订单结果补齐后段证据。"
+        : "页面对象已经接进来，但当前仍以 landingSite 订单代理为主，后续还要补 page-level sessions。",
+      "支付失败订单当前按 financialStatus=voided/pending/authorized 代理，后续再和 checkout 事件对齐。",
+    ],
+  };
 }
 
 function buildRevenueReport(
@@ -3195,10 +4034,48 @@ export async function loadTodayDecisionReportData(params: {
       orderCounts,
       sessionCounts,
     );
+    if (!params.hasReadReports && (params.metric === "traffic" || params.metric === "conversion")) {
+      filters.dataNotes.push("当前店铺未返回 read_reports，流量与转化报告暂时无法按地区读取 Storefront sessions。");
+    }
     const [orderScope, objectData] = await Promise.all([
       loadOrderScopeData(params.shop, filters.selectedCountry, now),
       loadDecisionObjectData(params.shop, filters.selectedCountry, now),
     ]);
+    if (params.metric === "traffic") {
+      if (objectData.pageSignalStatus === "loaded") {
+        filters.dataNotes.push("流量页的页面对象已接入 web pixel 的 page_viewed / product_added_to_cart / checkout_started 事件，再用 landingSite 订单结果补齐后段承接。");
+      } else if (objectData.pageSignalStatus === "country_unavailable") {
+        filters.dataNotes.push("当前切到单地区后，页面级像素事件暂不支持按国家拆分，页面对象先回退为 landingSite 订单代理口径。");
+      } else {
+        filters.dataNotes.push("流量页的页面对象当前先基于订单 landingSite 归因，待页面级像素事件可用后再补会话与加购口径。");
+      }
+    }
+    if (params.metric === "conversion") {
+      if (objectData.pageSignalStatus === "loaded") {
+        filters.dataNotes.push("转化页的页面对象已接入 web pixel 的 page_viewed / product_added_to_cart / checkout_started / payment_info_submitted / checkout_completed 事件，再用 landingSite 订单结果补齐成交后风险。");
+      } else if (objectData.pageSignalStatus === "country_unavailable") {
+        filters.dataNotes.push("当前切到单地区后，页面级像素事件暂不支持按国家拆分，页面对象先回退为 landingSite 订单代理口径。");
+      } else {
+        filters.dataNotes.push("转化页的页面对象当前先基于订单 landingSite 归因，待页面级像素事件可用后再补页面漏斗口径。");
+      }
+      filters.dataNotes.push("支付失败订单当前按 financialStatus=voided/pending/authorized 代理，后续会与 checkout 事件口径对齐。");
+    }
+    const sessionScope =
+      params.metric === "traffic" || params.metric === "conversion"
+        ? params.hasReadReports
+          ? await loadSessionScope(
+              params.admin,
+              filters.selectedCountry === TODAY_ALL_COUNTRIES ? null : filters.selectedCountry,
+              true,
+            ).catch((error) => {
+              console.warn(`[todayGeo] loadSessionScope failed for metric=${params.metric}:`, error);
+              return null;
+            })
+          : null
+        : null;
+    if ((params.metric === "traffic" || params.metric === "conversion") && params.hasReadReports && sessionScope === null) {
+      filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，流量与转化报告先显示为待补口径。");
+    }
     const selectedCountryLabel = filters.selectedCountryLabel;
 
     const report =
@@ -3206,6 +4083,10 @@ export async function loadTodayDecisionReportData(params: {
         ? buildRevenueReport(orderScope, objectData, selectedCountryLabel, params.focus)
         : params.metric === "profit"
           ? buildProfitReport(orderScope, objectData, selectedCountryLabel, params.focus)
+          : params.metric === "traffic"
+            ? buildTrafficReport(sessionScope, orderScope, objectData, selectedCountryLabel)
+            : params.metric === "conversion"
+              ? buildConversionReport(sessionScope, orderScope, objectData, selectedCountryLabel)
           : await buildRoiDecisionReport(
               params.shop,
               filters.selectedCountry,

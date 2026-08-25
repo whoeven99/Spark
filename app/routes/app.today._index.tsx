@@ -104,13 +104,14 @@ export default function TodayOverview() {
   };
 
   const buildDetailPath = (path: string) => {
-    const params = new URLSearchParams();
+    const [pathname, rawSearch] = path.split("?");
+    const params = new URLSearchParams(rawSearch ?? "");
     params.set("returnTo", `${location.pathname}${location.search}`);
     if (filters.selectedCountry !== TODAY_ALL_COUNTRIES) {
       params.set("country", filters.selectedCountry);
     }
     const query = params.toString();
-    return query ? `${path}?${query}` : path;
+    return query ? `${pathname}?${query}` : pathname;
   };
 
   return (
@@ -128,7 +129,7 @@ export default function TodayOverview() {
           options={filters.countries.map((item) => ({ key: item.key, label: item.label }))}
           activeCountry={filters.selectedCountry}
           onChange={handleCountryChange}
-          summary={`当前范围：${filters.selectedCountryLabel}。这一版首页先统一回答增长质量、利润结果和回报效率。`}
+          summary={`当前范围：${filters.selectedCountryLabel}。这一版首页先统一回答收入、成本、利润、利润率、订单数和客单价。`}
           notes={filters.dataNotes}
         />
 
@@ -172,7 +173,7 @@ export default function TodayOverview() {
           </div>
         </PageSurface>
 
-        <PageSurface title="一级经营问题" subtitle="首页只保留 3 个正式入口，先收敛问题，再进对象分析。">
+        <PageSurface title="核心经营指标" subtitle="首页先保留 6 张经营卡，直接进入对应的 B 报告。">
           <div style={cardGridStyle(isMobile, 3)}>
             {report.metricCards.map((card) => (
               <div key={card.key} style={pageStatusCardStyle}>
@@ -182,17 +183,9 @@ export default function TodayOverview() {
                 </div>
                 <div style={pageMetricValueStyle}>{card.value}</div>
                 <div style={deltaTextStyle(card.tone)}>{card.delta}</div>
-                <div style={subMetricRowStyle}>
-                  {card.subMetrics.map((item) => (
-                    <div key={item.label} style={subMetricChipStyle}>
-                      <span style={subMetricLabelStyle}>{item.label}</span>
-                      <strong style={subMetricValueStyle}>{item.value}</strong>
-                    </div>
-                  ))}
-                </div>
-                <p style={summaryTextStyle}>{card.summary}</p>
+                {card.summary ? <p style={summaryTextStyle}>{card.summary}</p> : null}
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="查看详情" onClick={() => navigate(buildDetailPath(card.href))} />
+                  <SurfaceButton label="进入分析" onClick={() => navigate(buildDetailPath(card.href))} />
                 </div>
               </div>
             ))}
@@ -218,7 +211,7 @@ export default function TodayOverview() {
           </div>
         </PageSurface>
 
-        <PageSurface title="长期质量补充" subtitle="这里不再假装输出完整三层 ROI，只保留短期结果、长期信号和回收期数据状态。">
+        <PageSurface title="ROI 三层摘要" subtitle="这里固定展示短期、回收期、长期三层，不再把长期价值混成首页补充块。">
           <div style={cardGridStyle(isMobile, 3)}>
             {report.roiSummary.cards.map((card) => (
               <div key={card.key} style={pageStatusCardStyle}>
@@ -232,7 +225,7 @@ export default function TodayOverview() {
                 </div>
                 <p style={summaryTextStyle}>{card.summary}</p>
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="查看回报效率页" onClick={() => navigate(buildDetailPath(card.href))} />
+                  <SurfaceButton label="查看 ROI 页" onClick={() => navigate(buildDetailPath(card.href))} />
                 </div>
               </div>
             ))}
@@ -354,31 +347,6 @@ const summaryTextStyle: CSSProperties = {
   color: pageColorTokens.textSecondary,
   fontSize: "0.84rem",
   lineHeight: 1.6,
-};
-
-const subMetricRowStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "0.6rem",
-};
-
-const subMetricChipStyle: CSSProperties = {
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: pageColorTokens.radiusControl,
-  background: pageColorTokens.surfaceSubtle,
-  padding: "0.65rem 0.75rem",
-  display: "grid",
-  gap: "0.2rem",
-};
-
-const subMetricLabelStyle: CSSProperties = {
-  color: pageColorTokens.textFootnote,
-  fontSize: "0.72rem",
-};
-
-const subMetricValueStyle: CSSProperties = {
-  color: pageColorTokens.textPrimary,
-  fontSize: "0.82rem",
 };
 
 function deltaTextStyle(tone: "positive" | "neutral" | "warning" | "negative"): CSSProperties {

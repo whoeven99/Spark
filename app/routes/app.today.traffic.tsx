@@ -3,9 +3,9 @@ import { useLoaderData, useSearchParams } from "react-router";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
-import { loadTodayDetailData } from "../server/operations/todayGeo.server";
-import { TodayMetricDetailPage } from "./page/TodayMetricDetailPage";
+import { loadTodayDecisionReportData } from "../server/operations/todayGeo.server";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
+import { TodayMetricReportPage } from "./page/TodayMetricReportPage";
 
 export default function TodayTrafficPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,8 +23,8 @@ export default function TodayTrafficPage() {
   };
 
   return (
-    <TodayMetricDetailPage
-      data={data.detail}
+    <TodayMetricReportPage
+      report={data.report}
       returnTo={returnTo}
       topSection={
         <TodayCountryFilterCard
@@ -42,7 +42,7 @@ export default function TodayTrafficPage() {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
-  return loadTodayDetailData({
+  return loadTodayDecisionReportData({
     shop: session.shop,
     admin,
     hasReadReports: hasReadReportsScope(session.scope),
