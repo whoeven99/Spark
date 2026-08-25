@@ -1,17 +1,7 @@
 /** 工作台首页 — 对齐 Spark 首页实装预览：问候、AI 输入、店铺概览、任务监控。 */
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
-import type {
-  AutomationOverview,
-  AutomationOverviewResponse,
-  PlaybookSurfaceItem,
-} from "../../../lib/automationOverviewTypes";
-import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
-import {
-  describeValueShape,
-  logClientDiagnostic,
-} from "../../../lib/clientDiagnostics.client";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
 import {
@@ -670,8 +660,6 @@ export function HomePanel({
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const [draft, setDraft] = useState("");
-  const [automationOverview, setAutomationOverview] =
-    useState<AutomationOverview | null>(null);
   const now = useMemo(() => {
     if (!initialRenderTimeIso) return new Date();
     const parsed = new Date(initialRenderTimeIso);
@@ -694,9 +682,6 @@ export function HomePanel({
     ? localizedSnapshot.alerts
     : []
   ).slice(0, 3);
-  const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
-    ? automationOverview.recommendedPlaybooks
-    : [];
   const locale = i18n.resolvedLanguage || i18n.language || "en";
   const quickPrompts = useMemo(
     () => [
@@ -727,42 +712,6 @@ export function HomePanel({
     ],
     [t],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    fetch(`/api/automation-overview${authQuery}`)
-      .then((res) => res.json() as Promise<AutomationOverviewResponse>)
-      .then((json) => {
-        if (cancelled) return;
-        if (!json.ok) {
-          logClientDiagnostic("automation_overview_error", {
-            ok: json.ok,
-            error: json.error,
-          });
-          return;
-        }
-        const overview = json.overview;
-        logClientDiagnostic("automation_overview_shape", {
-          configured: describeValueShape(overview?.configured),
-          history: describeValueShape(overview?.history),
-          recommendedPlaybooks: describeValueShape(overview?.recommendedPlaybooks),
-          templates: describeValueShape(overview?.templates),
-        });
-        setAutomationOverview(normalizeAutomationOverview(overview));
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          logClientDiagnostic("automation_overview_fetch_failed", {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          setAutomationOverview(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const submitDraft = () => {
     const text = draft.trim();
@@ -805,10 +754,8 @@ export function HomePanel({
         topMetrics={topMetrics}
         topAlerts={topAlerts}
         suggestionItems={suggestionItems}
-        recommendedPlaybooks={recommendedPlaybooks}
         needsAttention={needsAttention}
         isMobile={isMobile}
-        onSubmitPrompt={onSubmitPrompt}
         onOpenDashboard={onOpenDashboard}
         onOpenDailyOps={onOpenDailyOps}
       />
@@ -876,10 +823,8 @@ function CommandCenter({
   topMetrics,
   topAlerts,
   suggestionItems,
-  recommendedPlaybooks,
   needsAttention,
   isMobile,
-  onSubmitPrompt,
   onOpenDashboard,
   onOpenDailyOps,
 }: {
@@ -887,10 +832,8 @@ function CommandCenter({
   topMetrics: WorkspaceDashboardSnapshot["metrics"];
   topAlerts: WorkspaceDashboardSnapshot["alerts"];
   suggestionItems: string[];
-  recommendedPlaybooks: PlaybookSurfaceItem[];
   needsAttention: boolean;
   isMobile: boolean;
-  onSubmitPrompt: (prompt: string) => void;
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
 }) {
@@ -907,25 +850,6 @@ function CommandCenter({
     : snapshot.snapshotDate
       ? t("workspace.home.command.snapshotDate", { date: snapshot.snapshotDate })
       : t("workspace.home.command.snapshotPending");
-  const fallbackActions = [
-    t("workspace.home.fallbackActions.report"),
-    t("workspace.home.fallbackActions.sync"),
-    t("workspace.home.fallbackActions.actions"),
-  ];
-  const actionItems =
-    recommendedPlaybooks.length > 0
-      ? recommendedPlaybooks.map((item) => ({
-          key: item.id,
-          label: item.title,
-          detail: item.recommendationReason ?? item.entrySubtitle ?? item.detail,
-          prompt: item.defaultPrompt,
-        }))
-      : fallbackActions.map((prompt) => ({
-          key: prompt,
-          label: prompt,
-          detail: "",
-          prompt,
-        }));
   const metricColumns = isMobile ? 2 : 3;
 
   return (
@@ -1031,30 +955,13 @@ function CommandCenter({
               </div>
             )}
           </div>
-          <div style={homeStyles.actionList}>
-            {actionItems.slice(0, 3).map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                style={homeStyles.actionButton}
-                onClick={() => onSubmitPrompt(item.prompt)}
-              >
-                {item.label}
-                {item.detail ? (
-                  <span
-                    style={{
-                      display: "block",
-                      marginTop: 3,
-                      color: shopifyUi.textSecondary,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {item.detail}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            style={{ ...homeStyles.actionButton, marginTop: 8 }}
+            onClick={onOpenDailyOps}
+          >
+            {t("workspace.home.links.viewFullHealthReport")} →
+          </button>
           {suggestionItems.length > 0 ? (
             <ul style={homeStyles.activityList}>
               {suggestionItems.slice(0, 2).map((item) => (

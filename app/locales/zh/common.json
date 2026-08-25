@@ -1228,7 +1228,7 @@
     "triggerTitle": "触发回补",
     "triggerSubtitle": "适用于首次接入或历史数据缺失场景。会补齐订单，并带上客户与退款数据。",
     "daysBackLabel": "回溯天数",
-    "daysBackHint": "默认回补近 90 天订单；如果是首次同步老店铺，可以按需要扩展到更长时间窗口。",
+    "daysBackHint": "默认回补近 {{days}} 天订单（环境变量 SPARK_ORDER_BACKFILL_DAYS，未配置时为 30）。老店铺首次同步可按需加大窗口；装完后新订单靠 webhook 自动增量同步。",
     "submitting": "同步中...",
     "submitAction": "回补订单（含客户/退款）",
     "errorPrefix": "错误",
@@ -4065,6 +4065,7 @@
       "links": {
         "dashboard": "经营指标",
         "dailyOps": "健康度监测",
+        "viewFullHealthReport": "查看完整健康度报告",
         "tasks": "待办"
       },
       "pendingIntegration": "待接入",

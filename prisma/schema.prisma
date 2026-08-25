@@ -659,7 +659,7 @@ model ShopFulfillment {
 model ShopSyncCheckpoint {
   id           String   @id @default(cuid())
   shop         String
-  /// orders | refunds | customers | inventory | fulfillments
+  /// orders | refunds | customers | inventory | fulfillments | orders_install_bootstrap
   resource     String
   lastSyncedAt DateTime
   lastCursor   String?
