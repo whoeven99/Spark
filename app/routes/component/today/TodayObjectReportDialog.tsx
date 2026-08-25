@@ -27,12 +27,8 @@ export function TodayObjectReportDialog({
     if (!aiContext) return null;
     return buildWorkspaceChatPrefillPath({
       prompt: aiContext.chatPrompt,
-      constraints: [
-        `当前 AI 语境：Today / ${report.title} / ${objectCard?.title ?? ""}`,
-        "只围绕当前对象回答赚钱结果相关问题。",
-      ],
     });
-  }, [aiContext, objectCard?.title, report.title]);
+  }, [aiContext]);
 
   return (
     <DialogShell

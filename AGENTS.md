@@ -72,12 +72,16 @@ Spark/
 
 | 目的地 | URL | 主要实现 |
 |---|---|---|
-| Ask | `/app` | `app._index.tsx` → `page/workspace/WorkspaceAppShellPage.tsx`，聊天与上下文工作台 |
-| Today | `/app/today` | `app.today.*`，`_index` 经营驾驶舱（聚合经营指标、站点健康、洞察、任务）、`diagnosis` 每日诊断/ROI、`orders` 订单风险 |
+| Ask | `/app`（首页）+ `/app/assistant`（聊天） | `/app` → `app._index.tsx` + `HomePanel`；聊天工作台 → `app.assistant.tsx` → `page/workspace/WorkspaceAppShellPage.tsx` |
+| Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情） |
+| Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（走 `ensureDailySnapshot`） |
 | Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
-| Insights | `/app/insights` | `app.insights.*`：`_index` 经营报告（复用 Today 报告能力）、`charts/_index` 图表总览（当前先承接广告总览，读库聚合，见 `adsInsights/overview.server.ts`）、`charts/performance` 投放明细；只读页面，授权与同步仍在 Ads Catalog。旧路径 `/app/insights/performance` 与 `/app/settings/ads-insights` 重定向到 `charts/performance` |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
-| Settings | `/app/settings` | `app.settings.*`：`billing` 计费、`ads-create`/`ads-edit` 广告投放、`logistics` 物流、`google-analytics` GA4、`google-search-console` GSC、`pagespeed` PageSpeed Insights、`data` 历史回补、`shopify-reports` ShopifyQL 官方报表、`feedback` 反馈；`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings hub 内链，不占一级导航） |
+| Settings | `/app/settings` | `app.settings.*`：`billing` 计费、`ads-create`/`ads-edit` 广告投放、`logistics` 物流、`google-analytics` GA4、`google-search-console` GSC、`pagespeed` PageSpeed Insights、`data` 历史回补、`shopify-reports` ShopifyQL 官方报表、`feedback` 反馈；`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航） |
+
+兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。
+
+Ask 工作台上下文工具（聊天输入区）当前仅：**商品 / 订单 / 文章 / 文件**（`ContextTool = product \| article \| order \| file`）。首页「更多」打开文章选择器。已移除富媒体、约束 UI；遗留 `prefillConstraint` query 只做 URL 清理、不再写入上下文。任务确认卡仍由 agent/SSE 的 `task_proposal` 产出，聊天栏无独立「生成任务建议」按钮。
 
 Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页面：`/app/logistics/fedex/config`、`/app/logistics/sf/config`（承运商凭证表单，由 `app.settings.logistics.tsx` 内链）、`/app/feedback/suggestion`、`/app/ads/google-ads/start`、`/app/ads/google-merchant/start`（OAuth 启动页）。
 
@@ -91,9 +95,9 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console 的 auth-url、属性/站点列表、连接状态与断开。
 - `POST /api/pagespeed`：PageSpeed Insights 实验室分析（平台 API Key，不落库，同步等待）。
 - `/api/ai-capabilities`、`/api/upload-file`：AI 能力清单（由 Skill Manifest 派生）与工作台文件上传解析。
-- `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源。
+- `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源（`context-resources` 类型为 product / article / order）。
 - `/api/automation-overview`：Today/自动化概览。
-- `/api/task-proposal`：聊天中的任务建议/确认载荷。
+- `/api/task-proposal`：TaskProposal 确认卡的估算/执行入口（由聊天流里的 `task_proposal` 卡片触发，不是独立工具栏按钮）。
 - `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。
@@ -124,8 +128,10 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | ShopifyQL 官方报表 | `app/server/shopifyql/`（`shopifyqlQuery` + 七域 preset：销售/退款/成本利润/客户/库存/履约/店面漏斗，入口 `/app/settings/shopify-reports`，需要 `read_reports` 与 Protected Customer Data Level 2） |
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
-| 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts` |
+| 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts`（Skill/SSE 产出 `task_proposal` → 前端 `TaskProposalCard` → `/api/task-proposal`） |
 | Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断） |
+| Health Monitor | `app/routes/app.health-monitor.tsx` + `app/lib/healthMonitor*`；详情数据走 `ensureDailySnapshot`（不要与 overview 入口混用） |
+| 工作台上下文（前端） | `app/routes/page/workspace/useWorkspaceContext.ts`、`ContextToolModal.tsx`、`ChatPanel.tsx`；Shopify 对象搜索 `app/server/shopify/contextResourceSearch.server.ts` + `/api/context-resources*` |
 | Shopify 数据读取与同步 | `app/server/shopify/`、`app/server/shopify/sync/` |
 | 计费、订阅、购包 | `app/server/billing/`、`app/server/tokenUsage/` |
 | 会话与文件上下文 | `app/server/conversation/`、`app/server/fileContext/` |
@@ -139,7 +145,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Agent 运行摘要 | `app/server/agentRunLog/` |
 | Playbook Case | `app/server/playbookCase/` |
 
-AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传。修改工具时同时检查注册、schema、执行器、token 计费、任务卡片和测试，不要只改工具实现文件。
+AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。修改工具时同时检查注册、schema、执行器、token 计费、任务卡片和测试，不要只改工具实现文件。
 
 ## 5. 数据与外部系统边界
 
@@ -178,6 +184,8 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 | 任意前端视觉、布局、组件样式 | `docs/DESIGN.md` |
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
 | Today 运营工作流 | `docs/DAILY_OPERATIONS_WORKFLOWS.md` |
+| Today 信息架构细节 | `docs/TODAY_INFORMATION_ARCHITECTURE.md` |
+| Health Monitor AI 明细 | `docs/HEALTH_MONITOR_AI_DETAIL_SPEC.md` |
 | 信息架构和功能归属 | `docs/SPARK_FUNCTION_INVENTORY.md` |
 | 整店翻译兼容、运营排查或跨 TSF 边界 | 直接读取 TSF 根 `AGENTS.md` 和 `packages/translation-core/*`；Spark 只保留图片翻译、兼容清理与 Admin 只读观测 |
 
@@ -194,7 +202,8 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
-- 保持现有六目的地信息架构（Ask / Today / Studio / Insights / Tasks / Settings）；除非用户明确要求重构，不新增一级导航或恢复旧的 per-tool 导航。
+- 保持现有六目的地信息架构（Ask / Today / Health Monitor / Studio / Tasks / Settings）；除非用户明确要求重构，不新增一级导航或恢复旧的 per-tool / Insights 一级导航。
+- Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。
 - 标准参考：`app/routes/component/productImprove/ProductImproveTaskCard.tsx`、`app/routes/component/imageStudio/ImageGenerationTaskCard.tsx`、`app/routes/component/imageStudio/PictureTranslateTaskCard.tsx`；广告同步卡参考 `app/routes/component/adsCatalog/AdsCatalogTaskCard.tsx`。
@@ -350,6 +359,7 @@ npm run build
 当以下事实发生变化时，相关代码改动必须同步更新本文件：
 
 - 一级导航、主要路由或服务边界变化；
+- Ask 工作台上下文工具清单（商品/订单/文章/文件）增减；
 - 新增/删除可部署应用、worker、扩展或外部存储；
 - package scripts、Node 版本或验证门禁变化；
 - 新增强制设计/交互/计费/迁移约束；

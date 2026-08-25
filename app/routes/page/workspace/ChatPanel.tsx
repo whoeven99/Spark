@@ -132,9 +132,7 @@ export function ChatPanel({
     toggleContextTool,
     selectedObjectsByType,
     objectQuerySelectionByType,
-    constraints,
     selectedFileIds,
-    selectedMediaIds,
     filledContextCount,
     clearContext,
     clearToolSelection,
@@ -212,8 +210,6 @@ export function ChatPanel({
     { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
     { key: "article", label: queryToolLabel("article", "文章"), icon: "≣", active: activeContextTool === "article" },
     { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
-    { key: "media", label: selectedMediaIds.length > 0 ? `富媒体 ${selectedMediaIds.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
-    { key: "constraint", label: constraints.length > 0 ? `约束 ${constraints.length}` : "约束", icon: "⚐", active: activeContextTool === "constraint" },
   ];
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
@@ -223,8 +219,6 @@ export function ChatPanel({
     ...(selectedObjectsByType.article.length > 0 ? [{ key: "article" as const, label: `已选择 ${selectedObjectsByType.article.length} 篇文章` }] : []),
     ...(objectQuerySelectionByType.article ? [{ key: "article" as const, label: `按条件圈定文章${objectQuerySelectionByType.article.matchCount != null ? `（约 ${objectQuerySelectionByType.article.matchCount} 篇）` : ""}` }] : []),
     ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
-    ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
-    ...(constraints.length > 0 ? [{ key: "constraint" as const, label: `约束 ${constraints.length} 条` }] : []),
   ];
 
   /**
@@ -413,7 +407,7 @@ export function ChatPanel({
         onKeyDown={handleTextareaKeyDown}
         className="workspace-composer-input"
         style={isMobile ? mobileTextareaStyle : textareaStyle}
-        placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
+        placeholder="继续补充你的任务目标，并结合商品、订单、文章或文件上下文..."
         disabled={isStreaming}
         autoFocus
       />
@@ -451,9 +445,6 @@ export function ChatPanel({
           <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
         </div>
         <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
-          <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
-            生成任务建议
-          </button>
           {isStreaming ? (
             <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
               停止

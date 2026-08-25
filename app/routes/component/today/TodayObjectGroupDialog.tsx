@@ -33,12 +33,8 @@ export function TodayObjectGroupDialog({
     if (!aiContext || !group) return null;
     return buildWorkspaceChatPrefillPath({
       prompt: aiContext.chatPrompt,
-      constraints: [
-        `当前 AI 语境：Today / ${report.title} / ${group.title}`,
-        "只围绕当前对象组回答赚钱结果相关问题。",
-      ],
     });
-  }, [aiContext, group, report.title]);
+  }, [aiContext]);
 
   return (
     <DialogShell

@@ -3931,7 +3931,7 @@
         "createFailed": "创建对话失败，请稍后重试"
       },
       "conversation": {
-        "welcome": "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+        "welcome": "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章或文件，再发送任务需求。",
         "prefillWelcome": "已根据经营任务生成新对话，你可以直接发送或继续补充上下文。"
       },
       "chat": {
@@ -4071,14 +4071,11 @@
       "sections": {
         "businessMetrics": "经营指标",
         "businessMetricsHint": "先看 ROI 与关键经营指标摘要，再进入 Today 查看完整拆解",
+        "dailyInspectionPending": "今日尚未生成巡检",
         "topRisks": "健康度概况",
         "topRisksHint": "最多展示 3 条，完整列表在健康度监测里",
         "recommendedActions": "推荐动作",
-        "recommendedActionsHint": "基于当前经营与健康判断，直接进入下一步",
-        "recentTasks": "待办",
-        "runningTasks": "{{count}} 个任务进行中",
-        "noRunningTasks": "当前没有进行中任务",
-        "noRecentTasks": "暂无近期任务。创建文案或图片任务后会显示在这里。"
+        "recommendedActionsHint": "基于当前经营与健康判断，直接进入下一步"
       }
     }
   }

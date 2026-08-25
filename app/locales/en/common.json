@@ -3931,7 +3931,7 @@
         "createFailed": "Failed to create chat. Please try again."
       },
       "conversation": {
-        "welcome": "A new chat is ready. You can add products, orders, articles, files, or media from the toolbar below before sending your request.",
+        "welcome": "A new chat is ready. You can add products, orders, articles, or files from the toolbar below before sending your request.",
         "prefillWelcome": "A new chat has been prepared from the operations task. You can send it directly or add more context first."
       },
       "chat": {
@@ -4071,14 +4071,11 @@
       "sections": {
         "businessMetrics": "Business metrics",
         "businessMetricsHint": "Start with ROI and the key business metrics summary, then open Today for the full breakdown",
+        "dailyInspectionPending": "No inspection generated yet today",
         "topRisks": "Health overview",
         "topRisksHint": "Shows up to 3 items. Open Health Monitor for the full list.",
         "recommendedActions": "Recommended actions",
-        "recommendedActionsHint": "Jump straight to the next step from the current business and health diagnosis",
-        "recentTasks": "Todo",
-        "runningTasks": "{{count}} tasks running",
-        "noRunningTasks": "No tasks are currently running",
-        "noRecentTasks": "No recent tasks yet. Copy and image tasks will appear here after you create them."
+        "recommendedActionsHint": "Jump straight to the next step from the current business and health diagnosis"
       }
     }
   }

@@ -496,6 +496,24 @@ const homeStyles = {
     fontFamily: "inherit",
     lineHeight: 1.35,
   },
+  inspectionFooter: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTop: `1px solid ${shopifyUi.border}`,
+    display: "grid",
+    gap: 4,
+    width: "100%",
+    textAlign: "left" as const,
+    background: "transparent",
+    borderLeft: "none",
+    borderRight: "none",
+    borderBottom: "none",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+  },
   taskList: {
     display: "flex",
     flexDirection: "column" as const,
@@ -633,25 +651,21 @@ const homeStyles = {
 export function HomePanel({
   displayName,
   snapshot,
-  runningTaskCount,
   initialRenderTimeIso,
   onSubmitPrompt,
   onOpenContextTool,
   onMoreContext,
   onOpenDashboard,
   onOpenDailyOps,
-  onOpenTasks,
 }: {
   displayName: string;
   snapshot: WorkspaceDashboardSnapshot;
-  runningTaskCount: number;
   initialRenderTimeIso?: string;
   onSubmitPrompt: (prompt: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
   onMoreContext: () => void;
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
-  onOpenTasks: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -678,10 +692,6 @@ export function HomePanel({
   ).slice(0, 5);
   const topAlerts = (Array.isArray(localizedSnapshot.alerts)
     ? localizedSnapshot.alerts
-    : []
-  ).slice(0, 3);
-  const recentTasks = (Array.isArray(localizedSnapshot.recentTaskSummaries)
-    ? localizedSnapshot.recentTaskSummaries
     : []
   ).slice(0, 3);
   const recommendedPlaybooks = Array.isArray(automationOverview?.recommendedPlaybooks)
@@ -795,15 +805,12 @@ export function HomePanel({
         topMetrics={topMetrics}
         topAlerts={topAlerts}
         suggestionItems={suggestionItems}
-        recentTasks={recentTasks}
         recommendedPlaybooks={recommendedPlaybooks}
-        runningTaskCount={runningTaskCount}
         needsAttention={needsAttention}
         isMobile={isMobile}
         onSubmitPrompt={onSubmitPrompt}
         onOpenDashboard={onOpenDashboard}
         onOpenDailyOps={onOpenDailyOps}
-        onOpenTasks={onOpenTasks}
       />
 
       <section style={homeStyles.assistantCard}>
@@ -869,29 +876,23 @@ function CommandCenter({
   topMetrics,
   topAlerts,
   suggestionItems,
-  recentTasks,
   recommendedPlaybooks,
-  runningTaskCount,
   needsAttention,
   isMobile,
   onSubmitPrompt,
   onOpenDashboard,
   onOpenDailyOps,
-  onOpenTasks,
 }: {
   snapshot: WorkspaceDashboardSnapshot;
   topMetrics: WorkspaceDashboardSnapshot["metrics"];
   topAlerts: WorkspaceDashboardSnapshot["alerts"];
   suggestionItems: string[];
-  recentTasks: WorkspaceDashboardSnapshot["recentTaskSummaries"];
   recommendedPlaybooks: PlaybookSurfaceItem[];
-  runningTaskCount: number;
   needsAttention: boolean;
   isMobile: boolean;
   onSubmitPrompt: (prompt: string) => void;
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
-  onOpenTasks: () => void;
 }) {
   const { t } = useTranslation();
   const statusCopy = snapshot.hasData
@@ -942,7 +943,7 @@ function CommandCenter({
         </div>
       </div>
 
-      <div style={homeStyles.metricsGrid(isMobile ? 1 : 3)}>
+      <div style={homeStyles.metricsGrid(isMobile ? 1 : 2)}>
         <section style={homeStyles.sectionCard}>
           <div style={homeStyles.sectionHead}>
             <div>
@@ -973,6 +974,20 @@ function CommandCenter({
               </div>
             ))}
           </div>
+          {snapshot.automation ? (
+            <button type="button" style={homeStyles.inspectionFooter} onClick={onOpenDailyOps}>
+              <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
+              <span style={sectionTextStyle}>{snapshot.automation.detail}</span>
+              <span style={{ ...mutedMetaStyle, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span>
+                  {snapshot.automation.lastRunAt
+                    ? formatInspectionTime(snapshot.automation.lastRunAt, t)
+                    : t("workspace.home.sections.dailyInspectionPending")}
+                </span>
+                <span>{t("workspace.home.links.dailyOps")} →</span>
+              </span>
+            </button>
+          ) : null}
         </section>
 
         <section style={homeStyles.sectionCard}>
@@ -1050,57 +1065,6 @@ function CommandCenter({
               ))}
             </ul>
           ) : null}
-        </section>
-
-        <section style={homeStyles.sectionCard}>
-          <div style={homeStyles.sectionHead}>
-            <div>
-              <h3 style={homeStyles.sectionTitle}>{t("workspace.home.sections.recentTasks")}</h3>
-              <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
-                {runningTaskCount > 0
-                  ? t("workspace.home.sections.runningTasks", { count: runningTaskCount })
-                  : t("workspace.home.sections.noRunningTasks")}
-              </div>
-            </div>
-            <button type="button" style={textButtonStyle} onClick={onOpenTasks}>
-              {t("workspace.home.links.tasks")} →
-            </button>
-          </div>
-          {snapshot.automation ? (
-            <div style={{ ...homeStyles.taskItem, marginBottom: 10 }}>
-              <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
-              <span style={sectionTextStyle}>{snapshot.automation.detail}</span>
-              {snapshot.automation.lastRunAt ? (
-                <span style={mutedMetaStyle}>
-                  {formatInspectionTime(snapshot.automation.lastRunAt, t)}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <div style={homeStyles.taskList}>
-            {recentTasks.length > 0 ? (
-              recentTasks.map((task) => (
-                <button
-                  key={task.id}
-                  type="button"
-                  style={{
-                    ...homeStyles.taskItem,
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                  onClick={onOpenTasks}
-                >
-                  <span style={sectionTitleSmallStyle}>{task.title}</span>
-                  <span style={sectionTextStyle}>{task.result}</span>
-                </button>
-              ))
-            ) : (
-              <div style={homeStyles.taskItem}>
-                <span style={sectionTextStyle}>{t("workspace.home.sections.noRecentTasks")}</span>
-              </div>
-            )}
-          </div>
         </section>
       </div>
     </section>
