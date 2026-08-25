@@ -143,8 +143,17 @@ export async function queryProductOperations(
   client: ShopifyAdminGraphqlClient,
 ): Promise<ProductOperationsData | null> {
   try {
+    const draftStartedAt = Date.now();
     const draftNodes = await fetchProductsByQuery(client, "status:DRAFT");
+    const draftMs = Date.now() - draftStartedAt;
+    const activeStartedAt = Date.now();
     const activeNodes = await fetchProductsByQuery(client, "status:ACTIVE");
+    const activeMs = Date.now() - activeStartedAt;
+    console.info(
+      `[diagnosis] source=productOps elapsedMs=${draftMs + activeMs}` +
+        ` draftMs=${draftMs} activeMs=${activeMs}` +
+        ` draftCount=${draftNodes.length} activeCount=${activeNodes.length}`,
+    );
 
     const draftProducts = draftNodes
       .filter((product) => product.status === "DRAFT")

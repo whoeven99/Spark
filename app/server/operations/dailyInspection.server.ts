@@ -974,6 +974,7 @@ export async function ensureDailySnapshotOverview(
   if (!options?.force) {
     const now = options?.now ?? new Date();
     const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
+    const lookupStartedAt = Date.now();
     const existing = await prisma.operationDiagnosisSnapshot.findUnique({
       where: {
         shop_snapshotDate: { shop, snapshotDate: toDateKey(now, timeZone) },
@@ -981,7 +982,12 @@ export async function ensureDailySnapshotOverview(
       include: { items: true },
     });
     if (existing) {
-      return buildOverviewFromSnapshot(shop, existing, now, timeZone);
+      const result = buildOverviewFromSnapshot(shop, existing, now, timeZone);
+      console.info(
+        `[diagnosis] shop=${shop} source=overview snapshot=hit` +
+          ` elapsedMs=${Date.now() - lookupStartedAt}`,
+      );
+      return result;
     }
   }
   return ensureDailySnapshot(shop, options);
@@ -999,25 +1005,35 @@ export async function ensureDailySnapshot(
   const now = options?.now ?? new Date();
   const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
   const dateKey = toDateKey(now, timeZone);
+  const startedAt = Date.now();
 
   const existing = await prisma.operationDiagnosisSnapshot.findUnique({
     where: { shop_snapshotDate: { shop, snapshotDate: dateKey } },
     include: { items: true },
   });
+  const lookupMs = Date.now() - startedAt;
 
   if (existing && !options?.force) {
+    const diagnosisStartedAt = Date.now();
     const [base, diagnosis] = await Promise.all([
       buildOverviewFromSnapshot(shop, existing, now, timeZone),
       computeOperationsDiagnosis(shop, now, {
         shopifyAdmin: options?.shopifyAdmin,
       }),
     ]);
+    console.info(
+      `[diagnosis] shop=${shop} source=snapshot snapshot=hit` +
+        ` lookupMs=${lookupMs} diagnosisMs=${Date.now() - diagnosisStartedAt}` +
+        ` elapsedMs=${Date.now() - startedAt} productOpsClient=${options?.shopifyAdmin ? 1 : 0}`,
+    );
     return { ...base, detail: diagnosis.detail };
   }
 
+  const diagnosisStartedAt = Date.now();
   const diagnosis = await computeOperationsDiagnosis(shop, now, {
     shopifyAdmin: options?.shopifyAdmin,
   });
+  const diagnosisMs = Date.now() - diagnosisStartedAt;
 
   if (existing) {
     // force 重算：级联删除旧诊断项，任务保留（snapshotId 置空后重新挂接）
@@ -1052,6 +1068,13 @@ export async function ensureDailySnapshot(
     listOperationTasks(shop),
     buildReview(shop, diagnosis.summaryMetrics, now, timeZone),
   ]);
+
+  console.info(
+    `[diagnosis] shop=${shop} source=snapshot snapshot=miss` +
+      ` force=${options?.force ? 1 : 0} lookupMs=${lookupMs}` +
+      ` diagnosisMs=${diagnosisMs} elapsedMs=${Date.now() - startedAt}` +
+      ` productOpsClient=${options?.shopifyAdmin ? 1 : 0}`,
+  );
 
   return {
     shop,
