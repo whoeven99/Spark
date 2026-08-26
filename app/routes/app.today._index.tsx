@@ -20,6 +20,7 @@ import {
 } from "./page/pageUiStyles";
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { MetricHintLabel } from "./component/shared/MetricHintLabel";
+import { useObservationWindowLabel } from "./component/shared/useObservationWindowLabel";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
 function SurfaceButton({
@@ -89,7 +90,8 @@ export default function TodayOverview() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
-  const { filters, report } = data;
+  const { filters, report, observationWindow } = data;
+  const windowLabel = useObservationWindowLabel(observationWindow);
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const lastValuePathRef = useRef<string | null>(null);
   useFeatureView("today");
@@ -185,7 +187,14 @@ export default function TodayOverview() {
           notes={filters.dataNotes}
         />
 
-        <PageSurface title="经营报告" subtitle="首页先给出经营主结论；具体数据判断继续进入下一级报告和对象页展开。">
+        <PageSurface
+          title="经营报告"
+          subtitle={
+            windowLabel
+              ? `${windowLabel}。首页先给出经营主结论；具体数据判断继续进入下一级报告和对象页展开。`
+              : "首页先给出经营主结论；具体数据判断继续进入下一级报告和对象页展开。"
+          }
+        >
           <div style={reportOverviewGridStyle(isMobile)}>
             <div style={headerMainCardStyle}>
               <span style={{ ...statusBadgeStyle, ...badgeStyle(report.header.status) }}>{report.header.statusLabel}</span>

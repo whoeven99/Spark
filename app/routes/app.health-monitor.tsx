@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import type {
+  HeadersFunction,
+  LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useLoaderData, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { resolveHealthMonitorDetail } from "../lib/healthMonitorAiDetail";
+import {
+  healthMonitorNeedsDiagnosisDetail,
+  resolveHealthMonitorView,
+  shouldRevalidateHealthMonitor,
+  type HealthMonitorViewMode,
+} from "../lib/healthMonitorView";
+import { toObservationWindowView } from "../lib/observationWindow";
 import { resolvePageSpeedLocale } from "../lib/pageSpeedLocales";
 import { buildWorkspaceChatPrefillPath } from "../lib/workspaceChatPrefill";
 import {
@@ -18,12 +29,17 @@ import {
 } from "../lib/healthMonitorData";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
-import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import {
+  ensureDailySnapshot,
+  ensureDailySnapshotOverview,
+  type DailyOperationsResult,
+} from "../server/operations/dailyInspection.server";
 import { loadHealthMonitorSignals } from "../server/operations/healthMonitorSignals.server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
 import { MetricHintLabel } from "./component/shared/MetricHintLabel";
+import { useObservationWindowLabel } from "./component/shared/useObservationWindowLabel";
 import { PageSpeedInsightsContent } from "./page/PageSpeedInsightsPage";
 import {
   mobilePageContentStyle,
@@ -34,9 +50,10 @@ import {
   PageSurface,
 } from "./page/pageUiStyles";
 
-type ViewMode = "overview" | "detail";
+type ViewMode = HealthMonitorViewMode;
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const viewMode = resolveHealthMonitorView(new URL(request.url).searchParams.get("view"));
   const [shopInfo, shopLocales] = await Promise.all([
     fetchShopBasicInfo(admin).catch(() => null),
     fetchShopLocalesPayload(admin, `[HealthMonitor] shop=${session.shop}`),
@@ -47,10 +64,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     defaultReportLocale: resolvePageSpeedLocale(shopLocales.defaultTargetLanguage),
   };
 
-  // 快照与外部信号并行取。signals 内部已逐项降级，不会整体 reject；
+  // 总览复用当日快照指标，不重算 30 天诊断；详情才取对象名单。
+  // signals 内部已逐项降级，不会整体 reject。
   // 快照失败时走演示数据，此时不注入 signals，避免真实值和演示值混在一起。
+  const loadSnapshot = healthMonitorNeedsDiagnosisDetail(viewMode)
+    ? ensureDailySnapshot
+    : ensureDailySnapshotOverview;
   const [snapshotResult, signals] = await Promise.all([
-    ensureDailySnapshot(session.shop, { shopifyAdmin: admin }).then(
+    loadSnapshot(session.shop, { shopifyAdmin: admin }).then(
       (snapshot) => ({ ok: true as const, snapshot }),
       (error: unknown) => ({ ok: false as const, error }),
     ),
@@ -62,15 +83,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       "[health-monitor] Failed to load daily snapshot, falling back to demo data.",
       snapshotResult.error,
     );
+    const fallbackNow = new Date();
     return {
       monitors: buildHealthMonitorRecords(),
       pageSpeedDefaults,
       usingFallback: true,
       fallbackMessage: "当前展示的是演示数据，真实健康度快照暂时不可用。",
+      observationWindow: toObservationWindowView(7, fallbackNow, shopInfo?.ianaTimezone),
+      observationWindow30d: toObservationWindowView(30, fallbackNow, shopInfo?.ianaTimezone),
     };
   }
 
   const snapshot = snapshotResult.snapshot;
+  const windowNow = new Date(snapshot.generatedAt);
   return {
     monitors: buildHealthMonitorRecords({
       metrics: snapshot.metrics,
@@ -81,18 +106,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
       environments: snapshot.environments,
       items: snapshot.items,
-      detail: snapshot.detail,
+      detail: healthMonitorNeedsDiagnosisDetail(viewMode)
+        ? (snapshot as DailyOperationsResult).detail
+        : undefined,
       signals,
     }),
     pageSpeedDefaults,
     usingFallback: false,
     fallbackMessage: null,
+    observationWindow: toObservationWindowView(7, windowNow, shopInfo?.ianaTimezone),
+    observationWindow30d: toObservationWindowView(30, windowNow, shopInfo?.ianaTimezone),
   };
 };
 
-function resolveHealthMonitorView(value: string | null): ViewMode {
-  if (value === "detail") return value;
-  return "overview";
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return shouldRevalidateHealthMonitor({
+    currentUrl,
+    nextUrl,
+    defaultShouldRevalidate,
+  });
 }
 
 function resolveHealthMonitorId(
@@ -104,7 +140,14 @@ function resolveHealthMonitorId(
 }
 
 export default function AppHealthMonitor() {
-  const { monitors, pageSpeedDefaults, usingFallback, fallbackMessage } = useLoaderData<typeof loader>();
+  const {
+    monitors,
+    pageSpeedDefaults,
+    usingFallback,
+    fallbackMessage,
+    observationWindow,
+    observationWindow30d,
+  } = useLoaderData<typeof loader>();
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
@@ -126,7 +169,44 @@ export default function AppHealthMonitor() {
 
   const selectedMonitor =
     monitors.find((item) => item.id === selectedMonitorId) ?? monitors[0] ?? HEALTH_MONITORS[0];
-  const selectedDetail = useMemo(() => resolveHealthMonitorDetail(selectedMonitor), [selectedMonitor]);
+  const window7dLabel = useObservationWindowLabel(observationWindow, "7d");
+  const window30dLabel = useObservationWindowLabel(observationWindow30d, "30d");
+
+  const selectedTimeWindow = useMemo(() => {
+    if (selectedMonitor.id === "page-performance") {
+      return { label: t("observationWindow.realtime") };
+    }
+    if (selectedMonitor.id === "seo-health") {
+      return { label: t("observationWindow.range28d") };
+    }
+    if (selectedMonitor.id === "refund-health" && window30dLabel && observationWindow30d) {
+      return {
+        label: window30dLabel,
+        startAt: observationWindow30d.startAt,
+        endAt: observationWindow30d.endAt,
+      };
+    }
+    if (window7dLabel && observationWindow) {
+      return {
+        label: window7dLabel,
+        startAt: observationWindow.startAt,
+        endAt: observationWindow.endAt,
+      };
+    }
+    return undefined;
+  }, [
+    observationWindow,
+    observationWindow30d,
+    selectedMonitor.id,
+    t,
+    window30dLabel,
+    window7dLabel,
+  ]);
+
+  const selectedDetail = useMemo(
+    () => resolveHealthMonitorDetail(selectedMonitor, selectedTimeWindow),
+    [selectedMonitor, selectedTimeWindow],
+  );
 
   const monitoringSummary = useMemo(() => getHealthMonitorSummary(monitors), [monitors]);
   const overviewReturnPath = useMemo(() => {
@@ -242,7 +322,11 @@ export default function AppHealthMonitor() {
       ) : (
         <DestinationPage
           title={t("nav.healthMonitor")}
-          subtitle="Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。"
+          subtitle={
+            window7dLabel
+              ? `${window7dLabel}。Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。`
+              : "Health Monitor 只回答两件事：这些结果是否可信，以及这些关键指标是否达标。"
+          }
           titleBarTitle={t("nav.healthMonitor")}
           backLabel={returnTo ? "返回上一级" : "返回首页"}
           fallbackPath="/app"
@@ -267,6 +351,7 @@ export default function AppHealthMonitor() {
           <OverviewSection
             groups={groupedMonitors}
             summary={monitoringSummary}
+            windowLabel={window7dLabel}
             onOpenDetail={(monitorId) => {
               syncHealthMonitorSearch({ view: "detail", monitor: monitorId });
             }}
@@ -280,16 +365,22 @@ export default function AppHealthMonitor() {
 function OverviewSection({
   groups,
   summary,
+  windowLabel,
   onOpenDetail,
 }: {
   groups: Array<{ title: string; items: HealthMonitorRecord[] }>;
   summary: ReturnType<typeof getHealthMonitorSummary>;
+  windowLabel: string | null;
   onOpenDetail: (monitorId: string) => void;
 }) {
   return (
     <PageSurface
       title="总体判断"
-      subtitle="概览页直接包含本次检查进度和全部健康项。监测项不多时，留在同一页更顺手。"
+      subtitle={
+        windowLabel
+          ? `${windowLabel}。概览页直接包含本次检查进度和全部健康项。`
+          : "概览页直接包含本次检查进度和全部健康项。监测项不多时，留在同一页更顺手。"
+      }
     >
       <div style={stackStyle}>
         <div style={summaryGridStyle}>
@@ -442,7 +533,7 @@ function DetailSection({
               as="span"
               style={reportSummaryLabelStyle}
               text="观察窗口"
-              content="观察窗口 = 这条健康判断取数的时间范围，例如今日、近 7 天或近 30 天。"
+              content="观察窗口 = 这条健康判断取数的时间范围。近 7 天按 UTC 完整日、不含今天，日期按店铺时区展示。"
             />
             <strong style={reportSummaryValueStyle}>{detail.input.timeWindow.label}</strong>
           </div>
