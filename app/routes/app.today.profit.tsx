@@ -41,13 +41,6 @@ export default function TodayProfitPage() {
     navigate(nextQuery ? `/app/today/profit?${nextQuery}` : "/app/today/profit");
   };
 
-  const summary =
-    focus === "cost"
-      ? `当前范围：${data.filters.selectedCountryLabel}。这里优先看成本有没有跑到收入前面，以及成本主要压在哪些对象上。`
-      : focus === "margin"
-        ? `当前范围：${data.filters.selectedCountryLabel}。这里优先看利润率为什么变化，以及哪些对象正在拖低整体质量。`
-        : `当前范围：${data.filters.selectedCountryLabel}。这里先看哪些商品和订单真的留下了利润，哪些对象正在吞掉经营改善。`;
-
   return (
     <TodayMetricReportPage
       report={data.report}
@@ -65,7 +58,6 @@ export default function TodayProfitPage() {
           ]}
           activeFocus={focus}
           onFocusChange={handleFocusChange}
-          summary={summary}
           notes={data.filters.dataNotes}
         />
       }

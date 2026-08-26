@@ -132,7 +132,6 @@ export default function TodayOverview() {
           options={filters.countries.map((item) => ({ key: item.key, label: item.label }))}
           activeCountry={filters.selectedCountry}
           onChange={handleCountryChange}
-          summary={`当前范围：${filters.selectedCountryLabel}。这一版首页先统一回答收入、成本、利润、利润率、订单数和客单价。`}
           notes={filters.dataNotes}
         />
 

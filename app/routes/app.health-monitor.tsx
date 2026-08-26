@@ -220,7 +220,7 @@ export default function AppHealthMonitor() {
     {
       key: "detail",
       title: "结论详情",
-      detail: `${selectedMonitor.title} 的问题、论据、解决办法和 AI 入口。`,
+      detail: `${selectedMonitor.title} 的问题、论据、关键对象和 AI 入口。`,
       badge: statusLabel(selectedMonitor.status),
       active: viewMode === "detail",
       onClick: () =>
@@ -624,29 +624,13 @@ function DetailSection({
         ) : null}
 
         <div style={reportBlockStyle}>
-          <strong style={reportSectionTitleStyle}>解决办法</strong>
-          <div style={actionListStyle}>
-            {detail.result.actions.map((action) => (
-              <div key={action.title} style={actionItemStyle}>
-                <strong style={actionTitleStyle}>
-                  {action.title}
-                  <span style={actionPriorityStyle}>{action.priority}</span>
-                </strong>
-                <span style={actionDetailStyle}>{action.detail}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={reportBlockStyle}>
-          <strong style={reportSectionTitleStyle}>报告操作</strong>
+          <strong style={reportSectionTitleStyle}>和 AI 聊聊</strong>
           <div style={aiMetaPanelStyle}>
-            <strong style={evidenceLabelStyle}>和 AI 聊聊</strong>
             <pre style={aiPromptStyle}>{detail.result.aiChatPrompt}</pre>
           </div>
           <div style={buttonRowStyle}>
             <button type="button" style={primaryButtonStyle} onClick={onOpenAi}>
-              带着这份报告去和 AI 聊
+              和 AI 聊聊
             </button>
           </div>
         </div>
@@ -1126,46 +1110,6 @@ const evidenceLabelStyle: CSSProperties = {
 const evidenceValueStyle: CSSProperties = {
   fontSize: "0.9rem",
   color: pageColorTokens.textPrimary,
-  lineHeight: 1.55,
-};
-
-const actionListStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.75rem",
-};
-
-const actionItemStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.35rem",
-  padding: "0.9rem 1rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surface,
-};
-
-const actionTitleStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.9rem",
-  color: pageColorTokens.textPrimary,
-};
-
-const actionPriorityStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "0.12rem 0.38rem",
-  borderRadius: 999,
-  background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  color: pageColorTokens.textSecondary,
-  fontSize: "0.7rem",
-  fontWeight: 700,
-};
-
-const actionDetailStyle: CSSProperties = {
-  fontSize: "0.85rem",
-  color: pageColorTokens.textBody,
   lineHeight: 1.55,
 };
 

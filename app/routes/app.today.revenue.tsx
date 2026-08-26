@@ -34,13 +34,6 @@ export default function TodayRevenuePage() {
     setSearchParams(params, { replace: true, preventScrollReset: true });
   };
 
-  const summary =
-    focus === "orders"
-      ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断订单规模背后，哪些订单值得继续复制，哪些订单只是把单量做大。`
-      : focus === "aov"
-        ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断高客单是不是健康样本，而不是少量不可复制的虚高订单。`
-        : `当前范围：${data.filters.selectedCountryLabel}。这里先区分收入增长里哪些对象值得继续跟，哪些对象只是把规模做大。`;
-
   return (
     <TodayMetricReportPage
       report={data.report}
@@ -58,7 +51,6 @@ export default function TodayRevenuePage() {
           ]}
           activeFocus={focus}
           onFocusChange={handleFocusChange}
-          summary={summary}
           notes={data.filters.dataNotes}
         />
       }

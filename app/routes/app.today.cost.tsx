@@ -58,7 +58,6 @@ export default function TodayCostPage() {
           ]}
           activeFocus="cost"
           onFocusChange={handleFocusChange}
-          summary={`当前范围：${data.filters.selectedCountryLabel}。这里优先看成本有没有跑到收入前面，以及成本主要压在哪些对象上。`}
           notes={data.filters.dataNotes}
         />
       }

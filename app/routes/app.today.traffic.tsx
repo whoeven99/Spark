@@ -32,7 +32,6 @@ export default function TodayTrafficPage() {
           options={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
-          summary={`当前范围：${data.filters.selectedCountryLabel}。这里先比较不同地区的会话质量和主要来源。`}
           notes={data.filters.dataNotes}
         />
       }

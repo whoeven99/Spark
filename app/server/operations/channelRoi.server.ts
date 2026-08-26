@@ -14,7 +14,14 @@ import { loadCustomerValueMap } from "./customerValue.server";
  * 渠道经营三层输出（docs/DAILY_OPERATIONS_WORKFLOWS.md §8.2 / §8.5.13）：
  * 1. 收入层：按订单 UTM / 来源归因的真实收入（last-click 口径）
  * 2. 利润层：贡献利润近似（逐 SKU COGS 优先，缺失回退默认毛利率；未含运费补贴）
- * 3. ROI 层：投放成本未接入 → businessRoi = null、不给等级、confidence 标注缺口
+ * 3. ROI 层：短期 ROI = (贡献利润 - 广告费) / 广告费
+ *
+ * 当前广告费优先读取已落库的 AdMetricDaily，再按平台内收入占比分配到渠道：
+ * - meta -> facebook / instagram
+ * - google -> google
+ * - tiktok -> tiktok
+ *
+ * 未能映射到广告平台花费的渠道，businessRoi 保持 null，并明确标注缺口。
  */
 
 const WINDOW_DAYS = 30;
@@ -122,6 +129,17 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor;
 }
 
+function toUtcDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function resolveAdsPlatformForChannel(channelKey: string): "meta" | "google" | "tiktok" | null {
+  if (channelKey === "facebook" || channelKey === "instagram") return "meta";
+  if (channelKey === "google") return "google";
+  if (channelKey === "tiktok") return "tiktok";
+  return null;
+}
+
 // ── 主计算 ────────────────────────────────
 
 export async function computeChannelRoi(
@@ -131,7 +149,10 @@ export async function computeChannelRoi(
   scope: ChannelRoiScope = {},
 ): Promise<ChannelRoiResult> {
   const since = new Date(now.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const dateStart = toUtcDateKey(since);
+  const dateEnd = toUtcDateKey(now);
   const normalizedCountry = scope.countryCode?.trim().toUpperCase() || null;
+  const canMapAdSpend = !normalizedCountry;
   const orderWhere = normalizedCountry
     ? {
         shop,
@@ -144,7 +165,7 @@ export async function computeChannelRoi(
       }
     : { shop, createdAt: { gte: since }, status: { not: "cancelled" } };
 
-  const [orders, refunds, skuCostMap, customerValueMap] = await Promise.all([
+  const [orders, refunds, skuCostMap, customerValueMap, adSpendGroups] = await Promise.all([
     prisma.shopOrder.findMany({
       where: orderWhere,
       select: {
@@ -175,6 +196,18 @@ export async function computeChannelRoi(
     }),
     loadSkuCostMap(shop),
     loadCustomerValueMap(shop),
+    canMapAdSpend
+      ? prisma.adMetricDaily.groupBy({
+          by: ["platform"],
+          where: {
+            shop,
+            date: { gte: dateStart, lte: dateEnd },
+          },
+          _sum: {
+            spend: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const currency = orders[0]?.currency ?? "USD";
@@ -251,6 +284,19 @@ export async function computeChannelRoi(
     .filter(([key]) => key !== "direct" && key !== "referral")
     .reduce((sum, [, b]) => sum + b.revenue, 0);
   const attributedShare = totalRevenue > 0 ? attributedRevenue / totalRevenue : 0;
+  const adSpendByPlatform = new Map(
+    adSpendGroups.map((group) => [group.platform, group._sum.spend ?? 0] as const),
+  );
+  const platformRevenueByChannel = new Map<string, number>();
+
+  for (const [key, bucket] of buckets.entries()) {
+    const platform = resolveAdsPlatformForChannel(key);
+    if (!platform) continue;
+    platformRevenueByChannel.set(
+      platform,
+      (platformRevenueByChannel.get(platform) ?? 0) + bucket.revenue,
+    );
+  }
 
   const channels: ChannelMetrics[] = Array.from(buckets.entries())
     .sort((a, b) => b[1].revenue - a[1].revenue)
@@ -272,14 +318,25 @@ export async function computeChannelRoi(
         bucket.lineRevenueTotal > 0
           ? bucket.lineRevenueWithRealCost / bucket.lineRevenueTotal
           : 0;
-      // 投放成本未接入：成本完整度按 COGS 覆盖打五折，确保 ROI 层停留在低置信度
+      const mappedPlatform = resolveAdsPlatformForChannel(key);
+      const platformSpend =
+        canMapAdSpend && mappedPlatform ? adSpendByPlatform.get(mappedPlatform) ?? 0 : 0;
+      const platformRevenue =
+        canMapAdSpend && mappedPlatform ? platformRevenueByChannel.get(mappedPlatform) ?? 0 : 0;
+      const investmentCost =
+        mappedPlatform && platformSpend > 0 && platformRevenue > 0
+          ? platformSpend * (bucket.revenue / platformRevenue)
+          : null;
+      const costCompleteness =
+        investmentCost !== null && investmentCost > 0
+          ? Math.min(1, 0.55 + cogsRealCoverage * 0.45)
+          : cogsRealCoverage * 0.5;
       const confidence = judgeConfidence({
         attributionCoverage: attributedShare,
-        costCompleteness: cogsRealCoverage * 0.5,
+        costCompleteness,
         freshness: 1,
         sampleOrders: bucket.orderCount,
       });
-      const investmentCost = null;
       const businessRoi = computeBusinessRoi(contributionProfit, investmentCost ?? 0);
       const grade = gradeBusinessRoi(businessRoi);
 
@@ -312,12 +369,15 @@ export async function computeChannelRoi(
         roi: {
           attributedRevenue: round(bucket.revenue),
           contributionProfit: round(contributionProfit),
-          investmentCost,
-          businessRoi,
+          investmentCost: investmentCost === null ? null : round(investmentCost),
+          businessRoi: businessRoi === null ? null : round(businessRoi, 4),
           roiGrade: grade?.grade ?? null,
           confidence: confidence.confidence,
           confidenceScore: confidence.score,
-          confidenceGaps: [...confidence.gaps, "投放成本未接入（广告平台数据待同步）"],
+          confidenceGaps:
+            investmentCost === null
+              ? [...confidence.gaps, "广告花费未映射到当前渠道"]
+              : confidence.gaps,
           attributionWindow: `${WINDOW_DAYS}d`,
         },
         customers: {
@@ -354,10 +414,12 @@ export async function computeChannelRoi(
     channels,
     caveats: [
       `贡献利润为估算口径：逐 SKU 成本优先，缺失部分按默认毛利率 ${costConfig.defaultGrossMarginPercent}% 估算；支付手续费按 ${costConfig.paymentFeePercent}% + ${costConfig.paymentFeeFixed}/单估算；未含运费补贴`,
-      "投放成本未接入，Business ROI 暂不评级（接入广告数据后自动启用 S~D 等级）",
+      "短期 ROI 按 (贡献利润 - 广告费) / 广告费 计算；广告费来自已落库广告日指标，再按平台内收入占比分配到渠道。",
+      "当前仅对 facebook / instagram、google、tiktok 渠道尝试映射广告花费；未映射成功的渠道会继续标注为待补。",
       "渠道归因为 last-click 口径（订单 UTM / 引荐来源）",
       ...(normalizedCountry
         ? [
+            "单国家视角暂不映射广告花费，短期 ROI 会显式降级为待补。",
             `当前仅统计 ${normalizedCountry} 地区近 ${WINDOW_DAYS} 天订单。`,
             "渠道内客户质量指标沿用全店客户价值标签，仅筛出该地区订单涉及客户。",
           ]

@@ -118,13 +118,6 @@ export default function TodayRoiPage() {
     setSearchParams(params, { replace: true, preventScrollReset: true });
   };
 
-  const summary =
-    focus === "channels"
-      ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断哪些渠道真的值得继续投，哪些渠道只是把收入做出来却留不住利润。`
-      : focus === "loss"
-        ? `当前范围：${data.filters.selectedCountryLabel}。这里优先判断折扣、退款和高损耗订单如何继续吞掉经营回报。`
-        : `当前范围：${data.filters.selectedCountryLabel}。这里先总览渠道回报和损耗压力，再决定下一步先看哪组对象。`;
-
   return (
     <TodayMetricReportPage
       report={data.report}
@@ -142,7 +135,6 @@ export default function TodayRoiPage() {
           ]}
           activeFocus={focus}
           onFocusChange={handleFocusChange}
-          summary={summary}
           notes={data.filters.dataNotes}
         />
       }
