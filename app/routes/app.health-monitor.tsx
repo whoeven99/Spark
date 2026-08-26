@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import type {
+  HeadersFunction,
+  LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useLoaderData, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { resolveHealthMonitorDetail } from "../lib/healthMonitorAiDetail";
+import {
+  healthMonitorNeedsDiagnosisDetail,
+  resolveHealthMonitorView,
+  shouldRevalidateHealthMonitor,
+  type HealthMonitorViewMode,
+} from "../lib/healthMonitorView";
 import { toObservationWindowView } from "../lib/observationWindow";
 import { resolvePageSpeedLocale } from "../lib/pageSpeedLocales";
 import { buildWorkspaceChatPrefillPath } from "../lib/workspaceChatPrefill";
@@ -19,7 +29,11 @@ import {
 } from "../lib/healthMonitorData";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
-import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import {
+  ensureDailySnapshot,
+  ensureDailySnapshotOverview,
+  type DailyOperationsResult,
+} from "../server/operations/dailyInspection.server";
 import { loadHealthMonitorSignals } from "../server/operations/healthMonitorSignals.server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
@@ -36,9 +50,10 @@ import {
   PageSurface,
 } from "./page/pageUiStyles";
 
-type ViewMode = "overview" | "detail";
+type ViewMode = HealthMonitorViewMode;
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const viewMode = resolveHealthMonitorView(new URL(request.url).searchParams.get("view"));
   const [shopInfo, shopLocales] = await Promise.all([
     fetchShopBasicInfo(admin).catch(() => null),
     fetchShopLocalesPayload(admin, `[HealthMonitor] shop=${session.shop}`),
@@ -49,10 +64,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     defaultReportLocale: resolvePageSpeedLocale(shopLocales.defaultTargetLanguage),
   };
 
-  // 快照与外部信号并行取。signals 内部已逐项降级，不会整体 reject；
+  // 总览复用当日快照指标，不重算 30 天诊断；详情才取对象名单。
+  // signals 内部已逐项降级，不会整体 reject。
   // 快照失败时走演示数据，此时不注入 signals，避免真实值和演示值混在一起。
+  const loadSnapshot = healthMonitorNeedsDiagnosisDetail(viewMode)
+    ? ensureDailySnapshot
+    : ensureDailySnapshotOverview;
   const [snapshotResult, signals] = await Promise.all([
-    ensureDailySnapshot(session.shop, { shopifyAdmin: admin }).then(
+    loadSnapshot(session.shop, { shopifyAdmin: admin }).then(
       (snapshot) => ({ ok: true as const, snapshot }),
       (error: unknown) => ({ ok: false as const, error }),
     ),
@@ -87,7 +106,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
       environments: snapshot.environments,
       items: snapshot.items,
-      detail: snapshot.detail,
+      detail: healthMonitorNeedsDiagnosisDetail(viewMode)
+        ? (snapshot as DailyOperationsResult).detail
+        : undefined,
       signals,
     }),
     pageSpeedDefaults,
@@ -98,9 +119,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-function resolveHealthMonitorView(value: string | null): ViewMode {
-  if (value === "detail") return value;
-  return "overview";
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return shouldRevalidateHealthMonitor({
+    currentUrl,
+    nextUrl,
+    defaultShouldRevalidate,
+  });
 }
 
 function resolveHealthMonitorId(
