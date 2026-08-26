@@ -1,3 +1,4 @@
+import { buildManagedAiLaunchContextFromSpec } from "../../lib/managedAiLaunchContext";
 import { buildTodayAnalysisTodoRefinePrompt } from "../../lib/todayReportAi";
 import type {
   TodayAnalysisCard,
@@ -581,6 +582,7 @@ function assistantTodo(pageTitle: string, cardTitle: string, title: string, evid
     actionType: "open_assistant" as const,
     payload: {
       prompt: prompt.chatPrompt,
+      managedAiContext: buildManagedAiLaunchContextFromSpec(prompt.spec),
     },
   };
 }

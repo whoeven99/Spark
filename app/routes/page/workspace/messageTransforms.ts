@@ -28,10 +28,12 @@ import {
   objectTypeLabels,
   type FileRole,
   type LocalFileItem,
+  type WorkspaceConversationMessage,
   type ObjectType,
   type QueryableObjectType,
-  type WorkspaceConversationMessage,
 } from "./types";
+import { parseManagedAiLaunchContext, type ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext";
+import type { ManagedAiOutputParseResult } from "../../../lib/managedAiOutputRuntime";
 
 export function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
   return { role: message.role, content: message.text };
@@ -56,12 +58,18 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
     ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
+    ...(message.assistantLaunchContext ? { assistantLaunchContext: message.assistantLaunchContext } : {}),
+    ...(message.managedAiResult ? { managedAiResult: message.managedAiResult } : {}),
   };
 }
 
 export function buildAssistantWorkspaceMessage(
   text: string,
   payload: ChatStreamFinishPayload,
+  options?: {
+    assistantLaunchContext?: ManagedAiLaunchContext | null;
+    managedAiResult?: ManagedAiOutputParseResult | null;
+  },
 ): WorkspaceConversationMessage {
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
@@ -77,6 +85,8 @@ export function buildAssistantWorkspaceMessage(
       : {}),
     ...(payload.taskProposal ? { taskProposal: payload.taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
+    ...(options?.assistantLaunchContext ? { assistantLaunchContext: options.assistantLaunchContext } : {}),
+    ...(options?.managedAiResult ? { managedAiResult: options.managedAiResult } : {}),
   };
 }
 
@@ -133,6 +143,8 @@ export function serializeWorkspaceMessagePayloads(
   if (message.taskRun) result.taskRun = message.taskRun;
   if (message.aiTask) result.aiTask = message.aiTask;
   if (message.thinkingContent) result.thinkingContent = message.thinkingContent;
+  if (message.assistantLaunchContext) result.assistantLaunchContext = message.assistantLaunchContext;
+  if (message.managedAiResult) result.managedAiResult = message.managedAiResult;
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
 
@@ -143,6 +155,13 @@ export function dbMessageToUiMessage(msg: {
   createdAt: string;
 }): WorkspaceConversationMessage {
   const extras = msg.payloads ? (JSON.parse(msg.payloads) as Record<string, unknown>) : {};
+  const assistantLaunchContext = parseManagedAiLaunchContext(
+    typeof extras.assistantLaunchContext === "string"
+      ? extras.assistantLaunchContext
+      : extras.assistantLaunchContext
+        ? JSON.stringify(extras.assistantLaunchContext)
+        : null,
+  );
   return {
     role: msg.role as "user" | "assistant",
     text: msg.content,
@@ -189,6 +208,10 @@ export function dbMessageToUiMessage(msg: {
       : {}),
     ...(typeof extras.thinkingContent === "string"
       ? { thinkingContent: extras.thinkingContent }
+      : {}),
+    ...(assistantLaunchContext ? { assistantLaunchContext } : {}),
+    ...(extras.managedAiResult && typeof extras.managedAiResult === "object"
+      ? { managedAiResult: extras.managedAiResult as ManagedAiOutputParseResult }
       : {}),
   };
 }

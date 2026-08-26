@@ -1,4 +1,5 @@
 import type { AiDrilldownAction, AiDrilldownMetric, AiDrilldownStatus } from "./aiDrilldownContext";
+import type { ManagedAiLaunchContext } from "./managedAiLaunchContext";
 
 export type TodayDecisionReportKey = "revenue" | "profit" | "roi" | "traffic" | "conversion";
 
@@ -148,6 +149,7 @@ export type TodayAnalysisTodo =
       payload: {
         prompt: string;
         openContextTool?: string | null;
+        managedAiContext?: ManagedAiLaunchContext | null;
       };
     };
 

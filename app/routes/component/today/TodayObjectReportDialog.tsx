@@ -27,6 +27,15 @@ export function TodayObjectReportDialog({
     if (!aiContext) return null;
     return buildWorkspaceChatPrefillPath({
       prompt: aiContext.chatPrompt,
+      managedAiContext:
+        aiContext.promptRegistryKey && aiContext.promptContextSchemaKey && aiContext.promptOutputSchemaKey
+          ? {
+              version: "v1",
+              registryKey: aiContext.promptRegistryKey,
+              contextSchemaKey: aiContext.promptContextSchemaKey,
+              outputSchemaKey: aiContext.promptOutputSchemaKey,
+            }
+          : null,
     });
   }, [aiContext]);
 

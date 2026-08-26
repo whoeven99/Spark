@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useLocation, useSearchParams } from "react-router";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { buildTodayAnalysisTodoRefinePrompt } from "../lib/todayReportAi";
+import { buildManagedAiLaunchContextFromSpec } from "../lib/managedAiLaunchContext";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
@@ -112,12 +113,14 @@ export default function TodayCustomerValueAnalysisPage() {
                       actionType: "open_assistant",
                       payload: {
                         prompt: assistantPrompt.chatPrompt,
+                        managedAiContext: buildManagedAiLaunchContextFromSpec(assistantPrompt.spec),
                       },
                     }),
                   ),
                 ),
               payload: {
                 prompt: assistantPrompt.chatPrompt,
+                managedAiContext: buildManagedAiLaunchContextFromSpec(assistantPrompt.spec),
               },
             },
           ],

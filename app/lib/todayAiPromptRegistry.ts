@@ -1,4 +1,9 @@
 import { buildManagedAiPrompt, type ManagedAiPromptTemplate } from "./managedAiPrompt";
+import {
+  getTodayManagedOutputDescription,
+  validateTodayManagedOutput,
+  type TodayManagedOutputSchemaKey,
+} from "./todayAiOutputSchemas";
 import type { TodayAnalysisCard, TodayDecisionReport, TodayEvidenceGroup, TodayObjectCard } from "./todayReportTypes";
 
 export type TodayManagedPromptSceneKey =
@@ -11,7 +16,8 @@ export type TodayManagedPromptCatalogItem = {
   sceneKey: TodayManagedPromptSceneKey;
   title: string;
   contextSchemaKey: string;
-  outputSchemaKey: string;
+  outputSchemaKey: TodayManagedOutputSchemaKey;
+  outputDescription: string[];
   objective: string;
 };
 
@@ -46,11 +52,7 @@ const TODAY_PAGE_TEMPLATE: ManagedAiPromptTemplate<TodayPagePromptInput> = {
   outputSchemaKey: "today.page.analysis.reply.v1",
   role: "Spark 的 Today 经营分析助手",
   objective: "围绕一个 Today 报告页，继续判断最值得优先处理的经营问题。",
-  output: [
-    "先判断当前页面最主要的支撑项和拖累项。",
-    "给出今天最优先的处理顺序，按先后列出。",
-    "如果存在不确定性，要明确指出还缺哪一类证据。",
-  ],
+  output: getTodayManagedOutputDescription("today.page.analysis.reply.v1"),
   guardrails: TODAY_PROMPT_GUARDRAILS,
   buildIntroLines: ({ report }) => [`我们正在查看 Today 的「${report.title}」报告页。`],
   buildContextBlocks: ({ report }) => [
@@ -88,11 +90,7 @@ const TODAY_OBJECT_TEMPLATE: ManagedAiPromptTemplate<TodayObjectPromptInput> = {
   outputSchemaKey: "today.object.analysis.reply.v1",
   role: "Spark 的 Today 对象分析助手",
   objective: "围绕一个对象卡，判断它应该继续放大、先止损、还是继续观察。",
-  output: [
-    "先说明这个对象当前最关键的经营判断。",
-    "给出对象级的优先处理顺序。",
-    "如果需要继续下钻，要明确指出最值得看的下一层对象或证据。",
-  ],
+  output: getTodayManagedOutputDescription("today.object.analysis.reply.v1"),
   guardrails: TODAY_PROMPT_GUARDRAILS,
   buildIntroLines: ({ report, objectCard }) => [
     `我们正在查看 Today 的「${report.title}」报告页中的对象「${objectCard.title}」。`,
@@ -128,11 +126,7 @@ const TODAY_GROUP_TEMPLATE: ManagedAiPromptTemplate<TodayGroupPromptInput> = {
   outputSchemaKey: "today.group.analysis.reply.v1",
   role: "Spark 的 Today 对象组分析助手",
   objective: "围绕一组对象，判断谁更应该优先放大、止损或排查。",
-  output: [
-    "先判断这组对象的整体问题。",
-    "列出最值得优先处理的对象顺序。",
-    "说明每个优先对象背后的关键证据。",
-  ],
+  output: getTodayManagedOutputDescription("today.group.analysis.reply.v1"),
   guardrails: TODAY_PROMPT_GUARDRAILS,
   buildIntroLines: ({ report, group }) => [`我们正在查看 Today 的「${report.title}」中的对象组「${group.title}」。`],
   buildContextBlocks: ({ group }) => [
@@ -161,11 +155,7 @@ const TODAY_ANALYSIS_TODO_TEMPLATE: ManagedAiPromptTemplate<TodayAnalysisTodoPro
   outputSchemaKey: "today.todo.refine.v1",
   role: "Spark 的 Today 经营动作助手",
   objective: "把分析卡的结论继续拆成今天就能执行的轻量 todo。",
-  output: [
-    "输出 3 条以内的 today todo。",
-    "每条 todo 都要包含动作、对象、目标指标和优先级。",
-    "todo 要足够轻，不要变成大型项目计划。",
-  ],
+  output: getTodayManagedOutputDescription("today.todo.refine.v1"),
   guardrails: [
     ...TODAY_PROMPT_GUARDRAILS,
     "todo 必须是今天能开始执行的动作，不要写长期战略口号。",
@@ -206,6 +196,7 @@ const TODAY_MANAGED_PROMPT_CATALOG: TodayManagedPromptCatalogItem[] = [
     title: "Today 页面分析",
     contextSchemaKey: TODAY_PAGE_TEMPLATE.contextSchemaKey,
     outputSchemaKey: TODAY_PAGE_TEMPLATE.outputSchemaKey,
+    outputDescription: TODAY_PAGE_TEMPLATE.output,
     objective: TODAY_PAGE_TEMPLATE.objective,
   },
   {
@@ -213,6 +204,7 @@ const TODAY_MANAGED_PROMPT_CATALOG: TodayManagedPromptCatalogItem[] = [
     title: "Today 对象分析",
     contextSchemaKey: TODAY_OBJECT_TEMPLATE.contextSchemaKey,
     outputSchemaKey: TODAY_OBJECT_TEMPLATE.outputSchemaKey,
+    outputDescription: TODAY_OBJECT_TEMPLATE.output,
     objective: TODAY_OBJECT_TEMPLATE.objective,
   },
   {
@@ -220,6 +212,7 @@ const TODAY_MANAGED_PROMPT_CATALOG: TodayManagedPromptCatalogItem[] = [
     title: "Today 对象组分析",
     contextSchemaKey: TODAY_GROUP_TEMPLATE.contextSchemaKey,
     outputSchemaKey: TODAY_GROUP_TEMPLATE.outputSchemaKey,
+    outputDescription: TODAY_GROUP_TEMPLATE.output,
     objective: TODAY_GROUP_TEMPLATE.objective,
   },
   {
@@ -227,6 +220,7 @@ const TODAY_MANAGED_PROMPT_CATALOG: TodayManagedPromptCatalogItem[] = [
     title: "Today 分析卡 Todo 细化",
     contextSchemaKey: TODAY_ANALYSIS_TODO_TEMPLATE.contextSchemaKey,
     outputSchemaKey: TODAY_ANALYSIS_TODO_TEMPLATE.outputSchemaKey,
+    outputDescription: TODAY_ANALYSIS_TODO_TEMPLATE.output,
     objective: TODAY_ANALYSIS_TODO_TEMPLATE.objective,
   },
 ];
@@ -237,6 +231,14 @@ export function listTodayManagedPromptCatalog(): TodayManagedPromptCatalogItem[]
 
 export function getTodayManagedPromptCatalogItem(sceneKey: TodayManagedPromptSceneKey): TodayManagedPromptCatalogItem | null {
   return TODAY_MANAGED_PROMPT_CATALOG.find((item) => item.sceneKey === sceneKey) ?? null;
+}
+
+export function validateTodayManagedPromptOutput(sceneKey: TodayManagedPromptSceneKey, value: unknown) {
+  const item = getTodayManagedPromptCatalogItem(sceneKey);
+  if (!item) {
+    throw new Error(`[today-ai-prompt-registry] unknown scene key: ${sceneKey}`);
+  }
+  return validateTodayManagedOutput(item.outputSchemaKey, value);
 }
 
 export function buildTodayPageManagedPrompt(report: TodayDecisionReport) {

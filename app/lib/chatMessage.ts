@@ -1,4 +1,6 @@
 import type { AITaskItem } from "./aiTaskTypes";
+import type { ManagedAiLaunchContext } from "./managedAiLaunchContext";
+import type { ManagedAiOutputParseResult } from "./managedAiOutputRuntime";
 import type { TaskProposalPayload } from "./taskProposalPayload";
 import type { TaskRunPayload } from "./taskRunPayload";
 
@@ -64,4 +66,6 @@ export type ChatMessage =
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;
+      assistantLaunchContext?: ManagedAiLaunchContext;
+      managedAiResult?: ManagedAiOutputParseResult;
     };

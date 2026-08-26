@@ -39,6 +39,7 @@ export function buildTodayAnalysisTodoHref(todo: TodayAnalysisTodo): string {
       return buildWorkspaceChatPrefillPath({
         prompt: todo.payload.prompt,
         openContextTool: todo.payload.openContextTool,
+        managedAiContext: todo.payload.managedAiContext,
       });
   }
 }
