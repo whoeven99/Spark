@@ -4,6 +4,8 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
+import type { ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext";
+import type { ManagedAiOutputParseResult } from "../../../lib/managedAiOutputRuntime";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 
@@ -41,6 +43,8 @@ export type WorkspaceConversationMessage = {
   taskRun?: TaskRunPayload;
   aiTask?: AITaskItem;
   thinkingContent?: string;
+  assistantLaunchContext?: ManagedAiLaunchContext;
+  managedAiResult?: ManagedAiOutputParseResult;
 };
 
 /** 侧栏「本会话任务」的批次条目（从消息流的 taskRun / 历史 aiTask 派生） */

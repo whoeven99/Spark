@@ -8,6 +8,7 @@ import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
+import { ManagedAiResultCard } from "./ManagedAiResultCard";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type ChatMessagesProps = {
@@ -47,6 +48,7 @@ export function ChatMessages({
           !hasTaskProposalCard;
         const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
         const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
+        const hasManagedAiCard = item.role === "assistant" && Boolean(item.managedAiResult);
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -57,6 +59,7 @@ export function ChatMessages({
           hasTaskProposalCard ||
           hasTaskRunCard ||
           hasAiTaskCard ||
+          hasManagedAiCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -101,6 +104,9 @@ export function ChatMessages({
                     <div style={{ marginBottom: "0.5rem" }}>
                       <ThinkingReview text={item.thinkingContent} />
                     </div>
+                  ) : null}
+                  {item.role === "assistant" && item.managedAiResult ? (
+                    <ManagedAiResultCard result={item.managedAiResult} />
                   ) : null}
                   <div style={{ marginTop: "0.35rem" }}>
                     {item.role === "assistant" ? (

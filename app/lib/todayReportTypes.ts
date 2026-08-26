@@ -1,4 +1,5 @@
 import type { AiDrilldownAction, AiDrilldownMetric, AiDrilldownStatus } from "./aiDrilldownContext";
+import type { ManagedAiLaunchContext } from "./managedAiLaunchContext";
 
 export type TodayDecisionReportKey = "revenue" | "profit" | "roi" | "traffic" | "conversion";
 
@@ -63,6 +64,131 @@ export type TodayRoiSummaryCard = {
 
 export type TodayRoiSummary = {
   cards: TodayRoiSummaryCard[];
+};
+
+export type TodayAnalysisTopicKey =
+  | "product"
+  | "ads"
+  | "orders"
+  | "after_sales"
+  | "customer_value";
+
+export type TodayAnalysisTodoActionType =
+  | "open_report"
+  | "open_health_monitor"
+  | "open_ads_insights"
+  | "open_task_center"
+  | "open_assistant";
+
+export type TodayAnalysisTodo =
+  | {
+      key: string;
+      title: string;
+      detail: string;
+      actionLabel: string;
+      actionType: "open_report";
+      payload: {
+        path: string;
+      };
+    }
+  | {
+      key: string;
+      title: string;
+      detail: string;
+      actionLabel: string;
+      actionType: "open_health_monitor";
+      payload: {
+        view?: "overview" | "run" | "detail";
+        monitor?: string | null;
+      };
+    }
+  | {
+      key: string;
+      title: string;
+      detail: string;
+      actionLabel: string;
+      actionType: "open_ads_insights";
+      payload: {
+        platform?: "all" | "meta" | "google" | "tiktok";
+      };
+    }
+  | {
+      key: string;
+      title: string;
+      detail: string;
+      actionLabel: string;
+      actionType: "open_task_center";
+      payload: {
+        taskId?: string | null;
+        view?: "current" | "history";
+        typeFilter?:
+          | "all"
+          | "automation_task"
+          | "operation_task"
+          | "product_improve"
+          | "image_generation"
+          | "picture_translate";
+        statusFilter?:
+          | "all"
+          | "running"
+          | "open"
+          | "in_progress"
+          | "needs_review"
+          | "failed"
+          | "completed"
+          | "ignored";
+        operationSourceFilter?: string[];
+      };
+    }
+  | {
+      key: string;
+      title: string;
+      detail: string;
+      actionLabel: string;
+      actionType: "open_assistant";
+      payload: {
+        prompt: string;
+        openContextTool?: string | null;
+        managedAiContext?: ManagedAiLaunchContext | null;
+      };
+    };
+
+export type TodayAnalysisEvidence = {
+  label: string;
+  value: string;
+  change?: string;
+};
+
+export type TodayAnalysisCard = {
+  key: string;
+  title: string;
+  question: string;
+  conclusion: string;
+  metricLabel: string;
+  metricValue: string;
+  evidence: TodayAnalysisEvidence[];
+  ideas: string[];
+  todos: TodayAnalysisTodo[];
+};
+
+export type TodayAnalysisPageReport = {
+  key: TodayAnalysisTopicKey;
+  title: string;
+  subtitle: string;
+  summary: string;
+  principles: string[];
+  cards: TodayAnalysisCard[];
+};
+
+export type TodayAnalysisOverviewCard = {
+  key: TodayAnalysisTopicKey;
+  title: string;
+  question: string;
+  conclusion: string;
+  metricLabel: string;
+  metricValue: string;
+  todoCount: number;
+  href: string;
 };
 
 export type TodayOverviewReport = {
