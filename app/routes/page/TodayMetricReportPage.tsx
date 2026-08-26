@@ -121,8 +121,17 @@ export function TodayMetricReportPage({
     () =>
       buildWorkspaceChatPrefillPath({
         prompt: aiContext.chatPrompt,
+        managedAiContext:
+          aiContext.promptRegistryKey && aiContext.promptContextSchemaKey && aiContext.promptOutputSchemaKey
+            ? {
+                version: "v1",
+                registryKey: aiContext.promptRegistryKey,
+                contextSchemaKey: aiContext.promptContextSchemaKey,
+                outputSchemaKey: aiContext.promptOutputSchemaKey,
+              }
+            : null,
       }),
-    [aiContext.chatPrompt],
+    [aiContext.chatPrompt, aiContext.promptContextSchemaKey, aiContext.promptOutputSchemaKey, aiContext.promptRegistryKey],
   );
 
   const findGroup = (groupKey: string) => report.groups.find((group) => group.key === groupKey) ?? null;

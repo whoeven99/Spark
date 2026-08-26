@@ -8,6 +8,8 @@ import {
   type ObservationWindowView,
 } from "../../lib/observationWindow";
 import type {
+  TodayAnalysisOverviewCard,
+  TodayAnalysisPageReport,
   TodayDecisionReport,
   TodayDecisionReportKey,
   TodayEvidenceGroup,
@@ -31,6 +33,7 @@ import { executeShopifyqlQuery } from "../shopifyql/shopifyqlQuery.server";
 import { computeChannelRoi } from "./channelRoi.server";
 import { getShopCostConfig } from "./roi/costConfig.server";
 import { loadSkuCostMap } from "./roi/skuCostSync.server";
+import { buildTodayAnalysisOverviewCards, buildTodayAnalysisPages } from "./todayAnalysisBuilder.server";
 
 type TodayCountryKey = string;
 
@@ -51,6 +54,8 @@ export type TodayFilterState = {
 export type TodayOverviewReportData = {
   filters: TodayFilterState;
   report: TodayOverviewReport;
+  analysisPages: TodayAnalysisPageReport[];
+  analysisOverviewCards: TodayAnalysisOverviewCard[];
   observationWindow: ObservationWindowView;
 };
 
@@ -167,11 +172,6 @@ async function resolveShopDisplayTimeZone(admin: ShopifyAdminGraphqlClient): Pro
   return resolveDisplayTimeZone(shopInfo?.ianaTimezone);
 }
 
-function shortDay(dateOrKey: Date | string): string {
-  const date = typeof dateOrKey === "string" ? new Date(`${dateOrKey}T00:00:00.000Z`) : dateOrKey;
-  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", timeZone: "UTC" }).format(date);
-}
-
 function regionLabel(code: string): string {
   return `${COUNTRY_DISPLAY_NAMES.of(code) ?? code} (${code})`;
 }
@@ -281,12 +281,6 @@ function classifyChannel(order: Pick<OrderFact, "utmSource" | "sourceName" | "re
   const source = order.sourceName?.trim().toLowerCase();
   if (source && source !== "web") return source;
   return "直接访问";
-}
-
-function toneFromDelta(delta: number, warning = -0.05, critical = -0.15): "positive" | "warning" | "critical" {
-  if (delta <= critical) return "critical";
-  if (delta <= warning) return "warning";
-  return "positive";
 }
 
 function statusFromRatio(value: number, watch: number, risk: number): TodayReportStatus["status"] {
@@ -4140,23 +4134,31 @@ export async function loadTodayOverviewReportData(params: {
     if (params.hasReadReports && sessionScope === null) {
       filters.dataNotes.push("Storefront sessions 地区查询当前未返回有效数据，流量与转化先显示为空值。");
     }
+    const report: TodayOverviewReport = {
+      header: buildTodayHeader(orderScope),
+      metricCards: buildTodayMetricCards(orderScope),
+      reasonCards: buildTodayReasonCards(orderScope, sessionScope),
+      roiSummary: buildTodayRoiSummary(orderScope),
+    };
+    const analysisPages = buildTodayAnalysisPages(report);
     return {
       filters,
-      report: {
-        header: buildTodayHeader(orderScope),
-        metricCards: buildTodayMetricCards(orderScope),
-        reasonCards: buildTodayReasonCards(orderScope, sessionScope),
-        roiSummary: buildTodayRoiSummary(orderScope),
-      },
+      report,
+      analysisPages,
+      analysisOverviewCards: buildTodayAnalysisOverviewCards(analysisPages),
       observationWindow,
     };
   } catch (error) {
     console.error("[todayGeo] loadTodayOverviewReportData failed:", error);
+    const report = buildFallbackOverviewReport();
+    const analysisPages = buildTodayAnalysisPages(report);
     return {
       filters: buildFallbackFilters(params.requestedCountry, [
         "Today 总览数据暂时加载失败，当前先展示最近一版默认分析文案，避免首页空白。",
       ]),
-      report: buildFallbackOverviewReport(),
+      report,
+      analysisPages,
+      analysisOverviewCards: buildTodayAnalysisOverviewCards(analysisPages),
       observationWindow: toObservationWindowView(7, now),
     };
   }

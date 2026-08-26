@@ -37,6 +37,11 @@ import {
   type WorkspacePanel,
 } from "./types";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import {
+  parseManagedAiLaunchContext,
+  type ManagedAiLaunchContext,
+} from "../../../lib/managedAiLaunchContext";
+import { tryParseManagedAiOutput } from "../../../lib/managedAiOutputRuntime";
 import { useWorkspaceContext } from "./useWorkspaceContext";
 import {
   accountMenuItemStyle,
@@ -427,6 +432,9 @@ export function WorkspaceAppShellPage({
         : null,
   );
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
+  const [managedAiContextByConversation, setManagedAiContextByConversation] = useState<
+    Record<string, ManagedAiLaunchContext | null>
+  >({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const createConversationRef = useRef<((options?: { draft?: string; assistantText?: string }) => void) | null>(null);
@@ -655,11 +663,21 @@ export function WorkspaceAppShellPage({
             return current;
           }
           const rawMessages = Array.isArray(data.messages) ? data.messages : [];
+          const messages = (rawMessages as Parameters<typeof dbMessageToUiMessage>[0][]).map(
+            dbMessageToUiMessage,
+          );
+          const launchContext =
+            messages.find((message) => message.role === "assistant" && message.assistantLaunchContext)
+              ?.assistantLaunchContext ?? null;
+          if (launchContext) {
+            setManagedAiContextByConversation((state) => ({
+              ...state,
+              [activeConversationId]: launchContext,
+            }));
+          }
           return {
             ...current,
-            [activeConversationId]: (rawMessages as Parameters<typeof dbMessageToUiMessage>[0][]).map(
-              dbMessageToUiMessage,
-            ),
+            [activeConversationId]: messages,
           };
         });
       })
@@ -738,6 +756,11 @@ export function WorkspaceAppShellPage({
         delete next[conversationId];
         return next;
       });
+      setManagedAiContextByConversation((current) => {
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
 
       if (wasActive) {
         const nextConversation = nextList[0] ?? null;
@@ -760,6 +783,7 @@ export function WorkspaceAppShellPage({
     draft?: string;
     assistantText?: string;
     autoSend?: boolean;
+    assistantLaunchContext?: ManagedAiLaunchContext | null;
   }) => {
     const nextDraft = options?.draft ?? "";
     const assistantText =
@@ -776,6 +800,10 @@ export function WorkspaceAppShellPage({
     if (existingEmpty) {
       workspaceContext.clearContext();
       setDraftByConversation((current) => ({ ...current, [existingEmpty.id]: nextDraft }));
+      setManagedAiContextByConversation((current) => ({
+        ...current,
+        [existingEmpty.id]: options?.assistantLaunchContext ?? current[existingEmpty.id] ?? null,
+      }));
       openConversation(existingEmpty.id);
       if (isMobile) setSidebarOpen(false);
       return;
@@ -792,11 +820,16 @@ export function WorkspaceAppShellPage({
       role: "assistant",
       text: assistantText,
       time: formatTimeLabel(new Date()),
+      ...(options?.assistantLaunchContext ? { assistantLaunchContext: options.assistantLaunchContext } : {}),
     };
     loadedConvIdsRef.current.add(conv.id);
     setConversationList((current) => [conv, ...current].slice(0, 50));
     setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
     setDraftByConversation((current) => ({ ...current, [conv.id]: nextDraft }));
+    setManagedAiContextByConversation((current) => ({
+      ...current,
+      [conv.id]: options?.assistantLaunchContext ?? null,
+    }));
     workspaceContext.clearContext();
     setActiveConversationId(conv.id);
     switchPanel("chat");
@@ -809,14 +842,16 @@ export function WorkspaceAppShellPage({
   useEffect(() => {
     const prefillPrompt = searchParams.get("prefillTaskPrompt");
     const rawOpenContextTool = searchParams.get("openContextTool");
+    const managedAiContext = parseManagedAiLaunchContext(searchParams.get("prefillManagedAiContext"));
     const openContextTool = isLaunchContextTool(rawOpenContextTool)
       ? rawOpenContextTool
       : null;
     const prefillSignature = JSON.stringify({
       prompt: prefillPrompt ?? "",
       openContextTool: openContextTool ?? "",
+      managedAiContext: managedAiContext ? JSON.stringify(managedAiContext) : "",
     });
-    if (!prefillPrompt && !openContextTool) {
+    if (!prefillPrompt && !openContextTool && !managedAiContext) {
       processedPrefillPromptRef.current = null;
       return;
     }
@@ -828,11 +863,13 @@ export function WorkspaceAppShellPage({
     createConversationRef.current?.({
       draft: prefillPrompt ?? "",
       assistantText: prefillWelcomeText,
+      assistantLaunchContext: managedAiContext,
     });
     const next = new URLSearchParams(searchParams);
     next.delete("prefillTaskPrompt");
     next.delete("prefillConstraint");
     next.delete("openContextTool");
+    next.delete("prefillManagedAiContext");
     setSearchParams(next);
   }, [prefillWelcomeText, searchParams, setSearchParams]);
 
@@ -842,6 +879,7 @@ export function WorkspaceAppShellPage({
     if (activeConversationId) return;
     if (searchParams.get("prefillTaskPrompt")) return;
     if (isLaunchContextTool(searchParams.get("openContextTool"))) return;
+    if (searchParams.get("prefillManagedAiContext")) return;
 
     initializedAssistantLandingRef.current = true;
     createConversationRef.current?.();
@@ -935,13 +973,18 @@ export function WorkspaceAppShellPage({
               : payload.aborted && !payload.reply.trim()
                 ? t("workspace.shell.chat.replyStopped")
                 : payload.reply.trim() || t("workspace.shell.chat.invalidReply");
+          const managedAiContext = managedAiContextByConversation[conversationId] ?? null;
+          const managedAiResult = tryParseManagedAiOutput(assistantText, managedAiContext);
 
           flushSync(() => {
             setMessagesByConversation((current) => ({
               ...current,
               [conversationId]: [
                 ...(current[conversationId] ??  []),
-                buildAssistantWorkspaceMessage(assistantText, payload),
+                buildAssistantWorkspaceMessage(assistantText, payload, {
+                  assistantLaunchContext: managedAiContext,
+                  managedAiResult,
+                }),
               ],
             }));
             setStreamingConversationId(null);
@@ -950,13 +993,26 @@ export function WorkspaceAppShellPage({
           // Persist user + assistant messages (fire and forget)
           if (!payload.httpStatus) {
             const assistantPayloads = serializeAssistantPayloads(payload);
+            const assistantMessagePayloads = assistantPayloads
+              ? (() => {
+                  const parsed = JSON.parse(assistantPayloads) as Record<string, unknown>;
+                  if (managedAiContext) parsed.assistantLaunchContext = managedAiContext;
+                  if (managedAiResult) parsed.managedAiResult = managedAiResult;
+                  return JSON.stringify(parsed);
+                })()
+              : managedAiContext || managedAiResult
+                ? JSON.stringify({
+                    ...(managedAiContext ? { assistantLaunchContext: managedAiContext } : {}),
+                    ...(managedAiResult ? { managedAiResult } : {}),
+                  })
+                : null;
             fetch(`/api/conversations/${conversationId}${authQuery}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 messages: [
                   { role: "user", content },
-                  { role: "assistant", content: assistantText, payloads: assistantPayloads },
+                  { role: "assistant", content: assistantText, payloads: assistantMessagePayloads },
                 ],
                 ...(isNewTitle ? { title: nextTitle } : {}),
                 preview: nextPreview,
