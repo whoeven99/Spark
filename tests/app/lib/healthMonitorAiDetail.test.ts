@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMonitorDetailInput } from "../../../app/lib/healthMonitorAiDetail";
+import { buildMonitorDetailInput, resolveHealthMonitorDetail } from "../../../app/lib/healthMonitorAiDetail";
 import { HEALTH_MONITORS } from "../../../app/lib/healthMonitorData";
 
 describe("inferCoreMetricLabel via buildMonitorDetailInput", () => {
@@ -24,5 +24,22 @@ describe("inferCoreMetricLabel via buildMonitorDetailInput", () => {
     });
 
     expect(input.coreMetric.label).toBe("未知健康项");
+  });
+});
+
+describe("resolveHealthMonitorDetail evidence", () => {
+  it("does not invent a second demo evidence row when only one real fact exists", () => {
+    const template = HEALTH_MONITORS.find((item) => item.id === "conversion-health");
+    if (!template) throw new Error("missing conversion-health template");
+
+    const detail = resolveHealthMonitorDetail({
+      ...template,
+      value: "CVR 3.2%",
+      evidence: [{ label: "当前数据", value: "近 7 天转化率 3.2%。" }],
+    });
+
+    expect(detail.result.evidenceSummary).toHaveLength(1);
+    expect(detail.result.evidenceSummary[0]?.summary).toBe("近 7 天转化率 3.2%。");
+    expect(detail.result.evidenceSummary.map((entry) => entry.summary).join(" ")).not.toContain("1.4%");
   });
 });

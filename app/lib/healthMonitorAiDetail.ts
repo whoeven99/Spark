@@ -80,7 +80,7 @@ export const monitorDetailResultSchema = z.object({
       label: nonEmptyStringSchema,
       summary: nonEmptyStringSchema,
     }),
-  ).min(2).max(4),
+  ).min(1).max(4),
   actions: z.array(
     z.object({
       title: nonEmptyStringSchema,
