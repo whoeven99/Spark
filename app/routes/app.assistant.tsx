@@ -29,7 +29,7 @@ const WorkspaceAppShellPage = lazy(() =>
 );
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   if (isBillingReturnRequest(request)) {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
@@ -39,7 +39,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
   try {
     const [dailyOps, recentTaskEntries] = await Promise.all([
-      ensureDailySnapshotOverview(session.shop),
+      ensureDailySnapshotOverview(session.shop, { shopifyAdmin: admin }),
       listMergedUnifiedTaskEntries(session.shop, {
         limit: DASHBOARD_RECENT_TASK_LIMIT,
       }),

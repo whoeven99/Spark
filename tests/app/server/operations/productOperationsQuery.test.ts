@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseProductOperationsRows } from "../../../../app/server/operations/productOperationsQuery.server";
+import {
+  loadProductOperations,
+  parseProductOperationsRows,
+} from "../../../../app/server/operations/productOperationsQuery.server";
 
 describe("parseProductOperationsRows", () => {
   it("aggregates product operation issues", () => {
@@ -41,5 +44,11 @@ describe("parseProductOperationsRows", () => {
     expect(result.samples.draftSample).toHaveLength(5);
     expect(result.samples.noImagesSample).toHaveLength(3);
     expect(result.samples.noDescriptionSample).toHaveLength(3);
+  });
+});
+
+describe("loadProductOperations", () => {
+  it("returns null when the Admin client is missing", async () => {
+    await expect(loadProductOperations(null)).resolves.toBeNull();
   });
 });

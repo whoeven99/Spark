@@ -32,7 +32,9 @@ function createGetDailyOperationsTool(context: AgentContext): DynamicStructuredT
         return JSON.stringify({ ok: false, errorMsg: "无法识别当前店铺" });
       }
       try {
-        const result = await ensureDailySnapshotOverview(shop);
+        const result = await ensureDailySnapshotOverview(shop, {
+          shopifyAdmin: context.admin,
+        });
         if (!result.hasData) {
           return JSON.stringify({
             ok: true,
