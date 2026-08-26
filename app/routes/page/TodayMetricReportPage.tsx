@@ -2,9 +2,11 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFeatureView } from "../../lib/featureTrack";
+import type { ObservationWindowView } from "../../lib/observationWindow";
 import { buildTodayPageAiDrilldownContext } from "../../lib/todayReportAi";
 import type { TodayDecisionReport, TodayEvidenceGroup, TodayObjectCard } from "../../lib/todayReportTypes";
 import { buildWorkspaceChatPrefillPath } from "../../lib/workspaceChatPrefill";
+import { useObservationWindowLabel } from "../component/shared/useObservationWindowLabel";
 import { TodayObjectGroupDialog } from "../component/today/TodayObjectGroupDialog";
 import { TodayObjectReportDialog } from "../component/today/TodayObjectReportDialog";
 import {
@@ -58,6 +60,7 @@ function resolveGroupToneStyle(tone: TodayEvidenceGroup["tone"]): CSSProperties 
 
 export function TodayMetricReportPage({
   report,
+  observationWindow,
   backLabel = "返回经营",
   fallbackPath = "/app/today",
   returnTo,
@@ -65,6 +68,7 @@ export function TodayMetricReportPage({
   extraSections,
 }: {
   report: TodayDecisionReport;
+  observationWindow?: ObservationWindowView;
   backLabel?: string;
   fallbackPath?: string;
   returnTo?: string;
@@ -73,6 +77,7 @@ export function TodayMetricReportPage({
 }) {
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
+  const windowLabel = useObservationWindowLabel(observationWindow);
   const [activeObject, setActiveObject] = useState<TodayObjectCard | null>(null);
   const [activeGroup, setActiveGroup] = useState<TodayEvidenceGroup | null>(null);
   useFeatureView("today");
@@ -119,7 +124,12 @@ export function TodayMetricReportPage({
                 <h2 style={pageSectionMajorTitleStyle}>{report.primaryQuestion}</h2>
                 <p style={summaryTextStyle}>{report.summary}</p>
               </div>
-              <span style={pageAccentBadgeStyle}>{report.accent}</span>
+              <div style={{ display: "grid", gap: "0.35rem", justifyItems: isMobile ? "start" : "end" }}>
+                <span style={pageAccentBadgeStyle}>{report.accent}</span>
+                {windowLabel ? (
+                  <span style={{ color: pageColorTokens.textFootnote, fontSize: "0.78rem" }}>{windowLabel}</span>
+                ) : null}
+              </div>
             </div>
 
             <div style={statusListStyle}>

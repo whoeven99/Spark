@@ -22,6 +22,7 @@ import {
 } from "./page/pageUiStyles";
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { MetricHintLabel } from "./component/shared/MetricHintLabel";
+import { useObservationWindowLabel } from "./component/shared/useObservationWindowLabel";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 
 function SurfaceButton({
@@ -91,7 +92,8 @@ export default function TodayOverview() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
-  const { filters, report } = data;
+  const { filters, report, observationWindow } = data;
+  const windowLabel = useObservationWindowLabel(observationWindow);
   useFeatureView("today");
 
   const handleCountryChange = (country: string) => {
@@ -134,7 +136,14 @@ export default function TodayOverview() {
           notes={filters.dataNotes}
         />
 
-        <PageSurface title="经营状态头部" subtitle="先判断最近 7 天是在健康增长、需要关注，还是已经进入盈利压力。">
+        <PageSurface
+          title="经营状态头部"
+          subtitle={
+            windowLabel
+              ? `${windowLabel}。先判断这段时间是在健康增长、需要关注，还是已经进入盈利压力。`
+              : "先判断最近 7 天是在健康增长、需要关注，还是已经进入盈利压力。"
+          }
+        >
           <div style={headerGridStyle(isMobile)}>
             <div style={headerMainCardStyle}>
               <span style={{ ...statusBadgeStyle, ...badgeStyle(report.header.status) }}>{report.header.statusLabel}</span>

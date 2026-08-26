@@ -5,6 +5,7 @@ import {
   type PixelFunnelCounts,
   type PixelFunnelLoader,
 } from "../aliyunLog/pixelQuery.server";
+import { isInCompleteUtcWindow, resolveCompleteUtcWindow } from "../../lib/observationWindow";
 import {
   loadProductOperations as defaultLoadProductOperations,
   type ProductOperationsData,
@@ -330,10 +331,15 @@ export async function computeOperationsDiagnosis(
 ): Promise<OperationsDiagnosis> {
   const loadPixelFunnel = options?.loadPixelFunnel ?? defaultLoadPixelFunnel;
   const shopifyAdmin = options?.shopifyAdmin ?? null;
-  const since7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const since14Days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-  const since30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const since60Days = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const window7d = resolveCompleteUtcWindow(7, now);
+  const window14d = resolveCompleteUtcWindow(14, now);
+  const window30d = resolveCompleteUtcWindow(30, now);
+  const window60d = resolveCompleteUtcWindow(60, now);
+  const since7Days = window7d.start;
+  const since14Days = window14d.start;
+  const since30Days = window30d.start;
+  const since60Days = window60d.start;
+  const windowEnd = window7d.end;
 
   const [
     orders,
@@ -348,14 +354,14 @@ export async function computeOperationsDiagnosis(
     productOpsData,
   ] = await Promise.all([
     prisma.shopOrder.findMany({
-      where: { shop, createdAt: { gte: since30Days } },
+      where: { shop, createdAt: { gte: since30Days, lt: windowEnd } },
       include: { fulfillments: true },
     }),
     prisma.shopOrder.count({
       where: { shop, createdAt: { gte: since60Days, lt: since30Days } },
     }),
     prisma.shopRefund.findMany({
-      where: { shop, processedAt: { gte: since30Days } },
+      where: { shop, processedAt: { gte: since30Days, lt: windowEnd } },
       include: { order: true, lineItems: true },
       orderBy: { processedAt: "desc" },
     }),
@@ -364,13 +370,13 @@ export async function computeOperationsDiagnosis(
       select: { shopifyOrderId: true },
     }),
     prisma.shopRefundLineItem.findMany({
-      where: { shop, refund: { processedAt: { gte: since30Days } } },
+      where: { shop, refund: { processedAt: { gte: since30Days, lt: windowEnd } } },
     }),
     prisma.shopInventoryLevel.findMany({ where: { shop } }),
     prisma.shopOrderLineItem.findMany({
       where: {
         shop,
-        order: { createdAt: { gte: since30Days }, status: { not: "cancelled" } },
+        order: { createdAt: { gte: since30Days, lt: windowEnd }, status: { not: "cancelled" } },
       },
     }),
     prisma.shopOrder.count({ where: { shop } }),
@@ -391,7 +397,7 @@ export async function computeOperationsDiagnosis(
   // ── Web Pixel 漏斗（流量 §7.2 / 转化 §7.3），缺失时静默降级 ──
   const pixelWindows = await loadPixelFunnel(shop, {
     currentFrom: since7Days,
-    currentTo: now,
+    currentTo: windowEnd,
     prevFrom: since14Days,
     prevTo: since7Days,
   });
@@ -400,7 +406,9 @@ export async function computeOperationsDiagnosis(
 
   // ── 支付链路统计（§7.3 转化率补充）──
   // 从订单的 financialStatus 推断：pending/authorized → 支付尝试但未完成，paid 及以上 → 成功
-  const orders7dForPayment = orders.filter((o) => o.createdAt >= since7Days);
+  const orders7dForPayment = orders.filter((o) =>
+    isInCompleteUtcWindow(o.createdAt, since7Days, windowEnd),
+  );
   const paymentAttempts7d = orders7dForPayment.filter(
     (o) => o.status !== "cancelled" && o.financialStatus !== null,
   ).length;
@@ -419,9 +427,11 @@ export async function computeOperationsDiagnosis(
   const cancelledCount = orders.length - nonCancelledOrders.length;
 
   // ── 销售趋势（7d vs prev 7d，按订单创建时间）──
-  const orders7d = nonCancelledOrders.filter((o) => o.createdAt >= since7Days);
-  const ordersPrev7d = nonCancelledOrders.filter(
-    (o) => o.createdAt >= since14Days && o.createdAt < since7Days,
+  const orders7d = nonCancelledOrders.filter((o) =>
+    isInCompleteUtcWindow(o.createdAt, since7Days, windowEnd),
+  );
+  const ordersPrev7d = nonCancelledOrders.filter((o) =>
+    isInCompleteUtcWindow(o.createdAt, since14Days, since7Days),
   );
   const salesAmount7d = orders7d.reduce((s, o) => s + o.totalPrice, 0);
   const salesAmountPrev7d = ordersPrev7d.reduce((s, o) => s + o.totalPrice, 0);

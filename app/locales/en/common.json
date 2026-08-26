@@ -377,6 +377,13 @@
     "environmentAfterSales": "After-sales",
     "environmentConversion": "Content & conversion"
   },
+  "observationWindow": {
+    "range7d": "Last 7 days · {{start}}–{{end}} ({{tz}}, excluding today)",
+    "range30d": "Last 30 days · {{start}}–{{end}} ({{tz}}, excluding today)",
+    "range28d": "Last 28 days",
+    "realtime": "Live check",
+    "hint7d": "Metrics use complete UTC calendar days and exclude today. Dates are shown in the shop timezone."
+  },
   "todayShell": {
     "overview": "Overview"
   },

@@ -128,6 +128,7 @@ export default function TodayRoiPage() {
   return (
     <TodayMetricReportPage
       report={data.report}
+      observationWindow={data.observationWindow}
       returnTo={returnTo}
       topSection={
         <TodayCountryFilterCard

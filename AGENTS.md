@@ -137,7 +137,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts`（Skill/SSE 产出 `task_proposal` → 前端 `TaskProposalCard` → `/api/task-proposal`） |
-| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断） |
+| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断）。「近 7 天」经营页与健康度共用 UTC 完整日、不含今天（`app/lib/observationWindow.ts`）；展示按店铺 `ianaTimezone` 格式化 |
 | Health Monitor | `app/routes/app.health-monitor.tsx` + `app/lib/healthMonitor*`；详情数据走 `ensureDailySnapshot`（不要与 overview 入口混用） |
 | 工作台上下文（前端） | `app/routes/page/workspace/useWorkspaceContext.ts`、`ContextToolModal.tsx`、`ChatPanel.tsx`；Shopify 对象搜索 `app/server/shopify/contextResourceSearch.server.ts` + `/api/context-resources*` |
 | Shopify 数据读取与同步 | `app/server/shopify/`、`app/server/shopify/sync/` |

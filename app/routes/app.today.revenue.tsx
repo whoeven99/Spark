@@ -44,6 +44,7 @@ export default function TodayRevenuePage() {
   return (
     <TodayMetricReportPage
       report={data.report}
+      observationWindow={data.observationWindow}
       returnTo={returnTo}
       topSection={
         <TodayCountryFilterCard

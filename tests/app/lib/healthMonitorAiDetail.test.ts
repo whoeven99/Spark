@@ -15,6 +15,20 @@ describe("inferCoreMetricLabel via buildMonitorDetailInput", () => {
     expect(labels["risk-control-health"]).toBe("风控状态");
   });
 
+  it("uses an explicit observation window when provided", () => {
+    const input = buildMonitorDetailInput(HEALTH_MONITORS[0], {
+      label: "近 7 天 · 8月19日–8月25日（GMT+8，不含今天）",
+      startAt: "2026-08-19T00:00:00.000Z",
+      endAt: "2026-08-26T00:00:00.000Z",
+    });
+
+    expect(input.timeWindow).toEqual({
+      label: "近 7 天 · 8月19日–8月25日（GMT+8，不含今天）",
+      startAt: "2026-08-19T00:00:00.000Z",
+      endAt: "2026-08-26T00:00:00.000Z",
+    });
+  });
+
   it("uses the monitor title when the id is unknown", () => {
     const input = buildMonitorDetailInput({
       ...HEALTH_MONITORS[0],

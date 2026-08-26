@@ -1,5 +1,12 @@
 import prisma from "../../db.server";
 import { TODAY_ALL_COUNTRIES } from "../../lib/todayGeo.shared";
+import {
+  addUtcDays,
+  resolveDisplayTimeZone,
+  startOfUtcDay,
+  toObservationWindowView,
+  type ObservationWindowView,
+} from "../../lib/observationWindow";
 import type {
   TodayDecisionReport,
   TodayDecisionReportKey,
@@ -19,6 +26,7 @@ import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopify
 import { getAliyunLogConfig } from "../aliyunLog/config.server";
 import { PIXEL_FUNNEL_EVENTS } from "../aliyunLog/pixelQuery.server";
 import { getSlsClient } from "../aliyunLog/slsClient.server";
+import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 import { executeShopifyqlQuery } from "../shopifyql/shopifyqlQuery.server";
 import { computeChannelRoi } from "./channelRoi.server";
 import { getShopCostConfig } from "./roi/costConfig.server";
@@ -43,11 +51,13 @@ export type TodayFilterState = {
 export type TodayOverviewReportData = {
   filters: TodayFilterState;
   report: TodayOverviewReport;
+  observationWindow: ObservationWindowView;
 };
 
 export type TodayDecisionReportData = {
   filters: TodayFilterState;
   report: TodayDecisionReport;
+  observationWindow: ObservationWindowView;
 };
 
 type OrderFact = {
@@ -148,16 +158,13 @@ const REFERRER_CHANNELS: Array<{ pattern: RegExp; key: string }> = [
   { pattern: /twitter\.|x\.com/i, key: "X" },
 ];
 
-function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function addDays(date: Date, days: number): Date {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
-}
-
 function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+async function resolveShopDisplayTimeZone(admin: ShopifyAdminGraphqlClient): Promise<string> {
+  const shopInfo = await fetchShopBasicInfo(admin).catch(() => null);
+  return resolveDisplayTimeZone(shopInfo?.ianaTimezone);
 }
 
 function shortDay(dateOrKey: Date | string): string {
@@ -290,7 +297,7 @@ function statusFromRatio(value: number, watch: number, risk: number): TodayRepor
 
 async function loadOrderFacts(shop: string, now: Date): Promise<OrderFact[]> {
   const todayStart = startOfUtcDay(now);
-  const since = addDays(todayStart, -ORDER_LOOKBACK_DAYS);
+  const since = addUtcDays(todayStart, -ORDER_LOOKBACK_DAYS);
   return prisma.shopOrder.findMany({
     where: {
       shop,
@@ -316,7 +323,7 @@ async function loadOrderFacts(shop: string, now: Date): Promise<OrderFact[]> {
 
 async function loadOrderCountryCounts(shop: string, now: Date): Promise<Map<string, number>> {
   const todayStart = startOfUtcDay(now);
-  const since = addDays(todayStart, -COUNTRY_OPTION_WINDOW_DAYS);
+  const since = addUtcDays(todayStart, -COUNTRY_OPTION_WINDOW_DAYS);
   const rows = await prisma.shopOrder.findMany({
     where: {
       shop,
@@ -339,7 +346,7 @@ async function loadOrderCountryCounts(shop: string, now: Date): Promise<Map<stri
 
 async function loadSessionCountryCounts(admin: ShopifyAdminGraphqlClient): Promise<Map<string, number>> {
   const query =
-    "FROM sessions SHOW sessions WHERE session_country_code IS NOT NULL SINCE -30d UNTIL today GROUP BY session_country_code ORDER BY sessions DESC LIMIT 20";
+    "FROM sessions SHOW sessions WHERE session_country_code IS NOT NULL SINCE -30d UNTIL yesterday GROUP BY session_country_code ORDER BY sessions DESC LIMIT 20";
   const result = await executeShopifyqlQuery(admin, query);
   if (!result.ok) return new Map();
   const counts = new Map<string, number>();
@@ -357,9 +364,9 @@ async function loadSessionScope(
   includeReferrers = false,
 ): Promise<SessionScopeData | null> {
   const whereClause = country ? ` WHERE session_country_code = '${country}'` : "";
-  const summaryQuery = `FROM sessions SHOW sessions, pageviews, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout${whereClause} SINCE -7d UNTIL today`;
-  const trendQuery = `FROM sessions SHOW sessions, pageviews, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout${whereClause} TIMESERIES day SINCE -7d UNTIL today ORDER BY day ASC`;
-  const referrerQuery = `FROM sessions SHOW sessions, conversion_rate${whereClause} SINCE -7d UNTIL today GROUP BY referrer_source ORDER BY sessions DESC LIMIT 6`;
+  const summaryQuery = `FROM sessions SHOW sessions, pageviews, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout${whereClause} SINCE -7d UNTIL yesterday`;
+  const trendQuery = `FROM sessions SHOW sessions, pageviews, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout${whereClause} TIMESERIES day SINCE -7d UNTIL yesterday ORDER BY day ASC`;
+  const referrerQuery = `FROM sessions SHOW sessions, conversion_rate${whereClause} SINCE -7d UNTIL yesterday GROUP BY referrer_source ORDER BY sessions DESC LIMIT 6`;
 
   const [summaryResult, trendResult, referrerResult] = await Promise.all([
     executeShopifyqlQuery(admin, summaryQuery),
@@ -470,11 +477,11 @@ async function loadOrderScopeData(
 
   const todayStart = startOfUtcDay(now);
   const recentSevenDays = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(todayStart, -7 + index);
+    const date = addUtcDays(todayStart, -7 + index);
     return dateKey(date);
   });
   const baselineThirtyDays = Array.from({ length: 30 }, (_, index) => {
-    const date = addDays(todayStart, -37 + index);
+    const date = addUtcDays(todayStart, -37 + index);
     return dateKey(date);
   });
 
@@ -540,7 +547,7 @@ async function loadOrderScopeData(
   const refunds = await prisma.shopRefund.findMany({
     where: {
       shop,
-      processedAt: { gte: addDays(todayStart, -ORDER_LOOKBACK_DAYS), lt: todayStart },
+      processedAt: { gte: addUtcDays(todayStart, -ORDER_LOOKBACK_DAYS), lt: todayStart },
     },
     select: {
       refundAmount: true,
@@ -1486,7 +1493,7 @@ async function loadDecisionObjectData(
   const costConfig = await getShopCostConfig(shop);
   const skuCostMap = await loadSkuCostMap(shop);
   const todayStart = startOfUtcDay(now);
-  const since = addDays(todayStart, -7);
+  const since = addUtcDays(todayStart, -7);
   const orderWhere =
     selectedCountry === TODAY_ALL_COUNTRIES
       ? {
@@ -1892,7 +1899,7 @@ async function loadPageEventAggregates(
   }
 
   const todayStart = startOfUtcDay(now);
-  const since = addDays(todayStart, -7);
+  const since = addUtcDays(todayStart, -7);
   const safeShop = shop.trim().toLowerCase().replace(/"/g, '\\"');
   const baseQuery = `shopName: "${safeShop}"`;
   const eventConfigs = [
@@ -3922,13 +3929,17 @@ export async function loadTodayOverviewReportData(params: {
 }): Promise<TodayOverviewReportData> {
   const now = params.now ?? new Date();
   try {
-    const sessionCounts = params.hasReadReports
-      ? await loadSessionCountryCounts(params.admin).catch((error) => {
-          console.warn("[todayGeo] loadSessionCountryCounts failed in overview:", error);
-          return new Map<string, number>();
-        })
-      : new Map<string, number>();
-    const orderCounts = await loadOrderCountryCounts(params.shop, now);
+    const [timeZone, sessionCounts, orderCounts] = await Promise.all([
+      resolveShopDisplayTimeZone(params.admin),
+      params.hasReadReports
+        ? loadSessionCountryCounts(params.admin).catch((error) => {
+            console.warn("[todayGeo] loadSessionCountryCounts failed in overview:", error);
+            return new Map<string, number>();
+          })
+        : Promise.resolve(new Map<string, number>()),
+      loadOrderCountryCounts(params.shop, now),
+    ]);
+    const observationWindow = toObservationWindowView(7, now, timeZone);
     const filters = buildCountryOptions(
       normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
       orderCounts,
@@ -3959,6 +3970,7 @@ export async function loadTodayOverviewReportData(params: {
         reasonCards: buildTodayReasonCards(orderScope, sessionScope),
         roiSummary: buildTodayRoiSummary(orderScope),
       },
+      observationWindow,
     };
   } catch (error) {
     console.error("[todayGeo] loadTodayOverviewReportData failed:", error);
@@ -3967,6 +3979,7 @@ export async function loadTodayOverviewReportData(params: {
         "Today 总览数据暂时加载失败，当前先展示最近一版默认分析文案，避免首页空白。",
       ]),
       report: buildFallbackOverviewReport(),
+      observationWindow: toObservationWindowView(7, now),
     };
   }
 }
@@ -3982,13 +3995,17 @@ export async function loadTodayDecisionReportData(params: {
 }): Promise<TodayDecisionReportData> {
   const now = params.now ?? new Date();
   try {
-    const sessionCounts = params.hasReadReports
-      ? await loadSessionCountryCounts(params.admin).catch((error) => {
-          console.warn(`[todayGeo] loadSessionCountryCounts failed for metric=${params.metric}:`, error);
-          return new Map<string, number>();
-        })
-      : new Map<string, number>();
-    const orderCounts = await loadOrderCountryCounts(params.shop, now);
+    const [timeZone, sessionCounts, orderCounts] = await Promise.all([
+      resolveShopDisplayTimeZone(params.admin),
+      params.hasReadReports
+        ? loadSessionCountryCounts(params.admin).catch((error) => {
+            console.warn(`[todayGeo] loadSessionCountryCounts failed for metric=${params.metric}:`, error);
+            return new Map<string, number>();
+          })
+        : Promise.resolve(new Map<string, number>()),
+      loadOrderCountryCounts(params.shop, now),
+    ]);
+    const observationWindow = toObservationWindowView(7, now, timeZone);
     const filters = buildCountryOptions(
       normalizeCountryKey(params.requestedCountry) ?? params.requestedCountry ?? null,
       orderCounts,
@@ -4056,7 +4073,7 @@ export async function loadTodayDecisionReportData(params: {
               params.focus,
             );
 
-    return { filters, report };
+    return { filters, report, observationWindow };
   } catch (error) {
     console.error(`[todayGeo] loadTodayDecisionReportData failed metric=${params.metric}:`, error);
     return {
@@ -4064,6 +4081,7 @@ export async function loadTodayDecisionReportData(params: {
         "Today 报告数据暂时加载失败，当前先展示最近一版默认分析内容，避免报告页空白。",
       ]),
       report: buildFallbackDecisionReport(params.metric),
+      observationWindow: toObservationWindowView(7, now),
     };
   }
 }

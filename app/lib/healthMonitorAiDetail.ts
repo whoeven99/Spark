@@ -94,7 +94,13 @@ export const monitorDetailResultSchema = z.object({
 export type MonitorDetailInput = z.infer<typeof monitorDetailInputSchema>;
 export type MonitorDetailResult = z.infer<typeof monitorDetailResultSchema>;
 
-export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDetailInput {
+export function buildMonitorDetailInput(
+  monitor: HealthMonitorRecord,
+  timeWindowOverride?: { label: string; startAt?: string; endAt?: string },
+): MonitorDetailInput {
+  const inferredWindow = timeWindowOverride ?? {
+    label: inferTimeWindowLabel(monitor),
+  };
   const input: MonitorDetailInput = {
     version: "v1",
     monitor: {
@@ -104,9 +110,7 @@ export function buildMonitorDetailInput(monitor: HealthMonitorRecord): MonitorDe
       label: monitor.title,
       status: monitor.status,
     },
-    timeWindow: {
-      label: inferTimeWindowLabel(monitor),
-    },
+    timeWindow: inferredWindow,
     scoring: {
       dataQuality: inferDataQuality(monitor),
       confidence: inferConfidence(monitor),
@@ -201,9 +205,12 @@ export function generateMonitorDetailResult(input: MonitorDetailInput): MonitorD
   }).result;
 }
 
-export function resolveHealthMonitorDetail(monitor: HealthMonitorRecord) {
+export function resolveHealthMonitorDetail(
+  monitor: HealthMonitorRecord,
+  timeWindowOverride?: { label: string; startAt?: string; endAt?: string },
+) {
   try {
-    const input = buildMonitorDetailInput(monitor);
+    const input = buildMonitorDetailInput(monitor, timeWindowOverride);
     const prompt = buildMonitorDetailPrompt(input);
     const result = generateMonitorDetailResult(input);
 
