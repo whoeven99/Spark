@@ -36,7 +36,7 @@ export function TodayObjectReportDialog({
       onClose={onClose}
       width={960}
       title={objectCard?.report.title ?? "对象报告"}
-      description={objectCard?.report.subtitle ?? "查看当前对象的完整数据、结论和建议动作。"}
+      description={objectCard?.report.subtitle ?? "查看当前对象的完整数据、结论和分析要点。"}
       footer={
         <div style={footerRowStyle}>
           {aiChatPath ? (
@@ -72,21 +72,6 @@ export function TodayObjectReportDialog({
               {objectCard.report.analysisPoints.map((point) => (
                 <div key={point} style={pointItemStyle}>
                   {point}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section style={sectionStyle}>
-            <div style={sectionTitleStyle}>建议动作</div>
-            <div style={actionListStyle}>
-              {objectCard.report.actions.map((action) => (
-                <div key={action.title} style={actionItemStyle}>
-                  <strong style={actionTitleStyle}>
-                    {action.title}
-                    <span style={actionPriorityStyle}>{action.priority}</span>
-                  </strong>
-                  <span style={bodyTextStyle}>{action.detail}</span>
                 </div>
               ))}
             </div>
@@ -146,41 +131,6 @@ const pointItemStyle: CSSProperties = {
   color: pageColorTokens.textBody,
   fontSize: "0.875rem",
   lineHeight: 1.6,
-};
-
-const actionListStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.75rem",
-};
-
-const actionItemStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.35rem",
-  border: `1px solid ${pageColorTokens.border}`,
-  borderRadius: pageColorTokens.radiusControl,
-  background: pageColorTokens.surfaceSubtle,
-  padding: "0.9rem 1rem",
-};
-
-const actionTitleStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.9rem",
-  color: pageColorTokens.textPrimary,
-};
-
-const actionPriorityStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minWidth: 34,
-  padding: "0.1rem 0.45rem",
-  borderRadius: 999,
-  background: "#edf3ff",
-  color: pageColorTokens.brandBlue,
-  fontSize: "0.75rem",
-  fontWeight: 700,
 };
 
 const footerRowStyle: CSSProperties = {

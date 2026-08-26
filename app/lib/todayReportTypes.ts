@@ -76,6 +76,7 @@ export type TodayBreakdownRow = {
   label: string;
   value: string;
   meta: string;
+  chartValue?: number;
 };
 
 export type TodayBreakdownBlock = {

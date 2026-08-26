@@ -2290,6 +2290,14 @@ function buildChannelObjectCard(
   channel: Awaited<ReturnType<typeof computeChannelRoi>>["channels"][number],
   currency: string,
 ): TodayObjectCard {
+  const adSpend = channel.roi.investmentCost;
+  const shortTermRoi = channel.roi.businessRoi;
+  const adProfit = adSpend !== null ? channel.contributionProfit - adSpend : null;
+  const isHealthyChannel =
+    shortTermRoi !== null
+      ? shortTermRoi > 0
+      : channel.contributionProfit > 0;
+
   return {
     id: channel.channelKey,
     title: channel.label,
@@ -2297,35 +2305,58 @@ function buildChannelObjectCard(
     metrics: [
       toSummaryMetric("收入", formatCurrency(channel.revenue, currency)),
       toSummaryMetric("贡献利润", formatCurrency(channel.contributionProfit, currency)),
-      toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`),
+      ...(adSpend !== null
+        ? [toSummaryMetric("短期 ROI", formatPercent(shortTermRoi ?? 0))]
+        : [toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`)]),
     ],
     summary:
-      channel.contributionProfit > 0
-        ? "这个渠道当前仍然在留下利润，更适合继续看流量质量和客户质量。"
-        : "这个渠道已经接近低质量投入，应该先排查回报被谁拖弱了。",
-    primaryActionLabel: channel.contributionProfit > 0 ? "查看支撑原因" : "查看低效原因",
+      isHealthyChannel
+        ? shortTermRoi !== null
+          ? "这个渠道当前短期 ROI 仍为正，更适合继续看流量质量和客户质量。"
+          : "这个渠道当前仍然在留下贡献利润，更适合继续看流量质量和客户质量。"
+        : shortTermRoi !== null
+          ? "这个渠道收入有了，但广告后利润没有留下来，应该先排查短期 ROI 被谁拖弱了。"
+          : "这个渠道已经接近低质量投入，应该先排查回报被谁拖弱了。",
+    primaryActionLabel: isHealthyChannel ? "查看支撑原因" : "查看低效原因",
     report: {
       title: channel.label,
       subtitle: "ROI 报告 / 渠道对象",
       headlineMetrics: [
         toSummaryMetric("收入", formatCurrency(channel.revenue, currency)),
         toSummaryMetric("贡献利润", formatCurrency(channel.contributionProfit, currency)),
-        toSummaryMetric("退款损耗", formatCurrency(channel.refundLoss, currency)),
-        toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`),
+        ...(adSpend !== null
+          ? [
+              toSummaryMetric("广告费", formatCurrency(adSpend, currency)),
+              toSummaryMetric("短期 ROI", formatPercent(shortTermRoi ?? 0)),
+            ]
+          : [
+              toSummaryMetric("退款损耗", formatCurrency(channel.refundLoss, currency)),
+              toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`),
+            ]),
       ],
       conclusion:
-        channel.contributionProfit > 0
-          ? "这个渠道仍然能留下利润，但仍需确认是不是靠健康对象在支撑。"
-          : "这个渠道的问题不是有没有收入，而是回报质量已经开始变弱。",
+        isHealthyChannel
+          ? shortTermRoi !== null
+            ? "这个渠道当前短期 ROI 仍为正，但仍需确认是不是靠健康对象在支撑。"
+            : "这个渠道仍然能留下贡献利润，但仍需确认是不是靠健康对象在支撑。"
+          : shortTermRoi !== null
+            ? "这个渠道的问题不是有没有收入，而是广告后利润已经开始变弱。"
+            : "这个渠道的问题不是有没有收入，而是回报质量已经开始变弱。",
       analysisPoints: [
         `收入 ${formatCurrency(channel.revenue, currency)}，贡献利润 ${formatCurrency(channel.contributionProfit, currency)}。`,
-        `退款损耗 ${formatCurrency(channel.refundLoss, currency)}，新客占比 ${channel.customers.newOrderShare}%。`,
+        ...(adSpend !== null
+          ? [
+              `广告费 ${formatCurrency(adSpend, currency)}，广告后利润 ${formatCurrency(adProfit ?? 0, currency)}，短期 ROI ${formatPercent(shortTermRoi ?? 0)}。`,
+            ]
+          : [
+              `退款损耗 ${formatCurrency(channel.refundLoss, currency)}，新客占比 ${channel.customers.newOrderShare}%。`,
+            ]),
         "下一步更适合继续看这个渠道带来的高价值订单和异常损耗订单。",
       ],
       actions: [
         {
-          title: channel.contributionProfit > 0 ? "继续承接健康对象" : "先收紧低效投入",
-          detail: channel.contributionProfit > 0 ? "优先保留真正能留下利润的流量。" : "避免继续把预算压在低质量回报上。",
+          title: isHealthyChannel ? "继续承接健康对象" : "先收紧低效投入",
+          detail: isHealthyChannel ? "优先保留真正能留下利润的流量。" : "避免继续把预算压在低质量回报上。",
           priority: "P0",
         },
         {
@@ -2489,7 +2520,26 @@ function buildTrafficReport(
     )
     .sort((left, right) => right.sessions - left.sessions)
     .slice(0, 3);
+  const lowQualitySourceKeys = new Set(lowQualitySources.map((source) => source.key));
+  const healthyTopTrafficSessions = topTrafficSources
+    .filter((source) => !lowQualitySourceKeys.has(source.key))
+    .reduce((sum, item) => sum + item.sessions, 0);
+  const lowQualitySourceSessions = lowQualitySources.reduce((sum, item) => sum + item.sessions, 0);
+  const otherSourceSessions = Math.max(
+    0,
+    (sessionScope?.summary.sessions ?? 0) - healthyTopTrafficSessions - lowQualitySourceSessions,
+  );
   const weakSourceSessionShare = lowQualitySources.reduce((sum, item) => sum + item.sessionShare, 0);
+  const browseOnlySessions = sessionScope
+    ? Math.max(0, sessionScope.summary.sessions - sessionScope.summary.sessionsWithCartAdditions)
+    : null;
+  const addedCartNotCheckoutSessions = sessionScope
+    ? Math.max(0, sessionScope.summary.sessionsWithCartAdditions - sessionScope.summary.sessionsThatReachedCheckout)
+    : null;
+  const reachedCheckoutNotCompleteSessions = sessionScope
+    ? Math.max(0, sessionScope.summary.sessionsThatReachedCheckout - sessionScope.summary.sessionsThatCompletedCheckout)
+    : null;
+  const completedCheckoutSessions = sessionScope?.summary.sessionsThatCompletedCheckout ?? null;
   const pageSignalPages = objectData.landingPages.filter((page) => (page.sessions ?? 0) > 0 || (page.pageViews ?? 0) > 0);
   const healthyLandingPages = [...objectData.landingPages]
     .filter((page) =>
@@ -2518,8 +2568,6 @@ function buildTrafficReport(
         : right.orderCount - left.orderCount || right.refundLoss - left.refundLoss,
     )
     .slice(0, 3);
-  const weakLandingPageOrders = weakLandingPages.reduce((sum, page) => sum + page.orderCount, 0);
-  const weakLandingPageSessions = weakLandingPages.reduce((sum, page) => sum + pageTrafficBase(page), 0);
   const groups: TodayEvidenceGroup[] = [
     {
       key: "high_traffic_sources",
@@ -2617,19 +2665,22 @@ function buildTrafficReport(
         summary: "先确认会话主要来自哪里，再判断这些来源有没有把流量带成有效承接。",
         rows: [
           {
-            label: "高流量来源会话",
-            value: formatInteger(topTrafficSources.reduce((sum, item) => sum + item.sessions, 0)),
-            meta: "当前会话占比最高的来源集合。",
+            label: "主要健康来源会话",
+            value: sessionScope ? formatInteger(healthyTopTrafficSessions) : "待补",
+            meta: "高会话且未落入低质量样本的来源集合，更适合作为继续放量的入口。",
+            chartValue: sessionScope ? healthyTopTrafficSessions : undefined,
           },
           {
             label: "低质量来源会话",
-            value: formatInteger(lowQualitySources.reduce((sum, item) => sum + item.sessions, 0)),
+            value: sessionScope ? formatInteger(lowQualitySourceSessions) : "待补",
             meta: "会话有了，但来源转化率明显低于整体。",
+            chartValue: sessionScope ? lowQualitySourceSessions : undefined,
           },
           {
-            label: "来源数量",
-            value: String(sources.length),
-            meta: "当前来源判断基于 Shopify sessions 的 referrer_source 口径。",
+            label: "其他来源会话",
+            value: sessionScope ? formatInteger(otherSourceSessions) : "待补",
+            meta: "剩余来源分散贡献，当前先不作为第一优先级。",
+            chartValue: sessionScope ? otherSourceSessions : undefined,
           },
         ],
         relatedGroupKeys: ["high_traffic_sources", "low_quality_sources"],
@@ -2640,27 +2691,32 @@ function buildTrafficReport(
         summary: "当页深和加购触达开始走弱时，就不能再把会话增长直接当成健康增长。",
         rows: [
           {
-            label: "页/会话",
-            value: pageviewsPerSession.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 2 }),
-            meta: "页面深度越浅，越要回头看入口页是否接住了流量。",
+            label: "浏览后流失会话",
+            value: browseOnlySessions === null ? "待补" : formatInteger(browseOnlySessions),
+            meta: "流量进站后没有形成加购，是最早一层的承接损失。",
+            chartValue: browseOnlySessions ?? undefined,
           },
           {
-            label: "加购触达率",
-            value: formatPercent(cartRate),
-            meta: "这是判断流量有没有形成初步承接的第一道信号。",
+            label: "加购后未到结账",
+            value: addedCartNotCheckoutSessions === null ? "待补" : formatInteger(addedCartNotCheckoutSessions),
+            meta: "已经形成加购意图，但还没顺利推进到结账。",
+            chartValue: addedCartNotCheckoutSessions ?? undefined,
           },
           {
-            label: pageSignalPages.length > 0 ? "承接偏弱页面会话" : "承接偏弱页面订单",
-            value: formatInteger(pageSignalPages.length > 0 ? weakLandingPageSessions : weakLandingPageOrders),
+            label: "进入结账未完成",
+            value:
+              reachedCheckoutNotCompleteSessions === null ? "待补" : formatInteger(reachedCheckoutNotCompleteSessions),
             meta:
               pageSignalPages.length > 0
-                ? "当前已按页面事件聚合会话与加购信号，再用订单结果补看后段承接。"
-                : "当前页面对象先按 landingSite 聚合，用订单质量先做代理承接判断。",
+                ? "当前已能定位到承接偏弱页面，优先去看结账前后的掉点页面。"
+                : "当前仍以订单代理补看中后段承接，后续继续补页面会话信号。",
+            chartValue: reachedCheckoutNotCompleteSessions ?? undefined,
           },
           {
-            label: "到达结账率",
-            value: formatPercent(checkoutReachRate),
-            meta: "如果这里开始掉点，下一步更适合继续到转化页看页面和支付风险。",
+            label: "完成结账会话",
+            value: completedCheckoutSessions === null ? "待补" : formatInteger(completedCheckoutSessions),
+            meta: "这是当前真正完成成交闭环的会话结果。",
+            chartValue: completedCheckoutSessions ?? undefined,
           },
         ],
         relatedGroupKeys: ["healthy_landing_pages", "weak_landing_pages"],
@@ -2778,6 +2834,17 @@ function buildConversionReport(
   const paymentAttempts = objectData.landingPages.reduce((sum, page) => sum + page.paymentAttemptCount, 0);
   const paymentFailures = objectData.landingPages.reduce((sum, page) => sum + page.paymentFailureCount, 0);
   const paymentSuccessRate = safeDivide(paymentAttempts - paymentFailures, paymentAttempts || 1);
+  const preAddToCartDropoffSessions = sessionScope
+    ? Math.max(0, sessionScope.summary.sessions - sessionScope.summary.sessionsWithCartAdditions)
+    : null;
+  const completedCheckoutSessions = sessionScope?.summary.sessionsThatCompletedCheckout ?? null;
+  const addToCartDropoffSessions = sessionScope
+    ? Math.max(0, sessionScope.summary.sessionsWithCartAdditions - sessionScope.summary.sessionsThatReachedCheckout)
+    : null;
+  const checkoutDropoffSessions = sessionScope
+    ? Math.max(0, sessionScope.summary.sessionsThatReachedCheckout - sessionScope.summary.sessionsThatCompletedCheckout)
+    : null;
+  const paymentSuccessCount = paymentAttempts > 0 ? Math.max(0, paymentAttempts - paymentFailures) : null;
   const groups: TodayEvidenceGroup[] = [
     {
       key: "stable_conversion_pages",
@@ -2865,29 +2932,33 @@ function buildConversionReport(
         summary: "先看掉点更多发生在加购前、结账前，还是完成结账前。",
         rows: [
           {
-            label: "加购触达率",
-            value: formatPercent(cartRate),
+            label: "浏览后未加购",
+            value: preAddToCartDropoffSessions === null ? "待补" : formatInteger(preAddToCartDropoffSessions),
             meta: "这是商品详情页和入口页是否接住流量的第一层信号。",
+            chartValue: preAddToCartDropoffSessions ?? undefined,
           },
           {
-            label: "到达结账率",
-            value: formatPercent(checkoutReachRate),
+            label: "加购后未到结账",
+            value: addToCartDropoffSessions === null ? "待补" : formatInteger(addToCartDropoffSessions),
             meta: "如果这里偏低，优先排查中后段承接和结账链路。",
+            chartValue: addToCartDropoffSessions ?? undefined,
           },
           {
-            label: "支付风险页面",
-            value: formatInteger(paymentRiskPages.length),
+            label: "结账后未完成",
+            value: checkoutDropoffSessions === null ? "待补" : formatInteger(checkoutDropoffSessions),
             meta:
               pageCompletionSignalPages.length > 0
-                ? "当前页面对象已经补进会话、加购、结账触发、支付提交和完成支付信号，再用支付失败订单补看成交后风险。"
+                ? "当前页面对象已经补进结账与支付信号，可以继续往支付末端下钻。"
                 : pageSignalPages.length > 0
-                  ? "当前页面对象已经补进会话、加购和结账触发信号，再用支付失败订单补看末端风险。"
-                : "当前先按 landingSite 聚合页面对象，用支付失败订单把页面风险补出来。",
+                  ? "当前页面对象已经补进会话、加购和结账触发信号。"
+                  : "当前先按 landingSite 订单代理补看结账前后的承接差异。",
+            chartValue: checkoutDropoffSessions ?? undefined,
           },
           {
-            label: "完成结账率",
-            value: formatPercent(checkoutCompleteRate),
+            label: "完成结账会话",
+            value: completedCheckoutSessions === null ? "待补" : formatInteger(completedCheckoutSessions),
             meta: "这里偏低时，要重点怀疑支付与结账完成环节。",
+            chartValue: completedCheckoutSessions ?? undefined,
           },
         ],
         relatedGroupKeys: ["stable_conversion_pages", "payment_risk_pages"],
@@ -2898,27 +2969,19 @@ function buildConversionReport(
         summary: "支付失败订单已经接入代理口径，优先用异常订单补看支付末端的真实后果。",
         rows: [
           {
-            label: "支付失败订单数",
-            value: formatInteger(paymentRiskOrders.length),
-            meta: "这些订单已经走到支付末端，但没有完成闭环。",
+            label: "支付成功次数",
+            value: paymentSuccessCount === null ? "待补" : formatInteger(paymentSuccessCount),
+            meta: "这是已经完成支付闭环的末端结果。",
+            chartValue: paymentSuccessCount ?? undefined,
           },
           {
-            label: "支付失败率",
-            value: paymentAttempts > 0 ? formatPercent(safeDivide(paymentFailures, paymentAttempts)) : "待补",
-            meta: "当前先按订单 financialStatus 代理支付失败口径。",
-          },
-          {
-            label: "支付成功率",
-            value:
-              pagePaymentSubmissions > 0
-                ? formatPercent(pagePaymentCompletionRate)
-                : paymentAttempts > 0
-                  ? formatPercent(paymentSuccessRate)
-                  : "待补",
+            label: "支付失败次数",
+            value: paymentAttempts > 0 ? formatInteger(paymentFailures) : "待补",
             meta:
               pagePaymentSubmissions > 0
-                ? "当前优先展示页面像素的 payment_info_submitted -> checkout_completed 完成率。"
-                : "当前先按订单 financialStatus 代理支付成功口径。",
+                ? "当前优先结合页面像素的 payment_info_submitted -> checkout_completed 信号复核支付末端。"
+                : "当前先按订单 financialStatus 代理支付失败口径。",
+            chartValue: paymentAttempts > 0 ? paymentFailures : undefined,
           },
         ],
         relatedGroupKeys: ["payment_failed_orders"],
@@ -3078,16 +3141,24 @@ function buildRevenueReport(
             label: "Top 赚钱商品",
             value: formatCurrency(topProfitableProducts.reduce((sum, item) => sum + item.revenue, 0), objectData.currency),
             meta: "收入和利润都相对健康，适合继续放量。",
+            chartValue: topProfitableProducts.reduce((sum, item) => sum + item.revenue, 0),
           },
           {
             label: "低质量增长商品",
             value: formatCurrency(lowQualityGrowthProducts.reduce((sum, item) => sum + item.revenue, 0), objectData.currency),
             meta: "有收入，但利润空间偏弱，最值得继续拆清楚。",
+            chartValue: lowQualityGrowthProducts.reduce((sum, item) => sum + item.revenue, 0),
           },
           {
             label: "长尾商品收入",
             value: formatCurrency(Math.max(0, orderScope.sevenDayTotals.revenue - topProfitableProducts.reduce((sum, item) => sum + item.revenue, 0) - lowQualityGrowthProducts.reduce((sum, item) => sum + item.revenue, 0)), objectData.currency),
             meta: "分散贡献，当前先不作为第一优先级。",
+            chartValue: Math.max(
+              0,
+              orderScope.sevenDayTotals.revenue
+                - topProfitableProducts.reduce((sum, item) => sum + item.revenue, 0)
+                - lowQualityGrowthProducts.reduce((sum, item) => sum + item.revenue, 0),
+            ),
           },
         ],
         relatedGroupKeys: ["top_profitable_products", "low_quality_growth_products"],
@@ -3101,16 +3172,19 @@ function buildRevenueReport(
             label: "高价值订单收入",
             value: formatCurrency(highValueOrders.reduce((sum, item) => sum + item.revenue, 0), objectData.currency),
             meta: "高客单、低损耗，更适合作为健康样本继续追溯。",
+            chartValue: highValueOrders.reduce((sum, item) => sum + item.revenue, 0),
           },
           {
             label: "高退款损耗订单",
             value: formatCurrency(highRefundOrders.reduce((sum, item) => sum + item.refundLoss, 0), objectData.currency),
             meta: "成交之后利润继续流失，应该优先排查。",
+            chartValue: highRefundOrders.reduce((sum, item) => sum + item.refundLoss, 0),
           },
           {
             label: "复购订单收入",
             value: formatCurrency(objectData.orders.filter((order) => !order.isFirstOrder).reduce((sum, item) => sum + item.revenue, 0), objectData.currency),
             meta: "复购订单更能解释收入质量有没有稳定基础。",
+            chartValue: objectData.orders.filter((order) => !order.isFirstOrder).reduce((sum, item) => sum + item.revenue, 0),
           },
         ],
         relatedGroupKeys: ["high_value_orders", "high_refund_orders"],
@@ -3350,16 +3424,23 @@ function buildProfitReport(
             label: "高利润商品",
             value: formatCurrency(topProfitProducts.reduce((sum, item) => sum + item.estimatedProfit, 0), objectData.currency),
             meta: "这些商品是当前最值得继续放量的正向样本。",
+            chartValue: Math.abs(topProfitProducts.reduce((sum, item) => sum + item.estimatedProfit, 0)),
           },
           {
             label: "亏损商品",
             value: formatCurrency(lossProducts.reduce((sum, item) => sum + item.estimatedProfit, 0), objectData.currency),
             meta: "它们会把收入规模伪装成改善，应该优先止损。",
+            chartValue: Math.abs(lossProducts.reduce((sum, item) => sum + item.estimatedProfit, 0)),
           },
           {
             label: "长尾利润",
             value: formatCurrency(objectData.products.reduce((sum, item) => sum + item.estimatedProfit, 0) - topProfitProducts.reduce((sum, item) => sum + item.estimatedProfit, 0) - lossProducts.reduce((sum, item) => sum + item.estimatedProfit, 0), objectData.currency),
             meta: "分散贡献，当前先作为补充观察。",
+            chartValue: Math.abs(
+              objectData.products.reduce((sum, item) => sum + item.estimatedProfit, 0)
+                - topProfitProducts.reduce((sum, item) => sum + item.estimatedProfit, 0)
+                - lossProducts.reduce((sum, item) => sum + item.estimatedProfit, 0),
+            ),
           },
         ],
         relatedGroupKeys: ["top_profit_products", "loss_products"],
@@ -3373,16 +3454,19 @@ function buildProfitReport(
             label: "健康订单利润",
             value: formatCurrency(healthyOrders.reduce((sum, item) => sum + item.estimatedProfit, 0), objectData.currency),
             meta: "高客单、低损耗，更适合复制。",
+            chartValue: Math.abs(healthyOrders.reduce((sum, item) => sum + item.estimatedProfit, 0)),
           },
           {
             label: "异常损耗订单",
             value: formatCurrency(abnormalLossOrders.reduce((sum, item) => sum + item.refundLoss, 0), objectData.currency),
             meta: "退款和低质量来源正在继续吞利润。",
+            chartValue: abnormalLossOrders.reduce((sum, item) => sum + item.refundLoss, 0),
           },
           {
             label: "退款损耗",
             value: formatCurrency(orderScope.sevenDayTotals.refundLoss, objectData.currency),
             meta: "成交后利润流失要单独盯，不要被收入总量掩盖。",
+            chartValue: orderScope.sevenDayTotals.refundLoss,
           },
         ],
         relatedGroupKeys: ["healthy_orders", "abnormal_loss_orders"],
@@ -3481,16 +3565,19 @@ function buildProfitReport(
               label: "亏损商品收入",
               value: formatCurrency(lossProductRevenue, objectData.currency),
               meta: "这些商品仍在卖，但已经无法留下健康利润。",
+              chartValue: lossProductRevenue,
             },
             {
               label: "亏损商品估算利润",
               value: formatCurrency(lossProductProfit, objectData.currency),
               meta: "负利润商品是当前成本压力最直接的对象证据。",
+              chartValue: Math.abs(lossProductProfit),
             },
             {
               label: "折扣成本",
               value: formatCurrency(orderScope.sevenDayTotals.discounts, objectData.currency),
               meta: "折扣是最典型的售前成本压力来源。",
+              chartValue: orderScope.sevenDayTotals.discounts,
             },
           ],
           relatedGroupKeys: ["loss_products", "top_profit_products"],
@@ -3504,16 +3591,19 @@ function buildProfitReport(
               label: "异常损耗订单退款",
               value: formatCurrency(abnormalLossOrders.reduce((sum, item) => sum + item.refundLoss, 0), objectData.currency),
               meta: "成交后的退款会继续吞掉已获得的利润。",
+              chartValue: abnormalLossOrders.reduce((sum, item) => sum + item.refundLoss, 0),
             },
             {
               label: "异常损耗订单估算利润",
               value: formatCurrency(abnormalLossOrders.reduce((sum, item) => sum + item.estimatedProfit, 0), objectData.currency),
               meta: "负利润订单应该先单独看，不要被整体收入掩盖。",
+              chartValue: Math.abs(abnormalLossOrders.reduce((sum, item) => sum + item.estimatedProfit, 0)),
             },
             {
               label: "支付与售后压力",
               value: formatCurrency(orderScope.sevenDayTotals.paymentFees + orderScope.sevenDayTotals.refundLoss, objectData.currency),
               meta: "支付手续费与退款损耗都会直接压缩最终利润。",
+              chartValue: orderScope.sevenDayTotals.paymentFees + orderScope.sevenDayTotals.refundLoss,
             },
           ],
           relatedGroupKeys: ["abnormal_loss_orders"],
@@ -3621,12 +3711,49 @@ async function buildRoiDecisionReport(
   const channelResult = await computeChannelRoi(shop, costConfig, new Date(), {
     countryCode: selectedCountry === TODAY_ALL_COUNTRIES ? null : selectedCountry,
   });
-  const healthyChannels = channelResult.channels
-    .filter((channel) => channel.contributionProfit > 0)
+  const channelsWithAdSpend = channelResult.channels.filter(
+    (channel) => channel.roi.investmentCost !== null && channel.roi.investmentCost > 0,
+  );
+  const paidContributionProfit = channelsWithAdSpend.reduce(
+    (sum, item) => sum + item.contributionProfit,
+    0,
+  );
+  const paidInvestmentCost = channelsWithAdSpend.reduce(
+    (sum, item) => sum + (item.roi.investmentCost ?? 0),
+    0,
+  );
+  const mappedPaidRevenue = channelsWithAdSpend.reduce((sum, item) => sum + item.revenue, 0);
+  const paidAfterSpendProfit = paidContributionProfit - paidInvestmentCost;
+  const paidShortTermRoi =
+    paidInvestmentCost > 0
+      ? (paidContributionProfit - paidInvestmentCost) / paidInvestmentCost
+      : null;
+  const paidRoas = paidInvestmentCost > 0 ? mappedPaidRevenue / paidInvestmentCost : null;
+  const healthyChannels = [...channelResult.channels]
+    .filter((channel) =>
+      channel.roi.businessRoi !== null
+        ? channel.roi.businessRoi > 0
+        : channel.contributionProfit > 0,
+    )
+    .sort((left, right) => {
+      if (left.roi.businessRoi !== null && right.roi.businessRoi !== null) {
+        return right.roi.businessRoi - left.roi.businessRoi;
+      }
+      return right.contributionProfit - left.contributionProfit;
+    })
     .slice(0, 3);
   const weakChannels = [...channelResult.channels]
-    .filter((channel) => channel.contributionProfit <= 0 || (channel.contributionMarginPercent ?? 0) < 8)
-    .sort((left, right) => left.contributionProfit - right.contributionProfit)
+    .filter((channel) =>
+      channel.roi.businessRoi !== null
+        ? channel.roi.businessRoi <= 0
+        : channel.contributionProfit <= 0 || (channel.contributionMarginPercent ?? 0) < 8,
+    )
+    .sort((left, right) => {
+      if (left.roi.businessRoi !== null && right.roi.businessRoi !== null) {
+        return left.roi.businessRoi - right.roi.businessRoi;
+      }
+      return left.contributionProfit - right.contributionProfit;
+    })
     .slice(0, 3);
   const refundLossOrders = [...objectData.orders]
     .filter((order) => order.refundLoss > 0)
@@ -3639,6 +3766,7 @@ async function buildRoiDecisionReport(
   const lossOrderRefund = refundLossOrders.reduce((sum, item) => sum + item.refundLoss, 0);
   const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, orderScope.sevenDayTotals.revenue || 1);
   const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, orderScope.sevenDayTotals.revenue || 1);
+  const totalLossShare = discountShare + refundShare;
   const channelCount = channelResult.channels.length;
 
   const report: TodayDecisionReport = {
@@ -3648,21 +3776,34 @@ async function buildRoiDecisionReport(
     accent: `${selectedCountryLabel} / 近 7 天 vs 前 30 天`,
     primaryQuestion: "最近的回报效率是被哪些渠道支撑住的，哪些损耗对象已经需要先止损？",
     summary:
-      (shortTermReturn ?? 0) >= 1
-        ? "当前仍然在赚钱，但下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
-        : "当前短期经营回报已经偏弱，应该优先排查低效渠道和高损耗订单。",
+      paidShortTermRoi !== null
+        ? paidShortTermRoi > 0
+          ? "当前已能按广告费口径计算短期 ROI，整体仍为正，但下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
+          : "当前已能按广告费口径计算短期 ROI，但广告后利润已经偏弱，应该优先排查低效渠道和高损耗订单。"
+        : (shortTermReturn ?? 0) >= 1
+          ? "当前仍然在赚钱，但广告费口径的短期 ROI 还未完全接通，下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
+          : "当前短期经营回报已经偏弱，应该优先排查低效渠道和高损耗订单。",
     statuses: [
       {
-        label: "短期经营回报",
+        label: paidShortTermRoi !== null ? "短期 ROI" : "短期经营回报",
         status:
-          shortTermReturn == null || baselineReturn == null
-            ? "watch"
-            : shortTermReturn < baselineReturn * 0.85
+          paidShortTermRoi !== null
+            ? paidShortTermRoi <= 0
               ? "risk"
-              : shortTermReturn < baselineReturn * 0.95
+              : paidShortTermRoi <= 0.2
                 ? "watch"
-                : "healthy",
-        detail: `近 7 天 ${formatMultiple(shortTermReturn)}，前 30 天基准 ${formatMultiple(baselineReturn)}。`,
+                : "healthy"
+            : shortTermReturn == null || baselineReturn == null
+              ? "watch"
+              : shortTermReturn < baselineReturn * 0.85
+                ? "risk"
+                : shortTermReturn < baselineReturn * 0.95
+                  ? "watch"
+                  : "healthy",
+        detail:
+          paidShortTermRoi !== null
+            ? `已映射广告费 ${formatCurrency(paidInvestmentCost, channelResult.currency)}，近 30 天短期 ROI ${formatPercent(paidShortTermRoi)}。`
+            : `近 7 天 ${formatMultiple(shortTermReturn)}，前 30 天基准 ${formatMultiple(baselineReturn)}。`,
       },
       {
         label: "渠道质量",
@@ -3676,16 +3817,16 @@ async function buildRoiDecisionReport(
       },
     ],
     summaryMetrics: [
-      toSummaryMetric("短期经营回报", formatMultiple(shortTermReturn)),
-      toSummaryMetric(
-        "健康渠道收入占比",
-        formatPercent(safeDivide(paidChannelRevenue, channelResult.totalRevenue || 1)),
-      ),
-      toSummaryMetric(
-        "低效渠道收入占比",
-        formatPercent(safeDivide(weakChannelRevenue, channelResult.totalRevenue || 1)),
-      ),
-      toSummaryMetric("总损耗占比", formatPercent(discountShare + refundShare)),
+      paidShortTermRoi !== null
+        ? toSummaryMetric("短期 ROI", formatPercent(paidShortTermRoi))
+        : toSummaryMetric("短期经营回报", formatMultiple(shortTermReturn)),
+      paidShortTermRoi !== null
+        ? toSummaryMetric("广告后利润", formatCurrency(paidAfterSpendProfit, channelResult.currency))
+        : toSummaryMetric("健康渠道收入占比", formatPercent(safeDivide(paidChannelRevenue, channelResult.totalRevenue || 1))),
+      toSummaryMetric("总损耗占比", formatPercent(totalLossShare)),
+      paidShortTermRoi !== null
+        ? toSummaryMetric("ROAS", formatMultiple(paidRoas))
+        : toSummaryMetric("低效渠道收入占比", formatPercent(safeDivide(weakChannelRevenue, channelResult.totalRevenue || 1))),
     ],
     breakdowns: [
       {
@@ -3694,19 +3835,53 @@ async function buildRoiDecisionReport(
         summary: "先确认哪些渠道真的在留下利润，哪些渠道虽然有收入，但回报质量已经变弱。",
         rows: [
           {
-            label: "健康渠道收入",
-            value: formatCurrency(healthyChannels.reduce((sum, item) => sum + item.revenue, 0), channelResult.currency),
-            meta: "量和质相对均衡，更适合作为继续投的方向。",
+            label: paidShortTermRoi !== null ? "已映射付费收入" : "健康渠道收入",
+            value: formatCurrency(
+              paidShortTermRoi !== null
+                ? mappedPaidRevenue
+                : healthyChannels.reduce((sum, item) => sum + item.revenue, 0),
+              channelResult.currency,
+            ),
+            meta:
+              paidShortTermRoi !== null
+                ? "这部分收入已经成功映射到广告费，可以直接进入短期 ROI 计算。"
+                : "量和质相对均衡，更适合作为继续投的方向。",
+            chartValue:
+              paidShortTermRoi !== null
+                ? mappedPaidRevenue
+                : healthyChannels.reduce((sum, item) => sum + item.revenue, 0),
           },
           {
-            label: "低效渠道收入",
-            value: formatCurrency(weakChannels.reduce((sum, item) => sum + item.revenue, 0), channelResult.currency),
-            meta: "收入有了，但贡献利润已经开始偏弱。",
+            label: paidShortTermRoi !== null ? "广告费" : "低效渠道收入",
+            value: formatCurrency(
+              paidShortTermRoi !== null
+                ? paidInvestmentCost
+                : weakChannels.reduce((sum, item) => sum + item.revenue, 0),
+              channelResult.currency,
+            ),
+            meta:
+              paidShortTermRoi !== null
+                ? "广告费来自广告平台日指标，再按平台内收入占比分配到渠道。"
+                : "收入有了，但贡献利润已经开始偏弱。",
+            chartValue:
+              paidShortTermRoi !== null
+                ? paidInvestmentCost
+                : weakChannels.reduce((sum, item) => sum + item.revenue, 0),
           },
           {
-            label: "可归因收入占比",
-            value: `${channelResult.attributedRevenueShare}%`,
-            meta: "当前渠道判断基于 last-click 归因口径。",
+            label: paidShortTermRoi !== null ? "广告后利润" : "可归因收入占比",
+            value:
+              paidShortTermRoi !== null
+                ? formatCurrency(paidAfterSpendProfit, channelResult.currency)
+                : `${channelResult.attributedRevenueShare}%`,
+            meta:
+              paidShortTermRoi !== null
+                ? "广告后利润 = 贡献利润 - 广告费，用来判断投放后到底还剩多少钱。"
+                : "当前渠道判断基于 last-click 归因口径。",
+            chartValue:
+              paidShortTermRoi !== null
+                ? Math.abs(paidAfterSpendProfit)
+                : channelResult.totalRevenue * (channelResult.attributedRevenueShare / 100),
           },
         ],
         relatedGroupKeys: ["healthy_channels", "weak_channels"],
@@ -3717,19 +3892,22 @@ async function buildRoiDecisionReport(
         summary: "ROI 下降不一定只发生在投放前段，成交后的退款和损耗也会继续吞掉结果。",
         rows: [
           {
-            label: "退款损耗订单",
-            value: formatCurrency(refundLossOrders.reduce((sum, item) => sum + item.refundLoss, 0), channelResult.currency),
-            meta: "成交后损耗会继续压缩回报。",
-          },
-          {
-            label: "折扣损耗",
+            label: "折扣成本",
             value: formatCurrency(orderScope.sevenDayTotals.discounts, channelResult.currency),
             meta: "折扣是典型的售前损耗，需要和渠道一起看。",
+            chartValue: orderScope.sevenDayTotals.discounts,
           },
           {
             label: "退款损耗",
             value: formatCurrency(orderScope.sevenDayTotals.refundLoss, channelResult.currency),
             meta: "退款问题应该单独看，不要被规模掩盖。",
+            chartValue: orderScope.sevenDayTotals.refundLoss,
+          },
+          {
+            label: "高损耗订单",
+            value: formatCurrency(lossOrderRefund, channelResult.currency),
+            meta: "Top 高损耗订单能解释是哪几笔订单在继续拖弱回报。",
+            chartValue: lossOrderRefund,
           },
         ],
         relatedGroupKeys: ["refund_loss_orders"],

@@ -42,12 +42,12 @@ export function TodayObjectGroupDialog({
       onClose={onClose}
       width={980}
       title={group?.title ?? "对象组"}
-      description={group?.summary ?? "查看当前对象组的完整列表与建议动作。"}
+      description={group?.summary ?? "查看当前对象组的完整列表和当前判断。"}
       footer={
         <div style={footerRowStyle}>
           {aiChatPath ? (
             <button type="button" style={primaryButtonStyle} onClick={() => navigate(aiChatPath)}>
-              带着这组对象和 AI 聊
+              和 AI 聊聊
             </button>
           ) : null}
           <button type="button" style={secondaryButtonStyle} onClick={onClose}>
@@ -68,7 +68,7 @@ export function TodayObjectGroupDialog({
             <div>对象</div>
             <div>关键数据</div>
             <div>当前判断</div>
-            <div>建议动作</div>
+            <div>操作</div>
           </div>
 
           <div style={listStyle}>
@@ -94,7 +94,6 @@ export function TodayObjectGroupDialog({
                 <div style={summaryCellStyle}>{item.report.conclusion}</div>
                 <div style={actionCellStyle}>
                   <span style={detailHintStyle}>查看详情</span>
-                  <span>{item.report.actions.map((action) => action.title).join(" / ")}</span>
                 </div>
               </button>
             ))}
