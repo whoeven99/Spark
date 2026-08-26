@@ -118,7 +118,9 @@ async function run({
   if (context.shop) {
     try {
       onStep?.("数据拉取", "running");
-      const daily = await ensureDailySnapshotOverview(context.shop);
+      const daily = await ensureDailySnapshotOverview(context.shop, {
+        shopifyAdmin: context.admin,
+      });
       if (daily.hasData) {
         onStep?.("数据拉取", "completed");
         steps.push({

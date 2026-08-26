@@ -4,7 +4,7 @@ import type {
   PlaybookDefinition,
   PlaybookRunParams,
 } from "../../../../../app/server/ai/core/playbookRegistry.server";
-import { ensureDailySnapshot } from "../../../../../app/server/operations/dailyInspection.server";
+import { ensureDailySnapshot, ensureDailySnapshotOverview } from "../../../../../app/server/operations/dailyInspection.server";
 
 // mock LLM 避免真实 API 调用（必须在顶层，vitest 会提升）
 vi.mock("../../../../../app/server/ai/core/shopChatGraph.server", () => ({
@@ -18,6 +18,7 @@ vi.mock(
   "../../../../../app/server/operations/dailyInspection.server",
   () => ({
     ensureDailySnapshot: vi.fn().mockResolvedValue({ hasData: false }),
+    ensureDailySnapshotOverview: vi.fn().mockResolvedValue({ hasData: false }),
   }),
 );
 
@@ -176,6 +177,10 @@ describe("shopHealthCheck playbook run", () => {
 
     const result = await shopHealthCheckPlaybook.run({ goal: "经营体检", context: ctx });
 
+    expect(ensureDailySnapshotOverview).toHaveBeenCalledWith(ctx.shop, {
+      shopifyAdmin: ctx.admin,
+    });
+
     expect(result.ok).toBe(true);
     expect(result.steps).toHaveLength(3);
     expect(result.steps[0].status).toBe("completed");
@@ -297,9 +302,14 @@ describe("inventoryRiskMitigation playbook run", () => {
       },
     } as unknown as Awaited<ReturnType<typeof ensureDailySnapshot>>);
 
+    const ctx = mockContext();
     const result = await inventoryRiskMitigationPlaybook.run({
       goal: "哪些 SKU 要先补货",
-      context: mockContext(),
+      context: ctx,
+    });
+
+    expect(ensureDailySnapshot).toHaveBeenCalledWith(ctx.shop, {
+      shopifyAdmin: ctx.admin,
     });
 
     expect(result.ok).toBe(true);
@@ -363,9 +373,14 @@ describe("refundIssueReview playbook run", () => {
       },
     } as unknown as Awaited<ReturnType<typeof ensureDailySnapshot>>);
 
+    const ctx = mockContext();
     const result = await refundIssueReviewPlaybook.run({
       goal: "退款率为什么上升",
-      context: mockContext(),
+      context: ctx,
+    });
+
+    expect(ensureDailySnapshot).toHaveBeenCalledWith(ctx.shop, {
+      shopifyAdmin: ctx.admin,
     });
 
     expect(result.ok).toBe(true);

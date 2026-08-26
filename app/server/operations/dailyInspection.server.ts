@@ -22,7 +22,9 @@ import {
 /**
  * 每日巡检服务：生成/读取当日诊断快照，同步四象限待办任务，输出昨日复盘。
  *
- * 触发方式为「懒巡检」：当天首个访问触发计算，后续访问直接读快照；
+ * 触发方式为「懒巡检」：当天首个访问触发计算，后续访问直接读快照。
+ * 若当日快照缺少商品运营数据且本次带了 Shopify Admin 客户端，会补算并写回，
+ * 避免首页先建空快照后健康度整天停在「待接入」。
  * 后续可平滑切换为定时器调用 ensureDailySnapshot。
  */
 
@@ -927,6 +929,21 @@ type SnapshotRow = {
   items: DiagnosisItemRow[];
 };
 
+function snapshotLacksProductOps(existing: SnapshotRow): boolean {
+  const metrics = existing.metrics;
+  if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) return true;
+  return (metrics as OperationsSummaryMetrics).hasProductOpsData !== true;
+}
+
+function shouldRebuildDailySnapshot(
+  existing: SnapshotRow | null,
+  options?: EnsureDailySnapshotOptions,
+): boolean {
+  if (!existing) return true;
+  if (options?.force) return true;
+  return Boolean(options?.shopifyAdmin) && snapshotLacksProductOps(existing);
+}
+
 /** 用已持久化的快照拼出概览结果，只额外读任务列表与环比，不重算诊断。 */
 async function buildOverviewFromSnapshot(
   shop: string,
@@ -972,7 +989,7 @@ export async function ensureDailySnapshotOverview(
       },
       include: { items: true },
     });
-    if (existing) {
+    if (existing && !shouldRebuildDailySnapshot(existing, options)) {
       return buildOverviewFromSnapshot(shop, existing, now, timeZone);
     }
   }
@@ -997,12 +1014,11 @@ export async function ensureDailySnapshot(
     include: { items: true },
   });
 
-  if (existing && !options?.force) {
+  if (existing && !shouldRebuildDailySnapshot(existing, options)) {
     const [base, diagnosis] = await Promise.all([
       buildOverviewFromSnapshot(shop, existing, now, timeZone),
-      computeOperationsDiagnosis(shop, now, {
-        shopifyAdmin: options?.shopifyAdmin,
-      }),
+      // 命中完整快照时 detail 只读 Shop* 表，不再打商品 GraphQL
+      computeOperationsDiagnosis(shop, now),
     ]);
     return { ...base, detail: diagnosis.detail };
   }
