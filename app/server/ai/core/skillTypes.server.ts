@@ -18,6 +18,24 @@ export type SkillStage =
   | "execute" // 执行
   | "review"; // 复盘验证
 
+/**
+ * Skill 对商户的可见性：
+ * - public：可在「有什么功能」等对外介绍中展示
+ * - internal：Agent 仍可调用，但不主动介绍给商户
+ * 缺省按 public 处理。
+ */
+export type SkillVisibility = "public" | "internal";
+
+export function resolveSkillVisibility(
+  visibility?: SkillVisibility,
+): SkillVisibility {
+  return visibility ?? "public";
+}
+
+export function isPublicSkill(visibility?: SkillVisibility): boolean {
+  return resolveSkillVisibility(visibility) === "public";
+}
+
 export const SKILL_STAGE_LABELS: Record<SkillStage, string> = {
   dataAlign: "数据对齐",
   monitor: "监控与发现",

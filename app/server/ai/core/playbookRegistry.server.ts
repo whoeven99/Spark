@@ -2,7 +2,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
-import { normalizeSteps, type StepInput } from "./skillTypes.server";
+import { normalizeSteps, type SkillVisibility, type StepInput } from "./skillTypes.server";
 import type {
   PlaybookCaseDraft,
   PlaybookStructuredResult,
@@ -70,6 +70,10 @@ export interface PlaybookDefinition {
     | "competitive";
   /** 告诉 LLM 何时应选择此 Playbook */
   triggerDescription: string;
+  /**
+   * 对商户可见性：public 可对外介绍；internal 仅内部调用。缺省 public。
+   */
+  visibility?: SkillVisibility;
   /**
    * 步骤声明，用于 system prompt / admin 流程图展示。
    * 可写字符串（label 即 id），也可写完整 StepSpec 以携带 kind/stage/runningLabel。

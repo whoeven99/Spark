@@ -781,9 +781,8 @@ function createShopInventoryHealthTool(admin: ShopifyAdminGraphqlClient) {
   });
 }
 
-export function createShopifyShopInfoTools(admin: ShopifyAdminGraphqlClient) {
+export function createShopifyShopMetricsTools(admin: ShopifyAdminGraphqlClient) {
   return [
-    createShopBasicInfoTool(admin),
     createShopTodaySalesTool(admin),
     createShopTodayOrderCountTool(admin),
     createShopTodayConversionRateTool(admin),
@@ -793,6 +792,11 @@ export function createShopifyShopInfoTools(admin: ShopifyAdminGraphqlClient) {
     createShopTodayRefundRateTool(admin),
     createShopInventoryHealthTool(admin),
   ];
+}
+
+/** @deprecated 使用 createShopifyShopMetricsTools + createShopifyShopInfoTool */
+export function createShopifyShopInfoTools(admin: ShopifyAdminGraphqlClient) {
+  return [createShopBasicInfoTool(admin), ...createShopifyShopMetricsTools(admin)];
 }
 
 export function createShopifyShopInfoTool(admin: ShopifyAdminGraphqlClient) {

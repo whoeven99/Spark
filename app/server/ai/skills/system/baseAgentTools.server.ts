@@ -1,6 +1,7 @@
 export {
   createShopifyShopInfoTools,
   createShopifyShopInfoTool,
+  createShopifyShopMetricsTools,
   type ShopifyAdminGraphqlClient,
 } from "../shopifyInfo/shopifyInfo.tool";
 export { timeTool } from "./timeTool";
