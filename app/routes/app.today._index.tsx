@@ -1,6 +1,6 @@
-import type { CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useLocation, useSearchParams } from "react-router";
+import { useFetcher, useLoaderData, useLocation, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
@@ -10,15 +10,13 @@ import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
 import { loadTodayOverviewReportData } from "../server/operations/todayGeo.server";
+import type { ValueLayerResponse } from "./api.today-value-layer";
 import {
   mobilePageContentStyle,
   pageColorTokens,
   pageContentStyle,
   pageHintTextStyle,
-  pageMetricLabelStyle,
-  pageMetricValueStyle,
   PageSurface,
-  pageStatusCardStyle,
 } from "./page/pageUiStyles";
 import { DestinationPage } from "./component/shared/DestinationPage";
 import { MetricHintLabel } from "./component/shared/MetricHintLabel";
@@ -92,7 +90,61 @@ export default function TodayOverview() {
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
   const { filters, report } = data;
+  const valueFetcher = useFetcher<ValueLayerResponse>();
+  const lastValuePathRef = useRef<string | null>(null);
   useFeatureView("today");
+  const reportConclusionItems = [
+    { label: "主要瓶颈", detail: report.header.primaryBottleneck },
+    { label: "最大机会", detail: report.header.biggestOpportunity },
+    ...report.reasonCards.slice(0, 3).map((card) => ({
+      label: card.label,
+      detail: card.summary,
+    })),
+  ];
+  const coreMetricItems = [
+    ...report.metricCards.map((card) => ({
+      key: card.key,
+      label: card.label,
+      value: card.value,
+      delta: card.delta,
+      tone: card.tone,
+      href: card.href,
+      hint: getTodayMetricCardExplanation(card.key),
+    })),
+    ...report.roiSummary.cards.map((card) => ({
+      key: card.key,
+      label: card.label,
+      value: card.value,
+      delta: card.summary,
+      tone: "warning" as const,
+      href: card.href,
+      hint: getTodayRoiSummaryExplanation(card.key),
+    })),
+  ];
+  const valuePath = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.selectedCountry !== TODAY_ALL_COUNTRIES) {
+      params.set("country", filters.selectedCountry);
+    }
+    const query = params.toString();
+    return query ? `/api/today-value-layer?${query}` : "/api/today-value-layer";
+  }, [filters.selectedCountry]);
+  const valueLayer = valueFetcher.data?.ok ? valueFetcher.data.value : null;
+  const customerLtvValue = valueLayer
+    ? formatCurrencyValue(valueLayer.customers.averageDynamicLtv, valueLayer.channels.currency)
+    : valueFetcher.state !== "idle"
+      ? "加载中"
+      : "待补";
+  const analysisCards = data.analysisOverviewCards.map((card) => ({
+    ...card,
+    metricValue: card.key === "customer_value" && customerLtvValue !== "待补" ? customerLtvValue : card.metricValue,
+  }));
+
+  useEffect(() => {
+    if (lastValuePathRef.current === valuePath) return;
+    lastValuePathRef.current = valuePath;
+    valueFetcher.load(valuePath);
+  }, [valueFetcher, valuePath]);
 
   const handleCountryChange = (country: string) => {
     const params = new URLSearchParams(searchParams);
@@ -133,58 +185,21 @@ export default function TodayOverview() {
           notes={filters.dataNotes}
         />
 
-        <PageSurface title="经营状态头部" subtitle="先判断最近 7 天是在健康增长、需要关注，还是已经进入盈利压力。">
-          <div style={headerGridStyle(isMobile)}>
+        <PageSurface title="经营报告" subtitle="首页先给出经营主结论；具体数据判断继续进入下一级报告和对象页展开。">
+          <div style={reportOverviewGridStyle(isMobile)}>
             <div style={headerMainCardStyle}>
               <span style={{ ...statusBadgeStyle, ...badgeStyle(report.header.status) }}>{report.header.statusLabel}</span>
-              <div style={headerTitleStyle}>{report.header.summary}</div>
-              <div style={headerNotesStyle}>
-                <strong>主要瓶颈：</strong>
-                {report.header.primaryBottleneck}
-              </div>
-              <div style={headerNotesStyle}>
-                <strong>最大机会：</strong>
-                {report.header.biggestOpportunity}
-              </div>
+              <div style={headerTitleStyle}>当前经营主结论</div>
+              <div style={headerLeadSummaryStyle}>{report.header.summary}</div>
             </div>
 
-            <div style={headerMetricGridStyle}>
-              <div style={headerMetricTileStyle}>
-                <MetricHintLabel
-                  as="div"
-                  style={pageMetricLabelStyle}
-                  text="收入"
-                  content={getTodayHeaderMetricExplanation("revenue")}
-                />
-                <div style={pageMetricValueStyle}>{report.header.metrics.revenue}</div>
-              </div>
-              <div style={headerMetricTileStyle}>
-                <MetricHintLabel
-                  as="div"
-                  style={pageMetricLabelStyle}
-                  text="估算利润"
-                  content={getTodayHeaderMetricExplanation("estimatedProfit")}
-                />
-                <div style={pageMetricValueStyle}>{report.header.metrics.estimatedProfit}</div>
-              </div>
-              <div style={headerMetricTileStyle}>
-                <MetricHintLabel
-                  as="div"
-                  style={pageMetricLabelStyle}
-                  text="估算利润率"
-                  content={getTodayHeaderMetricExplanation("estimatedProfitMargin")}
-                />
-                <div style={pageMetricValueStyle}>{report.header.metrics.estimatedProfitMargin}</div>
-              </div>
-              <div style={headerMetricTileStyle}>
-                <MetricHintLabel
-                  as="div"
-                  style={pageMetricLabelStyle}
-                  text="短期经营回报"
-                  content={getTodayHeaderMetricExplanation("shortTermReturn")}
-                />
-                <div style={pageMetricValueStyle}>{report.header.metrics.shortTermReturn}</div>
-              </div>
+            <div style={reportConclusionListStyle}>
+              {reportConclusionItems.map((item) => (
+                <div key={`${item.label}-${item.detail}`} style={reportConclusionItemStyle}>
+                  <div style={reportConclusionLabelStyle}>{item.label}</div>
+                  <div style={headerNotesStyle}>{item.detail}</div>
+                </div>
+              ))}
             </div>
           </div>
           <div style={headerMetaRowStyle}>
@@ -193,31 +208,29 @@ export default function TodayOverview() {
           </div>
         </PageSurface>
 
-        <PageSurface title="核心经营指标" subtitle="首页先保留 6 张经营卡，直接进入对应的 B 报告。">
-          <div style={cardGridStyle(isMobile, 3)}>
-            {report.metricCards.map((card) => (
-              <div key={card.key} style={pageStatusCardStyle}>
-                <div style={cardHeaderStyle}>
+        <PageSurface title="核心经营指标" subtitle="首页先保留核心经营卡，并直接进入对应的 B 报告。">
+          <div style={coreMetricListStyle}>
+            {coreMetricItems.map((item) => (
+              <div key={item.key} style={coreMetricRowStyle(isMobile)}>
+                <div style={coreMetricMainStyle}>
                   <MetricHintLabel
                     as="div"
-                    style={pageMetricLabelStyle}
-                    text={card.label}
-                    content={getTodayMetricCardExplanation(card.key)}
+                    style={coreMetricLabelStyle}
+                    text={item.label}
+                    content={item.hint}
                   />
-                  <span style={metricSourceStyle}>{card.source === "estimated" ? "估算" : "已实现"}</span>
+                  <div style={coreMetricValueStyle}>{item.value}</div>
+                  <div style={coreMetricDeltaStyle(item.tone)}>{item.delta}</div>
                 </div>
-                <div style={pageMetricValueStyle}>{card.value}</div>
-                <div style={deltaTextStyle(card.tone)}>{card.delta}</div>
-                {card.summary ? <p style={summaryTextStyle}>{card.summary}</p> : null}
-                <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="进入分析" onClick={() => navigate(buildDetailPath(card.href))} />
+                <div style={coreMetricActionStyle(isMobile)}>
+                  <SurfaceButton label="进入分析" onClick={() => navigate(buildDetailPath(item.href))} />
                 </div>
               </div>
             ))}
           </div>
         </PageSurface>
 
-        <PageSurface title="为什么会这样" subtitle="这一层不展开长报告，只给出当前最需要记住的三条判断。">
+        <PageSurface title="分项报告" subtitle="不同数据方向的结论继续在下一级报告里展开，这里只保留当前焦点和入口。">
           <div style={cardGridStyle(isMobile, 3)}>
             {report.reasonCards.map((card) => (
               <div key={card.key} style={reasonCardStyle}>
@@ -233,7 +246,7 @@ export default function TodayOverview() {
                 <p style={summaryTextStyle}>{card.summary}</p>
                 {card.href ? (
                   <div style={cardActionRowStyle(isMobile)}>
-                    <SurfaceButton label="继续看对象" onClick={() => navigate(buildDetailPath(card.href!))} />
+                    <SurfaceButton label="进入报告" onClick={() => navigate(buildDetailPath(card.href!))} />
                   </div>
                 ) : null}
               </div>
@@ -241,31 +254,28 @@ export default function TodayOverview() {
           </div>
         </PageSurface>
 
-        <PageSurface title="短期 ROI" subtitle="回收期与长期 ROI 本轮不展示。短期口径仍用当前估算，公式确定后再改。">
-          <div style={cardGridStyle(isMobile, 3)}>
-            {report.roiSummary.cards.map((card) => (
-              <div key={card.key} style={pageStatusCardStyle}>
-                <div style={cardHeaderStyle}>
-                  <MetricHintLabel
-                    as="div"
-                    style={pageMetricLabelStyle}
-                    text={card.label}
-                    content={getTodayRoiSummaryExplanation(card.key)}
-                  />
-                  <span style={metricSourceStyle}>{card.statusLabel}</span>
+        <PageSurface title="专题分析" subtitle="这组卡片强调的是指标 + 分析结论，用来继续下钻到更完整的详情报告，不和健康度卡片混用。">
+          <div style={analysisCardGridStyle(isMobile)}>
+            {analysisCards.map((card) => (
+              <div key={card.key} style={analysisCardStyle}>
+                <div style={analysisCardHeaderStyle}>
+                  <strong style={analysisCardTitleStyle}>{card.title}</strong>
                 </div>
-                <div style={pageMetricValueStyle}>{card.value}</div>
-                <div style={roiMetaStyle}>
-                  数据质量：{card.dataQuality} / 置信度：{card.confidence}
-                </div>
-                <p style={summaryTextStyle}>{card.summary}</p>
+                <div style={analysisQuestionLabelStyle}>问题</div>
+                <p style={analysisQuestionTextStyle}>{card.question}</p>
+                <div style={analysisMetricLabelStyle}>{card.metricLabel}</div>
+                <div style={analysisMetricValueStyle}>{card.metricValue}</div>
+                <div style={analysisConclusionLabelStyle}>分析结论</div>
+                <p style={summaryTextStyle}>{card.conclusion}</p>
+                <div style={analysisTodoMetaStyle}>已整理 {card.todoCount} 条可执行 todo</div>
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="查看 ROI 页" onClick={() => navigate(buildDetailPath(card.href))} />
+                  <SurfaceButton label="进入详情报告" onClick={() => navigate(buildDetailPath(card.href))} />
                 </div>
               </div>
             ))}
           </div>
         </PageSurface>
+
       </DestinationPage>
     </div>
   );
@@ -294,7 +304,15 @@ function cardGridStyle(isMobile: boolean, columns: number): CSSProperties {
   };
 }
 
-function headerGridStyle(isMobile: boolean): CSSProperties {
+function analysisCardGridStyle(isMobile: boolean): CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+    gap: "1rem",
+  };
+}
+
+function reportOverviewGridStyle(isMobile: boolean): CSSProperties {
   return {
     display: "grid",
     gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
@@ -331,6 +349,13 @@ const headerMainCardStyle: CSSProperties = {
 };
 
 const headerTitleStyle: CSSProperties = {
+  fontSize: "0.8rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+  letterSpacing: "0.02em",
+};
+
+const headerLeadSummaryStyle: CSSProperties = {
   fontSize: "1.2rem",
   fontWeight: 760,
   color: pageColorTokens.textPrimary,
@@ -343,17 +368,24 @@ const headerNotesStyle: CSSProperties = {
   lineHeight: 1.65,
 };
 
-const headerMetricGridStyle: CSSProperties = {
+const reportConclusionListStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "0.75rem",
 };
 
-const headerMetricTileStyle: CSSProperties = {
+const reportConclusionItemStyle: CSSProperties = {
   padding: "0.9rem",
   borderRadius: pageColorTokens.radiusControl,
   border: `1px solid ${pageColorTokens.border}`,
   background: pageColorTokens.surfaceSubtle,
+  display: "grid",
+  gap: "0.3rem",
+};
+
+const reportConclusionLabelStyle: CSSProperties = {
+  fontSize: "0.78rem",
+  fontWeight: 700,
+  color: pageColorTokens.textFootnote,
 };
 
 const headerMetaRowStyle: CSSProperties = {
@@ -363,32 +395,49 @@ const headerMetaRowStyle: CSSProperties = {
   marginTop: "0.9rem",
 };
 
-const cardHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
+const coreMetricListStyle: CSSProperties = {
+  display: "grid",
   gap: "0.75rem",
-  marginBottom: "0.5rem",
 };
 
-const metricSourceStyle: CSSProperties = {
-  color: pageColorTokens.textFootnote,
-  fontSize: "0.75rem",
-  fontWeight: 700,
-};
-
-const summaryTextStyle: CSSProperties = {
-  margin: 0,
-  color: pageColorTokens.textSecondary,
-  fontSize: "0.84rem",
-  lineHeight: 1.6,
-};
-
-function deltaTextStyle(tone: "positive" | "neutral" | "warning" | "negative"): CSSProperties {
+function coreMetricRowStyle(isMobile: boolean): CSSProperties {
   return {
-    marginTop: "0.35rem",
-    fontSize: "0.8rem",
-    fontWeight: 700,
+    display: "flex",
+    alignItems: isMobile ? "stretch" : "center",
+    justifyContent: "space-between",
+    flexDirection: isMobile ? "column" : "row",
+    gap: isMobile ? "0.9rem" : "1rem",
+    padding: isMobile ? "0.95rem" : "0.9rem 1rem",
+    border: `1px solid ${pageColorTokens.border}`,
+    borderRadius: pageColorTokens.radiusControl,
+    background: pageColorTokens.surfaceSubtle,
+  };
+}
+
+const coreMetricMainStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.22rem",
+  minWidth: 0,
+  flex: "1 1 auto",
+};
+
+const coreMetricLabelStyle: CSSProperties = {
+  fontSize: "0.95rem",
+  fontWeight: 760,
+  color: pageColorTokens.textPrimary,
+};
+
+const coreMetricValueStyle: CSSProperties = {
+  fontSize: "1.6rem",
+  fontWeight: 780,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.15,
+};
+
+function coreMetricDeltaStyle(tone: "positive" | "neutral" | "warning" | "negative"): CSSProperties {
+  return {
+    fontSize: "0.95rem",
+    fontWeight: 800,
     color:
       tone === "negative"
         ? pageColorTokens.critical
@@ -400,6 +449,20 @@ function deltaTextStyle(tone: "positive" | "neutral" | "warning" | "negative"): 
   };
 }
 
+function coreMetricActionStyle(isMobile: boolean): CSSProperties {
+  return {
+    flexShrink: 0,
+    alignSelf: isMobile ? "stretch" : "center",
+  };
+}
+
+const summaryTextStyle: CSSProperties = {
+  margin: 0,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.84rem",
+  lineHeight: 1.6,
+};
+
 const reasonCardStyle: CSSProperties = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
@@ -407,6 +470,67 @@ const reasonCardStyle: CSSProperties = {
   padding: "1rem",
   display: "grid",
   gap: "0.5rem",
+};
+
+const analysisCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surfaceSubtle,
+  padding: "1rem",
+  display: "grid",
+  gap: "0.42rem",
+};
+
+const analysisCardHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+};
+
+const analysisCardTitleStyle: CSSProperties = {
+  fontSize: "1rem",
+  color: pageColorTokens.textPrimary,
+};
+
+const analysisQuestionLabelStyle: CSSProperties = {
+  fontSize: "0.78rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+};
+
+const analysisQuestionTextStyle: CSSProperties = {
+  margin: 0,
+  color: pageColorTokens.textPrimary,
+  fontSize: "0.88rem",
+  fontWeight: 650,
+  lineHeight: 1.55,
+};
+
+const analysisMetricLabelStyle: CSSProperties = {
+  fontSize: "0.78rem",
+  fontWeight: 700,
+  color: pageColorTokens.textFootnote,
+};
+
+const analysisMetricValueStyle: CSSProperties = {
+  fontSize: "1.4rem",
+  fontWeight: 780,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.2,
+};
+
+const analysisConclusionLabelStyle: CSSProperties = {
+  fontSize: "0.78rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+  marginTop: "0.15rem",
+};
+
+const analysisTodoMetaStyle: CSSProperties = {
+  color: pageColorTokens.textFootnote,
+  fontSize: "0.78rem",
+  fontWeight: 700,
 };
 
 const reasonLabelStyle: CSSProperties = {
@@ -429,25 +553,6 @@ const reasonValueStyle: CSSProperties = {
   fontWeight: 760,
   color: pageColorTokens.textPrimary,
 };
-
-function getTodayHeaderMetricExplanation(
-  key: "revenue" | "estimatedProfit" | "estimatedProfitMargin" | "shortTermReturn",
-): string {
-  if (key === "revenue") {
-    return "收入 = 近 7 天非取消订单的 totalPrice 求和。";
-  }
-  if (key === "estimatedProfit") {
-    return [
-      "估算利润 = 收入 - 估算成本。",
-      "估算成本 = 估算 COGS + 折扣 + 支付手续费 + 退款损耗。",
-      "估算 COGS = subtotal × (1 - 默认毛利率)。",
-    ].join("\n");
-  }
-  if (key === "estimatedProfitMargin") {
-    return "估算利润率 = 估算利润 / 收入。";
-  }
-  return "短期经营回报 = 收入 / 估算成本，用来看最近 7 天有没有留下正向经营结果。";
-}
 
 function getTodayMetricCardExplanation(
   key: "revenue" | "cost" | "profit" | "profit_margin" | "orders" | "aov",
@@ -502,8 +607,12 @@ const reasonMetaStyle: CSSProperties = {
   fontSize: "0.78rem",
 };
 
-const roiMetaStyle: CSSProperties = {
-  color: pageColorTokens.textFootnote,
-  fontSize: "0.78rem",
-  marginTop: "0.35rem",
-};
+function formatCurrencyValue(value: number, currencyCode: string | null | undefined): string {
+  if (!Number.isFinite(value)) return "—";
+  if (!currencyCode) return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
