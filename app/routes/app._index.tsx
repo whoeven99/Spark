@@ -21,7 +21,7 @@ import { HomePanel } from "./page/workspace/HomePanel";
 import { contentStyle, mobileContentStyle } from "./page/workspace/styles";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   if (isBillingReturnRequest(request)) {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
@@ -29,7 +29,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
   try {
-    const dailyOps = await ensureDailySnapshotOverview(session.shop);
+    const dailyOps = await ensureDailySnapshotOverview(session.shop, {
+      shopifyAdmin: admin,
+    });
     dashboardSnapshot = buildWorkspaceDashboardFromDailyOps(dailyOps);
   } catch (error) {
     console.error("[app._index] dashboard snapshot failed:", error);

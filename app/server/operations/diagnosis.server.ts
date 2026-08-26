@@ -198,7 +198,67 @@ function displaySku(sku: string | null | undefined): string {
   return sku?.trim() || "UNKNOWN";
 }
 
-function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
+function buildProductOperationsItem(data: ProductOperationsData): DiagnosisItemResult {
+  const totalIssues =
+    data.draftProductCount + data.noImagesProductCount + data.noDescriptionProductCount;
+  const reasoning: string[] = [];
+  let status: DiagnosisStatus = "healthy";
+
+  if (data.draftProductCount > 5) {
+    status = "risk";
+    reasoning.push(
+      `有 ${data.draftProductCount} 个商品仍处于草稿（DRAFT）状态，占用库存但未上架，优先复盘上新卡点`,
+    );
+  } else if (data.draftProductCount > 0) {
+    status = "watch";
+    reasoning.push(
+      `有 ${data.draftProductCount} 个商品草稿待上架，需要复盘上新流程并完成审核发布`,
+    );
+  }
+
+  if (data.noImagesProductCount > 0) {
+    if (status !== "risk") status = "watch";
+    reasoning.push(`${data.noImagesProductCount} 个商品缺少图片，影响转化率，需补充视觉素材`);
+  }
+  if (data.noDescriptionProductCount > 0) {
+    if (status !== "risk") status = "watch";
+    reasoning.push(`${data.noDescriptionProductCount} 个商品缺少描述，提高买家疑虑风险`);
+  }
+
+  if (status === "healthy") {
+    reasoning.push("商品信息完整度良好，无待处理项");
+  } else {
+    reasoning.push("建议先区分是上架卡点还是素材缺口，再决定走上新复盘还是商品改进任务");
+  }
+
+  return {
+    key: "product_operations",
+    name: "商品运营",
+    status,
+    metrics: {
+      draftProductCount: data.draftProductCount,
+      noImagesProductCount: data.noImagesProductCount,
+      noDescriptionProductCount: data.noDescriptionProductCount,
+      totalIssues,
+    },
+    evidence: [
+      `DRAFT 商品 ${data.draftProductCount} 个，缺图 ${data.noImagesProductCount} 个，缺描述 ${data.noDescriptionProductCount} 个`,
+      totalIssues === 0 ? "所有商品均已上架且素材完整" : `共 ${totalIssues} 个商品需要处理`,
+    ],
+    reasoning,
+    formulas: [
+      "draft_count = count(products where status = 'DRAFT')",
+      "no_images_count = count(products where status = 'ACTIVE' and images.length = 0)",
+      "no_description_count = count(products where status = 'ACTIVE' and description is empty)",
+    ],
+  };
+}
+
+function emptyDiagnosis(
+  shop: string,
+  now: Date,
+  productOpsData: ProductOperationsData | null = null,
+): OperationsDiagnosis {
   return {
     shop,
     generatedAt: now.toISOString(),
@@ -239,12 +299,12 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
       paymentSuccessful7d: 0,
       paymentSuccessRate7d: null,
       paymentFailureCount7d: 0,
-      hasProductOpsData: false,
-      draftProductCount: 0,
-      noImagesProductCount: 0,
-      noDescriptionProductCount: 0,
+      hasProductOpsData: productOpsData !== null,
+      draftProductCount: productOpsData?.draftProductCount ?? 0,
+      noImagesProductCount: productOpsData?.noImagesProductCount ?? 0,
+      noDescriptionProductCount: productOpsData?.noDescriptionProductCount ?? 0,
     },
-    items: [],
+    items: productOpsData ? [buildProductOperationsItem(productOpsData)] : [],
     detail: {
       overdueOrders: [],
       routineUnfulfilledOrders: [],
@@ -285,6 +345,7 @@ export async function computeOperationsDiagnosis(
     orderLineItems,
     totalOrdersAllTime,
     currencyRow,
+    productOpsData,
   ] = await Promise.all([
     prisma.shopOrder.findMany({
       where: { shop, createdAt: { gte: since30Days } },
@@ -318,10 +379,11 @@ export async function computeOperationsDiagnosis(
       orderBy: { createdAt: "desc" },
       select: { currency: true },
     }),
+    defaultLoadProductOperations(shopifyAdmin),
   ]);
 
   if (totalOrdersAllTime === 0) {
-    return emptyDiagnosis(shop, now);
+    return emptyDiagnosis(shop, now, productOpsData);
   }
 
   const currency = currencyRow?.currency ?? "USD";
@@ -335,9 +397,6 @@ export async function computeOperationsDiagnosis(
   });
   const pixelCurrent = pixelWindows?.current ?? null;
   const pixelPrevious = pixelWindows?.previous ?? null;
-
-  // ── 商品运营状态（§7.9 商品运营诊断）──
-  const productOpsData = await defaultLoadProductOperations(shopifyAdmin);
 
   // ── 支付链路统计（§7.3 转化率补充）──
   // 从订单的 financialStatus 推断：pending/authorized → 支付尝试但未完成，paid 及以上 → 成功
@@ -815,67 +874,7 @@ export async function computeOperationsDiagnosis(
 
   // 4. 商品运营（文档 §7.9）
   if (productOpsData) {
-    let pStatus: DiagnosisStatus = "healthy";
-    const pReasoning: string[] = [];
-    const totalIssues = productOpsData.draftProductCount +
-      productOpsData.noImagesProductCount +
-      productOpsData.noDescriptionProductCount;
-
-    if (productOpsData.draftProductCount > 5) {
-      pStatus = "risk";
-      pReasoning.push(
-        `有 ${productOpsData.draftProductCount} 个商品仍处于草稿（DRAFT）状态，占用库存但未上架，优先复盘上新卡点`,
-      );
-    } else if (productOpsData.draftProductCount > 0) {
-      pStatus = "watch";
-      pReasoning.push(
-        `有 ${productOpsData.draftProductCount} 个商品草稿待上架，需要复盘上新流程并完成审核发布`,
-      );
-    }
-
-    if (productOpsData.noImagesProductCount > 0) {
-      if (pStatus !== "risk") pStatus = pStatus === "watch" ? "watch" : "watch";
-      pReasoning.push(
-        `${productOpsData.noImagesProductCount} 个商品缺少图片，影响转化率，需补充视觉素材`,
-      );
-    }
-
-    if (productOpsData.noDescriptionProductCount > 0) {
-      if (pStatus !== "risk" && pStatus !== "watch") pStatus = "watch";
-      pReasoning.push(
-        `${productOpsData.noDescriptionProductCount} 个商品缺少描述，提高买家疑虑风险`,
-      );
-    }
-
-    if (pStatus === "healthy") {
-      pReasoning.push("商品信息完整度良好，无待处理项");
-    } else {
-      pReasoning.push("建议先区分是上架卡点还是素材缺口，再决定走上新复盘还是商品改进任务");
-    }
-
-    items.push({
-      key: "product_operations",
-      name: "商品运营",
-      status: pStatus,
-      metrics: {
-        draftProductCount: productOpsData.draftProductCount,
-        noImagesProductCount: productOpsData.noImagesProductCount,
-        noDescriptionProductCount: productOpsData.noDescriptionProductCount,
-        totalIssues,
-      },
-      evidence: [
-        `DRAFT 商品 ${productOpsData.draftProductCount} 个，缺图 ${productOpsData.noImagesProductCount} 个，缺描述 ${productOpsData.noDescriptionProductCount} 个`,
-        totalIssues === 0
-          ? "所有商品均已上架且素材完整"
-          : `共 ${totalIssues} 个商品需要处理`,
-      ],
-      reasoning: pReasoning,
-      formulas: [
-        "draft_count = count(products where status = 'DRAFT')",
-        "no_images_count = count(products where status = 'ACTIVE' and images.length = 0)",
-        "no_description_count = count(products where status = 'ACTIVE' and description is empty)",
-      ],
-    });
+    items.push(buildProductOperationsItem(productOpsData));
   }
 
   // 2. 履约健康（文档 §7.4）

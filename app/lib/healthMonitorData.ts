@@ -584,6 +584,22 @@ function statusRank(status: HealthMonitorStatus) {
   return 0;
 }
 
+const INSUFFICIENT_EVIDENCE = "当前没有足够可核验证据，暂不补演示数字。";
+const UNAVAILABLE_SUMMARY = "当前快照未提供该项数据，暂不生成健康度结论。";
+
+function unavailableMonitor(record: HealthMonitorRecord): HealthMonitorRecord {
+  return {
+    ...record,
+    value: "暂无数据",
+    status: "watch",
+    dataAvailable: false,
+    benchmark: null,
+    summary: UNAVAILABLE_SUMMARY,
+    issue: UNAVAILABLE_SUMMARY,
+    evidence: [{ label: "当前状态", value: INSUFFICIENT_EVIDENCE }],
+  };
+}
+
 export function buildHealthMonitorRecords(
   snapshot?: HealthMonitorSnapshotInput,
 ): HealthMonitorRecord[] {
@@ -598,27 +614,22 @@ export function buildHealthMonitorRecords(
   );
   const itemByKey = new Map((snapshot.items ?? []).map((item) => [item.key, item]));
 
-  return HEALTH_MONITORS.map((record) => {
+  return HEALTH_MONITORS.map((record): HealthMonitorRecord => {
     switch (record.id) {
       case "payment-health": {
         const environment = environmentByKey.get("payments");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         const rate = toNumber(environment.metrics["paymentSuccessRate7d"]);
         const attempts = toNumber(environment.metrics["paymentAttempts7d"]);
         const success = toNumber(environment.metrics["paymentSuccessful7d"]);
         const failure = toNumber(environment.metrics["paymentFailureCount7d"]);
         return {
           ...record,
-          value:
-            rate !== null
-              ? `成功率 ${formatPercent(rate)}`
-              : environment.source === "pending"
-                ? "待补数据"
-                : record.value,
+          value: rate !== null ? `成功率 ${formatPercent(rate)}` : "待补数据",
           status: toHealthMonitorStatus(environment.status),
           summary: environment.summary,
           issue: environment.summary,
-          evidence: mergeEvidence(record.evidence, [
+          evidence: mergeEvidence([
             rate !== null ? `近 7 天支付成功率 ${formatPercent(rate)}。` : null,
             attempts !== null && success !== null
               ? `近 7 天共 ${formatInteger(attempts)} 次支付尝试，成功 ${formatInteger(success)} 次。`
@@ -631,7 +642,7 @@ export function buildHealthMonitorRecords(
       }
       case "product-readiness-health": {
         const environment = environmentByKey.get("new-arrivals");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         const draftCount = toNumber(environment.metrics["draftProductCount"]) ?? 0;
         const noImagesCount = toNumber(environment.metrics["noImagesProductCount"]) ?? 0;
         const noDescriptionCount = toNumber(environment.metrics["noDescriptionProductCount"]) ?? 0;
@@ -649,7 +660,7 @@ export function buildHealthMonitorRecords(
           status: toHealthMonitorStatus(environment.status),
           summary: environment.summary,
           issue: environment.summary,
-          evidence: mergeEvidence(record.evidence, [
+          evidence: mergeEvidence([
             draftCount > 0 ? `${formatInteger(draftCount)} 个商品草稿待上架，建议优先复盘上新卡点。` : null,
             noImagesCount > 0 ? `${formatInteger(noImagesCount)} 个商品缺少图片。` : null,
             noDescriptionCount > 0 ? `${formatInteger(noDescriptionCount)} 个商品缺少描述。` : null,
@@ -659,21 +670,16 @@ export function buildHealthMonitorRecords(
       case "conversion-health": {
         const environment = environmentByKey.get("conversion");
         const item = itemByKey.get("conversion_health");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         const rate = toNumber(environment.metrics["conversionRate7d"]);
         const trafficChangeRate = toNumber(environment.metrics["trafficChangeRate"]);
         return {
           ...record,
-          value:
-            rate !== null
-              ? `CVR ${formatPercent(rate)}`
-              : environment.source === "pending"
-                ? "待补数据"
-                : record.value,
+          value: rate !== null ? `CVR ${formatPercent(rate)}` : "待补数据",
           status: toHealthMonitorStatus(item?.status ?? environment.status),
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
-          evidence: mergeEvidence(record.evidence, [
+          evidence: mergeEvidence([
             rate !== null ? `近 7 天转化率 ${formatPercent(rate)}。` : null,
             trafficChangeRate !== null
               ? `近 7 天流量环比 ${formatSignedPercent(trafficChangeRate)}。`
@@ -685,12 +691,12 @@ export function buildHealthMonitorRecords(
       case "refund-health": {
         const environment = environmentByKey.get("after-sales");
         const item = itemByKey.get("refund_health");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         const rate = toNumber(environment.metrics["refundRate30d"]);
         const delta = toNumber(environment.metrics["refundRateDelta"]);
         return {
           ...record,
-          value: rate !== null ? `退款率 ${formatPercent(rate)}` : record.value,
+          value: rate !== null ? `退款率 ${formatPercent(rate)}` : "暂无数据",
           status: toHealthMonitorStatus(item?.status ?? environment.status),
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
@@ -698,7 +704,7 @@ export function buildHealthMonitorRecords(
             ...buildRefundSkuObjects(detail?.topRefundSkus),
             ...buildAbnormalRefundOrderObjects(detail?.abnormalRefundOrders),
           ].slice(0, 4),
-          evidence: mergeEvidence(record.evidence, [
+          evidence: mergeEvidence([
             rate !== null ? `近 30 天退款率 ${formatPercent(rate)}。` : null,
             delta !== null ? `相较上一观察窗口变化 ${formatSignedPercent(delta, "pp")}。` : null,
             item?.evidence[0] ?? null,
@@ -708,7 +714,7 @@ export function buildHealthMonitorRecords(
       case "inventory-health": {
         const environment = environmentByKey.get("inventory");
         const item = itemByKey.get("inventory_health");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         const riskSkuCount = toNumber(environment.metrics["riskSkuCount"]) ?? 0;
         const estimatedLoss = toNumber(environment.metrics["estimatedInventoryLoss"]);
         const currency = toStringValue(environment.metrics["currency"]) ?? "USD";
@@ -719,7 +725,7 @@ export function buildHealthMonitorRecords(
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
           relatedObjects: buildInventoryRiskObjects(detail?.inventoryRisks).slice(0, 4),
-          evidence: mergeEvidence(record.evidence, [
+          evidence: mergeEvidence([
             riskSkuCount > 0 ? `${formatInteger(riskSkuCount)} 个高动销 SKU 已进入缺货风险区。` : "当前未发现高风险库存 SKU。",
             estimatedLoss !== null
               ? `预计未来 7 天库存风险损失 ${formatMoney(estimatedLoss, currency)}。`
@@ -731,7 +737,7 @@ export function buildHealthMonitorRecords(
       case "fulfillment-health": {
         const environment = environmentByKey.get("fulfillment");
         const item = itemByKey.get("fulfillment_health");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         const overdueOrderCount = toNumber(environment.metrics["overdueOrderCount"]) ?? 0;
         const carrierIssueCount = toNumber(environment.metrics["carrierIssueCount"]) ?? 0;
         const fulfillmentRate30d = toNumber(environment.metrics["fulfillmentRate30d"]);
@@ -742,7 +748,7 @@ export function buildHealthMonitorRecords(
               ? `超时单 ${formatInteger(overdueOrderCount)} 单`
               : fulfillmentRate30d !== null
                 ? `履约率 ${formatPercent(fulfillmentRate30d)}`
-                : record.value,
+                : "暂无数据",
           status: toHealthMonitorStatus(item?.status ?? environment.status),
           summary: item?.reasoning[0] ?? environment.summary,
           issue: item?.reasoning[0] ?? environment.summary,
@@ -750,7 +756,7 @@ export function buildHealthMonitorRecords(
             ...buildOverdueOrderObjects(detail?.overdueOrders),
             ...buildCarrierIssueObjects(detail?.carrierIssues),
           ].slice(0, 4),
-          evidence: mergeEvidence(record.evidence, [
+          evidence: mergeEvidence([
             overdueOrderCount > 0 ? `当前有 ${formatInteger(overdueOrderCount)} 单超时未发货。` : null,
             carrierIssueCount > 0 ? `当前有 ${formatInteger(carrierIssueCount)} 单物流轨迹异常。` : null,
             fulfillmentRate30d !== null ? `近 30 天履约率 ${formatPercent(fulfillmentRate30d)}。` : null,
@@ -759,10 +765,10 @@ export function buildHealthMonitorRecords(
       }
       case "risk-control-health": {
         const environment = environmentByKey.get("risk-control");
-        if (!environment) return record;
+        if (!environment) return unavailableMonitor(record);
         return {
           ...record,
-          value: environment.source === "pending" ? "待接入" : record.value,
+          value: environment.source === "pending" ? "待接入" : "暂无数据",
           status: toHealthMonitorStatus(environment.status),
           summary: environment.summary,
           issue: environment.summary,
@@ -774,17 +780,22 @@ export function buildHealthMonitorRecords(
           overview?.salesGrowthRate ?? toNumber(metrics["salesGrowthRate"]);
         const salesAmount7d = toNumber(metrics["salesAmount7d"]);
         const currency = toStringValue(metrics["currency"]) ?? "USD";
-        if (!item && salesGrowthRate === null) return record;
+        if (!item && salesGrowthRate === null) return unavailableMonitor(record);
+        const revenueSummary =
+          item?.reasoning[0] ??
+          (salesGrowthRate !== null
+            ? `近 7 天销售额环比 ${formatSignedPercent(salesGrowthRate)}。`
+            : UNAVAILABLE_SUMMARY);
         return {
           ...record,
           value:
             salesGrowthRate !== null
               ? `近 7 天 ${formatSignedPercent(salesGrowthRate)}`
-              : record.value,
-          status: item ? toHealthMonitorStatus(item.status) : record.status,
-          summary: item?.reasoning[0] ?? record.summary,
-          issue: item?.reasoning[0] ?? record.issue,
-          evidence: mergeEvidence(record.evidence, [
+              : "暂无数据",
+          status: item ? toHealthMonitorStatus(item.status) : "watch",
+          summary: revenueSummary,
+          issue: revenueSummary,
+          evidence: mergeEvidence([
             salesAmount7d !== null
               ? `近 7 天销售额 ${formatMoney(salesAmount7d, currency)}。`
               : null,
@@ -799,7 +810,16 @@ export function buildHealthMonitorRecords(
         const item = itemByKey.get("traffic_anomaly");
         const sessions7d = overview?.sessions7d ?? toNumber(metrics["sessions7d"]);
         const trafficChangeRate = toNumber(metrics["trafficChangeRate"]);
-        if (!item && sessions7d === null && trafficChangeRate === null) return record;
+        if (!item && sessions7d === null && trafficChangeRate === null) {
+          return unavailableMonitor(record);
+        }
+        const trafficSummary =
+          item?.reasoning[0] ??
+          (trafficChangeRate !== null
+            ? `近 7 天流量环比 ${formatSignedPercent(trafficChangeRate)}。`
+            : sessions7d !== null
+              ? `近 7 天会话数 ${formatInteger(sessions7d)}。`
+              : UNAVAILABLE_SUMMARY);
         return {
           ...record,
           value:
@@ -807,11 +827,11 @@ export function buildHealthMonitorRecords(
               ? `Sessions ${formatSignedPercent(trafficChangeRate)}`
               : sessions7d !== null
                 ? `Sessions ${formatInteger(sessions7d)}`
-                : record.value,
-          status: item ? toHealthMonitorStatus(item.status) : record.status,
-          summary: item?.reasoning[0] ?? record.summary,
-          issue: item?.reasoning[0] ?? record.issue,
-          evidence: mergeEvidence(record.evidence, [
+                : "暂无数据",
+          status: item ? toHealthMonitorStatus(item.status) : "watch",
+          summary: trafficSummary,
+          issue: trafficSummary,
+          evidence: mergeEvidence([
             sessions7d !== null ? `近 7 天会话数 ${formatInteger(sessions7d)}。` : null,
             trafficChangeRate !== null
               ? `近 7 天流量环比 ${formatSignedPercent(trafficChangeRate)}。`
@@ -852,6 +872,8 @@ export function buildHealthMonitorRecords(
           };
         }
 
+        const adsDirection: HealthMonitorBenchmark["direction"] =
+          ads.roas > ads.targetRoas ? "better" : ads.roas < ads.targetRoas ? "worse" : "flat";
         return {
           ...record,
           value: `ROAS ${formatMultiple(ads.roas)}`,
@@ -861,8 +883,7 @@ export function buildHealthMonitorRecords(
             label: "达标线",
             value: formatMultiple(ads.targetRoas),
             delta: formatSignedMultiple(ads.roas - ads.targetRoas),
-            direction:
-              ads.roas > ads.targetRoas ? "better" : ads.roas < ads.targetRoas ? "worse" : "flat",
+            direction: adsDirection,
           },
           summary: ads.gradeMeaning
             ? `近 7 天广告 ROAS ${formatMultiple(ads.roas)}，按 ROI 等级判定为「${ads.gradeMeaning}」。`
@@ -1022,7 +1043,6 @@ function formatSignedMultiple(value: number): string {
 }
 
 function mergeEvidence(
-  fallback: Array<{ label: string; value: string }>,
   evidence: Array<string | null>,
 ): Array<{ label: string; value: string }> {
   const normalized = evidence
@@ -1033,8 +1053,8 @@ function mergeEvidence(
       value: entry,
     }));
 
-  if (normalized.length >= 2) return normalized;
-  return [...normalized, ...fallback].slice(0, 3);
+  if (normalized.length > 0) return normalized;
+  return [{ label: "当前状态", value: INSUFFICIENT_EVIDENCE }];
 }
 
 function buildRefundSkuObjects(

@@ -50,7 +50,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // 快照与外部信号并行取。signals 内部已逐项降级，不会整体 reject；
   // 快照失败时走演示数据，此时不注入 signals，避免真实值和演示值混在一起。
   const [snapshotResult, signals] = await Promise.all([
-    ensureDailySnapshot(session.shop).then(
+    ensureDailySnapshot(session.shop, { shopifyAdmin: admin }).then(
       (snapshot) => ({ ok: true as const, snapshot }),
       (error: unknown) => ({ ok: false as const, error }),
     ),

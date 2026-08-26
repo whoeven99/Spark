@@ -91,7 +91,7 @@ async function run({
 
   try {
     onStep?.("读取诊断快照", "running");
-    const daily = await ensureDailySnapshot(shop);
+    const daily = await ensureDailySnapshot(shop, { shopifyAdmin: context.admin });
     onStep?.("读取诊断快照", "completed");
     steps.push({
       step: "读取诊断快照",
