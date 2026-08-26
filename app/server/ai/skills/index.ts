@@ -17,7 +17,7 @@ globalToolRegistry.register({
   displayName: "Shopify 店铺数据",
   category: "店铺运营",
   stage: "monitor",
-  description: "查询店铺基础信息、销售数据、库存状态及 OAuth 授权范围",
+  description: "查询店铺基础信息、销售数据与库存状态",
   createTool: ({ admin }) => createShopifyShopInfoTools(admin),
 });
 

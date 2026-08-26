@@ -19,12 +19,14 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
 | 目的地 | URL | 实现 |
 | --- | --- | --- |
-| 首页 | `/app/home-v2` | `app.home-v2.tsx` + `HomeV2Panel`（聊天；无 Playbook 快捷条） |
+| Ask | `/app` | `app._index.tsx` + `page/workspace/WorkspaceAppShellPage.tsx` |
+| 首页 v2 | `/app/home-v2` | `app.home-v2.tsx` + `HomeV2Panel`（聊天；无 Playbook 快捷条） |
+| Today | `/app/today` | `app.today._index.tsx`、`app.today.roi.tsx`、`app.today.orders.tsx`、`app.today.traffic.tsx`、`app.today.conversion.tsx` |
+| Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx` |
 | Studio | `/app/studio` | `app.studio.copy.tsx`、`app.studio.image.tsx`；`app.studio.translate.tsx` 重定向到 copy |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
 | 账户与订阅 | `/app/account` | `app.account.tsx` + `BillingPage`；旧 `/app/settings/billing` 重定向 |
-
-Today / Health Monitor / Settings / 旧 Ask 等深链保留，不占一级导航。
+| Settings | `/app/settings` | 连接、物流、数据、反馈等（计费已迁出） |
 
 React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路由时必须先核对文件名到 URL 的映射。
 

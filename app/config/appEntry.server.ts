@@ -1,7 +1,7 @@
 /**
  * 一级目的地。
- * 纯净 Agent IA：首页 v2（聊天）/ Studio / Tasks / 账户与订阅。
- * Today、Health Monitor、Settings、Ask、ads-catalog 仍可深链访问，不占一级导航。
+ * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
+ * 计费在一级「账户与订阅」`/app/account`；旧 `/app/settings/billing` 重定向至此。
  */
 export type NavItemKey =
   | "ask"
@@ -20,8 +20,17 @@ type AppShellConfig = {
 };
 
 const DEFAULT_APP_SHELL_CONFIG = {
-  home: "/app/home-v2",
-  nav: ["home-v2", "studio", "tasks", "account"],
+  home: "/app",
+  nav: [
+    "ask",
+    "home-v2",
+    "today",
+    "health-monitor",
+    "studio",
+    "tasks",
+    "account",
+    "settings",
+  ],
 } as const satisfies AppShellConfig;
 
 export function getAppEntryConfig(): AppShellConfig {

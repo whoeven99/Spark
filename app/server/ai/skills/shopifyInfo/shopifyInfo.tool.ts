@@ -109,16 +109,6 @@ const CURRENT_APP_SCOPES_QUERY = `#graphql
   }
 `;
 
-const ORDER_ACCESS_PROBE_QUERY = `#graphql
-  query OrderAccessProbe {
-    orders(first: 1, sortKey: CREATED_AT, reverse: true) {
-      nodes {
-        id
-      }
-    }
-  }
-`;
-
 type ShopBasicInfoResponse = {
   data?: {
     shop?: {
@@ -791,130 +781,9 @@ function createShopInventoryHealthTool(admin: ShopifyAdminGraphqlClient) {
   });
 }
 
-function createShopAppScopesTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_app_scopes",
-    description:
-      "查询当前应用在当前店铺已授权的 Shopify Admin API scopes。用户询问权限、scope、授权范围时使用。",
-    schema: z.object({}),
-    func: async () => {
-      try {
-        const scopes = await queryCurrentAppScopes(admin);
-        if (!scopes.length) {
-          return "当前应用未返回任何已授权 scope。请确认应用已正确安装并完成授权。";
-        }
-
-        return ["当前应用已授权 scopes：", ...scopes.map((scope) => `- ${scope}`)].join(
-          "\n",
-        );
-      } catch (error) {
-        return `查询应用权限 scopes 失败：${getErrorMessage(error)}。`;
-      }
-    },
-  });
-}
-
-function createShopOrderAccessDiagnosisTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "diagnose_shopify_order_access",
-    description:
-      "诊断当前应用为什么无法读取 Shopify 订单数据。会检查已授权 scopes 并执行最小订单查询，输出可能原因和处理步骤。",
-    schema: z.object({}),
-    func: async () => {
-      const requiredScopes = ["read_orders", "write_orders"];
-      let scopes: string[] = [];
-      try {
-        scopes = await queryCurrentAppScopes(admin);
-      } catch (error) {
-        return `订单访问诊断失败：无法读取当前应用 scopes（${getErrorMessage(error)}）。`;
-      }
-
-      const scopesSet = new Set(scopes);
-      const hasOrderScope = requiredScopes.some((scope) => scopesSet.has(scope));
-      const missingScopes = requiredScopes.filter((scope) => !scopesSet.has(scope));
-
-      if (!hasOrderScope) {
-        return [
-          "订单访问诊断结果：缺少订单读取权限 scope。",
-          `当前 scopes：${scopes.join(", ") || "（空）"}`,
-          `至少需要：${requiredScopes.join(" 或 ")}`,
-          `缺少：${missingScopes.join(", ")}`,
-          "处理步骤：更新 shopify.app.toml scopes 并重新安装/重新授权应用。",
-        ].join("\n");
-      }
-
-      try {
-        const probeResponse = await admin.graphql(ORDER_ACCESS_PROBE_QUERY);
-        const probePayload = (await probeResponse.json()) as {
-          errors?: Array<{ message?: string }>;
-          data?: {
-            orders?: {
-              nodes?: Array<{ id?: string }>;
-            };
-          };
-        };
-
-        const gqlErrors = probePayload.errors?.map((e) => e.message).filter(Boolean) ?? [];
-        if (!probeResponse.ok || gqlErrors.length) {
-          const reason = gqlErrors.join("；") || `HTTP ${probeResponse.status}`;
-          const lowerReason = reason.toLowerCase();
-          const looksLikeAccessDenied =
-            lowerReason.includes("access denied") ||
-            lowerReason.includes("forbidden") ||
-            lowerReason.includes("not approved") ||
-            lowerReason.includes("order");
-
-          if (looksLikeAccessDenied) {
-            return [
-              "订单访问诊断结果：scope 已具备，但订单对象仍被拒绝访问。",
-              `当前 scopes：${scopes.join(", ")}`,
-              `探测报错：${reason}`,
-              "高概率原因：",
-              "- 应用尚未完成 Shopify Protected Customer Data（受保护客户数据）合规要求",
-              "- 当前登录员工账号缺少订单查看权限",
-              "- 店铺策略或平台侧限制了订单数据访问",
-              "建议步骤：",
-              "1) 用店主账号重新授权应用",
-              "2) 在后台检查员工权限（Orders）",
-              "3) 在 Partner Dashboard 核对受保护客户数据申报/审核状态",
-              "4) 若仍失败，携带店铺域名、App ID、报错原文联系 Shopify Support",
-            ].join("\n");
-          }
-
-          return [
-            "订单访问诊断结果：订单探测查询失败（非典型权限拒绝）。",
-            `当前 scopes：${scopes.join(", ")}`,
-            `探测报错：${reason}`,
-            "建议先检查网络、API 版本、会话有效性后重试。",
-          ].join("\n");
-        }
-
-        const sampleOrderId = probePayload.data?.orders?.nodes?.[0]?.id;
-        return [
-          "订单访问诊断结果：订单查询可访问。",
-          `当前 scopes：${scopes.join(", ")}`,
-          sampleOrderId
-            ? `探测成功：已读取到订单 ID（示例）${sampleOrderId}`
-            : "探测成功：可访问订单对象，但当前时间范围可能暂无订单。",
-          "如果你在其他工具仍报错，问题更可能是查询字段、筛选条件或数据口径导致。",
-        ].join("\n");
-      } catch (error) {
-        return [
-          "订单访问诊断结果：订单探测查询执行异常。",
-          `当前 scopes：${scopes.join(", ")}`,
-          `异常信息：${getErrorMessage(error)}`,
-          "建议检查网络、会话与 Shopify Admin API 可用性。",
-        ].join("\n");
-      }
-    },
-  });
-}
-
 export function createShopifyShopInfoTools(admin: ShopifyAdminGraphqlClient) {
   return [
     createShopBasicInfoTool(admin),
-    createShopAppScopesTool(admin),
-    createShopOrderAccessDiagnosisTool(admin),
     createShopTodaySalesTool(admin),
     createShopTodayOrderCountTool(admin),
     createShopTodayConversionRateTool(admin),

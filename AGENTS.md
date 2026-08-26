@@ -80,12 +80,16 @@ Spark/
 
 | 目的地 | URL | 主要实现 |
 |---|---|---|
-| 首页 | `/app/home-v2`（应用 `home`） | `app.home-v2.tsx` + `HomeV2Panel`；聊天工作台（无 Playbook 快捷条） |
+| Ask | `/app`（首页）+ `/app/assistant`（聊天） | `/app` → `app._index.tsx` + `HomePanel`；聊天工作台 → `app.assistant.tsx` → `page/workspace/WorkspaceAppShellPage.tsx` |
+| 首页 v2 | `/app/home-v2` | `app.home-v2.tsx` + `HomeV2Panel`；本页直接聊天；输入区不展示 Playbook 快捷条 |
+| Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情） |
+| Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（走 `ensureDailySnapshot`） |
 | Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
+| Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航） |
 
-兼容层（不占一级导航，深链仍可用）：`/app` / `/app/assistant`（旧 Ask）、Today、Health Monitor、Settings（不含计费卡片）、`/app/ads-catalog`、`/app/insights*` 等。
+兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。
 
 Ask / 首页工作台上下文工具（聊天输入区）当前仅：**商品 / 订单 / 文章 / 文件**（`ContextTool = product \| article \| order \| file`）。已移除输入区 Playbook 快捷条；遗留 `prefillConstraint` query 只做 URL 清理、不再写入上下文。任务确认卡仍由 agent/SSE 的 `task_proposal` 产出。
 
@@ -209,7 +213,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
-- 一级导航当前为纯净 Agent IA：首页（`/app/home-v2`）/ Studio / Tasks / 账户与订阅（`/app/account`）。Today、Health Monitor、Settings、旧 Ask 等深链保留但不占主导航。聊天输入区不展示 Playbook 快捷条。
+- 一级导航：Ask / 首页 v2 / Today / Health Monitor / Studio / Tasks / 账户与订阅 / Settings。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。
