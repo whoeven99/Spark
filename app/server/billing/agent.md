@@ -95,6 +95,7 @@
 ## 路由
 
 - `/app/settings/billing`：计费与订阅页（`BillingPage`）；主 App 通过 Settings 目的地进入。
+- 页面必须直接渲染 `PlanCatalog` 的价格、积分和 `planKey`，走 Shopify Billing 结账。禁止前端覆盖价、伪造套餐或 `_mock` 禁用结账。
 - `/app/studio/copy` 与 `/api/product-improve`：商品文案优化调用 `requireBillingAccess`。
 
 ## 启用开关

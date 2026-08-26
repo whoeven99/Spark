@@ -18,6 +18,7 @@ import { normalizeWorkspaceDashboardSnapshot } from "../../../lib/workspaceDashb
 import { useChatStream } from "../chat/useChatStream";
 import { ChatPanel } from "./ChatPanel";
 import { HomePanel } from "./HomePanel";
+import { HomeV2Panel } from "./HomeV2Panel";
 import {
   augmentUserMessage,
   buildAssistantWorkspaceMessage,
@@ -366,12 +367,17 @@ export function WorkspaceAppShellPage({
   accountName,
   defaultPanel = "home",
   autoCreateConversation = false,
+  homeVariant = "default",
+  homeRenderTimeIso,
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
   accountName?: string;
   defaultPanel?: WorkspacePanel;
   autoCreateConversation?: boolean;
+  /** 并行首页预览：v2 用精简 HomeV2Panel，发送后仍在本页进入 ChatPanel。 */
+  homeVariant?: "default" | "v2";
+  homeRenderTimeIso?: string;
 }) {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
@@ -559,6 +565,7 @@ export function WorkspaceAppShellPage({
   const { sendMessage: streamConversation, prepareStreaming, abort: abortStream } = stream;
   const replyEpochRef = useRef(0);
   const pendingHomeContextToolRef = useRef<ContextTool | null>(null);
+  const pendingAutoSendRef = useRef(false);
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
@@ -752,11 +759,13 @@ export function WorkspaceAppShellPage({
   const createConversation = (options?: {
     draft?: string;
     assistantText?: string;
+    autoSend?: boolean;
   }) => {
     const nextDraft = options?.draft ?? "";
     const assistantText =
       options?.assistantText ??
       t("workspace.shell.conversation.welcome");
+    pendingAutoSendRef.current = Boolean(options?.autoSend && nextDraft.trim());
     // 已存在空会话（草稿或落库的"新对话"）时直接复用，避免列表里堆积重复空会话
     const existingEmpty = conversationList.find(
       (conversation) =>
@@ -973,6 +982,17 @@ export function WorkspaceAppShellPage({
       }));
     }
   };
+
+  useEffect(() => {
+    if (!pendingAutoSendRef.current) return;
+    if (activePanel !== "chat" || !activeConversation) return;
+    const content = (draftByConversation[activeConversation.id] ?? "").trim();
+    if (!content || streamingConversationId === activeConversation.id) return;
+    pendingAutoSendRef.current = false;
+    void sendMessage();
+    // sendMessage 随渲染重建；只在会话/草稿就绪时触发一次自动发送。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversation, activePanel, draftByConversation, streamingConversationId]);
 
   /**
    * TaskProposal 确认执行成功：向对话追加一轮「开始执行」交互
@@ -1502,7 +1522,22 @@ export function WorkspaceAppShellPage({
       )}
 
       <main style={isMobile ? mobileContentStyle : contentStyle}>
-        {activePanel === "home" ? (
+        {activePanel === "home" && homeVariant === "v2" ? (
+          <HomeV2Panel
+            displayName={displayName}
+            initialRenderTimeIso={homeRenderTimeIso}
+            onSubmitPrompt={(prompt) => createConversation({ draft: prompt, autoSend: true })}
+            onOpenContextTool={(tool) => {
+              pendingHomeContextToolRef.current = tool;
+              createConversation();
+            }}
+            onMoreContext={() => {
+              pendingHomeContextToolRef.current = "article";
+              createConversation();
+            }}
+          />
+        ) : null}
+        {activePanel === "home" && homeVariant !== "v2" ? (
           <HomePanel
             displayName={displayName}
             snapshot={effectiveDashboardSnapshot}

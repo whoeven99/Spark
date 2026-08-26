@@ -30,137 +30,11 @@ import styles from "../component/billing/billingPage.module.css";
 import { PageHeaderNav, mobilePageContentStyle, pageContentStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
-const MOCK_PLAN_SUFFIX = "_mock";
 const PLAN_TIER_ORDER: Record<PlanTier, number> = {
   base: 0,
   pro: 1,
   premium: 2,
 };
-
-function clonePlan(plan: PlanRecord, overrides: Partial<PlanRecord>): PlanRecord {
-  return { ...plan, ...overrides };
-}
-
-function createMockPlan(params: {
-  planKey: string;
-  billingInterval: "MONTHLY" | "ANNUAL";
-  displayName: string;
-  tokens: number;
-  priceAmount: string;
-  currencyCode: string;
-  trialDays: number | null;
-}): PlanRecord {
-  return {
-    planKey: `${params.planKey}${MOCK_PLAN_SUFFIX}`,
-    kind: "SUBSCRIPTION",
-    billingInterval: params.billingInterval,
-    displayName: params.displayName,
-    tokens: params.tokens,
-    priceAmount: params.priceAmount,
-    currencyCode: params.currencyCode,
-    trialDays: params.trialDays,
-    shopifyPlanName: null,
-  };
-}
-
-function isMockVisualPlan(plan: PlanRecord): boolean {
-  return plan.planKey.endsWith(MOCK_PLAN_SUFFIX);
-}
-
-function buildMockBillingPlans(params: {
-  trialPlan: PlanRecord | null;
-  subscriptionPlans: PlanRecord[];
-}): { trialPlan: PlanRecord | null; subscriptionPlans: PlanRecord[] } {
-  const currencyCode =
-    params.subscriptionPlans[0]?.currencyCode ?? params.trialPlan?.currencyCode ?? "USD";
-  const baseMonthly = pickSubscriptionPlan(params.subscriptionPlans, "MONTHLY", "base");
-  const baseAnnual = pickSubscriptionPlan(params.subscriptionPlans, "ANNUAL", "base");
-  const proMonthly = pickSubscriptionPlan(params.subscriptionPlans, "MONTHLY", "pro");
-  const proAnnual = pickSubscriptionPlan(params.subscriptionPlans, "ANNUAL", "pro");
-  const premiumMonthly = pickSubscriptionPlan(params.subscriptionPlans, "MONTHLY", "premium");
-  const premiumAnnual = pickSubscriptionPlan(params.subscriptionPlans, "ANNUAL", "premium");
-
-  const trialPlan = params.trialPlan
-    ? clonePlan(params.trialPlan, {
-        displayName: "Free plan",
-        tokens: 10000,
-        priceAmount: "0",
-      })
-    : null;
-
-  const mockedPlans: PlanRecord[] = [];
-
-  if (baseMonthly) {
-    mockedPlans.push(
-      clonePlan(baseMonthly, {
-        displayName: "Basic (Monthly)",
-        tokens: 500000,
-        priceAmount: "9.99",
-        trialDays: 7,
-      }),
-    );
-  }
-  if (baseAnnual) {
-    mockedPlans.push(
-      clonePlan(baseAnnual, {
-        displayName: "Basic (Annual)",
-        tokens: 6500000,
-        priceAmount: "99.99",
-        trialDays: 7,
-      }),
-    );
-  }
-  if (proMonthly) {
-    mockedPlans.push(
-      clonePlan(proMonthly, {
-        displayName: "Pro (Monthly)",
-        tokens: 2500000,
-        priceAmount: "39.99",
-        trialDays: 7,
-      }),
-    );
-  }
-  if (proAnnual) {
-    mockedPlans.push(
-      clonePlan(proAnnual, {
-        displayName: "Pro (Annual)",
-        tokens: 32500000,
-        priceAmount: "399.99",
-        trialDays: 7,
-      }),
-    );
-  }
-
-  mockedPlans.push(
-    premiumMonthly ??
-      createMockPlan({
-        planKey: "spark_premium_monthly",
-        billingInterval: "MONTHLY",
-        displayName: "Premium (Monthly)",
-        tokens: 10000000,
-        priceAmount: "99.99",
-        currencyCode,
-        trialDays: 7,
-      }),
-  );
-  mockedPlans.push(
-    premiumAnnual ??
-      createMockPlan({
-        planKey: "spark_premium_annual",
-        billingInterval: "ANNUAL",
-        displayName: "Premium (Annual)",
-        tokens: 130000000,
-        priceAmount: "999.99",
-        currencyCode,
-        trialDays: 7,
-      }),
-  );
-
-  return {
-    trialPlan,
-    subscriptionPlans: mockedPlans,
-  };
-}
 
 function compareColumnClass(
   column: string,
@@ -456,7 +330,6 @@ function PaidPlanCard({
   isPending,
   isSubmitting,
   submittingMode,
-  mockOnly,
   locale,
   t,
   paidFeatures,
@@ -469,7 +342,6 @@ function PaidPlanCard({
   isPending: boolean;
   isSubmitting: boolean;
   submittingMode: "trial" | "paid" | null;
-  mockOnly: boolean;
   locale: string;
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => PlanFeatureItem[];
@@ -529,8 +401,7 @@ function PaidPlanCard({
                 <button
                   type="submit"
                   className={styles.planPrimaryCta}
-                  disabled={isSubmitting || mockOnly}
-                  title={mockOnly ? "当前为前端 mock 展示，暂不支持结账" : undefined}
+                  disabled={isSubmitting}
                 >
                   {isSubmitting && submittingMode === "trial"
                     ? t("billing.redirectingToCheckout")
@@ -545,8 +416,7 @@ function PaidPlanCard({
               <button
                 type="submit"
                 className={hasTrial ? styles.planSecondaryCta : styles.planPrimaryCta}
-                disabled={isSubmitting || mockOnly}
-                title={mockOnly ? "当前为前端 mock 展示，暂不支持结账" : undefined}
+                disabled={isSubmitting}
               >
                 {isSubmitting && submittingMode === "paid"
                   ? t("billing.redirectingToCheckout")
@@ -563,8 +433,8 @@ function PaidPlanCard({
 export function BillingPage() {
   const {
     billing,
-    trialPlan: rawTrialPlan,
-    subscriptionPlans: rawSubscriptionPlans,
+    trialPlan,
+    subscriptionPlans,
     tokenPacks,
     billingHistory,
     toolUsageHistory,
@@ -596,17 +466,6 @@ export function BillingPage() {
   const backLabel = t("common.backToPrevious", {
     defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
   });
-  const mockedBillingPlans = useMemo(
-    () =>
-      buildMockBillingPlans({
-        trialPlan: rawTrialPlan,
-        subscriptionPlans: rawSubscriptionPlans,
-      }),
-    [rawSubscriptionPlans, rawTrialPlan],
-  );
-  const trialPlan = mockedBillingPlans.trialPlan;
-  const subscriptionPlans = mockedBillingPlans.subscriptionPlans;
-
   const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
   const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
   const proMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "pro");
@@ -1264,7 +1123,6 @@ export function BillingPage() {
                   isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
                   isSubmitting={subscribingPlanKey === plan.planKey}
                   submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}
-                  mockOnly={isMockVisualPlan(plan)}
                   locale={locale}
                   t={t}
                   paidFeatures={paidFeatures}

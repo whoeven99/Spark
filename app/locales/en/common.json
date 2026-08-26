@@ -360,6 +360,7 @@
     "orderMonitor": "Order Monitor",
     "dailyOperations": "Daily To-dos",
     "ask": "Assistant",
+    "homeV2": "Home v2",
     "today": "Operations",
     "healthMonitor": "Health Monitor",
     "studio": "Creative Workbench",
@@ -4084,6 +4085,21 @@
         "topRisksHint": "Shows up to 3 items. Open Health Monitor for the full list.",
         "recommendedActions": "Recommended actions",
         "recommendedActionsHint": "Jump straight to the next step from the current business and health diagnosis"
+      }
+    },
+    "homeV2": {
+      "subtitle": "What should AI Assistant help with today?",
+      "assistantTitle": "Ask directly, or start with a prompt below",
+      "composerPlaceholder": "For example: help me improve this product’s title and description…",
+      "quickPrompts": {
+        "optimizeCopy": {
+          "label": "Rewrite product copy",
+          "prompt": "Help me optimize a batch of product titles and descriptions with an SEO and conversion-focused style."
+        },
+        "generateImage": {
+          "label": "Generate a product image",
+          "prompt": "Help me generate a clean, white-background product hero image that highlights the item for a DTC store."
+        }
       }
     }
   }

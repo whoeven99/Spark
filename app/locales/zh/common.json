@@ -360,6 +360,7 @@
     "orderMonitor": "订单监控",
     "dailyOperations": "每日待办",
     "ask": "助手",
+    "homeV2": "首页 v2",
     "today": "经营",
     "healthMonitor": "健康度监测",
     "studio": "创作工作台",
@@ -4084,6 +4085,21 @@
         "topRisksHint": "最多展示 3 条，完整列表在健康度监测里",
         "recommendedActions": "推荐动作",
         "recommendedActionsHint": "基于当前经营与健康判断，直接进入下一步"
+      }
+    },
+    "homeV2": {
+      "subtitle": "今天想让 AI Assistant 做什么？",
+      "assistantTitle": "直接提问，或用下面的提示开始",
+      "composerPlaceholder": "例如：帮我优化这件商品的标题和描述…",
+      "quickPrompts": {
+        "optimizeCopy": {
+          "label": "改商品文案",
+          "prompt": "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。"
+        },
+        "generateImage": {
+          "label": "生成商品图",
+          "prompt": "帮我生成一张适合独立站的商品主图，风格干净、白底、突出产品。"
+        }
       }
     }
   }

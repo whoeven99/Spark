@@ -61,6 +61,7 @@ const NAV_ITEMS: Record<
     href: string;
     labelKey:
       | "nav.ask"
+      | "nav.homeV2"
       | "nav.today"
       | "nav.healthMonitor"
       | "nav.studio"
@@ -70,6 +71,7 @@ const NAV_ITEMS: Record<
   }
 > = {
   ask: { href: "/app/assistant", labelKey: "nav.ask" },
+  "home-v2": { href: "/app/home-v2", labelKey: "nav.homeV2" },
   today: { href: "/app/today", labelKey: "nav.today" },
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
@@ -226,7 +228,10 @@ function AppShellContent() {
   const location = useLocation();
   const { isMobile } = useResponsiveLayout();
   const normalizedPath = location.pathname.replace(/\/+$/, "");
-  const isWorkspace = normalizedPath === "/app" || normalizedPath === "/app/assistant";
+  const isWorkspace =
+    normalizedPath === "/app" ||
+    normalizedPath === "/app/assistant" ||
+    normalizedPath === "/app/home-v2";
 
   if (isWorkspace) {
     return <Outlet />;

@@ -81,6 +81,7 @@ Spark/
 | 目的地 | URL | 主要实现 |
 |---|---|---|
 | Ask | `/app`（首页）+ `/app/assistant`（聊天） | `/app` → `app._index.tsx` + `HomePanel`；聊天工作台 → `app.assistant.tsx` → `page/workspace/WorkspaceAppShellPage.tsx` |
+| 首页 v2（临时预览） | `/app/home-v2` | `app.home-v2.tsx` + `HomeV2Panel`；本页直接聊天，替换现首页前用完即删 |
 | Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情） |
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（走 `ensureDailySnapshot`） |
 | Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
@@ -211,7 +212,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
-- 保持现有六目的地信息架构（Ask / Today / Health Monitor / Studio / Tasks / Settings）；除非用户明确要求重构，不新增一级导航或恢复旧的 per-tool / Insights 一级导航。
+- 保持现有六目的地信息架构（Ask / Today / Health Monitor / Studio / Tasks / Settings）；除非用户明确要求重构，不新增一级导航或恢复旧的 per-tool / Insights 一级导航。当前临时多一项「首页 v2」（`/app/home-v2`），替换现首页后删除。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。

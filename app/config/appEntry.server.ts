@@ -4,9 +4,11 @@
  * today / studio / settings 三个目的地。旧的 insights 相关路径仅保留兼容层，
  * 正式经营判断回到 Today，连接与授权回到 Settings。
  * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
+ * home-v2 是并行首页预览，替换现 `/app` 后从 nav 删除。
  */
 export type NavItemKey =
   | "ask"
+  | "home-v2"
   | "today"
   | "health-monitor"
   | "studio"
@@ -21,7 +23,7 @@ type AppShellConfig = {
 
 const DEFAULT_APP_SHELL_CONFIG = {
   home: "/app",
-  nav: ["ask", "today", "health-monitor", "studio", "tasks", "settings"],
+  nav: ["ask", "home-v2", "today", "health-monitor", "studio", "tasks", "settings"],
 } as const satisfies AppShellConfig;
 
 export function getAppEntryConfig(): AppShellConfig {
