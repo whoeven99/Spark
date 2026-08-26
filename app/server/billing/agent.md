@@ -27,7 +27,7 @@
 ## Shopify returnUrl
 
 - Billing GraphQL 的 `returnUrl` **最多 255 字符**。
-- `buildBillingReturnUrl` 指向 **`/app/settings/billing`**（订阅与按量购包共用；新 IA 下归入 Settings），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
+- `buildBillingReturnUrl` 指向 **`/app/account`**（订阅与按量购包共用；一级「账户与订阅」），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
 - 跳转 Shopify 结账页须用 `authenticate.admin` 返回的 `redirect(url, { target: "_top" })`（嵌入式 exit iframe），勿直接用 React Router `redirect`。
 - 若 Shopify 将商户落到站点根路径 `/` 或 `/app`，`billing_return=1` 会由 `_index` / `app._index` 兜底重定向到计费页。
 - `buildBillingReturnUrl` 对 `aiassistant-wi7b.onrender.com` / `shopify.app.test.toml` client_id 映射 Admin handle `aiassistant-test`；可通过 `SHOPIFY_ADMIN_APP_HANDLE` 覆盖。
@@ -94,7 +94,7 @@
 
 ## 路由
 
-- `/app/settings/billing`：计费与订阅页（`BillingPage`）；主 App 通过 Settings 目的地进入。
+- `/app/account`：计费与订阅页（`BillingPage`）；一级导航「账户与订阅」。旧路径 `/app/settings/billing` 重定向至此。
 - 页面必须直接渲染 `PlanCatalog` 的价格、积分和 `planKey`，走 Shopify Billing 结账。禁止前端覆盖价、伪造套餐或 `_mock` 禁用结账。
 - `/app/studio/copy` 与 `/api/product-improve`：商品文案优化调用 `requireBillingAccess`。
 

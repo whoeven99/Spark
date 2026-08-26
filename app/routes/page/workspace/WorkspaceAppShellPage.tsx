@@ -1363,7 +1363,7 @@ export function WorkspaceAppShellPage({
               onClick={() => {
                 setAccountMenuOpen(false);
                 if (isMobile) setSidebarOpen(false);
-                navigate("/app/settings/billing");
+                navigate("/app/account");
               }}
             >
               Billing

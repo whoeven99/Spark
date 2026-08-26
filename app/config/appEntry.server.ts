@@ -1,10 +1,7 @@
 /**
- * 一级目的地（新信息架构，docs 见迁移方案 PR1）。
- * 旧的 per-tool 入口（product-improve / image-studio / order-monitor 等）已收敛进
- * today / studio / settings 三个目的地。旧的 insights 相关路径仅保留兼容层，
- * 正式经营判断回到 Today，连接与授权回到 Settings。
- * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
- * home-v2 是并行首页预览，替换现 `/app` 后从 nav 删除。
+ * 一级目的地。
+ * 纯净 Agent IA：首页 v2（聊天）/ Studio / Tasks / 账户与订阅。
+ * Today、Health Monitor、Settings、Ask、ads-catalog 仍可深链访问，不占一级导航。
  */
 export type NavItemKey =
   | "ask"
@@ -13,6 +10,7 @@ export type NavItemKey =
   | "health-monitor"
   | "studio"
   | "tasks"
+  | "account"
   | "settings"
   | "ads-catalog";
 
@@ -22,8 +20,8 @@ type AppShellConfig = {
 };
 
 const DEFAULT_APP_SHELL_CONFIG = {
-  home: "/app",
-  nav: ["ask", "home-v2", "today", "health-monitor", "studio", "tasks", "settings"],
+  home: "/app/home-v2",
+  nav: ["home-v2", "studio", "tasks", "account"],
 } as const satisfies AppShellConfig;
 
 export function getAppEntryConfig(): AppShellConfig {

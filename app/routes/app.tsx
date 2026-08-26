@@ -66,6 +66,7 @@ const NAV_ITEMS: Record<
       | "nav.healthMonitor"
       | "nav.studio"
       | "nav.tasks"
+      | "nav.account"
       | "nav.settings"
       | "nav.adsCatalog";
   }
@@ -76,6 +77,7 @@ const NAV_ITEMS: Record<
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
   tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
+  account: { href: "/app/account", labelKey: "nav.account" },
   settings: { href: "/app/settings", labelKey: "nav.settings" },
   "ads-catalog": { href: "/app/ads-catalog", labelKey: "nav.adsCatalog" },
 };

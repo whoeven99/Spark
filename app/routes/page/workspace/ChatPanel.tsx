@@ -1,5 +1,5 @@
 /** 工作台对话 Panel：消息列表 + 输入区 + 上下文工具栏（从 WorkspaceAppShellPage 拆出）。 */
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
@@ -7,12 +7,6 @@ import { ContextWindowIndicator } from "../../component/chat/ContextWindowIndica
 import { estimateMessagesTokens } from "../../../lib/tokenEstimate";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { useChatStream } from "../chat/useChatStream";
-import type {
-  AutomationOverview,
-  AutomationOverviewResponse,
-  PlaybookSurfaceItem,
-} from "../../../lib/automationOverviewTypes";
-import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
 import { ChatContextSidebar } from "./ChatContextSidebar";
 import { ContextToolModal } from "./ContextToolModal";
 import {
@@ -114,8 +108,6 @@ export function ChatPanel({
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
-  const [automationOverview, setAutomationOverview] =
-    useState<AutomationOverview | null>(null);
 
   const {
     isStreaming,
@@ -178,17 +170,6 @@ export function ChatPanel({
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
   const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
-  const playbookShortcuts = useMemo<PlaybookSurfaceItem[]>(() => {
-    if (!automationOverview) return [];
-    const recommended = Array.isArray(automationOverview.recommendedPlaybooks)
-      ? automationOverview.recommendedPlaybooks
-      : [];
-    const templates = Array.isArray(automationOverview.templates)
-      ? automationOverview.templates
-      : [];
-    const source = recommended.length > 0 ? recommended : templates;
-    return source.slice(0, isMobile ? 3 : 5);
-  }, [automationOverview, isMobile]);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -268,23 +249,6 @@ export function ChatPanel({
     return () => cancelAnimationFrame(raf);
   }, [conversation.id, messages.length, showStreamingReply]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    fetch(`/api/automation-overview${authQuery}`)
-      .then((res) => res.json() as Promise<AutomationOverviewResponse>)
-      .then((json) => {
-        if (cancelled) return;
-        if (json.ok) setAutomationOverview(normalizeAutomationOverview(json.overview));
-      })
-      .catch(() => {
-        if (!cancelled) setAutomationOverview(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // 流式过程中自动追底：思考文字、正文、skill steps 任一增长都触发
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
@@ -360,11 +324,6 @@ export function ChatPanel({
   }, [isMobile, draft, selectedSummaryBubbles.length, filledContextCount, isStreaming]);
 
   const mobileComposerOffset = isMobile ? mobileComposerHeight + 18 : 0;
-  const choosePlaybookShortcut = (item: PlaybookSurfaceItem) => {
-    if (isStreaming) return;
-    onDraftChange(item.defaultPrompt);
-    requestAnimationFrame(() => focusComposerInput());
-  };
 
   const composerContent = (
     <div style={isMobile ? mobileFixedComposerCardStyle : undefined}>
@@ -380,26 +339,7 @@ export function ChatPanel({
           ))}
         </div>
       ) : null}
-      {playbookShortcuts.length > 0 ? (
-        <div style={playbookShortcutWrapStyle}>
-          <span style={playbookShortcutLabelStyle}>Playbook</span>
-          <div style={playbookShortcutRowStyle}>
-            {playbookShortcuts.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                style={playbookShortcutButtonStyle}
-                onClick={() => choosePlaybookShortcut(item)}
-                disabled={isStreaming}
-                title={item.entrySubtitle ?? item.detail}
-              >
-                <span style={playbookShortcutIconStyle}>{item.icon ?? "PB"}</span>
-                <span>{item.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {/* 纯净 IA：暂不展示 Playbook 快捷条；服务端 Playbook 仍可经对话触发。 */}
       <textarea
         ref={textareaRef}
         value={draft}
@@ -555,51 +495,3 @@ export function ChatPanel({
     </div>
 );
 }
-
-const playbookShortcutWrapStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-  marginBottom: 8,
-};
-
-const playbookShortcutLabelStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#6d7175",
-};
-
-const playbookShortcutRowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  flexWrap: "wrap",
-};
-
-const playbookShortcutButtonStyle: CSSProperties = {
-  border: "1px solid #d9dee3",
-  borderRadius: 999,
-  background: "#ffffff",
-  color: "#30343a",
-  padding: "5px 9px 5px 6px",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  fontFamily: "inherit",
-};
-
-const playbookShortcutIconStyle: CSSProperties = {
-  width: 22,
-  height: 22,
-  borderRadius: 999,
-  background: "#f1f2f3",
-  color: "#5c6066",
-  display: "grid",
-  placeItems: "center",
-  fontSize: 9,
-  fontWeight: 800,
-};

@@ -7,7 +7,7 @@ import type {
   BillingToolUsageItem,
   PlanRecord,
 } from "../../lib/billingPageTypes";
-import type { loader, action } from "../app.settings.billing";
+import type { loader, action } from "../app.account";
 import {
   computeAnnualDiscountPercent,
   formatPlanTagLabel,
@@ -962,7 +962,7 @@ export function BillingPage() {
       <PageHeaderNav
         title={t("billing.pageTitle")}
         backLabel={backLabel}
-        fallbackPath="/app/settings"
+        fallbackPath="/app/home-v2"
       />
 
       {!billing.hasAccess && billing.billingRequired ? (
