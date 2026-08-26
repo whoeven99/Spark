@@ -347,14 +347,19 @@ function inferUnit(value: string) {
 function inferCoreMetricLabel(monitor: HealthMonitorRecord) {
   if (monitor.id === "page-performance") return "LCP";
   if (monitor.id === "seo-health") return "CTR";
+  if (monitor.id === "payment-health") return "支付成功率";
   if (monitor.id === "roi-health") return "ROI";
   if (monitor.id === "revenue-health") return "收入增速";
   if (monitor.id === "traffic-health") return "Sessions";
   if (monitor.id === "ads-health") return "ROAS";
+  if (monitor.id === "product-readiness-health") return "商品就绪度";
   if (monitor.id === "conversion-health") return "CVR";
+  if (monitor.id === "refund-health") return "退款率";
   if (monitor.id === "inventory-health") return "库存安全天数";
   if (monitor.id === "fulfillment-health") return "超时单占比";
-  return "毛利率";
+  if (monitor.id === "risk-control-health") return "风控状态";
+  if (monitor.id === "pricing-health") return "毛利率";
+  return monitor.title;
 }
 
 function buildRuleTrace(status: HealthMonitorStatus, label: string) {
