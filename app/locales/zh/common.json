@@ -377,6 +377,13 @@
     "environmentAfterSales": "售后服务",
     "environmentConversion": "内容与转化"
   },
+  "observationWindow": {
+    "range7d": "近 7 天 · {{start}}–{{end}}（{{tz}}，不含今天）",
+    "range30d": "近 30 天 · {{start}}–{{end}}（{{tz}}，不含今天）",
+    "range28d": "近 28 天",
+    "realtime": "实时检测",
+    "hint7d": "取数按 UTC 完整日历日、不含今天；日期按店铺时区展示。"
+  },
   "todayShell": {
     "overview": "概览"
   },
