@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { DestinationFilterBar } from "../shared/DestinationPage";
-import { PageSurface, pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
+import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 
 export type TodayCountryFilterOption = {
   key: string;
@@ -14,7 +14,6 @@ export function TodayCountryFilterCard({
   focusOptions,
   activeFocus,
   onFocusChange,
-  summary,
   notes = [],
 }: {
   options: TodayCountryFilterOption[];
@@ -23,19 +22,11 @@ export function TodayCountryFilterCard({
   focusOptions?: Array<{ key: string; label: string }>;
   activeFocus?: string;
   onFocusChange?: (focus: string) => void;
-  summary: string;
   notes?: string[];
 }) {
   return (
-    <PageSurface
-      title={focusOptions && focusOptions.length > 0 ? "地区与焦点" : "地区视角"}
-      subtitle={
-        focusOptions && focusOptions.length > 0
-          ? "先切换地区和当前分析焦点，再往下看对应的数据结论。"
-          : "先在这里切换总览或单地区，再往下看对应的数据结论。"
-      }
-    >
-      <div style={filterWrapStyle}>
+    <div style={filterWrapStyle}>
+      <div style={filterGridStyle}>
         <DestinationFilterBar label="经营范围" items={options} active={activeCountry} onChange={onChange} />
         {focusOptions && focusOptions.length > 0 && activeFocus && onFocusChange ? (
           <DestinationFilterBar
@@ -45,39 +36,39 @@ export function TodayCountryFilterCard({
             onChange={onFocusChange}
           />
         ) : null}
-        <div style={summaryStyle}>{summary}</div>
-        {notes.length > 0 ? (
-          <div style={notesWrapStyle}>
-            {notes.map((note) => (
-              <div key={note} style={pageHintTextStyle}>
-                {note}
-              </div>
-            ))}
-          </div>
-        ) : null}
       </div>
-    </PageSurface>
+      {notes.length > 0 ? (
+        <div style={notesWrapStyle}>
+          {notes.map((note) => (
+            <div key={note} style={noteItemStyle}>
+              {note}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
 const filterWrapStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.9rem",
+  display: "grid",
+  gap: "0.6rem",
 };
 
-const summaryStyle: CSSProperties = {
-  padding: "0.85rem 1rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
-  color: pageColorTokens.textBody,
-  fontSize: "0.875rem",
-  lineHeight: 1.55,
+const filterGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: "0.75rem",
+  alignItems: "start",
 };
 
 const notesWrapStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
+  display: "grid",
   gap: "0.25rem",
+};
+
+const noteItemStyle: CSSProperties = {
+  ...pageHintTextStyle,
+  padding: "0.15rem 0",
+  color: pageColorTokens.textSecondary,
 };
