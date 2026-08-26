@@ -2290,6 +2290,14 @@ function buildChannelObjectCard(
   channel: Awaited<ReturnType<typeof computeChannelRoi>>["channels"][number],
   currency: string,
 ): TodayObjectCard {
+  const adSpend = channel.roi.investmentCost;
+  const shortTermRoi = channel.roi.businessRoi;
+  const adProfit = adSpend !== null ? channel.contributionProfit - adSpend : null;
+  const isHealthyChannel =
+    shortTermRoi !== null
+      ? shortTermRoi > 0
+      : channel.contributionProfit > 0;
+
   return {
     id: channel.channelKey,
     title: channel.label,
@@ -2297,35 +2305,58 @@ function buildChannelObjectCard(
     metrics: [
       toSummaryMetric("收入", formatCurrency(channel.revenue, currency)),
       toSummaryMetric("贡献利润", formatCurrency(channel.contributionProfit, currency)),
-      toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`),
+      ...(adSpend !== null
+        ? [toSummaryMetric("短期 ROI", formatPercent(shortTermRoi ?? 0))]
+        : [toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`)]),
     ],
     summary:
-      channel.contributionProfit > 0
-        ? "这个渠道当前仍然在留下利润，更适合继续看流量质量和客户质量。"
-        : "这个渠道已经接近低质量投入，应该先排查回报被谁拖弱了。",
-    primaryActionLabel: channel.contributionProfit > 0 ? "查看支撑原因" : "查看低效原因",
+      isHealthyChannel
+        ? shortTermRoi !== null
+          ? "这个渠道当前短期 ROI 仍为正，更适合继续看流量质量和客户质量。"
+          : "这个渠道当前仍然在留下贡献利润，更适合继续看流量质量和客户质量。"
+        : shortTermRoi !== null
+          ? "这个渠道收入有了，但广告后利润没有留下来，应该先排查短期 ROI 被谁拖弱了。"
+          : "这个渠道已经接近低质量投入，应该先排查回报被谁拖弱了。",
+    primaryActionLabel: isHealthyChannel ? "查看支撑原因" : "查看低效原因",
     report: {
       title: channel.label,
       subtitle: "ROI 报告 / 渠道对象",
       headlineMetrics: [
         toSummaryMetric("收入", formatCurrency(channel.revenue, currency)),
         toSummaryMetric("贡献利润", formatCurrency(channel.contributionProfit, currency)),
-        toSummaryMetric("退款损耗", formatCurrency(channel.refundLoss, currency)),
-        toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`),
+        ...(adSpend !== null
+          ? [
+              toSummaryMetric("广告费", formatCurrency(adSpend, currency)),
+              toSummaryMetric("短期 ROI", formatPercent(shortTermRoi ?? 0)),
+            ]
+          : [
+              toSummaryMetric("退款损耗", formatCurrency(channel.refundLoss, currency)),
+              toSummaryMetric("新客占比", `${channel.customers.newOrderShare}%`),
+            ]),
       ],
       conclusion:
-        channel.contributionProfit > 0
-          ? "这个渠道仍然能留下利润，但仍需确认是不是靠健康对象在支撑。"
-          : "这个渠道的问题不是有没有收入，而是回报质量已经开始变弱。",
+        isHealthyChannel
+          ? shortTermRoi !== null
+            ? "这个渠道当前短期 ROI 仍为正，但仍需确认是不是靠健康对象在支撑。"
+            : "这个渠道仍然能留下贡献利润，但仍需确认是不是靠健康对象在支撑。"
+          : shortTermRoi !== null
+            ? "这个渠道的问题不是有没有收入，而是广告后利润已经开始变弱。"
+            : "这个渠道的问题不是有没有收入，而是回报质量已经开始变弱。",
       analysisPoints: [
         `收入 ${formatCurrency(channel.revenue, currency)}，贡献利润 ${formatCurrency(channel.contributionProfit, currency)}。`,
-        `退款损耗 ${formatCurrency(channel.refundLoss, currency)}，新客占比 ${channel.customers.newOrderShare}%。`,
+        ...(adSpend !== null
+          ? [
+              `广告费 ${formatCurrency(adSpend, currency)}，广告后利润 ${formatCurrency(adProfit ?? 0, currency)}，短期 ROI ${formatPercent(shortTermRoi ?? 0)}。`,
+            ]
+          : [
+              `退款损耗 ${formatCurrency(channel.refundLoss, currency)}，新客占比 ${channel.customers.newOrderShare}%。`,
+            ]),
         "下一步更适合继续看这个渠道带来的高价值订单和异常损耗订单。",
       ],
       actions: [
         {
-          title: channel.contributionProfit > 0 ? "继续承接健康对象" : "先收紧低效投入",
-          detail: channel.contributionProfit > 0 ? "优先保留真正能留下利润的流量。" : "避免继续把预算压在低质量回报上。",
+          title: isHealthyChannel ? "继续承接健康对象" : "先收紧低效投入",
+          detail: isHealthyChannel ? "优先保留真正能留下利润的流量。" : "避免继续把预算压在低质量回报上。",
           priority: "P0",
         },
         {
@@ -3621,12 +3652,49 @@ async function buildRoiDecisionReport(
   const channelResult = await computeChannelRoi(shop, costConfig, new Date(), {
     countryCode: selectedCountry === TODAY_ALL_COUNTRIES ? null : selectedCountry,
   });
-  const healthyChannels = channelResult.channels
-    .filter((channel) => channel.contributionProfit > 0)
+  const channelsWithAdSpend = channelResult.channels.filter(
+    (channel) => channel.roi.investmentCost !== null && channel.roi.investmentCost > 0,
+  );
+  const paidContributionProfit = channelsWithAdSpend.reduce(
+    (sum, item) => sum + item.contributionProfit,
+    0,
+  );
+  const paidInvestmentCost = channelsWithAdSpend.reduce(
+    (sum, item) => sum + (item.roi.investmentCost ?? 0),
+    0,
+  );
+  const mappedPaidRevenue = channelsWithAdSpend.reduce((sum, item) => sum + item.revenue, 0);
+  const paidAfterSpendProfit = paidContributionProfit - paidInvestmentCost;
+  const paidShortTermRoi =
+    paidInvestmentCost > 0
+      ? (paidContributionProfit - paidInvestmentCost) / paidInvestmentCost
+      : null;
+  const paidRoas = paidInvestmentCost > 0 ? mappedPaidRevenue / paidInvestmentCost : null;
+  const healthyChannels = [...channelResult.channels]
+    .filter((channel) =>
+      channel.roi.businessRoi !== null
+        ? channel.roi.businessRoi > 0
+        : channel.contributionProfit > 0,
+    )
+    .sort((left, right) => {
+      if (left.roi.businessRoi !== null && right.roi.businessRoi !== null) {
+        return right.roi.businessRoi - left.roi.businessRoi;
+      }
+      return right.contributionProfit - left.contributionProfit;
+    })
     .slice(0, 3);
   const weakChannels = [...channelResult.channels]
-    .filter((channel) => channel.contributionProfit <= 0 || (channel.contributionMarginPercent ?? 0) < 8)
-    .sort((left, right) => left.contributionProfit - right.contributionProfit)
+    .filter((channel) =>
+      channel.roi.businessRoi !== null
+        ? channel.roi.businessRoi <= 0
+        : channel.contributionProfit <= 0 || (channel.contributionMarginPercent ?? 0) < 8,
+    )
+    .sort((left, right) => {
+      if (left.roi.businessRoi !== null && right.roi.businessRoi !== null) {
+        return left.roi.businessRoi - right.roi.businessRoi;
+      }
+      return left.contributionProfit - right.contributionProfit;
+    })
     .slice(0, 3);
   const refundLossOrders = [...objectData.orders]
     .filter((order) => order.refundLoss > 0)
@@ -3639,6 +3707,7 @@ async function buildRoiDecisionReport(
   const lossOrderRefund = refundLossOrders.reduce((sum, item) => sum + item.refundLoss, 0);
   const discountShare = safeDivide(orderScope.sevenDayTotals.discounts, orderScope.sevenDayTotals.revenue || 1);
   const refundShare = safeDivide(orderScope.sevenDayTotals.refundLoss, orderScope.sevenDayTotals.revenue || 1);
+  const totalLossShare = discountShare + refundShare;
   const channelCount = channelResult.channels.length;
 
   const report: TodayDecisionReport = {
@@ -3648,21 +3717,34 @@ async function buildRoiDecisionReport(
     accent: `${selectedCountryLabel} / 近 7 天 vs 前 30 天`,
     primaryQuestion: "最近的回报效率是被哪些渠道支撑住的，哪些损耗对象已经需要先止损？",
     summary:
-      (shortTermReturn ?? 0) >= 1
-        ? "当前仍然在赚钱，但下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
-        : "当前短期经营回报已经偏弱，应该优先排查低效渠道和高损耗订单。",
+      paidShortTermRoi !== null
+        ? paidShortTermRoi > 0
+          ? "当前已能按广告费口径计算短期 ROI，整体仍为正，但下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
+          : "当前已能按广告费口径计算短期 ROI，但广告后利润已经偏弱，应该优先排查低效渠道和高损耗订单。"
+        : (shortTermReturn ?? 0) >= 1
+          ? "当前仍然在赚钱，但广告费口径的短期 ROI 还未完全接通，下一步更重要的是确认哪些渠道值得继续投，哪些损耗正在偷偷吞掉结果。"
+          : "当前短期经营回报已经偏弱，应该优先排查低效渠道和高损耗订单。",
     statuses: [
       {
-        label: "短期经营回报",
+        label: paidShortTermRoi !== null ? "短期 ROI" : "短期经营回报",
         status:
-          shortTermReturn == null || baselineReturn == null
-            ? "watch"
-            : shortTermReturn < baselineReturn * 0.85
+          paidShortTermRoi !== null
+            ? paidShortTermRoi <= 0
               ? "risk"
-              : shortTermReturn < baselineReturn * 0.95
+              : paidShortTermRoi <= 0.2
                 ? "watch"
-                : "healthy",
-        detail: `近 7 天 ${formatMultiple(shortTermReturn)}，前 30 天基准 ${formatMultiple(baselineReturn)}。`,
+                : "healthy"
+            : shortTermReturn == null || baselineReturn == null
+              ? "watch"
+              : shortTermReturn < baselineReturn * 0.85
+                ? "risk"
+                : shortTermReturn < baselineReturn * 0.95
+                  ? "watch"
+                  : "healthy",
+        detail:
+          paidShortTermRoi !== null
+            ? `已映射广告费 ${formatCurrency(paidInvestmentCost, channelResult.currency)}，近 30 天短期 ROI ${formatPercent(paidShortTermRoi)}。`
+            : `近 7 天 ${formatMultiple(shortTermReturn)}，前 30 天基准 ${formatMultiple(baselineReturn)}。`,
       },
       {
         label: "渠道质量",
@@ -3676,16 +3758,16 @@ async function buildRoiDecisionReport(
       },
     ],
     summaryMetrics: [
-      toSummaryMetric("短期经营回报", formatMultiple(shortTermReturn)),
-      toSummaryMetric(
-        "健康渠道收入占比",
-        formatPercent(safeDivide(paidChannelRevenue, channelResult.totalRevenue || 1)),
-      ),
-      toSummaryMetric(
-        "低效渠道收入占比",
-        formatPercent(safeDivide(weakChannelRevenue, channelResult.totalRevenue || 1)),
-      ),
-      toSummaryMetric("总损耗占比", formatPercent(discountShare + refundShare)),
+      paidShortTermRoi !== null
+        ? toSummaryMetric("短期 ROI", formatPercent(paidShortTermRoi))
+        : toSummaryMetric("短期经营回报", formatMultiple(shortTermReturn)),
+      paidShortTermRoi !== null
+        ? toSummaryMetric("广告后利润", formatCurrency(paidAfterSpendProfit, channelResult.currency))
+        : toSummaryMetric("健康渠道收入占比", formatPercent(safeDivide(paidChannelRevenue, channelResult.totalRevenue || 1))),
+      toSummaryMetric("总损耗占比", formatPercent(totalLossShare)),
+      paidShortTermRoi !== null
+        ? toSummaryMetric("ROAS", formatMultiple(paidRoas))
+        : toSummaryMetric("低效渠道收入占比", formatPercent(safeDivide(weakChannelRevenue, channelResult.totalRevenue || 1))),
     ],
     breakdowns: [
       {
@@ -3694,19 +3776,41 @@ async function buildRoiDecisionReport(
         summary: "先确认哪些渠道真的在留下利润，哪些渠道虽然有收入，但回报质量已经变弱。",
         rows: [
           {
-            label: "健康渠道收入",
-            value: formatCurrency(healthyChannels.reduce((sum, item) => sum + item.revenue, 0), channelResult.currency),
-            meta: "量和质相对均衡，更适合作为继续投的方向。",
+            label: paidShortTermRoi !== null ? "已映射付费收入" : "健康渠道收入",
+            value: formatCurrency(
+              paidShortTermRoi !== null
+                ? mappedPaidRevenue
+                : healthyChannels.reduce((sum, item) => sum + item.revenue, 0),
+              channelResult.currency,
+            ),
+            meta:
+              paidShortTermRoi !== null
+                ? "这部分收入已经成功映射到广告费，可以直接进入短期 ROI 计算。"
+                : "量和质相对均衡，更适合作为继续投的方向。",
           },
           {
-            label: "低效渠道收入",
-            value: formatCurrency(weakChannels.reduce((sum, item) => sum + item.revenue, 0), channelResult.currency),
-            meta: "收入有了，但贡献利润已经开始偏弱。",
+            label: paidShortTermRoi !== null ? "广告费" : "低效渠道收入",
+            value: formatCurrency(
+              paidShortTermRoi !== null
+                ? paidInvestmentCost
+                : weakChannels.reduce((sum, item) => sum + item.revenue, 0),
+              channelResult.currency,
+            ),
+            meta:
+              paidShortTermRoi !== null
+                ? "广告费来自广告平台日指标，再按平台内收入占比分配到渠道。"
+                : "收入有了，但贡献利润已经开始偏弱。",
           },
           {
-            label: "可归因收入占比",
-            value: `${channelResult.attributedRevenueShare}%`,
-            meta: "当前渠道判断基于 last-click 归因口径。",
+            label: paidShortTermRoi !== null ? "广告后利润" : "可归因收入占比",
+            value:
+              paidShortTermRoi !== null
+                ? formatCurrency(paidAfterSpendProfit, channelResult.currency)
+                : `${channelResult.attributedRevenueShare}%`,
+            meta:
+              paidShortTermRoi !== null
+                ? "广告后利润 = 贡献利润 - 广告费，用来判断投放后到底还剩多少钱。"
+                : "当前渠道判断基于 last-click 归因口径。",
           },
         ],
         relatedGroupKeys: ["healthy_channels", "weak_channels"],
@@ -3717,12 +3821,7 @@ async function buildRoiDecisionReport(
         summary: "ROI 下降不一定只发生在投放前段，成交后的退款和损耗也会继续吞掉结果。",
         rows: [
           {
-            label: "退款损耗订单",
-            value: formatCurrency(refundLossOrders.reduce((sum, item) => sum + item.refundLoss, 0), channelResult.currency),
-            meta: "成交后损耗会继续压缩回报。",
-          },
-          {
-            label: "折扣损耗",
+            label: "折扣成本",
             value: formatCurrency(orderScope.sevenDayTotals.discounts, channelResult.currency),
             meta: "折扣是典型的售前损耗，需要和渠道一起看。",
           },
@@ -3730,6 +3829,11 @@ async function buildRoiDecisionReport(
             label: "退款损耗",
             value: formatCurrency(orderScope.sevenDayTotals.refundLoss, channelResult.currency),
             meta: "退款问题应该单独看，不要被规模掩盖。",
+          },
+          {
+            label: "高损耗订单",
+            value: formatCurrency(lossOrderRefund, channelResult.currency),
+            meta: "Top 高损耗订单能解释是哪几笔订单在继续拖弱回报。",
           },
         ],
         relatedGroupKeys: ["refund_loss_orders"],

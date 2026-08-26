@@ -4,11 +4,17 @@ import { useTranslation } from "react-i18next";
 import type { ValueLayerData } from "../../../server/operations/valueLayer.server";
 import type { ShopCostConfigView } from "../../../server/operations/roi/costConfig.server";
 import {
-  PageMetricCard,
   PageSurface,
   pageColorTokens,
+  pageMetricCardStyle,
+  pageMetricFooterStyle,
+  pageMetricLabelStyle,
+  pageMetricTileStyle,
+  pageMetricUnitStyle,
+  pageMetricValueStyle,
   type PageMetricItem,
 } from "../../page/pageUiStyles";
+import { MetricHintLabel } from "../shared/MetricHintLabel";
 
 export const TODAY_ROI_COST_CONFIG_FETCHER_KEY = "today-roi-cost-config";
 
@@ -20,11 +26,15 @@ type InsightCard = {
   statusLabel: string;
   statusTone: "success" | "warning" | "neutral";
   source: DataSource;
-  metrics: PageMetricItem[];
+  metrics: InsightMetric[];
   conclusion: string;
 };
 
-const PAID_CHANNEL_KEYS = new Set(["facebook", "instagram", "tiktok", "youtube", "pinterest", "x", "bing"]);
+type InsightMetric = PageMetricItem & {
+  explanation?: string;
+};
+
+const PAID_CHANNEL_KEYS = new Set(["facebook", "instagram", "google", "tiktok", "youtube", "pinterest", "x", "bing"]);
 
 export function TodayRoiValueLayerSection({
   value,
@@ -79,6 +89,19 @@ export function TodayRoiValueLayerSection({
         {settingsOpen ? <CostConfigPanel costConfig={value.costConfig} isMobile={isMobile} /> : null}
       </PageSurface>
 
+      <PageSurface
+        title="ROI 口径说明"
+        subtitle="这里明确区分贡献利润、广告费和短期 ROI，避免把广告前利润和广告后回报混成一个数。"
+      >
+        <div style={explanationListStyle}>
+          {value.channels.caveats.map((item) => (
+            <div key={item} style={explanationItemStyle}>
+              {item}
+            </div>
+          ))}
+        </div>
+      </PageSurface>
+
       <div style={cardListStyle}>
         {cards.map((card) => (
           <PageSurface key={card.key} title={card.title}>
@@ -87,7 +110,7 @@ export function TodayRoiValueLayerSection({
               <span style={badgeStyle(card.statusTone)}>{card.statusLabel}</span>
               <SourceTag source={card.source} />
             </div>
-            <PageMetricCard metrics={card.metrics} />
+            <InsightMetricCard metrics={card.metrics} />
             <div style={conclusionBlockStyle}>
               <div style={conclusionLabelStyle}>{t("todayRoi.conclusionLabel")}</div>
               <p style={conclusionTextStyle}>{card.conclusion}</p>
@@ -108,9 +131,9 @@ function resolveCardHighlight(
     return cardKey === "paid-traffic" || cardKey === "mix";
   }
   if (focus === "loss") {
-    return cardKey === "coupon" || cardKey === "paid-traffic";
+    return cardKey === "loss" || cardKey === "paid-traffic";
   }
-  return cardKey === "customer-value" || cardKey === "repeat" || cardKey === "mix";
+  return cardKey === "paid-traffic" || cardKey === "customer-value" || cardKey === "mix";
 }
 
 function SourceTag({ source }: { source: DataSource }) {
@@ -132,6 +155,28 @@ function SourceTag({ source }: { source: DataSource }) {
     <span style={badgeStyle(dataSourceTone[source])} title={tip}>
       {label}
     </span>
+  );
+}
+
+function InsightMetricCard({ metrics }: { metrics: InsightMetric[] }) {
+  return (
+    <div style={pageMetricCardStyle}>
+      <div style={metricGridStyle(metrics.length)}>
+        {metrics.map((metric) => (
+          <div key={metric.label} style={pageMetricTileStyle}>
+            <MetricHintLabel
+              as="p"
+              style={pageMetricLabelStyle}
+              text={metric.label}
+              content={metric.explanation}
+            />
+            <p style={pageMetricValueStyle}>{metric.value}</p>
+            {metric.unit ? <p style={pageMetricUnitStyle}>{metric.unit}</p> : null}
+          </div>
+        ))}
+      </div>
+      <div style={pageMetricFooterStyle}>鼠标移到指标名上可以查看计算口径。</div>
+    </div>
   );
 }
 
@@ -285,16 +330,35 @@ function buildInsightCards(
 ): InsightCard[] {
   const { channels, customers } = value;
   const paidChannels = channels.channels.filter((channel) => PAID_CHANNEL_KEYS.has(channel.channelKey));
-  const paidRevenue = sumBy(paidChannels, (channel) => channel.revenue);
-  const paidProfit = sumBy(paidChannels, (channel) => channel.contributionProfit);
-  const paidShare = channels.totalRevenue > 0 ? (paidRevenue / channels.totalRevenue) * 100 : 0;
-  const discountCost = sumBy(channels.channels, (channel) => channel.discountCost);
-  const discountRate = channels.totalRevenue > 0 ? (discountCost / channels.totalRevenue) * 100 : 0;
-  const repeatDrivenChannels = channels.channels.filter((channel) => channel.customers.repeatCustomerShare >= 35);
-  const averageRepeatShare = averageBy(
-    repeatDrivenChannels,
-    (channel) => channel.customers.repeatCustomerShare,
+  const paidChannelsWithSpend = paidChannels.filter(
+    (channel) => channel.roi.investmentCost !== null && channel.roi.investmentCost > 0,
   );
+  const paidRevenue = sumBy(paidChannels, (channel) => channel.revenue);
+  const mappedPaidRevenue = sumBy(paidChannelsWithSpend, (channel) => channel.revenue);
+  const paidProfit = sumBy(paidChannels, (channel) => channel.contributionProfit);
+  const mappedPaidProfit = sumBy(paidChannelsWithSpend, (channel) => channel.contributionProfit);
+  const paidSpend = sumBy(paidChannelsWithSpend, (channel) => channel.roi.investmentCost ?? 0);
+  const paidAfterSpendProfit = mappedPaidProfit - paidSpend;
+  const paidShortTermRoi = paidSpend > 0 ? paidAfterSpendProfit / paidSpend : null;
+  const paidShare = channels.totalRevenue > 0 ? (paidRevenue / channels.totalRevenue) * 100 : 0;
+  const mappedPaidShare = channels.totalRevenue > 0 ? (mappedPaidRevenue / channels.totalRevenue) * 100 : 0;
+  const paidRoas = paidSpend > 0 ? mappedPaidRevenue / paidSpend : null;
+  const estimatedPaidNewOrders = sumBy(
+    paidChannelsWithSpend,
+    (channel) => channel.orderCount * (channel.customers.newOrderShare / 100),
+  );
+  const estimatedCac = estimatedPaidNewOrders > 0 ? paidSpend / estimatedPaidNewOrders : null;
+  const ltvCacRatio =
+    estimatedCac && estimatedCac > 0 && customers.averageDynamicLtv > 0
+      ? customers.averageDynamicLtv / estimatedCac
+      : null;
+  const discountCost = sumBy(channels.channels, (channel) => channel.discountCost);
+  const refundLoss = sumBy(channels.channels, (channel) => channel.refundLoss);
+  const totalLossCost = discountCost + refundLoss;
+  const discountRate = channels.totalRevenue > 0 ? (discountCost / channels.totalRevenue) * 100 : 0;
+  const refundRate = channels.totalRevenue > 0 ? (refundLoss / channels.totalRevenue) * 100 : 0;
+  const totalLossRate = channels.totalRevenue > 0 ? (totalLossCost / channels.totalRevenue) * 100 : 0;
+  const repeatDrivenChannels = channels.channels.filter((channel) => channel.customers.repeatCustomerShare >= 35);
   const topChannel =
     [...channels.channels].sort((left, right) => right.contributionProfit - left.contributionProfit)[0] ?? null;
   const lowMarginChannel =
@@ -310,94 +374,159 @@ function buildInsightCards(
     {
       key: "paid-traffic",
       title: t("todayRoi.lenses.paidTraffic.title"),
-      statusLabel: t("todayRoi.lenses.paidTraffic.status"),
-      statusTone: paidChannels.length > 0 ? "warning" : "neutral",
+      statusLabel:
+        paidShortTermRoi === null
+          ? "广告费待补"
+          : paidShortTermRoi > 0
+            ? "ROI 为正"
+            : "ROI 偏弱",
+      statusTone:
+        paidShortTermRoi === null
+          ? "neutral"
+          : paidShortTermRoi > 0
+            ? "success"
+            : "warning",
       source: paidChannels.length > 0 ? "estimated" : "pending",
       metrics: [
-        { label: t("todayRoi.summaryPaidTraffic"), value: formatPercent(paidShare) },
-        { label: t("todayRoi.metricContributionProfit"), value: formatCurrency(paidProfit, channels.currency) },
-        { label: t("todayRoi.metricPaidChannels"), value: String(paidChannels.length) },
+        {
+          label: paidShortTermRoi === null ? "付费收入占比" : "已映射付费收入占比",
+          value: paidShortTermRoi === null ? formatPercent(paidShare) : formatPercent(mappedPaidShare),
+          explanation:
+            paidShortTermRoi === null
+              ? "付费流量收入占比 = 已识别付费渠道收入 / 全部渠道收入。"
+              : "已映射付费收入占比 = 已成功映射广告费的付费渠道收入 / 全部渠道收入。",
+        },
+        {
+          label: "付费贡献利润",
+          value: formatCurrency(paidProfit, channels.currency),
+          explanation: "贡献利润 = 收入 - 商品成本 - 用券成本 - 支付手续费 - 退款损耗。当前未含运费补贴。",
+        },
+        {
+          label: "广告费",
+          value: paidShortTermRoi === null ? "待补" : formatCurrency(paidSpend, channels.currency),
+          explanation: "广告费来自已落库广告日指标，再按平台内收入占比分配到 facebook / instagram、google、tiktok 等渠道。",
+        },
+        {
+          label: "短期 ROI",
+          value: paidShortTermRoi === null ? "待补" : formatRoi(paidShortTermRoi),
+          explanation: "短期 ROI = (贡献利润 - 广告费) / 广告费。",
+        },
+        {
+          label: "广告后利润",
+          value: paidShortTermRoi === null ? "待补" : formatCurrency(paidAfterSpendProfit, channels.currency),
+          explanation: "广告后利润 = 贡献利润 - 广告费。",
+        },
+        {
+          label: "ROAS",
+          value: paidRoas === null ? "待补" : formatMultiple(paidRoas),
+          explanation: "ROAS = 已映射付费收入 / 广告费。",
+        },
+        {
+          label: "已映射付费渠道数",
+          value: String(paidChannelsWithSpend.length),
+          explanation: "已映射付费渠道数 = 当前既识别为付费渠道、又成功拿到广告费映射的渠道数量。",
+        },
       ],
       conclusion:
-        paidChannels.length > 0
-          ? t("todayRoi.lenses.paidTraffic.insightReady", {
-              count: paidChannels.length,
-              share: formatPercent(paidShare),
-            })
-          : t("todayRoi.lenses.paidTraffic.insightPending"),
+        paidShortTermRoi === null
+          ? `当前识别到 ${paidChannels.length} 个付费渠道、付费收入占比 ${formatPercent(paidShare)}，但广告费还没完整映射到这些渠道，所以短期 ROI 继续标记为待补。`
+          : `短期 ROI 按 (贡献利润 - 广告费) / 广告费 计算。当前已覆盖 ${paidChannelsWithSpend.length} 个已映射广告费的付费渠道，已映射付费收入占比 ${formatPercent(mappedPaidShare)}，广告后利润 ${formatCurrency(paidAfterSpendProfit, channels.currency)}。`,
     },
     {
-      key: "coupon",
-      title: t("todayRoi.lenses.coupon.title"),
-      statusLabel: t("todayRoi.lenses.coupon.status"),
-      statusTone: discountCost > 0 ? "warning" : "neutral",
-      source: discountCost > 0 ? "estimated" : "pending",
+      key: "loss",
+      title: "损耗压力",
+      statusLabel: totalLossRate >= 12 ? "损耗偏高" : totalLossRate > 0 ? "可继续看" : "损耗较轻",
+      statusTone: totalLossRate >= 12 ? "warning" : totalLossRate > 0 ? "neutral" : "success",
+      source: channels.channels.length > 0 ? "estimated" : "pending",
       metrics: [
-        { label: t("todayRoi.summaryCouponCost"), value: formatCurrency(discountCost, channels.currency) },
-        { label: t("todayRoi.metricDiscountRate"), value: formatPercent(discountRate) },
-        { label: t("todayRoi.metricDiscountSensitive"), value: String(customers.tagCounts.discount_sensitive) },
+        {
+          label: "折扣成本",
+          value: formatCurrency(discountCost, channels.currency),
+          explanation: "用券成本 = 观察窗口内订单折扣金额汇总。",
+        },
+        {
+          label: "退款损耗",
+          value: formatCurrency(refundLoss, channels.currency),
+          explanation: "退款损耗 = 观察窗口内退款金额汇总。",
+        },
+        {
+          label: "总损耗占比",
+          value: formatPercent(totalLossRate),
+          explanation: "总损耗占比 = (折扣成本 + 退款损耗) / 总收入。",
+        },
+        {
+          label: t("todayRoi.metricDiscountSensitive"),
+          value: String(customers.tagCounts.discount_sensitive),
+          explanation: "折扣敏感客户 = 当前客户价值模型里带有 discount_sensitive 标签的客户数量。",
+        },
       ],
-      conclusion: t("todayRoi.lenses.coupon.insight", {
-        discountSensitive: customers.tagCounts.discount_sensitive,
-      }),
+      conclusion:
+        totalLossCost > 0
+          ? `当前损耗成本 ${formatCurrency(totalLossCost, channels.currency)}，其中折扣率 ${formatPercent(discountRate)}、退款率 ${formatPercent(refundRate)}。ROI 被拖弱时，要先分清是售前让利还是成交后退款。`
+          : "当前还没看到明显损耗压力，这层更适合作为持续监控而不是主要矛盾。",
     },
     {
       key: "customer-value",
-      title: t("todayRoi.lenses.customerValue.title"),
-      statusLabel: t("todayRoi.lenses.customerValue.status"),
+      title: "长期价值质量",
+      statusLabel: customers.repeatPurchaseRate >= 25 ? "价值结构较稳" : "还要继续养熟客",
       statusTone: customerHealthTone,
       source: "estimated",
       metrics: [
-        { label: t("todayRoi.metricHighValueShare"), value: formatPercent(customers.highValueShare) },
-        { label: t("todayRoi.metricAvgScore"), value: String(customers.averageScore) },
-        { label: t("todayRoi.segmentVip"), value: String(customers.segmentCounts.vip) },
-        { label: t("todayRoi.segmentAtRisk"), value: String(customers.segmentCounts.at_risk) },
-      ],
-      conclusion: t("todayRoi.lenses.customerValue.insight", {
-        vip: customers.segmentCounts.vip,
-        atRisk: customers.segmentCounts.at_risk,
-        ltv: formatCurrency(customers.averageDynamicLtv, channels.currency),
-      }),
-    },
-    {
-      key: "repeat",
-      title: t("todayRoi.lenses.repeat.title"),
-      statusLabel: t("todayRoi.lenses.repeat.status"),
-      statusTone: customers.repeatPurchaseRate >= 25 ? "success" : "warning",
-      source: "estimated",
-      metrics: [
-        { label: t("todayRoi.summaryRepeatRate"), value: formatPercent(customers.repeatPurchaseRate) },
-        { label: t("todayRoi.metricAvgLtv"), value: formatCurrency(customers.averageDynamicLtv, channels.currency) },
-        { label: t("todayRoi.metricRepeatChannels"), value: String(repeatDrivenChannels.length) },
-        { label: t("todayRoi.metricRepeatShareAvg"), value: formatPercent(averageRepeatShare) },
+        {
+          label: t("todayRoi.metricHighValueShare"),
+          value: formatPercent(customers.highValueShare),
+          explanation: "高价值客户占比 = 分数 >= 70 的客户数 / 已纳入价值模型的客户数。",
+        },
+        {
+          label: "复购率",
+          value: formatPercent(customers.repeatPurchaseRate),
+          explanation: "复购率 = active + vip 客户数 / 已纳入价值模型的客户数。",
+        },
+        {
+          label: "平均 LTV",
+          value: formatCurrency(customers.averageDynamicLtv, channels.currency),
+          explanation: "平均 LTV = 当前客户价值表里的 dynamicLtv 均值。",
+        },
+        {
+          label: "LTV/CAC",
+          value: ltvCacRatio === null ? "待补" : formatMultiple(ltvCacRatio),
+          explanation: "LTV/CAC = 平均动态 LTV / 首单 CAC（估算）。用于看长期价值能否覆盖当前获客成本。",
+        },
       ],
       conclusion:
         repeatDrivenChannels.length > 0
-          ? t("todayRoi.lenses.repeat.insightReady", {
-              count: repeatDrivenChannels.length,
-              share: formatPercent(averageRepeatShare),
-            })
-          : t("todayRoi.lenses.repeat.insightPending"),
+          ? `当前已有 ${repeatDrivenChannels.length} 个渠道表现出较高复购倾向，长期价值层可以帮助判断今天的投放是不是在积累未来利润。`
+          : "当前复购驱动渠道还不够明显，长期价值层先作为补充判断，不直接替代短期 ROI。",
     },
     {
       key: "mix",
-      title: t("todayRoi.lenses.mix.title"),
-      statusLabel: t("todayRoi.lenses.mix.status"),
+      title: "渠道结构",
+      statusLabel: topChannel ? "结构已可判断" : "渠道样本待补",
       statusTone: topChannel ? "success" : "neutral",
-      source: topChannel ? "estimated" : "pending",
+      source: channels.channels.length > 0 ? "estimated" : "pending",
       metrics: [
-        { label: t("todayRoi.metricTopChannel"), value: topChannel?.label ?? "—" },
+        {
+          label: t("todayRoi.metricTopChannel"),
+          value: topChannel?.label ?? "—",
+          explanation: "Top 渠道 = 当前渠道列表里贡献利润最高的渠道。",
+        },
         {
           label: t("todayRoi.metricTopContributionProfit"),
           value: topChannel ? formatCurrency(topChannel.contributionProfit, channels.currency) : "—",
+          explanation: "Top 贡献利润 = Top 渠道在当前观察窗口内留下的贡献利润。",
         },
-        { label: t("todayRoi.metricLowMarginChannel"), value: lowMarginChannel?.label ?? "—" },
+        {
+          label: t("todayRoi.metricLowMarginChannel"),
+          value: lowMarginChannel?.label ?? "—",
+          explanation: "低利润率渠道 = 当前渠道列表里贡献利润率最低的渠道。",
+        },
         {
           label: t("todayRoi.metricLowMargin"),
           value:
             lowMarginChannel?.contributionMarginPercent === null || lowMarginChannel?.contributionMarginPercent === undefined
               ? "—"
               : formatPercent(lowMarginChannel.contributionMarginPercent),
+          explanation: "贡献利润率 = 贡献利润 / 收入。",
         },
       ],
       conclusion:
@@ -430,13 +559,21 @@ function formatPercent(value: number, digits = 1): string {
   return `${Number(value.toFixed(digits))}%`;
 }
 
+function formatRoi(value: number, digits = 1): string {
+  return `${Number((value * 100).toFixed(digits))}%`;
+}
+
 function sumBy<T>(items: T[], getter: (item: T) => number): number {
   return items.reduce((total, item) => total + getter(item), 0);
 }
 
-function averageBy<T>(items: T[], getter: (item: T) => number): number {
-  if (items.length === 0) return 0;
-  return sumBy(items, getter) / items.length;
+function metricGridStyle(columnCount: number): CSSProperties {
+  const minWidth = columnCount > 4 ? "120px" : "160px";
+  return {
+    display: "grid",
+    gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}, 1fr))`,
+    gap: 0,
+  };
 }
 
 const dataSourceTone: Record<DataSource, "success" | "warning" | "neutral"> = {
@@ -448,6 +585,21 @@ const dataSourceTone: Record<DataSource, "success" | "warning" | "neutral"> = {
 const sectionStackStyle: CSSProperties = {
   display: "grid",
   gap: "1rem",
+};
+
+const explanationListStyle: CSSProperties = {
+  display: "grid",
+  gap: "0.65rem",
+};
+
+const explanationItemStyle: CSSProperties = {
+  padding: "0.8rem 0.9rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.8125rem",
+  lineHeight: 1.55,
 };
 
 const pageEmptyStateStyle: CSSProperties = {
