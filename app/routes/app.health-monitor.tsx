@@ -66,17 +66,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // 总览复用当日快照指标，不重算 30 天诊断；详情才取对象名单。
   // signals 内部已逐项降级，不会整体 reject。
-  // 快照失败时走演示数据，此时不注入 signals，避免真实值和演示值混在一起。
+  // 快照失败时走演示数据，此时不拉、不注入 signals，避免白调用和真假值混在一起。
   const loadSnapshot = healthMonitorNeedsDiagnosisDetail(viewMode)
     ? ensureDailySnapshot
     : ensureDailySnapshotOverview;
-  const [snapshotResult, signals] = await Promise.all([
-    loadSnapshot(session.shop, { shopifyAdmin: admin }).then(
-      (snapshot) => ({ ok: true as const, snapshot }),
-      (error: unknown) => ({ ok: false as const, error }),
-    ),
-    loadHealthMonitorSignals({ shop: session.shop }),
-  ]);
+  const snapshotResult = await loadSnapshot(session.shop, { shopifyAdmin: admin }).then(
+    (snapshot) => ({ ok: true as const, snapshot }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
 
   if (!snapshotResult.ok) {
     console.error(
@@ -95,6 +92,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const snapshot = snapshotResult.snapshot;
+  const signals = await loadHealthMonitorSignals({ shop: session.shop });
   const windowNow = new Date(snapshot.generatedAt);
   return {
     monitors: buildHealthMonitorRecords({
