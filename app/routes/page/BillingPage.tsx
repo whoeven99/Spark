@@ -445,9 +445,6 @@ export function BillingPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const locale = i18n.language;
-  const backLabel = t("common.backToPrevious", {
-    defaultValue: t("billing.pageBack"),
-  });
   const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
   const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
   const proMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "pro");
@@ -933,9 +930,9 @@ export function BillingPage() {
       }}
     >
       <PageHeaderNav
-        title={t("billing.pageTitle")}
-        backLabel={backLabel}
-        fallbackPath="/app"
+        title={t("billing.quotaTitle")}
+        titleBarTitle={t("billing.pageTitle")}
+        hideBack
         chromeless
       />
 

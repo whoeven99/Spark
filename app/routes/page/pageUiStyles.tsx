@@ -603,7 +603,9 @@ type PageHeaderNavProps = {
   subtitle?: string;
   eyebrow?: string;
   titleBarTitle?: string;
-  backLabel: string;
+  /** Omit or set hideBack to skip the in-page back link (e.g. top-level destinations). */
+  backLabel?: string;
+  hideBack?: boolean;
   fallbackPath?: string;
   preserveSearch?: boolean;
   workspaceOnly?: boolean;
@@ -618,6 +620,7 @@ export function PageHeaderNav({
   eyebrow,
   titleBarTitle,
   backLabel,
+  hideBack = false,
   fallbackPath,
   preserveSearch,
   workspaceOnly,
@@ -639,13 +642,15 @@ export function PageHeaderNav({
       {/* 同步 Shopify Admin 顶部标题栏，避免切换页面后残留上一页标题 */}
       <TitleBar title={titleBarTitle ?? title} />
       <div style={pageHeaderNavMainStyle}>
-        <PageBackButton
-          label={backLabel}
-          fallbackPath={fallbackPath}
-          preserveSearch={preserveSearch}
-          workspaceOnly={workspaceOnly}
-          returnTo={returnTo}
-        />
+        {!hideBack && backLabel ? (
+          <PageBackButton
+            label={backLabel}
+            fallbackPath={fallbackPath}
+            preserveSearch={preserveSearch}
+            workspaceOnly={workspaceOnly}
+            returnTo={returnTo}
+          />
+        ) : null}
         <div style={pageHeaderNavHeadingStyle}>
           {eyebrow ? <p style={pageHeaderNavEyebrowStyle}>{eyebrow}</p> : null}
           <h1 style={isMobile ? pageHeaderNavTitleMobileStyle : pageHeaderNavTitleStyle}>
