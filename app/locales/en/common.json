@@ -1179,6 +1179,7 @@
     "poolTrial": "Trial",
     "noSubscription": "No active paid subscription",
     "subscribe": "Subscribe",
+    "subscribeNow": "Subscribe now",
     "buyPack": "Buy pack",
     "lowBalanceWarning": "Insufficient tokens. Please subscribe or purchase a token pack on the plans page.",
     "openBillingPage": "Go to plans",
@@ -1189,6 +1190,8 @@
     "intervalAnnual": "Annual",
     "trialDays_one": "{{count}}-day trial",
     "trialDays_other": "{{count}}-day trial",
+    "startTrial_one": "Start {{count}}-day trial",
+    "startTrial_other": "Start {{count}}-day trial",
     "status": {
       "PENDING": "Pending",
       "ACTIVE": "Active",

@@ -387,7 +387,7 @@ function PaidPlanCard({
                 >
                   {isSubmitting && submittingMode === "trial"
                     ? t("billing.redirectingToCheckout")
-                    : t("billing.trialDays", { count: plan.trialDays ?? 0 })}
+                    : t("billing.startTrial", { count: plan.trialDays ?? 0 })}
                 </button>
               </Form>
             ) : null}
@@ -402,7 +402,7 @@ function PaidPlanCard({
               >
                 {isSubmitting && submittingMode === "paid"
                   ? t("billing.redirectingToCheckout")
-                  : t("billing.subscribe")}
+                  : t("billing.subscribeNow")}
               </button>
             </Form>
           </div>
@@ -934,8 +934,10 @@ export function BillingPage() {
     >
       <PageHeaderNav
         title={t("billing.pageTitle")}
+        subtitle={t("billing.pageIntro")}
         backLabel={backLabel}
         fallbackPath="/app"
+        chromeless
       />
 
       {!billing.hasAccess && billing.billingRequired ? (
@@ -954,18 +956,18 @@ export function BillingPage() {
               {isSubscriptionTrialActive ? (
                 <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
               ) : null}
-              <button
-                type="button"
-                className={styles.secondaryEntryButton}
-                onClick={() => setShowAccountDetailPage(true)}
-              >
-                {t("billing.openAccountDetailPage")}
-              </button>
             </div>
             {quotaMetaDescription ? (
               <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
             ) : null}
           </div>
+          <button
+            type="button"
+            className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
+            onClick={() => setShowAccountDetailPage(true)}
+          >
+            {t("billing.openAccountDetailPage")}
+          </button>
         </div>
         <div className={styles.usageCard}>
           <div className={styles.usageMain}>
@@ -1222,7 +1224,14 @@ export function BillingPage() {
                     const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
                     return (
                       <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
-                        {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                        <span className={styles.comparePlanHeading}>
+                          {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                          {tier === emphasizedTier ? (
+                            <span className={styles.compareHeaderBadge}>
+                              {t("billing.compareHighlighted")}
+                            </span>
+                          ) : null}
+                        </span>
                       </th>
                     );
                   })}

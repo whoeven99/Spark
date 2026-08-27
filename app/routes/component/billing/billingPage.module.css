@@ -28,8 +28,9 @@
   flex-wrap: wrap;
 }
 
-.usageTitleRow .secondaryEntryButton {
-  margin-left: auto;
+.usageDetailsButton {
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .usageTitle {
@@ -90,11 +91,11 @@
   border: 1px solid #e1e3e5;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .usageMain {
-  padding: 1rem 1.15rem 0.9rem;
+  padding: 0.9rem 1rem;
 }
 
 .usageStatsRow {
@@ -154,7 +155,7 @@
 }
 
 .progressTrack {
-  height: 10px;
+  height: 8px;
   border-radius: 999px;
   background: #ebedf0;
   overflow: hidden;
@@ -221,7 +222,7 @@
 
 /* —— 选计划 —— */
 .plansSection {
-  padding-top: 0.25rem;
+  padding-top: 0;
 }
 
 .plansSectionHeadMain {
@@ -244,12 +245,12 @@
   justify-content: space-between;
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: 0.8rem;
 }
 
 .plansTitle {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
   flex: 1 1 12rem;
@@ -359,8 +360,8 @@
   background: #ffffff;
   border: 1px solid #e1e3e5;
   border-radius: 14px;
-  padding: 1.35rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
+  padding: 1.1rem;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
   transition:
     border-color 0.2s,
     box-shadow 0.2s,
@@ -375,8 +376,7 @@
 
 .planCardRecommended {
   border-color: #005bd3;
-  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.2), 0 8px 24px rgba(0, 91, 211, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.14), 0 2px 8px rgba(0, 91, 211, 0.07);
   background: #ffffff;
 }
 
@@ -415,14 +415,14 @@
 }
 
 .planName {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
 }
 
 .planPriceRow {
-  margin: 0 0 1rem;
+  margin: 0 0 0.75rem;
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
@@ -430,7 +430,7 @@
 }
 
 .planPrice {
-  font-size: 1.75rem;
+  font-size: 1.625rem;
   font-weight: 700;
   color: #1f2124;
 }
@@ -441,7 +441,7 @@
 }
 
 .planPriceMeta {
-  margin: -0.5rem 0 0.85rem;
+  margin: -0.35rem 0 0.65rem;
   font-size: 0.75rem;
   line-height: 1.4;
   color: #5c6066;
@@ -449,7 +449,7 @@
 
 .planFeatures {
   list-style: none;
-  margin: 0 0 1.25rem;
+  margin: 0 0 0.85rem;
   padding: 0;
   flex: 1;
 }
@@ -458,7 +458,7 @@
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   font-size: 0.8125rem;
   line-height: 1.4;
   color: #1f2124;
@@ -484,7 +484,7 @@
 
 .planCtaGroup {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.2rem;
 }
 
 .planActionForm {
@@ -535,11 +535,11 @@
   display: block;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.65rem 1rem;
+  padding: 0.45rem 0.75rem;
   border-radius: 9px;
-  border: 1px solid #c9cdd2;
-  background: #ffffff;
-  color: #1f2124;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #005bd3;
   font-size: 0.875rem;
   font-weight: 600;
   font-family: inherit;
@@ -554,10 +554,10 @@
 }
 
 .planSecondaryCta:hover:not(:disabled) {
-  background: #fafbfb;
-  border-color: #005bd3;
-  box-shadow: 0 2px 10px rgba(0, 91, 211, 0.08);
-  transform: translateY(-1px);
+  background: #eef4ff;
+  border-color: rgba(44, 110, 203, 0.14);
+  box-shadow: none;
+  transform: none;
 }
 
 .planSecondaryCta:disabled {
@@ -647,13 +647,13 @@
   background: #ffffff;
   border: 1px solid #e1e3e5;
   border-radius: 14px;
-  padding: 1.25rem;
+  padding: 1.1rem 1.2rem;
   overflow-x: auto;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .compareTitle {
-  margin: 0 0 1rem;
+  margin: 0 0 0.8rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
@@ -741,7 +741,7 @@
 
 .compareTable th,
 .compareTable td {
-  padding: 0.65rem 0.75rem;
+  padding: 0.6rem 0.7rem;
   text-align: center;
   border-bottom: 1px solid #f1f2f3;
 }
@@ -763,12 +763,8 @@
   border-bottom: none;
 }
 
-.compareTable tbody tr:nth-child(even) td {
-  background: #fafbfb;
-}
-
 .compareColHighlight {
-  background: #eef4ff !important;
+  background: #f8fbff !important;
   font-weight: 700;
   color: #1f2124;
 }
@@ -777,25 +773,44 @@
   color: #005bd3;
 }
 
+.comparePlanHeading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.compareHeaderBadge {
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: #eef4ff;
+  border: 1px solid rgba(44, 110, 203, 0.14);
+  color: #005bd3;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 /* —— 购包 —— */
 .packSection {
-  margin-top: 0.25rem;
+  margin-top: 0;
 }
 
 .packCard {
   background: #ffffff;
   border: 1px solid #e1e3e5;
   border-radius: 14px;
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 1.1rem 1.2rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
+  gap: 0.9rem;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .packCardHeader {
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid #f1f2f3;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .packTitle {
@@ -815,7 +830,7 @@
 .packOptions {
   display: grid;
   grid-template-columns: repeat(var(--pack-columns, 2), minmax(0, 1fr));
-  gap: 0.7rem;
+  gap: 0.6rem;
 }
 
 @media (max-width: 640px) {
@@ -842,9 +857,9 @@
   align-items: center;
   justify-content: center;
   gap: 0.08rem;
-  min-height: 5.8rem;
-  padding: 0.8rem 0.7rem;
-  border: 1.5px solid #c9cdd2;
+  min-height: 4.75rem;
+  padding: 0.65rem 0.6rem;
+  border: 1px solid #c9cdd2;
   border-radius: 11px;
   background: #ffffff;
   cursor: pointer;
@@ -868,8 +883,8 @@
 .packOptionSelected {
   border-color: #005bd3;
   background: #eef4ff;
-  box-shadow: 0 0 0 1px #005bd3, 0 4px 16px rgba(0, 91, 211, 0.08);
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px #005bd3;
+  transform: none;
 }
 
 .packOptionTokens {
@@ -897,7 +912,7 @@
 .packCheckoutBar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
   padding: 0.7rem 1rem;
@@ -913,7 +928,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: #202223;
-  text-align: center;
+  text-align: left;
 }
 
 .packCtaInline {
@@ -950,8 +965,8 @@
 }
 
 @media (max-width: 520px) {
-  .usageTitleRow .secondaryEntryButton {
-    margin-left: 0;
+  .usageDetailsButton {
+    align-self: stretch;
     width: 100%;
   }
 

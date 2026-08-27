@@ -49,6 +49,7 @@ import {
   recommendedMenuStyle,
   recommendedMenuTitleStyle,
   recommendedTriggerStyle,
+  recommendedChevronStyle,
   scrollBottomButtonStyle,
   scrollBottomOverlayStyle,
   selectionBubbleCloseStyle,
@@ -462,7 +463,9 @@ export function ChatPanel({
               >
                 <span style={toolbarIconGlyphStyle}>✦</span>
                 <span>{t("workspace.shell.chat.recommended")}</span>
-                <span aria-hidden="true">⌄</span>
+                <span aria-hidden="true" style={recommendedChevronStyle}>
+                  ⌄
+                </span>
               </button>
               {isRecommendedMenuOpen ? (
                 <div style={recommendedMenuStyle} role="menu">

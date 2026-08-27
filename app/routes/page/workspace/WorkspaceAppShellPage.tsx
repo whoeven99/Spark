@@ -1345,7 +1345,9 @@ export function WorkspaceAppShellPage({
           <div style={accountMenuStyle}>
             <div style={accountMenuSectionStyle}>
               <div style={accountMenuLabelStyle}>{t("workspace.shell.account.language")}</div>
-              <LanguageSelector />
+              <div style={accountUsageCardStyle}>
+                <LanguageSelector variant="fill" />
+              </div>
             </div>
             <div style={accountMenuSectionStyle}>
               <div style={accountMenuLabelStyle}>

@@ -316,6 +316,10 @@ export const accountUsageCardStyle: CSSProperties = {
   border: `1px solid ${shopifyUi.border}`,
   borderRadius: 8,
   background: shopifyUi.surfaceSubtle,
+  boxSizing: "border-box",
+  width: "100%",
+  minWidth: 0,
+  overflow: "hidden",
 };
 export const accountUsageValueStyle: CSSProperties = {
   color: "#202223",
@@ -569,6 +573,15 @@ export const recommendedTriggerStyle = (active: boolean): CSSProperties => ({
   fontWeight: 650,
   whiteSpace: "nowrap",
 });
+/** ⌄ 字形基线偏低，单独上移以与文字/星标视觉居中 */
+export const recommendedChevronStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  fontSize: 12,
+  lineHeight: 1,
+  transform: "translateY(-1.5px)",
+  flexShrink: 0,
+};
 export const recommendedMenuStyle: CSSProperties = {
   position: "absolute",
   left: 0,

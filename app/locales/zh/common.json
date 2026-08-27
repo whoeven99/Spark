@@ -1179,6 +1179,7 @@
     "poolTrial": "试用",
     "noSubscription": "尚未开通付费订阅",
     "subscribe": "订阅",
+    "subscribeNow": "直接订阅",
     "buyPack": "购买",
     "lowBalanceWarning": "Token 不足或未订阅，请前往套餐页开通或购包。",
     "openBillingPage": "前往套餐页",
@@ -1189,6 +1190,8 @@
     "intervalAnnual": "年付",
     "trialDays_one": "{{count}} 天试用",
     "trialDays_other": "{{count}} 天试用",
+    "startTrial_one": "开始 {{count}} 天试用",
+    "startTrial_other": "开始 {{count}} 天试用",
     "status": {
       "PENDING": "待确认",
       "ACTIVE": "生效中",
