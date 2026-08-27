@@ -194,15 +194,19 @@ export function ChatPanel({
     const manualCount = selectedObjectsByType[type].length;
     if (manualCount > 0) return `${base} ${manualCount}`;
     const query = objectQuerySelectionByType[type];
-    if (query) return query.matchCount != null ? `${base} 条件·${query.matchCount}` : `${base} 条件`;
+    if (query) {
+      return query.matchCount != null
+        ? `${base} ${t("workspace.shell.chat.toolQueryCount", { count: query.matchCount })}`
+        : `${base} ${t("workspace.shell.chat.toolQuerySuffix")}`;
+    }
     return base;
   };
 
   const toolItems: Array<{ key: ContextTool; label: string; icon: string; active: boolean }> = [
-    { key: "product", label: queryToolLabel("product", "商品"), icon: "◫", active: activeContextTool === "product" },
-    { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
-    { key: "article", label: queryToolLabel("article", "文章"), icon: "≣", active: activeContextTool === "article" },
-    { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
+    { key: "product", label: queryToolLabel("product", t("workspace.shell.chat.toolProduct")), icon: "◫", active: activeContextTool === "product" },
+    { key: "order", label: selectedObjectsByType.order.length > 0 ? `${t("workspace.shell.chat.toolOrder")} ${selectedObjectsByType.order.length}` : t("workspace.shell.chat.toolOrder"), icon: "◎", active: activeContextTool === "order" },
+    { key: "article", label: queryToolLabel("article", t("workspace.shell.chat.toolArticle")), icon: "≣", active: activeContextTool === "article" },
+    { key: "file", label: selectedFileIds.length > 0 ? `${t("workspace.shell.chat.toolFile")} ${selectedFileIds.length}` : t("workspace.shell.chat.toolFile"), icon: "↑", active: activeContextTool === "file" },
   ];
   const recommendedActions = useMemo(
     () => [
@@ -227,12 +231,34 @@ export function ChatPanel({
   );
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
-    ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
-    ...(objectQuerySelectionByType.product ? [{ key: "product" as const, label: `按条件圈定商品${objectQuerySelectionByType.product.matchCount != null ? `（约 ${objectQuerySelectionByType.product.matchCount} 个）` : ""}` }] : []),
-    ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
-    ...(selectedObjectsByType.article.length > 0 ? [{ key: "article" as const, label: `已选择 ${selectedObjectsByType.article.length} 篇文章` }] : []),
-    ...(objectQuerySelectionByType.article ? [{ key: "article" as const, label: `按条件圈定文章${objectQuerySelectionByType.article.matchCount != null ? `（约 ${objectQuerySelectionByType.article.matchCount} 篇）` : ""}` }] : []),
-    ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
+    ...(selectedObjectsByType.product.length > 0
+      ? [{ key: "product" as const, label: t("workspace.shell.chat.selectedProducts", { count: selectedObjectsByType.product.length }) }]
+      : []),
+    ...(objectQuerySelectionByType.product
+      ? [{
+          key: "product" as const,
+          label: objectQuerySelectionByType.product.matchCount != null
+            ? t("workspace.shell.chat.queryProductsApprox", { count: objectQuerySelectionByType.product.matchCount })
+            : t("workspace.shell.chat.queryProducts"),
+        }]
+      : []),
+    ...(selectedObjectsByType.order.length > 0
+      ? [{ key: "order" as const, label: t("workspace.shell.chat.selectedOrders", { count: selectedObjectsByType.order.length }) }]
+      : []),
+    ...(selectedObjectsByType.article.length > 0
+      ? [{ key: "article" as const, label: t("workspace.shell.chat.selectedArticles", { count: selectedObjectsByType.article.length }) }]
+      : []),
+    ...(objectQuerySelectionByType.article
+      ? [{
+          key: "article" as const,
+          label: objectQuerySelectionByType.article.matchCount != null
+            ? t("workspace.shell.chat.queryArticlesApprox", { count: objectQuerySelectionByType.article.matchCount })
+            : t("workspace.shell.chat.queryArticles"),
+        }]
+      : []),
+    ...(selectedFileIds.length > 0
+      ? [{ key: "file" as const, label: t("workspace.shell.chat.selectedFiles", { count: selectedFileIds.length }) }]
+      : []),
   ];
 
   /**

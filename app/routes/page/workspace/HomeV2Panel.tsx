@@ -18,11 +18,11 @@ function greetingForHour(
 }
 
 function formatHomeDate(now: Date, locale: string): string {
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(now);
-  if (locale.startsWith("zh")) {
-    return `${weekday} · ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
-  }
-  return `${weekday} · ${now.getMonth() + 1}/${now.getDate()}`;
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(now);
 }
 
 const homeV2Styles = {

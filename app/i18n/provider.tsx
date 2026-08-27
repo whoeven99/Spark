@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { i18n as I18nInstance } from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { useFetcher } from "react-router";
-import { readClientStoredLocale, resolveClientLocale } from "./detector.client";
+import { resolveClientLocale } from "./detector.client";
 import { initI18n } from "./index";
 import {
   LOCALE_STORAGE_KEY,
@@ -19,34 +19,19 @@ type Props = {
 export function AppI18nProvider({ locale, children }: Props) {
   const i18nRef = useRef<I18nInstance>(initI18n(locale));
   const i18n = i18nRef.current;
-  const localeFetcher = useFetcher();
 
   useEffect(() => {
-    if (i18n.language !== locale) {
-      void i18n.changeLanguage(locale);
-    }
-  }, [i18n, locale]);
-
-  useEffect(() => {
-    const stored = readClientStoredLocale();
     const target = resolveClientLocale(locale);
     if (target !== i18n.language) {
       void i18n.changeLanguage(target);
-      if (!stored) {
-        localeFetcher.submit(
-          { locale: target },
-          { method: "post", action: buildAppActionUrl("/app", { setLocale: "1" }) },
-        );
-      }
     }
-  }, [i18n, locale, localeFetcher]);
+  }, [i18n, locale]);
 
   useEffect(() => {
     const next = normalizeLocale(i18n.language);
     if (!next || typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
     document.documentElement.lang = next;
   }, [i18n.language]);
 

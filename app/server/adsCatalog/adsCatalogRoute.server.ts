@@ -3,7 +3,7 @@ import { authenticate } from "../../shopify.server";
 import { createBatchWithTask } from "../aiTask/aiTaskStore.server";
 import type { AITaskType } from "../../lib/aiTaskTypes";
 import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
-import { detectRequestLocale, readShopifySessionLocale } from "../../i18n/detector.server";
+import { resolveUiLocale } from "../../i18n/resolveUiLocale.server";
 import { initI18n } from "../../i18n";
 import {
   enqueueAdsCatalogSync,
@@ -89,8 +89,9 @@ async function handleAdsCatalogSyncActionInner(
   parsed: z.infer<typeof SyncRequestSchema>,
 ): Promise<Response> {
   const { admin, session } = await authenticate.admin(request);
-  const locale = detectRequestLocale(request, {
-    sessionLocale: readShopifySessionLocale(session),
+  const locale = await resolveUiLocale(request, {
+    admin,
+    logContext: `ads-catalog-sync shop=${session.shop}`,
   });
   initI18n(locale);
 

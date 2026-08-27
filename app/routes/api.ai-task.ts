@@ -16,7 +16,8 @@ import type {
   ProductImproveTaskResult,
 } from "../lib/aiTaskTypes";
 import { runProductDescriptionRefinement } from "../server/productImprove/services/refineDescriptionService";
-import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { detectRequestLocale } from "../i18n/detector.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { initI18n } from "../i18n";
 import { buildAITaskMessage } from "../lib/aiTaskMessage";
 
@@ -117,9 +118,10 @@ export const action = async ({
     );
   }
 
-  const { session } = await authenticate.admin(request);
-  const locale = detectRequestLocale(request, {
-    sessionLocale: readShopifySessionLocale(session),
+  const { admin, session } = await authenticate.admin(request);
+  const locale = await resolveUiLocale(request, {
+    admin,
+    logContext: `ai-task shop=${session.shop}`,
   });
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);

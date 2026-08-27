@@ -2,6 +2,7 @@ import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE_NAME,
   type SupportedLocale,
+  mapShopLocaleToUiLocale,
   normalizeLocale,
 } from "./config";
 
@@ -23,27 +24,12 @@ function parseCookieLocale(cookieHeader: string | null): SupportedLocale | null 
   return null;
 }
 
-function parseAcceptLanguageLocale(header: string | null): SupportedLocale | null {
-  if (!header) {
-    return null;
-  }
-
-  const tags = header
-    .split(",")
-    .map((token) => token.trim().split(";")[0])
-    .filter(Boolean);
-
-  for (const tag of tags) {
-    const normalized = normalizeLocale(tag);
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  return null;
+/** 读取请求 Cookie 中的手动语言偏好（LanguageSelector 写入）。 */
+export function readManualLocaleCookie(request: Request): SupportedLocale | null {
+  return parseCookieLocale(request.headers.get("cookie"));
 }
 
-/** Shopify 在线会话里员工 Admin 语言（Prisma Session.locale → associated_user.locale）。 */
+/** @deprecated 保留导出以免旧引用断裂；UI 语言不再跟 Shopify 员工 Admin locale。 */
 export function readShopifySessionLocale(session: unknown): string | null {
   if (!session || typeof session !== "object") {
     return null;
@@ -66,29 +52,26 @@ export function readShopifySessionLocale(session: unknown): string | null {
 }
 
 /**
- * 自动语言检测优先级（无用户手动选择时）：
- * 1. Cookie（LanguageSelector 写入）
- * 2. Shopify 员工 Admin locale
- * 3. Accept-Language
- * 4. 英语（DEFAULT_LOCALE）
+ * UI / AI 语言检测优先级：
+ * 1. Cookie（用户手动切换，LanguageSelector 写入）
+ * 2. 店铺主语言（中文 → zh-CN，否则 → en）
+ * 3. 英语（DEFAULT_LOCALE）
  */
 export function detectRequestLocale(
   request: Request,
-  options?: { sessionLocale?: string | null },
+  options?: {
+    shopPrimaryLocale?: string | null;
+    /** @deprecated 已忽略；请改传 shopPrimaryLocale */
+    sessionLocale?: string | null;
+  },
 ): SupportedLocale {
   const cookieLocale = parseCookieLocale(request.headers.get("cookie"));
   if (cookieLocale) {
     return cookieLocale;
   }
 
-  const sessionLocale = normalizeLocale(options?.sessionLocale);
-  if (sessionLocale) {
-    return sessionLocale;
-  }
-
-  const acceptLanguageLocale = parseAcceptLanguageLocale(request.headers.get("accept-language"));
-  if (acceptLanguageLocale) {
-    return acceptLanguageLocale;
+  if (options?.shopPrimaryLocale != null && options.shopPrimaryLocale !== "") {
+    return mapShopLocaleToUiLocale(options.shopPrimaryLocale);
   }
 
   return DEFAULT_LOCALE;
