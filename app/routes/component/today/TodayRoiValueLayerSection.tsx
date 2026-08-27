@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { useFetcher } from "react-router";
 import { useTranslation } from "react-i18next";
 import type { ValueLayerData } from "../../../server/operations/valueLayer.server";
@@ -42,15 +42,18 @@ export function TodayRoiValueLayerSection({
   valueFailed,
   isMobile,
   focus = "overview",
+  settingsOpen,
+  onToggleSettings,
 }: {
   value: ValueLayerData | null;
   valueLoading: boolean;
   valueFailed: boolean;
   isMobile: boolean;
   focus?: "overview" | "channels" | "loss";
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
 }) {
   const { t } = useTranslation();
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!value) {
     return (
@@ -84,7 +87,7 @@ export function TodayRoiValueLayerSection({
           value={value}
           isMobile={isMobile}
           settingsOpen={settingsOpen}
-          onToggleSettings={() => setSettingsOpen((current) => !current)}
+          onToggleSettings={onToggleSettings}
         />
         {settingsOpen ? <CostConfigPanel costConfig={value.costConfig} isMobile={isMobile} /> : null}
       </PageSurface>
