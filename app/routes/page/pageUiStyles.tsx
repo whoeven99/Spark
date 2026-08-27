@@ -186,12 +186,12 @@ export const pageHeaderNavMainStyle: CSSProperties = {
   minWidth: 0,
   display: "flex",
   flexDirection: "column",
-  gap: "0.58rem",
+  gap: "0.75rem",
 };
 
 export const pageHeaderNavHeadingStyle: CSSProperties = {
   display: "grid",
-  gap: "0.2rem",
+  gap: "0.3rem",
 };
 
 export const pageHeaderNavEyebrowStyle: CSSProperties = {

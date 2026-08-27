@@ -1158,7 +1158,7 @@
   },
   "billing": {
     "pageTitle": "套餐与 Token 额度",
-    "pageIntro": "查看 Token 用量、订阅套餐与按量购包。试用额度用完后可在此开通订阅或购买 Token 包。",
+    "pageIntro": "管理 Token 额度、套餐与购包",
     "quotaSubtitle": "用于 AI 商品标题与描述；额度用尽可在下方升级套餐或购买 Token 包。",
     "usagePercentUsed": "已使用 {{percent}}%",
     "planBenefitsFootnote": "按量包不过期 · 订阅额度按周期刷新",

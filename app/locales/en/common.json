@@ -1158,7 +1158,7 @@
   },
   "billing": {
     "pageTitle": "Plans & token balance",
-    "pageIntro": "View token usage, subscription plans, and pay-as-you-go packs. Subscribe or buy packs when trial credits run out.",
+    "pageIntro": "Manage your token balance, plans, and packs",
     "quotaSubtitle": "For AI product titles and descriptions. Upgrade or buy packs below when you need more.",
     "usagePercentUsed": "{{percent}}% used",
     "planBenefitsFootnote": "Packs never expire · Subscription refreshes each period",
