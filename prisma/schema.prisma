@@ -716,7 +716,7 @@ model Message {
 /// 业务能力 × 模型/提供商的 token 计费系数（运维在 Turso 维护，种子见 `prisma/token-billing-rule-seed.sql`）。
 model TokenBillingRule {
   ruleKey       String   @id
-  /// product_copy | image_prompt | image_generate | picture_translate
+  /// chat | product_copy | product_quality | image_prompt | image_generate | picture_translate
   feature       String
   /// 模型标识（如 deepseek-chat、volc-translate）；`_default` 为该 feature 下未匹配模型时的兜底
   modelKey      String

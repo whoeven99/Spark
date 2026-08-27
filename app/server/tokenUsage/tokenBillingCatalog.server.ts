@@ -34,7 +34,9 @@ function rowToRecord(row: {
 }): TokenBillingRuleRecord | null {
   const feature = row.feature as TokenBillingFeature;
   if (
+    feature !== "chat" &&
     feature !== "product_copy" &&
+    feature !== "product_quality" &&
     feature !== "image_prompt" &&
     feature !== "image_generate" &&
     feature !== "picture_translate"

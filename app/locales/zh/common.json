@@ -1267,7 +1267,9 @@
     "eventSubscriptionCancelled": "订阅已取消",
     "eventTokenPackInitiated": "购包待确认",
     "eventTokenPackPurchased": "购包成功",
+    "toolFeatureChat": "Ask 聊天",
     "toolFeatureProductCopy": "商品文案",
+    "toolFeatureProductQuality": "商品质量评分",
     "toolFeatureImageGenerate": "文生图",
     "toolFeatureImagePrompt": "图片提示词",
     "toolFeaturePictureTranslate": "图片翻译"

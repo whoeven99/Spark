@@ -1267,7 +1267,9 @@
     "eventSubscriptionCancelled": "Subscription cancelled",
     "eventTokenPackInitiated": "Pack purchase pending",
     "eventTokenPackPurchased": "Pack purchased",
+    "toolFeatureChat": "Ask chat",
     "toolFeatureProductCopy": "Product copy",
+    "toolFeatureProductQuality": "Product quality score",
     "toolFeatureImageGenerate": "Image generation",
     "toolFeatureImagePrompt": "Image prompt",
     "toolFeaturePictureTranslate": "Picture translation"

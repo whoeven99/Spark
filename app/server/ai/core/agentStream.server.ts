@@ -16,7 +16,7 @@ import { polishFinalReply } from "../utils/polishFinalReply";
 import { createLangsmithTracer, getTraceUrl } from "../utils/langsmith.server";
 import {
   extractTokenUsageFromMessages,
-  recordTokenUsage,
+  recordChatTokenUsage,
 } from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
 import { globalPlaybookRegistry } from "./playbookRegistry.server";
@@ -152,6 +152,7 @@ function lastHumanUtterance(messages: BaseMessage[]): string {
 async function generateFallbackReplyStream(
   input: string,
   contextText: string,
+  shop?: string,
 ): Promise<ReadableStream<StreamChunk>> {
   const model = getShopChatModel();
 
@@ -166,11 +167,23 @@ async function generateFallbackReplyStream(
 
   return new ReadableStream({
     async start(controller) {
+      let usageMeta: unknown;
       for await (const chunk of stream) {
+        if (
+          chunk &&
+          typeof chunk === "object" &&
+          "usage_metadata" in chunk &&
+          (chunk as { usage_metadata?: unknown }).usage_metadata
+        ) {
+          usageMeta = (chunk as { usage_metadata?: unknown }).usage_metadata;
+        }
         const content = extractMessageText(chunk);
         if (content) {
           controller.enqueue({ type: "text", content });
         }
+      }
+      if (shop && usageMeta) {
+        await recordChatTokenUsage({ shop, usage: usageMeta });
       }
       controller.enqueue({
         type: "done",
@@ -443,6 +456,7 @@ export function invokeChatAgentStream(
           const fb = await generateFallbackReplyStream(
             lastUserText,
             extractMessagesContext(resultMessages),
+            shop,
           );
           const reader = fb.getReader();
           // eslint-disable-next-line no-constant-condition
@@ -565,6 +579,7 @@ export function invokeChatAgentStream(
               assistantReply: finalReply,
               existingUiPayloads: uiPayloads,
               emittedFlags: streamContext.emittedFlags,
+              shop,
             });
             Object.assign(uiPayloads, llmResolution.uiPayloads);
             for (const chunk of llmResolution.streamChunks) {
@@ -582,7 +597,7 @@ export function invokeChatAgentStream(
         const agentUsage = extractTokenUsageFromMessages(resultMessages);
         const backgroundWrites: Promise<unknown>[] = [];
         if (shop && agentUsage.totalTokens > 0) {
-          backgroundWrites.push(recordTokenUsage({ shop, usage: agentUsage }));
+          backgroundWrites.push(recordChatTokenUsage({ shop, usage: agentUsage }));
         }
         backgroundWrites.push(persistStreamRun({ status: "success", resultMessages }));
         backgroundWrites.push(

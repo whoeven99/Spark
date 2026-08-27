@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages
 import type { BaseMessage } from "@langchain/core/messages";
 import { extractMessageText } from "./ai/utils/langchainMessageText";
 import { getShopSummaryModel } from "./ai/core/shopChatGraph.server";
+import { recordChatTokenUsage } from "./tokenUsage/index.server";
 
 /** 单次请求最多带入的上屏消息条数（含欢迎语与当前输入）。 */
 export const MAX_CHAT_HISTORY_MESSAGES = 36;
@@ -76,6 +77,7 @@ function messagesToPlainText(messages: BaseMessage[]): string {
  */
 async function summarizeOlderMessages(
   olderMessages: BaseMessage[],
+  shop?: string,
 ): Promise<string | null> {
   try {
     const plainText = messagesToPlainText(olderMessages).slice(
@@ -97,6 +99,15 @@ async function summarizeOlderMessages(
       ),
     ]);
     if (!result) return null;
+
+    if (shop?.trim()) {
+      const usageMeta =
+        result && typeof result === "object" && "usage_metadata" in result
+          ? (result as { usage_metadata?: unknown }).usage_metadata
+          : undefined;
+      await recordChatTokenUsage({ shop, usage: usageMeta });
+    }
+
     const summary = extractMessageText(result).trim();
     return summary || null;
   } catch (e) {
@@ -107,6 +118,8 @@ async function summarizeOlderMessages(
 
 export type ContextWindowOptions = {
   recentCount?: number;
+  /** 有 shop 时将摘要 LLM 用量记入账户 */
+  shop?: string;
 };
 
 /**
@@ -134,7 +147,7 @@ export async function buildContextWindow(
     return recent;
   }
 
-  const summary = await summarizeOlderMessages(older);
+  const summary = await summarizeOlderMessages(older, options?.shop);
 
   if (summary) {
     return [

@@ -15,6 +15,12 @@ import {
 } from "../../../productImprove/productQualityScoreMath.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../productImprove/constants.server";
+import {
+  normalizeBillingModelKey,
+  recordBilledTokenUsages,
+  type BilledTokenUsageItem,
+} from "../../../tokenUsage/index.server";
+import { parseUsageMetadata } from "../../../tokenUsage/parseUsageMetadata.server";
 import type { ShopifyAdminGraphqlClient } from "../shopifyInfo/shopifyInfo.tool";
 import type {
   ProductQualityScoreOutcome,
@@ -214,39 +220,51 @@ ${altLines || "(无)"}
 async function scoreImagesWithVision(params: {
   data: ProductQualityData;
   requestId: string;
-}): Promise<ProductQualityDimension> {
+}): Promise<{
+  dimension: ProductQualityDimension;
+  modelLabel?: string;
+  usageMeta?: unknown;
+}> {
   const { data, requestId } = params;
 
   if (data.imageCount <= 0) {
-    return scoreImagesByCount(0);
+    return { dimension: scoreImagesByCount(0) };
   }
 
   if (!isDeepSeekVisionConfigured()) {
     console.info(`${LOG_PREFIX} requestId=${requestId} Vision 未配置，图片分回退数量规则`);
-    return scoreImagesByCount(data.imageCount);
+    return { dimension: scoreImagesByCount(data.imageCount) };
   }
 
   const visionImages = data.images.slice(0, PRODUCT_QUALITY_VISION_IMAGE_LIMIT);
   try {
-    const { rawText } = await invokeDeepSeekVision({
+    const visionResult = await invokeDeepSeekVision({
       systemPrompt: IMAGE_VISION_SYSTEM_PROMPT,
       userText: buildImageVisionUserPrompt(data, visionImages),
       images: visionImages,
       temperature: 0.2,
       requestId,
     });
-    const parsed = parseVisionImageScoreJson(rawText);
+    const parsed = parseVisionImageScoreJson(visionResult.rawText);
     if (!parsed) {
       console.info(`${LOG_PREFIX} requestId=${requestId} Vision 返回无法解析，回退数量规则`);
-      return scoreImagesByCount(data.imageCount);
+      return {
+        dimension: scoreImagesByCount(data.imageCount),
+        modelLabel: visionResult.modelLabel,
+        usageMeta: visionResult.usageMeta,
+      };
     }
     console.info(
       `${LOG_PREFIX} requestId=${requestId} Vision 图片分=${parsed.score} usedImages=${visionImages.length}`,
     );
-    return parsed;
+    return {
+      dimension: parsed,
+      modelLabel: visionResult.modelLabel,
+      usageMeta: visionResult.usageMeta,
+    };
   } catch (e) {
     logDetailedError(LOG_PREFIX, `requestId=${requestId} Vision 评分失败，回退数量规则`, e);
-    return scoreImagesByCount(data.imageCount);
+    return { dimension: scoreImagesByCount(data.imageCount) };
   }
 }
 
@@ -272,8 +290,10 @@ export async function runProductQualityScore(params: {
   admin: ShopifyAdminGraphqlClient;
   productId: string;
   requestId: string;
+  /** 有 shop 时将文案 LLM + Vision 用量计入 Account.usedTokens */
+  shop?: string;
 }): Promise<ProductQualityScoreOutcome> {
-  const { admin, productId, requestId } = params;
+  const { admin, productId, requestId, shop } = params;
   try {
     const data = await fetchProductQualityData(admin, productId.trim());
     if (!data) {
@@ -281,7 +301,7 @@ export async function runProductQualityScore(params: {
     }
 
     const userPrompt = buildScoringUserPrompt(data);
-    const [textResult, imageScore] = await Promise.all([
+    const [textResult, visionScore] = await Promise.all([
       invokeDescriptionModels(
         SCORING_SYSTEM_PROMPT,
         userPrompt,
@@ -298,7 +318,37 @@ export async function runProductQualityScore(params: {
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as ProductQualityScoreData;
-    const merged = mergeWithVisionImageScore(parsed, imageScore);
+    const merged = mergeWithVisionImageScore(parsed, visionScore.dimension);
+
+    const shopKey = shop?.trim();
+    if (shopKey) {
+      const billItems: BilledTokenUsageItem[] = [];
+      const textUsage = parseUsageMetadata(textResult.usageMeta);
+      if (textUsage.totalTokens > 0) {
+        billItems.push({
+          feature: "product_quality",
+          modelKey: normalizeBillingModelKey(textResult.modelLabel),
+          usage: textUsage,
+        });
+      }
+      const visionUsage = parseUsageMetadata(visionScore.usageMeta);
+      if (visionUsage.totalTokens > 0) {
+        billItems.push({
+          feature: "product_quality",
+          modelKey: normalizeBillingModelKey(
+            visionScore.modelLabel ?? "deepseek-v4-flash-vision-exp",
+          ),
+          usage: visionUsage,
+        });
+      }
+      if (billItems.length > 0) {
+        const billed = await recordBilledTokenUsages({ shop: shopKey, items: billItems });
+        console.info(
+          `${LOG_PREFIX} requestId=${requestId} billedTokens=${billed} items=${billItems.length}`,
+        );
+      }
+    }
+
     console.info(`${LOG_PREFIX} done requestId=${requestId} score=${String(merged.score)}`);
     return { ok: true, productId: data.id, title: data.title, ...merged };
   } catch (e) {
@@ -308,7 +358,7 @@ export async function runProductQualityScore(params: {
 }
 
 export function createScoreProductQualityTool(context: AgentContext): DynamicStructuredTool {
-  const { admin } = context;
+  const { admin, shop } = context;
   return new DynamicStructuredTool({
     name: SCORE_PRODUCT_QUALITY_TOOL_NAME,
     description:
@@ -322,7 +372,12 @@ export function createScoreProductQualityTool(context: AgentContext): DynamicStr
     func: async ({ productId }) => {
       const requestId = crypto.randomUUID();
       console.info(`${LOG_PREFIX} start requestId=${requestId} productId=${productId}`);
-      const result = await runProductQualityScore({ admin, productId, requestId });
+      const result = await runProductQualityScore({
+        admin,
+        productId,
+        requestId,
+        shop,
+      });
       return JSON.stringify(result);
     },
   });

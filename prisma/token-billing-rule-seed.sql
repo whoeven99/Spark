@@ -1,5 +1,5 @@
 -- TokenBillingRule 种子（turso:migrate 执行）
--- feature: product_copy | image_prompt | image_generate | picture_translate
+-- feature: chat | product_copy | product_quality | image_prompt | image_generate | picture_translate
 DELETE FROM "TokenBillingRule"
 WHERE "ruleKey" LIKE 'gd:%';
 
@@ -15,10 +15,109 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
     "updatedAt"
 ) VALUES
     (
+        'pi:chat:deepseek-chat',
+        'chat',
+        'deepseek-chat',
+        'Ask 聊天 · deepseek-chat',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:chat:deepseek-v4-flash',
+        'chat',
+        'deepseek-v4-flash',
+        'Ask 聊天 · deepseek-v4-flash',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:chat:deepseek-v4-pro',
+        'chat',
+        'deepseek-v4-pro',
+        'Ask 聊天 · deepseek-v4-pro',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:chat:_default',
+        'chat',
+        '_default',
+        'Ask 聊天 · 默认',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
         'pi:product_copy:deepseek-chat',
         'product_copy',
         'deepseek-chat',
         '商品文案 · deepseek-chat',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:product_quality:deepseek-chat',
+        'product_quality',
+        'deepseek-chat',
+        '商品质量评分 · deepseek-chat',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:product_quality:deepseek-v4-flash',
+        'product_quality',
+        'deepseek-v4-flash',
+        '商品质量评分 · deepseek-v4-flash',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:product_quality:deepseek-v4-pro',
+        'product_quality',
+        'deepseek-v4-pro',
+        '商品质量评分 · deepseek-v4-pro',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:product_quality:deepseek-v4-flash-vision-exp',
+        'product_quality',
+        'deepseek-v4-flash-vision-exp',
+        '商品质量评分 · Vision',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'pi:product_quality:_default',
+        'product_quality',
+        '_default',
+        '商品质量评分 · 默认',
         1.0,
         NULL,
         1,

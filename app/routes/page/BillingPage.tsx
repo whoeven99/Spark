@@ -200,8 +200,12 @@ function resolveToolUsageFeatureLabel(
   t: (key: string) => string,
 ): string {
   switch (feature) {
+    case "chat":
+      return t("billing.toolFeatureChat");
     case "product_copy":
       return t("billing.toolFeatureProductCopy");
+    case "product_quality":
+      return t("billing.toolFeatureProductQuality");
     case "image_generate":
       return t("billing.toolFeatureImageGenerate");
     case "image_prompt":

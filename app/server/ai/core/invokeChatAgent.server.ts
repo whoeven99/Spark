@@ -17,7 +17,7 @@ import {
 import { buildContextWindow } from "../../chatPayload.server";
 import {
   extractTokenUsageFromMessages,
-  recordTokenUsage,
+  recordChatTokenUsage,
 } from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
 import {
@@ -50,6 +50,7 @@ async function collectUIPayloads(
   messages: BaseMessage[],
   lastUserText: string,
   reply: string,
+  shop?: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ payloads: Record<string, any>; reply: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,6 +72,7 @@ async function collectUIPayloads(
         lastUserText,
         assistantReply: reply,
         existingUiPayloads: payloads,
+        shop,
       });
       Object.assign(payloads, llmResolution.uiPayloads);
       if (llmResolution.adjustedReply) {
@@ -95,7 +97,11 @@ function lastHumanUtterance(messages: BaseMessage[]): string {
   return "";
 }
 
-async function generateFallbackReply(input: string, contextText: string) {
+async function generateFallbackReply(
+  input: string,
+  contextText: string,
+  shop?: string,
+) {
   const model = getShopChatModel();
   const result = await model.invoke([
     new SystemMessage(
@@ -105,6 +111,13 @@ async function generateFallbackReply(input: string, contextText: string) {
       `用户问题：${input}\n\n已知上下文（可能包含工具执行结果）：\n${contextText || "（无）"}`,
     ),
   ]);
+  if (shop) {
+    const usageMeta =
+      result && typeof result === "object" && "usage_metadata" in result
+        ? (result as { usage_metadata?: unknown }).usage_metadata
+        : undefined;
+    await recordChatTokenUsage({ shop, usage: usageMeta });
+  }
   return extractMessageText(result).trim();
 }
 
@@ -128,7 +141,9 @@ export async function invokeChatAgent(
   const shop = context.shop?.trim();
   const appName = "spark";
 
-  const agentInputMessages = await buildContextWindow(rawInputMessages);
+  const agentInputMessages = await buildContextWindow(rawInputMessages, {
+    shop,
+  });
   const lastUserTextInput = lastHumanUtterance(agentInputMessages);
 
   const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
@@ -185,7 +200,7 @@ export async function invokeChatAgent(
   if (shop) {
     const agentUsage = extractTokenUsageFromMessages(messages);
     if (agentUsage.totalTokens > 0) {
-      await recordTokenUsage({ shop, usage: agentUsage });
+      await recordChatTokenUsage({ shop, usage: agentUsage });
     }
     await recordPlaybookCasesFromMessages({
       messages,
@@ -252,7 +267,13 @@ export async function invokeChatAgent(
       const text = extractMessageText(msg).trim();
       if (text) {
         await writeRunLog("success");
-        const collected = await collectUIPayloads(activeDefs, messages, lastUserText, text);
+        const collected = await collectUIPayloads(
+          activeDefs,
+          messages,
+          lastUserText,
+          text,
+          shop,
+        );
         return {
           reply: polishFinalReply(collected.reply),
           uiPayloads: collected.payloads,
@@ -266,6 +287,7 @@ export async function invokeChatAgent(
     const fallbackText = await generateFallbackReply(
       lastUserText,
       extractMessagesContext(messages),
+      shop,
     );
     if (fallbackText) {
       await writeRunLog("success");
@@ -274,6 +296,7 @@ export async function invokeChatAgent(
         messages,
         lastUserText,
         fallbackText,
+        shop,
       );
       return {
         reply: polishFinalReply(collected.reply),
@@ -294,6 +317,7 @@ export async function invokeChatAgent(
     messages,
     lastUserText,
     defaultReply,
+    shop,
   );
   return {
     reply: collected.reply,

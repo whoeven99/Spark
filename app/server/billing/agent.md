@@ -15,7 +15,7 @@
 | `purchase/` | 按量购包、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount`、`grantTrial` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
-| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；计费前按 Turso `TokenBillingRule` 乘数（种子见 `prisma/token-billing-rule-seed.sql`，运行时见 `tokenBillingCatalog.server.ts`）经 `recordBilledTokenUsage` / `recordVisualToolTokenUsage`；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
+| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`（按 Turso `TokenBillingRule` 乘数，种子见 `prisma/token-billing-rule-seed.sql`）；续费结算见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
 
 ## 环境变量
 
@@ -41,7 +41,27 @@
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
-| `ToolTokenUsageLog` | 工具级 token 消耗明细（高频：商品优化/图片生成/图片翻译等） |
+| `ToolTokenUsageLog` | **统一**工具/聊天 token 消耗明细（`feature` × `modelKey`；含 chat / 文案 / 质量评分 / 文生图 / 图片翻译等） |
+
+## Token 消耗记账约定（强制）
+
+凡消耗 LLM / 视觉模型 token 的路径，成功后必须记入同一处：
+
+1. `Account.usedTokens`（用户账户额度）
+2. `ToolTokenUsageLog`（明细；账户页「工具用量」读取）
+
+统一入口：`recordBilledTokenUsage` / `recordBilledTokenUsages`（聊天可用 `recordChatTokenUsage`，视觉定额可用 `recordVisualToolTokenUsage`）。**禁止**业务侧直接调 `recordTokenUsage`（除非底层实现）。
+
+| feature | 能力 | 门禁 | 记账入口示例 |
+|---------|------|------|----------------|
+| `chat` | Ask 聊天主 Agent、卡片补全 LLM、fallback、上下文摘要 | `/chat-stream` → `requireBillingAccess` | `recordChatTokenUsage` |
+| `product_copy` | 商品文案生成/润色 | Studio / HTTP / 批量 | `recordBilledTokenUsage` |
+| `product_quality` | 质量评分（文案 LLM + Vision） | `/api/product-quality-score` | `recordBilledTokenUsages` |
+| `image_prompt` | 画面提示词扩写 | 视觉工具门禁 | `recordVisualToolTokenUsage` |
+| `image_generate` | 文生图（定额） | 视觉工具门禁 | `recordVisualToolTokenUsage` |
+| `picture_translate` | 图片翻译（定额） | 视觉工具门禁 | `recordVisualToolTokenUsage` |
+
+新增消耗点时：先加 `TOKEN_BILLING_FEATURES` + seed 规则，再接线门禁与 `recordBilled*`。
 
 ## 续费时的顺序
 

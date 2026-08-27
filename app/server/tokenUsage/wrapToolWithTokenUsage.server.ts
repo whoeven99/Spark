@@ -1,10 +1,10 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import type { AgentContext } from "../ai/core/toolRegistry.server";
-import { parseUsageMetadata } from "./parseUsageMetadata.server";
-import { recordTokenUsage } from "./recordTokenUsage.server";
+import { recordChatTokenUsage } from "./chatTokenUsage.server";
 
 /**
- * 包装 LangChain Tool：在每次调用后尝试记录 token（工具内 LLM 可通过返回值附带 usage）。
+ * 包装 LangChain Tool：若工具返回值显式带 tokenUsage，则按 feature=chat 记入统一明细。
+ * 多数业务工具已在内部走 recordBilled*；此包装仅兜底旧返回值形态。
  */
 export function wrapToolWithTokenUsage(
   tool: DynamicStructuredTool,
@@ -22,15 +22,11 @@ export function wrapToolWithTokenUsage(
     func: async (input, runManager, config) => {
       const result = await originalFunc(input, runManager, config);
 
-      let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
       if (result && typeof result === "object" && "tokenUsage" in result) {
-        usage = parseUsageMetadata(
-          (result as { tokenUsage?: unknown }).tokenUsage,
-        );
-      }
-
-      if (usage.totalTokens > 0) {
-        await recordTokenUsage({ shop, usage });
+        await recordChatTokenUsage({
+          shop,
+          usage: (result as { tokenUsage?: unknown }).tokenUsage,
+        });
       }
 
       return result;
