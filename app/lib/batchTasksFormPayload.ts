@@ -2,6 +2,10 @@
  * BatchTasksFormPayload — 批量任务确认卡片的数据结构
  * 由 AI skill 填充，前端卡片读取。
  */
+import {
+  detectPictureTranslateTargetLanguage,
+  isPictureTranslateUserIntent,
+} from "./chatCardFallback";
 
 export type BatchTaskProduct = {
   id: string;
@@ -49,6 +53,25 @@ export function mergeBatchTasksPayloadWithContext(
   if (payload.products.length > 0) return payload;
   if (contextProducts.length === 0) return payload;
   return { ...payload, products: contextProducts };
+}
+
+/**
+ * 按用户真实意图纠正批量任务类型：当用户明确要「翻译图片」但模型把
+ * taskType 填成了 product_improve（描述生成）时，改回 picture_translate，
+ * 并按用户正文修正目标语言（识别不到回落 zh）。已是 picture_translate 时不动。
+ */
+export function alignBatchTasksPayloadWithUserIntent(
+  payload: BatchTasksFormPayload,
+  lastUserText: string,
+): BatchTasksFormPayload {
+  if (payload.taskType === "picture_translate") return payload;
+  if (!isPictureTranslateUserIntent(lastUserText)) return payload;
+  return {
+    ...payload,
+    taskType: "picture_translate",
+    targetLanguage: detectPictureTranslateTargetLanguage(lastUserText) ?? "zh",
+    sourceLanguage: payload.sourceLanguage?.trim() || "auto",
+  };
 }
 
 export function coerceBatchTasksFormPayload(raw: unknown): BatchTasksFormPayload {

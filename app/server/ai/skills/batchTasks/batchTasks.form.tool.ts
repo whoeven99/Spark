@@ -17,12 +17,12 @@ const productSchema = z.object({
 export const batchTasksFormTool = new DynamicStructuredTool({
   name: OPEN_BATCH_TASKS_FORM_TOOL_NAME,
   description:
-    "当用户想要批量处理多个已选商品（优化/生成描述，或翻译商品图片文字）时调用。从上下文提取已选商品列表（ID、标题、图片 URL），在聊天内展示确认卡片，供用户一键提交批量任务。不要在用户仅询问单个商品或未明确批量意图时调用。",
+    "当用户想要批量处理已选商品（优化/生成描述，或翻译商品图片文字）时调用。从上下文提取已选商品列表（ID、标题、图片 URL），在聊天内展示确认卡片，供用户一键提交批量任务。taskType 必须与用户意图一致：翻译图片=picture_translate，生成/优化描述=product_improve，二者不可混淆。不要在用户未明确处理意图时调用。",
   schema: z.object({
     taskType: z
       .enum(["product_improve", "picture_translate"])
       .describe(
-        "任务类型：product_improve = 商品描述优化/生成；picture_translate = 商品图片文字翻译",
+        "任务类型，必须与用户意图一致：product_improve = 商品描述优化/生成；picture_translate = 商品图片文字翻译（用户说「翻译图片/翻译商品图/翻译图片文字」时必须选此项，禁止选 product_improve）",
       ),
     products: z
       .array(productSchema)
