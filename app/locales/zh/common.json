@@ -3244,6 +3244,8 @@
         "contextCount": "已补充 {{count}} 项",
         "clearContext": "清空上下文",
         "keyboardHint": "Enter 发送 · Shift+Enter 换行",
+        "recommended": "推荐",
+        "recommendedActions": "推荐操作",
         "replying": "AI Assistant 正在回复",
         "stop": "停止",
         "send": "发送",

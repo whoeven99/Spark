@@ -43,6 +43,10 @@ import {
   mobileToolbarStatusGroupStyle,
   mutedMetaStyle,
   primaryButtonStyle,
+  recommendedMenuGridStyle,
+  recommendedMenuItemStyle,
+  recommendedMenuStyle,
+  recommendedMenuTitleStyle,
   scrollBottomButtonStyle,
   scrollBottomOverlayStyle,
   selectionBubbleCloseStyle,
@@ -58,6 +62,7 @@ import {
   toolbarIconGroupStyle,
   toolbarPillButtonStyle,
   toolbarStatusGroupStyle,
+  toolbarTriggerWrapStyle,
 } from "./styles";
 
 type ChatStreamController = ReturnType<typeof useChatStream>;
@@ -73,6 +78,7 @@ export function ChatPanel({
   showStreamingReply,
   onDraftChange,
   onSend,
+  onRecommendedPrompt,
   onAbortStream,
   onAiTaskUpdated,
   onOpenTasks,
@@ -86,6 +92,7 @@ export function ChatPanel({
   showStreamingReply: boolean;
   onDraftChange: (value: string) => void;
   onSend: () => void | Promise<void>;
+  onRecommendedPrompt: (prompt: string) => void | Promise<void>;
   onAbortStream: () => void;
   onAiTaskUpdated: (
     conversationId: string,
@@ -102,7 +109,9 @@ export function ChatPanel({
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mobileComposerRef = useRef<HTMLDivElement | null>(null);
+  const recommendedMenuRef = useRef<HTMLDivElement | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [isRecommendedMenuOpen, setIsRecommendedMenuOpen] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
 
@@ -190,6 +199,27 @@ export function ChatPanel({
     { key: "article", label: queryToolLabel("article", "文章"), icon: "≣", active: activeContextTool === "article" },
     { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
   ];
+  const recommendedActions = useMemo(
+    () => [
+      {
+        label: t("workspace.homeV2.quickPrompts.todayOperations.label"),
+        prompt: t("workspace.homeV2.quickPrompts.todayOperations.prompt"),
+      },
+      {
+        label: t("workspace.homeV2.quickPrompts.optimizeCopy.label"),
+        prompt: t("workspace.homeV2.quickPrompts.optimizeCopy.prompt"),
+      },
+      {
+        label: t("workspace.homeV2.quickPrompts.generateImage.label"),
+        prompt: t("workspace.homeV2.quickPrompts.generateImage.prompt"),
+      },
+      {
+        label: t("workspace.homeV2.quickPrompts.translateImage.label"),
+        prompt: t("workspace.homeV2.quickPrompts.translateImage.prompt"),
+      },
+    ],
+    [t],
+  );
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
     ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
@@ -264,6 +294,26 @@ export function ChatPanel({
     focusComposerInput();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id, isStreaming]);
+
+  useEffect(() => {
+    if (!isRecommendedMenuOpen) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!recommendedMenuRef.current?.contains(event.target as Node)) {
+        setIsRecommendedMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setIsRecommendedMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isRecommendedMenuOpen]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -351,6 +401,43 @@ export function ChatPanel({
       <div style={toolbarDockStyle}>
         <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
           <div style={toolbarIconGroupStyle}>
+            <div ref={recommendedMenuRef} style={toolbarTriggerWrapStyle}>
+              <button
+                type="button"
+                style={toolbarPillButtonStyle(isRecommendedMenuOpen)}
+                onClick={() => setIsRecommendedMenuOpen((open) => !open)}
+                disabled={isStreaming}
+                aria-expanded={isRecommendedMenuOpen}
+                aria-haspopup="menu"
+              >
+                <span style={toolbarIconGlyphStyle}>✦</span>
+                <span>{t("workspace.shell.chat.recommended")}</span>
+              </button>
+              {isRecommendedMenuOpen ? (
+                <div style={recommendedMenuStyle} role="menu">
+                  <div style={recommendedMenuTitleStyle}>
+                    {t("workspace.shell.chat.recommendedActions")}
+                  </div>
+                  <div style={recommendedMenuGridStyle}>
+                    {recommendedActions.map((action) => (
+                      <button
+                        key={action.label}
+                        type="button"
+                        className="workspace-recommended-action"
+                        style={recommendedMenuItemStyle}
+                        role="menuitem"
+                        onClick={() => {
+                          setIsRecommendedMenuOpen(false);
+                          void onRecommendedPrompt(action.prompt);
+                        }}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
             {toolItems.map((item) => (
               <button
                 key={item.key}

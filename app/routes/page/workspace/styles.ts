@@ -529,6 +529,42 @@ export const toolbarIconGroupStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 export const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
+export const recommendedMenuStyle: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  bottom: "calc(100% + 8px)",
+  width: "min(320px, calc(100vw - 48px))",
+  padding: 10,
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusCard,
+  background: shopifyUi.surface,
+  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.12)",
+  zIndex: 8,
+};
+export const recommendedMenuTitleStyle: CSSProperties = {
+  margin: "0 2px 8px",
+  color: shopifyUi.textSecondary,
+  fontSize: 12,
+  fontWeight: 700,
+};
+export const recommendedMenuGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 6,
+};
+export const recommendedMenuItemStyle: CSSProperties = {
+  minWidth: 0,
+  padding: "9px 10px",
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.surface,
+  color: shopifyUi.text,
+  fontSize: 12,
+  fontWeight: 600,
+  lineHeight: 1.35,
+  textAlign: "left",
+  cursor: "pointer",
+};
 export const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   width: 32,
   height: 32,

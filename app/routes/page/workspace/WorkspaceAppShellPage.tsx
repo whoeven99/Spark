@@ -815,9 +815,13 @@ export function WorkspaceAppShellPage({
     createConversationRef.current?.();
   }, [activeConversationId, autoCreateConversation, searchParams]);
 
-  const sendMessage = async () => {
+  const sendMessage = async (contentOverride?: string) => {
     if (!activeConversation) return;
-    const content = (draftByConversation[activeConversation.id] ?? "").trim();
+    const content = (
+      contentOverride ??
+      draftByConversation[activeConversation.id] ??
+      ""
+    ).trim();
     if (!content || streamingConversationId === activeConversation.id) return;
 
     let conversationId = activeConversation.id;
@@ -1551,6 +1555,7 @@ export function WorkspaceAppShellPage({
               }))
             }
             onSend={sendMessage}
+            onRecommendedPrompt={(prompt) => sendMessage(prompt)}
             onAbortStream={() => {
               replyEpochRef.current += 1;
               setStreamingConversationId(null);

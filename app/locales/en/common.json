@@ -3244,6 +3244,8 @@
         "contextCount": "{{count}} added",
         "clearContext": "Clear context",
         "keyboardHint": "Enter to send · Shift+Enter for new line",
+        "recommended": "Recommended",
+        "recommendedActions": "Recommended actions",
         "replying": "AI Assistant is replying",
         "stop": "Stop",
         "send": "Send",
