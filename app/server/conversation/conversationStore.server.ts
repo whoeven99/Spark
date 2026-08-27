@@ -109,3 +109,22 @@ export async function appendConversationMessages(params: {
     }),
   ]);
 }
+
+export async function updateConversationTitle(params: {
+  conversationId: string;
+  shop: string;
+  title: string;
+}): Promise<boolean> {
+  const { conversationId, shop, title } = params;
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { shop: true },
+  });
+  if (!conversation || conversation.shop !== shop) return false;
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { title, updatedAt: new Date() },
+  });
+  return true;
+}
