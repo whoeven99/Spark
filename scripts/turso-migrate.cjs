@@ -138,6 +138,12 @@ async function executeMigrationStatement(client, statement) {
       console.log("[turso:migrate] 跳过已存在索引");
       return;
     }
+    const isAlterDropColumn =
+      /^\s*ALTER\s+TABLE\b/i.test(executable) && /\bDROP\s+COLUMN\b/i.test(executable);
+    if (isAlterDropColumn && /no such column/i.test(msg)) {
+      console.log(`[turso:migrate] 跳过不存在列 (${executable.split(/\s+/).slice(-3).join(" ")})`);
+      return;
+    }
     if (
       /no such table/i.test(msg) &&
       statement.includes(SATELLITE_SESSION_TABLE)

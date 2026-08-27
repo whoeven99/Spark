@@ -47,6 +47,8 @@ type Props = {
   tasks: AITaskItem[];
   taskMetrics: AITaskListMetrics;
   locationSearch: string;
+  selectedTaskId: string | null;
+  onSelectTaskId: (taskId: string | null) => void;
   onTaskDeleted: (task: AITaskItem) => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
@@ -75,6 +77,8 @@ export function ProductImproveTaskListPage({
   tasks,
   taskMetrics,
   locationSearch,
+  selectedTaskId,
+  onSelectTaskId,
   onTaskDeleted,
   onTaskUpdated,
 }: Props) {
@@ -96,7 +100,8 @@ export function ProductImproveTaskListPage({
     [getCacheKey(initialPageData.view, initialPageData.page)]: initialPageData,
   });
   const [loading, setLoading] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [fetchedTask, setFetchedTask] = useState<AITaskItem | null>(null);
+  const [fetchingTask, setFetchingTask] = useState(false);
   const pageSize = loadedPageData.pageSize || initialPageData.pageSize;
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
@@ -211,8 +216,57 @@ export function ProductImproveTaskListPage({
         : Math.max(1, Math.ceil(totalCount / initialPageData.pageSize));
 
   const selectedTask = selectedTaskId
-    ? visibleTasks.find((task) => task.id === selectedTaskId) ?? null
+    ? visibleTasks.find((task) => task.id === selectedTaskId) ??
+      tasks.find((task) => task.id === selectedTaskId) ??
+      (fetchedTask?.id === selectedTaskId ? fetchedTask : null)
     : null;
+
+  useEffect(() => {
+    if (!selectedTaskId) {
+      setFetchedTask(null);
+      setFetchingTask(false);
+      return;
+    }
+    if (
+      visibleTasks.some((task) => task.id === selectedTaskId) ||
+      tasks.some((task) => task.id === selectedTaskId)
+    ) {
+      setFetchedTask(null);
+      setFetchingTask(false);
+      return;
+    }
+    if (fetchedTask?.id === selectedTaskId) return;
+
+    let cancelled = false;
+    setFetchingTask(true);
+    const query = new URLSearchParams(
+      locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+    );
+    void fetch(`/api/ai-task/${encodeURIComponent(selectedTaskId)}?${query.toString()}`)
+      .then(async (resp) => {
+        if (cancelled) return;
+        if (!resp.ok) {
+          onSelectTaskId(null);
+          return;
+        }
+        const body = (await resp.json()) as { task?: AITaskItem };
+        if (body.task?.taskType === "product_improve") {
+          setFetchedTask(body.task);
+          return;
+        }
+        onSelectTaskId(null);
+      })
+      .catch(() => {
+        if (!cancelled) onSelectTaskId(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFetchingTask(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchedTask, locationSearch, onSelectTaskId, selectedTaskId, tasks, visibleTasks]);
 
   function handleViewChange(nextView: TaskViewTab) {
     if (nextView === viewTab) return;
@@ -251,7 +305,7 @@ export function ProductImproveTaskListPage({
             totalPages: Math.max(1, Math.ceil(Math.max(prev.totalCount - 1, 0) / prev.pageSize)),
           }));
         }
-        setSelectedTaskId((prev) => (prev === task.id ? null : prev));
+        if (selectedTaskId === task.id) onSelectTaskId(null);
         onTaskDeleted(task);
         if (visibleTasks.length === 1 && currentPage > 1) {
           setCurrentPage((prev) => prev - 1);
@@ -269,9 +323,22 @@ export function ProductImproveTaskListPage({
         <ProductImproveTaskDetailPage
           task={selectedTask}
           locationSearch={locationSearch}
-          onBack={() => setSelectedTaskId(null)}
+          onBack={() => onSelectTaskId(null)}
           onTaskUpdated={onTaskUpdated}
         />
+      ) : selectedTaskId && fetchingTask ? (
+        <div
+          style={{
+            ...pageEmptyStateStyle,
+            minHeight: EMPTY_STATE_MIN_HEIGHT,
+            padding: "2.75rem 1.5rem",
+          }}
+        >
+          <span style={{ fontSize: 28, lineHeight: 1 }}>⏳</span>
+          <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
+            Loading...
+          </span>
+        </div>
       ) : loading && !hasResolvedPageData && totalCount > 0 ? (
         <>
           <div
@@ -483,7 +550,7 @@ export function ProductImproveTaskListPage({
                 task={task}
                 locationSearch={locationSearch}
                 onDelete={() => void handleDelete(task)}
-                onOpenDetail={() => setSelectedTaskId(task.id)}
+                onOpenDetail={() => onSelectTaskId(task.id)}
                 onTaskUpdated={onTaskUpdated}
                 deleting={deletingId === task.id}
               />

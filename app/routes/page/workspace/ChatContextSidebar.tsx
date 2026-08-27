@@ -2,6 +2,7 @@
 import { useTranslation } from "react-i18next";
 import { describeObjectQuery, objectQueryKindLabel } from "../../../lib/objectQuerySpec";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import {
   fileRoleLabels,
   type ConversationTaskRunEntry,
@@ -63,7 +64,7 @@ function ConversationTasksCard({
 }: {
   taskRuns: ConversationTaskRunEntry[];
   tasksById: Record<string, AITaskItem>;
-  onOpenTasks: () => void;
+  onOpenTasks: (opts?: OpenWorkspaceTasksOptions) => void;
   onLocateRun: (runId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -158,7 +159,26 @@ function ConversationTasksCard({
                 <button
                   key={run.runId}
                   type="button"
-                  onClick={() => (needsReview ? onOpenTasks() : onLocateRun(run.runId))}
+                  onClick={() => {
+                    if (!needsReview) {
+                      onLocateRun(run.runId);
+                      return;
+                    }
+                    const firstPendingProduct = runTasks.find(
+                      (task) =>
+                        task.status === "pending_review" &&
+                        task.taskType === "product_improve",
+                    );
+                    if (firstPendingProduct) {
+                      onOpenTasks({
+                        taskType: "product_improve",
+                        taskId: firstPendingProduct.id,
+                        intent: "review",
+                      });
+                      return;
+                    }
+                    onOpenTasks();
+                  }}
                   style={{
                     textAlign: "left",
                     border: `1px solid ${needsReview ? "#fde68a" : "#e1e3e5"}`,
@@ -247,7 +267,7 @@ function ConversationTasksCard({
             </span>
             <button
               type="button"
-              onClick={onOpenTasks}
+              onClick={() => onOpenTasks()}
               style={{
                 fontSize: 12,
                 color: "rgba(44,110,203,0.9)",
@@ -277,7 +297,7 @@ export function ChatContextSidebar({
   context: WorkspaceContextController;
   taskRuns: ConversationTaskRunEntry[];
   tasksById: Record<string, AITaskItem>;
-  onOpenTasks: () => void;
+  onOpenTasks: (opts?: OpenWorkspaceTasksOptions) => void;
   onLocateRun: (runId: string) => void;
 }) {
   const { t } = useTranslation();

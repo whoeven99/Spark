@@ -9,6 +9,9 @@ import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import { BATCH_PRODUCT_IMPROVE_SKILL_ID } from "../../../lib/taskProposalPayload";
+import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import { useTranslation } from "react-i18next";
 
 const POLL_INTERVAL_MS = 5000;
 /** 卡片挂载后最长轮询时长，避免长期占用请求 */
@@ -35,6 +38,31 @@ function aggregate(statuses: AITaskStatus[]): StatusAggregate {
   return agg;
 }
 
+function resolveProductImproveOpenOptions(
+  run: TaskRunPayload,
+  matchedTasks: AITaskItem[],
+  pendingReview: number,
+): OpenWorkspaceTasksOptions | undefined {
+  const isProductImprove =
+    run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID ||
+    matchedTasks.some((task) => task.taskType === "product_improve");
+  if (!isProductImprove) return undefined;
+  const firstPending = matchedTasks.find((task) => task.status === "pending_review");
+  if (pendingReview > 0) {
+    return {
+      skillId: run.skillId,
+      taskType: "product_improve",
+      taskId: firstPending?.id ?? (matchedTasks.length === 1 ? matchedTasks[0]?.id : undefined),
+      intent: "review",
+    };
+  }
+  return {
+    skillId: run.skillId,
+    taskType: "product_improve",
+    intent: "list",
+  };
+}
+
 export function TaskRunChatCard({
   run,
   locationSearch,
@@ -43,10 +71,11 @@ export function TaskRunChatCard({
 }: {
   run: TaskRunPayload;
   locationSearch: string;
-  onOpenTasks?: () => void;
+  onOpenTasks?: (opts?: OpenWorkspaceTasksOptions) => void;
   /** 由外部（ChatPanel 统一轮询）提供任务状态时，卡片不再自行轮询 */
   tasksById?: Record<string, AITaskItem>;
 }) {
+  const { t } = useTranslation();
   const [selfPolledTasks, setSelfPolledTasks] = useState<AITaskItem[]>([]);
   const taskIdSet = useMemo(() => new Set(run.taskIds), [run.taskIds]);
   const externallyManaged = tasksById !== undefined;
@@ -230,9 +259,15 @@ export function TaskRunChatCard({
               fontWeight: 600,
               cursor: "pointer",
             }}
-            onClick={() => onOpenTasks?.()}
+            onClick={() =>
+              onOpenTasks?.(resolveProductImproveOpenOptions(run, matchedTasks, agg.pendingReview))
+            }
           >
-            查看任务列表
+            {agg.pendingReview > 0 &&
+            (run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID ||
+              matchedTasks.some((task) => task.taskType === "product_improve"))
+              ? t("productImproveStage1.chatGoReview")
+              : t("productImproveStage1.chatViewTaskList")}
           </button>
         </div>
       </div>

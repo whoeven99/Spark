@@ -21,7 +21,7 @@ import {
 
 const LOG = "[GenerateDescription][Service]";
 
-/** 成功路径下返回给 HTTP / Tool 的载荷：description 来自模型 JSON，title 来自 Shopify 商品。 */
+/** 成功路径下返回给 HTTP / Tool 的载荷：title 与 description 均来自模型 JSON。 */
 export type GenerateDescriptionOkPayload = {
   title: string;
   description: string;
@@ -161,7 +161,7 @@ export async function runProductDescriptionGeneration(params: {
   try {
     const aiPayload = parseAndValidateProductDescriptionJson(raw.rawText);
     const data: GenerateDescriptionOkPayload = {
-      title: context.title,
+      title: aiPayload.title,
       description: aiPayload.description,
     };
 
