@@ -1199,7 +1199,7 @@
       "EXPIRED": "Expired",
       "FROZEN": "Frozen"
     },
-    "quotaTitle": "Your token balance",
+    "quotaTitle": "Current balance",
     "planBenefits": "Packs never expire · Subscription refreshes each period · Buy extra packs anytime",
     "quotaUsageAria": "Used {{used}}, available {{available}} tokens",
     "quotaProgressAria": "{{percent}}% used",

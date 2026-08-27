@@ -1199,7 +1199,7 @@
       "EXPIRED": "已过期",
       "FROZEN": "已冻结"
     },
-    "quotaTitle": "您的 Token 额度",
+    "quotaTitle": "当前额度",
     "planBenefits": "按量包不过期 · 订阅额度按周期刷新 · 可另购补充",
     "quotaUsageAria": "已用 {{used}}，可用 {{available}} Token",
     "quotaProgressAria": "已使用 {{percent}}%",

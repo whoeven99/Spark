@@ -445,9 +445,6 @@ export function BillingPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const locale = i18n.language;
-  const backLabel = t("common.backToPrevious", {
-    defaultValue: t("billing.pageBack"),
-  });
   const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
   const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
   const proMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "pro");
@@ -933,9 +930,9 @@ export function BillingPage() {
       }}
     >
       <PageHeaderNav
-        title={t("billing.pageTitle")}
-        backLabel={backLabel}
-        fallbackPath="/app"
+        title={t("billing.quotaTitle")}
+        titleBarTitle={t("billing.pageTitle")}
+        hideBack
         chromeless
       />
 
@@ -947,20 +944,9 @@ export function BillingPage() {
       ) : null}
 
       <section className={styles.quotaSection}>
-        <div className={styles.usageHeader}>
-          <div className={styles.usageHeaderMain}>
-            {quotaMetaDescription ? (
-              <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
-            onClick={() => setShowAccountDetailPage(true)}
-          >
-            {t("billing.openAccountDetailPage")}
-          </button>
-        </div>
+        {quotaMetaDescription ? (
+          <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
+        ) : null}
         <div className={styles.usageCard}>
           <div className={styles.usageMain}>
             <div className={styles.usageStatsRow}>
@@ -1007,6 +993,13 @@ export function BillingPage() {
               {isSubscriptionTrialActive ? (
                 <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
               ) : null}
+              <button
+                type="button"
+                className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
+                onClick={() => setShowAccountDetailPage(true)}
+              >
+                {t("billing.openAccountDetailPage")}
+              </button>
             </div>
           </div>
         </div>
