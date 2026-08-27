@@ -73,7 +73,7 @@ export default function HomeV1Route() {
 
   return (
     <>
-      <TitleBar title="Spark" />
+      <TitleBar title="Spark AI" />
       <main style={isMobile ? mobileContentStyle : contentStyle}>
         <HomePanel
           displayName={data.accountName}

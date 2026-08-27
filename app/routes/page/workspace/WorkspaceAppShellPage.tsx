@@ -12,6 +12,7 @@ import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
+import { SparkMark } from "../../component/common/SparkMark";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { normalizeWorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
@@ -1160,10 +1161,12 @@ export function WorkspaceAppShellPage({
     <>
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <div style={brandRowStyle}>
-          <div style={brandBadgeStyle}>S</div>
+          <div style={brandBadgeStyle}>
+            <SparkMark />
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={brandTitleStyle}>Spark</div>
-            <div style={brandMetaStyle}>Shopify AI Workspace</div>
+            <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
+            <div style={brandMetaStyle}>{t("workspace.shell.brand.subtitle")}</div>
           </div>
           {!isMobile ? (
             <button
@@ -1440,7 +1443,9 @@ export function WorkspaceAppShellPage({
   const collapsedSidebarContent = (
     <>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flex: 1, minHeight: 0 }}>
-        <div style={brandBadgeStyle}>S</div>
+        <div style={brandBadgeStyle}>
+          <SparkMark />
+        </div>
         <button
           type="button"
           style={collapsedIconButtonStyle(false)}
@@ -1585,10 +1590,6 @@ export function WorkspaceAppShellPage({
             onSubmitPrompt={(prompt) => createConversation({ draft: prompt, autoSend: true })}
             onOpenContextTool={(tool) => {
               pendingHomeContextToolRef.current = tool;
-              createConversation();
-            }}
-            onMoreContext={() => {
-              pendingHomeContextToolRef.current = "article";
               createConversation();
             }}
           />

@@ -21,13 +21,23 @@ import {
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
-import {
-  hasStreamingVisualContent,
-  type SkillStepProgress,
-} from "./chatStreamUtils";
+import type { SkillStepProgress } from "./chatStreamUtils";
 
 export type { SkillStepProgress } from "./chatStreamUtils";
 export { hasStreamingVisualContent } from "./chatStreamUtils";
+
+function upsertProgressStep(
+  steps: SkillStepProgress[],
+  nextStep: SkillStepProgress,
+): SkillStepProgress[] {
+  const index = steps.findIndex(
+    (step) => step.skill === nextStep.skill && step.stepId === nextStep.stepId,
+  );
+  if (index < 0) return [...steps, nextStep];
+  const next = [...steps];
+  next[index] = nextStep;
+  return next;
+}
 
 type SkillProgressEvent = {
   skill: string;
@@ -298,20 +308,18 @@ export function useChatStream() {
                 markFirstChunkSeen();
                 const ev = chunk.event;
                 appendThinkingNote(`${ev.label}: ${ev.status}`);
-                setSkillSteps((prev) => {
-                  const idx = prev.findIndex(
-                    (s) => s.skill === ev.skill && s.stepId === ev.stepId,
-                  );
-                  if (idx >= 0) {
-                    const next = [...prev];
-                    next[idx] = { ...ev };
-                    return next;
-                  }
-                  return [...prev, { ...ev }];
-                });
+                setSkillSteps((prev) => upsertProgressStep(prev, ev));
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
                 appendThinkingNote(`Preparing ${chunk.name}`);
+                setSkillSteps((prev) =>
+                  upsertProgressStep(prev, {
+                    skill: "tool",
+                    stepId: chunk.name,
+                    label: `tool:${chunk.name}`,
+                    status: "running",
+                  }),
+                );
                 if (chunk.name === "open_product_improve_form") {
                   // 表单态统一转通用提案卡；即时生成结果（generate_product_description）保留旧卡
                   applyTaskProposal(
@@ -342,6 +350,14 @@ export function useChatStream() {
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
                 appendThinkingNote(`${chunk.name} returned a result`);
+                setSkillSteps((prev) =>
+                  upsertProgressStep(prev, {
+                    skill: "tool",
+                    stepId: chunk.name,
+                    label: `tool:${chunk.name}`,
+                    status: "completed",
+                  }),
+                );
                 if (chunk.name === "generate_product_description") {
                   const parsed = JSON.parse(chunk.result) as unknown;
                   snapshotRef.current.productImproveCard = true;
@@ -352,10 +368,20 @@ export function useChatStream() {
               } else if (chunk.type === "error") {
                 markFirstChunkSeen();
                 const msg = chunk.message;
+                setSkillSteps((prev) =>
+                  prev.map((step) =>
+                    step.status === "running" ? { ...step, status: "error" } : step,
+                  ),
+                );
                 setStreamingText(msg);
                 snapshotRef.current.reply = msg;
               } else if (chunk.type === "done") {
                 markFirstChunkSeen();
+                setSkillSteps((prev) =>
+                  prev.map((step) =>
+                    step.status === "running" ? { ...step, status: "completed" } : step,
+                  ),
+                );
                 const reply =
                   chunk.metadata.finalReply?.trim() ||
                   snapshotRef.current.reply;

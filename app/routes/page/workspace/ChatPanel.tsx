@@ -29,6 +29,7 @@ import {
   chatLayoutStyle,
   composerBoxStyle,
   composerFooterStyle,
+  composerSurfaceStyle,
   conversationMetaRowStyle,
   conversationMetaTitleStyle,
   footerLeftStyle,
@@ -167,6 +168,7 @@ export function ChatPanel({
     () => conversationRuns.flatMap((run) => run.taskIds),
     [conversationRuns],
   );
+  const showContextSidebar = filledContextCount > 0 || conversationRuns.length > 0;
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
   const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
@@ -326,7 +328,7 @@ export function ChatPanel({
   const mobileComposerOffset = isMobile ? mobileComposerHeight + 18 : 0;
 
   const composerContent = (
-    <div style={isMobile ? mobileFixedComposerCardStyle : undefined}>
+    <div style={isMobile ? mobileFixedComposerCardStyle : composerSurfaceStyle}>
       {selectedSummaryBubbles.length > 0 ? (
         <div style={selectionBubbleRowStyle}>
           {selectedSummaryBubbles.map((item) => (
@@ -367,14 +369,14 @@ export function ChatPanel({
               </button>
             ))}
           </div>
-          <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
-            {filledContextCount > 0 ? (
+          {filledContextCount > 0 ? (
+            <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
               <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
-            ) : null}
-            <button type="button" style={toolbarClearStyle} onClick={clearContext}>
-              清空上下文
-            </button>
-          </div>
+              <button type="button" style={toolbarClearStyle} onClick={clearContext}>
+                清空上下文
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
       <div style={isMobile ? mobileComposerFooterStyle : composerFooterStyle}>
@@ -405,7 +407,18 @@ export function ChatPanel({
   );
 
   return (
-    <div style={isMobile ? { ...mobileChatLayoutStyle, paddingBottom: mobileComposerOffset } : chatLayoutStyle}>
+    <div
+      style={
+        isMobile
+          ? { ...mobileChatLayoutStyle, paddingBottom: mobileComposerOffset }
+          : {
+              ...chatLayoutStyle,
+              gridTemplateColumns: showContextSidebar
+                ? "minmax(0, 1fr) 320px"
+                : "minmax(0, 1fr)",
+            }
+      }
+    >
       <section
         style={{
           ...(isMobile ? mobileSurfaceCardStyle : surfaceCardStyle),
@@ -483,7 +496,7 @@ export function ChatPanel({
 
       <ContextToolModal context={context} />
 
-      {!isMobile ? (
+      {!isMobile && showContextSidebar ? (
         <ChatContextSidebar
           context={context}
           taskRuns={conversationRuns}

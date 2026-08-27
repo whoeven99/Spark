@@ -65,7 +65,7 @@ export default function Index() {
 
   return (
     <ClientMount>
-      <TitleBar title="Spark" />
+      <TitleBar title="Spark AI" />
       <Suspense fallback={<RoutePageFallback />}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}

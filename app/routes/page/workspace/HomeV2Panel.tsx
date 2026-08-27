@@ -134,21 +134,22 @@ const homeV2Styles = {
       flexShrink: 0,
     }) as const,
   quickPillRow: {
-    display: "flex",
-    flexWrap: "wrap" as const,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 8,
     marginTop: 14,
   },
   quickPill: {
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 999,
+    borderRadius: 10,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
-    padding: "7px 13px",
-    fontSize: 12,
+    padding: "10px 12px",
+    fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "inherit",
+    textAlign: "left" as const,
   },
 };
 
@@ -157,13 +158,11 @@ export function HomeV2Panel({
   initialRenderTimeIso,
   onSubmitPrompt,
   onOpenContextTool,
-  onMoreContext,
 }: {
   displayName: string;
   initialRenderTimeIso?: string;
   onSubmitPrompt: (prompt: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
-  onMoreContext: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -176,6 +175,10 @@ export function HomeV2Panel({
   const quickPrompts = useMemo(
     () => [
       {
+        label: t("workspace.homeV2.quickPrompts.todayOperations.label"),
+        prompt: t("workspace.homeV2.quickPrompts.todayOperations.prompt"),
+      },
+      {
         label: t("workspace.homeV2.quickPrompts.optimizeCopy.label"),
         prompt: t("workspace.homeV2.quickPrompts.optimizeCopy.prompt"),
       },
@@ -183,12 +186,18 @@ export function HomeV2Panel({
         label: t("workspace.homeV2.quickPrompts.generateImage.label"),
         prompt: t("workspace.homeV2.quickPrompts.generateImage.prompt"),
       },
+      {
+        label: t("workspace.homeV2.quickPrompts.translateImage.label"),
+        prompt: t("workspace.homeV2.quickPrompts.translateImage.prompt"),
+      },
     ],
     [t],
   );
   const contextChips = useMemo(
     () => [
       { tool: "product" as const, label: t("workspace.home.context.product"), icon: "◫" },
+      { tool: "order" as const, label: t("workspace.home.context.order"), icon: "◎" },
+      { tool: "article" as const, label: t("workspace.home.context.article"), icon: "≣" },
       { tool: "file" as const, label: t("workspace.home.context.file"), icon: "↑" },
     ],
     [t],
@@ -249,9 +258,6 @@ export function HomeV2Panel({
                   {chip.icon} {chip.label}
                 </button>
               ))}
-              <button type="button" style={homeV2Styles.contextChip} onClick={onMoreContext}>
-                + {t("workspace.home.moreContext")}
-              </button>
             </div>
             <button
               type="button"

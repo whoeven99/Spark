@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "d68a7533dbbe676af335f27d01d87a12"
-name = "Spark"
+name = "Spark AI"
 application_url = "https://spark-prod.onrender.com"
 embedded = true
 

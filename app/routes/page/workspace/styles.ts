@@ -423,6 +423,13 @@ export const messageListStyle: CSSProperties = {
   // instant assignment so rapid frames don't fight each other and miss the bottom.
 };
 export const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
+export const composerSurfaceStyle: CSSProperties = {
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid #c9cdd2",
+  background: "#ffffff",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+};
 export const mobileFixedComposerWrapStyle = (keyboardInset: number): CSSProperties => ({
   position: "fixed",
   left: 14,
@@ -444,13 +451,12 @@ export const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 96,
   maxHeight: 320,
-  borderRadius: 12,
-  border: "1px solid #c9cdd2",
-  padding: 14,
+  border: "none",
+  padding: "4px 4px 8px",
   fontSize: 14,
   lineHeight: 1.6,
   color: "#202223",
-  background: "#ffffff",
+  background: "transparent",
   resize: "none",
   overflowY: "auto",
   boxSizing: "border-box",
@@ -460,7 +466,7 @@ export const textareaStyle: CSSProperties = {
 export const mobileTextareaStyle: CSSProperties = {
   ...textareaStyle,
   minHeight: 84,
-  padding: 12,
+  padding: "2px 2px 6px",
   fontSize: 13,
   lineHeight: 1.55,
 };
@@ -469,7 +475,12 @@ export const mobileComposerFooterStyle: CSSProperties = { ...composerFooterStyle
 export const footerLeftStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
 export const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 export const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
-export const toolbarDockStyle: CSSProperties = { marginTop: 12, position: "relative" };
+export const toolbarDockStyle: CSSProperties = {
+  marginTop: 8,
+  paddingTop: 8,
+  borderTop: "1px solid #ebedf0",
+  position: "relative",
+};
 export const toolbarBarStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",

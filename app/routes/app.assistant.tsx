@@ -83,7 +83,7 @@ export default function AssistantRoute() {
 
   return (
     <ClientMount>
-      <TitleBar title="Spark" />
+      <TitleBar title="Spark AI" />
       <Suspense fallback={<RoutePageFallback />}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}
