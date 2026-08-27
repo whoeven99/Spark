@@ -23,6 +23,7 @@ import { MetricHintLabel } from "./component/shared/MetricHintLabel";
 import { useObservationWindowLabel } from "./component/shared/useObservationWindowLabel";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
 import type { TranslateFn } from "../lib/i18nText";
+import { localizeAnalysisOverviewCard, localizeTodayOverviewReport } from "../lib/todayCopy";
 
 function SurfaceButton({
   label,
@@ -91,7 +92,8 @@ export default function TodayOverview() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
-  const { filters, report, observationWindow } = data;
+  const { filters, observationWindow } = data;
+  const report = localizeTodayOverviewReport(data.report, t);
   const windowLabel = useObservationWindowLabel(observationWindow);
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const lastValuePathRef = useRef<string | null>(null);
@@ -138,13 +140,16 @@ export default function TodayOverview() {
     : valueFetcher.state !== "idle"
       ? t("today.home.loading")
       : t("today.home.pending");
-  const analysisCards = data.analysisOverviewCards.map((card) => ({
-    ...card,
-    metricValue:
-      card.key === "customer_value" && customerLtvValue !== t("today.home.pending")
-        ? customerLtvValue
-        : card.metricValue,
-  }));
+  const analysisCards = data.analysisOverviewCards.map((card) => {
+    const localized = localizeAnalysisOverviewCard(card, t);
+    return {
+      ...localized,
+      metricValue:
+        card.key === "customer_value" && customerLtvValue !== t("today.home.pending")
+          ? customerLtvValue
+          : localized.metricValue,
+    };
+  });
 
   useEffect(() => {
     if (lastValuePathRef.current === valuePath) return;

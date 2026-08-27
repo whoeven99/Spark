@@ -429,7 +429,8 @@
       "conclusion": "Conclusion",
       "ideas": "Optimization ideas",
       "todo": "To-dos",
-      "currentFocus": "Current focus"
+      "currentFocus": "Current focus",
+      "refineAction": "Ask AI to refine to-dos"
     },
     "todoAction": {
       "open_report": "Report",
@@ -531,6 +532,630 @@
       "churnDetail": "Churned customers {{churned}} / Refund-risk tags {{refundRisk}}",
       "ltvConclusion": "Dynamic LTV is used to judge whether customers acquired and converted today can keep contributing profit over time.",
       "ltvDetail": "Paying customers {{paying}} / Total customers {{total}}"
+    },
+    "filters": {
+      "allCountries": "All regions",
+      "scope": "Operating scope"
+    },
+    "header": {
+      "status": {
+        "healthy": "Healthy growth",
+        "watch": "Needs attention",
+        "risk": "Profit pressure"
+      },
+      "summary": {
+        "healthy": "The last 7 days are still making money. The next job is to tell which objects are worth scaling.",
+        "watch": "The last 7 days are still positive, but profit quality is already weakening — do not read scale growth alone.",
+        "risk": "Earning efficiency has dropped into the risk zone. Stop low-quality growth and loss first."
+      },
+      "bottleneck": {
+        "refund": "Refund loss is eating profit directly.",
+        "discount": "Discount share is high, so scale growth is not turning into profit improvement.",
+        "profitLag": "Profit is growing slower than revenue, so current growth quality is not stable."
+      },
+      "opportunity": {
+        "repeat": "Repeat purchase is relatively solid, so healthy objects are worth scaling.",
+        "newOrders": "New orders still support scale. Keep low-quality objects in check and there is room to grow."
+      },
+      "dataFreshness": "Last 7 days of orders and refunds",
+      "fallback": {
+        "statusLabel": "Needs attention",
+        "summary": "Today overview data failed to load. Showing the latest default operating judgment so the home view is not blank.",
+        "bottleneck": "Short-term earning efficiency and landing quality are weakening. Keep watching order quality and ROI.",
+        "opportunity": "Narrow the problem through revenue, profit, and ROI first, then rank specific objects.",
+        "dataFreshness": "Default analysis copy"
+      }
+    },
+    "metricCards": {
+      "revenue": {
+        "label": "Revenue",
+        "summary": "See whether the pie actually grew, then split into the objects behind it."
+      },
+      "cost": {
+        "label": "Cost",
+        "summary": "The cost page answers whether cost ran ahead of revenue, and which objects carry it."
+      },
+      "profit": {
+        "label": "Profit",
+        "summary": "The profit page only answers how much of what you sold was kept, and who is eating it."
+      },
+      "profit_margin": {
+        "label": "Profit margin",
+        "summary": "Check whether earning quality got thinner. Do not read scale growth as operating improvement."
+      },
+      "orders": {
+        "label": "Orders",
+        "summary": "Separate healthy scale growth first, then drill into order objects."
+      },
+      "aov": {
+        "label": "AOV",
+        "summary": "Confirm whether high-AOV orders are repeatable healthy samples."
+      }
+    },
+    "reasonCards": {
+      "growth-change": {
+        "title": "Why growth changed",
+        "label": {
+          "up": "Growth quality",
+          "down": "Growth under pressure",
+          "fallback": "Growth quality"
+        },
+        "summary": {
+          "up": "Growth is still running, but confirm it is healthy objects — not just a bigger pie.",
+          "down": "Growth has weakened. Open the growth-quality page to see which products and orders are dragging results.",
+          "fallback": "Keeping the latest default judgment for now. Live growth-object evidence will replace this when the main path recovers."
+        },
+        "meta": {
+          "fallback": "Yesterday’s traffic was above the 7-day average, but high-quality traffic share did not rise with it. Watch effective input, not raw volume."
+        }
+      },
+      "profit-erosion": {
+        "title": "What is eating profit",
+        "label": {
+          "refund": "Refund loss",
+          "discount": "Discount share",
+          "fallback": "Profit erosion"
+        },
+        "summary": {
+          "refund": "Refunds are the higher priority — they eat profit that was already earned.",
+          "discount": "Do not read discount-driven scale growth as real operating improvement.",
+          "fallback": "Keeping the directional call for now. Live profit-object evidence will replace this after the snapshot recovers."
+        },
+        "meta": {
+          "refund": "Profit keeps leaking after checkout",
+          "discount": "Profit is given away before checkout",
+          "fallback": "Yesterday’s conversion was above the 7-day average, but add-to-cart to checkout still drops. Mid/late landing is still dragging earning efficiency."
+        }
+      },
+      "efficiency-shift": {
+        "title": "Why return weakened",
+        "label": {
+          "healthy": "Short-term operating return",
+          "weak": "Short-term operating return",
+          "fallback": "Return efficiency"
+        },
+        "summary": {
+          "healthy": "Return efficiency is still healthy, but keep checking which channels and objects are worth scaling.",
+          "weak": "Return efficiency has weakened. Look at inefficient channels and high-loss orders next.",
+          "fallback": "After live data recovers, split into channels and loss objects instead of staying on a blended return."
+        },
+        "meta": {
+          "fallback": "Short-term ROI is under pressure. Watch traffic quality and landing pages first, and avoid scaling wasted acquisition."
+        }
+      }
+    },
+    "roiCards": {
+      "short_term": {
+        "label": "Short-term ROI",
+        "summary": "Did the last 7 days leave a positive operating result? This layer only answers whether you are making money in the short term."
+      },
+      "status": {
+        "strong": "Strong",
+        "stable": "Stable",
+        "weak": "Weak",
+        "default": "Default judgment"
+      }
+    },
+    "analysisPages": {
+      "product": {
+        "principle1": "Pricing is not only whether it sells — the price band must also support keeping profit.",
+        "principle2": "Read SKU profit with discounts, refunds, and AOV mix. Do not treat scale growth as product success.",
+        "principle3": "Inventory turns are more operational. Drill into inventory health and at-risk SKUs."
+      },
+      "ads": {
+        "principle1": "A high-spend platform is not automatically a high-quality platform. Read after-ad profit and ROI.",
+        "principle2": "A weaker channel return can come from traffic quality, creatives, landing pages, or after-sales loss together.",
+        "principle3": "Channels worth scaling should be drilled into platform performance and campaign structure."
+      },
+      "orders": {
+        "principle1": "More orders do not mean better profit quality.",
+        "principle2": "Read AOV with product mix, discounted orders, and high-AOV samples.",
+        "principle3": "Keep order analysis next to after-sales, so refunds and fulfillment issues are not found last."
+      },
+      "after_sales": {
+        "principle1": "A rising refund rate is rarely one cause. Split product, logistics, and after-sales response.",
+        "principle2": "When fulfillment slows, after-sales pressure and refund loss rise together.",
+        "principle3": "Drill into refund health, fulfillment health, and specific abnormal order objects."
+      },
+      "customer_value": {
+        "principle1": "Customer quality is not order value alone — combine repeat purchase, refund risk, and value score.",
+        "principle2": "Segments exist to drive ads, CRM, and benefits — not classification for its own sake.",
+        "principle3": "High-value share and repeat rate are the key read on whether long-term operating quality is stable."
+      }
+    },
+    "analysisCards": {
+      "pricing": {
+        "title": "Pricing analysis",
+        "question": "Does the current price band support conversion and profit, or only short-term high AOV?",
+        "conclusion": "Confirm whether high AOV from the current price band is a repeatable healthy sample.",
+        "metricLabel": "AOV",
+        "idea1": "Split high-AOV samples first and check whether a few outlier orders lifted the average.",
+        "idea2": "Read the price band with profit so you do not raise AOV without keeping profit.",
+        "idea3": "Check discounted-order share so pricing is not hidden by heavy promotions.",
+        "evidence1Label": "AOV",
+        "evidence2Label": "Revenue",
+        "evidence3Label": "Orders",
+        "assistantTitle": "Break the price band into executable Today to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "unit-profit": {
+        "title": "SKU profit analysis",
+        "question": "Which products actually keep profit, and which are eating it?",
+        "conclusion": "See whether SKUs keep profit first, then drill into product and order objects to find who is eating it.",
+        "metricLabel": "Profit",
+        "idea1": "Investigate high-traffic thin-profit products first so scale does not amplify loss.",
+        "idea2": "Fold refunds and discounts into SKU profit — do not read sold revenue alone.",
+        "idea3": "Find the products eating the most profit and handle the head loss samples first.",
+        "evidence1Label": "Profit",
+        "evidence2Label": "Profit margin",
+        "evidence3Label": "Cost",
+        "assistantTitle": "Turn SKU profit issues into 3 executable to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "inventory-turnover": {
+        "title": "Inventory-turn analysis",
+        "question": "Are inventory turns slowing operations, or distorting the product read?",
+        "conclusion": "Inventory turns should be judged with days of supply, stockout risk, and slow SKUs, so inventory health is the right next step.",
+        "metricLabel": "Inventory turns",
+        "idea1": "Confirm whether stockouts and slow SKUs are distorting the operating read.",
+        "idea2": "Read inventory health with profit objects so stock issues are not misread as product issues.",
+        "idea3": "Fill a shared inventory-turn definition later, then turn this into a stronger metric card.",
+        "evidence1Label": "Current status",
+        "evidence2Label": "Profit",
+        "assistantTitle": "Write investigation to-dos before inventory-turn data is complete",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "channel-roi": {
+        "title": "Channel ROI analysis",
+        "question": "Which channels should keep getting ad budget, and which should be cut first?",
+        "conclusion": "Split ads by channel. Each channel gets its own operating call before you drill into ads detail.",
+        "metricLabel": "Short-term ROI",
+        "idea1": "Read each channel’s ROI first, then decide whether to scale or limit spend.",
+        "idea2": "A channel call cannot look at revenue alone — also check profit and landing quality.",
+        "idea3": "When blended ROI weakens, split into platforms and campaigns instead of staying on the overview.",
+        "evidence1Label": "Short-term ROI",
+        "evidence2Label": "Cost",
+        "evidence3Label": "Revenue",
+        "assistantTitle": "Turn the channel call into executable delivery to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "order-scale": {
+        "title": "Order scale analysis",
+        "question": "Is today’s order growth healthy scale growth?",
+        "conclusion": "Separate whether scale growth is healthy, then drill into order objects.",
+        "metricLabel": "Orders",
+        "idea1": "Compare orders, revenue, and profit. Do not read pure volume as operating improvement.",
+        "idea2": "Find objects where orders grew fast but profit did not.",
+        "idea3": "Open the orders page to see which order types are pulling today’s result.",
+        "evidence1Label": "Orders",
+        "evidence2Label": "Revenue",
+        "evidence3Label": "Profit",
+        "assistantTitle": "Turn order-scale issues into executable to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "aov-quality": {
+        "title": "AOV mix analysis",
+        "question": "Does high AOV come from a healthy mix, not outliers or heavy promotions?",
+        "conclusion": "Confirm whether high AOV is a repeatable healthy sample.",
+        "metricLabel": "AOV",
+        "idea1": "Pull high-AOV order samples and check whether a few outliers lifted the average.",
+        "idea2": "Read discounts and product mix together to judge AOV quality.",
+        "idea3": "If high AOV is not repeatable, do not treat it as a stable growth signal.",
+        "evidence1Label": "AOV",
+        "evidence2Label": "Revenue",
+        "evidence3Label": "Orders",
+        "assistantTitle": "Generate AOV-mix investigation to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "refund-risk": {
+        "title": "Return / refund analysis",
+        "question": "After checkout, which refunds or returns are still eating profit?",
+        "conclusion": "Refunds are the higher priority — they eat profit that was already earned.",
+        "metricLabel": "Refund loss",
+        "idea1": "Separate whether the issue sits in product, logistics, or after-sales handling.",
+        "idea2": "Read refunds with profit to see which objects need stopping first today.",
+        "idea3": "If refunds concentrate on a few objects, inspect those objects instead of staying on the overview.",
+        "evidence1Label": "Refund loss",
+        "evidence2Label": "Profit",
+        "evidence3Label": "Orders",
+        "assistantTitle": "Turn refund-loss issues into executable to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "fulfillment-efficiency": {
+        "title": "Fulfillment-speed analysis",
+        "question": "Will fulfillment speed turn today’s orders into later after-sales problems?",
+        "conclusion": "Fulfillment speed is not only shipping time — it feeds refunds, experience, and later repeat purchase.",
+        "metricLabel": "Fulfillment speed",
+        "idea1": "After order volume grows, check whether fulfillment kept up before after-sales pile up.",
+        "idea2": "Take fulfillment issues to the health page and inspect abnormal objects, not just the conclusion.",
+        "idea3": "If exceptions concentrate in a few countries or products, raise that handling priority.",
+        "evidence1Label": "Watch",
+        "evidence2Label": "Orders"
+      },
+      "quality-segmentation": {
+        "title": "Customer quality tiers",
+        "question": "How much of the current operating result comes from truly high-quality customers?",
+        "conclusion": "Customer quality is not order value alone — combine repeat purchase, refund risk, and value score.",
+        "metricLabel": "Dynamic LTV",
+        "idea1": "Tier customer quality first. Do not treat every paying customer as the same sample.",
+        "idea2": "High-value share and repeat rate should stay as a fixed layer of long-term operating evidence.",
+        "idea3": "Ads, CRM, and benefits should later read the same segment set.",
+        "evidence1Label": "Lifetime ROI",
+        "evidence2Label": "Revenue",
+        "evidence3Label": "Profit",
+        "assistantTitle": "Output customer-quality tier to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      },
+      "segment-structure": {
+        "title": "Customer segment split",
+        "question": "How should customers be split into operable segments instead of one pool?",
+        "conclusion": "Segments exist to manage new, active, VIP, and at-risk customers separately, each with its own strategy.",
+        "metricLabel": "Customer segments",
+        "idea1": "Lock a shared segment rule first so later pages and tasks can reuse it.",
+        "idea2": "Different segments should get different operating actions, not only an analysis conclusion.",
+        "idea3": "Split high-value, at-risk, and churn-leaning customers so later to-dos can actually run.",
+        "evidence1Label": "Current goal",
+        "evidence2Label": "Lifetime ROI",
+        "assistantTitle": "Generate customer-segment operating to-dos",
+        "assistantDetail": "Hand this card to AI to refine into executable Today to-dos."
+      }
+    },
+    "analysisTodos": {
+      "price-band-aov": {
+        "title": "Review high-AOV sources",
+        "detail": "Open the revenue page and confirm whether high AOV comes from a few sample orders or a specific product mix.",
+        "action": "View revenue / AOV"
+      },
+      "price-band-profit": {
+        "title": "Read the price band with profit",
+        "detail": "Open AOV and the profit page together to confirm whether a higher price band actually kept profit.",
+        "action": "View profit"
+      },
+      "unit-profit-report": {
+        "title": "Find objects eating profit",
+        "detail": "Open the profit page and confirm which products or orders need handling first today.",
+        "action": "View profit"
+      },
+      "unit-profit-margin": {
+        "title": "Recheck margin change",
+        "detail": "Open the margin view to see whether thinner profit comes from price, discounts, or refunds.",
+        "action": "View margin"
+      },
+      "inventory-health": {
+        "title": "Open inventory health",
+        "detail": "Confirm which product objects concentrate stockouts, slow movers, and excess inventory.",
+        "action": "View inventory health"
+      },
+      "inventory-task-center": {
+        "title": "View inventory-risk tasks",
+        "detail": "Open Tasks and show only inventory-risk operating tasks so you can start handling them.",
+        "action": "View inventory tasks"
+      },
+      "ads-roi-report": {
+        "title": "Open ROI channels",
+        "detail": "See which channels can still take spend, and which have already become inefficient.",
+        "action": "View ROI channels"
+      },
+      "ads-insights": {
+        "title": "Open ads performance",
+        "detail": "Drill into ads performance to locate a specific platform or campaign.",
+        "action": "View ads performance"
+      },
+      "orders-report": {
+        "title": "Open the orders page",
+        "detail": "Confirm which objects and mix are driving order-scale growth.",
+        "action": "View orders"
+      },
+      "aov-report": {
+        "title": "Open the AOV page",
+        "detail": "Keep reading AOV mix and confirm whether high-AOV sources are healthy.",
+        "action": "View AOV"
+      },
+      "after-sales-profit": {
+        "title": "Open profit to see loss",
+        "detail": "Read the profit page to confirm which profit samples refunds and loss are eating.",
+        "action": "View profit loss"
+      },
+      "after-sales-refund-health": {
+        "title": "Open refund health",
+        "detail": "Read refund-health detail and confirm which objects concentrate the exceptions.",
+        "action": "View refund health"
+      },
+      "after-sales-task-center": {
+        "title": "View refund and after-sales tasks",
+        "detail": "Open Tasks and show only refund-spike and after-sales-timeout tasks.",
+        "action": "View after-sales tasks"
+      },
+      "fulfillment-health": {
+        "title": "Open fulfillment health",
+        "detail": "Keep reviewing fulfillment exceptions and delay risk.",
+        "action": "View fulfillment health"
+      },
+      "fulfillment-task-center": {
+        "title": "View fulfillment tasks",
+        "detail": "Open Tasks and show only fulfillment-overdue tasks so you can follow up.",
+        "action": "View fulfillment tasks"
+      },
+      "customer-value-roi": {
+        "title": "Open the ROI value layer",
+        "detail": "Read dynamic LTV and high-value customer mix from the value layer first.",
+        "action": "View ROI value layer"
+      },
+      "customer-value-roi-segment": {
+        "title": "Keep reading segments in the ROI value layer",
+        "detail": "Keep reviewing customer mix and long-term quality in the value layer.",
+        "action": "View ROI value layer"
+      }
+    },
+    "decision": {
+      "revenue": {
+        "title": "Growth quality analysis",
+        "subtitle": "Current scope: {{country}}. Separate real growth from fake growth, then follow the products and orders worth watching.",
+        "accent": "{{country}} / last 7 days",
+        "primaryQuestion": "Is recent revenue growth healthy, and which products and orders are supporting or dragging it?",
+        "orders": {
+          "title": "Order scale analysis",
+          "subtitle": "Current scope: {{country}}. Judge which order mix behind scale is worth copying.",
+          "accent": "Focus: orders",
+          "primaryQuestion": "Is recent order-count change driven by healthy orders, or by low-quality checkouts stacking volume?"
+        },
+        "aov": {
+          "title": "AOV quality analysis",
+          "subtitle": "Current scope: {{country}}. Judge whether high AOV is a healthy sample, not a one-off inflated order.",
+          "accent": "Focus: AOV",
+          "primaryQuestion": "Does recent AOV change come from a healthier product mix, or from a few unrepeatable order samples?"
+        },
+        "fallback": {
+          "title": "Revenue analysis",
+          "subtitle": "The main data path is temporarily unavailable. Showing the latest default analysis so the report is not blank.",
+          "accent": "Default analysis copy",
+          "primaryQuestion": "Which objects are supporting results, and which are dragging the operating call?"
+        }
+      },
+      "profit": {
+        "title": "Profit analysis",
+        "subtitle": "Current scope: {{country}}. The profit page answers how much of what you sold was kept.",
+        "accent": "{{country}} / last 7 days",
+        "primaryQuestion": "Which products and orders kept recent profit, and which objects are eating the operating gain?",
+        "cost": {
+          "title": "Cost analysis",
+          "subtitle": "Current scope: {{country}}. See whether cost ran ahead of revenue, and which objects carry it.",
+          "accent": "Focus: cost",
+          "primaryQuestion": "Where is recent cost pressure coming from, and which products and orders are pushing cost into a dangerous place?"
+        },
+        "margin": {
+          "title": "Margin analysis",
+          "subtitle": "Current scope: {{country}}. See why margin changed, and which objects are dragging overall quality.",
+          "accent": "Focus: margin",
+          "primaryQuestion": "Why did recent margin change, and which products and orders are pulling overall operating quality down?"
+        },
+        "fallback": {
+          "title": "Profit analysis",
+          "subtitle": "The main data path is temporarily unavailable. Showing the latest default analysis so the report is not blank.",
+          "accent": "Default analysis copy",
+          "primaryQuestion": "Which objects are supporting results, and which are dragging the operating call?"
+        }
+      },
+      "roi": {
+        "title": "Return efficiency analysis",
+        "subtitle": "Current scope: {{country}}. See which channels are worth more spend, and which losses are eating return.",
+        "accent": "{{country}} / last 7 days vs previous 30 days",
+        "primaryQuestion": "Which channels are holding up recent return efficiency, and which loss objects already need cutting?",
+        "channels": {
+          "title": "Channel return analysis",
+          "subtitle": "Current scope: {{country}}. Judge which channels are worth more spend, and which only make revenue without keeping profit.",
+          "accent": "Focus: channels",
+          "primaryQuestion": "Which channels support recent operating return, and which have already become low-quality spend?"
+        },
+        "loss": {
+          "title": "Return-loss analysis",
+          "subtitle": "Current scope: {{country}}. See how discounts, refunds, and high-loss orders keep eating operating return.",
+          "accent": "Focus: loss",
+          "primaryQuestion": "Which loss objects are dragging recent ROI, and does the problem sit more before or after checkout?"
+        },
+        "fallback": {
+          "title": "Return efficiency analysis",
+          "subtitle": "The main data path is temporarily unavailable. Showing the latest default analysis so the report is not blank.",
+          "accent": "Default analysis copy",
+          "primaryQuestion": "Which operating actions are worth more spend, and which should be cut first?"
+        }
+      },
+      "traffic": {
+        "title": "Traffic analysis",
+        "subtitle": "Current scope: {{country}}. Judge which sources actually land, and which only stack sessions.",
+        "accent": "Focus: sources and landing",
+        "primaryQuestion": "Is recent traffic actually landing, or only stacking sessions?",
+        "fallback": {
+          "title": "Traffic analysis",
+          "subtitle": "The main data path is temporarily unavailable. Showing the latest default analysis so the report is not blank.",
+          "accent": "Default analysis copy",
+          "primaryQuestion": "Which sources are landing effectively, and which are only stacking sessions?"
+        }
+      },
+      "conversion": {
+        "title": "Conversion analysis",
+        "subtitle": "Current scope: {{country}}. Judge whether conversion is stuck at add-to-cart, checkout, or post-purchase quality.",
+        "accent": "Focus: funnel and post-checkout risk",
+        "primaryQuestion": "Is recent conversion landing stuck at add-to-cart, reaching checkout, or after checkout completes?",
+        "fallback": {
+          "title": "Conversion analysis",
+          "subtitle": "The main data path is temporarily unavailable. Showing the latest default analysis so the report is not blank.",
+          "accent": "Default analysis copy",
+          "primaryQuestion": "Where in the funnel is conversion stuck, and which sources should be checked first?"
+        }
+      }
+    },
+    "groups": {
+      "top_profitable_products": {
+        "title": "Top profitable products",
+        "summary": "These products bring both revenue and kept profit, so they are better hosts for healthy traffic."
+      },
+      "low_quality_growth_products": {
+        "title": "Top low-quality growth products",
+        "summary": "These products look like growth, but profit quality is weak. They most often disguise scale as operating improvement."
+      },
+      "high_value_orders": {
+        "title": "Top high-value orders",
+        "summary": "These orders better explain revenue quality. Trace their sources and product mix."
+      },
+      "high_refund_orders": {
+        "title": "Top high-refund-loss orders",
+        "summary": "These orders show that checkout is not kept profit. Investigate refund reasons and source quality first."
+      },
+      "top_profit_products": {
+        "title": "Top high-profit products",
+        "summary": "These products are leaving the clearest operating result and are the better objects to scale."
+      },
+      "loss_products": {
+        "title": "Top loss-making products",
+        "summary": "These products are already eating profit and should not stay hidden behind scale growth."
+      },
+      "healthy_orders": {
+        "title": "Top healthy orders",
+        "summary": "Healthy orders best explain which checkout patterns are worth copying."
+      },
+      "abnormal_loss_orders": {
+        "title": "Top abnormal-loss orders",
+        "summary": "These orders show that checkout is not kept profit. Investigate the loss reason first."
+      },
+      "high_traffic_sources": {
+        "title": "Top high-traffic sources",
+        "summary": "These sources currently bring most sessions and are the main sample for reviewing entry quality."
+      },
+      "low_quality_sources": {
+        "title": "Top high-traffic low-quality sources",
+        "summary": "These sources have sessions but weak landing. Fix entry and landing first."
+      },
+      "healthy_landing_pages": {
+        "title": "Top stable landing pages",
+        "summary": "These pages currently catch more orders and are the main sample for checking page landing."
+      },
+      "weak_landing_pages": {
+        "title": "Top weak landing pages",
+        "summary": "These pages already convert some orders, but order quality is weak. Fix landing before sending more traffic."
+      },
+      "stable_conversion_pages": {
+        "title": "Top stable conversion pages",
+        "summary": "These pages have been relatively stable at the end of the funnel and are better copyable page samples."
+      },
+      "payment_risk_pages": {
+        "title": "Top payment-risk pages",
+        "summary": "These pages already show clear payment risk. Check page landing and checkout completion first."
+      },
+      "payment_failed_orders": {
+        "title": "Top payment-failed orders",
+        "summary": "These orders are already in the payment-failure proxy. Investigate payment and checkout first."
+      },
+      "healthy_channels": {
+        "title": "Top healthy channels",
+        "summary": "These channels still keep profit and are better hosts for healthy objects."
+      },
+      "weak_channels": {
+        "title": "Top weak channels",
+        "summary": "These channels look like low-quality spend. Do not scale them just because they have revenue."
+      },
+      "refund_loss_orders": {
+        "title": "Top high-loss orders",
+        "summary": "These orders explain why ROI keeps worsening after checkout."
+      },
+      "refund_loss_orders_related": {
+        "title": "Related high-loss orders",
+        "summary": "Read channel calls with loss orders so after-sales loss is not misread as a pure ads problem."
+      },
+      "healthy_channels_contrast": {
+        "title": "Healthy channels for contrast",
+        "summary": "Keep a healthy-channel set as contrast to judge whether current loss is local or overall."
+      }
+    },
+    "breakdowns": {
+      "revenue-by-product": {
+        "title": "Revenue by product",
+        "summary": "See which products the money comes from, then judge whether they bring healthy growth or only a bigger pie."
+      },
+      "revenue-by-order": {
+        "title": "Revenue by order",
+        "summary": "Orders better answer revenue quality: which checkouts are worth copying, and which still lose value after checkout."
+      },
+      "orders-by-product": {
+        "title": "Product mix behind order changes",
+        "summary": "Order scale is not enough. Trace back to products to see whether growth was pulled off course by low-quality SKUs."
+      },
+      "aov-by-order": {
+        "title": "AOV by order",
+        "summary": "AOV is best read on order objects first, to separate high-value samples from high-loss samples."
+      },
+      "aov-by-product": {
+        "title": "Product mix behind AOV",
+        "summary": "After seeing high AOV on orders, confirm whether a healthy product mix is supporting it."
+      },
+      "profit-by-product": {
+        "title": "Profit by product",
+        "summary": "The profit page should start with product objects to see which SKUs actually leave an operating result."
+      },
+      "profit-by-order": {
+        "title": "Profit by order",
+        "summary": "Order objects better explain why profit was kept, or why it still leaked after checkout."
+      },
+      "cost-by-product": {
+        "title": "Cost by product",
+        "summary": "The cost page should start with loss-making and thin-profit products to see which object pushed cost ahead of revenue."
+      },
+      "cost-by-order": {
+        "title": "Cost by order",
+        "summary": "Orders better show which checkouts keep eating profit, especially refund-loss orders."
+      },
+      "margin-by-product": {
+        "title": "Margin by product",
+        "summary": "Start at products to find SKUs that still have revenue but are already dragging overall margin."
+      },
+      "margin-by-order": {
+        "title": "Margin by order",
+        "summary": "Orders better show whether thin margin comes from refund loss or an abnormal checkout mix."
+      },
+      "roi-by-channel": {
+        "title": "ROI by channel",
+        "summary": "See which channels actually keep profit, and which still have revenue but weaker return quality."
+      },
+      "roi-by-loss": {
+        "title": "ROI by loss objects",
+        "summary": "ROI can fall after checkout too — refunds and loss keep eating the result, not only pre-spend quality."
+      },
+      "traffic-by-source": {
+        "title": "Traffic by source",
+        "summary": "See where sessions mainly come from, then judge whether those sources turn traffic into landing."
+      },
+      "traffic-by-acceptance": {
+        "title": "Traffic landing signals",
+        "summary": "When page depth and add-to-cart reach weaken, session growth is no longer healthy growth."
+      },
+      "conversion-by-step": {
+        "title": "Conversion by funnel step",
+        "summary": "See whether drop-off sits more before add-to-cart, before checkout, or before checkout completes."
+      },
+      "conversion-after-checkout": {
+        "title": "Post-checkout risk",
+        "summary": "Payment-failed orders are already on a proxy definition. Use abnormal orders to read the real end of payment."
+      }
     }
   },
   "studioWorkbench": {

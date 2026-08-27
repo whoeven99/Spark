@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
+import { localizeCountryOptions } from "../../../lib/todayCopy";
 import { DestinationFilterBar } from "../shared/DestinationPage";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 
@@ -24,13 +26,16 @@ export function TodayCountryFilterCard({
   onFocusChange?: (focus: string) => void;
   notes?: string[];
 }) {
+  const { t } = useTranslation();
+  const countryOptions = localizeCountryOptions(options, t);
+
   return (
     <div style={filterWrapStyle}>
       <div style={filterGridStyle}>
-        <DestinationFilterBar label="经营范围" items={options} active={activeCountry} onChange={onChange} />
+        <DestinationFilterBar label={t("today.filters.scope")} items={countryOptions} active={activeCountry} onChange={onChange} />
         {focusOptions && focusOptions.length > 0 && activeFocus && onFocusChange ? (
           <DestinationFilterBar
-            label="当前焦点"
+            label={t("today.analysis.currentFocus")}
             items={focusOptions}
             active={activeFocus}
             onChange={onFocusChange}

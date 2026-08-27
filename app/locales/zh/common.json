@@ -429,7 +429,8 @@
       "conclusion": "分析结论",
       "ideas": "优化思路",
       "todo": "Todo",
-      "currentFocus": "当前焦点"
+      "currentFocus": "当前焦点",
+      "refineAction": "让 AI 细化 todo"
     },
     "todoAction": {
       "open_report": "报告",
@@ -531,6 +532,630 @@
       "churnDetail": "流失客户 {{churned}} / 退款风险标签 {{refundRisk}}",
       "ltvConclusion": "动态 LTV 用来判断今天获客和转化带来的客户，长期有没有机会持续贡献利润。",
       "ltvDetail": "付费客户 {{paying}} / 总客户 {{total}}"
+    },
+    "filters": {
+      "allCountries": "全部地区",
+      "scope": "经营范围"
+    },
+    "header": {
+      "status": {
+        "healthy": "健康增长",
+        "watch": "需要关注",
+        "risk": "盈利压力"
+      },
+      "summary": {
+        "healthy": "最近 7 天仍在稳定赚钱，当前更重要的是区分哪些对象值得继续放大。",
+        "watch": "最近 7 天仍然为正，但利润质量已经开始走弱，不能只看规模增长。",
+        "risk": "最近 7 天赚钱效率已经掉到风险区，应该优先止住低质量增长和损耗。"
+      },
+      "bottleneck": {
+        "refund": "退款损耗正在直接侵蚀利润。",
+        "discount": "折扣占比偏高，规模增长没有同步转成利润改善。",
+        "profitLag": "利润增速落后于收入增速，当前增长质量不够稳。"
+      },
+      "opportunity": {
+        "repeat": "复购基础相对稳，适合继续放大健康对象。",
+        "newOrders": "新增订单仍在支撑规模，只要控制低质量对象，仍有继续放大的空间。"
+      },
+      "dataFreshness": "近 7 天订单与退款快照",
+      "fallback": {
+        "statusLabel": "需要关注",
+        "summary": "Today 总览数据暂时加载失败，当前先展示最近一版默认经营判断，避免首页出现空白。",
+        "bottleneck": "短期赚钱效率和承接质量正在走弱，需要继续看订单质量与 ROI。",
+        "opportunity": "先从收入、利润和 ROI 三条主线收敛问题，再决定具体对象优先级。",
+        "dataFreshness": "默认分析文案"
+      }
+    },
+    "metricCards": {
+      "revenue": {
+        "label": "收入",
+        "summary": "先看盘子是否真正放大，再继续拆到具体收入对象。"
+      },
+      "cost": {
+        "label": "成本",
+        "summary": "成本页先回答成本有没有跑到收入前面，以及主要压在哪些对象上。"
+      },
+      "profit": {
+        "label": "利润",
+        "summary": "利润页只回答卖出去的钱最后留下了多少，以及是谁在吞利润。"
+      },
+      "profit_margin": {
+        "label": "利润率",
+        "summary": "利润率页先看赚钱质量有没有变薄，不把规模增长误判成经营改善。"
+      },
+      "orders": {
+        "label": "订单数",
+        "summary": "订单页先区分规模增长是否健康，再继续下钻到订单对象。"
+      },
+      "aov": {
+        "label": "客单价",
+        "summary": "客单价页先确认高客单是不是可复制的健康样本。"
+      }
+    },
+    "reasonCards": {
+      "growth-change": {
+        "title": "增长为什么变化",
+        "label": {
+          "up": "增长质量",
+          "down": "增长承压",
+          "fallback": "增长质量"
+        },
+        "summary": {
+          "up": "增长还在继续，但要先确认是健康对象在支撑，还是只把规模做大。",
+          "down": "增长已经变弱，下一步先到增长质量页看是哪些商品和订单在拖累结果。",
+          "fallback": "当前先沿用最近一版默认判断，主链路恢复后会替换为正式增长对象证据。"
+        },
+        "meta": {
+          "fallback": "昨日流量高于 7 日均值，但高质量流量占比没有同步抬升，今天要继续盯住有效输入而不是单纯冲量。"
+        }
+      },
+      "profit-erosion": {
+        "title": "利润被谁侵蚀",
+        "label": {
+          "refund": "退款损耗",
+          "discount": "折扣占比",
+          "fallback": "利润侵蚀"
+        },
+        "summary": {
+          "refund": "退款问题优先级更高，它会直接吞掉已经成交的利润。",
+          "discount": "当前先别把折扣带来的规模增长误判成真实经营改善。",
+          "fallback": "现阶段先保留方向判断，后续恢复真实快照后会替换成正式利润对象证据。"
+        },
+        "meta": {
+          "refund": "成交后利润继续流失",
+          "discount": "成交前利润先被让掉",
+          "fallback": "昨日转化率高于 7 日均值，但加购到结账阶段仍有掉点，赚钱效率仍在被中后段承接拖累。"
+        }
+      },
+      "efficiency-shift": {
+        "title": "回报为什么变弱",
+        "label": {
+          "healthy": "短期经营回报",
+          "weak": "短期经营回报",
+          "fallback": "回报效率"
+        },
+        "summary": {
+          "healthy": "当前回报效率还在健康区，但仍要继续看哪些渠道和对象值得继续放大。",
+          "weak": "回报效率已经走弱，下一步应该直接去看低效渠道和高损耗订单。",
+          "fallback": "恢复正式数据后，应该继续拆到渠道和损耗对象，而不是继续停在总回报口径。"
+        },
+        "meta": {
+          "fallback": "短期 ROI 明显承压，当前要优先盯住流量质量和落地页承接，避免继续放大获客浪费。"
+        }
+      }
+    },
+    "roiCards": {
+      "short_term": {
+        "label": "短期 ROI",
+        "summary": "先看最近 7 天有没有留下正向经营结果，这一层只回答短期是否在赚钱。"
+      },
+      "status": {
+        "strong": "强",
+        "stable": "稳定",
+        "weak": "偏弱",
+        "default": "默认判断"
+      }
+    },
+    "analysisPages": {
+      "product": {
+        "principle1": "定价不是只看卖不卖得动，还要看价格带是否支撑利润留存。",
+        "principle2": "单品利润要和折扣、退款、客单结构一起看，避免把规模增长误判成产品成功。",
+        "principle3": "库存周转更偏执行层，应该继续下钻到库存健康和 SKU 风险对象。"
+      },
+      "ads": {
+        "principle1": "高花费平台不一定是高质量平台，必须看广告后利润和 ROI。",
+        "principle2": "同一个渠道的回报变弱，可能是流量质量、创意、承接页或售后损耗共同导致。",
+        "principle3": "适合继续加码的渠道，要继续下钻到具体平台表现与 campaign 结构。"
+      },
+      "orders": {
+        "principle1": "订单数上升，不代表利润质量一定上升。",
+        "principle2": "客单价需要和商品组合、折扣订单、高客单样本一起看。",
+        "principle3": "订单分析和售后分析要连着看，避免把退款或履约问题留到最后才发现。"
+      },
+      "after_sales": {
+        "principle1": "退款率上升通常不是单一原因，要继续拆商品、物流和售后响应三类根因。",
+        "principle2": "履约效率变慢时，售后压力和退款损耗会一起抬升。",
+        "principle3": "适合继续下钻到退款健康、履约健康和具体异常订单对象。"
+      },
+      "customer_value": {
+        "principle1": "客户质量不能只看成交金额，还要结合复购、退款风险和价值分数。",
+        "principle2": "segment 的目标不是分类本身，而是帮助后续做投放、CRM 和权益策略。",
+        "principle3": "高价值客户占比和复购率，是判断长期经营质量是否稳定的关键。"
+      }
+    },
+    "analysisCards": {
+      "pricing": {
+        "title": "定价分析",
+        "question": "当前价格带是不是在支撑成交和利润，而不是只带来短期高客单？",
+        "conclusion": "先确认当前价格带带来的高客单，是不是可复制的健康样本。",
+        "metricLabel": "客单价",
+        "idea1": "先拆高客单样本，确认是不是少数异常订单把均值抬高。",
+        "idea2": "把价格带和利润一起看，避免只涨客单、不留利润。",
+        "idea3": "继续核对折扣订单占比，避免定价被强促销掩盖。",
+        "evidence1Label": "客单价",
+        "evidence2Label": "收入",
+        "evidence3Label": "订单数",
+        "assistantTitle": "把价格带进一步拆成可执行 today todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "unit-profit": {
+        "title": "单品利润分析",
+        "question": "哪些商品真的留下利润，哪些商品正在吞利润？",
+        "conclusion": "这里先看单品有没有真正留下利润，再下钻到商品与订单对象，确认是谁在吞利润。",
+        "metricLabel": "利润",
+        "idea1": "优先排查高流量但利润薄的商品，避免规模继续放大损耗。",
+        "idea2": "把退款和折扣一起纳入单品利润判断，不只看售出收入。",
+        "idea3": "继续找利润被吞掉最明显的商品对象，优先处理头部损耗样本。",
+        "evidence1Label": "利润",
+        "evidence2Label": "利润率",
+        "evidence3Label": "成本",
+        "assistantTitle": "把单品利润问题拆成 3 条可执行 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "inventory-turnover": {
+        "title": "库存周转分析",
+        "question": "库存周转会不会拖慢经营动作，或者让产品判断失真？",
+        "conclusion": "库存周转需要和可售天数、断货风险、慢销 SKU 一起判断，所以这里直接进入库存健康更合适。",
+        "metricLabel": "库存周转",
+        "idea1": "优先确认断货和慢销 SKU 是否正在拖累经营判断。",
+        "idea2": "把库存健康和利润对象一起看，避免把库存问题误判成产品问题。",
+        "idea3": "后续补齐库存周转统一口径，再把这张卡变成强指标卡。",
+        "evidence1Label": "当前状态",
+        "evidence2Label": "利润",
+        "assistantTitle": "输出库存周转待补口径前的排查 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "channel-roi": {
+        "title": "渠道 ROI 分析",
+        "question": "当前广告预算应该继续给哪些渠道，哪些渠道需要先止损？",
+        "conclusion": "广告分析按渠道拆开看，不同渠道分别给出自己的经营判断，再继续下钻到广告详情。",
+        "metricLabel": "短期 ROI",
+        "idea1": "先看各渠道 ROI，再决定是继续加码还是限制投入。",
+        "idea2": "渠道判断不能只看收入，还要看利润和承接质量。",
+        "idea3": "当总 ROI 变弱时，优先拆到平台和 campaign，不继续停留在总览层。",
+        "evidence1Label": "短期 ROI",
+        "evidence2Label": "成本",
+        "evidence3Label": "收入",
+        "assistantTitle": "把渠道判断拆成 today 可执行投放 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "order-scale": {
+        "title": "订单规模分析",
+        "question": "今天的订单增长是不是健康的规模增长？",
+        "conclusion": "先区分规模增长是否健康，再继续下钻订单对象。",
+        "metricLabel": "订单数",
+        "idea1": "对比订单、收入和利润，不把纯规模放量误判成经营改善。",
+        "idea2": "先找订单增长快但利润没同步增长的对象。",
+        "idea3": "继续下钻订单页确认到底是哪类订单在拉动今天的结果。",
+        "evidence1Label": "订单数",
+        "evidence2Label": "收入",
+        "evidence3Label": "利润",
+        "assistantTitle": "把订单规模问题拆成可执行 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "aov-quality": {
+        "title": "客单结构分析",
+        "question": "高客单是不是来自健康结构，而不是异常样本或强促销？",
+        "conclusion": "先确认高客单是不是可复制的健康样本。",
+        "metricLabel": "客单价",
+        "idea1": "拆出高客单订单样本，确认是不是少数异常订单拉高均值。",
+        "idea2": "联动折扣和商品组合判断客单结构质量。",
+        "idea3": "高客单如果不可复制，就不要把它当成稳定增长信号。",
+        "evidence1Label": "客单价",
+        "evidence2Label": "收入",
+        "evidence3Label": "订单数",
+        "assistantTitle": "生成客单结构排查 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "refund-risk": {
+        "title": "退单 / 退款分析",
+        "question": "成交之后，哪些退款或退单问题正在继续侵蚀利润？",
+        "conclusion": "退款问题优先级更高，它会直接吞掉已经成交的利润。",
+        "metricLabel": "退款损耗",
+        "idea1": "先分清问题发生在商品、物流还是售后处理链路。",
+        "idea2": "退款问题要和利润一起看，确认今天最该先止血的对象。",
+        "idea3": "如果退款集中在少数对象上，就直接进入对象排查，而不是停留在总览。",
+        "evidence1Label": "退款损耗",
+        "evidence2Label": "利润",
+        "evidence3Label": "订单数",
+        "assistantTitle": "把退款损耗问题拆成可执行 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "fulfillment-efficiency": {
+        "title": "履约效率分析",
+        "question": "履约效率会不会继续把今天的订单成果变成后续售后问题？",
+        "conclusion": "履约效率影响的不只是发货速度，它会继续传导到退款、体验和后续复购。",
+        "metricLabel": "履约效率",
+        "idea1": "订单放量后先看履约是否同步跟上，避免后续集中爆售后。",
+        "idea2": "履约问题优先去健康页看异常对象，不只停留在结论层。",
+        "idea3": "如果履约异常集中在少数国家或商品，要把处理优先级前置。",
+        "evidence1Label": "关注对象",
+        "evidence2Label": "订单数"
+      },
+      "quality-segmentation": {
+        "title": "客户质量划分",
+        "question": "现在的经营结果里，有多少来自真正的高质量客户？",
+        "conclusion": "客户质量不能只看成交金额，还要结合复购、退款风险和价值分数一起判断。",
+        "metricLabel": "动态 LTV",
+        "idea1": "先把客户质量分层，别把所有成交客户当成同一类样本。",
+        "idea2": "高价值客户占比和复购率应该成为长期经营判断的一层固定证据。",
+        "idea3": "后续需要让投放、CRM 和权益策略都能读到同一套 segment。",
+        "evidence1Label": "长期 ROI",
+        "evidence2Label": "收入",
+        "evidence3Label": "利润",
+        "assistantTitle": "输出客户质量划分的 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      },
+      "segment-structure": {
+        "title": "客户 Segment 划分",
+        "question": "应该怎么把客户分成可经营的 segment，而不是只看总客户池？",
+        "conclusion": "segment 的重点是把新客、活跃、VIP、风险客户拆开管理，不同 segment 应该承接不同策略。",
+        "metricLabel": "客户 Segment",
+        "idea1": "先把 segment 定成统一规则，后续页面和任务才能共用。",
+        "idea2": "不同 segment 应承接不同经营动作，不只停留在分析结论。",
+        "idea3": "把高价值、风险、流失倾向客户明确拆开，后续 todo 才能执行。",
+        "evidence1Label": "当前目标",
+        "evidence2Label": "长期 ROI",
+        "assistantTitle": "生成客户 segment 经营 todo",
+        "assistantDetail": "把当前卡片交给 AI 进一步细化成可执行的 today todo。"
+      }
+    },
+    "analysisTodos": {
+      "price-band-aov": {
+        "title": "复核高客单来源",
+        "detail": "进入收入页确认高客单是不是来自少数样本订单或特定商品组合。",
+        "action": "看收入 / 客单价"
+      },
+      "price-band-profit": {
+        "title": "联动利润看价格带质量",
+        "detail": "把客单价和利润页一起看，确认价格带提升是否真的留下利润。",
+        "action": "看利润页"
+      },
+      "unit-profit-report": {
+        "title": "进入利润页排查吞利润对象",
+        "detail": "先看利润页，确认今天最需要先处理的是哪类商品或订单。",
+        "action": "看利润页"
+      },
+      "unit-profit-margin": {
+        "title": "复核利润率变化",
+        "detail": "进入利润率视角确认利润变薄是价格、折扣还是退款导致。",
+        "action": "看利润率"
+      },
+      "inventory-health": {
+        "title": "进入库存健康页",
+        "detail": "先确认断货、慢销和库存积压集中在哪些商品对象上。",
+        "action": "看库存健康"
+      },
+      "inventory-task-center": {
+        "title": "查看库存风险任务",
+        "detail": "去任务中心只看库存风险相关的经营任务，方便直接开始处理。",
+        "action": "看库存任务"
+      },
+      "ads-roi-report": {
+        "title": "进入 ROI 渠道页",
+        "detail": "先看哪些渠道还能继续投，哪些渠道已经进入低效投入。",
+        "action": "看 ROI 渠道页"
+      },
+      "ads-insights": {
+        "title": "进入广告表现页",
+        "detail": "继续下钻到广告表现页，定位具体平台或 campaign。",
+        "action": "看广告表现"
+      },
+      "orders-report": {
+        "title": "进入订单页",
+        "detail": "先确认订单规模增长来自哪些对象和结构。",
+        "action": "看订单页"
+      },
+      "aov-report": {
+        "title": "进入客单价页",
+        "detail": "继续看客单价结构，确认高客单来源是否健康。",
+        "action": "看客单价页"
+      },
+      "after-sales-profit": {
+        "title": "进入利润页看损耗",
+        "detail": "联动利润页确认退款和损耗正在吞掉哪些利润样本。",
+        "action": "看利润损耗"
+      },
+      "after-sales-refund-health": {
+        "title": "进入退款健康页",
+        "detail": "继续看退款健康明细，确认异常集中在哪些对象上。",
+        "action": "看退款健康"
+      },
+      "after-sales-task-center": {
+        "title": "查看退款和售后任务",
+        "detail": "去任务中心只看退款异常和售后超时相关任务。",
+        "action": "看售后任务"
+      },
+      "fulfillment-health": {
+        "title": "进入履约健康页",
+        "detail": "继续查看履约异常对象和延迟风险。",
+        "action": "看履约健康"
+      },
+      "fulfillment-task-center": {
+        "title": "查看履约任务",
+        "detail": "去任务中心只看履约超时相关任务，便于直接跟进。",
+        "action": "看履约任务"
+      },
+      "customer-value-roi": {
+        "title": "进入 ROI 价值层",
+        "detail": "先从价值层看动态 LTV 和高价值客户结构。",
+        "action": "看 ROI 价值层"
+      },
+      "customer-value-roi-segment": {
+        "title": "进入 ROI 价值层继续看 segment",
+        "detail": "继续查看价值层里的客户结构和长期质量。",
+        "action": "看 ROI 价值层"
+      }
+    },
+    "decision": {
+      "revenue": {
+        "title": "增长质量分析",
+        "subtitle": "当前查看范围：{{country}}。先区分真增长和假增长，再继续看哪些商品和订单值得跟。",
+        "accent": "{{country}} / 近 7 天",
+        "primaryQuestion": "最近的收入增长到底是不是健康增长，哪些商品和订单在支撑或拖累结果？",
+        "orders": {
+          "title": "订单规模分析",
+          "subtitle": "当前查看范围：{{country}}。这里重点判断订单规模背后，哪些订单结构值得继续复制。",
+          "accent": "焦点：订单数",
+          "primaryQuestion": "最近订单数的变化，是由健康订单在支撑，还是由低质量成交在堆规模？"
+        },
+        "aov": {
+          "title": "客单质量分析",
+          "subtitle": "当前查看范围：{{country}}。这里重点判断高客单是不是健康样本，而不是一次性的虚高订单。",
+          "accent": "焦点：客单价",
+          "primaryQuestion": "最近客单价的变化，到底来自更健康的商品组合，还是来自少量不可复制的订单样本？"
+        },
+        "fallback": {
+          "title": "收入分析",
+          "subtitle": "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
+          "accent": "默认分析文案",
+          "primaryQuestion": "当前哪些对象在支撑结果，哪些对象正在拖累经营判断？"
+        }
+      },
+      "profit": {
+        "title": "利润分析",
+        "subtitle": "当前查看范围：{{country}}。利润页要回答的是卖出去的钱最后留下多少。",
+        "accent": "{{country}} / 近 7 天",
+        "primaryQuestion": "最近的利润到底由哪些商品和订单留下来，哪些对象正在吞掉经营改善？",
+        "cost": {
+          "title": "成本分析",
+          "subtitle": "当前查看范围：{{country}}。这里重点看成本有没有跑到收入前面，以及成本主要压在哪些对象上。",
+          "accent": "焦点：成本",
+          "primaryQuestion": "最近的成本压力主要来自哪里，哪些商品和订单正在把成本带到危险位置？"
+        },
+        "margin": {
+          "title": "利润率分析",
+          "subtitle": "当前查看范围：{{country}}。这里重点看利润率为什么变化，以及哪些对象正在拖低整体质量。",
+          "accent": "焦点：利润率",
+          "primaryQuestion": "最近利润率为什么变化，哪些商品和订单正在把整体经营质量往下拉？"
+        },
+        "fallback": {
+          "title": "利润分析",
+          "subtitle": "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
+          "accent": "默认分析文案",
+          "primaryQuestion": "当前哪些对象在支撑结果，哪些对象正在拖累经营判断？"
+        }
+      },
+      "roi": {
+        "title": "回报效率分析",
+        "subtitle": "当前查看范围：{{country}}。这里先看哪些渠道值得继续投，以及哪些损耗正在吞掉回报。",
+        "accent": "{{country}} / 近 7 天 vs 前 30 天",
+        "primaryQuestion": "最近的回报效率是被哪些渠道支撑住的，哪些损耗对象已经需要先止损？",
+        "channels": {
+          "title": "渠道回报分析",
+          "subtitle": "当前查看范围：{{country}}。这里重点判断哪些渠道值得继续投，哪些渠道只是把收入做出来却留不住利润。",
+          "accent": "焦点：渠道",
+          "primaryQuestion": "最近的经营回报主要由哪些渠道支撑，哪些渠道已经进入低质量投入？"
+        },
+        "loss": {
+          "title": "回报损耗分析",
+          "subtitle": "当前查看范围：{{country}}。这里重点看折扣、退款和高损耗订单如何继续吞掉经营回报。",
+          "accent": "焦点：损耗",
+          "primaryQuestion": "最近的 ROI 被哪些损耗对象拖弱，问题更多发生在成交前还是成交后？"
+        },
+        "fallback": {
+          "title": "回报效率分析",
+          "subtitle": "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
+          "accent": "默认分析文案",
+          "primaryQuestion": "当前哪些经营动作值得继续投，哪些动作应该先止损？"
+        }
+      },
+      "traffic": {
+        "title": "流量分析",
+        "subtitle": "当前查看范围：{{country}}。这里重点判断哪些来源真的带来了有效承接，哪些来源只是把会话堆上去。",
+        "accent": "焦点：来源与承接",
+        "primaryQuestion": "最近进来的流量，是真的在形成有效承接，还是只是在堆会话？",
+        "fallback": {
+          "title": "流量分析",
+          "subtitle": "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
+          "accent": "默认分析文案",
+          "primaryQuestion": "当前哪些来源在带来有效承接，哪些来源只是在堆会话？"
+        }
+      },
+      "conversion": {
+        "title": "转化分析",
+        "subtitle": "当前查看范围：{{country}}。这里重点判断转化问题卡在加购、结账，还是成交后的结果质量。",
+        "accent": "焦点：漏斗与成交后风险",
+        "primaryQuestion": "最近的转化承接，究竟卡在加购、到达结账，还是完成结账之后？",
+        "fallback": {
+          "title": "转化分析",
+          "subtitle": "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
+          "accent": "默认分析文案",
+          "primaryQuestion": "当前转化问题主要卡在漏斗哪里，哪些来源需要先排查？"
+        }
+      }
+    },
+    "groups": {
+      "top_profitable_products": {
+        "title": "Top 赚钱商品",
+        "summary": "这组商品既带收入，也能留下利润，更适合继续承接健康流量。"
+      },
+      "low_quality_growth_products": {
+        "title": "Top 低质量增长商品",
+        "summary": "这组商品表面上在制造增长，但利润质量偏弱，最容易把规模增长伪装成经营改善。"
+      },
+      "high_value_orders": {
+        "title": "Top 高价值订单",
+        "summary": "这些订单更适合解释收入质量，值得继续追溯来源与商品组合。"
+      },
+      "high_refund_orders": {
+        "title": "Top 高退款损耗订单",
+        "summary": "这组订单说明成交并不等于留下利润，应该优先排查退款原因与来源质量。"
+      },
+      "top_profit_products": {
+        "title": "Top 高利润商品",
+        "summary": "这些商品正在留下最明确的经营结果，更适合作为继续放量的主对象。"
+      },
+      "loss_products": {
+        "title": "Top 亏损商品",
+        "summary": "这些商品已经开始吞利润，不应该继续被规模增长掩盖。"
+      },
+      "healthy_orders": {
+        "title": "Top 健康订单",
+        "summary": "健康订单最能解释哪些成交模式真正值得继续复制。"
+      },
+      "abnormal_loss_orders": {
+        "title": "Top 异常损耗订单",
+        "summary": "这些订单说明成交并不等于留下利润，优先排查损耗原因。"
+      },
+      "high_traffic_sources": {
+        "title": "Top 高流量来源",
+        "summary": "这些来源当前带来了主要会话，适合作为继续复核入口质量的主样本。"
+      },
+      "low_quality_sources": {
+        "title": "Top 高流量低质量来源",
+        "summary": "这些来源会话不低，但承接明显偏弱，优先级应该放在先修入口与承接。"
+      },
+      "healthy_landing_pages": {
+        "title": "Top 承接较稳页面",
+        "summary": "这些页面当前接住了更多订单，适合作为继续校验页面承接的主样本。"
+      },
+      "weak_landing_pages": {
+        "title": "Top 承接偏弱页面",
+        "summary": "这些页面已经承接出订单，但订单质量偏弱，继续引流前应该先修页面承接。"
+      },
+      "stable_conversion_pages": {
+        "title": "Top 承接较稳页面",
+        "summary": "这些页面最近在末端承接相对稳定，更适合作为当前可复制的页面样本。"
+      },
+      "payment_risk_pages": {
+        "title": "Top 支付风险页面",
+        "summary": "这些页面已经暴露出明显支付风险，优先级应该先查页面承接和结账末端问题。"
+      },
+      "payment_failed_orders": {
+        "title": "Top 支付失败订单",
+        "summary": "这些订单已经进入支付失败代理口径，优先级应该放在先排查支付和结账链路。"
+      },
+      "healthy_channels": {
+        "title": "Top 健康渠道",
+        "summary": "这些渠道当前仍然在留下利润，更适合作为继续承接健康对象的主方向。"
+      },
+      "weak_channels": {
+        "title": "Top 低效渠道",
+        "summary": "这些渠道更像低质量投入，不应该只因为有收入就继续放量。"
+      },
+      "refund_loss_orders": {
+        "title": "Top 高损耗订单",
+        "summary": "这些订单解释了为什么 ROI 会在成交后继续变差。"
+      },
+      "refund_loss_orders_related": {
+        "title": "关联高损耗订单",
+        "summary": "渠道判断最好和损耗订单一起看，避免把售后损耗错判成单纯的投放问题。"
+      },
+      "healthy_channels_contrast": {
+        "title": "对照健康渠道",
+        "summary": "保留一组健康渠道做对照，帮助判断当前损耗是局部问题还是整体问题。"
+      }
+    },
+    "breakdowns": {
+      "revenue-by-product": {
+        "title": "收入拆到商品",
+        "summary": "先确认钱主要从哪些商品来，再判断这些商品是在带来健康增长，还是只是在放大规模。"
+      },
+      "revenue-by-order": {
+        "title": "收入拆到订单",
+        "summary": "订单更适合回答收入质量问题，帮助确认哪些成交值得复制，哪些成交后也留不住价值。"
+      },
+      "orders-by-product": {
+        "title": "订单变化对应的商品结构",
+        "summary": "订单规模本身不够，仍然要追到商品层，确认增长是不是被低质量商品带偏了。"
+      },
+      "aov-by-order": {
+        "title": "客单价拆到订单",
+        "summary": "客单价最适合先看订单对象，区分高价值样本和高损耗样本是不是同一类订单。"
+      },
+      "aov-by-product": {
+        "title": "客单价对应的商品结构",
+        "summary": "订单端看到高客单之后，还要继续确认是不是由健康商品组合在支撑。"
+      },
+      "profit-by-product": {
+        "title": "利润拆到商品",
+        "summary": "利润页最适合先看商品对象，快速识别哪些商品真的在留下经营结果。"
+      },
+      "profit-by-order": {
+        "title": "利润拆到订单",
+        "summary": "订单对象更适合解释利润为什么留下来，或者为什么成交后还是留不住。"
+      },
+      "cost-by-product": {
+        "title": "成本拆到商品",
+        "summary": "成本页优先看亏损商品和低利润商品，确认是哪个对象把成本带到收入前面。"
+      },
+      "cost-by-order": {
+        "title": "成本拆到订单",
+        "summary": "订单端更适合识别哪些成交之后仍在继续吞利润，尤其是退款损耗订单。"
+      },
+      "margin-by-product": {
+        "title": "利润率拆到商品",
+        "summary": "先从商品层识别哪些商品表面有收入，但质量已经开始把整体利润率往下拖。"
+      },
+      "margin-by-order": {
+        "title": "利润率拆到订单",
+        "summary": "订单端更适合判断低利润率是不是被退款损耗或异常成交结构拖出来的。"
+      },
+      "roi-by-channel": {
+        "title": "ROI 拆到渠道",
+        "summary": "先确认哪些渠道真的在留下利润，哪些渠道虽然有收入，但回报质量已经变弱。"
+      },
+      "roi-by-loss": {
+        "title": "ROI 拆到损耗对象",
+        "summary": "ROI 下降不一定只发生在投放前段，成交后的退款和损耗也会继续吞掉结果。"
+      },
+      "traffic-by-source": {
+        "title": "流量拆到来源",
+        "summary": "先确认会话主要来自哪里，再判断这些来源有没有把流量带成有效承接。"
+      },
+      "traffic-by-acceptance": {
+        "title": "流量承接信号",
+        "summary": "当页深和加购触达开始走弱时，就不能再把会话增长直接当成健康增长。"
+      },
+      "conversion-by-step": {
+        "title": "转化拆到漏斗节点",
+        "summary": "先看掉点更多发生在加购前、结账前，还是完成结账前。"
+      },
+      "conversion-after-checkout": {
+        "title": "成交后风险补充",
+        "summary": "支付失败订单已经接入代理口径，优先用异常订单补看支付末端的真实后果。"
+      }
     }
   },
   "studioWorkbench": {

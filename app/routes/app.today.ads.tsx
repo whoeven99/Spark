@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
+import { localizeAnalysisPage } from "../lib/todayCopy";
 import { authenticate } from "../shopify.server";
 import { loadTodayOverviewReportData } from "../server/operations/todayGeo.server";
 import type { ValueLayerResponse } from "./api.today-value-layer";
@@ -21,6 +22,7 @@ export default function TodayAdsAnalysisPage() {
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const lastValuePathRef = useRef<string | null>(null);
   const page = data.analysisPages.find((item) => item.key === "ads");
+  const localizedPage = page ? localizeAnalysisPage(page, t) : null;
 
   const valuePath = useMemo(() => {
     const params = new URLSearchParams();
@@ -147,7 +149,7 @@ export default function TodayAdsAnalysisPage() {
             ],
           };
         })
-      : page?.cards.map((card) => ({
+      : localizedPage?.cards.map((card) => ({
           ...card,
           todos: card.todos.map((todo) => ({
             ...todo,
@@ -157,8 +159,8 @@ export default function TodayAdsAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? t("today.topics.adsTitle")}
-      subtitle={page?.subtitle ?? t("today.topics.adsSubtitle")}
+      title={localizedPage?.title ?? t("today.topics.adsTitle")}
+      subtitle={localizedPage?.subtitle ?? t("today.topics.adsSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
@@ -166,8 +168,8 @@ export default function TodayAdsAnalysisPage() {
       notes={data.filters.dataNotes}
       lead={{
         title: t("today.analysis.currentFocus"),
-        summary: page?.summary ?? t("today.topics.adsSummary"),
-        points: page?.principles,
+        summary: localizedPage?.summary ?? t("today.topics.adsSummary"),
+        points: localizedPage?.principles,
       }}
       cards={cards}
     />

@@ -749,6 +749,9 @@ function buildTodayHeader(orderScope: OrderScopeData): TodayHeader {
         : "新增订单仍在支撑规模，只要控制低质量对象，仍有继续放大的空间。",
     dataFreshness: "近 7 天订单与退款快照",
     dataConfidence: "medium",
+    copySource: "live",
+    bottleneckKey: refundShare > 0.08 ? "refund" : discountShare > 0.15 ? "discount" : "profitLag",
+    opportunityKey: firstOrderShare < 0.45 ? "repeat" : "newOrders",
     metrics: {
       revenue: formatCurrency(orderScope.sevenDayTotals.revenue, orderScope.currency),
       estimatedProfit: formatCurrency(estimatedProfitValue, orderScope.currency),
@@ -889,6 +892,7 @@ function buildTodayReasonCards(orderScope: OrderScopeData, sessionScope: Session
           : "增长已经变弱，下一步先到增长质量页看是哪些商品和订单在拖累结果。",
       tone: revenueDelta >= 0 ? "blue" : "orange",
       href: "/app/today/revenue",
+      variant: revenueDelta >= 0 ? "up" : "down",
     },
     {
       key: "profit-erosion",
@@ -902,6 +906,7 @@ function buildTodayReasonCards(orderScope: OrderScopeData, sessionScope: Session
           : "当前先别把折扣带来的规模增长误判成真实经营改善。",
       tone: refundShare > 0.08 || discountShare > 0.15 ? "red" : "orange",
       href: "/app/today/profit",
+      variant: refundShare >= discountShare ? "refund" : "discount",
     },
     {
       key: "efficiency-shift",
@@ -918,6 +923,7 @@ function buildTodayReasonCards(orderScope: OrderScopeData, sessionScope: Session
           : "回报效率已经走弱，下一步应该直接去看低效渠道和高损耗订单。",
       tone: (shortTermReturn ?? 0) >= 1.5 ? "green" : "red",
       href: "/app/today/roi",
+      variant: (shortTermReturn ?? 0) >= 1.5 ? "healthy" : "weak",
     },
   ];
 }
@@ -937,6 +943,7 @@ function buildTodayRoiSummary(orderScope: OrderScopeData): TodayRoiSummary {
         dataQuality: "estimated",
         confidence: "medium",
         href: "/app/today/roi",
+        statusKey: (shortTermReturn ?? 0) >= 1.5 ? "strong" : (shortTermReturn ?? 0) >= 1 ? "stable" : "weak",
       },
     ],
   };
@@ -1269,6 +1276,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
       biggestOpportunity: "先从收入、利润和 ROI 三条主线收敛问题，再决定具体对象优先级。",
       dataFreshness: "默认分析文案",
       dataConfidence: "low",
+      copySource: "fallback",
       metrics: {
         revenue: "$7,510",
         estimatedProfit: "待恢复",
@@ -1348,6 +1356,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
         summary: "当前先沿用最近一版默认判断，主链路恢复后会替换为正式增长对象证据。",
         tone: "blue",
         href: "/app/today/revenue",
+        variant: "fallback",
       },
       {
         key: "profit-erosion",
@@ -1358,6 +1367,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
         summary: "现阶段先保留方向判断，后续恢复真实快照后会替换成正式利润对象证据。",
         tone: "orange",
         href: "/app/today/profit",
+        variant: "fallback",
       },
       {
         key: "efficiency-shift",
@@ -1368,6 +1378,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
         summary: "恢复正式数据后，应该继续拆到渠道和损耗对象，而不是继续停在总回报口径。",
         tone: "red",
         href: "/app/today/roi",
+        variant: "fallback",
       },
     ],
     roiSummary: {
@@ -1381,6 +1392,7 @@ function buildFallbackOverviewReport(): TodayOverviewReport {
           dataQuality: "pending",
           confidence: "low",
           href: "/app/today/roi",
+          statusKey: "default",
         },
       ],
     },
@@ -1442,6 +1454,7 @@ function buildFallbackDecisionReport(metric: TodayDecisionReportKey): TodayDecis
 
   return {
     key: metric,
+    copyKey: `${metric}.fallback`,
     title: metricTitle,
     subtitle: "当前主数据链路暂时不可用，先展示最近一版默认分析内容，避免报告页空白。",
     accent: "默认分析文案",
@@ -2610,6 +2623,7 @@ function buildTrafficReport(
 
   return {
     key: "traffic",
+    copyKey: "traffic",
     title: "流量分析",
     subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断哪些来源真的带来了有效承接，哪些来源只是把会话堆上去。`,
     accent: "焦点：来源与承接",
@@ -2876,6 +2890,7 @@ function buildConversionReport(
 
   return {
     key: "conversion",
+    copyKey: "conversion",
     title: "转化分析",
     subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断转化问题卡在加购、结账，还是成交后的结果质量。`,
     accent: "焦点：漏斗与成交后风险",
@@ -3096,6 +3111,7 @@ function buildRevenueReport(
 
   const report: TodayDecisionReport = {
     key: "revenue",
+    copyKey: "revenue",
     title: "增长质量分析",
     subtitle: `当前查看范围：${selectedCountryLabel}。先区分真增长和假增长，再继续看哪些商品和订单值得跟。`,
     accent: `${selectedCountryLabel} / 近 7 天`,
@@ -3214,6 +3230,7 @@ function buildRevenueReport(
   if (normalizedFocus === "orders") {
     return {
       ...report,
+      copyKey: "revenue.orders",
       title: "订单规模分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断订单规模背后，哪些订单结构值得继续复制。`,
       accent: "焦点：订单数",
@@ -3249,6 +3266,7 @@ function buildRevenueReport(
         report.breakdowns[1]!,
         {
           ...report.breakdowns[0]!,
+          copyKey: "orders-by-product",
           title: "订单变化对应的商品结构",
           summary: "订单规模本身不够，仍然要追到商品层，确认增长是不是被低质量商品带偏了。",
         },
@@ -3276,6 +3294,7 @@ function buildRevenueReport(
   if (normalizedFocus === "aov") {
     return {
       ...report,
+      copyKey: "revenue.aov",
       title: "客单质量分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断高客单是不是健康样本，而不是一次性的虚高订单。`,
       accent: "焦点：客单价",
@@ -3310,11 +3329,13 @@ function buildRevenueReport(
       breakdowns: [
         {
           ...report.breakdowns[1]!,
+          copyKey: "aov-by-order",
           title: "客单价拆到订单",
           summary: "客单价最适合先看订单对象，区分高价值样本和高损耗样本是不是同一类订单。",
         },
         {
           ...report.breakdowns[0]!,
+          copyKey: "aov-by-product",
           title: "客单价对应的商品结构",
           summary: "订单端看到高客单之后，还要继续确认是不是由健康商品组合在支撑。",
         },
@@ -3384,6 +3405,7 @@ function buildProfitReport(
 
   const report: TodayDecisionReport = {
     key: "profit",
+    copyKey: "profit",
     title: "利润分析",
     subtitle: `当前查看范围：${selectedCountryLabel}。利润页要回答的是卖出去的钱最后留下多少。`,
     accent: `${selectedCountryLabel} / 近 7 天`,
@@ -3525,6 +3547,7 @@ function buildProfitReport(
   if (normalizedFocus === "cost") {
     return {
       ...report,
+      copyKey: "profit.cost",
       title: "成本分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点看成本有没有跑到收入前面，以及成本主要压在哪些对象上。`,
       accent: "焦点：成本",
@@ -3559,6 +3582,7 @@ function buildProfitReport(
       breakdowns: [
         {
           ...report.breakdowns[0]!,
+          copyKey: "cost-by-product",
           title: "成本拆到商品",
           summary: "成本页优先看亏损商品和低利润商品，确认是哪个对象把成本带到收入前面。",
           rows: [
@@ -3585,6 +3609,7 @@ function buildProfitReport(
         },
         {
           ...report.breakdowns[1]!,
+          copyKey: "cost-by-order",
           title: "成本拆到订单",
           summary: "订单端更适合识别哪些成交之后仍在继续吞利润，尤其是退款损耗订单。",
           rows: [
@@ -3633,6 +3658,7 @@ function buildProfitReport(
   if (normalizedFocus === "margin") {
     return {
       ...report,
+      copyKey: "profit.margin",
       title: "利润率分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点看利润率为什么变化，以及哪些对象正在拖低整体质量。`,
       accent: "焦点：利润率",
@@ -3667,11 +3693,13 @@ function buildProfitReport(
       breakdowns: [
         {
           ...report.breakdowns[0]!,
+          copyKey: "margin-by-product",
           title: "利润率拆到商品",
           summary: "先从商品层识别哪些商品表面有收入，但质量已经开始把整体利润率往下拖。",
         },
         {
           ...report.breakdowns[1]!,
+          copyKey: "margin-by-order",
           title: "利润率拆到订单",
           summary: "订单端更适合判断低利润率是不是被退款损耗或异常成交结构拖出来的。",
         },
@@ -3772,6 +3800,7 @@ async function buildRoiDecisionReport(
 
   const report: TodayDecisionReport = {
     key: "roi",
+    copyKey: "roi",
     title: "回报效率分析",
     subtitle: `当前查看范围：${selectedCountryLabel}。这里先看哪些渠道值得继续投，以及哪些损耗正在吞掉回报。`,
     accent: `${selectedCountryLabel} / 近 7 天 vs 前 30 天`,
@@ -3960,6 +3989,7 @@ async function buildRoiDecisionReport(
   if (normalizedFocus === "channels") {
     return {
       ...report,
+      copyKey: "roi.channels",
       title: "渠道回报分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点判断哪些渠道值得继续投，哪些渠道只是把收入做出来却留不住利润。`,
       accent: "焦点：渠道",
@@ -3995,6 +4025,7 @@ async function buildRoiDecisionReport(
       supplementaryGroups: [
         {
           key: "refund_loss_orders",
+          copyKey: "refund_loss_orders_related",
           title: "关联高损耗订单",
           tone: "warning",
           summary: "渠道判断最好和损耗订单一起看，避免把售后损耗错判成单纯的投放问题。",
@@ -4024,6 +4055,7 @@ async function buildRoiDecisionReport(
   if (normalizedFocus === "loss") {
     return {
       ...report,
+      copyKey: "roi.loss",
       title: "回报损耗分析",
       subtitle: `当前查看范围：${selectedCountryLabel}。这里重点看折扣、退款和高损耗订单如何继续吞掉经营回报。`,
       accent: "焦点：损耗",
@@ -4063,6 +4095,7 @@ async function buildRoiDecisionReport(
       supplementaryGroups: [
         {
           key: "healthy_channels",
+          copyKey: "healthy_channels_contrast",
           title: "对照健康渠道",
           tone: "positive",
           summary: "保留一组健康渠道做对照，帮助判断当前损耗是局部问题还是整体问题。",

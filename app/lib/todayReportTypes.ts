@@ -21,6 +21,10 @@ export type TodayHeader = {
   biggestOpportunity: string;
   dataFreshness: string;
   dataConfidence: "high" | "medium" | "low";
+  /** live = 正常快照；fallback = 加载失败占位。前端按此选文案 key。 */
+  copySource?: "live" | "fallback";
+  bottleneckKey?: "refund" | "discount" | "profitLag";
+  opportunityKey?: "repeat" | "newOrders";
   metrics: {
     revenue: string;
     estimatedProfit: string;
@@ -49,6 +53,8 @@ export type TodayReasonCard = {
   summary: string;
   tone: "blue" | "green" | "orange" | "red";
   href?: string;
+  /** 同一张卡的分支文案，例如 growth-change 的 up/down。 */
+  variant?: string;
 };
 
 export type TodayRoiSummaryCard = {
@@ -60,6 +66,7 @@ export type TodayRoiSummaryCard = {
   dataQuality: TodayDataSource;
   confidence: "high" | "medium" | "low";
   href: string;
+  statusKey?: "strong" | "stable" | "weak" | "default";
 };
 
 export type TodayRoiSummary = {
@@ -211,6 +218,7 @@ export type TodayBreakdownBlock = {
   summary: string;
   rows: TodayBreakdownRow[];
   relatedGroupKeys: string[];
+  copyKey?: string;
 };
 
 export type TodayObjectReport = {
@@ -238,10 +246,14 @@ export type TodayEvidenceGroup = {
   tone: "positive" | "warning" | "negative" | "neutral";
   summary: string;
   items: TodayObjectCard[];
+  /** 同一 group.key 在不同 focus 下标题会变时使用。 */
+  copyKey?: string;
 };
 
 export type TodayDecisionReport = {
   key: TodayDecisionReportKey;
+  /** 焦点变体文案，如 revenue.orders。缺省用 key。 */
+  copyKey?: string;
   title: string;
   subtitle: string;
   accent: string;

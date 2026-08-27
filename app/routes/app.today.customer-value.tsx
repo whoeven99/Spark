@@ -7,6 +7,7 @@ import { buildTodayAnalysisTodoRefinePrompt } from "../lib/todayReportAi";
 import { buildManagedAiLaunchContextFromSpec } from "../lib/managedAiLaunchContext";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
+import { localizeAnalysisPage } from "../lib/todayCopy";
 import { authenticate } from "../shopify.server";
 import { loadTodayOverviewReportData } from "../server/operations/todayGeo.server";
 import type { ValueLayerResponse } from "./api.today-value-layer";
@@ -23,6 +24,7 @@ export default function TodayCustomerValueAnalysisPage() {
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const lastValuePathRef = useRef<string | null>(null);
   const page = data.analysisPages.find((item) => item.key === "customer_value");
+  const localizedPage = page ? localizeAnalysisPage(page, t) : null;
 
   const valuePath = useMemo(() => {
     const params = new URLSearchParams();
@@ -72,7 +74,7 @@ export default function TodayCustomerValueAnalysisPage() {
       })
     : t("today.customerValue.segmentPending");
   const cards =
-    page?.cards.map((card) => {
+    localizedPage?.cards.map((card) => {
       const base = {
         ...card,
         todos: card.todos.map((todo) => ({
@@ -201,8 +203,8 @@ export default function TodayCustomerValueAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? t("today.topics.customerValueTitle")}
-      subtitle={page?.subtitle ?? t("today.topics.customerValueSubtitle")}
+      title={localizedPage?.title ?? t("today.topics.customerValueTitle")}
+      subtitle={localizedPage?.subtitle ?? t("today.topics.customerValueSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
@@ -210,8 +212,8 @@ export default function TodayCustomerValueAnalysisPage() {
       notes={data.filters.dataNotes}
       lead={{
         title: t("today.analysis.currentFocus"),
-        summary: page?.summary ?? t("today.topics.customerValueSummary"),
-        points: page?.principles,
+        summary: localizedPage?.summary ?? t("today.topics.customerValueSummary"),
+        points: localizedPage?.principles,
       }}
       cards={cards}
     />

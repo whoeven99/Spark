@@ -48,6 +48,8 @@ export default function TodayProfitPage() {
       report={data.report}
       observationWindow={data.observationWindow}
       returnTo={returnTo}
+      selectedCountry={data.filters.selectedCountry}
+      countryLabel={data.filters.selectedCountryLabel}
       topSection={
         <TodayCountryFilterCard
           options={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}

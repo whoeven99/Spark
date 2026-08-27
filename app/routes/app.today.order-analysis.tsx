@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
+import { localizeAnalysisPage } from "../lib/todayCopy";
 import { authenticate } from "../shopify.server";
 import { loadTodayOverviewReportData } from "../server/operations/todayGeo.server";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
@@ -17,6 +18,7 @@ export default function TodayOrderAnalysisPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const page = data.analysisPages.find((item) => item.key === "orders");
+  const localizedPage = page ? localizeAnalysisPage(page, t) : null;
 
   const buildDetailPath = (path: string) => {
     const [pathname, rawSearch] = path.split("?");
@@ -40,7 +42,7 @@ export default function TodayOrderAnalysisPage() {
   };
 
   const cards =
-    page?.cards.map((card) => ({
+    localizedPage?.cards.map((card) => ({
       ...card,
       todos: card.todos.map((todo) => ({
         ...todo,
@@ -50,8 +52,8 @@ export default function TodayOrderAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? t("today.topics.ordersTitle")}
-      subtitle={page?.subtitle ?? t("today.topics.ordersSubtitle")}
+      title={localizedPage?.title ?? t("today.topics.ordersTitle")}
+      subtitle={localizedPage?.subtitle ?? t("today.topics.ordersSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
@@ -59,8 +61,8 @@ export default function TodayOrderAnalysisPage() {
       notes={data.filters.dataNotes}
       lead={{
         title: t("today.analysis.currentFocus"),
-        summary: page?.summary ?? t("today.topics.ordersSummary"),
-        points: page?.principles,
+        summary: localizedPage?.summary ?? t("today.topics.ordersSummary"),
+        points: localizedPage?.principles,
       }}
       cards={cards}
     />

@@ -4,6 +4,8 @@ import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFeatureView } from "../../lib/featureTrack";
 import type { ObservationWindowView } from "../../lib/observationWindow";
+import { localizeDecisionReport } from "../../lib/todayCopy";
+import { TODAY_ALL_COUNTRIES } from "../../lib/todayGeo.shared";
 import { buildTodayPageAiDrilldownContext } from "../../lib/todayReportAi";
 import type { TodayDecisionReport, TodayEvidenceGroup, TodayObjectCard } from "../../lib/todayReportTypes";
 import { buildWorkspaceChatPrefillPath } from "../../lib/workspaceChatPrefill";
@@ -95,13 +97,15 @@ function buildBreakdownChartGradient(chartRows: ReturnType<typeof buildBreakdown
 }
 
 export function TodayMetricReportPage({
-  report,
+  report: sourceReport,
   observationWindow,
   backLabel,
   fallbackPath = "/app/today",
   returnTo,
   topSection,
   extraSections,
+  selectedCountry,
+  countryLabel,
 }: {
   report: TodayDecisionReport;
   observationWindow?: ObservationWindowView;
@@ -110,6 +114,8 @@ export function TodayMetricReportPage({
   returnTo?: string;
   topSection?: ReactNode;
   extraSections?: ReactNode;
+  selectedCountry?: string;
+  countryLabel?: string;
 }) {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -118,7 +124,15 @@ export function TodayMetricReportPage({
   const [activeObject, setActiveObject] = useState<TodayObjectCard | null>(null);
   const [activeGroup, setActiveGroup] = useState<TodayEvidenceGroup | null>(null);
   useFeatureView("today");
-  const aiContext = useMemo(() => buildTodayPageAiDrilldownContext(report), [report]);
+  const resolvedCountry =
+    selectedCountry === TODAY_ALL_COUNTRIES
+      ? t("today.filters.allCountries")
+      : countryLabel;
+  const report = useMemo(
+    () => localizeDecisionReport(sourceReport, t, resolvedCountry),
+    [countryLabel, resolvedCountry, selectedCountry, sourceReport, t],
+  );
+  const aiContext = useMemo(() => buildTodayPageAiDrilldownContext(sourceReport), [sourceReport]);
   const aiChatPath = useMemo(
     () =>
       buildWorkspaceChatPrefillPath({
