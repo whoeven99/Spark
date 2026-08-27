@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import {
   resolveRoiFocus,
@@ -54,6 +55,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function TodayRoiPage() {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
@@ -153,9 +155,9 @@ export default function TodayRoiPage() {
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
           focusOptions={[
-            { key: "overview", label: "总览" },
-            { key: "channels", label: "渠道" },
-            { key: "loss", label: "损耗" },
+            { key: "overview", label: t("today.focus.overview") },
+            { key: "channels", label: t("today.focus.channels") },
+            { key: "loss", label: t("today.focus.loss") },
           ]}
           activeFocus={focus}
           onFocusChange={handleFocusChange}

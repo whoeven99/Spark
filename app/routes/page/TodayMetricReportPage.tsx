@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFeatureView } from "../../lib/featureTrack";
@@ -96,7 +97,7 @@ function buildBreakdownChartGradient(chartRows: ReturnType<typeof buildBreakdown
 export function TodayMetricReportPage({
   report,
   observationWindow,
-  backLabel = "返回经营",
+  backLabel,
   fallbackPath = "/app/today",
   returnTo,
   topSection,
@@ -110,6 +111,7 @@ export function TodayMetricReportPage({
   topSection?: ReactNode;
   extraSections?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const navigate = useEmbeddedNavigate();
   const windowLabel = useObservationWindowLabel(observationWindow);
@@ -148,7 +150,7 @@ export function TodayMetricReportPage({
           title={report.title}
           subtitle={report.subtitle}
           titleBarTitle={report.title}
-          backLabel={backLabel}
+          backLabel={backLabel ?? t("today.backToToday")}
           fallbackPath={fallbackPath}
           returnTo={returnTo}
         />
@@ -189,7 +191,7 @@ export function TodayMetricReportPage({
 
             {report.conclusionPoints && report.conclusionPoints.length > 0 ? (
               <div style={conclusionPanelStyle}>
-                <strong style={conclusionTitleStyle}>补充判断</strong>
+                <strong style={conclusionTitleStyle}>{t("today.report.extraJudgment")}</strong>
                 <ul style={conclusionListStyle}>
                   {report.conclusionPoints.map((item) => (
                     <li key={item} style={conclusionListItemStyle}>
@@ -202,7 +204,7 @@ export function TodayMetricReportPage({
           </section>
         </PageSurface>
 
-        <PageSurface title="摘要指标">
+        <PageSurface title={t("today.report.summaryMetrics")}>
           <div style={summaryMetricGridStyle}>
             {report.summaryMetrics.map((metric) => (
               <div key={metric.label} style={summaryMetricTileStyle}>
@@ -213,7 +215,7 @@ export function TodayMetricReportPage({
           </div>
         </PageSurface>
 
-        <PageSurface title="指标拆解与对象证据">
+        <PageSurface title={t("today.report.breakdownTitle")}>
           <div style={breakdownStackStyle}>
             {report.breakdowns.map((block) => {
               const relatedGroups = block.relatedGroupKeys
@@ -246,7 +248,9 @@ export function TodayMetricReportPage({
                           >
                             <div style={breakdownDonutInnerStyle}>
                               <strong style={breakdownDonutValueStyle}>{block.rows.length}</strong>
-                              <span style={breakdownDonutLabelStyle}>{hasRealChart ? "真实占比" : "结构图"}</span>
+                              <span style={breakdownDonutLabelStyle}>
+                                {hasRealChart ? t("today.report.chartShare") : t("today.report.chartStructure")}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -292,8 +296,8 @@ export function TodayMetricReportPage({
                   {relatedGroups.length > 0 ? (
                     <div style={topEntrySectionStyle}>
                       <div style={topEntryHeaderStyle}>
-                        <strong style={topEntryTitleStyle}>Top 数据入口</strong>
-                        <span style={topEntryMetaStyle}>按对象组继续往下钻</span>
+                        <strong style={topEntryTitleStyle}>{t("today.report.topEntryTitle")}</strong>
+                        <span style={topEntryMetaStyle}>{t("today.report.topEntryMeta")}</span>
                       </div>
                       <div style={topEntryGridStyle(isMobile)}>
                         {relatedGroups.map((group) => (
@@ -307,7 +311,7 @@ export function TodayMetricReportPage({
                               <span style={{ ...groupToneBadgeStyle, ...resolveGroupToneStyle(group.tone) }}>
                                 {group.title}
                               </span>
-                              <span style={objectActionHintStyle}>查看 Top 数据</span>
+                              <span style={objectActionHintStyle}>{t("today.report.viewTopData")}</span>
                             </div>
                             <p style={summaryTextStyle}>{group.summary}</p>
                             <div style={topEntryPreviewWrapStyle}>
@@ -317,7 +321,9 @@ export function TodayMetricReportPage({
                                 </span>
                               ))}
                             </div>
-                            <span style={topEntryFootnoteStyle}>{group.items.length} 个对象</span>
+                            <span style={topEntryFootnoteStyle}>
+                              {t("today.report.objectCount", { count: group.items.length })}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -330,7 +336,7 @@ export function TodayMetricReportPage({
         </PageSurface>
 
         {report.supplementaryGroups && report.supplementaryGroups.length > 0 ? (
-          <PageSurface title="补充对象组">
+          <PageSurface title={t("today.report.supplementaryGroups")}>
             <div style={evidenceGroupStackStyle}>
               {report.supplementaryGroups.map((group) => (
                 <section key={group.key} style={groupSectionStyle}>
@@ -342,7 +348,7 @@ export function TodayMetricReportPage({
                       <p style={summaryTextStyle}>{group.summary}</p>
                     </div>
                     <button type="button" style={groupLinkButtonStyle} onClick={() => setActiveGroup(group)}>
-                      查看全部
+                      {t("today.report.viewAll")}
                     </button>
                   </div>
                   <div style={objectCardListStyle}>
@@ -355,7 +361,7 @@ export function TodayMetricReportPage({
                       >
                         <div style={objectCardHeaderStyle}>
                           <strong style={objectTitleStyle}>{item.title}</strong>
-                          <span style={objectActionHintStyle}>查看详情</span>
+                          <span style={objectActionHintStyle}>{t("today.report.viewDetail")}</span>
                         </div>
                         <div style={objectMetricGridStyle}>
                           {item.metrics.map((metric) => (
@@ -375,11 +381,11 @@ export function TodayMetricReportPage({
           </PageSurface>
         ) : null}
 
-        <PageSurface title="和 AI 聊聊">
+        <PageSurface title={t("today.report.askAiTitle")}>
           <div style={reportActionPanelStyle}>
-            <p style={summaryTextStyle}>AI 会自动带上这份报告里的判断、指标和拆解，继续帮你判断今天先动什么。</p>
+            <p style={summaryTextStyle}>{t("today.report.askAiBody")}</p>
             <button type="button" style={primaryButtonStyle} onClick={() => navigate(aiChatPath)}>
-              和 AI 聊聊
+              {t("today.report.askAiCta")}
             </button>
           </div>
         </PageSurface>

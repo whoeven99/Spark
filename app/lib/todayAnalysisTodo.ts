@@ -59,17 +59,8 @@ export function getTodayAnalysisTodoActionTone(actionType: TodayAnalysisTodo["ac
   }
 }
 
-export function getTodayAnalysisTodoActionLabel(actionType: TodayAnalysisTodo["actionType"]): string {
-  switch (actionType) {
-    case "open_report":
-      return "报告";
-    case "open_health_monitor":
-      return "健康度";
-    case "open_ads_insights":
-      return "广告";
-    case "open_task_center":
-      return "任务";
-    case "open_assistant":
-      return "AI";
-  }
+export function getTodayAnalysisTodoActionLabelKey(
+  actionType: TodayAnalysisTodo["actionType"],
+): `today.todoAction.${TodayAnalysisTodo["actionType"]}` {
+  return `today.todoAction.${actionType}`;
 }

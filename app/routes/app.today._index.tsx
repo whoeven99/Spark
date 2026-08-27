@@ -22,6 +22,7 @@ import { DestinationPage } from "./component/shared/DestinationPage";
 import { MetricHintLabel } from "./component/shared/MetricHintLabel";
 import { useObservationWindowLabel } from "./component/shared/useObservationWindowLabel";
 import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard";
+import type { TranslateFn } from "../lib/i18nText";
 
 function SurfaceButton({
   label,
@@ -96,8 +97,8 @@ export default function TodayOverview() {
   const lastValuePathRef = useRef<string | null>(null);
   useFeatureView("today");
   const reportConclusionItems = [
-    { label: "主要瓶颈", detail: report.header.primaryBottleneck },
-    { label: "最大机会", detail: report.header.biggestOpportunity },
+    { label: t("today.home.primaryBottleneck"), detail: report.header.primaryBottleneck },
+    { label: t("today.home.biggestOpportunity"), detail: report.header.biggestOpportunity },
     ...report.reasonCards.slice(0, 3).map((card) => ({
       label: card.label,
       detail: card.summary,
@@ -111,7 +112,7 @@ export default function TodayOverview() {
       delta: card.delta,
       tone: card.tone,
       href: card.href,
-      hint: getTodayMetricCardExplanation(card.key),
+      hint: getTodayMetricCardExplanation(card.key, t),
     })),
     ...report.roiSummary.cards.map((card) => ({
       key: card.key,
@@ -120,7 +121,7 @@ export default function TodayOverview() {
       delta: card.summary,
       tone: "warning" as const,
       href: card.href,
-      hint: getTodayRoiSummaryExplanation(card.key),
+      hint: getTodayRoiSummaryExplanation(card.key, t),
     })),
   ];
   const valuePath = useMemo(() => {
@@ -135,11 +136,14 @@ export default function TodayOverview() {
   const customerLtvValue = valueLayer
     ? formatCurrencyValue(valueLayer.customers.averageDynamicLtv, valueLayer.channels.currency)
     : valueFetcher.state !== "idle"
-      ? "加载中"
-      : "待补";
+      ? t("today.home.loading")
+      : t("today.home.pending");
   const analysisCards = data.analysisOverviewCards.map((card) => ({
     ...card,
-    metricValue: card.key === "customer_value" && customerLtvValue !== "待补" ? customerLtvValue : card.metricValue,
+    metricValue:
+      card.key === "customer_value" && customerLtvValue !== t("today.home.pending")
+        ? customerLtvValue
+        : card.metricValue,
   }));
 
   useEffect(() => {
@@ -173,7 +177,7 @@ export default function TodayOverview() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title={t("todayDashboard.title")}
-        subtitle="Today 先回答赚没赚钱、为什么会这样、下一步先看哪个对象。"
+        subtitle={t("today.home.subtitle")}
         titleBarTitle={t("nav.today")}
         backLabel={t("todayDashboard.back")}
         fallbackPath="/app"
@@ -188,17 +192,17 @@ export default function TodayOverview() {
         />
 
         <PageSurface
-          title="经营报告"
+          title={t("today.home.reportTitle")}
           subtitle={
             windowLabel
-              ? `${windowLabel}。首页先给出经营主结论；具体数据判断继续进入下一级报告和对象页展开。`
-              : "首页先给出经营主结论；具体数据判断继续进入下一级报告和对象页展开。"
+              ? t("today.home.reportSubtitleWithWindow", { window: windowLabel })
+              : t("today.home.reportSubtitle")
           }
         >
           <div style={reportOverviewGridStyle(isMobile)}>
             <div style={headerMainCardStyle}>
               <span style={{ ...statusBadgeStyle, ...badgeStyle(report.header.status) }}>{report.header.statusLabel}</span>
-              <div style={headerTitleStyle}>当前经营主结论</div>
+              <div style={headerTitleStyle}>{t("today.home.headerTitle")}</div>
               <div style={headerLeadSummaryStyle}>{report.header.summary}</div>
             </div>
 
@@ -212,12 +216,16 @@ export default function TodayOverview() {
             </div>
           </div>
           <div style={headerMetaRowStyle}>
-            <span style={pageHintTextStyle}>数据新鲜度：{report.header.dataFreshness}</span>
-            <span style={pageHintTextStyle}>数据置信度：{report.header.dataConfidence}</span>
+            <span style={pageHintTextStyle}>
+              {t("today.home.dataFreshness", { value: report.header.dataFreshness })}
+            </span>
+            <span style={pageHintTextStyle}>
+              {t("today.home.dataConfidence", { value: report.header.dataConfidence })}
+            </span>
           </div>
         </PageSurface>
 
-        <PageSurface title="核心经营指标" subtitle="首页先保留核心经营卡，并直接进入对应的 B 报告。">
+        <PageSurface title={t("today.home.metricsTitle")} subtitle={t("today.home.metricsSubtitle")}>
           <div style={coreMetricListStyle}>
             {coreMetricItems.map((item) => (
               <div key={item.key} style={coreMetricRowStyle(isMobile)}>
@@ -232,14 +240,14 @@ export default function TodayOverview() {
                   <div style={coreMetricDeltaStyle(item.tone)}>{item.delta}</div>
                 </div>
                 <div style={coreMetricActionStyle(isMobile)}>
-                  <SurfaceButton label="进入分析" onClick={() => navigate(buildDetailPath(item.href))} />
+                  <SurfaceButton label={t("today.home.openAnalysis")} onClick={() => navigate(buildDetailPath(item.href))} />
                 </div>
               </div>
             ))}
           </div>
         </PageSurface>
 
-        <PageSurface title="分项报告" subtitle="不同数据方向的结论继续在下一级报告里展开，这里只保留当前焦点和入口。">
+        <PageSurface title={t("today.home.reasonTitle")} subtitle={t("today.home.reasonSubtitle")}>
           <div style={cardGridStyle(isMobile, 3)}>
             {report.reasonCards.map((card) => (
               <div key={card.key} style={reasonCardStyle}>
@@ -247,7 +255,7 @@ export default function TodayOverview() {
                   as="span"
                   style={{ ...reasonLabelStyle, ...reasonToneStyle(card.tone) }}
                   text={card.label}
-                  content={getTodayReasonCardExplanation(card.key)}
+                  content={getTodayReasonCardExplanation(card.key, t)}
                 />
                 <strong style={reasonTitleStyle}>{card.title}</strong>
                 <div style={reasonValueStyle}>{card.value}</div>
@@ -255,7 +263,7 @@ export default function TodayOverview() {
                 <p style={summaryTextStyle}>{card.summary}</p>
                 {card.href ? (
                   <div style={cardActionRowStyle(isMobile)}>
-                    <SurfaceButton label="进入报告" onClick={() => navigate(buildDetailPath(card.href!))} />
+                    <SurfaceButton label={t("today.home.openReport")} onClick={() => navigate(buildDetailPath(card.href!))} />
                   </div>
                 ) : null}
               </div>
@@ -263,22 +271,22 @@ export default function TodayOverview() {
           </div>
         </PageSurface>
 
-        <PageSurface title="专题分析" subtitle="这组卡片强调的是指标 + 分析结论，用来继续下钻到更完整的详情报告，不和健康度卡片混用。">
+        <PageSurface title={t("today.home.analysisTitle")} subtitle={t("today.home.analysisSubtitle")}>
           <div style={analysisCardGridStyle(isMobile)}>
             {analysisCards.map((card) => (
               <div key={card.key} style={analysisCardStyle}>
                 <div style={analysisCardHeaderStyle}>
                   <strong style={analysisCardTitleStyle}>{card.title}</strong>
                 </div>
-                <div style={analysisQuestionLabelStyle}>问题</div>
+                <div style={analysisQuestionLabelStyle}>{t("today.home.question")}</div>
                 <p style={analysisQuestionTextStyle}>{card.question}</p>
                 <div style={analysisMetricLabelStyle}>{card.metricLabel}</div>
                 <div style={analysisMetricValueStyle}>{card.metricValue}</div>
-                <div style={analysisConclusionLabelStyle}>分析结论</div>
+                <div style={analysisConclusionLabelStyle}>{t("today.home.conclusion")}</div>
                 <p style={summaryTextStyle}>{card.conclusion}</p>
-                <div style={analysisTodoMetaStyle}>已整理 {card.todoCount} 条可执行 todo</div>
+                <div style={analysisTodoMetaStyle}>{t("today.home.todoCount", { count: card.todoCount })}</div>
                 <div style={cardActionRowStyle(isMobile)}>
-                  <SurfaceButton label="进入详情报告" onClick={() => navigate(buildDetailPath(card.href))} />
+                  <SurfaceButton label={t("today.home.openDetailReport")} onClick={() => navigate(buildDetailPath(card.href))} />
                 </div>
               </div>
             ))}
@@ -565,50 +573,29 @@ const reasonValueStyle: CSSProperties = {
 
 function getTodayMetricCardExplanation(
   key: "revenue" | "cost" | "profit" | "profit_margin" | "orders" | "aov",
+  t: TranslateFn,
 ): string {
-  if (key === "revenue") {
-    return "收入 = 近 7 天非取消订单的 totalPrice 求和。";
-  }
-  if (key === "cost") {
-    return [
-      "成本 = 估算成本。",
-      "估算成本 = 估算 COGS + 折扣 + 支付手续费 + 退款损耗。",
-      "估算 COGS = subtotal × (1 - 默认毛利率)。",
-    ].join("\n");
-  }
-  if (key === "profit") {
-    return [
-      "利润 = 收入 - 估算成本。",
-      "这里是经营估算口径，不是会计结账口径。",
-    ].join("\n");
-  }
-  if (key === "profit_margin") {
-    return "利润率 = 利润 / 收入，用来判断规模增长有没有真正转成赚钱质量。";
-  }
-  if (key === "orders") {
-    return "订单数 = 近 7 天非取消订单数量。";
-  }
-  return "客单价 = 收入 / 订单数。";
+  if (key === "revenue") return t("today.hints.revenue");
+  if (key === "cost") return t("today.hints.cost");
+  if (key === "profit") return t("today.hints.profit");
+  if (key === "profit_margin") return t("today.hints.profitMargin");
+  if (key === "orders") return t("today.hints.orders");
+  return t("today.hints.aov");
 }
 
-function getTodayReasonCardExplanation(key: string): string {
-  if (key === "growth-change") {
-    return "增长变化 = (近 7 天收入 - 可比基线收入) / 可比基线收入。";
-  }
-  if (key === "profit-erosion") {
-    return "利润侵蚀优先看两类损耗：退款占比 = 退款损耗 / 收入，折扣占比 = 折扣 / 收入；页面展示的是当前更值得优先盯的那一项。";
-  }
-  return "回报效率 = 短期经营回报 = 收入 / 估算成本。";
+function getTodayReasonCardExplanation(key: string, t: TranslateFn): string {
+  if (key === "growth-change") return t("today.hints.growthChange");
+  if (key === "profit-erosion") return t("today.hints.profitErosion");
+  return t("today.hints.efficiencyShift");
 }
 
-function getTodayRoiSummaryExplanation(key: "short_term" | "payback" | "lifetime"): string {
-  if (key === "short_term") {
-    return "短期 ROI = 近 7 天收入 / 近 7 天估算投入成本。";
-  }
-  if (key === "payback") {
-    return "回收期 ROI 需要 CAC 和 cohort 回收窗口。当前数据还没接入，所以先展示缺口而不伪造结果。";
-  }
-  return "长期 ROI 需要长期回收与复购收益口径。当前只保留说明，避免把不完整数据当成结论。";
+function getTodayRoiSummaryExplanation(
+  key: "short_term" | "payback" | "lifetime",
+  t: TranslateFn,
+): string {
+  if (key === "short_term") return t("today.hints.roiShortTerm");
+  if (key === "payback") return t("today.hints.roiPayback");
+  return t("today.hints.roiLifetime");
 }
 
 const reasonMetaStyle: CSSProperties = {

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import { getTodayAnalysisTodoActionLabel, getTodayAnalysisTodoActionTone } from "../../lib/todayAnalysisTodo";
+import { useTranslation } from "react-i18next";
+import { getTodayAnalysisTodoActionLabelKey, getTodayAnalysisTodoActionTone } from "../../lib/todayAnalysisTodo";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import type { TodayAnalysisCard, TodayAnalysisTodo } from "../../lib/todayReportTypes";
 import { DestinationPage } from "../component/shared/DestinationPage";
@@ -46,6 +47,7 @@ export function TodayAnalysisPage({
   };
   cards: TodayAnalysisRenderableCard[];
 }) {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
 
   return (
@@ -54,7 +56,7 @@ export function TodayAnalysisPage({
         title={title}
         subtitle={subtitle}
         titleBarTitle={title}
-        backLabel="返回经营"
+        backLabel={t("today.backToToday")}
         fallbackPath="/app/today"
         returnTo={returnTo}
         isMobile={isMobile}
@@ -84,16 +86,16 @@ export function TodayAnalysisPage({
           </PageSurface>
         ) : null}
 
-        <PageSurface title="分析卡片" subtitle="每张卡片先回答一个经营问题，再进入对应详情页继续下钻。">
+        <PageSurface title={t("today.analysis.cardsTitle")} subtitle={t("today.analysis.cardsSubtitle")}>
           <div style={analysisGridStyle(isMobile)}>
             {cards.map((card) => (
               <div key={card.key} style={analysisCardStyle}>
                 <div style={analysisTitleStyle}>{card.title}</div>
-                <div style={analysisQuestionLabelStyle}>问题</div>
+                <div style={analysisQuestionLabelStyle}>{t("today.analysis.question")}</div>
                 <p style={analysisQuestionStyle}>{card.question}</p>
                 <div style={analysisMetricLabelStyle}>{card.metricLabel}</div>
                 <div style={analysisMetricValueStyle}>{card.metricValue}</div>
-                <div style={analysisConclusionLabelStyle}>分析结论</div>
+                <div style={analysisConclusionLabelStyle}>{t("today.analysis.conclusion")}</div>
                 <p style={analysisConclusionStyle}>{card.conclusion}</p>
                 {card.evidence.length > 0 ? (
                   <div style={analysisEvidenceWrapStyle}>
@@ -108,7 +110,7 @@ export function TodayAnalysisPage({
                 ) : null}
                 {card.ideas.length > 0 ? (
                   <div style={analysisIdeaBlockStyle}>
-                    <div style={analysisIdeaLabelStyle}>优化思路</div>
+                    <div style={analysisIdeaLabelStyle}>{t("today.analysis.ideas")}</div>
                     <div style={analysisIdeaListStyle}>
                       {card.ideas.map((idea) => (
                         <div key={idea} style={analysisIdeaItemStyle}>
@@ -121,14 +123,14 @@ export function TodayAnalysisPage({
                 {card.detail ? <div style={analysisDetailStyle}>{card.detail}</div> : null}
                 {card.todos.length > 0 ? (
                   <div style={analysisTodoBlockStyle}>
-                    <div style={analysisTodoLabelStyle}>Todo</div>
+                    <div style={analysisTodoLabelStyle}>{t("today.analysis.todo")}</div>
                     <div style={analysisTodoListStyle}>
                       {card.todos.map((todo, index) => (
                         <div key={todo.key} style={analysisTodoItemStyle}>
                           <div style={analysisTodoHeaderStyle}>
                             <div style={analysisTodoTitleStyle}>{todo.title}</div>
                             <span style={analysisTodoTypeBadgeStyle(getTodayAnalysisTodoActionTone(todo.actionType))}>
-                              {getTodayAnalysisTodoActionLabel(todo.actionType)}
+                              {t(getTodayAnalysisTodoActionLabelKey(todo.actionType))}
                             </span>
                           </div>
                           <div style={analysisTodoDetailStyle}>{todo.detail}</div>

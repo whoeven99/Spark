@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { authenticate } from "../shopify.server";
@@ -8,6 +9,7 @@ import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard
 import { TodayMetricReportPage } from "./page/TodayMetricReportPage";
 
 export default function TodayRevenuePage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const rawFocus = searchParams.get("focus");
@@ -45,9 +47,9 @@ export default function TodayRevenuePage() {
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
           focusOptions={[
-            { key: "revenue", label: "收入" },
-            { key: "orders", label: "订单数" },
-            { key: "aov", label: "客单价" },
+            { key: "revenue", label: t("today.focus.revenue") },
+            { key: "orders", label: t("today.focus.orders") },
+            { key: "aov", label: t("today.focus.aov") },
           ]}
           activeFocus={focus}
           onFocusChange={handleFocusChange}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useLocation, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { buildTodayAnalysisTodoRefinePrompt } from "../lib/todayReportAi";
 import { buildManagedAiLaunchContextFromSpec } from "../lib/managedAiLaunchContext";
@@ -13,6 +14,7 @@ import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { TodayAnalysisPage } from "./page/TodayAnalysisPage";
 
 export default function TodayCustomerValueAnalysisPage() {
+  const { t } = useTranslation();
   const data = useLoaderData<typeof loader>();
   const navigate = useEmbeddedNavigate();
   const location = useLocation();
@@ -62,8 +64,13 @@ export default function TodayCustomerValueAnalysisPage() {
   const customer = valueLayer?.customers;
   const segmentCounts = customer?.segmentCounts;
   const segmentSummary = segmentCounts
-    ? `新客 ${formatIntegerValue(segmentCounts.new)} / 活跃 ${formatIntegerValue(segmentCounts.active)} / VIP ${formatIntegerValue(segmentCounts.vip)} / 风险 ${formatIntegerValue(segmentCounts.at_risk)}`
-    : "待补 segment";
+    ? t("today.customerValue.segmentSummary", {
+        newCount: formatIntegerValue(segmentCounts.new),
+        activeCount: formatIntegerValue(segmentCounts.active),
+        vipCount: formatIntegerValue(segmentCounts.vip),
+        riskCount: formatIntegerValue(segmentCounts.at_risk),
+      })
+    : t("today.customerValue.segmentPending");
   const cards =
     page?.cards.map((card) => {
       const base = {
@@ -77,39 +84,49 @@ export default function TodayCustomerValueAnalysisPage() {
       if (card.key === "quality-segmentation") {
         const qualityCard = {
           ...base,
-          metricLabel: "高价值客户占比",
-          metricValue: customer ? formatPercentValue(customer.highValueShare) : "加载中",
+          metricLabel: t("today.metric.highValueShare"),
+          metricValue: customer ? formatPercentValue(customer.highValueShare) : t("today.home.loading"),
           conclusion: customer
-            ? `当前高价值客户占比 ${formatPercentValue(customer.highValueShare)}，说明现在的经营成果里，有多少是真正来自高质量客户。`
+            ? t("today.customerValue.qualityConclusion", {
+                share: formatPercentValue(customer.highValueShare),
+              })
             : card.conclusion,
           evidence: customer
             ? [
-                { label: "高价值客户占比", value: formatPercentValue(customer.highValueShare) },
-                { label: "平均分数", value: formatScoreValue(customer.averageScore) },
-                { label: "复购率", value: formatPercentValue(customer.repeatPurchaseRate) },
+                { label: t("today.metric.highValueShare"), value: formatPercentValue(customer.highValueShare) },
+                { label: t("today.metric.averageScore"), value: formatScoreValue(customer.averageScore) },
+                { label: t("today.metric.repeatPurchaseRate"), value: formatPercentValue(customer.repeatPurchaseRate) },
               ]
             : base.evidence,
-          detail: customer ? `平均分数 ${formatScoreValue(customer.averageScore)} / 复购率 ${formatPercentValue(customer.repeatPurchaseRate)}` : undefined,
+          detail: customer
+            ? t("today.customerValue.qualityDetail", {
+                score: formatScoreValue(customer.averageScore),
+                repeatRate: formatPercentValue(customer.repeatPurchaseRate),
+              })
+            : undefined,
         };
-        const assistantPrompt = buildTodayAnalysisTodoRefinePrompt("客户生命价值分析", qualityCard);
+        const assistantPrompt = buildTodayAnalysisTodoRefinePrompt(
+          t("today.topics.customerValueTitle"),
+          qualityCard,
+        );
         return {
           ...qualityCard,
           todos: [
             ...qualityCard.todos.slice(0, 1),
             {
               key: "customer-quality-assistant",
-              title: "让 AI 细化客户质量 todo",
-              detail: "把当前客户质量判断拆成 today 可执行动作。",
-              actionLabel: "让 AI 细化 todo",
+              title: t("today.customerValue.refineTitle"),
+              detail: t("today.customerValue.refineDetail"),
+              actionLabel: t("today.customerValue.refineAction"),
               actionType: "open_assistant" as const,
               onClick: () =>
                 navigate(
                   buildDetailPath(
                     buildTodayAnalysisTodoHref({
                       key: "customer-quality-assistant",
-                      title: "让 AI 细化客户质量 todo",
-                      detail: "把当前客户质量判断拆成 today 可执行动作。",
-                      actionLabel: "让 AI 细化 todo",
+                      title: t("today.customerValue.refineTitle"),
+                      detail: t("today.customerValue.refineDetail"),
+                      actionLabel: t("today.customerValue.refineAction"),
                       actionType: "open_assistant",
                       payload: {
                         prompt: assistantPrompt.chatPrompt,
@@ -133,13 +150,22 @@ export default function TodayCustomerValueAnalysisPage() {
           metricValue: segmentSummary,
           evidence: customer
             ? [
-                { label: "新客", value: formatIntegerValue(customer.segmentCounts.new) },
-                { label: "活跃 / VIP", value: `${formatIntegerValue(customer.segmentCounts.active)} / ${formatIntegerValue(customer.segmentCounts.vip)}` },
-                { label: "风险 / 流失", value: `${formatIntegerValue(customer.segmentCounts.at_risk)} / ${formatIntegerValue(customer.segmentCounts.churned)}` },
+                { label: t("today.metric.newCustomers"), value: formatIntegerValue(customer.segmentCounts.new) },
+                {
+                  label: t("today.metric.activeVip"),
+                  value: `${formatIntegerValue(customer.segmentCounts.active)} / ${formatIntegerValue(customer.segmentCounts.vip)}`,
+                },
+                {
+                  label: t("today.metric.riskChurned"),
+                  value: `${formatIntegerValue(customer.segmentCounts.at_risk)} / ${formatIntegerValue(customer.segmentCounts.churned)}`,
+                },
               ]
             : base.evidence,
           detail: customer
-            ? `流失客户 ${formatIntegerValue(customer.segmentCounts.churned)} / 退款风险标签 ${formatIntegerValue(customer.tagCounts.refund_risk)}`
+            ? t("today.customerValue.churnDetail", {
+                churned: formatIntegerValue(customer.segmentCounts.churned),
+                refundRisk: formatIntegerValue(customer.tagCounts.refund_risk),
+              })
             : undefined,
         };
       }
@@ -147,16 +173,26 @@ export default function TodayCustomerValueAnalysisPage() {
       if (card.key === "ltv-potential") {
         return {
           ...base,
-          metricValue: customer ? formatCurrencyValue(customer.averageDynamicLtv, valueLayer?.channels.currency ?? null) : "加载中",
-          conclusion: customer ? "动态 LTV 用来判断今天获客和转化带来的客户，长期有没有机会持续贡献利润。" : card.conclusion,
+          metricValue: customer
+            ? formatCurrencyValue(customer.averageDynamicLtv, valueLayer?.channels.currency ?? null)
+            : t("today.home.loading"),
+          conclusion: customer ? t("today.customerValue.ltvConclusion") : card.conclusion,
           evidence: customer
             ? [
-                { label: "动态 LTV", value: formatCurrencyValue(customer.averageDynamicLtv, valueLayer?.channels.currency ?? null) },
-                { label: "付费客户", value: formatIntegerValue(customer.payingCustomers) },
-                { label: "总客户", value: formatIntegerValue(customer.totalCustomers) },
+                {
+                  label: t("today.metric.dynamicLtv"),
+                  value: formatCurrencyValue(customer.averageDynamicLtv, valueLayer?.channels.currency ?? null),
+                },
+                { label: t("today.metric.payingCustomers"), value: formatIntegerValue(customer.payingCustomers) },
+                { label: t("today.metric.totalCustomers"), value: formatIntegerValue(customer.totalCustomers) },
               ]
             : base.evidence,
-          detail: customer ? `付费客户 ${formatIntegerValue(customer.payingCustomers)} / 总客户 ${formatIntegerValue(customer.totalCustomers)}` : undefined,
+          detail: customer
+            ? t("today.customerValue.ltvDetail", {
+                paying: formatIntegerValue(customer.payingCustomers),
+                total: formatIntegerValue(customer.totalCustomers),
+              })
+            : undefined,
         };
       }
 
@@ -165,18 +201,16 @@ export default function TodayCustomerValueAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? "客户生命价值分析"}
-      subtitle={page?.subtitle ?? "客户生命价值分析关注的是客户质量划分、segment 结构和长期价值，而不是只看一个平均数。"}
+      title={page?.title ?? t("today.topics.customerValueTitle")}
+      subtitle={page?.subtitle ?? t("today.topics.customerValueSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
       onCountryChange={handleCountryChange}
       notes={data.filters.dataNotes}
       lead={{
-        title: "当前焦点",
-        summary:
-          page?.summary ??
-          "客户生命价值页先回答两件事：客户质量怎么分层，哪些 segment 值得继续经营，哪些 segment 已经在流失。",
+        title: t("today.analysis.currentFocus"),
+        summary: page?.summary ?? t("today.topics.customerValueSummary"),
         points: page?.principles,
       }}
       cards={cards}

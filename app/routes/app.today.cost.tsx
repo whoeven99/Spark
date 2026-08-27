@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
@@ -9,6 +10,7 @@ import { TodayCountryFilterCard } from "./component/today/TodayCountryFilterCard
 import { TodayMetricReportPage } from "./page/TodayMetricReportPage";
 
 export default function TodayCostPage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useEmbeddedNavigate();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
@@ -52,9 +54,9 @@ export default function TodayCostPage() {
           activeCountry={data.filters.selectedCountry}
           onChange={handleCountryChange}
           focusOptions={[
-            { key: "profit", label: "利润" },
-            { key: "cost", label: "成本" },
-            { key: "margin", label: "利润率" },
+            { key: "profit", label: t("today.focus.profit") },
+            { key: "cost", label: t("today.focus.cost") },
+            { key: "margin", label: t("today.focus.margin") },
           ]}
           activeFocus="cost"
           onFocusChange={handleFocusChange}

@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useLocation, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
@@ -9,6 +10,7 @@ import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { TodayAnalysisPage } from "./page/TodayAnalysisPage";
 
 export default function TodayAfterSalesAnalysisPage() {
+  const { t } = useTranslation();
   const data = useLoaderData<typeof loader>();
   const navigate = useEmbeddedNavigate();
   const location = useLocation();
@@ -48,17 +50,16 @@ export default function TodayAfterSalesAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? "售后分析"}
-      subtitle={page?.subtitle ?? "售后分析关注退单、退款和履约效率，强调的是成交后质量而不是单纯订单结果。"}
+      title={page?.title ?? t("today.topics.afterSalesTitle")}
+      subtitle={page?.subtitle ?? t("today.topics.afterSalesSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
       onCountryChange={handleCountryChange}
       notes={data.filters.dataNotes}
       lead={{
-        title: "当前焦点",
-        summary:
-          page?.summary ?? "售后分析不是单独看退款率，而是一起判断退款、履约效率和售后响应会不会继续吞掉已经成交的利润。",
+        title: t("today.analysis.currentFocus"),
+        summary: page?.summary ?? t("today.topics.afterSalesSummary"),
         points: page?.principles,
       }}
       cards={cards}

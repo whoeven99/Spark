@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useLocation, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
@@ -9,6 +10,7 @@ import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { TodayAnalysisPage } from "./page/TodayAnalysisPage";
 
 export default function TodayOrderAnalysisPage() {
+  const { t } = useTranslation();
   const data = useLoaderData<typeof loader>();
   const navigate = useEmbeddedNavigate();
   const location = useLocation();
@@ -48,16 +50,16 @@ export default function TodayOrderAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? "订单分析"}
-      subtitle={page?.subtitle ?? "订单分析关注的是规模、客单和订单质量，不把订单增长直接当成经营改善。"}
+      title={page?.title ?? t("today.topics.ordersTitle")}
+      subtitle={page?.subtitle ?? t("today.topics.ordersSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
       onCountryChange={handleCountryChange}
       notes={data.filters.dataNotes}
       lead={{
-        title: "当前焦点",
-        summary: page?.summary ?? "订单分析先确认订单规模是不是健康，再继续看客单结构和成交后风险。",
+        title: t("today.analysis.currentFocus"),
+        summary: page?.summary ?? t("today.topics.ordersSummary"),
         points: page?.principles,
       }}
       cards={cards}

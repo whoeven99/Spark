@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useLocation, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 import { buildTodayAnalysisTodoHref } from "../lib/todayAnalysisTodo";
 import { hasReadReportsScope } from "../lib/shopifyReports";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
@@ -9,6 +10,7 @@ import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { TodayAnalysisPage } from "./page/TodayAnalysisPage";
 
 export default function TodayProductAnalysisPage() {
+  const { t } = useTranslation();
   const data = useLoaderData<typeof loader>();
   const navigate = useEmbeddedNavigate();
   const location = useLocation();
@@ -48,18 +50,16 @@ export default function TodayProductAnalysisPage() {
 
   return (
     <TodayAnalysisPage
-      title={page?.title ?? "产品分析"}
-      subtitle={page?.subtitle ?? "这里重点看定价、单品利润和库存周转，不把产品问题混进广告或健康度里。"}
+      title={page?.title ?? t("today.topics.productTitle")}
+      subtitle={page?.subtitle ?? t("today.topics.productSubtitle")}
       returnTo={returnTo}
       countryOptions={data.filters.countries.map((item) => ({ key: item.key, label: item.label }))}
       activeCountry={data.filters.selectedCountry}
       onCountryChange={handleCountryChange}
       notes={data.filters.dataNotes}
       lead={{
-        title: "当前焦点",
-        summary:
-          page?.summary ??
-          "产品分析先回答三件事：价格带有没有支撑成交、单品利润有没有留下来、库存周转会不会拖慢经营动作。",
+        title: t("today.analysis.currentFocus"),
+        summary: page?.summary ?? t("today.topics.productSummary"),
         points: page?.principles,
       }}
       cards={cards}
