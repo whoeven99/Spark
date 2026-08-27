@@ -2,11 +2,12 @@ import { useState } from "react";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import { ImageGenerationTaskCard } from "../imageStudio/ImageGenerationTaskCard";
 import { PictureTranslateTaskCard } from "../imageStudio/PictureTranslateTaskCard";
+import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 
 type Props = {
   task: AITaskItem;
   locationSearch: string;
-  onOpenTasks?: () => void;
+  onOpenTasks?: (opts?: OpenWorkspaceTasksOptions) => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
 

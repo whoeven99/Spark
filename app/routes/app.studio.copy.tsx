@@ -240,9 +240,10 @@ export default function AppProductImprove() {
   );
 }
 
-function serializeSearchWithoutTab(url: URL): string {
+function serializeSearchWithoutPageMode(url: URL): string {
   const params = new URLSearchParams(url.search);
   params.delete("tab");
+  params.delete("taskId");
   return params.toString();
 }
 
@@ -252,12 +253,14 @@ export function shouldRevalidate({
   defaultShouldRevalidate,
 }: ShouldRevalidateFunctionArgs) {
   const isSamePath = currentUrl.pathname === nextUrl.pathname;
-  const onlyTabChanged =
+  const onlyPageModeChanged =
     isSamePath &&
-    serializeSearchWithoutTab(currentUrl) === serializeSearchWithoutTab(nextUrl) &&
-    currentUrl.searchParams.get("tab") !== nextUrl.searchParams.get("tab");
+    serializeSearchWithoutPageMode(currentUrl) ===
+      serializeSearchWithoutPageMode(nextUrl) &&
+    (currentUrl.searchParams.get("tab") !== nextUrl.searchParams.get("tab") ||
+      currentUrl.searchParams.get("taskId") !== nextUrl.searchParams.get("taskId"));
 
-  if (onlyTabChanged) {
+  if (onlyPageModeChanged) {
     return false;
   }
 

@@ -37,6 +37,11 @@ import {
 } from "./types";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import {
+  isProductImproveTaskOpen,
+  resolveProductImproveOpenPath,
+  type OpenWorkspaceTasksOptions,
+} from "../../../lib/productImproveDeepLink";
+import {
   parseManagedAiLaunchContext,
   type ManagedAiLaunchContext,
 } from "../../../lib/managedAiLaunchContext";
@@ -1596,7 +1601,13 @@ export function WorkspaceAppShellPage({
               abortStream();
             }}
             onAiTaskUpdated={handleAiTaskUpdated}
-            onOpenTasks={() => navigate("/app/tasks")}
+            onOpenTasks={(opts?: OpenWorkspaceTasksOptions) => {
+              if (isProductImproveTaskOpen(opts) && opts) {
+                navigate(resolveProductImproveOpenPath(opts));
+                return;
+              }
+              navigate("/app/tasks");
+            }}
             onTaskProposalExecuted={handleTaskProposalExecuted}
           />
         ) : null}

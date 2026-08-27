@@ -30,6 +30,7 @@ import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
+import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import {
   buttonRowStyle,
   chatLayoutStyle,
@@ -103,7 +104,7 @@ export function ChatPanel({
     status: AITaskStatus,
     result?: Record<string, unknown>,
   ) => void;
-  onOpenTasks: () => void;
+  onOpenTasks: (opts?: OpenWorkspaceTasksOptions) => void;
   /** TaskProposal 执行成功：向对话追加「任务已开始」新一轮 */
   onTaskProposalExecuted: (conversationId: string, run: TaskRunPayload) => void;
 }) {

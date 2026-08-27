@@ -2113,6 +2113,8 @@
     "actionStopTask": "停止任务",
     "actionViewTaskDetail": "查看任务详情",
     "actionReviewResult": "审核结果",
+    "chatGoReview": "去审核结果",
+    "chatViewTaskList": "查看任务列表",
     "actionViewAppliedResult": "查看已应用结果",
     "actionRerunTask": "重新执行",
     "actionViewFailureDetail": "查看失败详情",
