@@ -24,9 +24,8 @@ type AppShellConfig = {
   nav: readonly NavItemKey[];
 };
 
-/** 测环境 / 本地：全量一级导航。 */
+/** 测环境 / 本地：全量一级导航（不含首页——点侧栏「Spark」即进 `/app`）。 */
 const FULL_NAV = [
-  "home",
   "ask",
   "home-v1",
   "today",
@@ -37,8 +36,8 @@ const FULL_NAV = [
   "settings",
 ] as const satisfies readonly NavItemKey[];
 
-/** 生产：第一版仅首页与账户与订阅。 */
-const PROD_NAV = ["home", "account"] as const satisfies readonly NavItemKey[];
+/** 生产：第一版仅账户与订阅；首页由点应用名进入。 */
+const PROD_NAV = ["account"] as const satisfies readonly NavItemKey[];
 
 export function getAppEntryConfig(): AppShellConfig {
   return {

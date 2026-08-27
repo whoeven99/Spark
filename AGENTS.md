@@ -215,7 +215,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
-- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：`NODE_ENV=prod|production` 仅「首页」(`/app`) +「账户与订阅」；测/本地为全量（首页 / 助手 / 首页 v1 / Today / Health Monitor / Studio / Tasks / 账户 / Settings）。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。应用首页 `/app` 为 HomeV2 落地（原 `/app/home-v2` 重定向至此）。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
+- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另仅展示「账户与订阅」；测/本地另展示助手 / 首页 v1 / Today / Health Monitor / Studio / Tasks / 账户 / Settings。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。

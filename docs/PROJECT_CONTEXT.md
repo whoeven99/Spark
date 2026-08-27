@@ -15,11 +15,11 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
 ## 2. 主应用信息架构
 
-一级导航由 `app/config/appEntry.server.ts` 定义（prod 仅首页 + 账户；测/本地全量），应用壳是 `app/routes/app.tsx`。
+一级导航由 `app/config/appEntry.server.ts` 定义（点侧栏应用名进 `/app`；prod 另仅「账户与订阅」；测/本地全量子页），应用壳是 `app/routes/app.tsx`。
 
 | 目的地 | URL | 实现 |
 | --- | --- | --- |
-| 首页 | `/app` | `HomeV2Panel` 落地（本页聊天）；旧 `/app/home-v2` 重定向至此 |
+| 首页（应用入口） | `/app` | `HomeV2Panel` 落地（本页聊天）；由点「Spark」进入，不占 `s-app-nav` 子项；旧 `/app/home-v2` 重定向至此 |
 | 助手 | `/app/assistant` | 默认进对话（测环境导航可见） |
 | 首页 v1 | `/app/home-v1` | `HomePanel` 经营概览（测环境导航可见） |
 | Today | `/app/today` | `app.today._index.tsx`、`app.today.roi.tsx`、`app.today.orders.tsx`、`app.today.traffic.tsx`、`app.today.conversion.tsx` |
