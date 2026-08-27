@@ -17,7 +17,7 @@ export function createGenerateProductDescriptionTool(context: AgentContext) {
   return new DynamicStructuredTool({
     name: GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME,
     description:
-      "根据 Shopify 商品 ID 生成该商品的营销型商品描述（结构化 JSON 中的 description 字段）。当用户要求生成、撰写、优化商品描述或营销文案，且已提供或可推断商品 ID 时使用。不要在未给出商品 ID 时猜测 ID。",
+      "根据 Shopify 商品 ID 生成该商品的标题与营销描述（结构化 JSON 的 title、description）。当用户要求生成、撰写、优化商品标题、描述或营销文案，且已提供或可推断商品 ID 时使用。不要在未给出商品 ID 时猜测 ID。结果需商家审核后才会写回 Shopify。",
     schema: z.object({
       productId: z
         .string()

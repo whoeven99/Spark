@@ -2119,6 +2119,8 @@
     "actionStopTask": "Stop Task",
     "actionViewTaskDetail": "View Task Details",
     "actionReviewResult": "Review Result",
+    "chatGoReview": "Review result",
+    "chatViewTaskList": "View task list",
     "actionViewAppliedResult": "View Applied Result",
     "actionRerunTask": "Rerun Task",
     "actionViewFailureDetail": "View Failure Details",

@@ -1,3 +1,6 @@
+/** 生成标题最大长度（清洗后），对齐 Shopify 商品标题上限内的审核约束。 */
+export const GENERATED_TITLE_MAX_LENGTH = 200;
+
 /** 生成描述最大长度（清洗后），单一 description 字段上限。 */
 export const GENERATED_DESCRIPTION_MAX_LENGTH = 50_000;
 

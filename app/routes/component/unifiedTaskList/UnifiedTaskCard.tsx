@@ -5,6 +5,8 @@ import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import { OperationTaskCard } from "./OperationTaskCard";
 import { AutomationTaskCard } from "./AutomationTaskCard";
+import { buildProductImprovePath } from "../../../lib/productImproveDeepLink";
+import { appendEmbeddedSearchToPath } from "../../../lib/embeddedLocationSearch";
 
 type Props = {
   entry: UnifiedTaskEntry;
@@ -46,7 +48,12 @@ export function UnifiedTaskCard({
         locationSearch={locationSearch}
         onDelete={() => onAITaskDeleted(task.id)}
         onOpenDetail={() => {
-          void navigate(`/app/studio/copy${locationSearch}`);
+          void navigate(
+            appendEmbeddedSearchToPath(
+              buildProductImprovePath({ tab: "tasks", taskId: task.id }),
+              locationSearch,
+            ),
+          );
         }}
         onTaskUpdated={onTaskUpdated}
         deleting={deleting}

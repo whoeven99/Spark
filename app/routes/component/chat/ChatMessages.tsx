@@ -10,6 +10,7 @@ import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { ManagedAiResultCard } from "./ManagedAiResultCard";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import { SparkMark } from "../common/SparkMark";
 
 type ChatMessagesProps = {
@@ -20,7 +21,7 @@ type ChatMessagesProps = {
     status: AITaskStatus,
     result?: Record<string, unknown>,
   ) => void;
-  onOpenTasks?: () => void;
+  onOpenTasks?: (opts?: OpenWorkspaceTasksOptions) => void;
   /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
   /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */

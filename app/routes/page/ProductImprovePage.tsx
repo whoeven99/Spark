@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLoaderData, useLocation } from "react-router";
@@ -14,6 +14,11 @@ import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
+  readProductImproveTabFromSearch,
+  readProductImproveTaskIdFromSearch,
+  type ProductImprovePageTab,
+} from "../../lib/productImproveDeepLink";
+import {
   PageHeaderNav,
   PageSurface,
   formErrorBoxStyle,
@@ -25,7 +30,7 @@ import {
   pageSelectStyle,
 } from "./pageUiStyles";
 
-type PageTab = "config" | "tasks";
+type PageTab = ProductImprovePageTab;
 
 const footerDividerStyle = {
   color: pageColorTokens.textFootnote,
@@ -48,18 +53,36 @@ const footerContentStyle = {
   textAlign: "center" as const,
 };
 
-function readPageTabFromSearch(search: string): PageTab {
-  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("tab") ===
-    "tasks"
-    ? "tasks"
-    : "config";
-}
-
-function buildSearchWithoutTab(search: string): string {
+function buildSearchWithoutPageMode(search: string): string {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   params.delete("tab");
+  params.delete("taskId");
   const serialized = params.toString();
   return serialized ? `?${serialized}` : "";
+}
+
+function syncProductImprovePageSearch(updates: {
+  tab?: PageTab;
+  taskId?: string | null;
+}) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (updates.tab === "config") {
+    url.searchParams.delete("tab");
+  } else if (updates.tab === "tasks") {
+    url.searchParams.set("tab", "tasks");
+  }
+  if (updates.taskId) {
+    url.searchParams.set("tab", "tasks");
+    url.searchParams.set("taskId", updates.taskId);
+  } else if (updates.taskId === null) {
+    url.searchParams.delete("taskId");
+  }
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
 }
 
 export function ProductImprovePage() {
@@ -75,7 +98,12 @@ export function ProductImprovePage() {
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
   const [taskMetrics, setTaskMetrics] = useState(loaderData.initialTaskPage.metrics);
   const [pageTab, setPageTabState] = useState<PageTab>(() =>
-    readPageTabFromSearch(
+    readProductImproveTabFromSearch(
+      typeof window !== "undefined" ? window.location.search : location.search,
+    ),
+  );
+  const [selectedTaskId, setSelectedTaskIdState] = useState<string | null>(() =>
+    readProductImproveTaskIdFromSearch(
       typeof window !== "undefined" ? window.location.search : location.search,
     ),
   );
@@ -97,26 +125,31 @@ export function ProductImprovePage() {
     | { success: false; errorMsg: string }
     | undefined;
 
-  const search = buildSearchWithoutTab(location.search);
+  const search = buildSearchWithoutPageMode(location.search);
 
   function setPageTab(nextTab: PageTab) {
     setPageTabState(nextTab);
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
     if (nextTab === "config") {
-      url.searchParams.delete("tab");
-    } else {
-      url.searchParams.set("tab", nextTab);
+      setSelectedTaskIdState(null);
+      syncProductImprovePageSearch({ tab: "config", taskId: null });
+      return;
     }
-    window.history.replaceState(
-      window.history.state,
-      "",
-      `${url.pathname}${url.search}${url.hash}`,
-    );
+    syncProductImprovePageSearch({ tab: nextTab });
   }
 
+  const setSelectedTaskId = useCallback((taskId: string | null) => {
+    setSelectedTaskIdState(taskId);
+    if (taskId) {
+      setPageTabState("tasks");
+      syncProductImprovePageSearch({ tab: "tasks", taskId });
+      return;
+    }
+    syncProductImprovePageSearch({ tab: "tasks", taskId: null });
+  }, []);
+
   useEffect(() => {
-    setPageTabState(readPageTabFromSearch(location.search));
+    setPageTabState(readProductImproveTabFromSearch(location.search));
+    setSelectedTaskIdState(readProductImproveTaskIdFromSearch(location.search));
   }, [location.search]);
 
   const runningCount = taskMetrics.runningCount;
@@ -503,6 +536,8 @@ export function ProductImprovePage() {
             tasks={tasks}
             taskMetrics={taskMetrics}
             locationSearch={search}
+            selectedTaskId={selectedTaskId}
+            onSelectTaskId={setSelectedTaskId}
             onTaskDeleted={handleTaskDeleted}
             onTaskUpdated={handleTaskUpdated}
           />

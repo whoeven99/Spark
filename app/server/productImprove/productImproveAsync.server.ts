@@ -99,9 +99,11 @@ async function runProductImproveTask(params: {
     return;
   }
 
+  let title: string;
   let description: string;
   try {
     const aiPayload = parseAndValidateProductDescriptionJson(raw.rawText);
+    title = aiPayload.title;
     description = aiPayload.description;
   } catch (e) {
     logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "parseAndValidate failed", e);
@@ -121,7 +123,7 @@ async function runProductImproveTask(params: {
   await pendingReviewTask({
     taskId,
     result: {
-      title: context.title,
+      title,
       description,
     },
     actualCredits,
