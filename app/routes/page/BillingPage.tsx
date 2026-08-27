@@ -947,20 +947,9 @@ export function BillingPage() {
       ) : null}
 
       <section className={styles.quotaSection}>
-        <div className={styles.usageHeader}>
-          <div className={styles.usageHeaderMain}>
-            {quotaMetaDescription ? (
-              <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
-            onClick={() => setShowAccountDetailPage(true)}
-          >
-            {t("billing.openAccountDetailPage")}
-          </button>
-        </div>
+        {quotaMetaDescription ? (
+          <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
+        ) : null}
         <div className={styles.usageCard}>
           <div className={styles.usageMain}>
             <div className={styles.usageStatsRow}>
@@ -1007,6 +996,13 @@ export function BillingPage() {
               {isSubscriptionTrialActive ? (
                 <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
               ) : null}
+              <button
+                type="button"
+                className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
+                onClick={() => setShowAccountDetailPage(true)}
+              >
+                {t("billing.openAccountDetailPage")}
+              </button>
             </div>
           </div>
         </div>
