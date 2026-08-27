@@ -316,6 +316,10 @@ export const accountUsageCardStyle: CSSProperties = {
   border: `1px solid ${shopifyUi.border}`,
   borderRadius: 8,
   background: shopifyUi.surfaceSubtle,
+  boxSizing: "border-box",
+  width: "100%",
+  minWidth: 0,
+  overflow: "hidden",
 };
 export const accountUsageValueStyle: CSSProperties = {
   color: "#202223",
@@ -528,7 +532,92 @@ export const toolbarIconGroupStyle: CSSProperties = {
   gap: 6,
   flexWrap: "wrap",
 };
+export const mobileToolbarIconGroupStyle: CSSProperties = {
+  ...toolbarIconGroupStyle,
+  alignItems: "flex-start",
+  flexDirection: "column",
+  gap: 8,
+};
+export const toolbarContextGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexWrap: "wrap",
+};
+export const toolbarGroupLabelStyle: CSSProperties = {
+  color: shopifyUi.textMuted,
+  fontSize: 12,
+  fontWeight: 500,
+  whiteSpace: "nowrap",
+};
+export const toolbarGroupDividerStyle: CSSProperties = {
+  width: 1,
+  height: 18,
+  margin: "0 2px",
+  background: shopifyUi.border,
+  flexShrink: 0,
+};
 export const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
+export const recommendedTriggerStyle = (active: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  height: 30,
+  padding: "0 10px",
+  border: `1px solid ${active ? shopifyUi.borderStrong : shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.surfaceSubtle : shopifyUi.surface,
+  color: shopifyUi.text,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 650,
+  whiteSpace: "nowrap",
+});
+/** ⌄ 字形基线偏低，单独上移以与文字/星标视觉居中 */
+export const recommendedChevronStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  fontSize: 12,
+  lineHeight: 1,
+  transform: "translateY(-1.5px)",
+  flexShrink: 0,
+};
+export const recommendedMenuStyle: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  bottom: "calc(100% + 8px)",
+  width: "min(320px, calc(100vw - 48px))",
+  padding: 10,
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusCard,
+  background: shopifyUi.surface,
+  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.12)",
+  zIndex: 8,
+};
+export const recommendedMenuTitleStyle: CSSProperties = {
+  margin: "0 2px 8px",
+  color: shopifyUi.textSecondary,
+  fontSize: 12,
+  fontWeight: 700,
+};
+export const recommendedMenuGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 6,
+};
+export const recommendedMenuItemStyle: CSSProperties = {
+  minWidth: 0,
+  padding: "9px 10px",
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.surface,
+  color: shopifyUi.text,
+  fontSize: 12,
+  fontWeight: 600,
+  lineHeight: 1.35,
+  textAlign: "left",
+  cursor: "pointer",
+};
 export const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   width: 32,
   height: 32,

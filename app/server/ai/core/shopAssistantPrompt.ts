@@ -1,17 +1,42 @@
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
 import type { PlaybookDefinition } from "./playbookRegistry.server";
 import { isPublicSkill, normalizeSteps } from "./skillTypes.server";
+import {
+  DEFAULT_LOCALE,
+  type SupportedLocale,
+} from "../../../i18n/config";
 
 /**
- * 基础店铺对话 Agent 系统提示
+ * 基础店铺对话 Agent 系统提示（按 UI locale 约束回复语言）。
  */
-export const SHOP_CHAT_AGENT_SYSTEM_PROMPT =
-  [
-    "你是一个店铺 AI 助手，请始终使用简体中文回复。若用户主动问起时间、天气、店铺基础信息或套餐/Token 额度，可调用对应内部工具获取信息；工具失败时明确说明。不要主动介绍这些内部能力。若用户问题不需要工具，也要基于常识和上下文直接给出可执行建议，不要只回复不知道。回复尽量结构清晰，优先使用短段落和列表，不要使用 Markdown 表格。",
+export function buildShopChatAgentSystemPrompt(
+  locale: SupportedLocale = DEFAULT_LOCALE,
+): string {
+  const languageRule =
+    locale === "zh-CN"
+      ? "请始终使用简体中文回复。"
+      : "Always reply in English.";
+
+  return [
+    `你是一个店铺 AI 助手。${languageRule}若用户主动问起时间、天气、店铺基础信息或套餐/Token 额度，可调用对应内部工具获取信息；工具失败时明确说明。不要主动介绍这些内部能力。若用户问题不需要工具，也要基于常识和上下文直接给出可执行建议，不要只回复不知道。回复尽量结构清晰，优先使用短段落和列表，不要使用 Markdown 表格。`,
     "",
     "【文件上下文能力】",
     "当系统消息中存在【附加文件上下文】区块时，该区块已包含用户上传文件的完整文本内容，你可以直接阅读、引用和分析这些内容。文件内容由服务端在发送消息前解析并注入，不需要任何额外工具。遇到此类情况时，绝对不要说「无法读取文件」或「没有文件读取能力」——文件内容就在你的上下文里，直接使用即可。",
   ].join("\n");
+}
+
+/** @deprecated 使用 buildShopChatAgentSystemPrompt(locale) */
+export const SHOP_CHAT_AGENT_SYSTEM_PROMPT = buildShopChatAgentSystemPrompt("zh-CN");
+
+export function buildFallbackAssistantSystemPrompt(
+  locale: SupportedLocale = DEFAULT_LOCALE,
+): string {
+  const languageRule =
+    locale === "zh-CN"
+      ? "必须使用简体中文"
+      : "Always reply in English";
+  return `你是一个店铺 AI 助手。请基于用户问题和已知上下文直接给出有帮助的回答。若信息不足，请明确不确定点并给出下一步可执行建议。${languageRule}，不要输出 Markdown 表格。`;
+}
 
 export function buildReflectionPrompt(reflectionSummary?: string): string {
   if (!reflectionSummary?.trim()) return "";
@@ -99,7 +124,8 @@ export async function getPersonalizedSystemPrompt(
   activePlaybookDefs?: PlaybookDefinition[],
 ): Promise<string> {
   const playbooks = activePlaybookDefs ?? [];
-  const parts: string[] = [SHOP_CHAT_AGENT_SYSTEM_PROMPT];
+  const locale = context.locale ?? DEFAULT_LOCALE;
+  const parts: string[] = [buildShopChatAgentSystemPrompt(locale)];
 
   const reflectionPrompt = buildReflectionPrompt(reflectionSummary);
   if (reflectionPrompt) {

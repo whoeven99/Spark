@@ -151,6 +151,13 @@ code {
   cursor: not-allowed;
 }
 
+.page-back-link {
+  transition: color 0.15s ease;
+}
+.page-back-link:hover {
+  color: var(--color-app-text-primary) !important;
+}
+
 .workspace-ghost-btn {
   transition:
     background 0.15s ease,
@@ -175,6 +182,70 @@ code {
 .workspace-composer-input:focus {
   border-color: #008060 !important;
   box-shadow: 0 0 0 1px #008060;
+}
+
+.workspace-home-composer {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.workspace-home-composer:focus-within {
+  border-color: #8a8d91 !important;
+  box-shadow: 0 0 0 1px rgba(31, 33, 36, 0.08);
+}
+
+.workspace-home-quick-action {
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.workspace-home-quick-action:hover {
+  background: #fafafa !important;
+  border-color: #c9cdd2 !important;
+  color: #1f2124 !important;
+}
+
+.workspace-home-quick-action:focus-visible {
+  outline: none;
+  border-color: #005bd3 !important;
+  box-shadow: 0 0 0 1px #005bd3;
+}
+
+.workspace-recommended-action {
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.workspace-recommended-action:hover {
+  background: #f6f6f7 !important;
+  border-color: #c9cdd2 !important;
+}
+
+.workspace-recommended-action:focus-visible {
+  outline: none;
+  border-color: #005bd3 !important;
+  box-shadow: 0 0 0 1px #005bd3;
+}
+
+.workspace-recommended-trigger {
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.workspace-recommended-trigger:hover:not(:disabled) {
+  background: #f6f6f7 !important;
+  border-color: #c9cdd2 !important;
+}
+
+.workspace-recommended-trigger:focus-visible {
+  outline: none;
+  border-color: #005bd3 !important;
+  box-shadow: 0 0 0 1px #005bd3;
 }
 
 /* Sidebar history row — show delete button on hover */

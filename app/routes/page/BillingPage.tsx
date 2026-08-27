@@ -78,21 +78,19 @@ function planCompareValue(
     | "transfer"
     | "support",
   locale: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   if (!plan) return EMPTY;
   const tier = planTierFromPlanKey(plan.planKey);
-  const isZh = locale.toLowerCase().startsWith("zh");
   switch (capability) {
     case "credits":
-      return isZh
-        ? `${plan.tokens.toLocaleString(locale)} / 周期`
-        : `${plan.tokens.toLocaleString(locale)} / period`;
+      return t("billing.creditsPerPeriod", {
+        count: plan.tokens.toLocaleString(locale),
+      });
     case "trial":
       return plan.trialDays ? `${plan.trialDays}` : EMPTY;
     case "text":
-      return isZh
-        ? "Google、ChatGPT、Claude"
-        : "Google, ChatGPT, Claude";
+      return "Google、ChatGPT、Claude";
     case "image":
       return booleanPlanCapability(locale, tier === "pro" || tier === "premium");
     case "video":
@@ -103,8 +101,11 @@ function planCompareValue(
       return booleanPlanCapability(locale, tier === "premium");
     case "support":
       return booleanPlanCapability(locale, true);
-    default:
+    default: {
+      const _exhaustive: never = capability;
+      void _exhaustive;
       return EMPTY;
+    }
   }
 }
 
@@ -250,61 +251,38 @@ type RecentLedgerEntry =
       billedTokens: number;
     };
 
-function buildPaidPlanFeatures(plan: PlanRecord, locale: string): PlanFeatureItem[] {
+function buildPaidPlanFeatures(
+  plan: PlanRecord,
+  locale: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): PlanFeatureItem[] {
   const tier = planTierFromPlanKey(plan.planKey);
   const count = plan.tokens.toLocaleString(locale);
-  if (locale.toLowerCase().startsWith("zh")) {
-    if (tier === "base") {
-      return [
-        { text: `每周期获得 ${count} 积分` },
-        { text: "支持使用 Google、ChatGPT、Claude 等最新文本模型，不支持图片和视频模型" },
-        { text: "人工支持" },
-      ];
-    }
-    if (tier === "pro") {
-      return [
-        { text: `每周期获得 ${count} 积分` },
-        { text: "支持使用 Google、ChatGPT、Claude 等最新文本模型" },
-        { text: "支持 ChatGPT Images、Nano Banana 等图片模型，不支持视频模型" },
-        { text: "人工支持" },
-      ];
-    }
-    if (tier === "premium") {
-      return [
-        { text: `每周期获得 ${count} 积分` },
-        { text: "支持使用 Google、ChatGPT、Claude 等最新文本模型" },
-        { text: "支持 ChatGPT Images、Nano Banana 等图片模型" },
-        { text: "支持 Seedance、Sora 等视频模型" },
-        { text: "人工支持" },
-      ];
-    }
-  } else {
-    if (tier === "base") {
-      return [
-        { text: `${count} credits per period` },
-        { text: "Access to latest text models including Google, ChatGPT, and Claude; no image or video models" },
-        { text: "Human support" },
-      ];
-    }
-    if (tier === "pro") {
-      return [
-        { text: `${count} credits per period` },
-        { text: "Access to latest text models including Google, ChatGPT, and Claude" },
-        { text: "Supports image models such as ChatGPT Images and Nano Banana; no video models" },
-        { text: "Human support" },
-      ];
-    }
-    if (tier === "premium") {
-      return [
-        { text: `${count} credits per period` },
-        { text: "Access to latest text models including Google, ChatGPT, and Claude" },
-        { text: "Supports image models such as ChatGPT Images and Nano Banana" },
-        { text: "Supports video models such as Seedance and Sora" },
-        { text: "Human support" },
-      ];
-    }
+  if (tier === "base") {
+    return [
+      { text: t("billing.planFeatureCredits", { count }) },
+      { text: t("billing.planFeatureTextModelsBase") },
+      { text: t("billing.planFeatureHumanSupport") },
+    ];
   }
-  return [{ text: `${count} ${locale.toLowerCase().startsWith("zh") ? "积分" : "credits"}` }];
+  if (tier === "pro") {
+    return [
+      { text: t("billing.planFeatureCredits", { count }) },
+      { text: t("billing.planFeatureTextModels") },
+      { text: t("billing.planFeatureImageModelsPro") },
+      { text: t("billing.planFeatureHumanSupport") },
+    ];
+  }
+  if (tier === "premium") {
+    return [
+      { text: t("billing.planFeatureCredits", { count }) },
+      { text: t("billing.planFeatureTextModels") },
+      { text: t("billing.planFeatureImageModels") },
+      { text: t("billing.planFeatureVideoModels") },
+      { text: t("billing.planFeatureHumanSupport") },
+    ];
+  }
+  return [{ text: t("billing.planFeatureCreditsFallback", { count }) }];
 }
 
 function PlanFeatureList({ items }: { items: PlanFeatureItem[] }) {
@@ -409,7 +387,7 @@ function PaidPlanCard({
                 >
                   {isSubmitting && submittingMode === "trial"
                     ? t("billing.redirectingToCheckout")
-                    : t("billing.trialDays", { count: plan.trialDays ?? 0 })}
+                    : t("billing.startTrial", { count: plan.trialDays ?? 0 })}
                 </button>
               </Form>
             ) : null}
@@ -424,7 +402,7 @@ function PaidPlanCard({
               >
                 {isSubmitting && submittingMode === "paid"
                   ? t("billing.redirectingToCheckout")
-                  : t("billing.subscribe")}
+                  : t("billing.subscribeNow")}
               </button>
             </Form>
           </div>
@@ -468,7 +446,7 @@ export function BillingPage() {
   const { isMobile } = useResponsiveLayout();
   const locale = i18n.language;
   const backLabel = t("common.backToPrevious", {
-    defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+    defaultValue: t("billing.pageBack"),
   });
   const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
   const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
@@ -601,7 +579,7 @@ export function BillingPage() {
     shopify.toast.show(actionData.error);
   }
 
-  const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale);
+  const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale, t);
 
   const periodSuffix =
     interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
@@ -696,19 +674,19 @@ export function BillingPage() {
     },
     {
       label: t("billing.compareTokens"),
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "credits", locale)),
+      values: paidPlansToShow.map((plan) => planCompareValue(plan, "credits", locale, t)),
     },
     {
       label: t("billing.compareTrialDays"),
       values: paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
     },
     {
-      label: locale.toLowerCase().startsWith("zh") ? "图片模型" : "Image models",
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale)),
+      label: t("billing.compareImageModels"),
+      values: paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale, t)),
     },
     {
-      label: locale.toLowerCase().startsWith("zh") ? "人工支持" : "Human support",
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "support", locale)),
+      label: t("billing.compareHumanSupport"),
+      values: paidPlansToShow.map((plan) => planCompareValue(plan, "support", locale, t)),
     },
   ];
   const comparePlanCards = [
@@ -813,11 +791,11 @@ export function BillingPage() {
                     <dd>{billing.usedTokens.toLocaleString()}</dd>
                   </div>
                   <div className={styles.accountFactCompact}>
-                    <dt>{locale.toLowerCase().startsWith("zh") ? "已使用占比" : "Usage rate"}</dt>
+                    <dt>{t("billing.usageRateLabel")}</dt>
                     <dd>{t("billing.usagePercentUsed", { percent: usagePercentDisplay })}</dd>
                   </div>
                   <div className={styles.accountFactCompact}>
-                    <dt>{locale.toLowerCase().startsWith("zh") ? "当前计划" : "Current plan"}</dt>
+                    <dt>{t("billing.currentPlanLabel")}</dt>
                     <dd>{currentPlanTagLabel}</dd>
                   </div>
                 </dl>
@@ -829,7 +807,7 @@ export function BillingPage() {
                   <span className={styles.accountCardMeta}>
                     {`${t("billing.historyCount", {
                       count: recentLedgerEntries.length,
-                    })} · ${locale.toLowerCase().startsWith("zh") ? "最近 45 天" : "Last 45 days"}`}
+                    })} · ${t("billing.historyLast45Days")}`}
                   </span>
                 </div>
                 {recentLedgerEntries.length > 0 ? (
@@ -844,9 +822,7 @@ export function BillingPage() {
                             >
                               {item.kind === "billing"
                                 ? resolveBillingEventLabel(item.eventType, t)
-                                : locale.toLowerCase().startsWith("zh")
-                                  ? "积分消耗"
-                                  : "Credit usage"}
+                                : t("billing.creditUsageLabel")}
                             </span>
                             <div className={styles.historyItemMeta}>
                               {item.kind === "billing" ? (
@@ -867,7 +843,7 @@ export function BillingPage() {
                                 <>
                                   <span>{resolveToolUsageFeatureLabel(item.feature, t)}</span>
                                   <span>
-                                    {locale.toLowerCase().startsWith("zh") ? "模型" : "Model"}:{" "}
+                                    {t("billing.modelLabel")}:{" "}
                                     {item.modelKey}
                                   </span>
                                 </>
@@ -907,15 +883,16 @@ export function BillingPage() {
                             className={styles.secondaryEntryButton}
                             onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
                           >
-                            {locale.toLowerCase().startsWith("zh") ? "上一页" : "Previous"}
+                            {t("billing.historyPrevPage")}
                           </button>
                         ) : (
                           <span aria-hidden />
                         )}
                         <span className={styles.historyPaginationText}>
-                          {locale.toLowerCase().startsWith("zh")
-                            ? `第 ${safeHistoryPage} / ${totalHistoryPages} 页`
-                            : `Page ${safeHistoryPage} / ${totalHistoryPages}`}
+                          {t("billing.historyPageStatus", {
+                            page: safeHistoryPage,
+                            total: totalHistoryPages,
+                          })}
                         </span>
                         {safeHistoryPage < totalHistoryPages ? (
                           <button
@@ -927,7 +904,7 @@ export function BillingPage() {
                               )
                             }
                           >
-                            {locale.toLowerCase().startsWith("zh") ? "下一页" : "Next"}
+                            {t("billing.historyNextPage")}
                           </button>
                         ) : (
                           <span aria-hidden />
@@ -959,6 +936,7 @@ export function BillingPage() {
         title={t("billing.pageTitle")}
         backLabel={backLabel}
         fallbackPath="/app"
+        chromeless
       />
 
       {!billing.hasAccess && billing.billingRequired ? (
@@ -971,24 +949,17 @@ export function BillingPage() {
       <section className={styles.quotaSection}>
         <div className={styles.usageHeader}>
           <div className={styles.usageHeaderMain}>
-            <div className={styles.usageTitleRow}>
-              <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
-              <span className={styles.planBadge}>{currentPlanTagLabel}</span>
-              {isSubscriptionTrialActive ? (
-                <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
-              ) : null}
-              <button
-                type="button"
-                className={styles.secondaryEntryButton}
-                onClick={() => setShowAccountDetailPage(true)}
-              >
-                {t("billing.openAccountDetailPage")}
-              </button>
-            </div>
             {quotaMetaDescription ? (
               <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
             ) : null}
           </div>
+          <button
+            type="button"
+            className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
+            onClick={() => setShowAccountDetailPage(true)}
+          >
+            {t("billing.openAccountDetailPage")}
+          </button>
         </div>
         <div className={styles.usageCard}>
           <div className={styles.usageMain}>
@@ -1030,6 +1001,12 @@ export function BillingPage() {
                 className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
                 style={{ width: `${usagePercentForBar}%` }}
               />
+            </div>
+            <div className={styles.usagePlanRow}>
+              <span className={styles.planBadge}>{currentPlanTagLabel}</span>
+              {isSubscriptionTrialActive ? (
+                <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1221,7 +1198,7 @@ export function BillingPage() {
                     <h3 className={styles.compareCardTitle}>{plan.title}</h3>
                     {plan.highlighted ? (
                       <span className={styles.compareCardBadge}>
-                        {locale.toLowerCase().startsWith("zh") ? "当前推荐" : "Highlighted"}
+                        {t("billing.compareHighlighted")}
                       </span>
                     ) : null}
                   </div>
@@ -1245,7 +1222,14 @@ export function BillingPage() {
                     const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
                     return (
                       <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
-                        {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                        <span className={styles.comparePlanHeading}>
+                          {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                          {tier === emphasizedTier ? (
+                            <span className={styles.compareHeaderBadge}>
+                              {t("billing.compareHighlighted")}
+                            </span>
+                          ) : null}
+                        </span>
                       </th>
                     );
                   })}

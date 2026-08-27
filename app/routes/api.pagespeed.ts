@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import {
   PAGE_SPEED_STRATEGIES,
   type PageSpeedResponse,
@@ -17,15 +17,6 @@ function parseStrategy(raw: unknown): PageSpeedStrategy {
     return raw as PageSpeedStrategy;
   }
   return "mobile";
-}
-
-function parseLocale(raw: unknown, request: Request, session: unknown): string {
-  if (typeof raw === "string" && raw.trim()) {
-    return resolvePageSpeedLocale(raw.trim());
-  }
-  return resolvePageSpeedLocale(
-    detectRequestLocale(request, { sessionLocale: readShopifySessionLocale(session) }),
-  );
 }
 
 function errorResponse(error: unknown): Response {
@@ -57,7 +48,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const body = (await request.json().catch(() => ({}))) as {
     url?: unknown;
     strategy?: unknown;
@@ -65,7 +56,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   };
   const url = typeof body.url === "string" ? body.url : "";
   const strategy = parseStrategy(body.strategy);
-  const reportLocale = parseLocale(body.locale, request, session);
+  const reportLocale =
+    typeof body.locale === "string" && body.locale.trim()
+      ? resolvePageSpeedLocale(body.locale.trim())
+      : resolvePageSpeedLocale(
+          await resolveUiLocale(request, {
+            admin,
+            logContext: `pagespeed shop=${session.shop}`,
+          }),
+        );
 
   try {
     console.info(

@@ -124,24 +124,22 @@ export const mobilePageContentStyle: CSSProperties = {
 export const pageBackButtonStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: "0.45rem",
+  gap: "0.4rem",
   width: "fit-content",
-  padding: "0.44rem 0.78rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surface,
+  padding: "0.2rem 0",
+  border: "none",
+  background: "transparent",
   color: pageColorTokens.textSecondary,
   fontSize: "0.8125rem",
-  fontWeight: 620,
+  fontWeight: 600,
   cursor: "pointer",
   boxShadow: "none",
-  transition: "border-color 120ms ease, color 120ms ease, background 120ms ease",
 };
 
 export const pageBackButtonMobileStyle: CSSProperties = {
   ...pageBackButtonStyle,
   minHeight: 36,
-  padding: "0.5rem 0.75rem",
+  padding: "0.5rem 0",
   fontSize: "0.75rem",
 };
 
@@ -186,12 +184,12 @@ export const pageHeaderNavMainStyle: CSSProperties = {
   minWidth: 0,
   display: "flex",
   flexDirection: "column",
-  gap: "0.58rem",
+  gap: "0.75rem",
 };
 
 export const pageHeaderNavHeadingStyle: CSSProperties = {
   display: "grid",
-  gap: "0.2rem",
+  gap: "0.3rem",
 };
 
 export const pageHeaderNavEyebrowStyle: CSSProperties = {
@@ -587,6 +585,7 @@ export function PageBackButton({
   return (
     <button
       type="button"
+      className="page-back-link"
       style={{
         ...(isMobile ? pageBackButtonMobileStyle : pageBackButtonStyle),
         ...style,

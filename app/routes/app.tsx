@@ -20,7 +20,7 @@ import {
   buildLocaleCookieHeader,
   normalizeLocale,
 } from "../i18n/config";
-import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
@@ -113,8 +113,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
 
-  const locale = detectRequestLocale(request, {
-    sessionLocale: readShopifySessionLocale(session),
+  const locale = await resolveUiLocale(request, {
+    admin,
+    logContext: `app-shell shop=${session.shop}`,
   });
   const { nav, home } = getAppEntryConfig();
   const buildInfo = getSparkBuildInfo();

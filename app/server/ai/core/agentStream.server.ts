@@ -12,7 +12,9 @@ import {
   extractMessagesContext,
 } from "../utils/langchainMessageText";
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
+import { buildFallbackAssistantSystemPrompt } from "./shopAssistantPrompt";
 import { polishFinalReply } from "../utils/polishFinalReply";
+import { DEFAULT_LOCALE, type SupportedLocale } from "../../../i18n/config";
 import { createLangsmithTracer, getTraceUrl } from "../utils/langsmith.server";
 import {
   extractTokenUsageFromMessages,
@@ -153,13 +155,12 @@ async function generateFallbackReplyStream(
   input: string,
   contextText: string,
   shop?: string,
+  locale: SupportedLocale = DEFAULT_LOCALE,
 ): Promise<ReadableStream<StreamChunk>> {
   const model = getShopChatModel();
 
   const stream = await model.stream([
-    new SystemMessage(
-      "你是一个店铺 AI 助手。请基于用户问题和已知上下文直接给出有帮助的回答。若信息不足，请明确不确定点并给出下一步可执行建议。必须使用简体中文，不要输出 Markdown 表格。",
-    ),
+    new SystemMessage(buildFallbackAssistantSystemPrompt(locale)),
     new HumanMessage(
       `用户问题：${input}\n\n已知上下文（可能包含工具执行结果）：\n${contextText || "（无）"}`,
     ),
@@ -457,6 +458,7 @@ export function invokeChatAgentStream(
             lastUserText,
             extractMessagesContext(resultMessages),
             shop,
+            context.locale ?? DEFAULT_LOCALE,
           );
           const reader = fb.getReader();
           // eslint-disable-next-line no-constant-condition

@@ -1,4 +1,5 @@
 /** 对话右侧"当前上下文 + 本会话任务"侧栏（从 WorkspaceAppShellPage 的 ChatPanel 拆出，仅桌面端展示）。 */
+import { useTranslation } from "react-i18next";
 import { describeObjectQuery, objectQueryKindLabel } from "../../../lib/objectQuerySpec";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
@@ -26,11 +27,11 @@ import {
 
 type TaskStatusBucket = "running" | "pendingReview" | "succeeded" | "failed";
 
-const bucketMeta: Record<TaskStatusBucket, { label: string; color: string }> = {
-  succeeded: { label: "完成", color: "#00a67c" },
-  pendingReview: { label: "待审核", color: "#f0a01d" },
-  running: { label: "进行中", color: "#4070f4" },
-  failed: { label: "失败", color: "#d72c0d" },
+const bucketColors: Record<TaskStatusBucket, string> = {
+  succeeded: "#00a67c",
+  pendingReview: "#f0a01d",
+  running: "#4070f4",
+  failed: "#d72c0d",
 };
 
 const bucketOrder: TaskStatusBucket[] = ["succeeded", "pendingReview", "running", "failed"];
@@ -66,6 +67,13 @@ function ConversationTasksCard({
   onOpenTasks: (opts?: OpenWorkspaceTasksOptions) => void;
   onLocateRun: (runId: string) => void;
 }) {
+  const { t } = useTranslation();
+  const bucketLabels: Record<TaskStatusBucket, string> = {
+    succeeded: t("workspace.shell.contextSidebar.bucketSucceeded"),
+    pendingReview: t("workspace.shell.contextSidebar.bucketPendingReview"),
+    running: t("workspace.shell.contextSidebar.bucketRunning"),
+    failed: t("workspace.shell.contextSidebar.bucketFailed"),
+  };
   const allTasks = taskRuns
     .flatMap((run) => run.taskIds)
     .map((id) => tasksById[id])
@@ -77,7 +85,7 @@ function ConversationTasksCard({
   return (
     <div style={surfaceCardStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={sectionTitleStyle}>本会话任务</div>
+        <div style={sectionTitleStyle}>{t("workspace.shell.contextSidebar.tasksTitle")}</div>
         {counts.running > 0 ? (
           <span
             style={{
@@ -89,14 +97,14 @@ function ConversationTasksCard({
               color: "#2c4fc4",
             }}
           >
-            进行中 {counts.running}
+            {t("workspace.shell.contextSidebar.tasksRunningBadge", { count: counts.running })}
           </span>
         ) : null}
       </div>
 
       {taskRuns.length === 0 ? (
         <div style={{ fontSize: 13, color: "#8c9196", lineHeight: 1.6 }}>
-          通过任务确认卡片执行后，任务会出现在这里。
+          {t("workspace.shell.contextSidebar.tasksEmpty")}
         </div>
       ) : (
         <>
@@ -108,7 +116,7 @@ function ConversationTasksCard({
                   .map((bucket) => (
                     <div
                       key={bucket}
-                      style={{ flex: counts[bucket], background: bucketMeta[bucket].color }}
+                      style={{ flex: counts[bucket], background: bucketColors[bucket] }}
                     />
                   ))}
               </div>
@@ -117,8 +125,8 @@ function ConversationTasksCard({
                   .filter((bucket) => counts[bucket] > 0)
                   .map((bucket) => (
                     <span key={bucket}>
-                      <span style={{ color: bucketMeta[bucket].color }}>●</span>{" "}
-                      {bucketMeta[bucket].label} {counts[bucket]}
+                      <span style={{ color: bucketColors[bucket] }}>●</span>{" "}
+                      {bucketLabels[bucket]} {counts[bucket]}
                     </span>
                   ))}
               </div>
@@ -140,7 +148,10 @@ function ConversationTasksCard({
               const doneCount = runCounts.succeeded + runCounts.failed + runCounts.pendingReview;
               const timeLabel = formatTimeLabel(new Date(run.startedAt));
               const metaParts = [
-                `${run.taskIds.length} 个任务`,
+                t("workspace.shell.contextSidebar.tasksSummary", {
+                  runs: 1,
+                  tasks: run.taskIds.length,
+                }),
                 ...(Number.isNaN(new Date(run.startedAt).getTime()) ? [] : [timeLabel]),
                 ...(run.paramsSummary.length > 0 ? [run.paramsSummary[0]] : []),
               ];
@@ -195,7 +206,7 @@ function ConversationTasksCard({
                     </span>
                     {needsReview ? (
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#9a5b00", flexShrink: 0 }}>
-                        去审核 →
+                        {t("workspace.shell.contextSidebar.bucketPendingReview")} →
                       </span>
                     ) : allDone ? (
                       <span
@@ -209,7 +220,9 @@ function ConversationTasksCard({
                           flexShrink: 0,
                         }}
                       >
-                        {runCounts.failed > 0 ? `失败 ${runCounts.failed}` : "完成"}
+                        {runCounts.failed > 0
+                          ? `${bucketLabels.failed} ${runCounts.failed}`
+                          : bucketLabels.succeeded}
                       </span>
                     ) : runTasks.length > 0 ? (
                       <span
@@ -229,7 +242,7 @@ function ConversationTasksCard({
                   </div>
                   <span style={{ fontSize: 11, color: needsReview ? "#b45309" : "#8c9196" }}>
                     {metaParts.join(" · ")}
-                    {run.errorCount > 0 ? ` · ${run.errorCount} 个创建失败` : ""}
+                    {run.errorCount > 0 ? ` · ${run.errorCount}` : ""}
                   </span>
                 </button>
               );
@@ -247,7 +260,10 @@ function ConversationTasksCard({
             }}
           >
             <span style={{ fontSize: 11, color: "#8c9196" }}>
-              共 {taskRuns.length} 次执行 · {totalTaskCount} 个任务
+              {t("workspace.shell.contextSidebar.tasksSummary", {
+                runs: taskRuns.length,
+                tasks: totalTaskCount,
+              })}
             </span>
             <button
               type="button"
@@ -262,7 +278,7 @@ function ConversationTasksCard({
                 fontWeight: 600,
               }}
             >
-              查看全部任务 →
+              {t("workspace.shell.contextSidebar.viewAllTasks")}
             </button>
           </div>
         </>
@@ -284,6 +300,7 @@ export function ChatContextSidebar({
   onOpenTasks: (opts?: OpenWorkspaceTasksOptions) => void;
   onLocateRun: (runId: string) => void;
 }) {
+  const { t } = useTranslation();
   const {
     selectedObjectsByType,
     objectQuerySelectionByType,
@@ -300,14 +317,14 @@ export function ChatContextSidebar({
     <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
       <div style={surfaceCardStyle}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={sectionTitleStyle}>当前上下文</div>
+          <div style={sectionTitleStyle}>{t("workspace.shell.contextSidebar.title")}</div>
           {filledContextCount > 0 ? (
             <button
               type="button"
               style={{ fontSize: 11, color: "#6d7175", background: "none", border: "none", cursor: "pointer", padding: 0 }}
               onClick={clearContext}
             >
-              清空
+              {t("workspace.shell.contextSidebar.clear")}
             </button>
           ) : null}
         </div>
@@ -319,14 +336,18 @@ export function ChatContextSidebar({
           return (
             <div key={type} style={ctxGroupStyle}>
               <div style={ctxGroupLabelStyle}>
-                {objectQueryKindLabel(type)} · 按条件圈定
-                {query.matchCount != null ? ` · 约 ${query.matchCount} 个` : ""}
+                {t("workspace.shell.contextSidebar.queryTagged", {
+                  kind: objectQueryKindLabel(type),
+                })}
+                {query.matchCount != null
+                  ? t("workspace.shell.contextSidebar.queryApprox", { count: query.matchCount })
+                  : ""}
               </div>
               <div style={{ fontSize: 12, color: "#202223", lineHeight: 1.5 }}>
                 {describeObjectQuery(query)}
               </div>
               <div style={{ fontSize: 11, color: "#8c9196", marginTop: 2 }}>
-                执行时按条件重新求值，不固化 ID
+                {t("workspace.shell.contextSidebar.queryHint")}
               </div>
             </div>
           );
@@ -335,7 +356,11 @@ export function ChatContextSidebar({
         {/* Products */}
         {selectedObjectsByType.product.length > 0 ? (
           <div style={ctxGroupStyle}>
-            <div style={ctxGroupLabelStyle}>商品 · {selectedObjectsByType.product.length} 个</div>
+            <div style={ctxGroupLabelStyle}>
+              {t("workspace.shell.contextSidebar.products", {
+                count: selectedObjectsByType.product.length,
+              })}
+            </div>
             {selectedObjectsByType.product.map((item) => (
               <div key={item.id} style={ctxItemRowStyle}>
                 {item.imageUrl ? (
@@ -352,7 +377,11 @@ export function ChatContextSidebar({
         {/* Articles */}
         {selectedObjectsByType.article.length > 0 ? (
           <div style={ctxGroupStyle}>
-            <div style={ctxGroupLabelStyle}>文章 · {selectedObjectsByType.article.length} 篇</div>
+            <div style={ctxGroupLabelStyle}>
+              {t("workspace.shell.contextSidebar.articles", {
+                count: selectedObjectsByType.article.length,
+              })}
+            </div>
             {selectedObjectsByType.article.map((item) => (
               <div key={item.id} style={ctxItemRowStyle}>
                 {item.imageUrl ? (
@@ -369,7 +398,9 @@ export function ChatContextSidebar({
         {/* Files */}
         {selectedFileIds.length > 0 ? (
           <div style={ctxGroupStyle}>
-            <div style={ctxGroupLabelStyle}>文件 · {selectedFileIds.length} 个</div>
+            <div style={ctxGroupLabelStyle}>
+              {t("workspace.shell.contextSidebar.files", { count: selectedFileIds.length })}
+            </div>
             {selectedFileIds.map((id) => {
               const file = localFiles.find((f) => f.id === id);
               if (!file) return null;
@@ -384,7 +415,9 @@ export function ChatContextSidebar({
                     </div>
                   </div>
                   {file.uploading ? (
-                    <span style={{ fontSize: 10, color: "#6d7175", flexShrink: 0 }}>上传中…</span>
+                    <span style={{ fontSize: 10, color: "#6d7175", flexShrink: 0 }}>
+                      {t("workspace.shell.contextSidebar.uploading")}
+                    </span>
                   ) : null}
                 </div>
               );
@@ -395,7 +428,7 @@ export function ChatContextSidebar({
         {/* Empty state */}
         {totalSelectedObjects === 0 && totalQuerySelections === 0 && selectedFileIds.length === 0 ? (
           <div style={{ fontSize: 13, color: "#8c9196", lineHeight: 1.6 }}>
-            在下方选择商品、文章或上传文件，它们会出现在这里并随消息一起发给 AI。
+            {t("workspace.shell.contextSidebar.empty")}
           </div>
         ) : null}
       </div>

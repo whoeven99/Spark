@@ -21,7 +21,8 @@ const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
 
 type LanguageSelectorProps = {
   locale?: SupportedLocale;
-  variant?: "bar" | "inline";
+  /** bar：独立灰条含标签；inline：紧凑行内；fill：无标签、撑满父容器（账户菜单等） */
+  variant?: "bar" | "inline" | "fill";
 };
 
 export function LanguageSelector({
@@ -31,22 +32,41 @@ export function LanguageSelector({
   const { i18n, t } = useTranslation();
   const { setLocale, isSyncingLocale } = useLocaleActions();
   const isInline = variant === "inline";
+  const isFill = variant === "fill";
+
+  const selectStyle = isFill
+    ? {
+        ...pageSelectCompactStyle(isSyncingLocale),
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        flex: "none",
+      }
+    : isInline
+      ? {
+          ...pageSelectCompactStyle(isSyncingLocale),
+          minWidth: "8.5rem",
+          maxWidth: "12rem",
+        }
+      : pageSelectCompactStyle(isSyncingLocale);
 
   return (
     <div
       style={
-        isInline
-          ? {
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }
-          : languageSelectorBarStyle
+        isFill
+          ? { display: "block", width: "100%", minWidth: 0 }
+          : isInline
+            ? {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }
+            : languageSelectorBarStyle
       }
       role="group"
       aria-label={t("common.languageSelectorLabel")}
     >
-      {!isInline ? (
+      {!isInline && !isFill ? (
         <span style={languageSelectorLabelStyle}>{t("common.languageSelectorLabel")}</span>
       ) : null}
       <select
@@ -59,15 +79,7 @@ export function LanguageSelector({
           setLocale(next);
         }}
         disabled={isSyncingLocale}
-        style={
-          isInline
-            ? {
-                ...pageSelectCompactStyle(isSyncingLocale),
-                minWidth: "8.5rem",
-                maxWidth: "12rem",
-              }
-            : pageSelectCompactStyle(isSyncingLocale)
-        }
+        style={selectStyle}
       >
         {SUPPORTED_LOCALES.map((item) => (
           <option key={item} value={item}>

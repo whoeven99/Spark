@@ -8,6 +8,7 @@ import type {
   SkillVisibility,
   StepInput,
 } from "./skillTypes.server";
+import type { SupportedLocale } from "../../../i18n/config";
 
 export interface UserProfile {
   preferences?: Record<string, unknown>;
@@ -18,6 +19,8 @@ export interface AgentContext {
   admin: ShopifyAdminGraphqlClient;
   profile?: UserProfile;
   shop?: string;
+  /** UI/AI 回复语言（与 detectRequestLocale 口径一致） */
+  locale?: SupportedLocale;
   /**
    * 统一进度发射器（原子 Skill 与 Playbook 共用）。
    * 由 agentStream 在 graph.stream() 前注入，映射为 SSE `skill_progress`。

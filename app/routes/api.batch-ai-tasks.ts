@@ -15,7 +15,7 @@ import {
   createPictureTranslateBatchTasks,
   createProductImproveBatchTasks,
 } from "../server/aiTask/batchTaskCreate.server";
-import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { initI18n } from "../i18n";
 
 const MAX_BATCH = 20;
@@ -84,8 +84,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
-  const locale = detectRequestLocale(request, {
-    sessionLocale: readShopifySessionLocale(session),
+  const locale = await resolveUiLocale(request, {
+    admin,
+    logContext: `batch-ai-tasks shop=${shop}`,
   });
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);

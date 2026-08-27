@@ -41,9 +41,16 @@ import {
   mobileSurfaceCardStyle,
   mobileTextareaStyle,
   mobileToolbarBarStyle,
+  mobileToolbarIconGroupStyle,
   mobileToolbarStatusGroupStyle,
   mutedMetaStyle,
   primaryButtonStyle,
+  recommendedMenuGridStyle,
+  recommendedMenuItemStyle,
+  recommendedMenuStyle,
+  recommendedMenuTitleStyle,
+  recommendedTriggerStyle,
+  recommendedChevronStyle,
   scrollBottomButtonStyle,
   scrollBottomOverlayStyle,
   selectionBubbleCloseStyle,
@@ -55,10 +62,14 @@ import {
   toolbarClearStyle,
   toolbarCountStyle,
   toolbarDockStyle,
+  toolbarContextGroupStyle,
+  toolbarGroupDividerStyle,
+  toolbarGroupLabelStyle,
   toolbarIconGlyphStyle,
   toolbarIconGroupStyle,
   toolbarPillButtonStyle,
   toolbarStatusGroupStyle,
+  toolbarTriggerWrapStyle,
 } from "./styles";
 
 type ChatStreamController = ReturnType<typeof useChatStream>;
@@ -74,6 +85,7 @@ export function ChatPanel({
   showStreamingReply,
   onDraftChange,
   onSend,
+  onRecommendedPrompt,
   onAbortStream,
   onAiTaskUpdated,
   onOpenTasks,
@@ -87,6 +99,7 @@ export function ChatPanel({
   showStreamingReply: boolean;
   onDraftChange: (value: string) => void;
   onSend: () => void | Promise<void>;
+  onRecommendedPrompt: (prompt: string) => void | Promise<void>;
   onAbortStream: () => void;
   onAiTaskUpdated: (
     conversationId: string,
@@ -103,7 +116,9 @@ export function ChatPanel({
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mobileComposerRef = useRef<HTMLDivElement | null>(null);
+  const recommendedMenuRef = useRef<HTMLDivElement | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [isRecommendedMenuOpen, setIsRecommendedMenuOpen] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
 
@@ -181,24 +196,71 @@ export function ChatPanel({
     const manualCount = selectedObjectsByType[type].length;
     if (manualCount > 0) return `${base} ${manualCount}`;
     const query = objectQuerySelectionByType[type];
-    if (query) return query.matchCount != null ? `${base} 条件·${query.matchCount}` : `${base} 条件`;
+    if (query) {
+      return query.matchCount != null
+        ? `${base} ${t("workspace.shell.chat.toolQueryCount", { count: query.matchCount })}`
+        : `${base} ${t("workspace.shell.chat.toolQuerySuffix")}`;
+    }
     return base;
   };
 
   const toolItems: Array<{ key: ContextTool; label: string; icon: string; active: boolean }> = [
-    { key: "product", label: queryToolLabel("product", "商品"), icon: "◫", active: activeContextTool === "product" },
-    { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
-    { key: "article", label: queryToolLabel("article", "文章"), icon: "≣", active: activeContextTool === "article" },
-    { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
+    { key: "product", label: queryToolLabel("product", t("workspace.shell.chat.toolProduct")), icon: "◫", active: activeContextTool === "product" },
+    { key: "order", label: selectedObjectsByType.order.length > 0 ? `${t("workspace.shell.chat.toolOrder")} ${selectedObjectsByType.order.length}` : t("workspace.shell.chat.toolOrder"), icon: "◎", active: activeContextTool === "order" },
+    { key: "article", label: queryToolLabel("article", t("workspace.shell.chat.toolArticle")), icon: "≣", active: activeContextTool === "article" },
+    { key: "file", label: selectedFileIds.length > 0 ? `${t("workspace.shell.chat.toolFile")} ${selectedFileIds.length}` : t("workspace.shell.chat.toolFile"), icon: "↑", active: activeContextTool === "file" },
   ];
+  const recommendedActions = useMemo(
+    () => [
+      {
+        label: t("workspace.homeV2.quickPrompts.todayOperations.label"),
+        prompt: t("workspace.homeV2.quickPrompts.todayOperations.prompt"),
+      },
+      {
+        label: t("workspace.homeV2.quickPrompts.optimizeCopy.label"),
+        prompt: t("workspace.homeV2.quickPrompts.optimizeCopy.prompt"),
+      },
+      {
+        label: t("workspace.homeV2.quickPrompts.generateImage.label"),
+        prompt: t("workspace.homeV2.quickPrompts.generateImage.prompt"),
+      },
+      {
+        label: t("workspace.homeV2.quickPrompts.translateImage.label"),
+        prompt: t("workspace.homeV2.quickPrompts.translateImage.prompt"),
+      },
+    ],
+    [t],
+  );
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
-    ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
-    ...(objectQuerySelectionByType.product ? [{ key: "product" as const, label: `按条件圈定商品${objectQuerySelectionByType.product.matchCount != null ? `（约 ${objectQuerySelectionByType.product.matchCount} 个）` : ""}` }] : []),
-    ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
-    ...(selectedObjectsByType.article.length > 0 ? [{ key: "article" as const, label: `已选择 ${selectedObjectsByType.article.length} 篇文章` }] : []),
-    ...(objectQuerySelectionByType.article ? [{ key: "article" as const, label: `按条件圈定文章${objectQuerySelectionByType.article.matchCount != null ? `（约 ${objectQuerySelectionByType.article.matchCount} 篇）` : ""}` }] : []),
-    ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
+    ...(selectedObjectsByType.product.length > 0
+      ? [{ key: "product" as const, label: t("workspace.shell.chat.selectedProducts", { count: selectedObjectsByType.product.length }) }]
+      : []),
+    ...(objectQuerySelectionByType.product
+      ? [{
+          key: "product" as const,
+          label: objectQuerySelectionByType.product.matchCount != null
+            ? t("workspace.shell.chat.queryProductsApprox", { count: objectQuerySelectionByType.product.matchCount })
+            : t("workspace.shell.chat.queryProducts"),
+        }]
+      : []),
+    ...(selectedObjectsByType.order.length > 0
+      ? [{ key: "order" as const, label: t("workspace.shell.chat.selectedOrders", { count: selectedObjectsByType.order.length }) }]
+      : []),
+    ...(selectedObjectsByType.article.length > 0
+      ? [{ key: "article" as const, label: t("workspace.shell.chat.selectedArticles", { count: selectedObjectsByType.article.length }) }]
+      : []),
+    ...(objectQuerySelectionByType.article
+      ? [{
+          key: "article" as const,
+          label: objectQuerySelectionByType.article.matchCount != null
+            ? t("workspace.shell.chat.queryArticlesApprox", { count: objectQuerySelectionByType.article.matchCount })
+            : t("workspace.shell.chat.queryArticles"),
+        }]
+      : []),
+    ...(selectedFileIds.length > 0
+      ? [{ key: "file" as const, label: t("workspace.shell.chat.selectedFiles", { count: selectedFileIds.length }) }]
+      : []),
   ];
 
   /**
@@ -265,6 +327,26 @@ export function ChatPanel({
     focusComposerInput();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id, isStreaming]);
+
+  useEffect(() => {
+    if (!isRecommendedMenuOpen) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!recommendedMenuRef.current?.contains(event.target as Node)) {
+        setIsRecommendedMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setIsRecommendedMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isRecommendedMenuOpen]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -351,19 +433,66 @@ export function ChatPanel({
       />
       <div style={toolbarDockStyle}>
         <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
-          <div style={toolbarIconGroupStyle}>
-            {toolItems.map((item) => (
+          <div style={isMobile ? mobileToolbarIconGroupStyle : toolbarIconGroupStyle}>
+            <div style={toolbarContextGroupStyle}>
+              <span style={toolbarGroupLabelStyle}>
+                {t("workspace.shell.chat.addContext")}
+              </span>
+              {toolItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  style={toolbarPillButtonStyle(item.active)}
+                  onClick={() => toggleContextTool(item.key)}
+                  title={item.label}
+                >
+                  <span style={toolbarIconGlyphStyle}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+            {!isMobile ? <span aria-hidden="true" style={toolbarGroupDividerStyle} /> : null}
+            <div ref={recommendedMenuRef} style={toolbarTriggerWrapStyle}>
               <button
-                key={item.key}
                 type="button"
-                style={toolbarPillButtonStyle(item.active)}
-                onClick={() => toggleContextTool(item.key)}
-                title={item.label}
+                className="workspace-recommended-trigger"
+                style={recommendedTriggerStyle(isRecommendedMenuOpen)}
+                onClick={() => setIsRecommendedMenuOpen((open) => !open)}
+                disabled={isStreaming}
+                aria-expanded={isRecommendedMenuOpen}
+                aria-haspopup="menu"
               >
-                <span style={toolbarIconGlyphStyle}>{item.icon}</span>
-                <span>{item.label}</span>
+                <span style={toolbarIconGlyphStyle}>✦</span>
+                <span>{t("workspace.shell.chat.recommended")}</span>
+                <span aria-hidden="true" style={recommendedChevronStyle}>
+                  ⌄
+                </span>
               </button>
-            ))}
+              {isRecommendedMenuOpen ? (
+                <div style={recommendedMenuStyle} role="menu">
+                  <div style={recommendedMenuTitleStyle}>
+                    {t("workspace.shell.chat.recommendedActions")}
+                  </div>
+                  <div style={recommendedMenuGridStyle}>
+                    {recommendedActions.map((action) => (
+                      <button
+                        key={action.label}
+                        type="button"
+                        className="workspace-recommended-action"
+                        style={recommendedMenuItemStyle}
+                        role="menuitem"
+                        onClick={() => {
+                          setIsRecommendedMenuOpen(false);
+                          void onRecommendedPrompt(action.prompt);
+                        }}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
           <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
             {filledContextCount > 0 ? (

@@ -9,6 +9,7 @@ import {
   billingErrorToResponse,
   requireBillingAccess,
 } from "./billing/index.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -64,6 +65,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[LangSmith] Streaming chat tracing started: ${getTraceUrl() ?? "enabled"}`);
     }
 
+    const locale = await resolveUiLocale(request, {
+      admin,
+      logContext: `chat-stream shop=${shop ?? ""}`,
+    });
+
     const windowedMessages = await buildContextWindow(agentMessages, { shop });
 
     const messagesWithFiles =
@@ -76,6 +82,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       context: {
         admin,
         shop,
+        locale,
       },
       config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
     });

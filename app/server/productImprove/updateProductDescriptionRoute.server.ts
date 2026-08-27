@@ -5,7 +5,8 @@ import {
   executeUpdateProductDescriptionRequest,
   parseUpdateProductDescriptionBody,
 } from "./updateProductDescriptionHttp.server";
-import { detectRequestLocale, readShopifySessionLocale } from "../../i18n/detector.server";
+import { detectRequestLocale } from "../../i18n/detector.server";
+import { resolveUiLocale } from "../../i18n/resolveUiLocale.server";
 import { initI18n } from "../../i18n";
 
 const LOG_PREFIX = "[UpdateProductDescriptionRoute]";
@@ -106,8 +107,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
-    const locale = detectRequestLocale(request, {
-      sessionLocale: readShopifySessionLocale(session),
+    const locale = await resolveUiLocale(request, {
+      admin,
+      logContext: `update-product-description shop=${session.shop}`,
     });
     const i18n = initI18n(locale);
     const t = i18n.t.bind(i18n);

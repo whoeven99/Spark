@@ -13,27 +13,13 @@ export function readClientStoredLocale(): SupportedLocale | null {
   return normalizeLocale(value);
 }
 
-export function detectClientNavigatorLocale(): SupportedLocale {
-  if (typeof navigator === "undefined") {
-    return DEFAULT_LOCALE;
-  }
-
-  const candidates = [...(navigator.languages ?? []), navigator.language];
-  for (const candidate of candidates) {
-    const normalized = normalizeLocale(candidate);
-    if (normalized) {
-      return normalized;
-    }
-  }
-  return DEFAULT_LOCALE;
-}
-
 /**
- * 客户端解析 UI 语言（无 localStorage 手动选择时）：
- * 1. localStorage
- * 2. 服务端 loader 已解析结果（Cookie / Shopify locale / Accept-Language）
- * 3. 浏览器 navigator.languages
- * 4. 英语
+ * 客户端解析 UI 语言：
+ * 1. localStorage（仅手动切换时写入）
+ * 2. 服务端 loader 结果（Cookie 手动偏好 / 店铺主语言）
+ * 3. 英语
+ *
+ * 不再用 navigator 覆盖店铺语言，避免未手动选择时被浏览器语言抢走。
  */
 export function resolveClientLocale(serverLocale: SupportedLocale): SupportedLocale {
   const stored = readClientStoredLocale();
@@ -46,5 +32,5 @@ export function resolveClientLocale(serverLocale: SupportedLocale): SupportedLoc
     return fromServer;
   }
 
-  return detectClientNavigatorLocale();
+  return DEFAULT_LOCALE;
 }

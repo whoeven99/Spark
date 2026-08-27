@@ -27,7 +27,8 @@ import {
 import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import { getEstimatedSeconds, getEstimatedCredits } from "../server/aiTask/aiTaskEstimation.server";
-import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { detectRequestLocale } from "../i18n/detector.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { initI18n } from "../i18n";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
@@ -138,8 +139,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
-    const locale = detectRequestLocale(request, {
-      sessionLocale: readShopifySessionLocale(session),
+    const locale = await resolveUiLocale(request, {
+      admin,
+      logContext: `studio-copy shop=${session.shop}`,
     });
     const i18n = initI18n(locale);
     const t = i18n.t.bind(i18n);
