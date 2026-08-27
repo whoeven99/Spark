@@ -5,6 +5,10 @@ import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.s
 import { parseClientChatMessages, buildContextWindow } from "./chatPayload.server";
 import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
 import { injectFilesIntoMessages } from "./fileContext/fileContextInjector.server";
+import {
+  billingErrorToResponse,
+  requireBillingAccess,
+} from "./billing/index.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -47,6 +51,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
+    const shop = session.shop?.trim();
+    if (shop) {
+      await requireBillingAccess(shop);
+    }
 
     const langsmithTracer = isLangsmithAvailable()
       ? await createLangsmithTracer(`chat-stream-${Date.now()}`)
@@ -56,18 +64,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[LangSmith] Streaming chat tracing started: ${getTraceUrl() ?? "enabled"}`);
     }
 
-    const windowedMessages = await buildContextWindow(agentMessages);
+    const windowedMessages = await buildContextWindow(agentMessages, { shop });
 
     const messagesWithFiles =
-      fileIds.length && session?.shop
-        ? await injectFilesIntoMessages(windowedMessages, session.shop, fileIds)
+      fileIds.length && shop
+        ? await injectFilesIntoMessages(windowedMessages, shop, fileIds)
         : windowedMessages;
 
     const stream = invokeChatAgentStream({
       messages: messagesWithFiles,
       context: {
         admin,
-        shop: session?.shop,
+        shop,
       },
       config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
     });
@@ -93,6 +101,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   } catch (error) {
     console.error("Chat agent error:", error);
+    const billingResponse = billingErrorToResponse(error);
+    if (billingResponse) {
+      const body = (await billingResponse.json()) as { errorMsg?: string };
+      const encoder = new TextEncoder();
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: body.errorMsg ?? "Token 余额不足或尚未订阅，请前往账户页开通",
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      });
+      return new Response(errorStream, {
+        status: 402,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
+      });
+    }
     const hint =
       error instanceof Error && error.message.includes("DEEPSEEK_API_KEY")
         ? "未配置 DEEPSEEK_API_KEY，请在环境变量中设置后再试。"

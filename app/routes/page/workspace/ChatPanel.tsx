@@ -1,18 +1,13 @@
 /** 工作台对话 Panel：消息列表 + 输入区 + 上下文工具栏（从 WorkspaceAppShellPage 拆出）。 */
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
 import { ContextWindowIndicator } from "../../component/chat/ContextWindowIndicator";
 import { estimateMessagesTokens } from "../../../lib/tokenEstimate";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { useChatStream } from "../chat/useChatStream";
-import type {
-  AutomationOverview,
-  AutomationOverviewResponse,
-  PlaybookSurfaceItem,
-} from "../../../lib/automationOverviewTypes";
-import { normalizeAutomationOverview } from "../../../lib/automationOverviewTypes";
 import { ChatContextSidebar } from "./ChatContextSidebar";
 import { ContextToolModal } from "./ContextToolModal";
 import {
@@ -32,18 +27,14 @@ import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import {
-  buttonRowStyle,
   chatLayoutStyle,
   composerBoxStyle,
-  composerFooterStyle,
+  composerSurfaceStyle,
   conversationMetaRowStyle,
   conversationMetaTitleStyle,
-  footerLeftStyle,
   ghostButtonStyle,
   messageListStyle,
-  mobileButtonRowStyle,
   mobileChatLayoutStyle,
-  mobileComposerFooterStyle,
   mobileConversationMetaRowStyle,
   mobileFixedComposerCardStyle,
   mobileFixedComposerWrapStyle,
@@ -55,7 +46,6 @@ import {
   primaryButtonStyle,
   scrollBottomButtonStyle,
   scrollBottomOverlayStyle,
-  sectionTextStyle,
   selectionBubbleCloseStyle,
   selectionBubbleRowStyle,
   selectionBubbleStyle,
@@ -108,6 +98,7 @@ export function ChatPanel({
   /** TaskProposal 执行成功：向对话追加「任务已开始」新一轮 */
   onTaskProposalExecuted: (conversationId: string, run: TaskRunPayload) => void;
 }) {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -115,8 +106,6 @@ export function ChatPanel({
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
-  const [automationOverview, setAutomationOverview] =
-    useState<AutomationOverview | null>(null);
 
   const {
     isStreaming,
@@ -176,20 +165,10 @@ export function ChatPanel({
     () => conversationRuns.flatMap((run) => run.taskIds),
     [conversationRuns],
   );
+  const showContextSidebar = filledContextCount > 0 || conversationRuns.length > 0;
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
   const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
-  const playbookShortcuts = useMemo<PlaybookSurfaceItem[]>(() => {
-    if (!automationOverview) return [];
-    const recommended = Array.isArray(automationOverview.recommendedPlaybooks)
-      ? automationOverview.recommendedPlaybooks
-      : [];
-    const templates = Array.isArray(automationOverview.templates)
-      ? automationOverview.templates
-      : [];
-    const source = recommended.length > 0 ? recommended : templates;
-    return source.slice(0, isMobile ? 3 : 5);
-  }, [automationOverview, isMobile]);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -269,23 +248,6 @@ export function ChatPanel({
     return () => cancelAnimationFrame(raf);
   }, [conversation.id, messages.length, showStreamingReply]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    fetch(`/api/automation-overview${authQuery}`)
-      .then((res) => res.json() as Promise<AutomationOverviewResponse>)
-      .then((json) => {
-        if (cancelled) return;
-        if (json.ok) setAutomationOverview(normalizeAutomationOverview(json.overview));
-      })
-      .catch(() => {
-        if (!cancelled) setAutomationOverview(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // 流式过程中自动追底：思考文字、正文、skill steps 任一增长都触发
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
@@ -361,14 +323,9 @@ export function ChatPanel({
   }, [isMobile, draft, selectedSummaryBubbles.length, filledContextCount, isStreaming]);
 
   const mobileComposerOffset = isMobile ? mobileComposerHeight + 18 : 0;
-  const choosePlaybookShortcut = (item: PlaybookSurfaceItem) => {
-    if (isStreaming) return;
-    onDraftChange(item.defaultPrompt);
-    requestAnimationFrame(() => focusComposerInput());
-  };
 
   const composerContent = (
-    <div style={isMobile ? mobileFixedComposerCardStyle : undefined}>
+    <div style={isMobile ? mobileFixedComposerCardStyle : composerSurfaceStyle}>
       {selectedSummaryBubbles.length > 0 ? (
         <div style={selectionBubbleRowStyle}>
           {selectedSummaryBubbles.map((item) => (
@@ -381,26 +338,7 @@ export function ChatPanel({
           ))}
         </div>
       ) : null}
-      {playbookShortcuts.length > 0 ? (
-        <div style={playbookShortcutWrapStyle}>
-          <span style={playbookShortcutLabelStyle}>Playbook</span>
-          <div style={playbookShortcutRowStyle}>
-            {playbookShortcuts.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                style={playbookShortcutButtonStyle}
-                onClick={() => choosePlaybookShortcut(item)}
-                disabled={isStreaming}
-                title={item.entrySubtitle ?? item.detail}
-              >
-                <span style={playbookShortcutIconStyle}>{item.icon ?? "PB"}</span>
-                <span>{item.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {/* 纯净 IA：暂不展示 Playbook 快捷条；服务端 Playbook 也已临时全部屏蔽。 */}
       <textarea
         ref={textareaRef}
         value={draft}
@@ -408,9 +346,8 @@ export function ChatPanel({
         onKeyDown={handleTextareaKeyDown}
         className="workspace-composer-input"
         style={isMobile ? mobileTextareaStyle : textareaStyle}
-        placeholder="继续补充你的任务目标，并结合商品、订单、文章或文件上下文..."
+        placeholder={t("workspace.shell.chat.composerPlaceholder")}
         disabled={isStreaming}
-        autoFocus
       />
       <div style={toolbarDockStyle}>
         <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
@@ -430,43 +367,61 @@ export function ChatPanel({
           </div>
           <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
             {filledContextCount > 0 ? (
-              <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+              <>
+                <span style={toolbarCountStyle}>
+                  {t("workspace.shell.chat.contextCount", {
+                    count: filledContextCount,
+                  })}
+                </span>
+                <button type="button" style={toolbarClearStyle} onClick={clearContext}>
+                  {t("workspace.shell.chat.clearContext")}
+                </button>
+              </>
             ) : null}
-            <button type="button" style={toolbarClearStyle} onClick={clearContext}>
-              清空上下文
+            <span style={mutedMetaStyle}>
+              {isStreaming
+                ? t("workspace.shell.chat.replying")
+                : t("workspace.shell.chat.keyboardHint")}
+            </span>
+            <ContextWindowIndicator
+              currentTokens={contextTokens}
+              maxTokens={MAX_CONTEXT_TOKENS}
+            />
+            {isStreaming ? (
+              <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
+                {t("workspace.shell.chat.stop")}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="workspace-primary-btn"
+              style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
+              onClick={() => void onSend()}
+              disabled={isStreaming}
+            >
+              {isStreaming
+                ? t("workspace.shell.chat.sending")
+                : t("workspace.shell.chat.send")}
             </button>
           </div>
-        </div>
-      </div>
-      <div style={isMobile ? mobileComposerFooterStyle : composerFooterStyle}>
-        <div style={footerLeftStyle}>
-          <span style={sectionTextStyle}>
-            {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
-          </span>
-          <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
-        </div>
-        <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
-          {isStreaming ? (
-            <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
-              停止
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="workspace-primary-btn"
-            style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
-            onClick={() => void onSend()}
-            disabled={isStreaming}
-          >
-            {isStreaming ? "发送中…" : "发送"}
-          </button>
         </div>
       </div>
     </div>
   );
 
   return (
-    <div style={isMobile ? { ...mobileChatLayoutStyle, paddingBottom: mobileComposerOffset } : chatLayoutStyle}>
+    <div
+      style={
+        isMobile
+          ? { ...mobileChatLayoutStyle, paddingBottom: mobileComposerOffset }
+          : {
+              ...chatLayoutStyle,
+              gridTemplateColumns: showContextSidebar
+                ? "minmax(0, 1fr) 320px"
+                : "minmax(0, 1fr)",
+            }
+      }
+    >
       <section
         style={{
           ...(isMobile ? mobileSurfaceCardStyle : surfaceCardStyle),
@@ -544,7 +499,7 @@ export function ChatPanel({
 
       <ContextToolModal context={context} />
 
-      {!isMobile ? (
+      {!isMobile && showContextSidebar ? (
         <ChatContextSidebar
           context={context}
           taskRuns={conversationRuns}
@@ -556,51 +511,3 @@ export function ChatPanel({
     </div>
 );
 }
-
-const playbookShortcutWrapStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-  marginBottom: 8,
-};
-
-const playbookShortcutLabelStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#6d7175",
-};
-
-const playbookShortcutRowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  flexWrap: "wrap",
-};
-
-const playbookShortcutButtonStyle: CSSProperties = {
-  border: "1px solid #d9dee3",
-  borderRadius: 999,
-  background: "#ffffff",
-  color: "#30343a",
-  padding: "5px 9px 5px 6px",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  fontFamily: "inherit",
-};
-
-const playbookShortcutIconStyle: CSSProperties = {
-  width: 22,
-  height: 22,
-  borderRadius: 999,
-  background: "#f1f2f3",
-  color: "#5c6066",
-  display: "grid",
-  placeItems: "center",
-  fontSize: 9,
-  fontWeight: 800,
-};

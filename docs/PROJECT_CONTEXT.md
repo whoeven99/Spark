@@ -15,16 +15,19 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
 ## 2. 主应用信息架构
 
-一级导航由 `app/config/appEntry.server.ts` 定义，应用壳是 `app/routes/app.tsx`。
+一级导航由 `app/config/appEntry.server.ts` 定义（点侧栏应用名进 `/app`；prod 另仅「账户与订阅」；测/本地全量子页），应用壳是 `app/routes/app.tsx`。
 
 | 目的地 | URL | 实现 |
 | --- | --- | --- |
-| Ask | `/app` | `app._index.tsx` + `page/workspace/WorkspaceAppShellPage.tsx` |
+| 首页（应用入口） | `/app` | `HomeV2Panel` 落地（本页聊天）；由点「Spark」进入，不占 `s-app-nav` 子项；旧 `/app/home-v2` 重定向至此 |
+| 助手 | `/app/assistant` | 默认进对话（测环境导航可见） |
+| 首页 v1 | `/app/home-v1` | `HomePanel` 经营概览（测环境导航可见） |
 | Today | `/app/today` | `app.today._index.tsx`、`app.today.roi.tsx`、`app.today.orders.tsx`、`app.today.traffic.tsx`、`app.today.conversion.tsx` |
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx` |
 | Studio | `/app/studio` | `app.studio.copy.tsx`、`app.studio.image.tsx`；`app.studio.translate.tsx` 重定向到 copy |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
-| Settings | `/app/settings` | `billing`、`channels`、`logistics`、`data`、`feedback` |
+| 账户与订阅 | `/app/account` | `app.account.tsx` + `BillingPage`；旧 `/app/settings/billing` 重定向 |
+| Settings | `/app/settings` | 连接、物流、数据、反馈等（计费已迁出） |
 
 React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路由时必须先核对文件名到 URL 的映射。
 
@@ -138,7 +141,7 @@ npm run turso:migrate:test
 - Turso（主应用）：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`（测/产各自配值）；`DATABASE_URL` 仅 Prisma CLI / 本地 SQLite。
 - Turso（Admin）：`SPARK_DATABASE_URL` / `SPARK_DATABASE_AUTH_TOKEN`（Spark 库）；
   `TSF_DATABASE_URL` / `TSF_DATABASE_AUTH_TOKEN`（翻译库）；测/产分服务配值，无 TARGET。
-- AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量。
+- AI：`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`，以及对应模型/base URL 变量；商品质量评分的图片维度使用独立密钥 `DEEPSEEK_VISION_KEY` 与模型 `DEEPSEEK_VISION_MODEL`（默认 `deepseek-v4-flash-vision-exp`）。
 - Cosmos / Blob / Redis：按功能读取 `COSMOS_*`、`AZURE_BLOB_*`、`BLOB_TRANSLATE_V3_*`；主应用 Render KV 用 `SPARK_KV`（与 TSF **共用同一实例** 时也走此变量）；Admin Redis 优先 `RENDER_KV`（与 TSF 同名；兼容 `REDIS_URL`）。主应用 key 必须以 `spark:` 开头，避免与 TSF 冲突。
 - 图片翻译：`HUOSHAN_*` / `VOLC_*`、`AIDGE_*`、`PICTURE_TRANSLATE_*`。
 - 图片生成：`AZURE_BLOB_GENERATED_IMAGES_CONTAINER`、`IMAGE_GEN_BLOB_SAS_TTL_MINUTES`。

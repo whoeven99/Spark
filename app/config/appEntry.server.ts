@@ -1,16 +1,21 @@
 /**
- * 一级目的地（新信息架构，docs 见迁移方案 PR1）。
- * 旧的 per-tool 入口（product-improve / image-studio / order-monitor 等）已收敛进
- * today / studio / settings 三个目的地。旧的 insights 相关路径仅保留兼容层，
- * 正式经营判断回到 Today，连接与授权回到 Settings。
+ * 一级目的地。
  * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
+ * 计费在一级「账户与订阅」`/app/account`；旧 `/app/settings/billing` 重定向至此。
+ *
+ * 导航按运行时环境分流：prod 仅首页 + 账户；测/本地展示全量。
  */
+import { isProductionNodeEnv } from "./nodeEnv.server";
+
 export type NavItemKey =
+  | "home"
   | "ask"
+  | "home-v1"
   | "today"
   | "health-monitor"
   | "studio"
   | "tasks"
+  | "account"
   | "settings"
   | "ads-catalog";
 
@@ -19,18 +24,31 @@ type AppShellConfig = {
   nav: readonly NavItemKey[];
 };
 
-const DEFAULT_APP_SHELL_CONFIG = {
-  home: "/app",
-  nav: ["ask", "today", "health-monitor", "studio", "tasks", "settings"],
-} as const satisfies AppShellConfig;
+/** 测环境 / 本地：全量一级导航（不含首页——点侧栏「Spark」即进 `/app`）。 */
+const FULL_NAV = [
+  "ask",
+  "home-v1",
+  "today",
+  "health-monitor",
+  "studio",
+  "tasks",
+  "account",
+  "settings",
+] as const satisfies readonly NavItemKey[];
+
+/** 生产：第一版仅账户与订阅；首页由点应用名进入。 */
+const PROD_NAV = ["account"] as const satisfies readonly NavItemKey[];
 
 export function getAppEntryConfig(): AppShellConfig {
-  return DEFAULT_APP_SHELL_CONFIG;
+  return {
+    home: "/app",
+    nav: isProductionNodeEnv() ? PROD_NAV : FULL_NAV,
+  };
 }
 
 /** 嵌入式 App 首页路径（工作台 `/app`）。 */
 export function getAppHomePath(): string {
-  return DEFAULT_APP_SHELL_CONFIG.home;
+  return "/app";
 }
 
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */

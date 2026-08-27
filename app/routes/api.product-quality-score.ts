@@ -56,7 +56,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await requireBillingAccess(session.shop);
 
-    const result = await runProductQualityScore({ admin, productId, requestId });
+    const result = await runProductQualityScore({
+      admin,
+      productId,
+      requestId,
+      shop: session.shop,
+    });
 
     const durationMs = Date.now() - routeStart;
 

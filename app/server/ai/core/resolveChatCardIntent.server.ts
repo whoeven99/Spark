@@ -30,6 +30,7 @@ import {
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { extractMessageText } from "../utils/langchainMessageText";
 import { getShopChatModel } from "./shopChatGraph.server";
+import { recordChatTokenUsage } from "../../tokenUsage/index.server";
 
 type CardStreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
@@ -223,10 +224,12 @@ export async function resolveChatCardIntentWithLlm(params: {
   lastUserText: string;
   assistantReply: string;
   toolsCalled: string[];
+  shop?: string;
 }): Promise<ChatCardIntent> {
   const userIntent = extractUserIntentText(params.lastUserText);
   const model = getShopChatModel().withStructuredOutput(ChatCardIntentSchema, {
     name: "chat_card_intent",
+    includeRaw: true,
   });
 
   const result = await model.invoke([
@@ -252,7 +255,23 @@ ${params.assistantReply.trim() || "（空）"}
     ),
   ]);
 
-  return normalizeLlmIntent(result);
+  const raw =
+    result && typeof result === "object" && "raw" in result
+      ? (result as { raw?: { usage_metadata?: unknown } }).raw
+      : undefined;
+  const parsed =
+    result && typeof result === "object" && "parsed" in result
+      ? (result as { parsed: unknown }).parsed
+      : result;
+
+  if (params.shop?.trim() && raw?.usage_metadata) {
+    await recordChatTokenUsage({
+      shop: params.shop,
+      usage: raw.usage_metadata,
+    });
+  }
+
+  return normalizeLlmIntent(parsed as ChatCardIntent);
 }
 
 export async function resolveMissingChatCardsWithLlm(params: {
@@ -261,6 +280,7 @@ export async function resolveMissingChatCardsWithLlm(params: {
   assistantReply: string;
   existingUiPayloads: Record<string, unknown>;
   emittedFlags?: Set<string>;
+  shop?: string;
 }): Promise<LlmChatCardResolution> {
   if (hasAnyChatCardInUiPayloads(params.existingUiPayloads)) {
     return { uiPayloads: {}, streamChunks: [] };
@@ -270,6 +290,7 @@ export async function resolveMissingChatCardsWithLlm(params: {
     lastUserText: params.lastUserText,
     assistantReply: params.assistantReply,
     toolsCalled: extractToolsCalledFromMessages(params.messages),
+    shop: params.shop,
   });
 
   const llmPayloads = buildChatCardPayloadFromIntent(intent, params.lastUserText);

@@ -2,13 +2,13 @@
 import type { CSSProperties } from "react";
 import type { WorkspaceDashboardMetricTone } from "../../../lib/workspaceDashboardTypes";
 
-/** Shopify Admin / Polaris 对齐色板 */
+/** Shopify Admin / Polaris 对齐色板；工作台边框参考 Cursor 细线分割 */
 export const shopifyUi = {
-  pageBg: "#f6f6f7",
+  pageBg: "#f7f7f8",
   surface: "#ffffff",
-  surfaceSubtle: "#fafbfb",
-  border: "#e1e3e5",
-  borderStrong: "#c9cccf",
+  surfaceSubtle: "#fafafa",
+  border: "#e5e5e5",
+  borderStrong: "#d4d4d4",
   text: "#1f2124",
   textSecondary: "#61666c",
   textMuted: "#8c9196",
@@ -17,16 +17,18 @@ export const shopifyUi = {
   primarySurface: "#e9f7ef",
   primaryText: "#004c3f",
   link: "#005bd3",
-  radiusControl: 10,
-  radiusCard: 14,
-  shadowCard: "0 1px 0 rgba(0, 0, 0, 0.05)",
+  radiusControl: 8,
+  radiusCard: 12,
+  shadowCard: "none",
 } as const;
 
 export const shellStyle: CSSProperties = {
+  height: "100dvh",
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "220px minmax(0, 1fr)",
-  background: shopifyUi.pageBg,
+  background: shopifyUi.surface,
+  overflow: "hidden",
 };
 
 export const mobileShellStyle: CSSProperties = {
@@ -102,23 +104,27 @@ export const sidebarStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  padding: "16px 12px",
+  padding: "14px 10px",
   borderRight: `1px solid ${shopifyUi.border}`,
-  background: shopifyUi.surface,
-  gap: 14,
-  height: "100vh",
+  background: shopifyUi.pageBg,
+  gap: 12,
+  height: "100%",
+  boxSizing: "border-box",
   overflow: "hidden",
   position: "sticky",
   top: 0,
 };
 
 export const contentStyle: CSSProperties = {
-  padding: "24px 28px 36px",
+  height: "100%",
+  padding: "20px 22px 12px",
   display: "flex",
   flexDirection: "column",
   gap: 20,
   minWidth: 0,
-  background: shopifyUi.pageBg,
+  background: shopifyUi.surface,
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 export const mobileContentStyle: CSSProperties = {
@@ -150,7 +156,13 @@ export const brandBadgeStyle: CSSProperties = {
   fontSize: 13,
 };
 export const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: shopifyUi.text };
-export const brandMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
+export const brandMetaStyle: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.25,
+  letterSpacing: "-0.01em",
+  color: shopifyUi.textMuted,
+  whiteSpace: "nowrap",
+};
 
 export const newChatButtonStyle: CSSProperties = {
   display: "flex",
@@ -161,13 +173,12 @@ export const newChatButtonStyle: CSSProperties = {
   border: `1px solid ${shopifyUi.primary}`,
   borderRadius: shopifyUi.radiusControl,
   background: shopifyUi.primary,
-  padding: "10px 12px",
+  padding: "9px 12px",
   fontSize: 13,
   fontWeight: 600,
   color: "#ffffff",
   cursor: "pointer",
-  marginBottom: 10,
-  boxShadow: "0 1px 0 rgba(0, 0, 0, 0.05)",
+  marginBottom: 8,
 };
 export const newChatPlusBadgeStyle: CSSProperties = {
   width: 20,
@@ -209,8 +220,8 @@ export const navIconStyle = (active: boolean): CSSProperties => ({
 
 export const sidebarDividerStyle: CSSProperties = {
   height: 1,
-  background: "#e1e3e5",
-  margin: "10px 2px",
+  background: shopifyUi.border,
+  margin: "8px 2px",
 };
 
 export const sidebarSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2, minHeight: 0, flex: 1 };
@@ -240,11 +251,10 @@ export const historyItemStyle = (active: boolean): CSSProperties => ({
   textAlign: "left",
   border: "none",
   borderRadius: shopifyUi.radiusControl,
-  background: active ? shopifyUi.primarySurface : "transparent",
-  padding: "6px 10px",
+  background: active ? "rgba(0, 0, 0, 0.05)" : "transparent",
+  padding: "7px 10px",
   cursor: "pointer",
   overflow: "hidden",
-  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
 });
 export const historyDeleteButtonStyle: CSSProperties = {
   flexShrink: 0,
@@ -260,7 +270,7 @@ export const historyDeleteButtonStyle: CSSProperties = {
 export const historyTitleStyle = (active: boolean): CSSProperties => ({
   fontSize: 13,
   fontWeight: active ? 600 : 500,
-  color: active ? shopifyUi.primaryText : shopifyUi.text,
+  color: active ? shopifyUi.text : shopifyUi.textSecondary,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -270,7 +280,7 @@ export const historyTitleStyle = (active: boolean): CSSProperties => ({
 export const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
-  borderTop: "1px solid #e1e3e5",
+  borderTop: `1px solid ${shopifyUi.border}`,
 };
 export const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
@@ -293,25 +303,43 @@ export const accountMenuStyle: CSSProperties = {
   flexDirection: "column",
   gap: 12,
   padding: 12,
-  borderRadius: 14,
-  border: "1px solid #e1e3e5",
-  background: "#ffffff",
-  boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+  borderRadius: 12,
+  border: `1px solid ${shopifyUi.border}`,
+  background: shopifyUi.surface,
+  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
   zIndex: 10,
 };
 export const accountMenuSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
 export const accountMenuLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
-export const accountMenuItemStyle: CSSProperties = {
-  width: "100%",
-  border: "1px solid #dfe3e8",
-  borderRadius: 10,
-  background: "#ffffff",
-  color: "#202223",
+export const accountUsageCardStyle: CSSProperties = {
   padding: "10px 12px",
-  fontSize: 13,
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: 8,
+  background: shopifyUi.surfaceSubtle,
+};
+export const accountUsageValueStyle: CSSProperties = {
+  color: "#202223",
+  fontSize: 12,
   fontWeight: 600,
-  textAlign: "left",
-  cursor: "pointer",
+  fontVariantNumeric: "tabular-nums",
+};
+export const accountUsageHintStyle: CSSProperties = {
+  marginTop: 2,
+  color: "#8c9196",
+  fontSize: 11,
+};
+export const accountUsageTrackStyle: CSSProperties = {
+  height: 5,
+  marginTop: 8,
+  overflow: "hidden",
+  borderRadius: 999,
+  background: "#e1e3e5",
+};
+export const accountUsageFillStyle: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  background: shopifyUi.primary,
+  transition: "width 180ms ease",
 };
 export const footerTagStyle: CSSProperties = {
   padding: "4px 8px",
@@ -406,7 +434,13 @@ export const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 export const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 export const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
-export const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, height: "calc(100vh - 100px)" };
+export const chatLayoutStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 320px",
+  gap: 16,
+  height: "100%",
+  minHeight: 0,
+};
 export const mobileChatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, minHeight: "calc(100vh - 110px)" };
 export const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexShrink: 0 };
 export const mobileConversationMetaRowStyle: CSSProperties = { ...conversationMetaRowStyle, flexDirection: "column", alignItems: "flex-start", marginBottom: 10 };
@@ -423,6 +457,12 @@ export const messageListStyle: CSSProperties = {
   // instant assignment so rapid frames don't fight each other and miss the bottom.
 };
 export const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
+export const composerSurfaceStyle: CSSProperties = {
+  padding: 10,
+  borderRadius: 12,
+  border: `1px solid ${shopifyUi.border}`,
+  background: shopifyUi.surface,
+};
 export const mobileFixedComposerWrapStyle = (keyboardInset: number): CSSProperties => ({
   position: "fixed",
   left: 14,
@@ -434,23 +474,20 @@ export const mobileFixedComposerWrapStyle = (keyboardInset: number): CSSProperti
 export const mobileFixedComposerCardStyle: CSSProperties = {
   pointerEvents: "auto",
   padding: 12,
-  borderRadius: 16,
-  border: "1px solid rgba(201, 205, 210, 0.92)",
-  background: "rgba(255, 255, 255, 0.96)",
-  boxShadow: "0 14px 32px rgba(15, 23, 42, 0.14)",
-  backdropFilter: "blur(12px)",
+  borderRadius: 12,
+  border: `1px solid ${shopifyUi.border}`,
+  background: shopifyUi.surface,
 };
 export const textareaStyle: CSSProperties = {
   width: "100%",
-  minHeight: 96,
+  minHeight: 68,
   maxHeight: 320,
-  borderRadius: 12,
-  border: "1px solid #c9cdd2",
-  padding: 14,
+  border: "none",
+  padding: "4px 4px 8px",
   fontSize: 14,
   lineHeight: 1.6,
   color: "#202223",
-  background: "#ffffff",
+  background: "transparent",
   resize: "none",
   overflowY: "auto",
   boxSizing: "border-box",
@@ -459,17 +496,19 @@ export const textareaStyle: CSSProperties = {
 };
 export const mobileTextareaStyle: CSSProperties = {
   ...textareaStyle,
-  minHeight: 84,
-  padding: 12,
+  minHeight: 64,
+  padding: "2px 2px 6px",
   fontSize: 13,
   lineHeight: 1.55,
 };
-export const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
-export const mobileComposerFooterStyle: CSSProperties = { ...composerFooterStyle, flexDirection: "column", alignItems: "stretch" };
-export const footerLeftStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
 export const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 export const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
-export const toolbarDockStyle: CSSProperties = { marginTop: 12, position: "relative" };
+export const toolbarDockStyle: CSSProperties = {
+  marginTop: 4,
+  paddingTop: 8,
+  borderTop: "1px solid #ebedf0",
+  position: "relative",
+};
 export const toolbarBarStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -481,9 +520,14 @@ export const mobileToolbarBarStyle: CSSProperties = {
   ...toolbarBarStyle,
   flexDirection: "column",
   alignItems: "stretch",
-  gap: 10,
+  gap: 8,
 };
-export const toolbarIconGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
+export const toolbarIconGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexWrap: "wrap",
+};
 export const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
 export const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   width: 32,
@@ -501,8 +545,8 @@ export const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-  height: 30,
-  padding: "0 10px",
+  height: 28,
+  padding: "0 9px",
   border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
   background: active ? shopifyUi.primarySurface : shopifyUi.surface,
   color: active ? shopifyUi.primaryText : shopifyUi.text,
@@ -553,7 +597,15 @@ export const scrollBottomButtonStyle: CSSProperties = {
   boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
   whiteSpace: "nowrap",
 };
-export const toolbarStatusGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" };
+export const toolbarStatusGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 8,
+  marginLeft: "auto",
+  paddingRight: 56,
+  flexWrap: "wrap",
+};
 export const mobileToolbarStatusGroupStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -561,6 +613,8 @@ export const mobileToolbarStatusGroupStyle: CSSProperties = {
   gap: 10,
   width: "100%",
   marginLeft: 0,
+  paddingRight: 60,
+  boxSizing: "border-box",
   flexWrap: "wrap",
 };
 export const toolbarCountStyle: CSSProperties = { fontSize: 12, color: "#6d7175", fontWeight: 600 };

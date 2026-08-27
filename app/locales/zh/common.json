@@ -351,7 +351,11 @@
     "zh-tw": "繁体中文"
   },
   "nav": {
+    "home": "首页",
     "ask": "助手",
+    "homeV1": "首页 v1",
+    "homeV2": "首页 v2",
+    "account": "账户与订阅",
     "today": "经营",
     "healthMonitor": "健康度监测",
     "studio": "创作工作台",
@@ -1265,7 +1269,9 @@
     "eventSubscriptionCancelled": "订阅已取消",
     "eventTokenPackInitiated": "购包待确认",
     "eventTokenPackPurchased": "购包成功",
+    "toolFeatureChat": "Ask 聊天",
     "toolFeatureProductCopy": "商品文案",
+    "toolFeatureProductQuality": "商品质量评分",
     "toolFeatureImageGenerate": "文生图",
     "toolFeatureImagePrompt": "图片提示词",
     "toolFeaturePictureTranslate": "图片翻译"
@@ -3196,6 +3202,10 @@
   },
   "workspace": {
     "shell": {
+      "brand": {
+        "name": "Spark AI",
+        "subtitle": "AI Store Assistant"
+      },
       "panels": {
         "home": "首页"
       },
@@ -3206,7 +3216,7 @@
         "last7Days": "7 天内",
         "earlier": "更早"
       },
-      "defaultAccountName": "Spark 用户",
+      "defaultAccountName": "Spark AI 用户",
       "newConversationTitle": "新对话",
       "workspaceTitle": "工作台",
       "recentConversations": "最近对话",
@@ -3229,7 +3239,17 @@
         "replyStopped": "回复已停止。",
         "invalidReply": "AI Assistant 未返回有效内容，请重试。",
         "sendFailed": "抱歉，发送失败，请稍后重试。",
-        "justNow": "刚刚"
+        "justNow": "刚刚",
+        "you": "你",
+        "contextUsage": "上下文使用量：{{current}} / {{max}}（{{percent}}%）",
+        "composerPlaceholder": "继续补充你的任务目标，并结合商品、订单、文章或文件上下文…",
+        "contextCount": "已补充 {{count}} 项",
+        "clearContext": "清空上下文",
+        "keyboardHint": "Enter 发送 · Shift+Enter 换行",
+        "replying": "AI Assistant 正在回复",
+        "stop": "停止",
+        "send": "发送",
+        "sending": "发送中…"
       },
       "taskRun": {
         "userText": "开始执行：{{title}}（{{count}} 个任务）",
@@ -3257,7 +3277,43 @@
       },
       "account": {
         "language": "语言",
-        "workspaceLabel": "Spark 工作台"
+        "workspaceLabel": "Spark AI 工作台",
+        "tokenUsage": "Token 用量",
+        "tokenUsageValue": "{{used}} / {{total}}",
+        "tokenUsageHint": "已使用 / 总额度",
+        "loadingUsage": "正在读取额度…",
+        "unavailableUsage": "暂时无法读取"
+      }
+    },
+    "execution": {
+      "title": "AI 执行轨迹",
+      "preparing": "正在理解任务并规划步骤",
+      "progress": "{{completed}}/{{total}} 已完成",
+      "status": {
+        "running": "执行中",
+        "completed": "已完成",
+        "skipped": "已跳过",
+        "error": "失败"
+      },
+      "tools": {
+        "prepareTask": "整理任务与执行参数",
+        "generateDescription": "生成商品文案",
+        "currentTime": "确认当前时间",
+        "inventoryHealth": "检查库存健康",
+        "shopInfo": "读取店铺信息",
+        "abandonmentRate": "分析弃购率",
+        "averageOrderValue": "计算客单价",
+        "conversionRate": "分析转化率",
+        "orderCount": "统计订单数量",
+        "refundRate": "分析退款与退货",
+        "sales": "汇总销售额",
+        "trafficSources": "分析流量来源",
+        "weather": "查询天气信息",
+        "batchTask": "准备批量任务",
+        "imageGeneration": "准备图片生成任务",
+        "pictureTranslation": "准备图片翻译任务",
+        "productCopy": "准备商品文案任务",
+        "fallback": "调用工具：{{name}}"
       }
     },
     "dashboard": {
@@ -3324,13 +3380,14 @@
       "context": {
         "product": "商品",
         "order": "订单",
+        "article": "文章",
         "file": "文件"
       },
       "status": {
         "needsAttention": "健康度概况中有需关注事项",
         "healthy": "健康度概况整体稳定"
       },
-      "askSpark": "ASK SPARK",
+      "askSpark": "ASK SPARK AI",
       "assistantTitle": "继续追问，或直接发起一个任务",
       "composerPlaceholder": "例如：把上面的库存风险拆成可执行清单，并告诉我先处理哪 3 个 SKU…",
       "moreContext": "更多",
@@ -3367,6 +3424,29 @@
         "topRisksHint": "最多展示 3 条，完整列表在健康度监测里",
         "recommendedActions": "推荐动作",
         "recommendedActionsHint": "基于当前经营与健康判断，直接进入下一步"
+      }
+    },
+    "homeV2": {
+      "subtitle": "今天想让 Spark AI 帮你做什么？",
+      "assistantTitle": "描述目标，Spark AI 会查询店铺并协助执行",
+      "composerPlaceholder": "例如：查看今天的经营情况，并告诉我最需要处理的 3 件事…",
+      "quickPrompts": {
+        "todayOperations": {
+          "label": "查看今日经营",
+          "prompt": "帮我查看今天的销售、订单、转化与退款情况，并告诉我最需要优先处理的 3 件事。"
+        },
+        "optimizeCopy": {
+          "label": "优化商品文案",
+          "prompt": "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。"
+        },
+        "generateImage": {
+          "label": "生成商品图",
+          "prompt": "帮我生成一张适合独立站的商品主图，风格干净、白底、突出产品。"
+        },
+        "translateImage": {
+          "label": "翻译商品图",
+          "prompt": "帮我翻译商品图片中的文字，并尽量保持原图的排版和视觉风格。"
+        }
       }
     }
   }

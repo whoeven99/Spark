@@ -13,7 +13,7 @@ const QUADRANT_LABELS: Record<string, string> = {
   q4: "不紧急不重要",
 };
 
-function createGetDailyOperationsTool(context: AgentContext): DynamicStructuredTool {
+export function createGetDailyOperationsTool(context: AgentContext): DynamicStructuredTool {
   const { shop } = context;
   return new DynamicStructuredTool({
     name: GET_DAILY_OPERATIONS_TOOL_NAME,
@@ -88,6 +88,10 @@ function createGetDailyOperationsTool(context: AgentContext): DynamicStructuredT
   });
 }
 
+/**
+ * @deprecated 已并入 skills/index 的 shopOperations（店铺经营）。
+ * 保留定义供参考；勿再单独 register。
+ */
 export const dailyOperationsToolDefinition: ToolDefinition = {
   name: "dailyOperations",
   displayName: "健康度与待办",

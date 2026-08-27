@@ -15,7 +15,7 @@
 | `purchase/` | 按量购包、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount`、`grantTrial` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
-| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；计费前按 Turso `TokenBillingRule` 乘数（种子见 `prisma/token-billing-rule-seed.sql`，运行时见 `tokenBillingCatalog.server.ts`）经 `recordBilledTokenUsage` / `recordVisualToolTokenUsage`；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
+| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`（按 Turso `TokenBillingRule` 乘数，种子见 `prisma/token-billing-rule-seed.sql`）；续费结算见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
 
 ## 环境变量
 
@@ -27,7 +27,7 @@
 ## Shopify returnUrl
 
 - Billing GraphQL 的 `returnUrl` **最多 255 字符**。
-- `buildBillingReturnUrl` 指向 **`/app/settings/billing`**（订阅与按量购包共用；新 IA 下归入 Settings），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
+- `buildBillingReturnUrl` 指向 **`/app/account`**（订阅与按量购包共用；一级「账户与订阅」），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
 - 跳转 Shopify 结账页须用 `authenticate.admin` 返回的 `redirect(url, { target: "_top" })`（嵌入式 exit iframe），勿直接用 React Router `redirect`。
 - 若 Shopify 将商户落到站点根路径 `/` 或 `/app`，`billing_return=1` 会由 `_index` / `app._index` 兜底重定向到计费页。
 - `buildBillingReturnUrl` 对 `aiassistant-wi7b.onrender.com` / `shopify.app.test.toml` client_id 映射 Admin handle `aiassistant-test`；可通过 `SHOPIFY_ADMIN_APP_HANDLE` 覆盖。
@@ -41,7 +41,27 @@
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
-| `ToolTokenUsageLog` | 工具级 token 消耗明细（高频：商品优化/图片生成/图片翻译等） |
+| `ToolTokenUsageLog` | **统一**工具/聊天 token 消耗明细（`feature` × `modelKey`；含 chat / 文案 / 质量评分 / 文生图 / 图片翻译等） |
+
+## Token 消耗记账约定（强制）
+
+凡消耗 LLM / 视觉模型 token 的路径，成功后必须记入同一处：
+
+1. `Account.usedTokens`（用户账户额度）
+2. `ToolTokenUsageLog`（明细；账户页「工具用量」读取）
+
+统一入口：`recordBilledTokenUsage` / `recordBilledTokenUsages`（聊天可用 `recordChatTokenUsage`，视觉定额可用 `recordVisualToolTokenUsage`）。**禁止**业务侧直接调 `recordTokenUsage`（除非底层实现）。
+
+| feature | 能力 | 门禁 | 记账入口示例 |
+|---------|------|------|----------------|
+| `chat` | Ask 聊天主 Agent、卡片补全 LLM、fallback、上下文摘要 | `/chat-stream` → `requireBillingAccess` | `recordChatTokenUsage` |
+| `product_copy` | 商品文案生成/润色 | Studio / HTTP / 批量 | `recordBilledTokenUsage` |
+| `product_quality` | 质量评分（文案 LLM + Vision） | `/api/product-quality-score` | `recordBilledTokenUsages` |
+| `image_prompt` | 画面提示词扩写 | 视觉工具门禁 | `recordVisualToolTokenUsage` |
+| `image_generate` | 文生图（定额） | 视觉工具门禁 | `recordVisualToolTokenUsage` |
+| `picture_translate` | 图片翻译（定额） | 视觉工具门禁 | `recordVisualToolTokenUsage` |
+
+新增消耗点时：先加 `TOKEN_BILLING_FEATURES` + seed 规则，再接线门禁与 `recordBilled*`。
 
 ## 续费时的顺序
 
@@ -94,7 +114,8 @@
 
 ## 路由
 
-- `/app/settings/billing`：计费与订阅页（`BillingPage`）；主 App 通过 Settings 目的地进入。
+- `/app/account`：计费与订阅页（`BillingPage`）；一级导航「账户与订阅」。旧路径 `/app/settings/billing` 重定向至此。
+- 页面必须直接渲染 `PlanCatalog` 的价格、积分和 `planKey`，走 Shopify Billing 结账。禁止前端覆盖价、伪造套餐或 `_mock` 禁用结账。
 - `/app/studio/copy` 与 `/api/product-improve`：商品文案优化调用 `requireBillingAccess`。
 
 ## 启用开关

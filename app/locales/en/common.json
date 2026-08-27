@@ -351,7 +351,11 @@
     "zh-tw": "Traditional Chinese"
   },
   "nav": {
+    "home": "Home",
     "ask": "Assistant",
+    "homeV1": "Home v1",
+    "homeV2": "Home v2",
+    "account": "Account & billing",
     "today": "Operations",
     "healthMonitor": "Health Monitor",
     "studio": "Creative Workbench",
@@ -1265,7 +1269,9 @@
     "eventSubscriptionCancelled": "Subscription cancelled",
     "eventTokenPackInitiated": "Pack purchase pending",
     "eventTokenPackPurchased": "Pack purchased",
+    "toolFeatureChat": "Ask chat",
     "toolFeatureProductCopy": "Product copy",
+    "toolFeatureProductQuality": "Product quality score",
     "toolFeatureImageGenerate": "Image generation",
     "toolFeatureImagePrompt": "Image prompt",
     "toolFeaturePictureTranslate": "Picture translation"
@@ -3196,6 +3202,10 @@
   },
   "workspace": {
     "shell": {
+      "brand": {
+        "name": "Spark AI",
+        "subtitle": "AI Store Assistant"
+      },
       "panels": {
         "home": "Home"
       },
@@ -3206,7 +3216,7 @@
         "last7Days": "Last 7 days",
         "earlier": "Earlier"
       },
-      "defaultAccountName": "Spark User",
+      "defaultAccountName": "Spark AI User",
       "newConversationTitle": "New chat",
       "workspaceTitle": "Workspace",
       "recentConversations": "Recent chats",
@@ -3229,7 +3239,17 @@
         "replyStopped": "Reply stopped.",
         "invalidReply": "AI Assistant did not return valid content. Please try again.",
         "sendFailed": "Sorry, sending failed. Please try again later.",
-        "justNow": "Just now"
+        "justNow": "Just now",
+        "you": "You",
+        "contextUsage": "Context usage: {{current}} / {{max}} ({{percent}}%)",
+        "composerPlaceholder": "Continue your request with product, order, article, or file context…",
+        "contextCount": "{{count}} added",
+        "clearContext": "Clear context",
+        "keyboardHint": "Enter to send · Shift+Enter for new line",
+        "replying": "AI Assistant is replying",
+        "stop": "Stop",
+        "send": "Send",
+        "sending": "Sending…"
       },
       "taskRun": {
         "userText": "Start run: {{title}} ({{count}} tasks)",
@@ -3257,7 +3277,43 @@
       },
       "account": {
         "language": "Language",
-        "workspaceLabel": "Spark Workspace"
+        "workspaceLabel": "Spark AI Workspace",
+        "tokenUsage": "Token usage",
+        "tokenUsageValue": "{{used}} / {{total}}",
+        "tokenUsageHint": "Used / total",
+        "loadingUsage": "Loading usage…",
+        "unavailableUsage": "Unavailable"
+      }
+    },
+    "execution": {
+      "title": "AI execution trace",
+      "preparing": "Understanding the task and planning next steps",
+      "progress": "{{completed}}/{{total}} completed",
+      "status": {
+        "running": "Running",
+        "completed": "Completed",
+        "skipped": "Skipped",
+        "error": "Failed"
+      },
+      "tools": {
+        "prepareTask": "Preparing the task and parameters",
+        "generateDescription": "Generating product copy",
+        "currentTime": "Checking the current time",
+        "inventoryHealth": "Checking inventory health",
+        "shopInfo": "Reading store information",
+        "abandonmentRate": "Analyzing abandonment rate",
+        "averageOrderValue": "Calculating average order value",
+        "conversionRate": "Analyzing conversion rate",
+        "orderCount": "Counting orders",
+        "refundRate": "Analyzing refunds and returns",
+        "sales": "Summarizing sales",
+        "trafficSources": "Analyzing traffic sources",
+        "weather": "Checking weather information",
+        "batchTask": "Preparing batch tasks",
+        "imageGeneration": "Preparing an image generation task",
+        "pictureTranslation": "Preparing an image translation task",
+        "productCopy": "Preparing a product copy task",
+        "fallback": "Using tool: {{name}}"
       }
     },
     "dashboard": {
@@ -3324,13 +3380,14 @@
       "context": {
         "product": "Product",
         "order": "Order",
+        "article": "Article",
         "file": "File"
       },
       "status": {
         "needsAttention": "The health overview has items that need attention",
         "healthy": "The health overview looks stable"
       },
-      "askSpark": "ASK SPARK",
+      "askSpark": "ASK SPARK AI",
       "assistantTitle": "Ask a follow-up or start a task directly",
       "composerPlaceholder": "For example: turn the inventory risks above into an action checklist and tell me which 3 SKUs to handle first…",
       "moreContext": "More",
@@ -3367,6 +3424,29 @@
         "topRisksHint": "Shows up to 3 items. Open Health Monitor for the full list.",
         "recommendedActions": "Recommended actions",
         "recommendedActionsHint": "Jump straight to the next step from the current business and health diagnosis"
+      }
+    },
+    "homeV2": {
+      "subtitle": "What should Spark AI help you with today?",
+      "assistantTitle": "Describe your goal and Spark AI will inspect your store and help execute it",
+      "composerPlaceholder": "For example: review today’s business and tell me the top 3 things to handle…",
+      "quickPrompts": {
+        "todayOperations": {
+          "label": "Review today’s business",
+          "prompt": "Review today’s sales, orders, conversion, and refunds, then tell me the top 3 things to handle first."
+        },
+        "optimizeCopy": {
+          "label": "Optimize product copy",
+          "prompt": "Help me optimize a batch of product titles and descriptions with an SEO and conversion-focused style."
+        },
+        "generateImage": {
+          "label": "Generate a product image",
+          "prompt": "Help me generate a clean, white-background product hero image that highlights the item for a DTC store."
+        },
+        "translateImage": {
+          "label": "Translate a product image",
+          "prompt": "Translate the text in my product image while preserving its original layout and visual style."
+        }
       }
     }
   }

@@ -207,6 +207,19 @@ function logCriticalEnvStatus(): void {
     ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL, "deepseek-chat"],
   ]);
 
+  logEnvCheck(
+    "LLM (DeepSeek Vision)",
+    Boolean(process.env.DEEPSEEK_VISION_KEY?.trim()),
+    [
+      ["DEEPSEEK_VISION_KEY", process.env.DEEPSEEK_VISION_KEY],
+      [
+        "DEEPSEEK_VISION_MODEL",
+        process.env.DEEPSEEK_VISION_MODEL,
+        "deepseek-v4-flash-vision-exp",
+      ],
+    ],
+  );
+
   console.info(`${ENV_LOG} process.env 总键数: ${Object.keys(process.env).length}`);
   console.info(`${ENV_LOG} =================`);
 }
