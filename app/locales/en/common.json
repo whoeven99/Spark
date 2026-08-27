@@ -3242,6 +3242,7 @@
         "contextUsage": "Context usage: {{current}} / {{max}} ({{percent}}%)",
         "composerPlaceholder": "Continue your request with product, order, article, or file context…",
         "contextCount": "{{count}} added",
+        "addContext": "Add context",
         "clearContext": "Clear context",
         "keyboardHint": "Enter to send · Shift+Enter for new line",
         "recommended": "Recommended",

@@ -528,7 +528,47 @@ export const toolbarIconGroupStyle: CSSProperties = {
   gap: 6,
   flexWrap: "wrap",
 };
+export const mobileToolbarIconGroupStyle: CSSProperties = {
+  ...toolbarIconGroupStyle,
+  alignItems: "flex-start",
+  flexDirection: "column",
+  gap: 8,
+};
+export const toolbarContextGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexWrap: "wrap",
+};
+export const toolbarGroupLabelStyle: CSSProperties = {
+  color: shopifyUi.textMuted,
+  fontSize: 12,
+  fontWeight: 500,
+  whiteSpace: "nowrap",
+};
+export const toolbarGroupDividerStyle: CSSProperties = {
+  width: 1,
+  height: 18,
+  margin: "0 2px",
+  background: shopifyUi.border,
+  flexShrink: 0,
+};
 export const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
+export const recommendedTriggerStyle = (active: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  height: 30,
+  padding: "0 10px",
+  border: `1px solid ${active ? shopifyUi.borderStrong : shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.surfaceSubtle : shopifyUi.surface,
+  color: shopifyUi.text,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 650,
+  whiteSpace: "nowrap",
+});
 export const recommendedMenuStyle: CSSProperties = {
   position: "absolute",
   left: 0,

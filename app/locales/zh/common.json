@@ -3242,6 +3242,7 @@
         "contextUsage": "上下文使用量：{{current}} / {{max}}（{{percent}}%）",
         "composerPlaceholder": "继续补充你的任务目标，并结合商品、订单、文章或文件上下文…",
         "contextCount": "已补充 {{count}} 项",
+        "addContext": "添加上下文",
         "clearContext": "清空上下文",
         "keyboardHint": "Enter 发送 · Shift+Enter 换行",
         "recommended": "推荐",

@@ -224,6 +224,23 @@ code {
   box-shadow: 0 0 0 1px #005bd3;
 }
 
+.workspace-recommended-trigger {
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.workspace-recommended-trigger:hover:not(:disabled) {
+  background: #f6f6f7 !important;
+  border-color: #c9cdd2 !important;
+}
+
+.workspace-recommended-trigger:focus-visible {
+  outline: none;
+  border-color: #005bd3 !important;
+  box-shadow: 0 0 0 1px #005bd3;
+}
+
 /* Sidebar history row — show delete button on hover */
 .sidebar-history-row .sidebar-history-delete {
   opacity: 0;

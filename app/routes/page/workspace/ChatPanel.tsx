@@ -40,6 +40,7 @@ import {
   mobileSurfaceCardStyle,
   mobileTextareaStyle,
   mobileToolbarBarStyle,
+  mobileToolbarIconGroupStyle,
   mobileToolbarStatusGroupStyle,
   mutedMetaStyle,
   primaryButtonStyle,
@@ -47,6 +48,7 @@ import {
   recommendedMenuItemStyle,
   recommendedMenuStyle,
   recommendedMenuTitleStyle,
+  recommendedTriggerStyle,
   scrollBottomButtonStyle,
   scrollBottomOverlayStyle,
   selectionBubbleCloseStyle,
@@ -58,6 +60,9 @@ import {
   toolbarClearStyle,
   toolbarCountStyle,
   toolbarDockStyle,
+  toolbarContextGroupStyle,
+  toolbarGroupDividerStyle,
+  toolbarGroupLabelStyle,
   toolbarIconGlyphStyle,
   toolbarIconGroupStyle,
   toolbarPillButtonStyle,
@@ -400,11 +405,30 @@ export function ChatPanel({
       />
       <div style={toolbarDockStyle}>
         <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
-          <div style={toolbarIconGroupStyle}>
+          <div style={isMobile ? mobileToolbarIconGroupStyle : toolbarIconGroupStyle}>
+            <div style={toolbarContextGroupStyle}>
+              <span style={toolbarGroupLabelStyle}>
+                {t("workspace.shell.chat.addContext")}
+              </span>
+              {toolItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  style={toolbarPillButtonStyle(item.active)}
+                  onClick={() => toggleContextTool(item.key)}
+                  title={item.label}
+                >
+                  <span style={toolbarIconGlyphStyle}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+            {!isMobile ? <span aria-hidden="true" style={toolbarGroupDividerStyle} /> : null}
             <div ref={recommendedMenuRef} style={toolbarTriggerWrapStyle}>
               <button
                 type="button"
-                style={toolbarPillButtonStyle(isRecommendedMenuOpen)}
+                className="workspace-recommended-trigger"
+                style={recommendedTriggerStyle(isRecommendedMenuOpen)}
                 onClick={() => setIsRecommendedMenuOpen((open) => !open)}
                 disabled={isStreaming}
                 aria-expanded={isRecommendedMenuOpen}
@@ -412,6 +436,7 @@ export function ChatPanel({
               >
                 <span style={toolbarIconGlyphStyle}>✦</span>
                 <span>{t("workspace.shell.chat.recommended")}</span>
+                <span aria-hidden="true">⌄</span>
               </button>
               {isRecommendedMenuOpen ? (
                 <div style={recommendedMenuStyle} role="menu">
@@ -438,18 +463,6 @@ export function ChatPanel({
                 </div>
               ) : null}
             </div>
-            {toolItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                style={toolbarPillButtonStyle(item.active)}
-                onClick={() => toggleContextTool(item.key)}
-                title={item.label}
-              >
-                <span style={toolbarIconGlyphStyle}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
           </div>
           <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
             {filledContextCount > 0 ? (
