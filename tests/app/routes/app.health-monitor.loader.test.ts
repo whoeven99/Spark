@@ -101,6 +101,7 @@ describe("health-monitor loader snapshot entry", () => {
 
     expect(ensureDailySnapshotOverview).toHaveBeenCalledWith(SHOP, { shopifyAdmin: ADMIN });
     expect(ensureDailySnapshot).not.toHaveBeenCalled();
+    expect(loadHealthMonitorSignals).toHaveBeenCalledWith({ shop: SHOP });
     expect(result.usingFallback).toBe(false);
   });
 
@@ -123,6 +124,22 @@ describe("health-monitor loader snapshot entry", () => {
     expect(ensureDailySnapshot).toHaveBeenCalledWith(SHOP, { shopifyAdmin: ADMIN });
     expect(ensureDailySnapshotOverview).not.toHaveBeenCalled();
     expect(result.usingFallback).toBe(false);
+  });
+
+  it("does not load signals when the snapshot fails and falls back to demo data", async () => {
+    ensureDailySnapshotOverview.mockRejectedValue(new Error("snapshot unavailable"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const result = await loader({
+        request: new Request("https://example.com/app/health-monitor"),
+      } as never);
+
+      expect(result.usingFallback).toBe(true);
+      expect(loadHealthMonitorSignals).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("revalidates through the route export when opening detail from overview", () => {

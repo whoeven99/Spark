@@ -154,3 +154,46 @@ describe("legacy /app/today/diagnosis task redirect", () => {
     expect(ensureDailySnapshot).not.toHaveBeenCalled();
   });
 });
+
+describe("legacy /app/today/diagnosis value redirect", () => {
+  beforeEach(() => {
+    authenticateAdmin.mockReset();
+    authenticateAdmin.mockResolvedValue({
+      session: { shop: "spark-test.myshopify.com" },
+    });
+  });
+
+  it("redirects detail=value to the ROI overview", async () => {
+    await expectRedirectLocation(
+      new Request("https://example.com/app/today/diagnosis?detail=value"),
+      "/app/today/roi",
+    );
+  });
+
+  it("maps valueTab=channels to ROI focus", async () => {
+    await expectRedirectLocation(
+      new Request(
+        "https://example.com/app/today/diagnosis?detail=value&valueTab=channels&returnTo=%2Fapp%2Ftoday",
+      ),
+      "/app/today/roi?focus=channels&returnTo=%2Fapp%2Ftoday",
+    );
+  });
+
+  it("maps valueTab=cost to ROI cost settings", async () => {
+    await expectRedirectLocation(
+      new Request("https://example.com/app/today/diagnosis?detail=value&valueTab=cost"),
+      "/app/today/roi?settings=cost",
+    );
+  });
+
+  it("keeps framework and customers on ROI overview", async () => {
+    await expectRedirectLocation(
+      new Request("https://example.com/app/today/diagnosis?detail=value&valueTab=framework"),
+      "/app/today/roi",
+    );
+    await expectRedirectLocation(
+      new Request("https://example.com/app/today/diagnosis?detail=value&valueTab=customers"),
+      "/app/today/roi",
+    );
+  });
+});

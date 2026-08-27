@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { hasReadReportsScope } from "../lib/shopifyReports";
+import {
+  resolveRoiFocus,
+  shouldOpenRoiCostSettings,
+  stripConsumedRoiDeepLinkParams,
+} from "../lib/todayRoiDeepLink";
 import { TODAY_ALL_COUNTRIES } from "../lib/todayGeo.shared";
 import { ensureCustomerValueLayer } from "../server/operations/customerValue.server";
 import { upsertShopCostConfig } from "../server/operations/roi/costConfig.server";
@@ -53,8 +58,8 @@ export default function TodayRoiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
   const returnTo = searchParams.get("returnTo")?.trim() || undefined;
-  const rawFocus = searchParams.get("focus");
-  const focus = rawFocus === "channels" || rawFocus === "loss" ? rawFocus : "overview";
+  const focus = resolveRoiFocus(searchParams);
+  const openCostSettings = shouldOpenRoiCostSettings(searchParams);
   const valueFetcher = useFetcher<ValueLayerResponse>();
   const costConfigFetcher = useFetcher<ActionData>({
     key: TODAY_ROI_COST_CONFIG_FETCHER_KEY,
@@ -94,12 +99,19 @@ export default function TodayRoiPage() {
     }
   }, [costConfigFetcher.data, costConfigFetcher.state, valueFetcher, valuePath]);
 
+  useEffect(() => {
+    const cleaned = stripConsumedRoiDeepLinkParams(searchParams);
+    if (!cleaned) return;
+    setSearchParams(cleaned, { replace: true, preventScrollReset: true });
+  }, [searchParams, setSearchParams]);
+
   const value = valueFetcher.data?.ok ? valueFetcher.data.value : null;
   const valueLoading = !valueFetcher.data || valueFetcher.state !== "idle";
   const valueFailed = valueFetcher.data?.ok === false;
 
   const handleCountryChange = (country: string) => {
     const params = new URLSearchParams(searchParams);
+    params.delete("valueTab");
     if (country === TODAY_ALL_COUNTRIES) {
       params.delete("country");
     } else {
@@ -110,10 +122,22 @@ export default function TodayRoiPage() {
 
   const handleFocusChange = (nextFocus: string) => {
     const params = new URLSearchParams(searchParams);
+    params.delete("valueTab");
     if (nextFocus === "overview") {
       params.delete("focus");
     } else {
       params.set("focus", nextFocus);
+    }
+    setSearchParams(params, { replace: true, preventScrollReset: true });
+  };
+
+  const handleToggleCostSettings = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("valueTab");
+    if (openCostSettings) {
+      params.delete("settings");
+    } else {
+      params.set("settings", "cost");
     }
     setSearchParams(params, { replace: true, preventScrollReset: true });
   };
@@ -145,6 +169,8 @@ export default function TodayRoiPage() {
           valueFailed={valueFailed}
           isMobile={isMobile}
           focus={focus}
+          settingsOpen={openCostSettings}
+          onToggleSettings={handleToggleCostSettings}
         />
       }
     />
@@ -160,6 +186,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     hasReadReports: hasReadReportsScope(session.scope),
     requestedCountry: url.searchParams.get("country"),
     metric: "roi",
-    focus: url.searchParams.get("focus"),
+    focus: resolveRoiFocus(url.searchParams),
   });
 };

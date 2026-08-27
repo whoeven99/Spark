@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { isOperationTaskHistory } from "../lib/operationTaskList";
+import { mapLegacyRoiValueTab } from "../lib/todayRoiDeepLink";
 import { authenticate } from "../shopify.server";
 import {
   getOperationTaskByIdForShop,
@@ -70,7 +71,9 @@ function buildTodayRoiValuePath(params: {
   returnTo?: string | null;
 }) {
   const next = new URLSearchParams();
-  if (params.valueTab) next.set("valueTab", params.valueTab);
+  const mapped = mapLegacyRoiValueTab(params.valueTab);
+  if (mapped.focus) next.set("focus", mapped.focus);
+  if (mapped.settings) next.set("settings", mapped.settings);
   if (params.returnTo) next.set("returnTo", params.returnTo);
   const query = next.toString();
   return `/app/today/roi${query ? `?${query}` : ""}`;
