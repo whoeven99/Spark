@@ -307,17 +307,35 @@ export const accountMenuStyle: CSSProperties = {
 };
 export const accountMenuSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
 export const accountMenuLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
-export const accountMenuItemStyle: CSSProperties = {
-  width: "100%",
+export const accountUsageCardStyle: CSSProperties = {
+  padding: "10px 12px",
   border: "1px solid #dfe3e8",
   borderRadius: 10,
-  background: "#ffffff",
+  background: "#fafbfb",
+};
+export const accountUsageValueStyle: CSSProperties = {
   color: "#202223",
-  padding: "10px 12px",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 600,
-  textAlign: "left",
-  cursor: "pointer",
+  fontVariantNumeric: "tabular-nums",
+};
+export const accountUsageHintStyle: CSSProperties = {
+  marginTop: 2,
+  color: "#8c9196",
+  fontSize: 11,
+};
+export const accountUsageTrackStyle: CSSProperties = {
+  height: 5,
+  marginTop: 8,
+  overflow: "hidden",
+  borderRadius: 999,
+  background: "#e1e3e5",
+};
+export const accountUsageFillStyle: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  background: shopifyUi.primary,
+  transition: "width 180ms ease",
 };
 export const footerTagStyle: CSSProperties = {
   padding: "4px 8px",

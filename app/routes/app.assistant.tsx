@@ -90,6 +90,7 @@ export default function AssistantRoute() {
           dashboardSnapshot={data?.dashboardSnapshot}
           accountName={data?.accountName}
           defaultPanel="chat"
+          homeVariant="v2"
           autoCreateConversation
         />
       </Suspense>

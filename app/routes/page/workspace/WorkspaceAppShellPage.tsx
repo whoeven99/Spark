@@ -1,6 +1,6 @@
 /**
  * 工作台应用壳：侧边栏导航 + 会话管理 + 面板路由。
- * 面板已精简为 首页(HomePanel) + 对话(ChatPanel)；看板/技能/自动化/任务已上升为顶级目的地
+ * 面板已精简为新对话首页(HomeV2Panel) + 对话(ChatPanel)；看板/技能/自动化/任务已上升为顶级目的地
  * 经营(/app/today) / 创作(/app/studio) / 任务(/app/tasks)。对话上下文状态统一在 useWorkspaceContext。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -45,11 +45,15 @@ import {
 import { tryParseManagedAiOutput } from "../../../lib/managedAiOutputRuntime";
 import { useWorkspaceContext } from "./useWorkspaceContext";
 import {
-  accountMenuItemStyle,
   accountMenuLabelStyle,
   accountMenuSectionStyle,
   accountMenuStyle,
   accountMenuWrapStyle,
+  accountUsageCardStyle,
+  accountUsageFillStyle,
+  accountUsageHintStyle,
+  accountUsageTrackStyle,
+  accountUsageValueStyle,
   brandBadgeStyle,
   brandMetaStyle,
   brandRowStyle,
@@ -69,9 +73,6 @@ import {
   mobileTopBarStyle,
   mobileTopBarTitleStyle,
   mobileTopBarTitleWrapStyle,
-  navButtonStyle,
-  navGroupStyle,
-  navIconStyle,
   newChatButtonStyle,
   newChatPlusBadgeStyle,
   shellStyle,
@@ -81,69 +82,6 @@ import {
   sidebarSectionStyle,
   sidebarStyle,
 } from "./styles";
-
-function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
-  const common = {
-    width: 15,
-    height: 15,
-    viewBox: "0 0 14 14",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.4,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-  if (name === "home") {
-    return (
-      <svg {...common} aria-hidden="true">
-        <path d="M2.2 6.8 L7 3.2 L11.8 6.8" />
-        <path d="M3.8 6.9 V11.4 H10.2 V6.9" />
-      </svg>
-    );
-  }
-  if (name === "dashboard") {
-    return (
-      <svg {...common} aria-hidden="true">
-        <rect x="1.2" y="1.2" width="4.8" height="4.8" rx="1.2" />
-        <rect x="8" y="1.2" width="4.8" height="4.8" rx="1.2" />
-        <rect x="1.2" y="8" width="4.8" height="4.8" rx="1.2" />
-        <rect x="8" y="8" width="4.8" height="4.8" rx="1.2" />
-      </svg>
-    );
-  }
-  if (name === "skills") {
-    return (
-      <svg {...common} aria-hidden="true">
-        <path d="M7 1.4 L8.4 5.6 L12.6 7 L8.4 8.4 L7 12.6 L5.6 8.4 L1.4 7 L5.6 5.6 Z" />
-      </svg>
-    );
-  }
-  if (name === "automation") {
-    return (
-      <svg {...common} aria-hidden="true">
-        <path d="M12.4 7a5.4 5.4 0 1 1-1.7-3.9" />
-        <path d="M12.6 1.6 v2.5 h-2.5" />
-      </svg>
-    );
-  }
-  return (
-    <svg {...common} aria-hidden="true">
-      <path d="M1.4 3.2 l1 1 l1.7-2" />
-      <path d="M6.4 3.4 h6.2" />
-      <path d="M1.4 8.4 l1 1 l1.7-2" />
-      <path d="M6.4 8.6 h6.2" />
-      <path d="M6.4 12.4 h6.2" />
-    </svg>
-  );
-}
-
-// 工作台左栏只保留 首页（其余 看板/技能/自动化/任务列表 已上升为顶级目的地 经营/创作/任务）。
-const panelItems: Array<{
-  key: Exclude<WorkspacePanel, "chat">;
-  labelKey: "workspace.shell.panels.home";
-}> = [
-  { key: "home", labelKey: "workspace.shell.panels.home" },
-];
 
 function isLaunchContextTool(value: string | null): value is ContextTool {
   return value === "product" || value === "article" || value === "order" || value === "file";
@@ -225,26 +163,6 @@ const conversationSearchInputStyle = {
   boxSizing: "border-box",
 } as const;
 
-const navBadgeStyle = {
-  marginLeft: "auto",
-  fontSize: 10,
-  fontWeight: 700,
-  padding: "0px 6px",
-  borderRadius: 999,
-  background: "rgba(64,112,244,0.12)",
-  color: "#2c4fc4",
-  flexShrink: 0,
-} as const;
-
-const navDotStyle = {
-  marginLeft: "auto",
-  width: 7,
-  height: 7,
-  borderRadius: "50%",
-  background: "#f0a01d",
-  flexShrink: 0,
-} as const;
-
 const conversationMenuStyle = {
   position: "absolute",
   top: "100%",
@@ -307,17 +225,6 @@ const collapsedIconButtonStyle = (active: boolean) =>
     placeItems: "center",
     position: "relative",
     flexShrink: 0,
-  }) as const;
-
-const collapsedDotStyle = (color: string) =>
-  ({
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 7,
-    height: 7,
-    borderRadius: "50%",
-    background: color,
   }) as const;
 
 const sidebarQuotaRowStyle = {
@@ -438,7 +345,14 @@ export function WorkspaceAppShellPage({
   >({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
-  const createConversationRef = useRef<((options?: { draft?: string; assistantText?: string }) => void) | null>(null);
+  const createConversationRef = useRef<
+    ((options?: {
+      draft?: string;
+      assistantText?: string;
+      autoSend?: boolean;
+      assistantLaunchContext?: ManagedAiLaunchContext | null;
+    }) => void) | null
+  >(null);
   const processedPrefillPromptRef = useRef<string | null>(null);
   const initializedAssistantLandingRef = useRef(false);
   const [runningTaskCount, setRunningTaskCount] = useState(0);
@@ -569,6 +483,11 @@ export function WorkspaceAppShellPage({
     };
   }, []);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [billingUsage, setBillingUsage] = useState<{
+    usedTokens: number;
+    totalTokens: number;
+  } | null>(null);
+  const [billingUsageLoading, setBillingUsageLoading] = useState(false);
   const workspaceContext = useWorkspaceContext();
   const stream = useChatStream();
   const { sendMessage: streamConversation, prepareStreaming, abort: abortStream } = stream;
@@ -713,6 +632,15 @@ export function WorkspaceAppShellPage({
     pruneEmptyDraftConversations(conversationId);
     setActiveConversationId(conversationId);
     switchPanel("chat");
+  };
+
+  const openNewConversationHome = () => {
+    pruneEmptyDraftConversations();
+    pendingAutoSendRef.current = false;
+    pendingHomeContextToolRef.current = null;
+    workspaceContext.clearContext();
+    setActiveConversationId(null);
+    switchPanel("home");
   };
 
   const removeConversation = async (conversationId: string) => {
@@ -1150,12 +1078,39 @@ export function WorkspaceAppShellPage({
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [accountMenuOpen]);
 
-  const activePanelLabel = activePanel === "chat"
-    ? activeConversation?.title ?? newConversationTitle
-    : t(
-        panelItems.find((item) => item.key === activePanel)?.labelKey ??
-          "workspace.shell.workspaceTitle",
-      );
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const controller = new AbortController();
+    const fetchBillingUsage = async () => {
+      setBillingUsageLoading(true);
+      try {
+        const authQuery =
+          typeof window !== "undefined" ? window.location.search : "";
+        const response = await fetch(`/api/billing-summary${authQuery}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = (await response.json()) as {
+          usedTokens: number;
+          totalTokens: number;
+        };
+        setBillingUsage(data);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[WorkspaceAppShellPage] billing usage failed:", error);
+        }
+      } finally {
+        if (!controller.signal.aborted) setBillingUsageLoading(false);
+      }
+    };
+    void fetchBillingUsage();
+    return () => controller.abort();
+  }, [accountMenuOpen]);
+
+  const activePanelLabel =
+    activePanel === "chat"
+      ? activeConversation?.title ?? newConversationTitle
+      : t("workspace.shell.workspaceTitle");
 
   const sidebarContent = (
     <>
@@ -1185,39 +1140,11 @@ export function WorkspaceAppShellPage({
           type="button"
           className="sidebar-new-chat-btn workspace-primary-btn"
           style={newChatButtonStyle}
-          onClick={() => createConversation()}
+          onClick={openNewConversationHome}
         >
           <span style={newChatPlusBadgeStyle}>+</span>
           <span>{t("workspace.shell.actions.newChat")}</span>
         </button>
-
-        <div style={navGroupStyle}>
-          {panelItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
-              style={navButtonStyle(activePanel === item.key)}
-              onClick={() => switchPanel(item.key)}
-            >
-              <span style={{ ...navIconStyle(activePanel === item.key), display: "inline-flex", alignItems: "center" }}>
-                <NavIcon name={item.key} />
-              </span>
-              <span>{t(item.labelKey)}</span>
-              {item.key === "tasks" && runningTaskCount > 0 ? (
-                <span
-                  style={navBadgeStyle}
-                  title={t("workspace.shell.status.runningTasksCount", { count: runningTaskCount })}
-                >
-                  {runningTaskCount}
-                </span>
-              ) : null}
-              {item.key === "dashboard" && effectiveDashboardSnapshot.automation?.status === "attention" ? (
-                <span style={navDotStyle} title={t("workspace.shell.status.attentionItems")} />
-              ) : null}
-            </button>
-          ))}
-        </div>
 
         <div style={sidebarDividerStyle} />
 
@@ -1416,17 +1343,39 @@ export function WorkspaceAppShellPage({
               <div style={accountMenuLabelStyle}>{t("workspace.shell.account.language")}</div>
               <LanguageSelector />
             </div>
-            <button
-              type="button"
-              style={accountMenuItemStyle}
-              onClick={() => {
-                setAccountMenuOpen(false);
-                if (isMobile) setSidebarOpen(false);
-                navigate("/app/account");
-              }}
-            >
-              Billing
-            </button>
+            <div style={accountMenuSectionStyle}>
+              <div style={accountMenuLabelStyle}>
+                {t("workspace.shell.account.tokenUsage")}
+              </div>
+              <div style={accountUsageCardStyle}>
+                <div style={accountUsageValueStyle}>
+                  {billingUsage
+                    ? t("workspace.shell.account.tokenUsageValue", {
+                        used: (billingUsage?.usedTokens ?? 0).toLocaleString(locale),
+                        total: (billingUsage?.totalTokens ?? 0).toLocaleString(locale),
+                      })
+                    : billingUsageLoading
+                      ? t("workspace.shell.account.loadingUsage")
+                      : t("workspace.shell.account.unavailableUsage")}
+                </div>
+                <div style={accountUsageHintStyle}>
+                  {t("workspace.shell.account.tokenUsageHint")}
+                </div>
+                <div style={accountUsageTrackStyle}>
+                  <div
+                    style={{
+                      ...accountUsageFillStyle,
+                      width: `${Math.min(
+                        100,
+                        billingUsage && billingUsage.totalTokens > 0
+                          ? (billingUsage.usedTokens / billingUsage.totalTokens) * 100
+                          : 0,
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
         <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
@@ -1464,37 +1413,13 @@ export function WorkspaceAppShellPage({
             border: "1px solid #008060",
             fontSize: 18,
           }}
-          onClick={() => createConversation()}
+          onClick={openNewConversationHome}
           title={t("workspace.shell.actions.newChat")}
           aria-label={t("workspace.shell.actions.newChat")}
         >
           +
         </button>
         <div style={{ height: 1, width: 28, background: "#e1e3e5", margin: "2px 0" }} />
-        {panelItems.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            style={collapsedIconButtonStyle(activePanel === item.key)}
-            onClick={() => switchPanel(item.key)}
-            title={t(item.labelKey)}
-            aria-label={t(item.labelKey)}
-          >
-            <NavIcon name={item.key} />
-            {item.key === "tasks" && runningTaskCount > 0 ? (
-              <span
-                style={collapsedDotStyle("#4070f4")}
-                title={t("workspace.shell.status.runningTasksCount", { count: runningTaskCount })}
-              />
-            ) : null}
-            {item.key === "dashboard" && effectiveDashboardSnapshot.automation?.status === "attention" ? (
-              <span
-                style={collapsedDotStyle("#f0a01d")}
-                title={t("workspace.shell.status.attentionItems")}
-              />
-            ) : null}
-          </button>
-        ))}
       </div>
       <button
         type="button"
@@ -1539,7 +1464,7 @@ export function WorkspaceAppShellPage({
             <button
               type="button"
               style={mobileTopBarButtonStyle}
-              onClick={() => createConversation()}
+              onClick={openNewConversationHome}
               aria-label={t("workspace.shell.actions.newChat")}
             >
               +

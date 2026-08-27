@@ -3267,7 +3267,12 @@
       },
       "account": {
         "language": "语言",
-        "workspaceLabel": "Spark AI 工作台"
+        "workspaceLabel": "Spark AI 工作台",
+        "tokenUsage": "Token 用量",
+        "tokenUsageValue": "{{used}} / {{total}}",
+        "tokenUsageHint": "已使用 / 总额度",
+        "loadingUsage": "正在读取额度…",
+        "unavailableUsage": "暂时无法读取"
       }
     },
     "execution": {

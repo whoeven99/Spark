@@ -3267,7 +3267,12 @@
       },
       "account": {
         "language": "Language",
-        "workspaceLabel": "Spark AI Workspace"
+        "workspaceLabel": "Spark AI Workspace",
+        "tokenUsage": "Token usage",
+        "tokenUsageValue": "{{used}} / {{total}}",
+        "tokenUsageHint": "Used / total",
+        "loadingUsage": "Loading usage…",
+        "unavailableUsage": "Unavailable"
       }
     },
     "execution": {
