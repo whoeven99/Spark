@@ -603,6 +603,7 @@ export const toolbarStatusGroupStyle: CSSProperties = {
   justifyContent: "flex-end",
   gap: 8,
   marginLeft: "auto",
+  paddingRight: 56,
   flexWrap: "wrap",
 };
 export const mobileToolbarStatusGroupStyle: CSSProperties = {
@@ -612,6 +613,8 @@ export const mobileToolbarStatusGroupStyle: CSSProperties = {
   gap: 10,
   width: "100%",
   marginLeft: 0,
+  paddingRight: 60,
+  boxSizing: "border-box",
   flexWrap: "wrap",
 };
 export const toolbarCountStyle: CSSProperties = { fontSize: 12, color: "#6d7175", fontWeight: 600 };
