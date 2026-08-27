@@ -941,10 +941,25 @@ export function WorkspaceAppShellPage({
                   { role: "user", content },
                   { role: "assistant", content: assistantText, payloads: assistantMessagePayloads },
                 ],
-                ...(isNewTitle ? { title: nextTitle } : {}),
+                // 先用首句占位，服务端 generateTitle 成功后再回写 AI 短标题（Cursor 风格）
+                ...(isNewTitle ? { title: nextTitle, generateTitle: true } : {}),
                 preview: nextPreview,
               }),
-            }).catch((err) => console.error("[WorkspaceAppShellPage] persist messages failed:", err));
+            })
+              .then(async (res) => {
+                if (!res.ok || !isNewTitle) return;
+                const data = (await res.json()) as { title?: string };
+                const aiTitle = data.title?.trim();
+                if (!aiTitle) return;
+                setConversationList((current) =>
+                  current.map((conversation) =>
+                    conversation.id === conversationId
+                      ? { ...conversation, title: aiTitle }
+                      : conversation,
+                  ),
+                );
+              })
+              .catch((err) => console.error("[WorkspaceAppShellPage] persist messages failed:", err));
           }
         },
       });
