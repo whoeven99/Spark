@@ -5,7 +5,6 @@ import type { ContextTool } from "./types";
 import {
   panelStackStyle,
   shopifyUi,
-  surfaceCardStyle,
 } from "./styles";
 
 function greetingForHour(
@@ -53,10 +52,10 @@ const homeV2Styles = {
     lineHeight: 1.45,
   },
   assistantCard: {
-    ...surfaceCardStyle,
     padding: "18px 20px 18px",
+    borderRadius: shopifyUi.radiusCard,
     border: `1px solid ${shopifyUi.border}`,
-    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+    background: shopifyUi.surface,
   },
   assistantBadge: {
     display: "inline-flex",
@@ -76,8 +75,8 @@ const homeV2Styles = {
   },
   composerShell: {
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 14,
-    background: shopifyUi.surfaceSubtle,
+    borderRadius: 12,
+    background: shopifyUi.surface,
     padding: "14px 14px 12px",
   },
   composerInput: {
@@ -108,7 +107,7 @@ const homeV2Styles = {
     flexWrap: "wrap" as const,
   },
   contextChip: {
-    border: `1px solid ${shopifyUi.borderStrong}`,
+    border: `1px solid ${shopifyUi.border}`,
     borderRadius: 999,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
@@ -141,7 +140,7 @@ const homeV2Styles = {
   },
   quickPill: {
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 10,
+    borderRadius: 8,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
     padding: "10px 12px",

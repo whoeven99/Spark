@@ -151,15 +151,14 @@ const conversationTimeStyle = {
   marginLeft: 6,
 } as const;
 
-const conversationSearchInputStyle = {
+const conversationRenameInputStyle = {
   width: "100%",
-  border: "1px solid #e1e3e5",
+  border: "1px solid #e5e5e5",
   borderRadius: 8,
   padding: "5px 10px",
   fontSize: 12,
   color: "#202223",
   background: "#ffffff",
-  marginBottom: 6,
   boxSizing: "border-box",
 } as const;
 
@@ -169,9 +168,9 @@ const conversationMenuStyle = {
   right: 0,
   zIndex: 30,
   background: "#ffffff",
-  border: "1px solid #e1e3e5",
-  borderRadius: 10,
-  boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
+  border: "1px solid #e5e5e5",
+  borderRadius: 8,
+  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
   padding: 4,
   minWidth: 112,
   display: "flex",
@@ -202,8 +201,8 @@ const collapseToggleStyle = {
   width: 24,
   height: 24,
   borderRadius: 6,
-  border: "1px solid #e1e3e5",
-  background: "#ffffff",
+  border: "1px solid #e5e5e5",
+  background: "transparent",
   color: "#6d7175",
   fontSize: 12,
   cursor: "pointer",
@@ -216,9 +215,9 @@ const collapsedIconButtonStyle = (active: boolean) =>
   ({
     width: 36,
     height: 36,
-    borderRadius: 10,
-    border: `1px solid ${active ? "rgba(0,128,96,0.4)" : "#e1e3e5"}`,
-    background: active ? "rgba(0,128,96,0.08)" : "#ffffff",
+    borderRadius: 8,
+    border: `1px solid ${active ? "rgba(0,128,96,0.35)" : "#e5e5e5"}`,
+    background: active ? "rgba(0,128,96,0.08)" : "transparent",
     color: active ? "#008060" : "#5f6368",
     cursor: "pointer",
     display: "grid",
@@ -356,7 +355,6 @@ export function WorkspaceAppShellPage({
   const processedPrefillPromptRef = useRef<string | null>(null);
   const initializedAssistantLandingRef = useRef(false);
   const [runningTaskCount, setRunningTaskCount] = useState(0);
-  const [conversationSearch, setConversationSearch] = useState("");
   // 置顶与折叠均为本机偏好（localStorage），不进数据库
   const pinnedStorageKey = useMemo(() => {
     const shop =
@@ -1152,29 +1150,13 @@ export function WorkspaceAppShellPage({
           <div style={sidebarSectionHeadStyle}>
             <span>{t("workspace.shell.recentConversations")}</span>
           </div>
-          <input
-            value={conversationSearch}
-            onChange={(event) => setConversationSearch(event.target.value)}
-            placeholder={t("workspace.shell.searchPlaceholder")}
-            style={conversationSearchInputStyle}
-          />
           <div style={conversationListStyle}>
             {(() => {
-              const keyword = conversationSearch.trim().toLowerCase();
-              const filtered = conversationList
-                .slice(0, 50)
-                .filter(
-                  (conversation) =>
-                    !keyword ||
-                    conversation.title.toLowerCase().includes(keyword) ||
-                    conversation.preview.toLowerCase().includes(keyword),
-                );
+              const filtered = conversationList.slice(0, 50);
               if (filtered.length === 0) {
                 return (
                   <div style={{ fontSize: 12, color: "#8c9196", padding: "8px 10px" }}>
-                    {keyword
-                      ? t("workspace.shell.noMatchingConversations")
-                      : t("workspace.shell.noConversations")}
+                    {t("workspace.shell.noConversations")}
                   </div>
                 );
               }
@@ -1213,7 +1195,7 @@ export function WorkspaceAppShellPage({
                             setRenamingConversationId(null);
                           }
                         }}
-                        style={{ ...conversationSearchInputStyle, marginBottom: 0, flex: 1 }}
+                        style={{ ...conversationRenameInputStyle, flex: 1 }}
                       />
                     ) : (
                       <>
