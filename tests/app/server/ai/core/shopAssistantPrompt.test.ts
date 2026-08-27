@@ -34,6 +34,16 @@ describe("buildMerchantCapabilityPrompt", () => {
         displayName: "模板邮件发送",
         visibility: "internal",
       }),
+      stubTool({
+        name: "currentTime",
+        displayName: "查询当前时间",
+        visibility: "internal",
+      }),
+      stubTool({
+        name: "getBillingStatus",
+        displayName: "查询套餐与 Token 额度",
+        visibility: "internal",
+      }),
     ];
 
     const playbooks: PlaybookDefinition[] = [
@@ -43,7 +53,7 @@ describe("buildMerchantCapabilityPrompt", () => {
         description: "体检报告",
         category: "operations",
         triggerDescription: "体检",
-        visibility: "public",
+        visibility: "internal",
         steps: ["a"],
         run: async () => ({ ok: true, summary: "", steps: [] }),
       },
@@ -52,9 +62,11 @@ describe("buildMerchantCapabilityPrompt", () => {
     const prompt = buildMerchantCapabilityPrompt(tools, playbooks);
 
     expect(prompt).toContain("经营数据查询");
-    expect(prompt).toContain("经营体检");
+    expect(prompt).not.toContain("经营体检");
     expect(prompt).not.toContain("搜索/浏览商品");
     expect(prompt).not.toContain("模板邮件发送");
+    expect(prompt).not.toContain("查询当前时间");
+    expect(prompt).not.toContain("查询套餐与 Token 额度");
     expect(prompt).toContain("internal");
     expect(prompt).toContain("对外能力清单");
   });

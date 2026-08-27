@@ -339,7 +339,7 @@ export function ChatPanel({
           ))}
         </div>
       ) : null}
-      {/* 纯净 IA：暂不展示 Playbook 快捷条；服务端 Playbook 仍可经对话触发。 */}
+      {/* 纯净 IA：暂不展示 Playbook 快捷条；服务端 Playbook 也已临时全部屏蔽。 */}
       <textarea
         ref={textareaRef}
         value={draft}

@@ -10,6 +10,8 @@ import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
 import { dailyOperationsToolDefinition } from "./dailyOperations/dailyOperations.tool";
 import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
 import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skill";
+import { timeTool } from "./system/timeTool";
+import { weatherTool } from "./system/weatherTool";
 
 // ==========================================
 // 注册各类核心与扩展 Tools 到全局注册表
@@ -35,6 +37,27 @@ globalToolRegistry.register({
   visibility: "internal",
   description: "查询店名、域名、币种、时区、套餐等店铺基础信息",
   createTool: ({ admin }) => createShopifyShopInfoTool(admin),
+});
+
+// 时间 / 天气：可调用，但不对商户介绍
+globalToolRegistry.register({
+  name: "currentTime",
+  displayName: "查询当前时间",
+  category: "系统",
+  stage: "monitor",
+  visibility: "internal",
+  description: "查询当前日期与时间",
+  createTool: () => timeTool,
+});
+
+globalToolRegistry.register({
+  name: "weather",
+  displayName: "查询天气",
+  category: "系统",
+  stage: "monitor",
+  visibility: "internal",
+  description: "按城市查询天气",
+  createTool: () => weatherTool,
 });
 
 // 整店翻译已迁移至 TSF，Spark 不再注册翻译任务工具。
