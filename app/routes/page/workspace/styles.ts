@@ -150,7 +150,13 @@ export const brandBadgeStyle: CSSProperties = {
   fontSize: 13,
 };
 export const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: shopifyUi.text };
-export const brandMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
+export const brandMetaStyle: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.25,
+  letterSpacing: "-0.01em",
+  color: shopifyUi.textMuted,
+  whiteSpace: "nowrap",
+};
 
 export const newChatButtonStyle: CSSProperties = {
   display: "flex",
