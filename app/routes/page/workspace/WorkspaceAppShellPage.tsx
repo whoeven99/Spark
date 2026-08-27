@@ -639,6 +639,9 @@ export function WorkspaceAppShellPage({
     workspaceContext.clearContext();
     setActiveConversationId(null);
     switchPanel("home");
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>("[data-home-composer]")?.focus();
+    });
   };
 
   const removeConversation = async (conversationId: string) => {

@@ -3428,6 +3428,8 @@
       "subtitle": "今天想让 Spark AI 帮你做什么？",
       "assistantTitle": "描述目标，Spark AI 会查询店铺并协助执行",
       "composerPlaceholder": "例如：查看今天的经营情况，并告诉我最需要处理的 3 件事…",
+      "recommendationsTitle": "推荐操作",
+      "recommendationsHint": "从常用任务快速开始",
       "quickPrompts": {
         "todayOperations": {
           "label": "查看今日经营",

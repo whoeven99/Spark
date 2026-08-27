@@ -177,6 +177,36 @@ code {
   box-shadow: 0 0 0 1px #008060;
 }
 
+.workspace-home-composer {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.workspace-home-composer:focus-within {
+  border-color: #8a8d91 !important;
+  box-shadow: 0 0 0 1px rgba(31, 33, 36, 0.08);
+}
+
+.workspace-home-quick-action {
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.workspace-home-quick-action:hover {
+  background: #fafafa !important;
+  border-color: #c9cdd2 !important;
+  color: #1f2124 !important;
+}
+
+.workspace-home-quick-action:focus-visible {
+  outline: none;
+  border-color: #005bd3 !important;
+  box-shadow: 0 0 0 1px #005bd3;
+}
+
 /* Sidebar history row — show delete button on hover */
 .sidebar-history-row .sidebar-history-delete {
   opacity: 0;

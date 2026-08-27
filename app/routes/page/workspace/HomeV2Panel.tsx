@@ -52,7 +52,7 @@ const homeV2Styles = {
     lineHeight: 1.45,
   },
   assistantCard: {
-    padding: "18px 20px 18px",
+    padding: "16px",
     borderRadius: shopifyUi.radiusCard,
     border: `1px solid ${shopifyUi.border}`,
     background: shopifyUi.surface,
@@ -65,23 +65,23 @@ const homeV2Styles = {
     fontWeight: 700,
     letterSpacing: "0.06em",
     color: shopifyUi.primary,
-    marginBottom: 10,
+    marginBottom: 7,
   },
   assistantTitle: {
-    margin: "0 0 12px",
-    fontSize: 16,
+    margin: "0 0 14px",
+    fontSize: 15,
     fontWeight: 700,
     color: shopifyUi.text,
   },
   composerShell: {
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 12,
+    borderRadius: 10,
     background: shopifyUi.surface,
-    padding: "14px 14px 12px",
+    padding: "12px 12px 10px",
   },
   composerInput: {
     width: "100%",
-    minHeight: 74,
+    minHeight: 62,
     border: "none",
     outline: "none",
     resize: "none" as const,
@@ -111,7 +111,7 @@ const homeV2Styles = {
     borderRadius: 999,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
-    padding: "5px 11px",
+    padding: "5px 10px",
     fontSize: 12,
     fontWeight: 600,
     cursor: "pointer",
@@ -136,19 +136,48 @@ const homeV2Styles = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 8,
-    marginTop: 14,
+  },
+  recommendations: {
+    borderTop: `1px solid ${shopifyUi.border}`,
+    marginTop: 16,
+    paddingTop: 13,
+  },
+  recommendationsHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 8,
+    marginBottom: 9,
+  },
+  recommendationsTitle: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 700,
+    color: shopifyUi.text,
+  },
+  recommendationsHint: {
+    fontSize: 12,
+    color: shopifyUi.textMuted,
   },
   quickPill: {
     border: `1px solid ${shopifyUi.border}`,
     borderRadius: 8,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
-    padding: "10px 12px",
+    padding: "9px 11px",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left" as const,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  quickPillArrow: {
+    color: shopifyUi.textMuted,
+    fontSize: 14,
+    lineHeight: 1,
   },
 };
 
@@ -237,8 +266,9 @@ export function HomeV2Panel({
           <span>{t("workspace.home.askSpark")}</span>
         </div>
         <h2 style={homeV2Styles.assistantTitle}>{t("workspace.homeV2.assistantTitle")}</h2>
-        <div style={homeV2Styles.composerShell}>
+        <div className="workspace-home-composer" style={homeV2Styles.composerShell}>
           <textarea
+            data-home-composer
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleComposerKeyDown}
@@ -269,17 +299,29 @@ export function HomeV2Panel({
             </button>
           </div>
         </div>
-        <div style={homeV2Styles.quickPillRow}>
-          {quickPrompts.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              style={homeV2Styles.quickPill}
-              onClick={() => onSubmitPrompt(item.prompt)}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div style={homeV2Styles.recommendations}>
+          <div style={homeV2Styles.recommendationsHeader}>
+            <h3 style={homeV2Styles.recommendationsTitle}>
+              {t("workspace.homeV2.recommendationsTitle")}
+            </h3>
+            <span style={homeV2Styles.recommendationsHint}>
+              {t("workspace.homeV2.recommendationsHint")}
+            </span>
+          </div>
+          <div style={homeV2Styles.quickPillRow}>
+            {quickPrompts.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className="workspace-home-quick-action"
+                style={homeV2Styles.quickPill}
+                onClick={() => onSubmitPrompt(item.prompt)}
+              >
+                <span>{item.label}</span>
+                <span style={homeV2Styles.quickPillArrow} aria-hidden="true">→</span>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
     </div>

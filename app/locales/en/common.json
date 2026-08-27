@@ -3428,6 +3428,8 @@
       "subtitle": "What should Spark AI help you with today?",
       "assistantTitle": "Describe your goal and Spark AI will inspect your store and help execute it",
       "composerPlaceholder": "For example: review today’s business and tell me the top 3 things to handle…",
+      "recommendationsTitle": "Recommended actions",
+      "recommendationsHint": "Start quickly with a common task",
       "quickPrompts": {
         "todayOperations": {
           "label": "Review today’s business",
