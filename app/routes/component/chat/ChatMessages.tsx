@@ -131,9 +131,7 @@ export function ChatMessages({
                           : t("workspace.shell.chat.copy")}
                       </button>
                     </div>
-                  ) : (
-                    <div style={userIdentityStyle}>{t("workspace.shell.chat.you")}</div>
-                  )}
+                  ) : null}
                   {item.role === "assistant" && item.thinkingContent ? (
                     <div style={{ marginBottom: "0.5rem" }}>
                       <ThinkingReview text={item.thinkingContent} />
@@ -279,11 +277,4 @@ const assistantAvatarStyle: CSSProperties = {
   borderRadius: 8,
   background: "#008060",
   color: "#ffffff",
-};
-
-const userIdentityStyle: CSSProperties = {
-  marginBottom: 4,
-  color: "#8c9196",
-  fontSize: 11,
-  fontWeight: 600,
 };
