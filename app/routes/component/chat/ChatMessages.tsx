@@ -82,15 +82,16 @@ export function ChatMessages({
           hasManagedAiCard ||
           hasImageAttachments;
 
-        const bubbleShellStyle: CSSProperties = {
-          borderRadius: "12px",
-          borderWidth: item.role === "assistant" ? 0 : 1,
-          borderStyle: "solid",
-          borderColor: item.role === "assistant" ? "transparent" : "#e1e3e5",
-          background: item.role === "assistant" ? "transparent" : "#f6f6f7",
-        };
-
         const isAssistant = item.role === "assistant";
+
+        const bubbleShellStyle: CSSProperties = {
+          borderRadius: isAssistant ? "12px" : "14px",
+          borderWidth: isAssistant ? 0 : 1,
+          borderStyle: "solid",
+          borderColor: isAssistant ? "transparent" : "#e6e8ea",
+          background: isAssistant ? "transparent" : "#f1f2f4",
+          padding: isAssistant ? "16px" : "8px 13px",
+        };
 
         return (
           <div
@@ -111,7 +112,7 @@ export function ChatMessages({
               }}
             >
               <div style={bubbleShellStyle}>
-                <s-box padding="base" borderRadius="base" background="transparent">
+                <div>
                   {isAssistant ? (
                     <div style={assistantIdentityRowStyle}>
                       <div style={assistantIdentityStyle}>
@@ -140,11 +141,11 @@ export function ChatMessages({
                   {item.role === "assistant" && item.managedAiResult ? (
                     <ManagedAiResultCard result={item.managedAiResult} />
                   ) : null}
-                  <div style={{ marginTop: "0.35rem" }}>
-                    {item.role === "assistant" ? (
+                  <div style={isAssistant ? { marginTop: "0.35rem" } : undefined}>
+                    {isAssistant ? (
                       <ChatMessageContent content={item.content} />
                     ) : (
-                      <span style={{ whiteSpace: "pre-wrap" }}>{item.content}</span>
+                      <span style={userMessageTextStyle}>{item.content}</span>
                     )}
                   </div>
 
@@ -228,7 +229,7 @@ export function ChatMessages({
                       />
                     </div>
                   ) : null}
-                </s-box>
+                </div>
               </div>
             </div>
           </div>
@@ -245,6 +246,14 @@ const assistantIdentityRowStyle: CSSProperties = {
   justifyContent: "space-between",
   gap: 8,
   marginBottom: 8,
+};
+
+const userMessageTextStyle: CSSProperties = {
+  display: "block",
+  whiteSpace: "pre-wrap",
+  fontSize: 13.5,
+  lineHeight: 1.5,
+  color: "#202223",
 };
 
 const assistantIdentityStyle: CSSProperties = {
