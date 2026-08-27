@@ -3239,7 +3239,15 @@
         "sendFailed": "Sorry, sending failed. Please try again later.",
         "justNow": "Just now",
         "you": "You",
-        "contextUsage": "Context usage: {{current}} / {{max}} ({{percent}}%)"
+        "contextUsage": "Context usage: {{current}} / {{max}} ({{percent}}%)",
+        "composerPlaceholder": "Continue your request with product, order, article, or file context…",
+        "contextCount": "{{count}} added",
+        "clearContext": "Clear context",
+        "keyboardHint": "Enter to send · Shift+Enter for new line",
+        "replying": "AI Assistant is replying",
+        "stop": "Stop",
+        "send": "Send",
+        "sending": "Sending…"
       },
       "taskRun": {
         "userText": "Start run: {{title}} ({{count}} tasks)",

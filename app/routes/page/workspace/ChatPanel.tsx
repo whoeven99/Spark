@@ -1,6 +1,7 @@
 /** 工作台对话 Panel：消息列表 + 输入区 + 上下文工具栏（从 WorkspaceAppShellPage 拆出）。 */
 import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
 import { ContextWindowIndicator } from "../../component/chat/ContextWindowIndicator";
@@ -25,19 +26,14 @@ import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import {
-  buttonRowStyle,
   chatLayoutStyle,
   composerBoxStyle,
-  composerFooterStyle,
   composerSurfaceStyle,
   conversationMetaRowStyle,
   conversationMetaTitleStyle,
-  footerLeftStyle,
   ghostButtonStyle,
   messageListStyle,
-  mobileButtonRowStyle,
   mobileChatLayoutStyle,
-  mobileComposerFooterStyle,
   mobileConversationMetaRowStyle,
   mobileFixedComposerCardStyle,
   mobileFixedComposerWrapStyle,
@@ -49,7 +45,6 @@ import {
   primaryButtonStyle,
   scrollBottomButtonStyle,
   scrollBottomOverlayStyle,
-  sectionTextStyle,
   selectionBubbleCloseStyle,
   selectionBubbleRowStyle,
   selectionBubbleStyle,
@@ -102,6 +97,7 @@ export function ChatPanel({
   /** TaskProposal 执行成功：向对话追加「任务已开始」新一轮 */
   onTaskProposalExecuted: (conversationId: string, run: TaskRunPayload) => void;
 }) {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -349,9 +345,8 @@ export function ChatPanel({
         onKeyDown={handleTextareaKeyDown}
         className="workspace-composer-input"
         style={isMobile ? mobileTextareaStyle : textareaStyle}
-        placeholder="继续补充你的任务目标，并结合商品、订单、文章或文件上下文..."
+        placeholder={t("workspace.shell.chat.composerPlaceholder")}
         disabled={isStreaming}
-        autoFocus
       />
       <div style={toolbarDockStyle}>
         <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
@@ -369,38 +364,45 @@ export function ChatPanel({
               </button>
             ))}
           </div>
-          {filledContextCount > 0 ? (
-            <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
-              <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
-              <button type="button" style={toolbarClearStyle} onClick={clearContext}>
-                清空上下文
+          <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
+            {filledContextCount > 0 ? (
+              <>
+                <span style={toolbarCountStyle}>
+                  {t("workspace.shell.chat.contextCount", {
+                    count: filledContextCount,
+                  })}
+                </span>
+                <button type="button" style={toolbarClearStyle} onClick={clearContext}>
+                  {t("workspace.shell.chat.clearContext")}
+                </button>
+              </>
+            ) : null}
+            <span style={mutedMetaStyle}>
+              {isStreaming
+                ? t("workspace.shell.chat.replying")
+                : t("workspace.shell.chat.keyboardHint")}
+            </span>
+            <ContextWindowIndicator
+              currentTokens={contextTokens}
+              maxTokens={MAX_CONTEXT_TOKENS}
+            />
+            {isStreaming ? (
+              <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
+                {t("workspace.shell.chat.stop")}
               </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div style={isMobile ? mobileComposerFooterStyle : composerFooterStyle}>
-        <div style={footerLeftStyle}>
-          <span style={sectionTextStyle}>
-            {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
-          </span>
-          <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
-        </div>
-        <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
-          {isStreaming ? (
-            <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
-              停止
+            ) : null}
+            <button
+              type="button"
+              className="workspace-primary-btn"
+              style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
+              onClick={() => void onSend()}
+              disabled={isStreaming}
+            >
+              {isStreaming
+                ? t("workspace.shell.chat.sending")
+                : t("workspace.shell.chat.send")}
             </button>
-          ) : null}
-          <button
-            type="button"
-            className="workspace-primary-btn"
-            style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
-            onClick={() => void onSend()}
-            disabled={isStreaming}
-          >
-            {isStreaming ? "发送中…" : "发送"}
-          </button>
+          </div>
         </div>
       </div>
     </div>

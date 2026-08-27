@@ -3239,7 +3239,15 @@
         "sendFailed": "抱歉，发送失败，请稍后重试。",
         "justNow": "刚刚",
         "you": "你",
-        "contextUsage": "上下文使用量：{{current}} / {{max}}（{{percent}}%）"
+        "contextUsage": "上下文使用量：{{current}} / {{max}}（{{percent}}%）",
+        "composerPlaceholder": "继续补充你的任务目标，并结合商品、订单、文章或文件上下文…",
+        "contextCount": "已补充 {{count}} 项",
+        "clearContext": "清空上下文",
+        "keyboardHint": "Enter 发送 · Shift+Enter 换行",
+        "replying": "AI Assistant 正在回复",
+        "stop": "停止",
+        "send": "发送",
+        "sending": "发送中…"
       },
       "taskRun": {
         "userText": "开始执行：{{title}}（{{count}} 个任务）",

@@ -23,10 +23,12 @@ export const shopifyUi = {
 } as const;
 
 export const shellStyle: CSSProperties = {
+  height: "100dvh",
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "220px minmax(0, 1fr)",
   background: shopifyUi.surface,
+  overflow: "hidden",
 };
 
 export const mobileShellStyle: CSSProperties = {
@@ -106,19 +108,23 @@ export const sidebarStyle: CSSProperties = {
   borderRight: `1px solid ${shopifyUi.border}`,
   background: shopifyUi.pageBg,
   gap: 12,
-  height: "100vh",
+  height: "100%",
+  boxSizing: "border-box",
   overflow: "hidden",
   position: "sticky",
   top: 0,
 };
 
 export const contentStyle: CSSProperties = {
-  padding: "24px 28px 36px",
+  height: "100%",
+  padding: "20px 22px 12px",
   display: "flex",
   flexDirection: "column",
   gap: 20,
   minWidth: 0,
   background: shopifyUi.surface,
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 export const mobileContentStyle: CSSProperties = {
@@ -428,7 +434,13 @@ export const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 export const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 export const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
-export const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, height: "calc(100vh - 100px)" };
+export const chatLayoutStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 320px",
+  gap: 16,
+  height: "100%",
+  minHeight: 0,
+};
 export const mobileChatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, minHeight: "calc(100vh - 110px)" };
 export const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexShrink: 0 };
 export const mobileConversationMetaRowStyle: CSSProperties = { ...conversationMetaRowStyle, flexDirection: "column", alignItems: "flex-start", marginBottom: 10 };
@@ -446,7 +458,7 @@ export const messageListStyle: CSSProperties = {
 };
 export const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
 export const composerSurfaceStyle: CSSProperties = {
-  padding: 12,
+  padding: 10,
   borderRadius: 12,
   border: `1px solid ${shopifyUi.border}`,
   background: shopifyUi.surface,
@@ -468,7 +480,7 @@ export const mobileFixedComposerCardStyle: CSSProperties = {
 };
 export const textareaStyle: CSSProperties = {
   width: "100%",
-  minHeight: 96,
+  minHeight: 68,
   maxHeight: 320,
   border: "none",
   padding: "4px 4px 8px",
@@ -484,18 +496,15 @@ export const textareaStyle: CSSProperties = {
 };
 export const mobileTextareaStyle: CSSProperties = {
   ...textareaStyle,
-  minHeight: 84,
+  minHeight: 64,
   padding: "2px 2px 6px",
   fontSize: 13,
   lineHeight: 1.55,
 };
-export const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
-export const mobileComposerFooterStyle: CSSProperties = { ...composerFooterStyle, flexDirection: "column", alignItems: "stretch" };
-export const footerLeftStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
 export const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 export const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
 export const toolbarDockStyle: CSSProperties = {
-  marginTop: 8,
+  marginTop: 4,
   paddingTop: 8,
   borderTop: "1px solid #ebedf0",
   position: "relative",
@@ -511,9 +520,14 @@ export const mobileToolbarBarStyle: CSSProperties = {
   ...toolbarBarStyle,
   flexDirection: "column",
   alignItems: "stretch",
-  gap: 10,
+  gap: 8,
 };
-export const toolbarIconGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
+export const toolbarIconGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexWrap: "wrap",
+};
 export const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
 export const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   width: 32,
@@ -531,8 +545,8 @@ export const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-  height: 30,
-  padding: "0 10px",
+  height: 28,
+  padding: "0 9px",
   border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
   background: active ? shopifyUi.primarySurface : shopifyUi.surface,
   color: active ? shopifyUi.primaryText : shopifyUi.text,
@@ -583,7 +597,14 @@ export const scrollBottomButtonStyle: CSSProperties = {
   boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
   whiteSpace: "nowrap",
 };
-export const toolbarStatusGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" };
+export const toolbarStatusGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 8,
+  marginLeft: "auto",
+  flexWrap: "wrap",
+};
 export const mobileToolbarStatusGroupStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
