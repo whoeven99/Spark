@@ -24,9 +24,28 @@ uri = "/webhooks/app/uninstalled"
 topics = ["app/scopes_update"]
 uri = "/webhooks/app/scopes_update"
 
-# 以下 5 个含 Protected Customer Data，PCD 未获批前不可订阅；获批后再加回：
-# orders/paid, orders/cancelled, refunds/create, fulfillments/create, fulfillments/update
-# inventory_levels/update：第一版不做库存镜像同步，暂不订阅
+# PCD 已获批：订单/退款/履约增量镜像
+[[webhooks.subscriptions]]
+topics = ["orders/paid"]
+uri = "/webhooks/orders/paid"
+
+[[webhooks.subscriptions]]
+topics = ["orders/cancelled"]
+uri = "/webhooks/orders/cancelled"
+
+[[webhooks.subscriptions]]
+topics = ["refunds/create"]
+uri = "/webhooks/refunds/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/create"]
+uri = "/webhooks/fulfillments/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/update"]
+uri = "/webhooks/fulfillments/update"
+
+# inventory_levels/update：第一版暂不做库存镜像，仍不订阅
 
 [app_proxy]
   url = "https://spark-prod.onrender.com/api/image-proxy"
@@ -34,10 +53,9 @@ uri = "/webhooks/app/scopes_update"
   prefix = "a"
 
 [access_scopes]
-# 第一版：经营指标/订单查询、商品文案评分查找与写回、语言列表、文章上下文
-# 未包含：translations（归 TSF）、pixels、themes、reports、fulfillments/inventory/locations
-# 注意：read_orders  alone 不够读 Order；还需 Partner 后台 Protected Customer Data 获批
-scopes = "read_orders,read_products,write_products,read_locales,read_content"
+# 第一版 + PCD：经营/订单查询与镜像、履约、商品文案评分查找与写回、语言、文章
+# 未包含：translations（归 TSF）、pixels、themes、reports、inventory/locations
+scopes = "read_orders,read_fulfillments,read_products,write_products,read_locales,read_content"
 
 [auth]
 redirect_urls = [

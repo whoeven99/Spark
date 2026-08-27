@@ -703,16 +703,8 @@ export function BillingPage() {
       values: paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
     },
     {
-      label: locale.toLowerCase().startsWith("zh") ? "文本模型" : "Text models",
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "text", locale)),
-    },
-    {
       label: locale.toLowerCase().startsWith("zh") ? "图片模型" : "Image models",
       values: paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale)),
-    },
-    {
-      label: locale.toLowerCase().startsWith("zh") ? "视频模型" : "Video models",
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "video", locale)),
     },
     {
       label: locale.toLowerCase().startsWith("zh") ? "人工支持" : "Human support",
