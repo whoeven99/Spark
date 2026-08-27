@@ -151,6 +151,13 @@ code {
   cursor: not-allowed;
 }
 
+.page-back-link {
+  transition: color 0.15s ease;
+}
+.page-back-link:hover {
+  color: var(--color-app-text-primary) !important;
+}
+
 .workspace-ghost-btn {
   transition:
     background 0.15s ease,

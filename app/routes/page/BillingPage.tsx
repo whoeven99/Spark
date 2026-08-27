@@ -934,7 +934,6 @@ export function BillingPage() {
     >
       <PageHeaderNav
         title={t("billing.pageTitle")}
-        subtitle={t("billing.pageIntro")}
         backLabel={backLabel}
         fallbackPath="/app"
         chromeless
@@ -950,13 +949,6 @@ export function BillingPage() {
       <section className={styles.quotaSection}>
         <div className={styles.usageHeader}>
           <div className={styles.usageHeaderMain}>
-            <div className={styles.usageTitleRow}>
-              <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
-              <span className={styles.planBadge}>{currentPlanTagLabel}</span>
-              {isSubscriptionTrialActive ? (
-                <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
-              ) : null}
-            </div>
             {quotaMetaDescription ? (
               <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
             ) : null}
@@ -1009,6 +1001,12 @@ export function BillingPage() {
                 className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
                 style={{ width: `${usagePercentForBar}%` }}
               />
+            </div>
+            <div className={styles.usagePlanRow}>
+              <span className={styles.planBadge}>{currentPlanTagLabel}</span>
+              {isSubscriptionTrialActive ? (
+                <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
+              ) : null}
             </div>
           </div>
         </div>

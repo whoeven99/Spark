@@ -21,28 +21,11 @@
   min-width: 0;
 }
 
-.usageTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-}
-
 .usageDetailsButton {
   flex-shrink: 0;
   align-self: center;
 }
 
-.usageTitle {
-  position: relative;
-  margin: 0;
-  padding-left: 0.75rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2124;
-}
-
-.usageTitle::before,
 .plansTitle::before,
 .compareTitle::before,
 .packTitle::before,
@@ -191,6 +174,14 @@
 .progressFillLow {
   background: #b98900;
   box-shadow: none;
+}
+
+.usagePlanRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.65rem;
 }
 
 .poolChips {
