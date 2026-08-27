@@ -306,7 +306,7 @@ export function ProductImprovePage() {
         {billing.billingRequired && !billing.hasAccess ? (
           <s-banner tone="warning">
             {t("billing.lowBalanceWarning")}{" "}
-            <s-link href={`/app/settings/billing${search}`}>{t("billing.openBillingPage")}</s-link>
+            <s-link href={`/app/account${search}`}>{t("billing.openBillingPage")}</s-link>
           </s-banner>
         ) : null}
 

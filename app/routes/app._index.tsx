@@ -1,42 +1,33 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect, useLoaderData } from "react-router";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { buildEmbeddedAppPath } from "../config/appEntry.server";
-import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
-import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { buildWorkspaceAssistantPath } from "../lib/workspaceChatPrefill";
-import { normalizeWorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
+import { useFeatureView } from "../lib/featureTrack";
 import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
 } from "../server/billing/buildBillingReturnUrl.server";
-import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
-import {
-  buildWorkspaceDashboardFromDailyOps,
-  emptyWorkspaceDashboardSnapshot,
-} from "../server/operations/workspaceDashboard.server";
+import { listConversations } from "../server/conversation/conversationStore.server";
+import { emptyWorkspaceDashboardSnapshot } from "../server/operations/workspaceDashboard.server";
 import { authenticate } from "../shopify.server";
-import { HomePanel } from "./page/workspace/HomePanel";
-import { contentStyle, mobileContentStyle } from "./page/workspace/styles";
+import { RoutePageFallback } from "./component/RoutePageFallback";
+
+const WorkspaceAppShellPage = lazy(() =>
+  import("./page/workspace/WorkspaceAppShellPage").then((m) => ({
+    default: m.WorkspaceAppShellPage,
+  })),
+);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   if (isBillingReturnRequest(request)) {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
-  let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
-  try {
-    const dailyOps = await ensureDailySnapshotOverview(session.shop, {
-      shopifyAdmin: admin,
-    });
-    dashboardSnapshot = buildWorkspaceDashboardFromDailyOps(dailyOps);
-  } catch (error) {
-    console.error("[app._index] dashboard snapshot failed:", error);
-  }
-
+  const conversations = await listConversations(session.shop);
   const associatedUser = (
     session as {
       onlineAccessInfo?: {
@@ -51,40 +42,41 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
   return {
-    dashboardSnapshot: normalizeWorkspaceDashboardSnapshot(
-      dashboardSnapshot,
-      emptyWorkspaceDashboardSnapshot(),
-    ),
+    conversations,
+    dashboardSnapshot: emptyWorkspaceDashboardSnapshot(),
     accountName,
     homeRenderTimeIso: new Date().toISOString(),
   };
 };
 
+function ClientMount({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return <RoutePageFallback />;
+  }
+  return children;
+}
+
+/** 应用首页：原 home-v2 落地（问候 + 本页提问，发送后进 ChatPanel）。 */
 export default function Index() {
   const data = useLoaderData<typeof loader>();
-  const navigate = useEmbeddedNavigate();
-  const { isMobile } = useResponsiveLayout();
+  useFeatureView("home-v2");
 
   return (
-    <>
-      <TitleBar title="Spark" />
-      <main style={isMobile ? mobileContentStyle : contentStyle}>
-        <HomePanel
-          displayName={data.accountName}
-          snapshot={data.dashboardSnapshot}
-          initialRenderTimeIso={data.homeRenderTimeIso}
-          onSubmitPrompt={(prompt) => navigate(buildWorkspaceAssistantPath({ prompt }))}
-          onOpenContextTool={(tool) =>
-            navigate(buildWorkspaceAssistantPath({ openContextTool: tool }))
-          }
-          onMoreContext={() =>
-            navigate(buildWorkspaceAssistantPath({ openContextTool: "article" }))
-          }
-          onOpenDashboard={() => navigate("/app/today")}
-          onOpenDailyOps={() => navigate("/app/health-monitor")}
+    <ClientMount>
+      <TitleBar title="Spark AI" />
+      <Suspense fallback={<RoutePageFallback />}>
+        <WorkspaceAppShellPage
+          initialConversationList={data?.conversations ?? []}
+          dashboardSnapshot={data?.dashboardSnapshot}
+          accountName={data?.accountName}
+          defaultPanel="home"
+          homeVariant="v2"
+          homeRenderTimeIso={data?.homeRenderTimeIso}
         />
-      </main>
-    </>
+      </Suspense>
+    </ClientMount>
   );
 }
 

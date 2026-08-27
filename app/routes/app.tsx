@@ -60,20 +60,26 @@ const NAV_ITEMS: Record<
   {
     href: string;
     labelKey:
+      | "nav.home"
       | "nav.ask"
+      | "nav.homeV1"
       | "nav.today"
       | "nav.healthMonitor"
       | "nav.studio"
       | "nav.tasks"
+      | "nav.account"
       | "nav.settings"
       | "nav.adsCatalog";
   }
 > = {
+  home: { href: "/app", labelKey: "nav.home" },
   ask: { href: "/app/assistant", labelKey: "nav.ask" },
+  "home-v1": { href: "/app/home-v1", labelKey: "nav.homeV1" },
   today: { href: "/app/today", labelKey: "nav.today" },
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },
   tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
+  account: { href: "/app/account", labelKey: "nav.account" },
   settings: { href: "/app/settings", labelKey: "nav.settings" },
   "ads-catalog": { href: "/app/ads-catalog", labelKey: "nav.adsCatalog" },
 };
@@ -226,7 +232,10 @@ function AppShellContent() {
   const location = useLocation();
   const { isMobile } = useResponsiveLayout();
   const normalizedPath = location.pathname.replace(/\/+$/, "");
-  const isWorkspace = normalizedPath === "/app" || normalizedPath === "/app/assistant";
+  const isWorkspace =
+    normalizedPath === "/app" ||
+    normalizedPath === "/app/assistant" ||
+    normalizedPath === "/app/home-v2";
 
   if (isWorkspace) {
     return <Outlet />;

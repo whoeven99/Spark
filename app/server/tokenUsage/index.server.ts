@@ -35,6 +35,10 @@ export {
   recordBilledTokenUsages,
 } from "./recordBilledTokenUsage.server";
 export {
+  resolveChatBillingModelKey,
+  recordChatTokenUsage,
+} from "./chatTokenUsage.server";
+export {
   TOKEN_BILLING_FEATURES,
   imageGenerationBillingModelKey,
   isTokenBillingFeature,

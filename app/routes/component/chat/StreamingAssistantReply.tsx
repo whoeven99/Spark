@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
@@ -9,6 +10,7 @@ import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
+import { SparkMark } from "../common/SparkMark";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -58,11 +60,28 @@ const PLAYBOOK_RUN_META: Record<
 
 const assistantBubbleShellStyle: CSSProperties = {
   borderRadius: "12px",
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(44, 110, 203, 0.35)",
-  background:
-    "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
+  border: "none",
+  background: "transparent",
+};
+
+const TOOL_LABEL_KEYS: Record<string, string> = {
+  chat_card_intent: "prepareTask",
+  generate_product_description: "generateDescription",
+  get_current_time: "currentTime",
+  get_shopify_inventory_health: "inventoryHealth",
+  get_shopify_shop_info: "shopInfo",
+  get_shopify_today_abandonment_rate: "abandonmentRate",
+  get_shopify_today_aov: "averageOrderValue",
+  get_shopify_today_conversion_rate: "conversionRate",
+  get_shopify_today_order_count: "orderCount",
+  get_shopify_today_refund_return_rate: "refundRate",
+  get_shopify_today_sales: "sales",
+  get_shopify_today_source_performance: "trafficSources",
+  get_weather: "weather",
+  open_batch_tasks_form: "batchTask",
+  open_image_generation_form: "imageGeneration",
+  open_picture_translate_form: "pictureTranslation",
+  open_product_improve_form: "productCopy",
 };
 
 function StreamingCursor() {
@@ -79,6 +98,7 @@ function StreamingCursor() {
 }
 
 function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
+  const { t } = useTranslation();
   if (steps.length === 0) return null;
   const playbookGroups: Array<{
     skill: string;
@@ -114,7 +134,17 @@ function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
       ))}
       {atomicSteps.length > 0 ? (
         <div style={skillStepsWrapStyle}>
-          <div style={skillStepsHeadingStyle}>正在执行</div>
+          <div style={skillStepsHeaderStyle}>
+            <div style={skillStepsHeadingStyle}>
+              {t("workspace.execution.title")}
+            </div>
+            <span style={skillStepsCountStyle}>
+              {t("workspace.execution.progress", {
+                completed: atomicSteps.filter((step) => step.status === "completed").length,
+                total: atomicSteps.length,
+              })}
+            </span>
+          </div>
           {atomicSteps.map((step) => (
             <SkillStepLine key={`${step.skill}-${step.stepId}`} step={step} />
           ))}
@@ -190,6 +220,17 @@ function SkillStepLine({
   step: SkillStepProgress;
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
+  const toolName = step.label.startsWith("tool:") ? step.label.slice(5) : null;
+  const toolLabelKey = toolName ? TOOL_LABEL_KEYS[toolName] : null;
+  const label = toolName
+    ? toolLabelKey
+      ? t(`workspace.execution.tools.${toolLabelKey}`)
+      : t("workspace.execution.tools.fallback", {
+          name: toolName.replaceAll("_", " "),
+        })
+    : step.label;
+
   return (
     <div style={compact ? compactSkillStepLineStyle : skillStepLineStyle}>
       <span style={skillStepStatusStyle(step.status)}>
@@ -201,9 +242,12 @@ function SkillStepLine({
               ? "✗"
               : "–"}
       </span>
-      <span>
-        {step.label}
+      <span style={skillStepLabelStyle}>
+        {label}
         {step.detail ? ` · ${step.detail}` : ""}
+      </span>
+      <span style={skillStepStateStyle(step.status)}>
+        {t(`workspace.execution.status.${step.status}`)}
       </span>
     </div>
   );
@@ -222,6 +266,7 @@ export function StreamingAssistantReply({
   workspaceProductQuery = null,
   onTaskProposalExecuted,
 }: StreamingAssistantReplyProps) {
+  const { t } = useTranslation();
   if (!active) return null;
 
   const streamingProductImprovePayload =
@@ -243,13 +288,16 @@ export function StreamingAssistantReply({
       <div style={{ maxWidth: hasEmbeddedCard ? "min(540px, 96%)" : "80%", width: "100%" }}>
         <div style={assistantBubbleShellStyle}>
           <s-box padding="base" borderRadius="base" background="transparent">
-            <div style={{ marginBottom: "0.25rem" }}>
-              <s-badge tone="neutral">AI Assistant</s-badge>
+            <div style={assistantIdentityStyle}>
+              <span style={assistantAvatarStyle}>
+                <SparkMark size={14} />
+              </span>
+              <span>{t("workspace.shell.brand.name")}</span>
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
               {!hasContent && !streamingThinkingText ? (
                 <div style={thinkingWrapStyle}>
-                  <ThinkingIndicator />
+                  <ThinkingIndicator label={t("workspace.execution.preparing")} />
                 </div>
               ) : null}
 
@@ -302,6 +350,26 @@ const thinkingWrapStyle: CSSProperties = {
   gap: 10,
 };
 
+const assistantIdentityStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  marginBottom: 8,
+  color: "#5c6370",
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const assistantAvatarStyle: CSSProperties = {
+  width: 24,
+  height: 24,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 8,
+  background: "#eef4ff",
+  color: "#2c6ecb",
+};
+
 const thinkingPanelSlotStyle: CSSProperties = {
   marginBottom: 10,
 };
@@ -341,6 +409,23 @@ const skillStepsHeadingStyle: CSSProperties = {
   color: "#5c6370",
 };
 
+const skillStepsHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+const skillStepsCountStyle: CSSProperties = {
+  padding: "2px 7px",
+  borderRadius: 999,
+  background: "#eef4ff",
+  color: "#2c6ecb",
+  fontSize: 11,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
 const skillStepLineStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
@@ -349,6 +434,27 @@ const skillStepLineStyle: CSSProperties = {
   color: "#61666c",
   lineHeight: 1.5,
 };
+
+const skillStepLabelStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+};
+
+const skillStepStateStyle = (
+  status: SkillStepProgress["status"],
+): CSSProperties => ({
+  flexShrink: 0,
+  fontSize: 11,
+  fontWeight: 600,
+  color:
+    status === "running"
+      ? "#2c6ecb"
+      : status === "completed"
+        ? "#008060"
+        : status === "error"
+          ? "#d72c0d"
+          : "#8c9196",
+});
 
 const compactSkillStepLineStyle: CSSProperties = {
   ...skillStepLineStyle,

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   currentTokens: number;
@@ -22,13 +23,26 @@ const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function ContextWindowIndicator({ currentTokens, maxTokens }: Props) {
+  const { t } = useTranslation();
   const ratio = Math.min(currentTokens / maxTokens, 1);
   const percent = Math.round(ratio * 100);
   const color = getColor(ratio);
   const dashOffset = CIRCUMFERENCE * (1 - ratio);
 
   return (
-    <div style={containerStyle}>
+    <div
+      style={containerStyle}
+      title={t("workspace.shell.chat.contextUsage", {
+        current: formatTokenCount(currentTokens),
+        max: formatTokenCount(maxTokens),
+        percent,
+      })}
+      aria-label={t("workspace.shell.chat.contextUsage", {
+        current: formatTokenCount(currentTokens),
+        max: formatTokenCount(maxTokens),
+        percent,
+      })}
+    >
       <svg
         width={RING_SIZE}
         height={RING_SIZE}
@@ -56,10 +70,6 @@ export function ContextWindowIndicator({ currentTokens, maxTokens }: Props) {
           transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
         />
       </svg>
-      <span style={{ ...labelStyle, color }}>
-        {formatTokenCount(currentTokens)} / {formatTokenCount(maxTokens)}
-      </span>
-      <span style={{ ...percentStyle, color }}>{percent}%</span>
     </div>
   );
 }
@@ -67,11 +77,9 @@ export function ContextWindowIndicator({ currentTokens, maxTokens }: Props) {
 const containerStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
-  padding: "2px 8px",
-  borderRadius: 6,
-  background: "rgba(107, 114, 128, 0.06)",
-  fontSize: 11,
+  padding: 4,
+  borderRadius: 999,
+  background: "transparent",
   lineHeight: 1,
   userSelect: "none",
   whiteSpace: "nowrap",
@@ -79,14 +87,4 @@ const containerStyle: CSSProperties = {
 
 const svgStyle: CSSProperties = {
   flexShrink: 0,
-};
-
-const labelStyle: CSSProperties = {
-  fontWeight: 500,
-  fontVariantNumeric: "tabular-nums",
-};
-
-const percentStyle: CSSProperties = {
-  fontWeight: 600,
-  fontVariantNumeric: "tabular-nums",
 };

@@ -83,13 +83,14 @@ export default function AssistantRoute() {
 
   return (
     <ClientMount>
-      <TitleBar title="Spark" />
+      <TitleBar title="Spark AI" />
       <Suspense fallback={<RoutePageFallback />}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}
           dashboardSnapshot={data?.dashboardSnapshot}
           accountName={data?.accountName}
           defaultPanel="chat"
+          homeVariant="v2"
           autoCreateConversation
         />
       </Suspense>

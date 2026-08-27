@@ -5,6 +5,7 @@ import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.
 import type {
   EmitSkillProgress,
   SkillStage,
+  SkillVisibility,
   StepInput,
 } from "./skillTypes.server";
 
@@ -51,6 +52,10 @@ export interface ToolDefinition {
    * 描述该工具的适用场景，用于注释和管理
    */
   description?: string;
+  /**
+   * 对商户可见性：public 可对外介绍；internal 仅内部调用。缺省 public。
+   */
+  visibility?: SkillVisibility;
   /**
    * 判断该工具是否应对当前用户/店铺开放
    */

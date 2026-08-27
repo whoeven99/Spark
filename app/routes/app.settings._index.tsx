@@ -16,7 +16,6 @@ import {
   pageContentStyle,
 } from "./page/pageUiStyles";
 import { DestinationActionGrid, destinationSurfaceStyle } from "./component/shared/DestinationPage";
-import { loadBillingContext } from "../server/billing/index.server";
 import {
   getFacebookCatalogCredential,
   getGoogleAdsCredential,
@@ -47,7 +46,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const developerTokenConfigured = Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim());
 
   const [
-    billing,
     metaCatalog,
     googleMerchant,
     googleMerchantPending,
@@ -67,10 +65,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sf,
     connectionOverview,
   ] = await Promise.all([
-    loadBillingContext(shop).catch((error) => {
-      console.error("[settings._index] loadBillingContext failed:", error);
-      return null;
-    }),
     getFacebookCatalogCredential(shop),
     getGoogleMerchantCredential(shop),
     getGoogleMerchantPending(shop),
@@ -94,20 +88,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   ]);
 
-  const currentPlan =
-    billing?.subscription && billing.subscription.status
-      ? billing.plans.find((plan) => plan.planKey === billing.subscription?.planKey)?.displayName ??
-        billing.subscription.planKey
-      : null;
-
   return {
     summaries: {
-      billing: {
-        subscriptionStatus: billing?.subscription?.status ?? null,
-        currentPlan,
-        availableTokens: billing?.availableTokens ?? 0,
-        hasAccess: billing?.hasAccess ?? false,
-      },
       google: {
         merchantConnected: Boolean(googleMerchant),
         merchantPending: Boolean(googleMerchantPending?.accounts.length),
@@ -146,7 +128,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-type SettingsModuleId = "billing" | "data" | "shopifyReports" | "feedback";
+type SettingsModuleId = "data" | "shopifyReports" | "feedback";
 
 type SettingsModule = {
   id: SettingsModuleId;
@@ -162,18 +144,6 @@ type SettingsSection = {
 };
 
 const SETTINGS_SECTIONS: SettingsSection[] = [
-  {
-    titleKey: "settingsShell.sectionAccountTitle",
-    subtitleKey: "settingsShell.sectionAccountSubtitle",
-    modules: [
-      {
-        id: "billing",
-        to: "/app/settings/billing",
-        labelKey: "settingsShell.navBilling",
-        descKey: "settingsShell.descBilling",
-      },
-    ],
-  },
   {
     titleKey: "settingsShell.sectionOperationsTitle",
     subtitleKey: "settingsShell.sectionOperationsSubtitle",
@@ -212,36 +182,6 @@ function buildModuleSummary(
   t: ReturnType<typeof useTranslation>["t"],
 ) {
   switch (moduleId) {
-    case "billing": {
-      if (summaries.billing.subscriptionStatus === "ACTIVE") {
-        return {
-          badge: t("settingsShell.statusSubscribed"),
-          meta: summaries.billing.currentPlan
-            ? t("settingsShell.summaryBillingPlan", { plan: summaries.billing.currentPlan })
-            : t("settingsShell.summaryBillingTokens", {
-                count: summaries.billing.availableTokens,
-              }),
-        };
-      }
-      if (summaries.billing.subscriptionStatus === "PENDING") {
-        return {
-          badge: t("settingsShell.statusPending"),
-          meta: summaries.billing.currentPlan
-            ? t("settingsShell.summaryBillingPlan", { plan: summaries.billing.currentPlan })
-            : t("settingsShell.summaryBillingTokens", {
-                count: summaries.billing.availableTokens,
-              }),
-        };
-      }
-      return {
-        badge: summaries.billing.hasAccess
-          ? t("settingsShell.statusReady")
-          : t("settingsShell.statusNeedsSetup"),
-        meta: t("settingsShell.summaryBillingTokens", {
-          count: summaries.billing.availableTokens,
-        }),
-      };
-    }
     case "data":
       return {
         badge: t("settingsShell.statusTool"),
@@ -261,6 +201,10 @@ function buildModuleSummary(
         badge: t("settingsShell.statusSupport"),
         meta: t("settingsShell.summaryFeedback"),
       };
+    default: {
+      const _exhaustive: never = moduleId;
+      return _exhaustive;
+    }
   }
 }
 
@@ -713,23 +657,6 @@ export default function SettingsIndex() {
 
       <PageSurface>
         <PageSectionHeader
-          title={t("settingsShell.sectionAccountTitle")}
-          subtitle={t("settingsShell.sectionAccountSubtitle")}
-        />
-        <DestinationActionGrid
-          isMobile={isMobile}
-          actions={SETTINGS_SECTIONS[0]!.modules.map((mod) => ({
-            ...buildModuleSummary(mod.id, summaries, t),
-            key: mod.to,
-            title: t(mod.labelKey),
-            detail: t(mod.descKey),
-            onClick: () => navigate(mod.to),
-          }))}
-        />
-      </PageSurface>
-
-      <PageSurface>
-        <PageSectionHeader
           title={t("settingsShell.sectionConnectionsHubTitle")}
           subtitle={t("settingsShell.sectionConnectionsHubSubtitle")}
           badge={<span style={hubBadgeStyle}>{t("settingsShell.sectionConnectionsHubBadge")}</span>}
@@ -815,7 +742,7 @@ export default function SettingsIndex() {
         </div>
       </PageSurface>
 
-      {SETTINGS_SECTIONS.slice(1).map((section) => (
+      {SETTINGS_SECTIONS.map((section) => (
         <PageSurface key={section.titleKey}>
           <PageSectionHeader
             title={t(section.titleKey)}

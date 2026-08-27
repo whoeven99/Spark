@@ -34,7 +34,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 
 发布姿态与 Partner 应用（邀请制内测，不是 App Store 公开）：
 
-- 仓库只有 `shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）。**没有** `shopify.app.prod.toml`。CI（`spark-deploy.yml`）只发 Spark Test / Admin，不发独立生产应用。
+- 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）只发 Spark Test / Admin，不发独立生产应用。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
 - **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
 - Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
 - 卸载目前只删 Session、记日志、发通知，不清理该店 `ShopOrder*` / 广告凭证等镜像。公开上架前还缺 GDPR 强制 webhook（`customers/data_request`、`customers/redact`、`shop/redact`）和隐私政策页。
@@ -80,16 +80,19 @@ Spark/
 
 | 目的地 | URL | 主要实现 |
 |---|---|---|
-| Ask | `/app`（首页）+ `/app/assistant`（聊天） | `/app` → `app._index.tsx` + `HomePanel`；聊天工作台 → `app.assistant.tsx` → `page/workspace/WorkspaceAppShellPage.tsx` |
+| 首页 | `/app` | `app._index.tsx` + `HomeV2Panel`（本页直接聊天）；旧 `/app/home-v2` 重定向至此 |
+| 助手 | `/app/assistant` | `app.assistant.tsx` → `WorkspaceAppShellPage`（默认进对话；prod 导航可不展示） |
+| 首页 v1 | `/app/home-v1` | `app.home-v1.tsx` + `HomePanel`（原首页经营概览；提问跳转助手；prod 导航可不展示） |
 | Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情） |
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（总览走 `ensureDailySnapshotOverview`，`?view=detail` 才走 `ensureDailySnapshot`） |
 | Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
-| Settings | `/app/settings` | `app.settings.*`：`billing` 计费、`ads-create`/`ads-edit` 广告投放、`logistics` 物流、`google-analytics` GA4、`google-search-console` GSC、`pagespeed` PageSpeed Insights、`data` 历史回补、`shopify-reports` ShopifyQL 官方报表、`feedback` 反馈；`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航） |
+| 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
+| Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航） |
 
-兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。
+兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。旧 `/app/home-v2` 重定向到 `/app`。
 
-Ask 工作台上下文工具（聊天输入区）当前仅：**商品 / 订单 / 文章 / 文件**（`ContextTool = product \| article \| order \| file`）。首页「更多」打开文章选择器。已移除富媒体、约束 UI；遗留 `prefillConstraint` query 只做 URL 清理、不再写入上下文。任务确认卡仍由 agent/SSE 的 `task_proposal` 产出，聊天栏无独立「生成任务建议」按钮。
+Ask / 首页工作台上下文工具（聊天输入区）当前仅：**商品 / 订单 / 文章 / 文件**（`ContextTool = product \| article \| order \| file`）。已移除输入区 Playbook 快捷条；遗留 `prefillConstraint` query 只做 URL 清理、不再写入上下文。任务确认卡仍由 agent/SSE 的 `task_proposal` 产出。
 
 Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页面：`/app/logistics/fedex/config`、`/app/logistics/sf/config`（承运商凭证表单，由 `app.settings.logistics.tsx` 内链）、`/app/feedback/suggestion`、`/app/ads/google-ads/start`、`/app/ads/google-merchant/start`（OAuth 启动页）。
 
@@ -187,6 +190,7 @@ AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assista
 |---|---|
 | 任意任务（协作风格，§0 强制） | `.cursor/skills/deliberate-collab/SKILL.md` |
 | 项目架构、跨域改动、环境变量、部署 | `docs/PROJECT_CONTEXT.md`，并以当前代码复核过时路径 |
+| **发布新 Shopify App（CLI + Render + 密钥/URL）** | `docs/SHOPIFY_APP_PUBLISH.md` |
 | 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
 | 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节（分发选定后不可改；Custom 不能走 Shopify Billing） |
 | Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
@@ -211,7 +215,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
-- 保持现有六目的地信息架构（Ask / Today / Health Monitor / Studio / Tasks / Settings）；除非用户明确要求重构，不新增一级导航或恢复旧的 per-tool / Insights 一级导航。
+- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另仅展示「账户与订阅」；测/本地另展示助手 / 首页 v1 / Today / Health Monitor / Studio / Tasks / 账户 / Settings。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。

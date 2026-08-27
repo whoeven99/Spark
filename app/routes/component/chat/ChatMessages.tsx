@@ -10,6 +10,7 @@ import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { ManagedAiResultCard } from "./ManagedAiResultCard";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import { SparkMark } from "../common/SparkMark";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -64,16 +65,10 @@ export function ChatMessages({
 
         const bubbleShellStyle: CSSProperties = {
           borderRadius: "12px",
-          borderWidth: 1,
+          borderWidth: item.role === "assistant" ? 0 : 1,
           borderStyle: "solid",
-          borderColor:
-            item.role === "assistant"
-              ? "rgba(44, 110, 203, 0.35)"
-              : "rgba(0, 128, 96, 0.35)",
-          background:
-            item.role === "assistant"
-              ? "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))"
-              : "linear-gradient(180deg, rgba(0, 128, 96, 0.08), rgba(0, 128, 96, 0.02))",
+          borderColor: item.role === "assistant" ? "transparent" : "#e1e3e5",
+          background: item.role === "assistant" ? "transparent" : "#f6f6f7",
         };
 
         return (
@@ -95,11 +90,16 @@ export function ChatMessages({
             >
               <div style={bubbleShellStyle}>
                 <s-box padding="base" borderRadius="base" background="transparent">
-                  <div style={{ marginBottom: "0.25rem" }}>
-                    <s-badge tone={item.role === "assistant" ? "neutral" : "success"}>
-                      {item.role === "assistant" ? "AI Assistant" : "你"}
-                    </s-badge>
-                  </div>
+                  {item.role === "assistant" ? (
+                    <div style={assistantIdentityStyle}>
+                      <span style={assistantAvatarStyle}>
+                        <SparkMark size={14} />
+                      </span>
+                      <span>{t("workspace.shell.brand.name")}</span>
+                    </div>
+                  ) : (
+                    <div style={userIdentityStyle}>{t("workspace.shell.chat.you")}</div>
+                  )}
                   {item.role === "assistant" && item.thinkingContent ? (
                     <div style={{ marginBottom: "0.5rem" }}>
                       <ThinkingReview text={item.thinkingContent} />
@@ -206,3 +206,30 @@ export function ChatMessages({
     </s-stack>
   );
 }
+
+const assistantIdentityStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  marginBottom: 8,
+  color: "#5c6370",
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const assistantAvatarStyle: CSSProperties = {
+  width: 24,
+  height: 24,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 8,
+  background: "#eef4ff",
+  color: "#2c6ecb",
+};
+
+const userIdentityStyle: CSSProperties = {
+  marginBottom: 4,
+  color: "#8c9196",
+  fontSize: 11,
+  fontWeight: 600,
+};

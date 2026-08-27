@@ -1,12 +1,17 @@
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
 import type { PlaybookDefinition } from "./playbookRegistry.server";
-import { normalizeSteps } from "./skillTypes.server";
+import { isPublicSkill, normalizeSteps } from "./skillTypes.server";
 
 /**
  * 基础店铺对话 Agent 系统提示
  */
 export const SHOP_CHAT_AGENT_SYSTEM_PROMPT =
-  '你是一个店铺 AI 助手，请始终使用简体中文回复。对于时间、天气、当前 Shopify 商店基础信息等问题，优先调用对应工具获取信息；如果工具失败，明确说明。若用户问题不需要工具，也要基于常识和上下文直接给出可执行建议，不要只回复不知道。回复尽量结构清晰，优先使用短段落和列表，不要使用 Markdown 表格。\n\n【文件上下文能力】\n当系统消息中存在【附加文件上下文】区块时，该区块已包含用户上传文件的完整文本内容，你可以直接阅读、引用和分析这些内容。文件内容由服务端在发送消息前解析并注入，不需要任何额外工具。遇到此类情况时，绝对不要说「无法读取文件」或「没有文件读取能力」——文件内容就在你的上下文里，直接使用即可。';
+  [
+    "你是一个店铺 AI 助手，请始终使用简体中文回复。若用户主动问起时间、天气、店铺基础信息或套餐/Token 额度，可调用对应内部工具获取信息；工具失败时明确说明。不要主动介绍这些内部能力。若用户问题不需要工具，也要基于常识和上下文直接给出可执行建议，不要只回复不知道。回复尽量结构清晰，优先使用短段落和列表，不要使用 Markdown 表格。",
+    "",
+    "【文件上下文能力】",
+    "当系统消息中存在【附加文件上下文】区块时，该区块已包含用户上传文件的完整文本内容，你可以直接阅读、引用和分析这些内容。文件内容由服务端在发送消息前解析并注入，不需要任何额外工具。遇到此类情况时，绝对不要说「无法读取文件」或「没有文件读取能力」——文件内容就在你的上下文里，直接使用即可。",
+  ].join("\n");
 
 export function buildReflectionPrompt(reflectionSummary?: string): string {
   if (!reflectionSummary?.trim()) return "";
@@ -41,6 +46,50 @@ export function buildSkillsTierPrompt(
 }
 
 /**
+ * 按 Skill.visibility 生成「对商户介绍能力」规则：
+ * - public：可出现在「有什么功能」类回答
+ * - internal：可调用，但禁止主动介绍
+ */
+export function buildMerchantCapabilityPrompt(
+  activeDefs: ToolDefinition[],
+  activePlaybookDefs: PlaybookDefinition[] = [],
+): string {
+  const publicSkills = activeDefs.filter((def) => isPublicSkill(def.visibility));
+  const publicPlaybooks = activePlaybookDefs.filter((def) =>
+    isPublicSkill(def.visibility),
+  );
+
+  const publicLines = [
+    ...publicSkills.map((def) => {
+      const title = def.displayName ?? def.name;
+      const desc = def.description?.trim();
+      return desc ? `- ${title}：${desc}` : `- ${title}`;
+    }),
+    ...publicPlaybooks.map((def) => {
+      const desc = def.description?.trim();
+      return desc ? `- ${def.displayName}：${desc}` : `- ${def.displayName}`;
+    }),
+  ];
+
+  const lines = [
+    "【Skill 可见性与对外介绍】",
+    "Skill 分为 public（对外）与 internal（内部）：",
+    "- public：用户问「你有什么功能 / 能做什么」时，只介绍下列对外清单；不要罗列工具函数名。",
+    "- internal：你仍可在用户提出具体需求时调用，但禁止主动介绍、禁止写进功能清单。",
+    "",
+    "对外能力清单（仅这些可展示给用户）：",
+  ];
+
+  if (publicLines.length === 0) {
+    lines.push("- （当前无已启用的对外能力）");
+  } else {
+    lines.push(...publicLines);
+  }
+
+  return lines.join("\n");
+}
+
+/**
  * 根据用户画像和注册的工具动态组装完整的 System Prompt。
  */
 export async function getPersonalizedSystemPrompt(
@@ -49,6 +98,7 @@ export async function getPersonalizedSystemPrompt(
   reflectionSummary?: string,
   activePlaybookDefs?: PlaybookDefinition[],
 ): Promise<string> {
+  const playbooks = activePlaybookDefs ?? [];
   const parts: string[] = [SHOP_CHAT_AGENT_SYSTEM_PROMPT];
 
   const reflectionPrompt = buildReflectionPrompt(reflectionSummary);
@@ -56,7 +106,9 @@ export async function getPersonalizedSystemPrompt(
     parts.push(reflectionPrompt);
   }
 
-  const skillsTierPrompt = buildSkillsTierPrompt(activePlaybookDefs ?? []);
+  parts.push(buildMerchantCapabilityPrompt(activeDefs, playbooks));
+
+  const skillsTierPrompt = buildSkillsTierPrompt(playbooks);
   if (skillsTierPrompt) {
     parts.push(skillsTierPrompt);
   }
@@ -74,7 +126,7 @@ export async function getPersonalizedSystemPrompt(
   }
 
   // Playbook 专属 prompt 指令
-  for (const def of activePlaybookDefs ?? []) {
+  for (const def of playbooks) {
     if (def.systemPromptExtension) {
       parts.push(def.systemPromptExtension);
     }

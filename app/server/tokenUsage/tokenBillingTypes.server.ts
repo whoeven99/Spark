@@ -1,6 +1,8 @@
 /** 计入 Account.usedTokens 前按「业务能力 × 模型」查表的 feature。 */
 export const TOKEN_BILLING_FEATURES = [
+  "chat",
   "product_copy",
+  "product_quality",
   "image_prompt",
   "image_generate",
   "picture_translate",

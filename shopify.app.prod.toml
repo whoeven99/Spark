@@ -1,0 +1,72 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "d68a7533dbbe676af335f27d01d87a12"
+name = "Spark AI"
+application_url = "https://spark-prod.onrender.com"
+embedded = true
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/app/subscriptions_update"
+
+[[webhooks.subscriptions]]
+topics = ["app_purchases_one_time/update"]
+uri = "/webhooks/app/purchases_one_time_update"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
+
+# PCD 已获批：订单/退款/履约增量镜像
+[[webhooks.subscriptions]]
+topics = ["orders/paid"]
+uri = "/webhooks/orders/paid"
+
+[[webhooks.subscriptions]]
+topics = ["orders/cancelled"]
+uri = "/webhooks/orders/cancelled"
+
+[[webhooks.subscriptions]]
+topics = ["refunds/create"]
+uri = "/webhooks/refunds/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/create"]
+uri = "/webhooks/fulfillments/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/update"]
+uri = "/webhooks/fulfillments/update"
+
+# inventory_levels/update：第一版暂不做库存镜像，仍不订阅
+
+[app_proxy]
+  url = "https://spark-prod.onrender.com/api/image-proxy"
+  subpath = "ciwi-spark"
+  prefix = "a"
+
+[access_scopes]
+# 第一版 + PCD：经营/订单查询与镜像、履约、商品文案评分查找与写回、语言、文章
+# 未包含：translations（归 TSF）、pixels、themes、reports、inventory/locations
+scopes = "read_orders,read_fulfillments,read_products,write_products,read_locales,read_content"
+
+[auth]
+redirect_urls = [
+  "https://spark-prod.onrender.com/auth/callback",
+  "https://spark-prod.onrender.com/auth/shopify/callback",
+]
+
+[build]
+automatically_update_urls_on_dev = true
+
+[shop.metafields.app.google_remarketing_config]
+type = "json"
+name = "Google remarketing configuration"
+access.admin = "merchant_read"

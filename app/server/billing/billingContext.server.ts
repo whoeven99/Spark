@@ -153,6 +153,21 @@ export type BillingContext = {
   plans: PlanRecord[];
 };
 
+export type BillingUsageSummary = {
+  usedTokens: number;
+  totalTokens: number;
+};
+
+export async function loadBillingUsageSummary(
+  shop: string,
+): Promise<BillingUsageSummary> {
+  const account = await ensureAccount(shop);
+  return {
+    usedTokens: account.usedTokens,
+    totalTokens: getAvailableTokens(account),
+  };
+}
+
 export async function loadBillingContext(shop: string): Promise<BillingContext> {
 
   const account = await ensureAccount(shop);
