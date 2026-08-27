@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "../../core/toolRegistry.server";
 import {
+  alignBatchTasksPayloadWithUserIntent,
   coerceBatchTasksFormPayload,
   mergeBatchTasksPayloadWithContext,
 } from "../../../../lib/batchTasksFormPayload";
@@ -20,11 +21,12 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
   uiPayloadKey: "batchTasksCard",
   systemPromptExtension: `当用户在[工作台上下文]中已选择了商品（含「已选商品（共 N 个）」格式），且用户说要处理/优化/翻译这些商品时，必须调用 open_batch_tasks_form：
 - 从上下文「已选商品」列表逐行提取每个商品的 ID（[ID: gid://...]）、标题（• 后面的文本）、图片 URL（[图片: url]），填入 products 数组。每个选中商品必须对应一个 products 条目，禁止传空数组。
+- 【taskType 必须与用户意图一致】用户说「翻译图片/翻译商品图/翻译图片里的文字/图片本地化」→ 必须传 taskType=picture_translate，禁止传 product_improve；用户说「生成/撰写/优化商品描述、文案、标题」→ 才传 product_improve。二者不可混淆。
 - product_improve：描述生成/优化，targetLanguage 从用户意图推断（如"英文""中文"），默认 en
-- picture_translate：图片文字翻译，仅对有图片 URL 的商品有效
+- picture_translate：图片文字翻译，仅对有图片 URL 的商品有效；targetLanguage 从用户意图推断（简体中文=zh-CN、繁体=zh-TW），sourceLanguage 默认 auto
 - 调用后告知用户「已为 N 个商品准备好批量任务，请在卡片中确认」
 - 禁止声称已创建任务；任务由用户点击确认卡片后才会创建
-- 【优先级】只要上下文有 ≥ 1 个已选商品且用户意图涉及商品处理，本工具优先于 open_product_improve_form（单商品工具）`,
+- 【优先级】只要上下文有 ≥ 1 个已选商品且用户意图涉及商品处理，本工具优先于 open_product_improve_form（单商品描述工具）；但这只改变入口，不改变任务类型：翻译图片仍须 taskType=picture_translate`,
   createTool: () => batchTasksFormTool,
   extractUIPayload: (messages, lastUserText, assistantReplyRaw) =>
     resolveBatchTasksFormPayload(messages, lastUserText),
@@ -45,11 +47,15 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
         typeof ev.output === "object" && ev.output !== null
           ? ev.output
           : String(ev.output ?? "");
-      const payload = mergeBatchTasksPayloadWithContext(
-        coerceBatchTasksFormPayload(raw),
-        parseWorkspaceProductsFromText(streamContext.lastUserText ?? ""),
+      const lastUserText = streamContext.lastUserText ?? "";
+      const payload = alignBatchTasksPayloadWithUserIntent(
+        mergeBatchTasksPayloadWithContext(
+          coerceBatchTasksFormPayload(raw),
+          parseWorkspaceProductsFromText(lastUserText),
+        ),
+        lastUserText,
       );
-      // product_improve 走通用 TaskProposal 协议；picture_translate 留旧卡片（阶段 4 迁移）
+      // 两种批量任务（product_improve / picture_translate）均走通用 TaskProposal 协议。
       const proposal = taskProposalFromBatchTasksPayload(payload);
       if (proposal) {
         enqueue({ type: "task_proposal", payload: proposal });
