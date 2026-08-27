@@ -3265,6 +3265,8 @@
         "sendFailed": "Sorry, sending failed. Please try again later.",
         "justNow": "Just now",
         "you": "You",
+        "copy": "Copy",
+        "copied": "Copied",
         "contextUsage": "Context usage: {{current}} / {{max}} ({{percent}}%)",
         "composerPlaceholder": "Continue your request with product, order, article, or file context…",
         "contextCount": "{{count}} added",

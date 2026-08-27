@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
@@ -39,6 +39,24 @@ export function ChatMessages({
   const { t } = useTranslation();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const copiedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopyMessage = async (index: number, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      return;
+    }
+    setCopiedIndex(index);
+    if (copiedResetTimer.current) {
+      clearTimeout(copiedResetTimer.current);
+    }
+    copiedResetTimer.current = setTimeout(() => {
+      setCopiedIndex(null);
+    }, 1600);
+  };
+
   return (
     <s-stack direction="block" gap="base">
       {messages.map((item, index) => {
@@ -72,9 +90,12 @@ export function ChatMessages({
           background: item.role === "assistant" ? "transparent" : "#f6f6f7",
         };
 
+        const isAssistant = item.role === "assistant";
+
         return (
           <div
             key={`${item.role}-${index}`}
+            className={isAssistant ? "chat-message-row" : undefined}
             {...(item.role === "assistant" && item.taskRun
               ? { "data-task-run-id": item.taskRun.runId }
               : {})}
@@ -91,12 +112,24 @@ export function ChatMessages({
             >
               <div style={bubbleShellStyle}>
                 <s-box padding="base" borderRadius="base" background="transparent">
-                  {item.role === "assistant" ? (
-                    <div style={assistantIdentityStyle}>
-                      <span style={assistantAvatarStyle}>
-                        <SparkMark size={14} />
-                      </span>
-                      <span>{t("workspace.shell.brand.name")}</span>
+                  {isAssistant ? (
+                    <div style={assistantIdentityRowStyle}>
+                      <div style={assistantIdentityStyle}>
+                        <span style={assistantAvatarStyle}>
+                          <SparkMark size={14} />
+                        </span>
+                        <span>{t("workspace.shell.brand.name")}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="chat-message-copy-btn"
+                        style={copyMessageButtonStyle}
+                        onClick={() => handleCopyMessage(index, item.content)}
+                      >
+                        {copiedIndex === index
+                          ? t("workspace.shell.chat.copied")
+                          : t("workspace.shell.chat.copy")}
+                      </button>
                     </div>
                   ) : (
                     <div style={userIdentityStyle}>{t("workspace.shell.chat.you")}</div>
@@ -208,14 +241,34 @@ export function ChatMessages({
   );
 }
 
+const assistantIdentityRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  marginBottom: 8,
+};
+
 const assistantIdentityStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 7,
-  marginBottom: 8,
   color: "#5c6370",
   fontSize: 12,
   fontWeight: 700,
+};
+
+const copyMessageButtonStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#8c9196",
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  padding: "2px 6px",
+  borderRadius: 6,
+  fontFamily: "inherit",
+  flexShrink: 0,
 };
 
 const assistantAvatarStyle: CSSProperties = {

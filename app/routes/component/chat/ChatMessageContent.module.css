@@ -37,8 +37,20 @@
   padding-left: 1.35em;
 }
 
+.root ul {
+  list-style: disc;
+}
+
+.root ol {
+  list-style: decimal;
+}
+
 .root li {
   margin: 0.35em 0;
+}
+
+.root li::marker {
+  color: rgba(0, 0, 0, 0.45);
 }
 
 .root li > p {
