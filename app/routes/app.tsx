@@ -60,8 +60,9 @@ const NAV_ITEMS: Record<
   {
     href: string;
     labelKey:
+      | "nav.home"
       | "nav.ask"
-      | "nav.homeV2"
+      | "nav.homeV1"
       | "nav.today"
       | "nav.healthMonitor"
       | "nav.studio"
@@ -71,8 +72,9 @@ const NAV_ITEMS: Record<
       | "nav.adsCatalog";
   }
 > = {
+  home: { href: "/app", labelKey: "nav.home" },
   ask: { href: "/app/assistant", labelKey: "nav.ask" },
-  "home-v2": { href: "/app/home-v2", labelKey: "nav.homeV2" },
+  "home-v1": { href: "/app/home-v1", labelKey: "nav.homeV1" },
   today: { href: "/app/today", labelKey: "nav.today" },
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },
   studio: { href: "/app/studio", labelKey: "nav.studio" },

@@ -652,7 +652,7 @@ export default function SettingsIndex() {
         subtitle={t("settingsShell.subtitle")}
         titleBarTitle={t("nav.settings")}
         backLabel={t("settingsShell.back")}
-        fallbackPath="/app/home-v2"
+        fallbackPath="/app"
       />
 
       <PageSurface>

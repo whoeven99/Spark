@@ -29,7 +29,8 @@ export type FeatureKey =
   | "tasks"
   | "settings"
   | "ads-catalog"
-  | "home-v2";
+  | "home-v2"
+  | "home-v1";
 
 /** 已上报过的 view 去重集合（page+feature 维度，单次会话内）。 */
 const viewedKeys = new Set<string>();

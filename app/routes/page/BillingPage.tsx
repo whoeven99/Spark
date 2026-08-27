@@ -966,7 +966,7 @@ export function BillingPage() {
       <PageHeaderNav
         title={t("billing.pageTitle")}
         backLabel={backLabel}
-        fallbackPath="/app/home-v2"
+        fallbackPath="/app"
       />
 
       {!billing.hasAccess && billing.billingRequired ? (

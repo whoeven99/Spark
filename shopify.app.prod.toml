@@ -34,10 +34,10 @@ uri = "/webhooks/app/scopes_update"
   prefix = "a"
 
 [access_scopes]
-# 第一版最小集（对应：经营指标实时查询、商品文案/评分/查找、写回文案、语言列表）
-# 未包含：translations（归 TSF）、pixels（Web Pixel/广告）、themes（App Embed 检测）、
-# reports（ShopifyQL）、fulfillments/inventory/locations（镜像同步）、content（文章）
-scopes = "read_orders,read_products,write_products,read_locales"
+# 第一版：经营指标/订单查询、商品文案评分查找与写回、语言列表、文章上下文
+# 未包含：translations（归 TSF）、pixels、themes、reports、fulfillments/inventory/locations
+# 注意：read_orders  alone 不够读 Order；还需 Partner 后台 Protected Customer Data 获批
+scopes = "read_orders,read_products,write_products,read_locales,read_content"
 
 [auth]
 redirect_urls = [

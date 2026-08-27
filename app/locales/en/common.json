@@ -351,7 +351,9 @@
     "zh-tw": "Traditional Chinese"
   },
   "nav": {
+    "home": "Home",
     "ask": "Assistant",
+    "homeV1": "Home v1",
     "homeV2": "Home v2",
     "account": "Account & billing",
     "today": "Operations",
