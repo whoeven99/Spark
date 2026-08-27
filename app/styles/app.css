@@ -266,6 +266,20 @@ code {
   background: #f6f6f7 !important;
 }
 
+/* Chat message — show copy button on hover */
+.chat-message-copy-btn {
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.chat-message-row:hover .chat-message-copy-btn,
+.chat-message-copy-btn:focus-visible {
+  opacity: 1;
+}
+.chat-message-copy-btn:hover {
+  background: #ebedf0 !important;
+  color: #444950 !important;
+}
+
 .spark-segmented-tabs__item:focus-visible {
   outline: none;
   border-color: #005bd3;

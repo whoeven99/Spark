@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
@@ -39,6 +39,24 @@ export function ChatMessages({
   const { t } = useTranslation();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const copiedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopyMessage = async (index: number, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      return;
+    }
+    setCopiedIndex(index);
+    if (copiedResetTimer.current) {
+      clearTimeout(copiedResetTimer.current);
+    }
+    copiedResetTimer.current = setTimeout(() => {
+      setCopiedIndex(null);
+    }, 1600);
+  };
+
   return (
     <s-stack direction="block" gap="base">
       {messages.map((item, index) => {
@@ -64,17 +82,21 @@ export function ChatMessages({
           hasManagedAiCard ||
           hasImageAttachments;
 
+        const isAssistant = item.role === "assistant";
+
         const bubbleShellStyle: CSSProperties = {
-          borderRadius: "12px",
-          borderWidth: item.role === "assistant" ? 0 : 1,
+          borderRadius: isAssistant ? "12px" : "14px",
+          borderWidth: isAssistant ? 0 : 1,
           borderStyle: "solid",
-          borderColor: item.role === "assistant" ? "transparent" : "#e1e3e5",
-          background: item.role === "assistant" ? "transparent" : "#f6f6f7",
+          borderColor: isAssistant ? "transparent" : "#e6e8ea",
+          background: isAssistant ? "transparent" : "#f1f2f4",
+          padding: isAssistant ? "16px" : "8px 13px",
         };
 
         return (
           <div
             key={`${item.role}-${index}`}
+            className={isAssistant ? "chat-message-row" : undefined}
             {...(item.role === "assistant" && item.taskRun
               ? { "data-task-run-id": item.taskRun.runId }
               : {})}
@@ -90,17 +112,27 @@ export function ChatMessages({
               }}
             >
               <div style={bubbleShellStyle}>
-                <s-box padding="base" borderRadius="base" background="transparent">
-                  {item.role === "assistant" ? (
-                    <div style={assistantIdentityStyle}>
-                      <span style={assistantAvatarStyle}>
-                        <SparkMark size={14} />
-                      </span>
-                      <span>{t("workspace.shell.brand.name")}</span>
+                <div>
+                  {isAssistant ? (
+                    <div style={assistantIdentityRowStyle}>
+                      <div style={assistantIdentityStyle}>
+                        <span style={assistantAvatarStyle}>
+                          <SparkMark size={14} />
+                        </span>
+                        <span>{t("workspace.shell.brand.name")}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="chat-message-copy-btn"
+                        style={copyMessageButtonStyle}
+                        onClick={() => handleCopyMessage(index, item.content)}
+                      >
+                        {copiedIndex === index
+                          ? t("workspace.shell.chat.copied")
+                          : t("workspace.shell.chat.copy")}
+                      </button>
                     </div>
-                  ) : (
-                    <div style={userIdentityStyle}>{t("workspace.shell.chat.you")}</div>
-                  )}
+                  ) : null}
                   {item.role === "assistant" && item.thinkingContent ? (
                     <div style={{ marginBottom: "0.5rem" }}>
                       <ThinkingReview text={item.thinkingContent} />
@@ -109,11 +141,11 @@ export function ChatMessages({
                   {item.role === "assistant" && item.managedAiResult ? (
                     <ManagedAiResultCard result={item.managedAiResult} />
                   ) : null}
-                  <div style={{ marginTop: "0.35rem" }}>
-                    {item.role === "assistant" ? (
+                  <div style={isAssistant ? { marginTop: "0.35rem" } : undefined}>
+                    {isAssistant ? (
                       <ChatMessageContent content={item.content} />
                     ) : (
-                      <span style={{ whiteSpace: "pre-wrap" }}>{item.content}</span>
+                      <span style={userMessageTextStyle}>{item.content}</span>
                     )}
                   </div>
 
@@ -197,7 +229,7 @@ export function ChatMessages({
                       />
                     </div>
                   ) : null}
-                </s-box>
+                </div>
               </div>
             </div>
           </div>
@@ -208,14 +240,42 @@ export function ChatMessages({
   );
 }
 
+const assistantIdentityRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  marginBottom: 8,
+};
+
+const userMessageTextStyle: CSSProperties = {
+  display: "block",
+  whiteSpace: "pre-wrap",
+  fontSize: 13.5,
+  lineHeight: 1.5,
+  color: "#202223",
+};
+
 const assistantIdentityStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 7,
-  marginBottom: 8,
   color: "#5c6370",
   fontSize: 12,
   fontWeight: 700,
+};
+
+const copyMessageButtonStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#8c9196",
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  padding: "2px 6px",
+  borderRadius: 6,
+  fontFamily: "inherit",
+  flexShrink: 0,
 };
 
 const assistantAvatarStyle: CSSProperties = {
@@ -224,13 +284,6 @@ const assistantAvatarStyle: CSSProperties = {
   display: "grid",
   placeItems: "center",
   borderRadius: 8,
-  background: "#eef4ff",
-  color: "#2c6ecb",
-};
-
-const userIdentityStyle: CSSProperties = {
-  marginBottom: 4,
-  color: "#8c9196",
-  fontSize: 11,
-  fontWeight: 600,
+  background: "#008060",
+  color: "#ffffff",
 };

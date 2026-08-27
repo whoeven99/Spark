@@ -366,8 +366,8 @@ const assistantAvatarStyle: CSSProperties = {
   display: "grid",
   placeItems: "center",
   borderRadius: 8,
-  background: "#eef4ff",
-  color: "#2c6ecb",
+  background: "#008060",
+  color: "#ffffff",
 };
 
 const thinkingPanelSlotStyle: CSSProperties = {
