@@ -18,9 +18,9 @@ describe("buildMerchantCapabilityPrompt", () => {
   it("lists only public skills and playbooks for merchant-facing capability intros", () => {
     const tools: ToolDefinition[] = [
       stubTool({
-        name: "shopifyShopMetrics",
-        displayName: "经营数据查询",
-        description: "查销售额",
+        name: "shopOperations",
+        displayName: "店铺经营",
+        description: "查指标与今日待办",
         visibility: "public",
       }),
       stubTool({
@@ -61,8 +61,10 @@ describe("buildMerchantCapabilityPrompt", () => {
 
     const prompt = buildMerchantCapabilityPrompt(tools, playbooks);
 
-    expect(prompt).toContain("经营数据查询");
+    expect(prompt).toContain("店铺经营");
     expect(prompt).not.toContain("经营体检");
+    expect(prompt).not.toContain("经营数据查询");
+    expect(prompt).not.toContain("健康度与待办");
     expect(prompt).not.toContain("搜索/浏览商品");
     expect(prompt).not.toContain("模板邮件发送");
     expect(prompt).not.toContain("查询当前时间");

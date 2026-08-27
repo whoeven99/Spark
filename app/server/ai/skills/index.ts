@@ -7,7 +7,7 @@ import { sendTemplateEmailToolDefinition } from "./email/email.tool";
 import { productOptimizationSkills } from "./productOptimization";
 import { productCatalogSkills } from "./productCatalog";
 import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
-import { dailyOperationsToolDefinition } from "./dailyOperations/dailyOperations.tool";
+import { createGetDailyOperationsTool } from "./dailyOperations/dailyOperations.tool";
 import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
 import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skill";
 import { timeTool } from "./system/timeTool";
@@ -18,15 +18,25 @@ import { weatherTool } from "./system/weatherTool";
 // visibility: public = 可对外介绍；internal = 仅内部调用
 // ==========================================
 
+// 店铺经营：指标查询 + 今日诊断待办（对外合并介绍，内部仍多工具路由）
 globalToolRegistry.register({
-  name: "shopifyShopMetrics",
-  displayName: "经营数据查询",
+  name: "shopOperations",
+  displayName: "店铺经营",
   category: "店铺运营",
   stage: "monitor",
   visibility: "public",
   description:
-    "查询销售额、订单数、转化率、客单价、弃购率、退款率、流量来源表现与库存健康",
-  createTool: ({ admin }) => createShopifyShopMetricsTools(admin),
+    "查询经营指标（销售/订单/转化/客单价/弃购/退款/流量/库存），并查看今日健康诊断与待办任务",
+  systemPromptExtension: [
+    "店铺经营相关需求按意图选工具，不要同时乱调：",
+    "1) 用户问具体数字/区间表现（销售额、订单数、转化率、客单价、弃购率、退款率、流量来源、库存健康等）→ 调用对应 get_shopify_today_* / get_shopify_inventory_health 工具。",
+    "2) 用户问「今天有什么要处理的」「店铺今天健康吗」「有哪些风险/待办」→ 调用 get_daily_operations；回复先讲紧急重要（q1/P0），再概述其他象限；诊断需引用 evidence 数字。任务状态：open=待处理，in_progress=处理中，done=已完成，ignored=已忽略，auto_closed=问题已自动消除。",
+    "3) 用户同时要「今天概况 + 关键指标」时，可先 get_daily_operations，再按需补查单项指标。",
+  ].join("\n"),
+  createTool: (context) => [
+    ...createShopifyShopMetricsTools(context.admin),
+    createGetDailyOperationsTool(context),
+  ],
 });
 
 globalToolRegistry.register({
@@ -81,10 +91,6 @@ for (const skill of productCatalogSkills) {
 globalToolRegistry.register({
   ...listMyTasksToolDefinition,
   visibility: "internal",
-});
-globalToolRegistry.register({
-  ...dailyOperationsToolDefinition,
-  visibility: "public",
 });
 globalToolRegistry.register({
   ...getBillingStatusToolDefinition,
