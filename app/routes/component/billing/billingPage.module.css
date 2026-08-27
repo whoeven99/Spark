@@ -34,10 +34,27 @@
 }
 
 .usageTitle {
+  position: relative;
   margin: 0;
+  padding-left: 0.75rem;
   font-size: 1.125rem;
   font-weight: 600;
   color: #1f2124;
+}
+
+.usageTitle::before,
+.plansTitle::before,
+.compareTitle::before,
+.packTitle::before,
+.sectionTitle::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.15rem;
+  bottom: 0.15rem;
+  width: 3px;
+  border-radius: 999px;
+  background: #005bd3;
 }
 
 .quotaSubtitle {
@@ -89,13 +106,14 @@
 .usageCard {
   background: #ffffff;
   border: 1px solid #e1e3e5;
+  border-left: 4px solid #005bd3;
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 .usageMain {
-  padding: 0.9rem 1rem;
+  padding: 0.9rem 1.1rem;
 }
 
 .usageStatsRow {
@@ -109,9 +127,9 @@
 
 .usagePercentBadge {
   flex-shrink: 0;
-  padding: 0.2rem 0.6rem;
+  padding: 0.3rem 0.75rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #005bd3;
   background: #eef4ff;
@@ -138,7 +156,7 @@
 }
 
 .quotaRatioValue {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: #1f2124;
   line-height: 1.15;
@@ -155,7 +173,7 @@
 }
 
 .progressTrack {
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
   background: #ebedf0;
   overflow: hidden;
@@ -249,7 +267,9 @@
 }
 
 .plansTitle {
+  position: relative;
   margin: 0;
+  padding-left: 0.75rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
@@ -318,7 +338,12 @@
   }
 
   .plansTitle {
+    padding-left: 0;
     text-align: center;
+  }
+
+  .plansTitle::before {
+    display: none;
   }
 
   .plansSubtitle {
@@ -375,15 +400,14 @@
 }
 
 .planCardRecommended {
-  border-color: #005bd3;
-  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.14), 0 2px 8px rgba(0, 91, 211, 0.07);
-  background: #ffffff;
+  border-color: transparent;
+  padding-top: 2.5rem;
+  background: #f5f9ff;
+  box-shadow: 0 0 0 2px rgba(0, 91, 211, 0.22), 0 12px 28px rgba(0, 91, 211, 0.14);
 }
 
-@media (max-width: 900px) {
-  .planCardRecommended {
-    transform: none;
-  }
+.planCardRecommended .planPrice {
+  font-size: 1.875rem;
 }
 
 .planCardCurrent {
@@ -401,16 +425,16 @@
 .recommendedRibbon {
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
-  padding: 0.28rem 0.7rem;
-  border-radius: 0 14px 0 9px;
-  background: #eef4ff;
-  border-left: 1px solid rgba(44, 110, 203, 0.18);
-  border-bottom: 1px solid rgba(44, 110, 203, 0.18);
-  color: #005bd3;
-  font-size: 0.6875rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 13px 13px 0 0;
+  background: #005bd3;
+  color: #ffffff;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+  text-align: center;
   box-shadow: none;
 }
 
@@ -653,7 +677,9 @@
 }
 
 .compareTitle {
+  position: relative;
   margin: 0 0 0.8rem;
+  padding-left: 0.75rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
@@ -756,6 +782,7 @@
 .compareTable thead th {
   font-weight: 600;
   color: #202223;
+  background: #fafbfb;
   border-bottom: 1px solid #e1e3e5;
 }
 
@@ -763,14 +790,20 @@
   border-bottom: none;
 }
 
+.compareTable tbody tr:hover td:not(.compareColHighlight) {
+  background: #fafbfb;
+}
+
 .compareColHighlight {
-  background: #f8fbff !important;
+  background: #eef4ff !important;
   font-weight: 700;
   color: #1f2124;
 }
 
 .compareTable thead .compareColHighlight {
   color: #005bd3;
+  border-bottom: 2px solid #005bd3;
+  border-radius: 10px 10px 0 0;
 }
 
 .comparePlanHeading {
@@ -814,7 +847,9 @@
 }
 
 .packTitle {
+  position: relative;
   margin: 0 0 0.35rem;
+  padding-left: 0.75rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
@@ -1133,7 +1168,9 @@
 }
 
 .sectionTitle {
+  position: relative;
   margin: 0;
+  padding-left: 0.75rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: #1f2124;
