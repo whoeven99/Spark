@@ -102,6 +102,7 @@
 | `TOKEN_PACK_INITIATED` | 按量购包待确认（售卖已下线，兼容旧路径） |
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 | `PROMO_TOKEN_CLAIMED` | 营销活动领取 Token（`referenceId` = campaignId；入账 `purchasedTokens`） |
+| `SYSTEM_REWARD` | Admin 系统奖励 / 手动调整按量池（入账 `purchasedTokens`；metadata 含操作者与备注） |
 
 ## 营销领 Token（账户页）
 
@@ -109,6 +110,7 @@
 - 默认活动：`install-welcome-1m`，安装后可在 `/app/account` 领取 **1000000** Token；每店每活动一次。
 - 环境变量：`SPARK_PROMO_ENABLED`（默认开，`false` 关闭）、`SPARK_PROMO_CAMPAIGN_ID`、`SPARK_PROMO_TOKEN_AMOUNT`、`SPARK_PROMO_STARTS_AT` / `SPARK_PROMO_ENDS_AT`（ISO；可选）。
 - 换活动：改 `SPARK_PROMO_CAMPAIGN_ID`（新 id 可再领一次）并按需改额度/文案（i18n `billing.promo*`）。
+- Admin：`/credits` 可查三池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览。
 
 门禁错误码（非 BillingLog）：`QUOTA_EXHAUSTED` / `OVERAGE_CAP_REACHED` → `BillingAccessDeniedError`（402；对话 SSE 文案分流）。
 

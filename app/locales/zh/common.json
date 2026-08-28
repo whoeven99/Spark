@@ -1367,6 +1367,7 @@
     "eventTokenPackInitiated": "购包待确认",
     "eventTokenPackPurchased": "购包成功",
     "eventPromoTokenClaimed": "活动 Token 到账",
+    "eventSystemReward": "系统奖励",
     "promoTitle": "限时福利",
     "promoBody": "安装可领 {{count}} Token，每店限一次",
     "promoClaimedBody": "已领取 {{count}} Token",

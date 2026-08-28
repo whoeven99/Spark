@@ -174,6 +174,8 @@ function resolveBillingEventLabel(
       return t("billing.eventTokenPackPurchased");
     case "PROMO_TOKEN_CLAIMED":
       return t("billing.eventPromoTokenClaimed");
+    case "SYSTEM_REWARD":
+      return t("billing.eventSystemReward");
     default:
       return eventType;
   }
@@ -193,6 +195,7 @@ function resolveBillingEventToneClass(
     case "SUBSCRIPTION_RENEWED":
     case "TOKEN_PACK_PURCHASED":
     case "PROMO_TOKEN_CLAIMED":
+    case "SYSTEM_REWARD":
       return stylesMap.historyTonePositive;
     default:
       return stylesMap.historyToneNeutral;
@@ -514,8 +517,9 @@ export function BillingPage() {
   const [overageMode, setOverageMode] = useState<"fixed" | "disabled">(
     () => (billing.overage?.spendingEnabled === false ? "disabled" : "fixed"),
   );
-  /** 用量未满 60% 时按需区块默认收起，点击展开；达到 60% 自动展开 */
-  const [overageManualExpanded, setOverageManualExpanded] = useState(false);
+  /** 按需区块：默认用量≥60%展开、<60%收起；用户可随时手动展开/收起覆盖默认 */
+  const [overageForceCollapsed, setOverageForceCollapsed] = useState(false);
+  const [overageForceExpanded, setOverageForceExpanded] = useState(false);
 
   const paidPlansForInterval = useMemo(
     () => sortPlansByTier(listSubscriptionPlansForInterval(subscriptionPlans, interval)),
@@ -595,7 +599,9 @@ export function BillingPage() {
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
   const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
   const overageAutoExpanded = usagePercent >= 60;
-  const overageExpanded = overageAutoExpanded || overageManualExpanded;
+  const overageExpanded = overageForceCollapsed
+    ? false
+    : overageAutoExpanded || overageForceExpanded;
   const overageUsagePercent =
     billing.overage?.enabled && billing.overage.spendingEnabled
       ? Math.min(
@@ -1207,7 +1213,10 @@ export function BillingPage() {
                   <button
                     type="button"
                     className={styles.overageCollapsedRow}
-                    onClick={() => setOverageManualExpanded(true)}
+                    onClick={() => {
+                      setOverageForceCollapsed(false);
+                      setOverageForceExpanded(true);
+                    }}
                     aria-expanded={false}
                   >
                     <span className={styles.overageCollapsedMain}>
@@ -1373,16 +1382,17 @@ export function BillingPage() {
                         </div>
                       </div>
                     </Form>
-                    {!overageAutoExpanded ? (
-                      <button
-                        type="button"
-                        className={styles.overageCollapseButton}
-                        onClick={() => setOverageManualExpanded(false)}
-                        aria-expanded={true}
-                      >
-                        {t("billing.overageCollapse")}
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.overageCollapseButton}
+                      onClick={() => {
+                        setOverageForceCollapsed(true);
+                        setOverageForceExpanded(false);
+                      }}
+                      aria-expanded={true}
+                    >
+                      {t("billing.overageCollapse")}
+                    </button>
                   </>
                 )}
               </div>

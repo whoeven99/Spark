@@ -1367,6 +1367,7 @@
     "eventTokenPackInitiated": "Pack purchase pending",
     "eventTokenPackPurchased": "Pack purchased",
     "eventPromoTokenClaimed": "Promo tokens claimed",
+    "eventSystemReward": "System reward",
     "promoTitle": "Limited-time offer",
     "promoBody": "Claim {{count}} tokens · one per store",
     "promoClaimedBody": "Claimed {{count}} tokens",

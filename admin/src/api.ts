@@ -571,6 +571,158 @@ export function fetchBillingLogs(
   return apiFetch(`/subscriptions/${encodeURIComponent(shop)}/billing`);
 }
 
+// --- Spark 额度 / 系统奖励 ---
+
+export type SparkCreditsAccount = {
+  shop: string;
+  subscriptionTokens: number;
+  purchasedTokens: number;
+  trialTokens: number;
+  usedTokens: number;
+  totalTokens: number;
+  remainingTokens: number;
+  usagePercent: number;
+  createdAt: string;
+  updatedAt: string;
+  planKey: string | null;
+  subStatus: string | null;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
+};
+
+export type SparkCreditsBillingLog = {
+  shop: string;
+  eventType: string;
+  planKey: string | null;
+  referenceId: string | null;
+  tokensDelta: number;
+  usedTokens: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export type SparkCreditsPeriodHistory = {
+  periodStart: string;
+  periodEnd: string;
+  usedTokens: number;
+  subscriptionTokensAllocated: number;
+  purchasedTokensRemaining: number;
+  trialTokensRemaining: number;
+  planKey: string | null;
+  archivedAt: string;
+};
+
+export type SparkCreditsData = {
+  queriedShop: string;
+  account: SparkCreditsAccount | null;
+  billingLogs: SparkCreditsBillingLog[];
+  systemRewards: SparkCreditsBillingLog[];
+  periodHistory: SparkCreditsPeriodHistory[];
+};
+
+export function fetchSparkCredits(shop: string): Promise<SparkCreditsData> {
+  return apiFetch(`/spark-credits?shop=${encodeURIComponent(shop)}`);
+}
+
+export type SparkRewardAdjustResult = {
+  shop: string;
+  action: "add" | "set";
+  before: number;
+  after: number;
+  tokensDelta: number;
+  referenceId?: string;
+  eventType?: string;
+  logId?: string;
+  note?: string;
+};
+
+/** Admin 调整 purchasedTokens，BillingLog = SYSTEM_REWARD（系统奖励）。 */
+export function adjustSparkSystemReward(params: {
+  shop: string;
+  action: "add" | "set";
+  amount: number;
+  note?: string;
+}): Promise<SparkRewardAdjustResult> {
+  return apiFetch("/spark-credits/reward", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+// --- Spark 账单总览 ---
+
+export type SparkBillingOverviewEvent = SparkCreditsBillingLog;
+
+export type SparkBillingLowBalanceShop = {
+  shop: string;
+  planKey: string | null;
+  subStatus: string | null;
+  subscriptionTokens: number;
+  purchasedTokens: number;
+  trialTokens: number;
+  usedTokens: number;
+  totalTokens: number;
+  remainingTokens: number;
+  usagePercent: number;
+};
+
+export type SparkBillingOverviewData = {
+  days: number;
+  since: string;
+  summary: {
+    activeSubscriptions: number;
+    billingEvents: number;
+    systemRewardCount: number;
+    systemRewardTokens: number;
+    lowBalanceShops: number;
+  };
+  byEventType: Array<{ eventType: string; count: number; tokensSum: number }>;
+  recentBillingEvents: SparkBillingOverviewEvent[];
+  lowBalanceShops: SparkBillingLowBalanceShop[];
+};
+
+export function fetchSparkBillingOverview(
+  days = 30,
+): Promise<SparkBillingOverviewData> {
+  return apiFetch(`/spark-billing/overview?days=${days}`);
+}
+
+export type SparkBillingLedgerData = {
+  days: number;
+  since: string;
+  shop: string | null;
+  eventType: string | null;
+  account: {
+    shop: string;
+    subscriptionTokens: number;
+    purchasedTokens: number;
+    trialTokens: number;
+    usedTokens: number;
+    totalTokens: number;
+    remainingTokens: number;
+    usagePercent: number;
+    planKey: string | null;
+    subStatus: string | null;
+    billingInterval: string | null;
+    currentPeriodEnd: string | null;
+  } | null;
+  events: SparkCreditsBillingLog[];
+};
+
+export function fetchSparkBillingLedger(params?: {
+  shop?: string;
+  days?: number;
+  eventType?: string;
+}): Promise<SparkBillingLedgerData> {
+  const query = new URLSearchParams();
+  if (params?.shop) query.set("shop", params.shop);
+  if (params?.days) query.set("days", String(params.days));
+  if (params?.eventType) query.set("eventType", params.eventType);
+  const qs = query.toString();
+  return apiFetch(`/spark-billing/ledger${qs ? `?${qs}` : ""}`);
+}
+
 export type BillingTrendPoint = {
   period: string;
   count: number;

@@ -36,6 +36,8 @@ import TsfSingleTranslateLogs from "./pages/tsf/TsfSingleTranslateLogs";
 import TranslationOps from "./pages/TranslationOps";
 import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
 import OpenRouterProbe from "./pages/OpenRouterProbe";
+import SparkCredits from "./pages/SparkCredits";
+import SparkBilling from "./pages/SparkBilling";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -84,6 +86,8 @@ export default function App() {
             <Route path="shops" element={<Shops />} />
             <Route path="usage" element={<Usage />} />
             <Route path="subscriptions" element={<Subscriptions />} />
+            <Route path="billing" element={<SparkBilling />} />
+            <Route path="credits" element={<SparkCredits />} />
             <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="agent-runs" element={<AgentRuns />} />
