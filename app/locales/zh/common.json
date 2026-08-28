@@ -3435,10 +3435,15 @@
         "healthDiagnosis": {
           "title": "今日健康诊断与待办",
           "subtitle": "基于规则引擎快照，不消耗 LLM",
+          "liveBadge": "健康诊断",
+          "resultBadge": "诊断结果",
+          "liveSummary": "查看当日风险摘要与优先待办；点击「刷新诊断」强制重算并发送结果卡。",
+          "resultSummary": "以下为本次刷新后的诊断快照。",
           "snapshotMeta": "快照 {{date}} · 生成于 {{generated}}",
           "loading": "正在加载诊断…",
           "loadFailed": "加载诊断失败，请稍后重试",
           "noData": "暂无已同步订单数据，无法生成诊断。可先在设置中回填历史订单。",
+          "metricsTitle": "概况",
           "metricRisk": "风险",
           "metricWatch": "关注",
           "metricOpenTasks": "待办",
@@ -3452,8 +3457,12 @@
           },
           "refresh": "刷新诊断",
           "refreshing": "刷新中…",
+          "refreshingHint": "正在强制重算当日诊断，请稍候…",
           "refreshDone": "诊断已刷新",
-          "refreshFailed": "刷新失败，请稍后重试"
+          "refreshFailed": "刷新失败，请稍后重试",
+          "refreshUserText": "刷新今日健康诊断",
+          "refreshAssistantText": "诊断已刷新：风险 {{risk}} · 关注 {{watch}} · 待办 {{open}}。详情见下方卡片。",
+          "refreshAssistantNoData": "诊断已刷新，但仍无可用订单数据。详情见下方卡片。"
         }
       },
       "contextSidebar": {

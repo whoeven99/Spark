@@ -10,6 +10,7 @@ import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
 import { HealthDiagnosisChatCard } from "./HealthDiagnosisChatCard";
 import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
 import { coerceHealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
+import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -40,6 +41,8 @@ type StreamingAssistantReplyProps = {
   onOpenProductPicker?: () => void;
   /** TaskProposal 执行成功（向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
+  /** 健康诊断刷新成功（向对话追加结果卡） */
+  onHealthDiagnosisRefreshed?: (payload: HealthDiagnosisFormPayload) => void;
 };
 
 const PLAYBOOK_RUN_META: Record<
@@ -284,6 +287,7 @@ export function StreamingAssistantReply({
   workspaceProductQuery = null,
   onOpenProductPicker,
   onTaskProposalExecuted,
+  onHealthDiagnosisRefreshed,
 }: StreamingAssistantReplyProps) {
   const { t } = useTranslation();
   if (!active) return null;
@@ -366,7 +370,11 @@ export function StreamingAssistantReply({
 
               {showHealthDiagnosisCard ? (
                 <div style={cardSlotStyle}>
-                  <HealthDiagnosisChatCard embedded initialPayload={healthPayload} />
+                  <HealthDiagnosisChatCard
+                    embedded
+                    initialPayload={healthPayload}
+                    onDiagnosisRefreshed={onHealthDiagnosisRefreshed}
+                  />
                 </div>
               ) : null}
 

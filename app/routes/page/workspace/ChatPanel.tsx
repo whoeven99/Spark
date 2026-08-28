@@ -22,6 +22,7 @@ import {
 } from "./types";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import {
   resolveTaskRunTitle,
   skillIdFromAiTaskType,
@@ -112,6 +113,7 @@ export function ChatPanel({
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
+  onHealthDiagnosisRefreshed,
 }: {
   conversation: Conversation;
   conversationTimeZone?: string;
@@ -133,6 +135,11 @@ export function ChatPanel({
   onOpenTasks: (opts?: OpenWorkspaceTasksOptions) => void;
   /** TaskProposal 执行成功：向对话追加「任务已开始」新一轮 */
   onTaskProposalExecuted: (conversationId: string, run: TaskRunPayload) => void;
+  /** 健康诊断刷新成功：向对话追加诊断结果卡 */
+  onHealthDiagnosisRefreshed: (
+    conversationId: string,
+    payload: HealthDiagnosisFormPayload,
+  ) => void;
 }) {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -749,6 +756,9 @@ export function ChatPanel({
                   onTaskProposalExecuted={(run) =>
                     onTaskProposalExecuted(conversation.id, run)
                   }
+                  onHealthDiagnosisRefreshed={(payload) =>
+                    onHealthDiagnosisRefreshed(conversation.id, payload)
+                  }
                 />
               }
               onAiTaskUpdated={(taskId, status, result) =>
@@ -757,6 +767,9 @@ export function ChatPanel({
               onOpenTasks={handleOpenTasks}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
+              }
+              onHealthDiagnosisRefreshed={(payload) =>
+                onHealthDiagnosisRefreshed(conversation.id, payload)
               }
               contextProducts={workspaceBatchProducts}
               contextProductQuery={objectQuerySelectionByType.product}

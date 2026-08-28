@@ -8,6 +8,7 @@ import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
 import { HealthDiagnosisChatCard } from "./HealthDiagnosisChatCard";
+import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -28,6 +29,8 @@ type ChatMessagesProps = {
   onOpenTasks?: (opts?: OpenWorkspaceTasksOptions) => void;
   /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
+  /** 健康诊断刷新成功（工作台追加诊断结果卡） */
+  onHealthDiagnosisRefreshed?: (payload: HealthDiagnosisFormPayload) => void;
   /** 工作台已选商品，供 TaskProposalCard 空目标时补全 */
   contextProducts?: BatchTaskProduct[];
   contextProductQuery?: ObjectQuerySelection | null;
@@ -43,6 +46,7 @@ export function ChatMessages({
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
+  onHealthDiagnosisRefreshed,
   contextProducts = [],
   contextProductQuery = null,
   onOpenProductPicker,
@@ -234,6 +238,7 @@ export function ChatMessages({
                       <HealthDiagnosisChatCard
                         embedded
                         initialPayload={item.healthDiagnosisCardPayload}
+                        onDiagnosisRefreshed={onHealthDiagnosisRefreshed}
                       />
                     </div>
                   ) : null}

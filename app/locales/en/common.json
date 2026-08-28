@@ -3435,10 +3435,15 @@
         "healthDiagnosis": {
           "title": "Today's health diagnosis & todos",
           "subtitle": "Rule-engine snapshot — no LLM cost",
+          "liveBadge": "Health check",
+          "resultBadge": "Diagnosis result",
+          "liveSummary": "Review today's risk summary and priority todos. Click Refresh to recompute and post a result card.",
+          "resultSummary": "Snapshot from this refresh.",
           "snapshotMeta": "Snapshot {{date}} · generated {{generated}}",
           "loading": "Loading diagnosis…",
           "loadFailed": "Failed to load diagnosis. Please try again.",
           "noData": "No synced order data yet, so diagnosis can't be generated. Backfill historical orders in Settings first.",
+          "metricsTitle": "Overview",
           "metricRisk": "Risks",
           "metricWatch": "Watch",
           "metricOpenTasks": "Open todos",
@@ -3452,8 +3457,12 @@
           },
           "refresh": "Refresh diagnosis",
           "refreshing": "Refreshing…",
+          "refreshingHint": "Recomputing today's diagnosis…",
           "refreshDone": "Diagnosis refreshed",
-          "refreshFailed": "Refresh failed. Please try again."
+          "refreshFailed": "Refresh failed. Please try again.",
+          "refreshUserText": "Refresh today's health diagnosis",
+          "refreshAssistantText": "Diagnosis refreshed: {{risk}} risks · {{watch}} watch · {{open}} open todos. See the card below.",
+          "refreshAssistantNoData": "Diagnosis refreshed, but no order data is available yet. See the card below."
         }
       },
       "contextSidebar": {
