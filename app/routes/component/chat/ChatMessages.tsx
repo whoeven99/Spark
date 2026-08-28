@@ -117,7 +117,7 @@ export function ChatMessages({
                     <div style={assistantIdentityRowStyle}>
                       <div style={assistantIdentityStyle}>
                         <span style={assistantAvatarStyle}>
-                          <SparkMark size={14} />
+                          <SparkMark size={24} />
                         </span>
                         <span>{t("workspace.shell.brand.name")}</span>
                       </div>
@@ -284,6 +284,6 @@ const assistantAvatarStyle: CSSProperties = {
   display: "grid",
   placeItems: "center",
   borderRadius: 8,
-  background: "#008060",
-  color: "#ffffff",
+  overflow: "hidden",
+  flexShrink: 0,
 };
