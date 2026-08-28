@@ -211,17 +211,13 @@ app/server/ai/playbooks/{name}/
 
 ### App Store AI self-review（2026-08-28，AiAssistant-Test / `shopify.app.test.toml`）
 
-对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements)。Public + Unlisted 提交前建议清掉 ❌，⚠️ 用人测或配置核对。Listing / 隐私政策 / GDPR 真擦除 **不在** 本检查覆盖范围（提交时仍会审）。
-
-代码侧 ❌（建议本周期修，挡 Unlisted 提交）：
-
-- [ ] **2.3.1** 去掉商户手填 `.myshopify.com` 的安装入口：`app/routes/_index/route.tsx`、`app/routes/auth.login/route.tsx`。安装必须从 Shopify Admin / App Store 发起。
-- [ ] **落地页脚手架文案**：`/` 仍是 “A short heading about [your app]”。即使 1.1.4 未判死，审核员打开 `application_url` 会当成未完成产品。
+对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements)。本轮代码侧 **无 ❌**；Public + Unlisted 提交前把下面 ⚠️ 用人测或配置核对。Listing / 隐私政策 / GDPR 真擦除 **不在** 本检查覆盖范围（提交时仍会审）。
 
 代码侧 ⚠️（提交前用人测 / 配置核对）：
 
-- [ ] **1.2.2 / 1.2.3** 换套餐：`appSubscriptionCreate` 未设 `replacementBehavior`；确认 Render 上 `BILLING_GATEWAY` 不是 `noop`，正式店关闭 `BILLING_TEST`。测：升/降配、拒费、重装后再订。
-- [ ] **5.1.5** Theme/Pixel 采集：Today / Google activity 有汇总；TikTok 主要链到 Events Manager。准备审核说明：商户能在何处看到店面事件。
+- [ ] **1.2.2 / 1.2.3** 换套餐：`appSubscriptionCreate` 未设 `replacementBehavior`；账户页其它档仍可点订阅。确认 Render 上 `BILLING_GATEWAY` 不是 `noop`，正式店关闭 `BILLING_TEST`。测：升/降配、拒费、重装后再订。
+- [ ] **5.1.5** Theme/Pixel 采集：Today / Google Pixel activity 有汇总；TikTok 主要链到 Events Manager。准备审核说明：商户能在何处看到店面事件。Google purchase 走 Customer Events 粘贴脚本（非改 theme.liquid），审核员可能追问。
+- [ ] **5.1.1** 只读 Theme Files（`settings_data.json`）用于检测 App Embed；若审核员按 Theme API 追问，说明是检测而非改主题。
 - [ ] **3.1.1** 证书：`application_url` 已是 HTTPS Render，提交前在浏览器确认无证书告警。
 
 已知、本检查未覆盖、仍挡公开上架（M3；Unlisted 也可能被追问）：
