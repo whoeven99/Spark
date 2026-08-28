@@ -763,7 +763,6 @@ export function ChatPanel({
               contextProductQuery={objectQuerySelectionByType.product}
               onOpenProductPicker={handleOpenProductPicker}
               tasksById={tasksById}
-              workspaceBatchProducts={workspaceBatchProducts}
             />
           </div>
           {isScrolledUp ? (

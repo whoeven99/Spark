@@ -24,7 +24,7 @@ describe("dbMessageToUiMessage image generation", () => {
     expect(message.imageGenerationCardPayload).toBeUndefined();
   });
 
-  it("still hydrates legacy imageGenerationCard payloads", () => {
+  it("converts legacy imageGenerationCard payloads to taskProposal", () => {
     const message = dbMessageToUiMessage({
       role: "assistant",
       content: "文生图卡片已打开",
@@ -38,12 +38,34 @@ describe("dbMessageToUiMessage image generation", () => {
       }),
       createdAt: "2026-08-28T12:00:00.000Z",
     });
-    expect(message.imageGenerationCard).toBe(true);
-    expect(message.imageGenerationCardPayload).toEqual({
-      description: "旧卡片描述",
-      productId: "gid://shopify/Product/1",
-      productTitle: "冲浪服",
+    expect(message.taskProposal?.skillId).toBe(IMAGE_GENERATION_SKILL_ID);
+    expect(message.taskProposal?.params[0]?.value).toBe("旧卡片描述");
+    expect(message.taskProposal?.targets.items).toEqual([
+      {
+        id: "gid://shopify/Product/1",
+        title: "冲浪服",
+        imageUrl: null,
+      },
+    ]);
+    expect(message.imageGenerationCard).toBeUndefined();
+    expect(message.imageGenerationCardPayload).toBeUndefined();
+  });
+
+  it("prefers persisted taskProposal when a legacy imageGenerationCard is also present", () => {
+    const proposal = buildImageGenerationProposal({
+      description: "提案描述优先",
     });
-    expect(message.taskProposal).toBeUndefined();
+    const message = dbMessageToUiMessage({
+      role: "assistant",
+      content: "文生图卡片已打开",
+      payloads: JSON.stringify({
+        taskProposal: proposal,
+        imageGenerationCard: true,
+        imageGenerationCardPayload: { description: "旧卡片描述" },
+      }),
+      createdAt: "2026-08-28T12:00:00.000Z",
+    });
+    expect(message.taskProposal?.params[0]?.value).toBe("提案描述优先");
+    expect(message.imageGenerationCard).toBeUndefined();
   });
 });
