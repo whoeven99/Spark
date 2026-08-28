@@ -191,11 +191,26 @@ export function ChatPanel({
           errorCount: message.taskRun.errors.length,
           paramsSummary: message.taskRun.paramsSummary,
           params: message.taskRun.params,
+          targets: message.taskRun.targets,
           startedAt: message.taskRun.startedAt,
         });
       } else if (message.aiTask) {
         const skillId = skillIdFromAiTaskType(message.aiTask.taskType);
         const fallbackTitle = message.aiTask.taskType;
+        const cfg = message.aiTask.config as Record<string, unknown>;
+        const result = message.aiTask.result as Record<string, unknown> | null | undefined;
+        const productId =
+          typeof cfg.productId === "string" && cfg.productId.trim()
+            ? cfg.productId.trim()
+            : null;
+        const title =
+          (typeof cfg.originalTitle === "string" && cfg.originalTitle.trim()) ||
+          (typeof cfg.title === "string" && cfg.title.trim()) ||
+          productId;
+        const imageUrl =
+          (typeof cfg.imageUrl === "string" && cfg.imageUrl.trim()) ||
+          (typeof result?.imageUrl === "string" && result.imageUrl.trim()) ||
+          null;
         runs.push({
           runId: message.aiTask.id,
           skillId,
@@ -205,6 +220,27 @@ export function ChatPanel({
           taskIds: [message.aiTask.id],
           errorCount: 0,
           paramsSummary: [],
+          ...(productId && title
+            ? {
+                targets: [
+                  {
+                    id: productId,
+                    title,
+                    imageUrl,
+                  },
+                ],
+              }
+            : imageUrl
+              ? {
+                  targets: [
+                    {
+                      id: message.aiTask.id,
+                      title: fallbackTitle,
+                      imageUrl,
+                    },
+                  ],
+                }
+              : {}),
           startedAt: message.aiTask.createdAt,
         });
       }

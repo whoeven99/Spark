@@ -1,9 +1,9 @@
 /**
  * TaskProposal 图片翻译：商品下行内嵌缩略图多选网格。
  * - 右上角圆圈：勾选 / 取消
- * - 点击图片：弹窗预览大图
+ * - 点击图片：弹窗预览大图（支持左右切换）
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { DialogShell } from "../shared/DialogShell";
@@ -79,6 +79,28 @@ const checkButtonStyle = (active: boolean) =>
     zIndex: 1,
   }) as const;
 
+const navButtonStyle = (disabled: boolean) =>
+  ({
+    position: "absolute" as const,
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    background: disabled ? "rgba(255,255,255,0.55)" : "#ffffff",
+    color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textPrimary,
+    fontSize: 18,
+    fontWeight: 700,
+    lineHeight: 1,
+    display: "grid",
+    placeItems: "center",
+    cursor: disabled ? "default" : "pointer",
+    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.12)",
+    zIndex: 1,
+    opacity: disabled ? 0.45 : 1,
+  }) as const;
+
 export function TaskProposalProductImageGrid({
   productId,
   fallbackImageUrl,
@@ -89,7 +111,7 @@ export function TaskProposalProductImageGrid({
 }: Props) {
   const { t } = useTranslation();
   const requestedRef = useRef<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (cache?.status === "ready" || cache?.status === "error") return;
@@ -161,6 +183,42 @@ export function TaskProposalProductImageGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
+  const images = cache?.status === "ready" ? cache.images : [];
+  const previewOpen = previewIndex != null && previewIndex >= 0 && previewIndex < images.length;
+  const previewImage = previewOpen ? images[previewIndex]! : null;
+  const canGoPrev = previewOpen && previewIndex > 0;
+  const canGoNext = previewOpen && previewIndex < images.length - 1;
+
+  const goPrev = useCallback(() => {
+    setPreviewIndex((current) => {
+      if (current == null || current <= 0) return current;
+      return current - 1;
+    });
+  }, []);
+
+  const goNext = useCallback(() => {
+    setPreviewIndex((current) => {
+      if (current == null) return current;
+      if (current >= images.length - 1) return current;
+      return current + 1;
+    });
+  }, [images.length]);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goPrev();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goNext();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [goNext, goPrev, previewOpen]);
+
   if (!cache || cache.status === "loading") {
     return (
       <div style={{ ...gridStyle, color: pageColorTokens.textFootnote, fontSize: 11 }}>
@@ -194,7 +252,7 @@ export function TaskProposalProductImageGrid({
   return (
     <>
       <div style={gridStyle} role="group" aria-label={t("workspace.taskProposal.card.selectImages")}>
-        {cache.images.map((image) => {
+        {cache.images.map((image, index) => {
           const active = selectedSet.has(image.url);
           return (
             <div key={image.url} style={cellStyle(active)}>
@@ -208,7 +266,7 @@ export function TaskProposalProductImageGrid({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setPreviewUrl(image.url);
+                  setPreviewIndex(index);
                 }}
               >
                 <img
@@ -241,15 +299,34 @@ export function TaskProposalProductImageGrid({
       </div>
 
       <DialogShell
-        open={Boolean(previewUrl)}
-        onClose={() => setPreviewUrl(null)}
+        open={previewOpen}
+        onClose={() => setPreviewIndex(null)}
         width={720}
-        title={t("workspace.taskProposal.card.imagePreviewTitle")}
+        title={
+          <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
+            <span>{t("workspace.taskProposal.card.imagePreviewTitle")}</span>
+            {previewOpen ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: pageColorTokens.textSecondary,
+                }}
+              >
+                {t("workspace.taskProposal.card.imagePreviewCounter", {
+                  current: previewIndex + 1,
+                  total: images.length,
+                })}
+              </span>
+            ) : null}
+          </span>
+        }
         destroyOnHidden
       >
-        {previewUrl ? (
+        {previewImage ? (
           <div
             style={{
+              position: "relative",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -257,11 +334,23 @@ export function TaskProposalProductImageGrid({
               borderRadius: 8,
               overflow: "hidden",
               minHeight: 240,
+              padding: "0 44px",
             }}
           >
+            {images.length > 1 ? (
+              <button
+                type="button"
+                style={{ ...navButtonStyle(!canGoPrev), left: 8 }}
+                onClick={goPrev}
+                disabled={!canGoPrev}
+                aria-label={t("workspace.taskProposal.card.imagePreviewPrev")}
+              >
+                ‹
+              </button>
+            ) : null}
             <img
-              src={previewUrl}
-              alt=""
+              src={previewImage.url}
+              alt={previewImage.altText ?? ""}
               style={{
                 maxWidth: "100%",
                 maxHeight: "min(70vh, 560px)",
@@ -269,6 +358,17 @@ export function TaskProposalProductImageGrid({
                 display: "block",
               }}
             />
+            {images.length > 1 ? (
+              <button
+                type="button"
+                style={{ ...navButtonStyle(!canGoNext), right: 8 }}
+                onClick={goNext}
+                disabled={!canGoNext}
+                aria-label={t("workspace.taskProposal.card.imagePreviewNext")}
+              >
+                ›
+              </button>
+            ) : null}
           </div>
         ) : null}
       </DialogShell>

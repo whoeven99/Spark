@@ -59,6 +59,8 @@ export type ConversationTaskRunEntry = {
   errorCount: number;
   paramsSummary: string[];
   params?: Record<string, string>;
+  /** 执行时勾选的目标对象（含缩略图）；旧消息可能缺失 */
+  targets?: Array<{ id: string; title: string; imageUrl?: string | null }>;
   startedAt: string;
 };
 

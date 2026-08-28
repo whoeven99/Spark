@@ -133,15 +133,15 @@ const homeV2Styles = {
       placeItems: "center",
       flexShrink: 0,
     }) as const,
-  quickPillRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  recommendGroups: {
+    display: "flex",
+    flexDirection: "column" as const,
     gap: 8,
   },
   recommendGroup: {
     display: "flex",
     flexDirection: "column" as const,
-    gap: 8,
+    gap: 5,
   },
   recommendGroupLabel: {
     margin: 0,
@@ -150,21 +150,21 @@ const homeV2Styles = {
     color: shopifyUi.textMuted,
     letterSpacing: 0.2,
   },
-  recommendGroups: {
+  quickPillRow: {
     display: "flex",
-    flexDirection: "column" as const,
-    gap: 12,
+    flexWrap: "wrap" as const,
+    gap: 6,
   },
   recommendations: {
     borderTop: `1px solid ${shopifyUi.border}`,
-    marginTop: 16,
-    paddingTop: 13,
+    marginTop: 14,
+    paddingTop: 11,
   },
   recommendationsHeader: {
     display: "flex",
     alignItems: "baseline",
     gap: 8,
-    marginBottom: 9,
+    marginBottom: 8,
   },
   recommendationsTitle: {
     margin: 0,
@@ -178,39 +178,28 @@ const homeV2Styles = {
   },
   quickPill: {
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 8,
+    borderRadius: 999,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
-    padding: "9px 11px",
-    fontSize: 13,
+    padding: "5px 10px",
+    fontSize: 12,
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left" as const,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  quickPillMeta: {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    flexShrink: 0,
+    lineHeight: 1.25,
   },
   quickPillBadge: {
-    padding: "1px 6px",
+    padding: "0 5px",
     borderRadius: 999,
     background: shopifyUi.surfaceSubtle,
     color: shopifyUi.textMuted,
     fontSize: 10,
     fontWeight: 700,
     whiteSpace: "nowrap" as const,
-  },
-  quickPillArrow: {
-    color: shopifyUi.textMuted,
-    fontSize: 14,
-    lineHeight: 1,
   },
 };
 
@@ -339,14 +328,11 @@ export function HomeV2Panel({
                       onClick={() => onSubmitPrompt(item.prompt)}
                     >
                       <span>{item.label}</span>
-                      <span style={homeV2Styles.quickPillMeta}>
-                        {item.createsTask ? (
-                          <span style={homeV2Styles.quickPillBadge}>
-                            {t("workspace.shell.chat.recommend.createsTask")}
-                          </span>
-                        ) : null}
-                        <span style={homeV2Styles.quickPillArrow} aria-hidden="true">→</span>
-                      </span>
+                      {item.createsTask ? (
+                        <span style={homeV2Styles.quickPillBadge}>
+                          {t("workspace.shell.chat.recommend.createsTask")}
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </div>
