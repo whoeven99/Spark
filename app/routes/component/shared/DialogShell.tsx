@@ -5,7 +5,7 @@ type DialogShellProps = {
   open: boolean;
   onClose: () => void;
   closeDisabled?: boolean;
-  width?: number;
+  width?: number | string;
   title: ReactNode;
   description?: ReactNode;
   children?: ReactNode;

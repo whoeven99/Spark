@@ -17,6 +17,8 @@ type Props = {
   locationSearch: string;
   onBack: () => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
+  /** dialog：对话页弹层，返回按钮改为关闭，不暗示会回到任务列表。 */
+  presentation?: "page" | "dialog";
 };
 
 type ResultRecord = {
@@ -316,6 +318,7 @@ export function ProductImproveTaskDetailPage({
   locationSearch,
   onBack,
   onTaskUpdated,
+  presentation = "page",
 }: Props) {
   const { t, i18n } = useTranslation();
   const unknownText = t("common.unknown");
@@ -660,7 +663,9 @@ export function ProductImproveTaskDetailPage({
                   whiteSpace: "nowrap",
                 }}
               >
-                {t("productImproveStage1.backToTaskList")}
+                {presentation === "dialog"
+                  ? t("common.close")
+                  : t("productImproveStage1.backToTaskList")}
               </button>
               <span
                 style={{

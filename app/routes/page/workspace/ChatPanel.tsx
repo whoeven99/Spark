@@ -1,6 +1,6 @@
 /** 工作台对话 Panel：消息列表 + 输入区 + 上下文工具栏（从 WorkspaceAppShellPage 拆出）。 */
 import type { KeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
@@ -28,7 +28,11 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
-import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import {
+  shouldOpenInPageReview,
+  type OpenWorkspaceTasksOptions,
+} from "../../../lib/productImproveDeepLink";
+import { ProductImproveReviewDialog } from "../../component/productImprove/ProductImproveReviewDialog";
 import {
   chatLayoutStyle,
   composerBoxStyle,
@@ -124,6 +128,7 @@ export function ChatPanel({
   const [isRecommendedMenuOpen, setIsRecommendedMenuOpen] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
+  const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
 
   const {
     isStreaming,
@@ -195,6 +200,28 @@ export function ChatPanel({
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
   const { tasksById, upsertTaskStatus } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
+
+  const handleOpenTasks = useCallback(
+    (opts?: OpenWorkspaceTasksOptions) => {
+      if (shouldOpenInPageReview(opts)) {
+        setReviewTaskId(opts.taskId);
+        return;
+      }
+      onOpenTasks(opts);
+    },
+    [onOpenTasks],
+  );
+
+  const remainingPendingCount = useMemo(() => {
+    if (!reviewTaskId) return 0;
+    const run = conversationRuns.find((entry) => entry.taskIds.includes(reviewTaskId));
+    const ids = run?.taskIds ?? [reviewTaskId];
+    return ids.filter((id) => {
+      if (id === reviewTaskId) return false;
+      const status = tasksById[id]?.status;
+      return status === "pending_review" || status === "scored";
+    }).length;
+  }, [reviewTaskId, conversationRuns, tasksById]);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -611,7 +638,7 @@ export function ChatPanel({
                 upsertTaskStatus(taskId, status, result);
                 onAiTaskUpdated(conversation.id, taskId, status, result);
               }}
-              onOpenTasks={onOpenTasks}
+              onOpenTasks={handleOpenTasks}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
@@ -642,12 +669,25 @@ export function ChatPanel({
 
       <ContextToolModal context={context} />
 
+      <ProductImproveReviewDialog
+        open={Boolean(reviewTaskId)}
+        taskId={reviewTaskId}
+        cachedTask={reviewTaskId ? tasksById[reviewTaskId] : undefined}
+        locationSearch={locationSearch}
+        remainingPendingCount={remainingPendingCount}
+        onClose={() => setReviewTaskId(null)}
+        onTaskUpdated={(taskId, status, result) => {
+          upsertTaskStatus(taskId, status, result);
+          onAiTaskUpdated(conversation.id, taskId, status, result);
+        }}
+      />
+
       {!isMobile && showContextSidebar ? (
         <ChatContextSidebar
           context={context}
           taskRuns={conversationRuns}
           tasksById={tasksById}
-          onOpenTasks={onOpenTasks}
+          onOpenTasks={handleOpenTasks}
           onLocateRun={locateRun}
         />
       ) : null}

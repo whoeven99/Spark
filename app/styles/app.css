@@ -425,6 +425,20 @@ code {
   line-height: 1.55;
 }
 
+.spark-dialog-shell--review.ant-modal {
+  top: 24px;
+  padding-bottom: 24px;
+  max-width: calc(100vw - 24px);
+}
+
+.spark-dialog-shell--review .spark-dialog-shell__body {
+  max-height: min(72vh, 820px);
+  overflow: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 .spark-ant-empty .ant-empty-description {
   color: #61666c;
 }
