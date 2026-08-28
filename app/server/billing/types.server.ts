@@ -7,6 +7,10 @@ export const BILLING_LOG_EVENT = {
   /** 一次性购包已发起，待商家确认 */
   TOKEN_PACK_INITIATED: "TOKEN_PACK_INITIATED",
   TOKEN_PACK_PURCHASED: "TOKEN_PACK_PURCHASED",
+  /** 营销活动领取 Token（referenceId = campaignId） */
+  PROMO_TOKEN_CLAIMED: "PROMO_TOKEN_CLAIMED",
+  /** Admin 手动发放/调整按量 Token（系统奖励） */
+  SYSTEM_REWARD: "SYSTEM_REWARD",
 } as const;
 
 export type BillingLogEventType =

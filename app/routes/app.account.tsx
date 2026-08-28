@@ -9,6 +9,7 @@ import { authenticate } from "../shopify.server";
 import {
   BillingError,
   cancelActiveSubscription,
+  claimPromoTokens,
   loadBillingPageData,
   reconcilePendingSubscriptions,
   reconcilePendingTokenPackPurchases,
@@ -91,6 +92,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
 
   try {
+    if (intent === "claim_promo_tokens") {
+      const result = await claimPromoTokens(session.shop);
+      return {
+        ok: true as const,
+        claimedPromo: true as const,
+        alreadyClaimed: result.alreadyClaimed,
+        tokensDelta: result.tokensDelta,
+      };
+    }
+
     if (intent === "cancel_subscription") {
       await cancelActiveSubscription({
         admin,

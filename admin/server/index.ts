@@ -40,6 +40,8 @@ import { tsfRoiRouter } from "./routes/tsfRoi.js";
 import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
 import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
+import { sparkCreditsRouter } from "./routes/sparkCredits.js";
+import { sparkBillingRouter } from "./routes/sparkBilling.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 import { logAdminEnvStatus } from "./lib/logEnvStatus.js";
 
@@ -83,6 +85,10 @@ app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
 app.use("/api/app-logs", authMiddleware, appLogsRouter);
 // 人工客服会话：所有登录运营可见可回复
 app.use("/api/support", authMiddleware, supportRouter);
+// Spark 额度查询 / 系统奖励调整（所有登录用户）
+app.use("/api/spark-credits", authMiddleware, sparkCreditsRouter);
+// Spark 账单总览与流水（所有登录用户）
+app.use("/api/spark-billing", authMiddleware, sparkBillingRouter);
 // 翻译 V4 任务列表 / 内容 / LLM key 统计（Cosmos + Redis + Blob）
 app.use("/api/translations", authMiddleware, translationsRouter);
 // 店铺体量画像（翻译页标注大/中/小商店）

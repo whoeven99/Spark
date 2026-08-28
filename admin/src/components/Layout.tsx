@@ -70,7 +70,10 @@ const sparkMenuItems: MenuItemDef[] = [
   { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: false },
   { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },
   { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: false },
+  { key: "/billing", icon: <FileTextOutlined />, label: <Link to="/billing">账单总览</Link>, ownerOnly: false },
+  { key: "/credits", icon: <WalletOutlined />, label: <Link to="/credits">用户额度</Link>, ownerOnly: false },
   { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
+  { key: "/pricing-workbench", icon: <CalculatorOutlined />, label: <Link to="/pricing-workbench">定价工作台</Link>, ownerOnly: true },
   { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
   { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
   {

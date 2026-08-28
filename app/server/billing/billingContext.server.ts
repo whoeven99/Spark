@@ -37,6 +37,7 @@ import {
   overageAmountToTokens,
   effectiveOverageCapAmount,
 } from "./overage/overageMath.server";
+import { loadPromoCampaignSnapshot } from "./promo/promoCampaign.server";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -179,29 +180,35 @@ export async function loadBillingPageData(
   },
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop);
-  const [usageHistoryRows, billingHistoryRows, toolUsageRows, overageRows] =
-    await Promise.all([
-      prisma.accountPeriodUsage.findMany({
-        where: { shop },
-        orderBy: { periodEnd: "desc" },
-        take: 6,
-      }),
-      prisma.billingLog.findMany({
-        where: { shop },
-        orderBy: { createdAt: "desc" },
-        take: 12,
-      }),
-      prisma.toolTokenUsageLog.findMany({
-        where: { shop },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      }),
-      prisma.overageUsageCharge.findMany({
-        where: { shop },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      }),
-    ]);
+  const [
+    usageHistoryRows,
+    billingHistoryRows,
+    toolUsageRows,
+    overageRows,
+    promoCampaign,
+  ] = await Promise.all([
+    prisma.accountPeriodUsage.findMany({
+      where: { shop },
+      orderBy: { periodEnd: "desc" },
+      take: 6,
+    }),
+    prisma.billingLog.findMany({
+      where: { shop },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+    prisma.toolTokenUsageLog.findMany({
+      where: { shop },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.overageUsageCharge.findMany({
+      where: { shop },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    loadPromoCampaignSnapshot(shop),
+  ]);
   const sub = ctx.subscription;
   const showDevCancelSubscription =
     isBillingDevCancelEnabled() &&
@@ -244,6 +251,7 @@ export async function loadBillingPageData(
     showDevCancelSubscription,
     pendingPlanChange,
     billingReturnFlash,
+    promoCampaign,
   };
 }
 

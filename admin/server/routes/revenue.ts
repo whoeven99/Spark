@@ -53,7 +53,6 @@ revenueRouter.get("/summary", async (_req, res) => {
       db.execute(`
         SELECT
           sub.shop,
-          sub.appName,
           sub.planKey,
           pc.priceAmount,
           pc.billingInterval,
@@ -90,7 +89,7 @@ revenueRouter.get("/summary", async (_req, res) => {
       })),
       topShops: topShopsResult.rows.map((r) => ({
         shop: r.shop as string,
-        appName: r.appName as string,
+        appName: "spark",
         planKey: r.planKey as string,
         priceAmount: Number(r.priceAmount ?? 0),
         billingInterval: (r.billingInterval as string | null) ?? null,
@@ -199,7 +198,7 @@ revenueRouter.get("/charges", async (req, res) => {
         : db.execute(`SELECT COUNT(*) as total ${fromClause}`),
       args.length
         ? db.execute({
-            sql: `SELECT bl.shop, bl.appName, bl.eventType, bl.planKey,
+            sql: `SELECT bl.shop, bl.eventType, bl.planKey,
                          pc.priceAmount, pc.billingInterval, pc.kind, bl.createdAt
                   ${fromClause}
                   ORDER BY bl.createdAt DESC
@@ -207,7 +206,7 @@ revenueRouter.get("/charges", async (req, res) => {
             args: [...args, pageSize, offset],
           })
         : db.execute(
-            `SELECT bl.shop, bl.appName, bl.eventType, bl.planKey,
+            `SELECT bl.shop, bl.eventType, bl.planKey,
                     pc.priceAmount, pc.billingInterval, pc.kind, bl.createdAt
              ${fromClause}
              ORDER BY bl.createdAt DESC
@@ -219,7 +218,7 @@ revenueRouter.get("/charges", async (req, res) => {
       total: Number(countResult.rows[0]?.total ?? 0),
       charges: chargesResult.rows.map((r) => ({
         shop: r.shop as string,
-        appName: r.appName as string,
+        appName: "spark",
         eventType: r.eventType as string,
         planKey: r.planKey as string,
         priceAmount: Number(r.priceAmount ?? 0),
