@@ -768,6 +768,7 @@ export function HomePanel({
         <h2 style={homeStyles.assistantTitle}>{t("workspace.home.assistantTitle")}</h2>
         <div style={homeStyles.composerShell}>
           <textarea
+            data-home-composer
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleComposerKeyDown}

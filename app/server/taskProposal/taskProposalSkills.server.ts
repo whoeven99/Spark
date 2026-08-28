@@ -138,10 +138,11 @@ const batchPictureTranslateHandler: TaskProposalSkillHandler = {
     const errors: TaskProposalExecuteError[] = [];
     const items: Array<{ productId: string; imageUrl: string }> = [];
     targets.forEach((target, index) => {
+      const productId = target.productId?.trim() || target.id;
       if (target.imageUrl) {
-        items.push({ productId: target.id, imageUrl: target.imageUrl });
+        items.push({ productId, imageUrl: target.imageUrl });
       } else {
-        errors.push({ index, targetId: target.id, error: `「${target.title}」无主图，已跳过` });
+        errors.push({ index, targetId: productId, error: `「${target.title}」无主图，已跳过` });
       }
     });
     if (items.length === 0) {

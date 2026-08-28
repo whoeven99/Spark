@@ -12,6 +12,8 @@ export function hasStreamingVisualContent(state: {
   streamingGenerateCard: boolean;
   streamingPictureTranslateCard?: boolean;
   streamingImageGenerationCard?: boolean;
+  streamingQualityCard?: boolean;
+  streamingHealthDiagnosisCard?: boolean;
   streamingTaskProposal?: unknown;
 }): boolean {
   return Boolean(
@@ -20,6 +22,8 @@ export function hasStreamingVisualContent(state: {
       state.streamingGenerateCard ||
       state.streamingPictureTranslateCard ||
       state.streamingImageGenerationCard ||
+      state.streamingQualityCard ||
+      state.streamingHealthDiagnosisCard ||
       state.streamingTaskProposal,
   );
 }

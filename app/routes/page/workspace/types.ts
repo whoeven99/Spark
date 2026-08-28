@@ -4,6 +4,8 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
+import type { ProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
+import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import type { ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext";
 import type { ManagedAiOutputParseResult } from "../../../lib/managedAiOutputRuntime";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
@@ -42,6 +44,10 @@ export type WorkspaceConversationMessage = {
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
+  productQualityCard?: boolean;
+  productQualityCardPayload?: ProductQualityFormPayload;
+  healthDiagnosisCard?: boolean;
+  healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
   taskProposal?: TaskProposalPayload;
   taskRun?: TaskRunPayload;
   aiTask?: AITaskItem;
@@ -59,6 +65,8 @@ export type ConversationTaskRunEntry = {
   errorCount: number;
   paramsSummary: string[];
   params?: Record<string, string>;
+  /** 执行时勾选的目标对象（含缩略图）；旧消息可能缺失 */
+  targets?: Array<{ id: string; title: string; imageUrl?: string | null }>;
   startedAt: string;
 };
 

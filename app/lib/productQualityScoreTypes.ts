@@ -19,6 +19,7 @@ export type ProductQualityScoreSuccess = {
   ok: true;
   productId: string;
   title: string;
+  billedTokens: number;
 } & ProductQualityScoreData;
 
 export type ProductQualityScoreFailure = {
@@ -34,7 +35,7 @@ export type ProductQualityScoreApiResponse =
       success: true;
       errorCode: 0;
       errorMsg: "";
-      response: { productId: string; title: string } & ProductQualityScoreData;
+      response: { productId: string; title: string; billedTokens: number } & ProductQualityScoreData;
     }
   | {
       success: false;

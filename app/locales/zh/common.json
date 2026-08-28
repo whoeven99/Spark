@@ -276,6 +276,7 @@
     "send": "发送",
     "newChat": "新对话",
     "clearResult": "清空结果",
+    "loading": "加载中…",
     "loadingLanguage": "加载语言中...",
     "languageSelectorLabel": "语言",
     "unknown": "—",
@@ -2115,10 +2116,21 @@
     "selectAria": "选择 {{title}}"
   },
   "qualityScore": {
+    "sectionTitle": "商品页质量评分",
+    "intro": "选择一个商品后开始诊断标题、主图、描述、规格与标签。",
+    "pickProduct": "商品",
+    "pickProductHint": "与底部工具栏同一选择框（评分仅针对单个商品）",
+    "pickProductButton": "选择商品",
+    "selectedProduct": "已选商品",
+    "singleSelectHint": "工作台已选 {{count}} 个商品，评分将使用第一个；可点「更换」重新选择。",
+    "startAction": "开始评分",
+    "rescoreAction": "重新评分",
+    "changeProduct": "更换",
+    "creditsUsed": "本次消耗 {{count}} 积分",
     "scoreAction": "质量评分",
     "scoring": "正在评分...",
     "scoreSuccess": "评分完成",
-    "emptyResult": "请在左侧选择商品并点击质量评分。",
+    "emptyResult": "选择商品后点击开始评分。",
     "overallScore": "综合质量评分",
     "levelGood": "优秀 — 商品页面质量良好",
     "levelFair": "良好 — 还有提升空间",
@@ -2213,6 +2225,7 @@
     "actionViewTaskDetail": "查看任务详情",
     "actionReviewResult": "审核结果",
     "chatGoReview": "去审核结果",
+    "chatReviewDialogTitle": "审核结果",
     "chatViewTaskList": "查看任务列表",
     "actionViewAppliedResult": "查看已应用结果",
     "actionRerunTask": "重新执行",
@@ -3353,6 +3366,54 @@
         "clearSelectionAria": "清空{{label}}",
         "recommended": "推荐",
         "recommendedActions": "推荐操作",
+        "recommend": {
+          "titleWithProduct": "针对已选商品的推荐操作",
+          "createsTask": "会建任务",
+          "groupOperations": "经营诊断",
+          "groupProduct": "商品优化",
+          "groupImage": "图片生成",
+          "todayOverview": {
+            "label": "今日经营概况",
+            "prompt": "帮我查看今天的销售额、订单数、转化率与客单价，并说明与上一周期相比的变化。"
+          },
+          "todayTodos": {
+            "label": "今日待办与风险",
+            "prompt": "帮我打开今日健康诊断与待办，展示当前风险和优先要处理的事项。"
+          },
+          "inventoryHealth": {
+            "label": "库存健康检查",
+            "prompt": "帮我检查库存健康情况，列出低库存与缺货风险的商品，并给出补货优先级。"
+          },
+          "abandonRefund": {
+            "label": "弃购与退款排查",
+            "prompt": "帮我查看弃购率、退款率和流量来源表现，指出异常项并分析可能原因。"
+          },
+          "qualityScore": {
+            "label": "商品页质量评分",
+            "prompt": {
+              "shop": "帮我给店内商品做商品页质量评分，指出标题、图片、描述、规格上的主要问题。",
+              "selected": "帮我给已选中的商品做商品页质量评分，逐项指出问题并给出改进建议。"
+            }
+          },
+          "optimizeCopy": {
+            "label": "优化商品文案",
+            "prompt": {
+              "shop": "帮我优化商品的标题与描述，风格偏 SEO 与转化。",
+              "selected": "帮我优化已选中商品的标题与描述，风格偏 SEO 与转化。"
+            }
+          },
+          "translateImage": {
+            "label": "翻译商品图文字",
+            "prompt": {
+              "shop": "帮我翻译商品图片中的文字，并尽量保持原图的排版和视觉风格。",
+              "selected": "帮我翻译已选中商品图片中的文字，并尽量保持原图的排版和视觉风格。"
+            }
+          },
+          "generateImage": {
+            "label": "生成商品主图",
+            "prompt": "帮我生成一张适合独立站的商品主图，风格干净、白底、突出产品。"
+          }
+        },
         "replying": "AI Assistant 正在回复",
         "stop": "停止",
         "send": "发送",
@@ -3370,7 +3431,30 @@
         "queryProducts": "按条件圈定商品",
         "queryProductsApprox": "按条件圈定商品（约 {{count}} 个）",
         "queryArticles": "按条件圈定文章",
-        "queryArticlesApprox": "按条件圈定文章（约 {{count}} 篇）"
+        "queryArticlesApprox": "按条件圈定文章（约 {{count}} 篇）",
+        "healthDiagnosis": {
+          "title": "今日健康诊断与待办",
+          "subtitle": "基于规则引擎快照，不消耗 LLM",
+          "snapshotMeta": "快照 {{date}} · 生成于 {{generated}}",
+          "loading": "正在加载诊断…",
+          "loadFailed": "加载诊断失败，请稍后重试",
+          "noData": "暂无已同步订单数据，无法生成诊断。可先在设置中回填历史订单。",
+          "metricRisk": "风险",
+          "metricWatch": "关注",
+          "metricOpenTasks": "待办",
+          "priorityTasks": "优先待办",
+          "noPriorityTasks": "当前没有待处理任务",
+          "riskItems": "诊断要点",
+          "status": {
+            "risk": "风险",
+            "watch": "关注",
+            "healthy": "健康"
+          },
+          "refresh": "刷新诊断",
+          "refreshing": "刷新中…",
+          "refreshDone": "诊断已刷新",
+          "refreshFailed": "刷新失败，请稍后重试"
+        }
       },
       "contextSidebar": {
         "title": "当前上下文",
@@ -3541,7 +3625,7 @@
         },
         "batchPictureTranslate": {
           "title": "批量翻译商品图片",
-          "summary": "为每个勾选商品的主图创建一个图片翻译任务，完成后可在任务列表逐个审核应用。"
+          "summary": "为勾选商品中选中的图片创建翻译任务，完成后可在任务列表逐个审核应用。"
         },
         "imageGeneration": {
           "title": "AI 生成商品图片",
@@ -3567,14 +3651,34 @@
         "submitted": "已提交",
         "confirmParamsToRun": "确认参数后开始执行",
         "targetsSelected": "{{count}} 个{{kind}} · 确认后批量创建",
+        "targetsSelectedWithImages": "{{products}} 个{{kind}} · {{images}} 张图 · 确认后批量创建",
         "queryTargets": "按条件圈定{{approx}} · 执行时重新求值",
         "queryApprox": " · 约 {{count}} 个{{kind}}",
-        "waitingForTargets": "等待补充操作对象",
+        "waitingForTargets": "先选择商品",
         "selectedTargets": "已选{{kind}}（{{checked}} / {{total}}）",
+        "selectedTargetsWithImages": "已选{{kind}}（{{checked}} / {{total}}）· {{images}} 张图",
+        "selectImages": "选择要翻译的图片",
+        "imageSelectedCount": "{{count}} 张",
+        "imagePreviewTitle": "图片预览",
+        "imagePreviewHint": "点击查看大图",
+        "imagePreviewAria": "预览图片：{{alt}}",
+        "imagePreviewCounter": "{{current}} / {{total}}",
+        "imagePreviewPrev": "上一张",
+        "imagePreviewNext": "下一张",
+        "imageUntitled": "商品图片",
+        "imageSelectAria": "选中此图片",
+        "imageDeselectAria": "取消选中此图片",
+        "imagesLoading": "加载商品图片…",
+        "imagesLoadFailed": "商品图片加载失败",
+        "imagesEmpty": "该商品暂无图片",
         "queryByCriteria": "按条件圈定：{{description}}",
         "queryHint": "{{approx}}执行时将按条件重新求值（适合保存为自动化后定期执行）",
         "queryApproxCount": "圈定时匹配约 {{count}} 个；",
-        "missingTargets": "未找到操作对象，请先在工作台下方工具栏选择{{kind}}后重新发送。",
+        "missingTargets": "请先选择要操作的{{kind}}。",
+        "pickProduct": "商品",
+        "pickProductHint": "与底部工具栏同一选择框",
+        "pickProductButton": "选择商品",
+        "changeProduct": "更换",
         "estimateLoading": "正在估算执行成本…",
         "estimateEmpty": "暂无历史执行数据；完成首批任务后预估会自动校准。",
         "estimateCredits": "预计消耗 ~{{credits}} 积分",
@@ -3583,11 +3687,12 @@
         "footerCreateOne": "将创建 1 个任务",
         "footerCreateQuery": "将按条件创建任务{{approx}}",
         "footerCreateQueryApprox": "（约 {{count}} 个）",
-        "footerSelectOne": "请至少勾选 1 个对象",
+        "footerSelectOne": "请先选择商品",
         "footerCreateCount": "将创建 {{count}} 个任务",
         "confirmSubmitting": "创建中…",
         "confirmStart": "确认开始执行",
         "confirmQuery": "按条件确认创建",
+        "confirmNeedProduct": "选择商品后继续",
         "confirmCreateCount": "确认创建 {{count}} 个任务",
         "doneSuccess": "✓ 已成功创建 {{created}}/{{total}} 个任务",
         "doneFailed": "任务创建失败",
@@ -3596,11 +3701,22 @@
       },
       "taskRunCard": {
         "startedBadge": "任务已开始",
+        "badgeRunning": "执行中",
+        "badgePendingReview": "待审核",
+        "badgeSucceeded": "已完成",
+        "badgeFailed": "失败",
         "running": "执行中…",
+        "runningHint": "任务进行中，完成后可在此审核结果",
         "createdCount": "已创建 {{count}} 个任务",
         "createdPartial": "已创建 {{count}} 个任务，{{failed}} 个对象创建失败",
         "progress": "进度：{{parts}}",
-        "moreErrors": "还有 {{count}} 个失败"
+        "moreErrors": "还有 {{count}} 个失败",
+        "metaProduct": "商品",
+        "metaProductCount": "{{count}} 个商品",
+        "metaLanguage": "语言",
+        "metaTokens": "Token",
+        "tokensUsed": "{{count}}",
+        "tokensEstimated": "预计 {{count}}"
       },
       "batchPanel": {
         "resultTitle": "批量创建结果",
@@ -3646,6 +3762,9 @@
         "imageGeneration": "准备图片生成任务",
         "pictureTranslation": "准备图片翻译任务",
         "productCopy": "准备商品文案任务",
+        "productQuality": "准备商品页质量评分",
+        "healthDiagnosis": "准备健康诊断与待办",
+        "dailyOperations": "读取今日经营诊断",
         "fallback": "调用工具：{{name}}"
       }
     },
@@ -3764,25 +3883,7 @@
       "assistantTitle": "描述目标，Spark AI 会查询店铺并协助执行",
       "composerPlaceholder": "例如：查看今天的经营情况，并告诉我最需要处理的 3 件事…",
       "recommendationsTitle": "推荐操作",
-      "recommendationsHint": "从常用任务快速开始",
-      "quickPrompts": {
-        "todayOperations": {
-          "label": "查看今日经营",
-          "prompt": "帮我查看今天的销售、订单、转化与退款情况，并告诉我最需要优先处理的 3 件事。"
-        },
-        "optimizeCopy": {
-          "label": "优化商品文案",
-          "prompt": "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。"
-        },
-        "generateImage": {
-          "label": "生成商品图",
-          "prompt": "帮我生成一张适合独立站的商品主图，风格干净、白底、突出产品。"
-        },
-        "translateImage": {
-          "label": "翻译商品图",
-          "prompt": "帮我翻译商品图片中的文字，并尽量保持原图的排版和视觉风格。"
-        }
-      }
+      "recommendationsHint": "从常用任务快速开始"
     }
   }
 }

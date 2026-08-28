@@ -13,6 +13,13 @@ export type TaskRunError = {
   error: string;
 };
 
+/** 确认执行时带入的目标对象快照（用于运行卡展示缩略图等） */
+export type TaskRunTarget = {
+  id: string;
+  title: string;
+  imageUrl?: string | null;
+};
+
 export type TaskRunPayload = {
   version: typeof TASK_RUN_VERSION;
   runId: string;
@@ -28,11 +35,37 @@ export type TaskRunPayload = {
   paramsSummary: string[];
   /** 参数快照（key → value），用于 UI 语言切换后重新本地化摘要 */
   params?: Record<string, string>;
+  /** 执行时勾选的目标对象（含缩略图）；旧消息可能缺失 */
+  targets?: TaskRunTarget[];
   startedAt: string;
 };
 
 function safeString(v: unknown, fallback = ""): string {
   return typeof v === "string" && v.trim() ? v.trim() : fallback;
+}
+
+function coerceTargets(raw: unknown): TaskRunTarget[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const targets = raw
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
+    .map((item) => {
+      const id = safeString(item.id);
+      const title = safeString(item.title);
+      if (!id || !title) return null;
+      const imageUrl =
+        item.imageUrl === null
+          ? null
+          : typeof item.imageUrl === "string" && item.imageUrl.trim()
+            ? item.imageUrl.trim()
+            : undefined;
+      return {
+        id,
+        title,
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+      } satisfies TaskRunTarget;
+    })
+    .filter((item): item is TaskRunTarget => item !== null);
+  return targets.length > 0 ? targets : undefined;
 }
 
 export function buildTaskRunPayload(args: {
@@ -42,7 +75,16 @@ export function buildTaskRunPayload(args: {
   errors: TaskRunError[];
   paramsSummary: string[];
   params?: Record<string, string>;
+  targets?: TaskRunTarget[];
 }): TaskRunPayload {
+  const targets =
+    args.targets && args.targets.length > 0
+      ? args.targets.map((t) => ({
+          id: t.id,
+          title: t.title,
+          ...(t.imageUrl !== undefined ? { imageUrl: t.imageUrl } : {}),
+        }))
+      : undefined;
   return {
     version: TASK_RUN_VERSION,
     runId: `run-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
@@ -52,6 +94,7 @@ export function buildTaskRunPayload(args: {
     errors: args.errors,
     paramsSummary: args.paramsSummary,
     ...(args.params && Object.keys(args.params).length > 0 ? { params: args.params } : {}),
+    ...(targets ? { targets } : {}),
     startedAt: new Date().toISOString(),
   };
 }
@@ -90,6 +133,7 @@ export function coerceTaskRunPayload(raw: unknown): TaskRunPayload | null {
             .map(([k, v]) => [k, (v as string).trim()]),
         )
       : undefined;
+  const targets = coerceTargets(r.targets);
   return {
     version: TASK_RUN_VERSION,
     runId: safeString(r.runId, `run-${Date.now()}`),
@@ -99,6 +143,7 @@ export function coerceTaskRunPayload(raw: unknown): TaskRunPayload | null {
     errors,
     paramsSummary,
     ...(params && Object.keys(params).length > 0 ? { params } : {}),
+    ...(targets ? { targets } : {}),
     startedAt: safeString(r.startedAt, new Date().toISOString()),
   };
 }

@@ -1,6 +1,6 @@
 /** 工作台对话 Panel：消息列表 + 输入区 + 上下文工具栏（从 WorkspaceAppShellPage 拆出）。 */
 import type { KeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
@@ -20,7 +20,7 @@ import {
   type ConversationTaskRunEntry,
   type WorkspaceConversationMessage,
 } from "./types";
-import type { AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import {
   resolveTaskRunTitle,
@@ -29,6 +29,22 @@ import {
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
+import { ProductImproveTaskDetailPage } from "../../component/productImprove/ProductImproveTaskDetailPage";
+import { PictureTranslateTaskDetailPage } from "../../component/imageStudio/PictureTranslateTaskDetailPage";
+import { ImageGenerationTaskDetailPage } from "../../component/imageStudio/ImageGenerationTaskDetailPage";
+import { DialogShell } from "../../component/shared/DialogShell";
+import { pageColorTokens } from "../pageUiStyles";
+
+const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
+  "product_improve",
+  "picture_translate",
+  "image_generation",
+]);
+
+function isChatInlineReviewTask(taskType?: string | null): boolean {
+  return Boolean(taskType && CHAT_INLINE_REVIEW_TASK_TYPES.has(taskType));
+}
 import {
   chatLayoutStyle,
   composerBoxStyle,
@@ -48,7 +64,9 @@ import {
   mobileToolbarStatusGroupStyle,
   mutedMetaStyle,
   primaryButtonStyle,
-  recommendedMenuGridStyle,
+  recommendedMenuGroupLabelStyle,
+  recommendedMenuGroupStyle,
+  recommendedMenuItemBadgeStyle,
   recommendedMenuItemStyle,
   recommendedMenuStyle,
   recommendedMenuTitleStyle,
@@ -81,6 +99,7 @@ const MAX_CONTEXT_TOKENS = 8000;
 
 export function ChatPanel({
   conversation,
+  conversationTimeZone = "UTC",
   messages,
   draft,
   context,
@@ -95,6 +114,7 @@ export function ChatPanel({
   onTaskProposalExecuted,
 }: {
   conversation: Conversation;
+  conversationTimeZone?: string;
   messages: WorkspaceConversationMessage[];
   draft: string;
   context: WorkspaceContextController;
@@ -124,6 +144,9 @@ export function ChatPanel({
   const [isRecommendedMenuOpen, setIsRecommendedMenuOpen] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
+  const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
+  const [reviewTask, setReviewTask] = useState<AITaskItem | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   const {
     isStreaming,
@@ -131,6 +154,10 @@ export function ChatPanel({
     streamingThinkingText,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingQualityCard,
+    streamingQualityPayload,
+    streamingHealthDiagnosisCard,
+    streamingHealthDiagnosisPayload,
     streamingTaskProposal,
     skillSteps,
   } = stream;
@@ -138,6 +165,7 @@ export function ChatPanel({
   const {
     activeContextTool,
     toggleContextTool,
+    openContextTool,
     selectedObjectsByType,
     objectQuerySelectionByType,
     selectedFileIds,
@@ -146,6 +174,10 @@ export function ChatPanel({
     clearToolSelection,
     workspaceBatchProducts,
   } = context;
+
+  const handleOpenProductPicker = useCallback(() => {
+    openContextTool("product");
+  }, [openContextTool]);
 
   const contextTokens = useMemo(
     () => estimateMessagesTokens(messages),
@@ -165,11 +197,26 @@ export function ChatPanel({
           errorCount: message.taskRun.errors.length,
           paramsSummary: message.taskRun.paramsSummary,
           params: message.taskRun.params,
+          targets: message.taskRun.targets,
           startedAt: message.taskRun.startedAt,
         });
       } else if (message.aiTask) {
         const skillId = skillIdFromAiTaskType(message.aiTask.taskType);
         const fallbackTitle = message.aiTask.taskType;
+        const cfg = message.aiTask.config as Record<string, unknown>;
+        const result = message.aiTask.result as Record<string, unknown> | null | undefined;
+        const productId =
+          typeof cfg.productId === "string" && cfg.productId.trim()
+            ? cfg.productId.trim()
+            : null;
+        const title =
+          (typeof cfg.originalTitle === "string" && cfg.originalTitle.trim()) ||
+          (typeof cfg.title === "string" && cfg.title.trim()) ||
+          productId;
+        const imageUrl =
+          (typeof cfg.imageUrl === "string" && cfg.imageUrl.trim()) ||
+          (typeof result?.imageUrl === "string" && result.imageUrl.trim()) ||
+          null;
         runs.push({
           runId: message.aiTask.id,
           skillId,
@@ -179,6 +226,27 @@ export function ChatPanel({
           taskIds: [message.aiTask.id],
           errorCount: 0,
           paramsSummary: [],
+          ...(productId && title
+            ? {
+                targets: [
+                  {
+                    id: productId,
+                    title,
+                    imageUrl,
+                  },
+                ],
+              }
+            : imageUrl
+              ? {
+                  targets: [
+                    {
+                      id: message.aiTask.id,
+                      title: fallbackTitle,
+                      imageUrl,
+                    },
+                  ],
+                }
+              : {}),
           startedAt: message.aiTask.createdAt,
         });
       }
@@ -194,6 +262,81 @@ export function ChatPanel({
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
   const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
+
+  const closeReviewDialog = useCallback(() => {
+    setReviewTaskId(null);
+    setReviewTask(null);
+    setReviewLoading(false);
+  }, []);
+
+  const handleOpenTasks = useCallback(
+    (opts?: OpenWorkspaceTasksOptions) => {
+      if (opts?.intent === "review" && opts.taskId && isChatInlineReviewTask(opts.taskType)) {
+        setReviewTaskId(opts.taskId);
+        return;
+      }
+      onOpenTasks(opts);
+    },
+    [onOpenTasks],
+  );
+
+  useEffect(() => {
+    if (!reviewTaskId) {
+      setReviewTask(null);
+      setReviewLoading(false);
+      return;
+    }
+
+    const cached = tasksById[reviewTaskId];
+    if (cached && isChatInlineReviewTask(cached.taskType)) {
+      setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : cached));
+      setReviewLoading(false);
+      return;
+    }
+
+    let alreadyLoaded = false;
+    setReviewTask((prev) => {
+      if (prev?.id === reviewTaskId) {
+        alreadyLoaded = true;
+        return prev;
+      }
+      return null;
+    });
+    if (alreadyLoaded) {
+      setReviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setReviewLoading(true);
+    const query = new URLSearchParams(
+      locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+    );
+    void fetch(`/api/ai-task/${encodeURIComponent(reviewTaskId)}?${query.toString()}`)
+      .then(async (resp) => {
+        if (cancelled) return;
+        if (!resp.ok) {
+          closeReviewDialog();
+          return;
+        }
+        const body = (await resp.json()) as { task?: AITaskItem };
+        if (body.task && isChatInlineReviewTask(body.task.taskType)) {
+          setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : body.task!));
+          return;
+        }
+        closeReviewDialog();
+      })
+      .catch(() => {
+        if (!cancelled) closeReviewDialog();
+      })
+      .finally(() => {
+        if (!cancelled) setReviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [closeReviewDialog, locationSearch, reviewTaskId, tasksById]);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -220,26 +363,12 @@ export function ChatPanel({
     { key: "article", label: queryToolLabel("article", t("workspace.shell.chat.toolArticle")), icon: "≣", active: activeContextTool === "article" },
     { key: "file", label: selectedFileIds.length > 0 ? `${t("workspace.shell.chat.toolFile")} ${selectedFileIds.length}` : t("workspace.shell.chat.toolFile"), icon: "↑", active: activeContextTool === "file" },
   ];
-  const recommendedActions = useMemo(
-    () => [
-      {
-        label: t("workspace.homeV2.quickPrompts.todayOperations.label"),
-        prompt: t("workspace.homeV2.quickPrompts.todayOperations.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.optimizeCopy.label"),
-        prompt: t("workspace.homeV2.quickPrompts.optimizeCopy.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.generateImage.label"),
-        prompt: t("workspace.homeV2.quickPrompts.generateImage.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.translateImage.label"),
-        prompt: t("workspace.homeV2.quickPrompts.translateImage.prompt"),
-      },
-    ],
-    [t],
+  // 已选商品（含按条件圈定）时，商品优化类推荐改为针对当前上下文，并排到最前
+  const hasProductContext =
+    selectedObjectsByType.product.length > 0 || objectQuerySelectionByType.product != null;
+  const recommendedGroups = useMemo(
+    () => buildWorkspaceRecommendedGroups(t, hasProductContext),
+    [hasProductContext, t],
   );
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
@@ -481,25 +610,35 @@ export function ChatPanel({
               {isRecommendedMenuOpen ? (
                 <div style={recommendedMenuStyle} role="menu">
                   <div style={recommendedMenuTitleStyle}>
-                    {t("workspace.shell.chat.recommendedActions")}
+                    {hasProductContext
+                      ? t("workspace.shell.chat.recommend.titleWithProduct")
+                      : t("workspace.shell.chat.recommendedActions")}
                   </div>
-                  <div style={recommendedMenuGridStyle}>
-                    {recommendedActions.map((action) => (
-                      <button
-                        key={action.label}
-                        type="button"
-                        className="workspace-recommended-action"
-                        style={recommendedMenuItemStyle}
-                        role="menuitem"
-                        onClick={() => {
-                          setIsRecommendedMenuOpen(false);
-                          void onRecommendedPrompt(action.prompt);
-                        }}
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
+                  {recommendedGroups.map((group) => (
+                    <div key={group.key} style={recommendedMenuGroupStyle}>
+                      <div style={recommendedMenuGroupLabelStyle}>{group.label}</div>
+                      {group.items.map((action) => (
+                        <button
+                          key={action.key}
+                          type="button"
+                          className="workspace-recommended-action"
+                          style={recommendedMenuItemStyle}
+                          role="menuitem"
+                          onClick={() => {
+                            setIsRecommendedMenuOpen(false);
+                            void onRecommendedPrompt(action.prompt);
+                          }}
+                        >
+                          <span>{action.label}</span>
+                          {action.createsTask ? (
+                            <span style={recommendedMenuItemBadgeStyle}>
+                              {t("workspace.shell.chat.recommend.createsTask")}
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -577,7 +716,9 @@ export function ChatPanel({
       >
         <div style={isMobile ? mobileConversationMetaRowStyle : conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
-          <span style={mutedMetaStyle}>{formatConversationTimestamp(conversation.updatedAt)}</span>
+          <span style={mutedMetaStyle}>
+            {formatConversationTimestamp(conversation.updatedAt, conversationTimeZone)}
+          </span>
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
@@ -597,9 +738,14 @@ export function ChatPanel({
                   skillSteps={skillSteps}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
+                  streamingQualityCard={streamingQualityCard}
+                  streamingQualityPayload={streamingQualityPayload}
+                  streamingHealthDiagnosisCard={streamingHealthDiagnosisCard}
+                  streamingHealthDiagnosisPayload={streamingHealthDiagnosisPayload}
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
+                  onOpenProductPicker={handleOpenProductPicker}
                   onTaskProposalExecuted={(run) =>
                     onTaskProposalExecuted(conversation.id, run)
                   }
@@ -608,10 +754,13 @@ export function ChatPanel({
               onAiTaskUpdated={(taskId, status, result) =>
                 onAiTaskUpdated(conversation.id, taskId, status, result)
               }
-              onOpenTasks={onOpenTasks}
+              onOpenTasks={handleOpenTasks}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
+              contextProducts={workspaceBatchProducts}
+              contextProductQuery={objectQuerySelectionByType.product}
+              onOpenProductPicker={handleOpenProductPicker}
               tasksById={tasksById}
             />
           </div>
@@ -638,12 +787,80 @@ export function ChatPanel({
 
       <ContextToolModal context={context} />
 
+      <DialogShell
+        open={Boolean(reviewTaskId)}
+        width={980}
+        onClose={closeReviewDialog}
+        title={t("productImproveStage1.chatReviewDialogTitle")}
+        destroyOnHidden
+      >
+        {reviewTask?.taskType === "product_improve" ? (
+          <ProductImproveTaskDetailPage
+            task={reviewTask}
+            locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "picture_translate" ? (
+          <PictureTranslateTaskDetailPage
+            task={reviewTask}
+            locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "image_generation" ? (
+          <ImageGenerationTaskDetailPage
+            task={reviewTask}
+            locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewLoading ? (
+          <div
+            style={{
+              minHeight: 160,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: pageColorTokens.textSecondary,
+              fontSize: 14,
+            }}
+          >
+            {t("common.loading")}
+          </div>
+        ) : null}
+      </DialogShell>
+
       {!isMobile && showContextSidebar ? (
         <ChatContextSidebar
           context={context}
           taskRuns={conversationRuns}
           tasksById={tasksById}
-          onOpenTasks={onOpenTasks}
+          onOpenTasks={handleOpenTasks}
           onLocateRun={locateRun}
         />
       ) : null}

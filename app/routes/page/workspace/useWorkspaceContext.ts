@@ -7,6 +7,10 @@ import { useTranslation } from "react-i18next";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { selectedShopifyObjectsToBatchProducts } from "../../../lib/workspaceContextProducts";
+import {
+  emptyWorkspaceConversationContext,
+  type WorkspaceConversationContext,
+} from "../../../lib/workspaceConversationContext";
 import { buildWorkspaceContextBlock } from "./messageTransforms";
 import {
   isObjectType,
@@ -75,6 +79,11 @@ export function useWorkspaceContext() {
     setActiveContextTool((current) => (current === tool ? null : tool));
   }, []);
 
+  /** 强制打开某上下文工具弹窗（不 toggle 关闭），供任务卡「选择商品」等入口复用。 */
+  const openContextTool = useCallback((tool: ContextTool) => {
+    setActiveContextTool(tool);
+  }, []);
+
   const closeContextTool = useCallback(() => {
     setActiveContextTool(null);
   }, []);
@@ -119,6 +128,19 @@ export function useWorkspaceContext() {
       );
     }
   }, []);
+
+  /** 覆盖某类型的手动选择（如任务卡单选商品写入上下文）。 */
+  const replaceObjectSelection = useCallback(
+    (type: ObjectType, objects: SelectedShopifyObject[]) => {
+      setSelectedObjectsByType((current) => ({ ...current, [type]: objects }));
+      if (isQueryableObjectType(type)) {
+        setObjectQuerySelectionByType((current) =>
+          current[type] ? { ...current, [type]: null } : current,
+        );
+      }
+    },
+    [],
+  );
 
   /** 按条件圈定（与手动勾选互斥：保存 query 时清空该类型的手动选择）。传 null 取消圈定。 */
   const setObjectQuerySelection = useCallback(
@@ -283,14 +305,77 @@ export function useWorkspaceContext() {
     ],
   );
 
+  const getSnapshot = useCallback((): WorkspaceConversationContext => {
+    const persistedFileIds = selectedFileIds
+      .map((id) => {
+        const file = localFiles.find((item) => item.id === id);
+        return file?.serverId ?? (file && !file.uploading ? file.id : null);
+      })
+      .filter((id): id is string => Boolean(id));
+    const roles: WorkspaceConversationContext["fileRolesById"] = {};
+    for (const id of persistedFileIds) {
+      const role = fileRolesById[id];
+      if (role === "reference" || role === "data" || role === "style") {
+        roles[id] = role;
+      }
+    }
+    return {
+      v: 1,
+      selectedObjectsByType: {
+        product: selectedObjectsByType.product,
+        article: selectedObjectsByType.article,
+        order: selectedObjectsByType.order,
+      },
+      objectQuerySelectionByType: {
+        product: objectQuerySelectionByType.product,
+        article: objectQuerySelectionByType.article,
+      },
+      selectedFileIds: persistedFileIds,
+      fileRolesById: roles,
+    };
+  }, [
+    fileRolesById,
+    localFiles,
+    objectQuerySelectionByType.article,
+    objectQuerySelectionByType.product,
+    selectedFileIds,
+    selectedObjectsByType.article,
+    selectedObjectsByType.order,
+    selectedObjectsByType.product,
+  ]);
+
+  const hydrateFromSnapshot = useCallback(
+    (snapshot: WorkspaceConversationContext | null | undefined) => {
+      const next = snapshot ?? emptyWorkspaceConversationContext();
+      setSelectedObjectsByType({
+        product: next.selectedObjectsByType.product,
+        article: next.selectedObjectsByType.article,
+        order: next.selectedObjectsByType.order,
+      });
+      setObjectQuerySelectionByType({
+        product: next.objectQuerySelectionByType.product,
+        article: next.objectQuerySelectionByType.article,
+      });
+      setSelectedFileIds(next.selectedFileIds);
+      setFileRolesById(next.fileRolesById);
+      setActiveContextTool(null);
+      if (next.selectedFileIds.length > 0) {
+        void loadWorkspaceFiles();
+      }
+    },
+    [loadWorkspaceFiles],
+  );
+
   return {
     activeContextTool,
     toggleContextTool,
+    openContextTool,
     closeContextTool,
     objectQueryByType,
     setObjectQuery,
     selectedObjectsByType,
     toggleObjectSelection,
+    replaceObjectSelection,
     objectQuerySelectionByType,
     setObjectQuerySelection,
     fileRolesById,
@@ -311,6 +396,8 @@ export function useWorkspaceContext() {
     uploadedFileIds,
     workspaceBatchProducts,
     buildContextBlock,
+    getSnapshot,
+    hydrateFromSnapshot,
   };
 }
 

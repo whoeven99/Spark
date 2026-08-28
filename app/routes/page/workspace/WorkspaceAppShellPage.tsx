@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
@@ -46,6 +46,11 @@ import {
   type OpenWorkspaceTasksOptions,
 } from "../../../lib/productImproveDeepLink";
 import {
+  emptyWorkspaceConversationContext,
+  isWorkspaceConversationContextEmpty,
+  type WorkspaceConversationContext,
+} from "../../../lib/workspaceConversationContext";
+import {
   parseManagedAiLaunchContext,
   type ManagedAiLaunchContext,
 } from "../../../lib/managedAiLaunchContext";
@@ -62,6 +67,7 @@ import {
   accountUsageTrackStyle,
   accountUsageValueStyle,
   brandBadgeStyle,
+  brandHomeButtonStyle,
   brandMetaStyle,
   brandRowStyle,
   brandTitleStyle,
@@ -293,6 +299,7 @@ export function WorkspaceAppShellPage({
   autoCreateConversation = false,
   homeVariant = "default",
   homeRenderTimeIso,
+  conversationTimeZone = "UTC",
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
@@ -302,10 +309,13 @@ export function WorkspaceAppShellPage({
   /** 并行首页预览：v2 用精简 HomeV2Panel，发送后仍在本页进入 ChatPanel。 */
   homeVariant?: "default" | "v2";
   homeRenderTimeIso?: string;
+  /** 对话更新时间展示时区：默认 UTC，确认中国 IP 时为 Asia/Shanghai。 */
+  conversationTimeZone?: string;
 }) {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
   const navigate = useEmbeddedNavigate();
+  const location = useLocation();
   const locale = i18n.resolvedLanguage || i18n.language || "en";
   const defaultDashboardSnapshot = useMemo<WorkspaceDashboardSnapshot>(
     () => ({
@@ -392,6 +402,8 @@ export function WorkspaceAppShellPage({
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [conversationMenuId, setConversationMenuId] = useState<string | null>(null);
+  /** 递增后在首页面板挂载/就绪时聚焦输入框（新建对话） */
+  const [composerFocusNonce, setComposerFocusNonce] = useState(0);
 
   // 会话 ··· 菜单：点击菜单外任意处关闭
   useEffect(() => {
@@ -505,6 +517,38 @@ export function WorkspaceAppShellPage({
   const pendingHomeContextToolRef = useRef<ContextTool | null>(null);
   const pendingAutoSendRef = useRef(false);
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
+  /** 会话上下文内存缓存（含草稿）；落库后仍保留以便切换时即时恢复 */
+  const contextCacheRef = useRef<Map<string, WorkspaceConversationContext>>(new Map());
+  const skipContextPersistRef = useRef(false);
+  const contextConversationIdRef = useRef<string | null>(null);
+  /** 仅在已从缓存/库恢复（或草稿初始化）后才允许写回，避免首屏空态冲掉库内上下文 */
+  const contextReadyIdsRef = useRef<Set<string>>(new Set());
+  const activeConversationIdRef = useRef<string | null>(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
+
+  const persistConversationContext = (
+    conversationId: string,
+    context: WorkspaceConversationContext,
+  ) => {
+    if (isDraftConversationId(conversationId)) return;
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    const payload = isWorkspaceConversationContextEmpty(context) ? null : context;
+    void fetch(`/api/conversations/${conversationId}${authQuery}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ updateContext: true, context: payload }),
+    }).catch((err) => {
+      console.error("[WorkspaceAppShellPage] persist context failed:", err);
+    });
+  };
+
+  const applyConversationContext = (context: WorkspaceConversationContext | null) => {
+    skipContextPersistRef.current = true;
+    workspaceContext.hydrateFromSnapshot(context);
+    requestAnimationFrame(() => {
+      skipContextPersistRef.current = false;
+    });
+  };
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : defaultPanel;
@@ -516,6 +560,8 @@ export function WorkspaceAppShellPage({
     const removeSet = new Set(conversationIds);
     for (const id of conversationIds) {
       loadedConvIdsRef.current.delete(id);
+      contextCacheRef.current.delete(id);
+      contextReadyIdsRef.current.delete(id);
     }
     setConversationList((current) => current.filter((item) => !removeSet.has(item.id)));
     setMessagesByConversation((current) => {
@@ -549,6 +595,19 @@ export function WorkspaceAppShellPage({
   const renameConversationInState = (oldId: string, nextConversation: ConversationSummary) => {
     loadedConvIdsRef.current.delete(oldId);
     loadedConvIdsRef.current.add(nextConversation.id);
+    const cachedContext = contextCacheRef.current.get(oldId);
+    if (cachedContext) {
+      contextCacheRef.current.delete(oldId);
+      contextCacheRef.current.set(nextConversation.id, cachedContext);
+      contextReadyIdsRef.current.delete(oldId);
+      contextReadyIdsRef.current.add(nextConversation.id);
+      persistConversationContext(nextConversation.id, cachedContext);
+    } else {
+      const live = workspaceContext.getSnapshot();
+      contextCacheRef.current.set(nextConversation.id, live);
+      contextReadyIdsRef.current.add(nextConversation.id);
+      persistConversationContext(nextConversation.id, live);
+    }
     setConversationList((current) =>
       current.map((conversation) =>
         conversation.id === oldId ? nextConversation : conversation,
@@ -577,18 +636,67 @@ export function WorkspaceAppShellPage({
     );
   };
 
-  // Lazy-load messages when switching to a conversation for the first time
+  // 切换会话：先缓存当前上下文，再恢复目标会话上下文
+  useEffect(() => {
+    const prevId = contextConversationIdRef.current;
+    const nextId = activeConversationId;
+    if (prevId === nextId) return;
+
+    if (prevId) {
+      const snapshot = workspaceContext.getSnapshot();
+      contextCacheRef.current.set(prevId, snapshot);
+      if (contextReadyIdsRef.current.has(prevId)) {
+        persistConversationContext(prevId, snapshot);
+      }
+    }
+
+    contextConversationIdRef.current = nextId;
+
+    if (!nextId) {
+      applyConversationContext(emptyWorkspaceConversationContext());
+      return;
+    }
+
+    const cached = contextCacheRef.current.get(nextId);
+    if (cached) {
+      applyConversationContext(cached);
+      contextReadyIdsRef.current.add(nextId);
+      return;
+    }
+
+    if (isDraftConversationId(nextId)) {
+      applyConversationContext(emptyWorkspaceConversationContext());
+      contextReadyIdsRef.current.add(nextId);
+      return;
+    }
+
+    // 已落库会话且尚未拉到上下文：先清空，等消息 loader 回填（此时不标记 ready）
+    applyConversationContext(emptyWorkspaceConversationContext());
+  }, [activeConversationId]);
+
+  // Lazy-load messages + context when switching to a conversation for the first time
   useEffect(() => {
     if (!activeConversationId) return;
     if (isDraftConversationId(activeConversationId)) return;
     if (loadedConvIdsRef.current.has(activeConversationId)) return;
     loadedConvIdsRef.current.add(activeConversationId);
+    const conversationId = activeConversationId;
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    fetch(`/api/conversations/${activeConversationId}${authQuery}`)
+    fetch(`/api/conversations/${conversationId}${authQuery}`)
       .then((res) => res.json())
-      .then((data: { messages?: unknown[] }) => {
+      .then((data: { messages?: unknown[]; context?: WorkspaceConversationContext | null }) => {
+        const context =
+          data.context && data.context.v === 1
+            ? data.context
+            : emptyWorkspaceConversationContext();
+        contextCacheRef.current.set(conversationId, context);
+        contextReadyIdsRef.current.add(conversationId);
+        if (activeConversationIdRef.current === conversationId) {
+          applyConversationContext(context);
+        }
+
         setMessagesByConversation((current) => {
-          const existing = current[activeConversationId] ?? [];
+          const existing = current[conversationId] ?? [];
           if (existing.length > 0) {
             return current;
           }
@@ -602,20 +710,44 @@ export function WorkspaceAppShellPage({
           if (launchContext) {
             setManagedAiContextByConversation((state) => ({
               ...state,
-              [activeConversationId]: launchContext,
+              [conversationId]: launchContext,
             }));
           }
           return {
             ...current,
-            [activeConversationId]: messages,
+            [conversationId]: messages,
           };
         });
       })
       .catch((err) => {
         console.error("[WorkspaceAppShellPage] load messages failed:", err);
-        setMessagesByConversation((current) => ({ ...current, [activeConversationId]: [] }));
+        contextReadyIdsRef.current.add(conversationId);
+        setMessagesByConversation((current) => ({ ...current, [conversationId]: [] }));
       });
   }, [activeConversationId]);
+
+  // 上下文变更防抖写库（已落库会话）
+  useEffect(() => {
+    if (skipContextPersistRef.current) return;
+    if (!activeConversationId || isDraftConversationId(activeConversationId)) return;
+    if (!contextReadyIdsRef.current.has(activeConversationId)) return;
+    const conversationId = activeConversationId;
+    const snapshot = workspaceContext.getSnapshot();
+    contextCacheRef.current.set(conversationId, snapshot);
+    const timer = window.setTimeout(() => {
+      if (skipContextPersistRef.current) return;
+      if (activeConversationIdRef.current !== conversationId) return;
+      if (!contextReadyIdsRef.current.has(conversationId)) return;
+      persistConversationContext(conversationId, snapshot);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeConversationId,
+    workspaceContext.selectedObjectsByType,
+    workspaceContext.objectQuerySelectionByType,
+    workspaceContext.selectedFileIds,
+    workspaceContext.fileRolesById,
+  ]);
 
   useEffect(() => {
     const tool = pendingHomeContextToolRef.current;
@@ -648,13 +780,28 @@ export function WorkspaceAppShellPage({
     pruneEmptyDraftConversations();
     pendingAutoSendRef.current = false;
     pendingHomeContextToolRef.current = null;
-    workspaceContext.clearContext();
     setActiveConversationId(null);
     switchPanel("home");
-    requestAnimationFrame(() => {
+    setComposerFocusNonce((n) => n + 1);
+  };
+
+  const goToAppHome = () => {
+    if (isMobile) setSidebarOpen(false);
+    const path = location.pathname.replace(/\/+$/, "") || "/";
+    if (path === "/app") {
+      openNewConversationHome();
+      return;
+    }
+    navigate("/app");
+  };
+
+  useEffect(() => {
+    if (composerFocusNonce === 0 || activePanel !== "home") return;
+    const frame = requestAnimationFrame(() => {
       document.querySelector<HTMLTextAreaElement>("[data-home-composer]")?.focus();
     });
-  };
+    return () => cancelAnimationFrame(frame);
+  }, [composerFocusNonce, activePanel]);
 
   const removeConversation = async (conversationId: string) => {
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -740,7 +887,12 @@ export function WorkspaceAppShellPage({
         !(messagesByConversation[conversation.id] ?? []).some((m) => m.role === "user"),
     );
     if (existingEmpty) {
-      workspaceContext.clearContext();
+      const emptyContext = emptyWorkspaceConversationContext();
+      contextCacheRef.current.set(existingEmpty.id, emptyContext);
+      contextReadyIdsRef.current.add(existingEmpty.id);
+      if (activeConversationId === existingEmpty.id) {
+        applyConversationContext(emptyContext);
+      }
       setDraftByConversation((current) => ({ ...current, [existingEmpty.id]: nextDraft }));
       setManagedAiContextByConversation((current) => ({
         ...current,
@@ -772,7 +924,8 @@ export function WorkspaceAppShellPage({
       ...current,
       [conv.id]: options?.assistantLaunchContext ?? null,
     }));
-    workspaceContext.clearContext();
+    contextCacheRef.current.set(conv.id, emptyWorkspaceConversationContext());
+    contextReadyIdsRef.current.add(conv.id);
     setActiveConversationId(conv.id);
     switchPanel("chat");
     if (isMobile) setSidebarOpen(false);
@@ -930,6 +1083,7 @@ export function WorkspaceAppShellPage({
                 buildAssistantWorkspaceMessage(assistantText, payload, {
                   assistantLaunchContext: managedAiContext,
                   managedAiResult,
+                  time: t("workspace.shell.chat.justNow"),
                 }),
               ],
             }));
@@ -1148,13 +1302,21 @@ export function WorkspaceAppShellPage({
     <>
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <div style={brandRowStyle}>
-          <div style={brandBadgeStyle}>
-            <SparkMark size={32} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
-            <div style={brandMetaStyle}>{t("workspace.shell.brand.subtitle")}</div>
-          </div>
+          <button
+            type="button"
+            style={brandHomeButtonStyle}
+            onClick={goToAppHome}
+            aria-label={t("workspace.shell.panels.home")}
+            title={t("workspace.shell.panels.home")}
+          >
+            <div style={brandBadgeStyle}>
+              <SparkMark size={32} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
+              <div style={brandMetaStyle}>{t("workspace.shell.brand.subtitle")}</div>
+            </div>
+          </button>
           {!isMobile ? (
             <button
               type="button"
@@ -1432,9 +1594,21 @@ export function WorkspaceAppShellPage({
   const collapsedSidebarContent = (
     <>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flex: 1, minHeight: 0 }}>
-        <div style={brandBadgeStyle}>
+        <button
+          type="button"
+          style={{
+            ...brandBadgeStyle,
+            border: "none",
+            padding: 0,
+            background: "transparent",
+            cursor: "pointer",
+          }}
+          onClick={goToAppHome}
+          aria-label={t("workspace.shell.panels.home")}
+          title={t("workspace.shell.panels.home")}
+        >
           <SparkMark size={32} />
-        </div>
+        </button>
         <button
           type="button"
           style={collapsedIconButtonStyle(false)}
@@ -1609,6 +1783,7 @@ export function WorkspaceAppShellPage({
         {activePanel === "chat" && activeConversation ? (
           <ChatPanel
             conversation={activeConversation}
+            conversationTimeZone={conversationTimeZone}
             messages={activeMessages}
             draft={draftByConversation[activeConversation.id] ?? ""}
             context={workspaceContext}

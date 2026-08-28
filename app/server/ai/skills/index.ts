@@ -8,6 +8,7 @@ import { productOptimizationSkills } from "./productOptimization";
 import { productCatalogSkills } from "./productCatalog";
 import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
 import { createGetDailyOperationsTool } from "./dailyOperations/dailyOperations.tool";
+import { healthDiagnosisFormSkillDefinition } from "./dailyOperations/healthDiagnosis.form.tool";
 import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
 import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skill";
 import { timeTool } from "./system/timeTool";
@@ -30,14 +31,16 @@ globalToolRegistry.register({
   systemPromptExtension: [
     "店铺经营相关需求按意图选工具，不要同时乱调：",
     "1) 用户问具体数字/区间表现（销售额、订单数、转化率、客单价、弃购率、退款率、流量来源、库存健康等）→ 调用对应 get_shopify_today_* / get_shopify_inventory_health 工具。",
-    "2) 用户问「今天有什么要处理的」「店铺今天健康吗」「有哪些风险/待办」→ 调用 get_daily_operations；回复先讲紧急重要（q1/P0），再概述其他象限；诊断需引用 evidence 数字。任务状态：open=待处理，in_progress=处理中，done=已完成，ignored=已忽略，auto_closed=问题已自动消除。",
-    "3) 用户同时要「今天概况 + 关键指标」时，可先 get_daily_operations，再按需补查单项指标。",
+    "2) 用户问「今天有什么要处理的」「店铺今天健康吗」「有哪些风险/待办」「今日健康诊断」→ 优先调用 open_health_diagnosis_form 打开聊天内诊断卡；仅当用户明确要求用文字解读/总结并引用数字时，再调用 get_daily_operations。",
+    "3) 用户同时要「今天概况 + 关键指标」时，可先 open_health_diagnosis_form（或 get_daily_operations），再按需补查单项指标。",
   ].join("\n"),
   createTool: (context) => [
     ...createShopifyShopMetricsTools(context.admin),
     createGetDailyOperationsTool(context),
   ],
 });
+
+globalToolRegistry.register(healthDiagnosisFormSkillDefinition);
 
 globalToolRegistry.register({
   name: "shopifyShopBasicInfo",
@@ -72,7 +75,7 @@ globalToolRegistry.register({
 
 // 整店翻译已迁移至 TSF，Spark 不再注册翻译任务工具。
 
-// 商品优化 Skill 组：文案生成、图片翻译、图片生成、质量评分（对外）
+// 商品优化：一级对外「商品优化」+ 独立一级「图片生成」；文案/评分/图翻等为 internal 子能力
 for (const skill of productOptimizationSkills) {
   globalToolRegistry.register({
     ...skill,

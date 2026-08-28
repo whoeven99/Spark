@@ -18,7 +18,7 @@ export function createGetDailyOperationsTool(context: AgentContext): DynamicStru
   return new DynamicStructuredTool({
     name: GET_DAILY_OPERATIONS_TOOL_NAME,
     description:
-      "获取店铺当日经营诊断快照与四象限待办任务：销售趋势、履约健康、物流异常、退款售后、库存健康五项诊断，以及由诊断规则生成的待办任务（含优先级、触发原因、建议动作）。当用户询问「今天有什么要处理的」「店铺今天情况如何」「有哪些待办/风险」时使用。",
+      "获取店铺当日经营诊断快照与四象限待办任务的原始数据，供文字解读使用。当用户明确要求用文字总结/解读诊断并引用数字时使用。若用户只是想查看今日健康诊断与待办，应优先改用 open_health_diagnosis_form。",
     schema: z.object({
       includeClosedTasks: z
         .boolean()
