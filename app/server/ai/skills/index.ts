@@ -72,7 +72,7 @@ globalToolRegistry.register({
 
 // 整店翻译已迁移至 TSF，Spark 不再注册翻译任务工具。
 
-// 商品优化 Skill 组：文案生成、图片翻译、图片生成、质量评分（对外）
+// 商品优化：一级对外「商品优化」+ 独立一级「图片生成」；文案/评分/图翻等为 internal 子能力
 for (const skill of productOptimizationSkills) {
   globalToolRegistry.register({
     ...skill,

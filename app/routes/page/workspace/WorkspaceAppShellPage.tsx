@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
@@ -62,6 +62,7 @@ import {
   accountUsageTrackStyle,
   accountUsageValueStyle,
   brandBadgeStyle,
+  brandHomeButtonStyle,
   brandMetaStyle,
   brandRowStyle,
   brandTitleStyle,
@@ -306,6 +307,7 @@ export function WorkspaceAppShellPage({
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
   const navigate = useEmbeddedNavigate();
+  const location = useLocation();
   const locale = i18n.resolvedLanguage || i18n.language || "en";
   const defaultDashboardSnapshot = useMemo<WorkspaceDashboardSnapshot>(
     () => ({
@@ -392,6 +394,8 @@ export function WorkspaceAppShellPage({
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [conversationMenuId, setConversationMenuId] = useState<string | null>(null);
+  /** 递增后在首页面板挂载/就绪时聚焦输入框（新建对话） */
+  const [composerFocusNonce, setComposerFocusNonce] = useState(0);
 
   // 会话 ··· 菜单：点击菜单外任意处关闭
   useEffect(() => {
@@ -651,10 +655,26 @@ export function WorkspaceAppShellPage({
     workspaceContext.clearContext();
     setActiveConversationId(null);
     switchPanel("home");
-    requestAnimationFrame(() => {
+    setComposerFocusNonce((n) => n + 1);
+  };
+
+  const goToAppHome = () => {
+    if (isMobile) setSidebarOpen(false);
+    const path = location.pathname.replace(/\/+$/, "") || "/";
+    if (path === "/app") {
+      openNewConversationHome();
+      return;
+    }
+    navigate("/app");
+  };
+
+  useEffect(() => {
+    if (composerFocusNonce === 0 || activePanel !== "home") return;
+    const frame = requestAnimationFrame(() => {
       document.querySelector<HTMLTextAreaElement>("[data-home-composer]")?.focus();
     });
-  };
+    return () => cancelAnimationFrame(frame);
+  }, [composerFocusNonce, activePanel]);
 
   const removeConversation = async (conversationId: string) => {
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -1148,13 +1168,21 @@ export function WorkspaceAppShellPage({
     <>
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <div style={brandRowStyle}>
-          <div style={brandBadgeStyle}>
-            <SparkMark size={32} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
-            <div style={brandMetaStyle}>{t("workspace.shell.brand.subtitle")}</div>
-          </div>
+          <button
+            type="button"
+            style={brandHomeButtonStyle}
+            onClick={goToAppHome}
+            aria-label={t("workspace.shell.panels.home")}
+            title={t("workspace.shell.panels.home")}
+          >
+            <div style={brandBadgeStyle}>
+              <SparkMark size={32} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
+              <div style={brandMetaStyle}>{t("workspace.shell.brand.subtitle")}</div>
+            </div>
+          </button>
           {!isMobile ? (
             <button
               type="button"
@@ -1432,9 +1460,21 @@ export function WorkspaceAppShellPage({
   const collapsedSidebarContent = (
     <>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flex: 1, minHeight: 0 }}>
-        <div style={brandBadgeStyle}>
+        <button
+          type="button"
+          style={{
+            ...brandBadgeStyle,
+            border: "none",
+            padding: 0,
+            background: "transparent",
+            cursor: "pointer",
+          }}
+          onClick={goToAppHome}
+          aria-label={t("workspace.shell.panels.home")}
+          title={t("workspace.shell.panels.home")}
+        >
           <SparkMark size={32} />
-        </div>
+        </button>
         <button
           type="button"
           style={collapsedIconButtonStyle(false)}

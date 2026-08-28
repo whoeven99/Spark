@@ -139,9 +139,24 @@ export const mobileContentStyle: CSSProperties = {
 export const brandRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
+  gap: 8,
   marginBottom: 14,
   padding: "6px 8px",
+  borderRadius: shopifyUi.radiusCard,
+};
+/** 侧栏品牌区可点进首页（不含折叠按钮） */
+export const brandHomeButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  flex: 1,
+  minWidth: 0,
+  margin: 0,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  textAlign: "left",
+  cursor: "pointer",
   borderRadius: shopifyUi.radiusCard,
 };
 export const brandBadgeStyle: CSSProperties = {
@@ -760,7 +775,6 @@ export const toolbarStatusGroupStyle: CSSProperties = {
   justifyContent: "flex-end",
   gap: 8,
   marginLeft: "auto",
-  paddingRight: 56,
   flexWrap: "wrap",
 };
 export const mobileToolbarStatusGroupStyle: CSSProperties = {
@@ -770,7 +784,6 @@ export const mobileToolbarStatusGroupStyle: CSSProperties = {
   gap: 10,
   width: "100%",
   marginLeft: 0,
-  paddingRight: 60,
   boxSizing: "border-box",
   flexWrap: "wrap",
 };
