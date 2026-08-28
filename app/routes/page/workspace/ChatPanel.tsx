@@ -137,7 +137,6 @@ export function ChatPanel({
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingTaskProposal,
-    streamingImageGenerationPayload,
     skillSteps,
   } = stream;
 
@@ -626,7 +625,6 @@ export function ChatPanel({
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
                   streamingTaskProposal={streamingTaskProposal}
-                  streamingImageGenerationPayload={streamingImageGenerationPayload}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
                   onTaskProposalExecuted={(run) =>

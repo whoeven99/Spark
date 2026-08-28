@@ -6,7 +6,6 @@ import type {
 } from "../../../lib/chatMessage";
 import {
   coerceImageGenerationFormPayload,
-  imageGenerationFormFromProposal,
   type ImageGenerationFormPayload,
 } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
@@ -218,13 +217,6 @@ export function dbMessageToUiMessage(msg: {
       if (extras.taskProposal) {
         const proposal = coerceTaskProposalPayload(extras.taskProposal);
         if (proposal) {
-          const imageForm = imageGenerationFormFromProposal(proposal);
-          if (imageForm) {
-            return {
-              imageGenerationCard: true,
-              imageGenerationCardPayload: imageForm,
-            };
-          }
           return { taskProposal: proposal };
         }
       }

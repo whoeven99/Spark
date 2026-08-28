@@ -221,6 +221,7 @@ export function ChatMessages({
                       <TaskProposalCard
                         embedded
                         proposal={item.taskProposal}
+                        contextProducts={workspaceBatchProducts}
                         onExecuted={onTaskProposalExecuted}
                       />
                     </div>
