@@ -49,6 +49,7 @@ const executeSchema = z.object({
         id: z.string().min(1),
         title: z.string().default(""),
         imageUrl: z.string().nullable().optional(),
+        productId: z.string().min(1).optional(),
       }),
     )
     .max(TASK_PROPOSAL_MAX_TARGETS, `最多一次执行 ${TASK_PROPOSAL_MAX_TARGETS} 个对象`)

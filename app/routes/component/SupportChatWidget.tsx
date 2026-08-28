@@ -221,7 +221,7 @@ export function SupportChatWidget({
                     <div style={mine ? styles.bubbleMine : styles.bubbleOps}>
                       {!mine && (
                         <div style={styles.senderName}>
-                          {m.senderName || t("support.opsDefaultName")}
+                          {t("support.opsDefaultName")}
                         </div>
                       )}
                       <div style={styles.msgContent}>{m.content}</div>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Spark AI">
+  <defs>
+    <linearGradient id="spark-avatar-bg" x1="24" y1="16" x2="488" y2="496" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a1170"/>
+      <stop offset="0.55" stop-color="#7c1fc4"/>
+      <stop offset="1" stop-color="#f04fa0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#spark-avatar-bg)"/>
+  <path fill="#fff" d="M228 134C228 233 271 276 370 276C271 276 228 319 228 418C228 319 185 276 86 276C185 276 228 233 228 134Z"/>
+  <path fill="#fff" d="M374 86C374 129 393 148 436 148C393 148 374 167 374 210C374 167 355 148 312 148C355 148 374 129 374 86Z"/>
+</svg>

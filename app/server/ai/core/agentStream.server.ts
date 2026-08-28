@@ -48,6 +48,10 @@ import {
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
+import {
+  coerceProductQualityFormPayload,
+  productQualityFormHasScore,
+} from "../../../lib/productQualityFormPayload";
 import "../skills/index";
 import "../playbooks/index";
 
@@ -558,6 +562,42 @@ export function invokeChatAgentStream(
                 controller.enqueue({
                   type: "tool_call",
                   name: "open_image_generation_form",
+                  args: payload,
+                });
+              }
+
+              if (
+                def.name === "productQualityScore" &&
+                !streamContext.emittedFlags.has("productQualityForm") &&
+                !streamContext.emittedFlags.has("scoreProductQuality")
+              ) {
+                const rec =
+                  payload && typeof payload === "object"
+                    ? (payload as Record<string, unknown>)
+                    : {};
+                const coerced = coerceProductQualityFormPayload(rec);
+                if (productQualityFormHasScore(coerced)) {
+                  controller.enqueue({
+                    type: "tool_result",
+                    name: "score_product_quality",
+                    result: JSON.stringify(payload),
+                  });
+                } else {
+                  controller.enqueue({
+                    type: "tool_call",
+                    name: "open_product_quality_form",
+                    args: coerced,
+                  });
+                }
+              }
+
+              if (
+                def.name === "healthDiagnosisForm" &&
+                !streamContext.emittedFlags.has("healthDiagnosisForm")
+              ) {
+                controller.enqueue({
+                  type: "tool_call",
+                  name: "open_health_diagnosis_form",
                   args: payload,
                 });
               }

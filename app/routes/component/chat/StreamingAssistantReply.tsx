@@ -6,6 +6,10 @@ import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
+import { HealthDiagnosisChatCard } from "./HealthDiagnosisChatCard";
+import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
+import { coerceHealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -24,10 +28,16 @@ type StreamingAssistantReplyProps = {
   skillSteps: SkillStepProgress[];
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
+  streamingQualityCard?: boolean;
+  streamingQualityPayload?: unknown;
+  streamingHealthDiagnosisCard?: boolean;
+  streamingHealthDiagnosisPayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
+  /** 打开与底部工具栏相同的商品选择弹窗 */
+  onOpenProductPicker?: () => void;
   /** TaskProposal 执行成功（向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
 };
@@ -82,6 +92,10 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   open_image_generation_form: "imageGeneration",
   open_picture_translate_form: "pictureTranslation",
   open_product_improve_form: "productCopy",
+  open_product_quality_form: "productQuality",
+  score_product_quality: "productQuality",
+  open_health_diagnosis_form: "healthDiagnosis",
+  get_daily_operations: "dailyOperations",
 };
 
 function StreamingCursor() {
@@ -261,9 +275,14 @@ export function StreamingAssistantReply({
   skillSteps,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingQualityCard = false,
+  streamingQualityPayload,
+  streamingHealthDiagnosisCard = false,
+  streamingHealthDiagnosisPayload,
   streamingTaskProposal,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
+  onOpenProductPicker,
   onTaskProposalExecuted,
 }: StreamingAssistantReplyProps) {
   const { t } = useTranslation();
@@ -275,13 +294,21 @@ export function StreamingAssistantReply({
     streamingGenerateCard &&
     !streamingTaskProposal &&
     workspaceBatchProducts.length < 2;
+  const qualityPayload = coerceProductQualityFormPayload(streamingQualityPayload);
+  const showQualityCard = streamingQualityCard;
+  const healthPayload = coerceHealthDiagnosisFormPayload(streamingHealthDiagnosisPayload);
+  const showHealthDiagnosisCard = streamingHealthDiagnosisCard;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingGenerateCard: showProductImproveCard,
+    streamingQualityCard: showQualityCard,
+    streamingHealthDiagnosisCard: showHealthDiagnosisCard,
     streamingTaskProposal,
   });
-  const hasEmbeddedCard = Boolean(showProductImproveCard || streamingTaskProposal);
+  const hasEmbeddedCard = Boolean(
+    showProductImproveCard || showQualityCard || showHealthDiagnosisCard || streamingTaskProposal,
+  );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -326,6 +353,23 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
+              {showQualityCard ? (
+                <div style={cardSlotStyle}>
+                  <ProductQualityScoreChatCard
+                    embedded
+                    initialPayload={qualityPayload}
+                    contextProducts={workspaceBatchProducts}
+                    onOpenProductPicker={onOpenProductPicker}
+                  />
+                </div>
+              ) : null}
+
+              {showHealthDiagnosisCard ? (
+                <div style={cardSlotStyle}>
+                  <HealthDiagnosisChatCard embedded initialPayload={healthPayload} />
+                </div>
+              ) : null}
+
               {streamingTaskProposal ? (
                 <div style={cardSlotStyle}>
                   <TaskProposalCard
@@ -333,6 +377,7 @@ export function StreamingAssistantReply({
                     proposal={streamingTaskProposal}
                     contextProducts={workspaceBatchProducts}
                     contextProductQuery={workspaceProductQuery}
+                    onOpenProductPicker={onOpenProductPicker}
                     onExecuted={onTaskProposalExecuted}
                   />
                 </div>

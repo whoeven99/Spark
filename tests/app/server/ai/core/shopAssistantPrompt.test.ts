@@ -24,6 +24,40 @@ describe("buildMerchantCapabilityPrompt", () => {
         visibility: "public",
       }),
       stubTool({
+        name: "productOptimization",
+        displayName: "商品优化",
+        description:
+          "含三个子能力：AI 生成/优化商品文案；商品页质量评分（诊断）；商品图片翻译",
+        visibility: "public",
+      }),
+      stubTool({
+        name: "productImprove",
+        displayName: "AI 生成/优化商品文案",
+        description: "生成标题与描述",
+        visibility: "internal",
+      }),
+      stubTool({
+        name: "productQualityScore",
+        displayName: "商品页质量评分（诊断）",
+        visibility: "internal",
+      }),
+      stubTool({
+        name: "pictureTranslate",
+        displayName: "商品图片翻译",
+        visibility: "internal",
+      }),
+      stubTool({
+        name: "imageGeneration",
+        displayName: "图片生成",
+        description: "根据提示词生成商品/营销图片",
+        visibility: "public",
+      }),
+      stubTool({
+        name: "imageGenerationForm",
+        displayName: "文生图卡片",
+        visibility: "internal",
+      }),
+      stubTool({
         name: "searchProducts",
         displayName: "搜索/浏览商品",
         description: "搜商品",
@@ -62,6 +96,15 @@ describe("buildMerchantCapabilityPrompt", () => {
     const prompt = buildMerchantCapabilityPrompt(tools, playbooks);
 
     expect(prompt).toContain("店铺经营");
+    expect(prompt).toContain("商品优化");
+    expect(prompt).toContain("AI 生成/优化商品文案");
+    expect(prompt).toContain("商品页质量评分（诊断）");
+    expect(prompt).toContain("商品图片翻译");
+    expect(prompt).toContain("图片生成");
+    expect(prompt).not.toContain("- AI 生成/优化商品文案");
+    expect(prompt).not.toContain("- 商品页质量评分（诊断）");
+    expect(prompt).not.toContain("- 商品图片翻译");
+    expect(prompt).not.toContain("文生图卡片");
     expect(prompt).not.toContain("经营体检");
     expect(prompt).not.toContain("经营数据查询");
     expect(prompt).not.toContain("健康度与待办");

@@ -18,6 +18,7 @@ import {
   failTask,
 } from "../aiTask/aiTaskLogger.server";
 import { getImageGenLimiter } from "../aiTask/concurrencyLimiter.server";
+import { runQueuedShopAiTask } from "../aiTask/runQueuedShopAiTask.server";
 import { fetchProductDescriptionContext } from "../productImprove/productContextFetcher.server";
 import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import { unauthenticated } from "../../shopify.server";
@@ -85,103 +86,120 @@ async function runImageGenerationTask(params: {
 
   await appendLog({ taskId: params.taskId, startedAt, message: "正在等待执行任务" });
 
-  // Resolve the final generation prompt and collect billing info for it
-  let finalPrompt: string;
-  const billingItems: BilledTokenUsageItem[] = [];
-
-  if (params.description && !params.prompt) {
-    // Path A: generate prompt from natural-language description via AI
-    await appendLog({ taskId: params.taskId, startedAt, message: "正在润色提示词生成更好的图片" });
-
-    if (params.productId) {
-      await appendLog({
-        taskId: params.taskId,
-        startedAt,
-        message: "正在读取商品描述作为画面参考",
-      });
-    }
-    const product = await loadOptionalProductContext(
-      params.shop,
-      params.productId,
-      params.taskId,
-    );
-    const promptResult = await generateImagePromptFromDescription({
-      description: params.description,
-      requestId: params.taskId,
-      product,
-    });
-
-    if (!promptResult.ok) {
-      await failTask({
-        taskId: params.taskId,
-        errorMsg: promptResult.errorMsg,
-        startedAt,
-        finalMessage: `文字润色失败：${promptResult.errorMsg}`,
-      });
-      return;
-    }
-
-    await appendLog({ taskId: params.taskId, startedAt, message: "提示词已润色，准备进入图片生成" });
-
-    finalPrompt = promptResult.prompt;
-    const promptTokenUsage = parseUsageMetadata(promptResult.usageMeta);
-    const promptModelKey = normalizeBillingModelKey(promptResult.modelLabel);
-    if (promptTokenUsage.totalTokens > 0) {
-      billingItems.push(buildImagePromptBillingItem(promptModelKey, promptTokenUsage));
-    }
-  } else if (params.prompt) {
-    // Path B: user provided a direct prompt
-    await appendLog({ taskId: params.taskId, startedAt, message: "正在润色提示词生成更好的图片" });
-    finalPrompt = params.prompt;
-  } else {
-    await failTask({
-      taskId: params.taskId,
-      errorMsg: "未提供 prompt 或 description",
-      startedAt,
-    });
-    return;
-  }
-
-  await appendLog({ taskId: params.taskId, startedAt, message: "正在大模型生成图片中" });
-
-  const result = await getImageGenLimiter().run(() =>
-    executeImageGeneration({
-      requestId: params.taskId,
-      shop: params.shop,
-      prompt: finalPrompt,
-    }),
-  );
-
-  if (!result.ok) {
-    await failTask({
-      taskId: params.taskId,
-      errorMsg: result.errorMsg,
-      startedAt,
-      finalMessage: `生成失败：${result.errorMsg}`,
-    });
-    console.info(
-      `${LOG_PREFIX} failed taskId=${params.taskId} reason=${result.reason} elapsedMs=${Date.now() - startedAt}`,
-    );
-    return;
-  }
-
-  await appendLog({ taskId: params.taskId, startedAt, message: "图片已生成，正在保存..." });
-
-  billingItems.push(buildImageGenerateBillingItem(result.provider));
-  const actualCredits = await recordVisualToolTokenUsage({
+  await runQueuedShopAiTask({
     shop: params.shop,
-    items: billingItems,
-  });
-
-  await completeTask({
     taskId: params.taskId,
-    result: { blobPath: result.blobPath, provider: result.provider },
-    actualCredits: actualCredits ?? undefined,
     startedAt,
-    finalMessage: "任务完成",
-  });
+    billingGate: "visual",
+    fn: async () => {
+      let finalPrompt: string;
+      const billingItems: BilledTokenUsageItem[] = [];
 
-  console.info(
-    `${LOG_PREFIX} ok taskId=${params.taskId} elapsedMs=${Date.now() - startedAt}`,
-  );
+      if (params.description && !params.prompt) {
+        await appendLog({
+          taskId: params.taskId,
+          startedAt,
+          message: "正在润色提示词生成更好的图片",
+        });
+
+        if (params.productId) {
+          await appendLog({
+            taskId: params.taskId,
+            startedAt,
+            message: "正在读取商品描述作为画面参考",
+          });
+        }
+        const product = await loadOptionalProductContext(
+          params.shop,
+          params.productId,
+          params.taskId,
+        );
+        const promptResult = await generateImagePromptFromDescription({
+          description: params.description,
+          requestId: params.taskId,
+          product,
+        });
+
+        if (!promptResult.ok) {
+          await failTask({
+            taskId: params.taskId,
+            errorMsg: promptResult.errorMsg,
+            startedAt,
+            finalMessage: `文字润色失败：${promptResult.errorMsg}`,
+          });
+          return;
+        }
+
+        await appendLog({
+          taskId: params.taskId,
+          startedAt,
+          message: "提示词已润色，准备进入图片生成",
+        });
+
+        finalPrompt = promptResult.prompt;
+        const promptTokenUsage = parseUsageMetadata(promptResult.usageMeta);
+        const promptModelKey = normalizeBillingModelKey(promptResult.modelLabel);
+        if (promptTokenUsage.totalTokens > 0) {
+          billingItems.push(buildImagePromptBillingItem(promptModelKey, promptTokenUsage));
+        }
+      } else if (params.prompt) {
+        await appendLog({
+          taskId: params.taskId,
+          startedAt,
+          message: "正在润色提示词生成更好的图片",
+        });
+        finalPrompt = params.prompt;
+      } else {
+        await failTask({
+          taskId: params.taskId,
+          errorMsg: "未提供 prompt 或 description",
+          startedAt,
+        });
+        return;
+      }
+
+      await appendLog({ taskId: params.taskId, startedAt, message: "正在大模型生成图片中" });
+
+      const result = await getImageGenLimiter().run(() =>
+        executeImageGeneration({
+          requestId: params.taskId,
+          shop: params.shop,
+          prompt: finalPrompt,
+        }),
+      );
+
+      if (!result.ok) {
+        await failTask({
+          taskId: params.taskId,
+          errorMsg: result.errorMsg,
+          startedAt,
+          finalMessage: `生成失败：${result.errorMsg}`,
+        });
+        console.info(
+          `${LOG_PREFIX} failed taskId=${params.taskId} reason=${result.reason} elapsedMs=${Date.now() - startedAt}`,
+        );
+        return;
+      }
+
+      await appendLog({ taskId: params.taskId, startedAt, message: "图片已生成，正在保存..." });
+
+      billingItems.push(buildImageGenerateBillingItem(result.provider));
+      const actualCredits = await recordVisualToolTokenUsage({
+        shop: params.shop,
+        items: billingItems,
+      });
+
+      await completeTask({
+        taskId: params.taskId,
+        result: { blobPath: result.blobPath, provider: result.provider },
+        actualCredits: actualCredits ?? undefined,
+        startedAt,
+        finalMessage: "任务完成",
+      });
+
+      console.info(
+        `${LOG_PREFIX} ok taskId=${params.taskId} elapsedMs=${Date.now() - startedAt}`,
+      );
+    },
+  });
 }

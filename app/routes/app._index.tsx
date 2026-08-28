@@ -10,8 +10,13 @@ import {
   isBillingReturnRequest,
 } from "../server/billing/buildBillingReturnUrl.server";
 import { listConversations } from "../server/conversation/conversationStore.server";
-import { emptyWorkspaceDashboardSnapshot } from "../server/operations/workspaceDashboard.server";
+import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
+import {
+  buildWorkspaceDashboardFromDailyOps,
+  emptyWorkspaceDashboardSnapshot,
+} from "../server/operations/workspaceDashboard.server";
 import { authenticate } from "../shopify.server";
+import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
 const WorkspaceAppShellPage = lazy(() =>
@@ -21,13 +26,25 @@ const WorkspaceAppShellPage = lazy(() =>
 );
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   if (isBillingReturnRequest(request)) {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
   const conversations = await listConversations(session.shop);
+
+  // 与 assistant / home-v1 / health-monitor 对齐：进首页即懒触发当日健康诊断快照
+  let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
+  try {
+    const dailyOps = await ensureDailySnapshotOverview(session.shop, {
+      shopifyAdmin: admin,
+    });
+    dashboardSnapshot = buildWorkspaceDashboardFromDailyOps(dailyOps);
+  } catch (error) {
+    console.error("[app._index] daily snapshot failed:", error);
+  }
+
   const associatedUser = (
     session as {
       onlineAccessInfo?: {
@@ -43,11 +60,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     conversations,
-    dashboardSnapshot: emptyWorkspaceDashboardSnapshot(),
+    dashboardSnapshot,
     accountName,
     homeRenderTimeIso: new Date().toISOString(),
+    conversationTimeZone: resolveConversationDisplayTimeZone(request.headers),
   };
 };
+
 
 function ClientMount({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -74,6 +93,7 @@ export default function Index() {
           defaultPanel="home"
           homeVariant="v2"
           homeRenderTimeIso={data?.homeRenderTimeIso}
+          conversationTimeZone={data?.conversationTimeZone}
         />
       </Suspense>
     </ClientMount>

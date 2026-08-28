@@ -1,13 +1,16 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
+import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
+import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
+import { HealthDiagnosisChatCard } from "./HealthDiagnosisChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
-import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { ManagedAiResultCard } from "./ManagedAiResultCard";
@@ -26,6 +29,11 @@ type ChatMessagesProps = {
   onOpenTasks?: (opts?: OpenWorkspaceTasksOptions) => void;
   /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
+  /** 工作台已选商品，供 TaskProposalCard 空目标时补全 */
+  contextProducts?: BatchTaskProduct[];
+  contextProductQuery?: ObjectQuerySelection | null;
+  /** 打开与底部工具栏相同的商品选择弹窗 */
+  onOpenProductPicker?: () => void;
   /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */
   tasksById?: Record<string, AITaskItem>;
   workspaceBatchProducts?: BatchTaskProduct[];
@@ -37,6 +45,9 @@ export function ChatMessages({
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
+  contextProducts = [],
+  contextProductQuery = null,
+  onOpenProductPicker,
   tasksById,
   workspaceBatchProducts = [],
 }: ChatMessagesProps) {
@@ -73,6 +84,12 @@ export function ChatMessages({
         const hasImageGenerationCard =
           item.role === "assistant" &&
           Boolean(item.imageGenerationCard || item.imageGenerationCardPayload);
+        const hasQualityScoreCard =
+          item.role === "assistant" &&
+          (Boolean(item.productQualityCard) || Boolean(item.productQualityCardPayload));
+        const hasHealthDiagnosisCard =
+          item.role === "assistant" &&
+          (Boolean(item.healthDiagnosisCard) || Boolean(item.healthDiagnosisCardPayload));
         const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
         const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const hasManagedAiCard = item.role === "assistant" && Boolean(item.managedAiResult);
@@ -84,6 +101,8 @@ export function ChatMessages({
         const hasEmbeddedCard =
           hasGenerateDescriptionCard ||
           hasImageGenerationCard ||
+          hasQualityScoreCard ||
+          hasHealthDiagnosisCard ||
           hasTaskProposalCard ||
           hasTaskRunCard ||
           hasAiTaskCard ||
@@ -216,12 +235,34 @@ export function ChatMessages({
                     </div>
                   ) : null}
 
+                  {hasQualityScoreCard && item.role === "assistant" ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ProductQualityScoreChatCard
+                        embedded
+                        initialPayload={item.productQualityCardPayload}
+                        contextProducts={contextProducts}
+                        onOpenProductPicker={onOpenProductPicker}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasHealthDiagnosisCard && item.role === "assistant" ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <HealthDiagnosisChatCard
+                        embedded
+                        initialPayload={item.healthDiagnosisCardPayload}
+                      />
+                    </div>
+                  ) : null}
+
                   {hasTaskProposalCard && item.role === "assistant" && item.taskProposal ? (
                     <div style={{ marginTop: "0.85rem" }}>
                       <TaskProposalCard
                         embedded
                         proposal={item.taskProposal}
-                        contextProducts={workspaceBatchProducts}
+                        contextProducts={contextProducts}
+                        contextProductQuery={contextProductQuery}
+                        onOpenProductPicker={onOpenProductPicker}
                         onExecuted={onTaskProposalExecuted}
                       />
                     </div>

@@ -8,6 +8,14 @@ import {
   coerceImageGenerationFormPayload,
   type ImageGenerationFormPayload,
 } from "../../../lib/imageGenerationFormPayload";
+import {
+  coerceProductQualityFormPayload,
+  type ProductQualityFormPayload,
+} from "../../../lib/productQualityFormPayload";
+import {
+  coerceHealthDiagnosisFormPayload,
+  type HealthDiagnosisFormPayload,
+} from "../../../lib/healthDiagnosisCardPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import {
@@ -64,6 +72,18 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.imageGenerationCardPayload
       ? { imageGenerationCardPayload: message.imageGenerationCardPayload }
       : {}),
+    ...(message.productQualityCard || message.productQualityCardPayload
+      ? { productQualityCard: true }
+      : {}),
+    ...(message.productQualityCardPayload
+      ? { productQualityCardPayload: message.productQualityCardPayload }
+      : {}),
+    ...(message.healthDiagnosisCard || message.healthDiagnosisCardPayload
+      ? { healthDiagnosisCard: true }
+      : {}),
+    ...(message.healthDiagnosisCardPayload
+      ? { healthDiagnosisCardPayload: message.healthDiagnosisCardPayload }
+      : {}),
     ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
@@ -79,17 +99,23 @@ export function buildAssistantWorkspaceMessage(
   options?: {
     assistantLaunchContext?: ManagedAiLaunchContext | null;
     managedAiResult?: ManagedAiOutputParseResult | null;
+    /** 新消息时间戳；缺省英文 Just now，调用方应传入 i18n。 */
+    time?: string;
   },
 ): WorkspaceConversationMessage {
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
   const hasImageGenerationCard =
     payload.imageGenerationCard || Boolean(payload.imageGenerationCardPayload);
+  const hasProductQualityCard =
+    payload.productQualityCard || Boolean(payload.productQualityCardPayload);
+  const hasHealthDiagnosisCard =
+    payload.healthDiagnosisCard || Boolean(payload.healthDiagnosisCardPayload);
 
   return {
     role: "assistant",
     text,
-    time: "刚刚",
+    time: options?.time?.trim() || "Just now",
     ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     ...(hasProductImproveCard ? { productImproveCard: true } : {}),
     ...(payload.productImproveCardPayload
@@ -100,6 +126,22 @@ export function buildAssistantWorkspaceMessage(
       ? {
           imageGenerationCardPayload:
             payload.imageGenerationCardPayload as ImageGenerationFormPayload,
+        }
+      : {}),
+    ...(hasProductQualityCard ? { productQualityCard: true } : {}),
+    ...(payload.productQualityCardPayload
+      ? {
+          productQualityCardPayload: coerceProductQualityFormPayload(
+            payload.productQualityCardPayload,
+          ),
+        }
+      : {}),
+    ...(hasHealthDiagnosisCard ? { healthDiagnosisCard: true } : {}),
+    ...(payload.healthDiagnosisCardPayload
+      ? {
+          healthDiagnosisCardPayload: coerceHealthDiagnosisFormPayload(
+            payload.healthDiagnosisCardPayload,
+          ),
         }
       : {}),
     ...(payload.taskProposal ? { taskProposal: payload.taskProposal } : {}),
@@ -113,14 +155,20 @@ export function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-/** 对话更新时间：上海时区，精确到秒（YYYY-MM-DD HH:mm:ss）。 */
-export function formatConversationTimestamp(isoString: string): string {
+/**
+ * 对话更新时间：库内 ISO UTC；默认按 UTC 展示。
+ * 仅当调用方确认中国 IP 时传入 Asia/Shanghai。
+ */
+export function formatConversationTimestamp(
+  isoString: string,
+  timeZone = "UTC",
+): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) {
     return isoString.slice(0, 19).replace("T", " ");
   }
-  const parts = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -128,6 +176,7 @@ export function formatConversationTimestamp(isoString: string): string {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
+    hourCycle: "h23",
   }).formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
@@ -145,6 +194,22 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
     result.imageGenerationCard = true;
     if (payload.imageGenerationCardPayload) {
       result.imageGenerationCardPayload = payload.imageGenerationCardPayload;
+    }
+  }
+  if (payload.productQualityCard || payload.productQualityCardPayload) {
+    result.productQualityCard = true;
+    if (payload.productQualityCardPayload) {
+      result.productQualityCardPayload = coerceProductQualityFormPayload(
+        payload.productQualityCardPayload,
+      );
+    }
+  }
+  if (payload.healthDiagnosisCard || payload.healthDiagnosisCardPayload) {
+    result.healthDiagnosisCard = true;
+    if (payload.healthDiagnosisCardPayload) {
+      result.healthDiagnosisCardPayload = coerceHealthDiagnosisFormPayload(
+        payload.healthDiagnosisCardPayload,
+      );
     }
   }
   if (payload.taskProposal) {
@@ -168,6 +233,18 @@ export function serializeWorkspaceMessagePayloads(
     result.imageGenerationCard = true;
     if (message.imageGenerationCardPayload) {
       result.imageGenerationCardPayload = message.imageGenerationCardPayload;
+    }
+  }
+  if (message.productQualityCard || message.productQualityCardPayload) {
+    result.productQualityCard = true;
+    if (message.productQualityCardPayload) {
+      result.productQualityCardPayload = message.productQualityCardPayload;
+    }
+  }
+  if (message.healthDiagnosisCard || message.healthDiagnosisCardPayload) {
+    result.healthDiagnosisCard = true;
+    if (message.healthDiagnosisCardPayload) {
+      result.healthDiagnosisCardPayload = message.healthDiagnosisCardPayload;
     }
   }
   if (message.taskProposal) result.taskProposal = message.taskProposal;
@@ -202,9 +279,27 @@ export function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
-    ...(extras.imageGenerationCard || extras.imageGenerationCardPayload
-      ? { imageGenerationCard: true }
+    ...(extras.productQualityCard || extras.productQualityCardPayload
+      ? { productQualityCard: true }
       : {}),
+    ...(extras.productQualityCardPayload
+      ? {
+          productQualityCardPayload: coerceProductQualityFormPayload(
+            extras.productQualityCardPayload,
+          ) as ProductQualityFormPayload,
+        }
+      : {}),
+    ...(extras.healthDiagnosisCard || extras.healthDiagnosisCardPayload
+      ? { healthDiagnosisCard: true }
+      : {}),
+    ...(extras.healthDiagnosisCardPayload
+      ? {
+          healthDiagnosisCardPayload: coerceHealthDiagnosisFormPayload(
+            extras.healthDiagnosisCardPayload,
+          ) as HealthDiagnosisFormPayload,
+        }
+      : {}),
+    // taskProposal 优先；旧批量/单图翻译/文生图卡片（历史落库消息）统一转为通用提案卡
     ...(() => {
       if (extras.imageGenerationCardPayload || extras.imageGenerationFormPayload) {
         return {

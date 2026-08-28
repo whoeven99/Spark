@@ -2,7 +2,7 @@
 export function SparkMark({ size = 20 }: { size?: number }) {
   return (
     <img
-      src="/spark-assistant-avatar.png"
+      src="/spark-ai-avatar.svg"
       width={size}
       height={size}
       alt=""

@@ -2,6 +2,8 @@ import type { AITaskItem } from "./aiTaskTypes";
 import type { ImageGenerationFormPayload } from "./imageGenerationFormPayload";
 import type { ManagedAiLaunchContext } from "./managedAiLaunchContext";
 import type { ManagedAiOutputParseResult } from "./managedAiOutputRuntime";
+import type { ProductQualityFormPayload } from "./productQualityFormPayload";
+import type { HealthDiagnosisFormPayload } from "./healthDiagnosisCardPayload";
 import type { TaskProposalPayload } from "./taskProposalPayload";
 import type { TaskRunPayload } from "./taskRunPayload";
 
@@ -67,6 +69,12 @@ export type ChatMessage =
       /** 对话内文生图卡片（选商品 / 描述 / 出图 / 积分，不跳页）。 */
       imageGenerationCard?: boolean;
       imageGenerationCardPayload?: ImageGenerationFormPayload;
+      /** 为 true 时在气泡内渲染「商品页质量评分」表单/结果卡。 */
+      productQualityCard?: boolean;
+      productQualityCardPayload?: ProductQualityFormPayload;
+      /** 为 true 时在气泡内渲染「今日健康诊断与待办」卡。 */
+      healthDiagnosisCard?: boolean;
+      healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;

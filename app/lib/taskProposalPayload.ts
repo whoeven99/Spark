@@ -38,6 +38,11 @@ export type TaskProposalTarget = {
   id: string;
   title: string;
   imageUrl?: string | null;
+  /**
+   * 图片翻译等多图场景：id 可能是「商品::图片」复合键，真正的商品 GID 放这里。
+   * 未设时执行端回退用 id（商品级目标）。
+   */
+  productId?: string;
   /** 不可执行原因（如图片翻译但无主图）；有值时默认不勾选 */
   disabledReason?: string;
 };
@@ -121,10 +126,12 @@ function coerceTarget(raw: unknown): TaskProposalTarget | null {
   const r = raw as Record<string, unknown>;
   const id = safeString(r.id);
   if (!id) return null;
+  const productId = safeString(r.productId);
   return {
     id,
     title: safeString(r.title, "未命名对象"),
     imageUrl: typeof r.imageUrl === "string" ? r.imageUrl : null,
+    ...(productId ? { productId } : {}),
     ...(safeString(r.disabledReason) ? { disabledReason: safeString(r.disabledReason) } : {}),
   };
 }
@@ -186,13 +193,16 @@ export const PRODUCT_IMPROVE_LANGUAGE_OPTIONS: Array<{ value: string; label: str
 
 /**
  * 客户端兜底合并：AI 没填 targets 时，用工作台已选商品（或按条件圈定）补全。
- * 优先级：proposal 自带 items > 工作台手动勾选 > 工作台按条件圈定（query）。
+ * 默认优先级：proposal 自带 items/query > 工作台手动勾选 > 工作台按条件圈定。
+ * preferContext=true（用户在本卡点了「更换/选择商品」）时改为：工作台当前选择优先，
+ * 避免历史消息里固化的 targets 挡住更换结果；其它卡片不受影响。
  * 图片翻译类提案补全时，无主图的商品自动标记不可执行。
  */
 export function mergeTaskProposalTargets(
   proposal: TaskProposalPayload,
   contextProducts: Array<{ id: string; title: string; imageUrl?: string | null }>,
   contextProductQuery?: ObjectQuerySelection | null,
+  options?: { preferContext?: boolean },
 ): TaskProposalPayload {
   // 文生图参考商品可选：工具未预填时，只用工作台第一个已选商品补全
   if (proposal.skillId === IMAGE_GENERATION_SKILL_ID) {
@@ -215,13 +225,20 @@ export function mergeTaskProposalTargets(
   }
   // 无目标对象的技能不做上下文兜底
   if (proposal.targets.kind === "none") return proposal;
-  if (proposal.targets.items.length > 0 || proposal.targets.query) return proposal;
+
+  const preferContext = Boolean(options?.preferContext);
+  const shouldKeepProposalTargets =
+    !preferContext &&
+    (proposal.targets.items.length > 0 || Boolean(proposal.targets.query));
+  if (shouldKeepProposalTargets) return proposal;
+
   const requiresImage = proposal.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
   if (contextProducts.length > 0) {
     return {
       ...proposal,
       targets: {
         ...proposal.targets,
+        query: undefined,
         items: contextProducts.map((p) => ({
           id: p.id,
           title: p.title,
@@ -236,7 +253,14 @@ export function mergeTaskProposalTargets(
   if (contextProductQuery && contextProductQuery.kind === "product") {
     return {
       ...proposal,
-      targets: { ...proposal.targets, query: contextProductQuery },
+      targets: { ...proposal.targets, items: [], query: contextProductQuery },
+    };
+  }
+  // 用户主动改选后清空了上下文：露出「选择商品」空态，而不是继续显示旧 proposal
+  if (preferContext) {
+    return {
+      ...proposal,
+      targets: { ...proposal.targets, items: [], query: undefined },
     };
   }
   return proposal;
@@ -358,7 +382,7 @@ export function buildBatchPictureTranslateProposal(args: {
     proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
     skillId: BATCH_PICTURE_TRANSLATE_SKILL_ID,
     title: "批量翻译商品图片",
-    summary: "为每个勾选商品的主图创建一个图片翻译任务，完成后可在任务列表逐个审核应用。",
+    summary: "为勾选商品中选中的图片创建翻译任务，完成后可在任务列表逐个审核应用。",
     targets: {
       kind: "products",
       items: args.products.map((p) => ({

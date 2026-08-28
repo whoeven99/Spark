@@ -4,6 +4,8 @@ import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessag
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { trackFeature } from "../../../lib/featureTrack";
 import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
+import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
+import { coerceHealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import {
   coerceImageGenerationFormPayload,
   type ImageGenerationFormPayload,
@@ -67,6 +69,8 @@ type StreamChunk =
         finalReply?: string;
         uiPayloads?: {
           productImproveCardPayload?: unknown;
+          productQualityCard?: unknown;
+          healthDiagnosisCard?: unknown;
           pictureTranslateCard?: unknown;
           imageGenerationCard?: unknown;
           batchTasksCard?: unknown;
@@ -89,6 +93,10 @@ export type ChatStreamFinishPayload = {
   productImproveCardPayload?: unknown;
   imageGenerationCard?: boolean;
   imageGenerationCardPayload?: ImageGenerationFormPayload;
+  productQualityCard?: boolean;
+  productQualityCardPayload?: unknown;
+  healthDiagnosisCard?: boolean;
+  healthDiagnosisCardPayload?: unknown;
   taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
@@ -103,6 +111,10 @@ type Snapshot = {
   productImproveCardPayload?: unknown;
   imageGenerationCard: boolean;
   imageGenerationCardPayload?: ImageGenerationFormPayload;
+  productQualityCard: boolean;
+  productQualityCardPayload?: unknown;
+  healthDiagnosisCard: boolean;
+  healthDiagnosisCardPayload?: unknown;
   taskProposal?: TaskProposalPayload;
 };
 
@@ -116,6 +128,10 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     productImproveCardPayload: snapshot.productImproveCardPayload,
     imageGenerationCard: snapshot.imageGenerationCard,
     imageGenerationCardPayload: snapshot.imageGenerationCardPayload,
+    productQualityCard: snapshot.productQualityCard,
+    productQualityCardPayload: snapshot.productQualityCardPayload,
+    healthDiagnosisCard: snapshot.healthDiagnosisCard,
+    healthDiagnosisCardPayload: snapshot.healthDiagnosisCardPayload,
     taskProposal: snapshot.taskProposal,
   };
 }
@@ -130,6 +146,11 @@ export function useChatStream() {
   const [streamingThinkingText, setStreamingThinkingText] = useState("");
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
+  const [streamingQualityCard, setStreamingQualityCard] = useState(false);
+  const [streamingQualityPayload, setStreamingQualityPayload] = useState<unknown>();
+  const [streamingHealthDiagnosisCard, setStreamingHealthDiagnosisCard] = useState(false);
+  const [streamingHealthDiagnosisPayload, setStreamingHealthDiagnosisPayload] =
+    useState<unknown>();
   const [streamingTaskProposal, setStreamingTaskProposal] =
     useState<TaskProposalPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
@@ -144,6 +165,10 @@ export function useChatStream() {
     productImproveCardPayload: undefined,
     imageGenerationCard: false,
     imageGenerationCardPayload: undefined,
+    productQualityCard: false,
+    productQualityCardPayload: undefined,
+    healthDiagnosisCard: false,
+    healthDiagnosisCardPayload: undefined,
     taskProposal: undefined,
   });
 
@@ -158,6 +183,10 @@ export function useChatStream() {
       productImproveCardPayload: undefined,
       imageGenerationCard: false,
       imageGenerationCardPayload: undefined,
+      productQualityCard: false,
+      productQualityCardPayload: undefined,
+      healthDiagnosisCard: false,
+      healthDiagnosisCardPayload: undefined,
       taskProposal: undefined,
     };
   };
@@ -167,6 +196,10 @@ export function useChatStream() {
     setStreamingThinkingText("");
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
+    setStreamingQualityCard(false);
+    setStreamingQualityPayload(undefined);
+    setStreamingHealthDiagnosisCard(false);
+    setStreamingHealthDiagnosisPayload(undefined);
     setStreamingTaskProposal(undefined);
     setSkillSteps([]);
   };
@@ -352,6 +385,18 @@ export function useChatStream() {
                   applyTaskProposal(
                     buildImageGenerationProposal(coerceImageGenerationFormPayload(chunk.args)),
                   );
+                } else if (chunk.name === "open_product_quality_form") {
+                  const qualityPayload = coerceProductQualityFormPayload(chunk.args);
+                  snapshotRef.current.productQualityCard = true;
+                  snapshotRef.current.productQualityCardPayload = qualityPayload;
+                  setStreamingQualityCard(true);
+                  setStreamingQualityPayload(qualityPayload);
+                } else if (chunk.name === "open_health_diagnosis_form") {
+                  const healthPayload = coerceHealthDiagnosisFormPayload(chunk.args);
+                  snapshotRef.current.healthDiagnosisCard = true;
+                  snapshotRef.current.healthDiagnosisCardPayload = healthPayload;
+                  setStreamingHealthDiagnosisCard(true);
+                  setStreamingHealthDiagnosisPayload(healthPayload);
                 } else if (chunk.name === "open_batch_tasks_form") {
                   // 旧服务端兼容：批量卡片 chunk 统一转为通用 TaskProposal
                   applyTaskProposal(
@@ -377,6 +422,21 @@ export function useChatStream() {
                   snapshotRef.current.productImproveCardPayload = parsed;
                   setStreamingGenerateCard(true);
                   setStreamingGeneratePayload(parsed);
+                } else if (chunk.name === "score_product_quality") {
+                  try {
+                    const parsed = JSON.parse(chunk.result) as unknown;
+                    const qualityPayload = coerceProductQualityFormPayload(parsed);
+                    snapshotRef.current.productQualityCard = true;
+                    snapshotRef.current.productQualityCardPayload = qualityPayload;
+                    setStreamingQualityCard(true);
+                    setStreamingQualityPayload(qualityPayload);
+                  } catch {
+                    snapshotRef.current.productQualityCard = true;
+                    snapshotRef.current.productQualityCardPayload =
+                      coerceProductQualityFormPayload({});
+                    setStreamingQualityCard(true);
+                    setStreamingQualityPayload(coerceProductQualityFormPayload({}));
+                  }
                 }
               } else if (chunk.type === "error") {
                 markFirstChunkSeen();
@@ -407,6 +467,20 @@ export function useChatStream() {
                 }
                 if (ui?.taskProposal && !snapshotRef.current.taskProposal) {
                   applyTaskProposal(coerceTaskProposalPayload(ui.taskProposal));
+                }
+                if (ui?.productQualityCard && !snapshotRef.current.productQualityCard) {
+                  const qualityPayload = coerceProductQualityFormPayload(ui.productQualityCard);
+                  snapshotRef.current.productQualityCard = true;
+                  snapshotRef.current.productQualityCardPayload = qualityPayload;
+                  setStreamingQualityCard(true);
+                  setStreamingQualityPayload(qualityPayload);
+                }
+                if (ui?.healthDiagnosisCard && !snapshotRef.current.healthDiagnosisCard) {
+                  const healthPayload = coerceHealthDiagnosisFormPayload(ui.healthDiagnosisCard);
+                  snapshotRef.current.healthDiagnosisCard = true;
+                  snapshotRef.current.healthDiagnosisCardPayload = healthPayload;
+                  setStreamingHealthDiagnosisCard(true);
+                  setStreamingHealthDiagnosisPayload(healthPayload);
                 }
                 if (
                   ui?.productImproveCardPayload &&
@@ -525,6 +599,10 @@ export function useChatStream() {
     streamingText,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingQualityCard,
+    streamingQualityPayload,
+    streamingHealthDiagnosisCard,
+    streamingHealthDiagnosisPayload,
     streamingTaskProposal,
     skillSteps,
     streamingThinkingText,

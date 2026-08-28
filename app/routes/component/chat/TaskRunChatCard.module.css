@@ -1,0 +1,55 @@
+@keyframes spark-task-run-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+}
+
+@keyframes spark-task-run-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes spark-task-run-hint-breathe {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.pulseDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: spark-task-run-pulse 1.2s ease-in-out infinite;
+}
+
+.progressRunning {
+  background-image: linear-gradient(
+    90deg,
+    rgba(246, 246, 247, 1) 0%,
+    rgba(233, 247, 239, 0.95) 45%,
+    rgba(246, 246, 247, 1) 90%
+  );
+  background-size: 220% 100%;
+  animation: spark-task-run-shimmer 2.2s ease-in-out infinite;
+}
+
+.hintRunning {
+  animation: spark-task-run-hint-breathe 2.4s ease-in-out infinite;
+}

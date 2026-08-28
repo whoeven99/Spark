@@ -18,6 +18,7 @@ import {
 import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
 import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
 import { authenticate } from "../shopify.server";
+import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
@@ -65,7 +66,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .join(" ")
       .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
 
-  return { conversations, dashboardSnapshot, accountName };
+  return {
+    conversations,
+    dashboardSnapshot,
+    accountName,
+    conversationTimeZone: resolveConversationDisplayTimeZone(request.headers),
+  };
 };
 
 function ClientMount({ children }: { children: ReactNode }) {
@@ -92,6 +98,7 @@ export default function AssistantRoute() {
           defaultPanel="chat"
           homeVariant="v2"
           autoCreateConversation
+          conversationTimeZone={data?.conversationTimeZone}
         />
       </Suspense>
     </ClientMount>

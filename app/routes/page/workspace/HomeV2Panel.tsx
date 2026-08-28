@@ -1,6 +1,7 @@
 /** 上架前并行首页：问候 + 本页提问 + 文案/生图提示。不含经营、健康度、任务入口。 */
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
 import type { ContextTool } from "./types";
 import {
   panelStackStyle,
@@ -132,21 +133,38 @@ const homeV2Styles = {
       placeItems: "center",
       flexShrink: 0,
     }) as const,
-  quickPillRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  recommendGroups: {
+    display: "flex",
+    flexDirection: "column" as const,
     gap: 8,
+  },
+  recommendGroup: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 5,
+  },
+  recommendGroupLabel: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 700,
+    color: shopifyUi.textMuted,
+    letterSpacing: 0.2,
+  },
+  quickPillRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 6,
   },
   recommendations: {
     borderTop: `1px solid ${shopifyUi.border}`,
-    marginTop: 16,
-    paddingTop: 13,
+    marginTop: 14,
+    paddingTop: 11,
   },
   recommendationsHeader: {
     display: "flex",
     alignItems: "baseline",
     gap: 8,
-    marginBottom: 9,
+    marginBottom: 8,
   },
   recommendationsTitle: {
     margin: 0,
@@ -160,24 +178,28 @@ const homeV2Styles = {
   },
   quickPill: {
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 8,
+    borderRadius: 999,
     background: shopifyUi.surface,
     color: shopifyUi.textSecondary,
-    padding: "9px 11px",
-    fontSize: 13,
+    padding: "5px 10px",
+    fontSize: 12,
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left" as const,
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
+    gap: 6,
+    lineHeight: 1.25,
   },
-  quickPillArrow: {
+  quickPillBadge: {
+    padding: "0 5px",
+    borderRadius: 999,
+    background: shopifyUi.surfaceSubtle,
     color: shopifyUi.textMuted,
-    fontSize: 14,
-    lineHeight: 1,
+    fontSize: 10,
+    fontWeight: 700,
+    whiteSpace: "nowrap" as const,
   },
 };
 
@@ -200,25 +222,9 @@ export function HomeV2Panel({
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }, [initialRenderTimeIso]);
   const locale = i18n.resolvedLanguage || i18n.language || "en";
-  const quickPrompts = useMemo(
-    () => [
-      {
-        label: t("workspace.homeV2.quickPrompts.todayOperations.label"),
-        prompt: t("workspace.homeV2.quickPrompts.todayOperations.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.optimizeCopy.label"),
-        prompt: t("workspace.homeV2.quickPrompts.optimizeCopy.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.generateImage.label"),
-        prompt: t("workspace.homeV2.quickPrompts.generateImage.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.translateImage.label"),
-        prompt: t("workspace.homeV2.quickPrompts.translateImage.prompt"),
-      },
-    ],
+  // 首页无会话商品上下文，与输入区「店铺级」推荐同源（8 条、三组）
+  const recommendedGroups = useMemo(
+    () => buildWorkspaceRecommendedGroups(t, false),
     [t],
   );
   const contextChips = useMemo(
@@ -308,18 +314,29 @@ export function HomeV2Panel({
               {t("workspace.homeV2.recommendationsHint")}
             </span>
           </div>
-          <div style={homeV2Styles.quickPillRow}>
-            {quickPrompts.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className="workspace-home-quick-action"
-                style={homeV2Styles.quickPill}
-                onClick={() => onSubmitPrompt(item.prompt)}
-              >
-                <span>{item.label}</span>
-                <span style={homeV2Styles.quickPillArrow} aria-hidden="true">→</span>
-              </button>
+          <div style={homeV2Styles.recommendGroups}>
+            {recommendedGroups.map((group) => (
+              <div key={group.key} style={homeV2Styles.recommendGroup}>
+                <div style={homeV2Styles.recommendGroupLabel}>{group.label}</div>
+                <div style={homeV2Styles.quickPillRow}>
+                  {group.items.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className="workspace-home-quick-action"
+                      style={homeV2Styles.quickPill}
+                      onClick={() => onSubmitPrompt(item.prompt)}
+                    >
+                      <span>{item.label}</span>
+                      {item.createsTask ? (
+                        <span style={homeV2Styles.quickPillBadge}>
+                          {t("workspace.shell.chat.recommend.createsTask")}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>

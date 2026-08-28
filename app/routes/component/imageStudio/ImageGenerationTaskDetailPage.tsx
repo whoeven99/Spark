@@ -11,6 +11,8 @@ type Props = {
   task: AITaskItem;
   locationSearch: string;
   onBack: () => void;
+  /** 嵌入弹窗时隐藏「返回任务列表」 */
+  showBackButton?: boolean;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
   onTaskCreated?: (
     taskId: string,
@@ -88,6 +90,7 @@ export function ImageGenerationTaskDetailPage({
   task,
   locationSearch,
   onBack,
+  showBackButton = true,
   onTaskUpdated,
   onTaskCreated,
 }: Props) {
@@ -264,22 +267,24 @@ export function ImageGenerationTaskDetailPage({
                 marginBottom: 10,
               }}
             >
-              <button
-                type="button"
-                onClick={onBack}
-                style={{
-                  padding: "0.35rem 0.7rem",
-                  borderRadius: pageColorTokens.radiusControl,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  background: "#ffffff",
-                  color: pageColorTokens.textBody,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                {t("imageStudio.backToTaskList")}
-              </button>
+              {showBackButton ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{
+                    padding: "0.35rem 0.7rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                    background: "#ffffff",
+                    color: pageColorTokens.textBody,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t("imageStudio.backToTaskList")}
+                </button>
+              ) : null}
               <span
                 style={{
                   fontSize: 11,

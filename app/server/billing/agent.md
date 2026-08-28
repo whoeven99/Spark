@@ -17,6 +17,7 @@
 | `account/` | `ensureAccount`、`grantTrial` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog`（含超额单价 / 默认封顶） |
 | `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`；`recordBilled*` 之后会 `trackAndFlushOverage`；续费结算见 `tokenPools.server.ts`；含内余额见 `getAvailableTokens` / `hasTokenQuota` |
+| `../aiTask/concurrencyLimiter.server.ts` | 进程内信号量：全局文生图 / 图翻 + **按店** `SHOP_AI_TASK_CONCURRENCY`（默认 2）；异步任务经 `runQueuedShopAiTask` 排队，开跑前复核额度，不足则 fail 并停烧 |
 
 ## 环境变量
 

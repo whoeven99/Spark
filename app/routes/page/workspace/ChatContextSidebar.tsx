@@ -62,6 +62,58 @@ function countBuckets(tasks: AITaskItem[]): Record<TaskStatusBucket, number> {
 }
 
 const MAX_RUN_ROWS = 5;
+const MAX_TASK_THUMBS = 3;
+
+type RunProductThumb = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+};
+
+/** 从 run.targets / AITask config 提取商品缩略图（按商品去重） */
+function resolveRunProductThumbs(
+  run: ConversationTaskRunEntry,
+  runTasks: AITaskItem[],
+): RunProductThumb[] {
+  const out: RunProductThumb[] = [];
+  const seen = new Set<string>();
+
+  const push = (id: string, title: string, imageUrl: string | null) => {
+    const key = id.includes("::") ? id.slice(0, id.indexOf("::")) : id;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({ id: key, title, imageUrl });
+  };
+
+  for (const target of run.targets ?? []) {
+    push(target.id, target.title, target.imageUrl ?? null);
+    if (out.length >= MAX_TASK_THUMBS) return out;
+  }
+
+  for (const task of runTasks) {
+    const cfg = task.config as Record<string, unknown>;
+    const result = task.result as Record<string, unknown> | null | undefined;
+    const productId =
+      typeof cfg.productId === "string" && cfg.productId.trim()
+        ? cfg.productId.trim()
+        : task.id;
+    const title =
+      (typeof cfg.originalTitle === "string" && cfg.originalTitle.trim()) ||
+      (typeof cfg.title === "string" && cfg.title.trim()) ||
+      productId;
+    const imageUrl =
+      (typeof cfg.imageUrl === "string" && cfg.imageUrl.trim()) ||
+      (typeof result?.imageUrl === "string" && result.imageUrl.trim()) ||
+      null;
+    if (!imageUrl && !(typeof cfg.productId === "string" && cfg.productId.trim())) {
+      continue;
+    }
+    push(productId, title, imageUrl);
+    if (out.length >= MAX_TASK_THUMBS) break;
+  }
+
+  return out;
+}
 
 function ConversationTasksCard({
   taskRuns,
@@ -183,26 +235,45 @@ function ConversationTasksCard({
                 ...(Number.isNaN(new Date(run.startedAt).getTime()) ? [] : [timeLabel]),
                 ...(paramsLines.length > 0 ? [paramsLines[0]] : []),
               ];
+              const productThumbs = resolveRunProductThumbs(run, runTasks);
+              const uniqueProductCount = (() => {
+                if (run.targets && run.targets.length > 0) {
+                  return new Set(
+                    run.targets.map((target) =>
+                      target.id.includes("::")
+                        ? target.id.slice(0, target.id.indexOf("::"))
+                        : target.id,
+                    ),
+                  ).size;
+                }
+                return productThumbs.length;
+              })();
+              const extraProductCount = Math.max(0, uniqueProductCount - productThumbs.length);
               return (
                 <button
                   key={run.runId}
                   type="button"
                   onClick={() => {
-                    if (!needsReview) {
-                      onLocateRun(run.runId);
-                      return;
-                    }
-                    const firstPendingProduct = runTasks.find(
+                    // 文案优化 / 图片翻译 / 生图：优先待审核，否则打开详情弹窗查看结果
+                    const reviewableTasks = runTasks.filter(
                       (task) =>
-                        task.status === "pending_review" &&
-                        task.taskType === "product_improve",
+                        task.taskType === "product_improve" ||
+                        task.taskType === "picture_translate" ||
+                        task.taskType === "image_generation",
                     );
-                    if (firstPendingProduct) {
+                    const preferredTask =
+                      reviewableTasks.find((task) => task.status === "pending_review") ??
+                      reviewableTasks[0];
+                    if (preferredTask) {
                       onOpenTasks({
-                        taskType: "product_improve",
-                        taskId: firstPendingProduct.id,
+                        taskType: preferredTask.taskType,
+                        taskId: preferredTask.id,
                         intent: "review",
                       });
+                      return;
+                    }
+                    if (!needsReview) {
+                      onLocateRun(run.runId);
                       return;
                     }
                     onOpenTasks();
@@ -215,10 +286,75 @@ function ConversationTasksCard({
                     padding: "8px 10px",
                     cursor: "pointer",
                     display: "flex",
-                    flexDirection: "column",
-                    gap: 3,
+                    alignItems: "flex-start",
+                    gap: 8,
                   }}
                 >
+                  {productThumbs.length > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        flexShrink: 0,
+                        marginTop: 1,
+                      }}
+                      aria-hidden="true"
+                    >
+                      {productThumbs.map((thumb, index) =>
+                        thumb.imageUrl ? (
+                          <img
+                            key={thumb.id}
+                            src={thumb.imageUrl}
+                            alt=""
+                            title={thumb.title}
+                            style={{
+                              ...ctxThumbStyle,
+                              marginLeft: index === 0 ? 0 : -8,
+                              boxShadow: "0 0 0 1.5px #ffffff",
+                              position: "relative",
+                              zIndex: productThumbs.length - index,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            key={thumb.id}
+                            title={thumb.title}
+                            style={{
+                              ...ctxThumbPlaceholderStyle,
+                              marginLeft: index === 0 ? 0 : -8,
+                              boxShadow: "0 0 0 1.5px #ffffff",
+                              position: "relative",
+                              zIndex: productThumbs.length - index,
+                            }}
+                          >
+                            {t("workspace.shell.contextPicker.thumbProduct")}
+                          </div>
+                        ),
+                      )}
+                      {extraProductCount > 0 ? (
+                        <span
+                          style={{
+                            ...ctxThumbPlaceholderStyle,
+                            marginLeft: -8,
+                            fontSize: 10,
+                            zIndex: 0,
+                            boxShadow: "0 0 0 1.5px #ffffff",
+                          }}
+                        >
+                          +{extraProductCount}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 3,
+                    }}
+                  >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                     <span
                       style={{
@@ -274,6 +410,7 @@ function ConversationTasksCard({
                     {metaParts.join(" · ")}
                     {run.errorCount > 0 ? ` · ${run.errorCount}` : ""}
                   </span>
+                  </div>
                 </button>
               );
             })}
@@ -281,9 +418,6 @@ function ConversationTasksCard({
 
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
               borderTop: "1px solid #e1e3e5",
               marginTop: 12,
               paddingTop: 10,
@@ -295,21 +429,6 @@ function ConversationTasksCard({
                 tasks: totalTaskCount,
               })}
             </span>
-            <button
-              type="button"
-              onClick={() => onOpenTasks()}
-              style={{
-                fontSize: 12,
-                color: "rgba(44,110,203,0.9)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                fontWeight: 600,
-              }}
-            >
-              {t("workspace.shell.contextSidebar.viewAllTasks")}
-            </button>
           </div>
         </>
       )}
