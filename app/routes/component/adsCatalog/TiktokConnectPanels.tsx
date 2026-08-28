@@ -5,7 +5,8 @@ import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
 import { TiktokCatalogRegionSelect } from "./TiktokCatalogRegionSelect";
 import { TiktokCreateCatalogForm } from "./TiktokCreateCatalogForm";
-import { TiktokPixelConfigPanel } from "./TiktokPixelConfigPanel";
+// 审核期临时关闭 5.1.5：隐藏 TikTok Pixel 配置。过审后恢复。
+// import { TiktokPixelConfigPanel } from "./TiktokPixelConfigPanel";
 import { isTiktokCatalogAutoCreateRegion } from "../../../lib/tiktokCatalogRegions";
 import type { CredentialsView } from "./types";
 
@@ -51,32 +52,16 @@ const secondaryBtn = {
   cursor: "pointer",
 };
 
-function resolveTiktokPixelBindError(
-  data: { error?: string; errorCode?: string },
-  t: (key: string) => string,
-): string {
-  if (data.errorCode === "PIXEL_ASSET_PERMISSION_DENIED") {
-    return t("adsCatalog.tiktokPixelBindErrorAssetPermission");
-  }
-  if (data.errorCode === "EVENT_SOURCE_NOT_AVAILABLE_FOR_ADV") {
-    return t("adsCatalog.tiktokPixelBindErrorNotAvailableForAdv");
-  }
-  return data.error ?? t("adsCatalog.authError");
-}
-
 export function TiktokConnectPanels({
   credentials,
   inferredTiktokRegion,
   locationSearch,
   languageCode,
   shopDomain,
-  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [pixelBindSuccess, setPixelBindSuccess] = useState(false);
-  const [pixelBindError, setPixelBindError] = useState<string | null>(null);
   const tiktokOAuth = useOAuthPopup("tiktok_catalog_oauth");
 
   const tiktok = credentials.tiktok;
@@ -137,33 +122,6 @@ export function TiktokConnectPanels({
     }
   }
 
-  async function rebindPixelEventSource() {
-    setBusy(true);
-    setPixelBindSuccess(false);
-    setPixelBindError(null);
-    try {
-      const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        errorCode?: string;
-      };
-      if (!resp.ok || !data.ok) {
-        setPixelBindError(resolveTiktokPixelBindError(data, t));
-        return;
-      }
-      setPixelBindSuccess(true);
-    } catch (e) {
-      setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const fmtDate = (iso: string | null) =>
     iso
       ? new Intl.DateTimeFormat(languageCode, {
@@ -207,45 +165,7 @@ export function TiktokConnectPanels({
                 {t("adsCatalog.tiktokModeApi")}
               </div>
             )}
-            {tiktok.bindingMode === "api_managed" && (
-              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-                <TiktokPixelConfigPanel
-                  locationSearch={locationSearch}
-                  shopDomain={shopDomain}
-                  shopifyApiKey={shopifyApiKey}
-                  pixelCode={tiktok.pixelCode}
-                  advertiserId={tiktok.advertiserId}
-                  hasEventsApiAccessToken={tiktok.hasEventsApiAccessToken}
-                  testEventCode={tiktok.testEventCode}
-                  eventsApiEnabled={tiktok.eventsApiEnabled}
-                  enabledEvents={tiktok.enabledEvents}
-                  busy={busy}
-                  setBusy={setBusy}
-                  onChanged={onChanged}
-                  onBindError={setPixelBindError}
-                />
-                {pixelBindError && (
-                  <span style={{ color: "#d72c0d", fontSize: 12 }}>{pixelBindError}</span>
-                )}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  {tiktok.pixelCode ? (
-                    <button
-                      type="button"
-                      style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 12 }}
-                      disabled={busy}
-                      onClick={() => void rebindPixelEventSource()}
-                    >
-                      {busy ? t("adsCatalog.tiktokRebindPixelBusy") : t("adsCatalog.tiktokRebindPixel")}
-                    </button>
-                  ) : null}
-                  {pixelBindSuccess && (
-                    <span style={{ color: "#0f7a52", fontSize: 12 }}>
-                      {t("adsCatalog.tiktokRebindPixelSuccess")}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* 审核期临时关闭 5.1.5：隐藏 TikTok Pixel 配置与 bind。过审后恢复。 */}
             {modeHint && <p style={pageHintTextStyle}>{modeHint}</p>}
             <div style={pageHintTextStyle}>
               {t("adsCatalog.tiktokUpdatedAt", { time: fmtDate(tiktok.updatedAt) })}

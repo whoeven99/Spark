@@ -216,7 +216,7 @@ app/server/ai/playbooks/{name}/
 代码侧 ⚠️（提交前用人测 / 配置核对）：
 
 - [ ] **1.2.2 / 1.2.3** 换套餐：`appSubscriptionCreate` 未设 `replacementBehavior`；账户页其它档仍可点订阅。确认 Render 上 `BILLING_GATEWAY` 不是 `noop`，正式店关闭 `BILLING_TEST`。测：升/降配、拒费、重装后再订。
-- [ ] **5.1.5** Theme/Pixel 采集：Today / Google Pixel activity 有汇总；TikTok 主要链到 Events Manager。准备审核说明：商户能在何处看到店面事件。Google purchase 走 Customer Events 粘贴脚本（非改 theme.liquid），审核员可能追问。
+- [x] **5.1.5** 审核期暂停（不提交采集能力）：已从版本中排除 Web Pixel 扩展与 Theme Pixel App Embed，并注释 pixel scope / `ensureWebPixel` / Ads Catalog Pixel 入口。过审后恢复：还原 toml 的 `write_pixels,read_customer_events,read_pixels`；`shopify.extension.toml.off` → `shopify.extension.toml`；把 `_disabled_pixel_blocks/*.liquid` 移回 `blocks/`；恢复 `app.tsx` 调用与 ConnectPanels 入口；再对该配置 `shopify app deploy`。
 - [ ] **5.1.1** 只读 Theme Files（`settings_data.json`）用于检测 App Embed；若审核员按 Theme API 追问，说明是检测而非改主题。
 - [ ] **3.1.1** 证书：`application_url` 已是 HTTPS Render，提交前在浏览器确认无证书告警。
 

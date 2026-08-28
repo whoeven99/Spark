@@ -23,7 +23,8 @@ import {
 import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
-import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+// 审核期临时关闭 5.1.5：不自动创建/更新 Web Pixel。过审后恢复 import 与下面的 ensureWebPixel 调用。
+// import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
 import { ensureInstallOrderBackfill } from "../server/shopify/sync/ensureInstallOrderBackfill.server";
 import {
   syncSessionShopProfile,
@@ -110,8 +111,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.warn("[SessionSync] syncSessionShopProfile failed:", error);
   });
 
-  // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
-  void ensureWebPixel(admin, session.shop);
+  // 审核期临时关闭 5.1.5：不调用 webPixelCreate / webPixelUpdate。
+  // void ensureWebPixel(admin, session.shop);
 
   const locale = await resolveUiLocale(request, {
     admin,

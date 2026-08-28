@@ -1,5 +1,8 @@
 # Shopify Web Pixel Extension: ciwi-spark-web-pixel
 #
+# 审核期临时关闭 5.1.5：文件名改为 .off，CLI 不会打包本扩展。
+# 过审后改回 shopify.extension.toml 再 deploy。
+#
 # UID will be filled by `shopify app deploy` on first deploy. If you need a
 # stable UID locally, run `shopify app generate extension` and copy the value.
 
