@@ -26,6 +26,7 @@ import {
   fileRoleDescriptions,
   fileRoleLabels,
   objectTypeLabels,
+  WORKSPACE_HISTORY_UPLOAD_NOTE,
   type FileRole,
   type LocalFileItem,
   type WorkspaceConversationMessage,
@@ -271,7 +272,8 @@ export function buildWorkspaceContextBlock(params: {
       if (filesInRole.length === 0) continue;
       lines.push(`  ◦ ${fileRoleLabels[role]}（${fileRoleDescriptions[role]}）：`);
       for (const file of filesInRole) {
-        const notePart = file.note ? `（${file.note}）` : "";
+        const displayNote = file.note === WORKSPACE_HISTORY_UPLOAD_NOTE ? "历史上传" : file.note;
+        const notePart = displayNote ? `（${displayNote}）` : "";
         const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
         lines.push(`    • ${file.name}${notePart}${sizePart}`);
       }

@@ -1,10 +1,14 @@
 /** 对话右侧"当前上下文 + 本会话任务"侧栏（从 WorkspaceAppShellPage 的 ChatPanel 拆出，仅桌面端展示）。 */
 import { useTranslation } from "react-i18next";
-import { describeObjectQuery, objectQueryKindLabel } from "../../../lib/objectQuerySpec";
+import { describeObjectQueryI18n } from "../../../lib/objectQuerySpec";
+import {
+  resolveTaskRunParamsSummaryLines,
+  resolveTaskRunTitle,
+} from "../../../lib/taskProposalDisplay";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import {
-  fileRoleLabels,
+  WORKSPACE_HISTORY_UPLOAD_NOTE,
   type ConversationTaskRunEntry,
   type QueryableObjectType,
 } from "./types";
@@ -147,13 +151,29 @@ function ConversationTasksCard({
                 runCounts.pendingReview === 0;
               const doneCount = runCounts.succeeded + runCounts.failed + runCounts.pendingReview;
               const timeLabel = formatTimeLabel(new Date(run.startedAt));
+              const displayTitle =
+                run.skillId != null
+                  ? resolveTaskRunTitle({ skillId: run.skillId, title: run.title }, t)
+                  : run.title;
+              const paramsLines =
+                run.skillId != null
+                  ? resolveTaskRunParamsSummaryLines(
+                      {
+                        skillId: run.skillId,
+                        title: run.title,
+                        paramsSummary: run.paramsSummary,
+                        params: run.params,
+                      },
+                      t,
+                    )
+                  : run.paramsSummary;
               const metaParts = [
                 t("workspace.shell.contextSidebar.tasksSummary", {
                   runs: 1,
                   tasks: run.taskIds.length,
                 }),
                 ...(Number.isNaN(new Date(run.startedAt).getTime()) ? [] : [timeLabel]),
-                ...(run.paramsSummary.length > 0 ? [run.paramsSummary[0]] : []),
+                ...(paramsLines.length > 0 ? [paramsLines[0]] : []),
               ];
               return (
                 <button
@@ -202,7 +222,7 @@ function ConversationTasksCard({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {run.title}
+                      {displayTitle}
                     </span>
                     {needsReview ? (
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#9a5b00", flexShrink: 0 }}>
@@ -337,14 +357,17 @@ export function ChatContextSidebar({
             <div key={type} style={ctxGroupStyle}>
               <div style={ctxGroupLabelStyle}>
                 {t("workspace.shell.contextSidebar.queryTagged", {
-                  kind: objectQueryKindLabel(type),
+                  kind:
+                    type === "product"
+                      ? t("workspace.shell.chat.toolProduct")
+                      : t("workspace.shell.chat.toolArticle"),
                 })}
                 {query.matchCount != null
                   ? t("workspace.shell.contextSidebar.queryApprox", { count: query.matchCount })
                   : ""}
               </div>
               <div style={{ fontSize: 12, color: "#202223", lineHeight: 1.5 }}>
-                {describeObjectQuery(query)}
+                {describeObjectQueryI18n(query, t)}
               </div>
               <div style={{ fontSize: 11, color: "#8c9196", marginTop: 2 }}>
                 {t("workspace.shell.contextSidebar.queryHint")}
@@ -366,7 +389,7 @@ export function ChatContextSidebar({
                 {item.imageUrl ? (
                   <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
                 ) : (
-                  <div style={ctxThumbPlaceholderStyle}>品</div>
+                  <div style={ctxThumbPlaceholderStyle}>{t("workspace.shell.contextPicker.thumbProduct")}</div>
                 )}
                 <span style={ctxItemTitleStyle}>{item.title}</span>
               </div>
@@ -387,7 +410,7 @@ export function ChatContextSidebar({
                 {item.imageUrl ? (
                   <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
                 ) : (
-                  <div style={ctxThumbPlaceholderStyle}>文</div>
+                  <div style={ctxThumbPlaceholderStyle}>{t("workspace.shell.contextPicker.thumbArticle")}</div>
                 )}
                 <span style={ctxItemTitleStyle}>{item.title}</span>
               </div>
@@ -410,8 +433,14 @@ export function ChatContextSidebar({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={ctxItemTitleStyle}>{file.name}</div>
                     <div style={{ fontSize: 11, color: "#8c9196", marginTop: 1 }}>
-                      {fileRoleLabels[fileRolesById[id] ?? "reference"]}
-                      {file.note ? ` · ${file.note}` : ""}
+                      {t(`workspace.shell.contextPicker.fileRole.${fileRolesById[id] ?? "reference"}`)}
+                      {file.note
+                        ? ` · ${
+                            file.note === WORKSPACE_HISTORY_UPLOAD_NOTE
+                              ? t("workspace.shell.contextPicker.historyUpload")
+                              : file.note
+                          }`
+                        : ""}
                     </div>
                   </div>
                   {file.uploading ? (

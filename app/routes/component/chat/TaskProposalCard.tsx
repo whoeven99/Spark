@@ -6,6 +6,7 @@
  * 执行走 POST /api/task-proposal，按 skillId 路由到服务端注册表。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   TaskProposalExecuteResponse,
   TaskProposalEstimateResponse,
@@ -14,9 +15,19 @@ import type {
 } from "../../../lib/taskProposalPayload";
 import { mergeTaskProposalTargets } from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
-import { describeObjectQuery } from "../../../lib/objectQuerySpec";
+import { describeObjectQueryI18n } from "../../../lib/objectQuerySpec";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { buildTaskRunPayload, type TaskRunPayload } from "../../../lib/taskRunPayload";
+import {
+  buildTaskRunParamsSummary,
+  resolveTaskProposalDisabledReason,
+  resolveTaskProposalFieldLabel,
+  resolveTaskProposalParamValueLabel,
+  resolveTaskProposalSummary,
+  resolveTaskProposalTargetKind,
+  resolveTaskProposalTitle,
+} from "../../../lib/taskProposalDisplay";
+import { formatThinkingDuration } from "../../../lib/thinkingDuration";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 // ─── Styles（与 BatchTasksChatCard 视觉对齐） ────────────────────────────────
@@ -148,6 +159,7 @@ function DoneState({
   total: number;
   errors: Array<{ index: number; targetId: string; error: string }>;
 }) {
+  const { t } = useTranslation();
   return (
     <div style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div
@@ -161,11 +173,13 @@ function DoneState({
           fontWeight: 700,
         }}
       >
-        {created > 0 ? `✓ 已成功创建 ${created}/${total} 个任务` : "任务创建失败"}
+        {created > 0
+          ? t("workspace.taskProposal.card.doneSuccess", { created, total })
+          : t("workspace.taskProposal.card.doneFailed")}
       </div>
       {created > 0 ? (
         <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-          可在「任务列表」面板查看执行进度与结果。
+          {t("workspace.taskProposal.card.doneHint")}
         </div>
       ) : null}
       {errors.length > 0 && (
@@ -187,7 +201,7 @@ function DoneState({
           ))}
           {errors.length > 3 && (
             <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-              还有 {errors.length - 3} 个失败
+              {t("workspace.taskProposal.card.doneMoreErrors", { count: errors.length - 3 })}
             </div>
           )}
         </div>
@@ -197,13 +211,6 @@ function DoneState({
 }
 
 // ─── Estimate line ────────────────────────────────────────────────────────────
-
-function formatDuration(totalSeconds: number): string {
-  if (totalSeconds < 60) return `${totalSeconds} 秒`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return seconds > 0 ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分钟`;
-}
 
 function EstimateLine({
   loading,
@@ -216,27 +223,36 @@ function EstimateLine({
   perItemSeconds: number | null;
   count: number;
 }) {
+  const { t } = useTranslation();
   if (loading) {
-    return <div style={estimateBoxStyle}>⏱ 正在估算执行成本…</div>;
+    return (
+      <div style={estimateBoxStyle}>⏱ {t("workspace.taskProposal.card.estimateLoading")}</div>
+    );
   }
   if (perItemCredits == null && perItemSeconds == null) {
     return (
-      <div style={estimateBoxStyle}>
-        ⏱ 暂无历史执行数据；完成首批任务后预估会自动校准。
-      </div>
+      <div style={estimateBoxStyle}>⏱ {t("workspace.taskProposal.card.estimateEmpty")}</div>
     );
   }
   const parts: string[] = [];
   if (perItemCredits != null && count > 0) {
-    parts.push(`预计消耗 ~${perItemCredits * count} 积分`);
+    parts.push(
+      t("workspace.taskProposal.card.estimateCredits", { credits: perItemCredits * count }),
+    );
   }
   if (perItemSeconds != null && count > 0) {
-    parts.push(`单项约 ${formatDuration(perItemSeconds)}`);
+    parts.push(
+      t("workspace.taskProposal.card.estimateDuration", {
+        duration: formatThinkingDuration(perItemSeconds * 1000, t),
+      }),
+    );
   }
   return (
     <div style={estimateBoxStyle}>
       <span>⏱ {parts.join(" · ")}</span>
-      <span style={{ color: pageColorTokens.textFootnote }}>（基于历史执行自动校准）</span>
+      <span style={{ color: pageColorTokens.textFootnote }}>
+        {t("workspace.taskProposal.card.estimateCalibrated")}
+      </span>
     </div>
   );
 }
@@ -263,6 +279,7 @@ export function TaskProposalCard({
   onTasksCreated,
   onExecuted,
 }: Props) {
+  const { t } = useTranslation();
   const resolved = useMemo(
     () => mergeTaskProposalTargets(proposal, contextProducts, contextProductQuery),
     [proposal, contextProducts, contextProductQuery],
@@ -335,6 +352,9 @@ export function TaskProposalCard({
     (targetless || selectedTargets.length > 0 || targetsQuery !== null) && !submitting && !done;
   /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标技能恒为 1 */
   const effectiveCount = targetless ? 1 : targetsQuery ? (queryCount ?? 0) : selectedTargets.length;
+  const displayTitle = resolveTaskProposalTitle(resolved, t);
+  const displaySummary = resolveTaskProposalSummary(resolved, t);
+  const targetKindLabel = resolveTaskProposalTargetKind(resolved.targets.kind, t);
 
   const toggleTarget = (target: TaskProposalTarget) => {
     if (target.disabledReason) return;
@@ -387,13 +407,20 @@ export function TaskProposalCard({
           onExecuted?.(
             buildTaskRunPayload({
               skillId: resolved.skillId,
-              title: resolved.title,
+              title: displayTitle,
               taskIds: json.taskIds,
               errors: json.errors.map((e) => ({ targetId: e.targetId, error: e.error })),
-              paramsSummary: resolved.params.map((field) => {
-                const value = paramValues[field.key] ?? field.value;
-                const optionLabel = field.options?.find((o) => o.value === value)?.label;
-                return `${field.label}：${optionLabel ?? value}`;
+              params: Object.fromEntries(
+                resolved.params.map((field) => [
+                  field.key,
+                  paramValues[field.key] ?? field.value,
+                ]),
+              ),
+              paramsSummary: buildTaskRunParamsSummary({
+                skillId: resolved.skillId,
+                params: resolved.params,
+                paramValues,
+                t,
               }),
             }),
           );
@@ -405,22 +432,34 @@ export function TaskProposalCard({
     } catch (e) {
       setDoneCreated(0);
       setDoneErrors([
-        { index: 0, targetId: "", error: e instanceof Error ? e.message : "网络错误" },
+        { index: 0, targetId: "", error: e instanceof Error ? e.message : t("workspace.shell.contextPicker.networkError") },
       ]);
     } finally {
       setSubmitting(false);
       setDone(true);
     }
-  }, [canSubmit, resolved, paramValues, selectedTargets, targetsQuery, onTasksCreated, onExecuted]);
+  }, [canSubmit, resolved, paramValues, selectedTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
 
-  const targetKindLabel =
-    resolved.targets.kind === "products"
-      ? "商品"
-      : resolved.targets.kind === "articles"
-        ? "文章"
-        : resolved.targets.kind === "orders"
-          ? "订单"
-          : "对象";
+  const headerSubtitle = done
+    ? t("workspace.taskProposal.card.submitted")
+    : targetless
+      ? t("workspace.taskProposal.card.confirmParamsToRun")
+      : targets.length > 0
+        ? t("workspace.taskProposal.card.targetsSelected", {
+            count: targets.length,
+            kind: targetKindLabel,
+          })
+        : targetsQuery
+          ? t("workspace.taskProposal.card.queryTargets", {
+              approx:
+                queryCount != null
+                  ? t("workspace.taskProposal.card.queryApprox", {
+                      count: queryCount,
+                      kind: targetKindLabel,
+                    })
+                  : "",
+            })
+          : t("workspace.taskProposal.card.waitingForTargets");
 
   return (
     <div style={{ ...cardStyle, maxWidth: embedded ? 480 : 560 }}>
@@ -436,18 +475,10 @@ export function TaskProposalCard({
             color: "#fff",
           }}
         >
-          {resolved.title}
+          {displayTitle}
         </span>
         <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, flex: 1 }}>
-          {done
-            ? "已提交"
-            : targetless
-              ? "确认参数后开始执行"
-              : targets.length > 0
-                ? `${targets.length} 个${targetKindLabel} · 确认后批量创建`
-                : targetsQuery
-                  ? `按条件圈定${queryCount != null ? ` · 约 ${queryCount} 个${targetKindLabel}` : ""} · 执行时重新求值`
-                  : "等待补充操作对象"}
+          {headerSubtitle}
         </span>
       </div>
 
@@ -464,9 +495,9 @@ export function TaskProposalCard({
       ) : (
         <>
           <div style={bodyStyle as React.CSSProperties}>
-            {resolved.summary ? (
+            {displaySummary ? (
               <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-                {resolved.summary}
+                {displaySummary}
               </div>
             ) : null}
 
@@ -474,7 +505,11 @@ export function TaskProposalCard({
             {targets.length > 0 ? (
               <div>
                 <div style={fieldLabelStyle}>
-                  已选{targetKindLabel}（{checkedIds.size} / {targets.length}）
+                  {t("workspace.taskProposal.card.selectedTargets", {
+                    kind: targetKindLabel,
+                    checked: checkedIds.size,
+                    total: targets.length,
+                  })}
                 </div>
                 <div style={targetListStyle as React.CSSProperties}>
                   {targets.map((target) => {
@@ -522,7 +557,7 @@ export function TaskProposalCard({
                               flexShrink: 0,
                             }}
                           >
-                            {target.disabledReason}
+                            {resolveTaskProposalDisabledReason(target.disabledReason, t)}
                           </span>
                         ) : null}
                       </label>
@@ -545,11 +580,17 @@ export function TaskProposalCard({
                 }}
               >
                 <span style={{ fontWeight: 700 }}>
-                  按条件圈定：{describeObjectQuery(targetsQuery)}
+                  {t("workspace.taskProposal.card.queryByCriteria", {
+                    description: describeObjectQueryI18n(targetsQuery, t),
+                  })}
                 </span>
                 <span style={{ color: pageColorTokens.textFootnote }}>
-                  {queryCount != null ? `圈定时匹配约 ${queryCount} 个；` : ""}
-                  执行时将按条件重新求值（适合保存为自动化后定期执行）
+                  {t("workspace.taskProposal.card.queryHint", {
+                    approx:
+                      queryCount != null
+                        ? t("workspace.taskProposal.card.queryApproxCount", { count: queryCount })
+                        : "",
+                  })}
                 </span>
               </div>
             ) : (
@@ -563,14 +604,14 @@ export function TaskProposalCard({
                   padding: "7px 10px",
                 }}
               >
-                ⚠️ 未找到操作对象，请先在工作台下方工具栏选择{targetKindLabel}后重新发送。
+                ⚠️ {t("workspace.taskProposal.card.missingTargets", { kind: targetKindLabel })}
               </div>
             )}
 
             {/* Params（schema 驱动） */}
             {resolved.params.map((field) => (
               <div key={field.key}>
-                <div style={fieldLabelStyle}>{field.label}</div>
+                <div style={fieldLabelStyle}>{resolveTaskProposalFieldLabel(field, t)}</div>
                 {field.type === "select" ? (
                   <select
                     style={inputStyle}
@@ -581,7 +622,7 @@ export function TaskProposalCard({
                   >
                     {(field.options ?? []).map((opt) => (
                       <option key={opt.value} value={opt.value}>
-                        {opt.label}
+                        {resolveTaskProposalParamValueLabel(field.key, opt.value, t)}
                       </option>
                     ))}
                   </select>
@@ -618,12 +659,21 @@ export function TaskProposalCard({
               }}
             >
               {targetless
-                ? "将创建 1 个任务"
+                ? t("workspace.taskProposal.card.footerCreateOne")
                 : targetsQuery
-                  ? `将按条件创建任务${queryCount != null ? `（约 ${queryCount} 个）` : ""}`
+                  ? t("workspace.taskProposal.card.footerCreateQuery", {
+                      approx:
+                        queryCount != null
+                          ? t("workspace.taskProposal.card.footerCreateQueryApprox", {
+                              count: queryCount,
+                            })
+                          : "",
+                    })
                   : selectedTargets.length === 0
-                    ? "请至少勾选 1 个对象"
-                    : `将创建 ${selectedTargets.length} 个任务`}
+                    ? t("workspace.taskProposal.card.footerSelectOne")
+                    : t("workspace.taskProposal.card.footerCreateCount", {
+                        count: selectedTargets.length,
+                      })}
             </span>
             <button
               type="button"
@@ -632,12 +682,14 @@ export function TaskProposalCard({
               onClick={() => void handleConfirm()}
             >
               {submitting
-                ? "创建中…"
+                ? t("workspace.taskProposal.card.confirmSubmitting")
                 : targetless
-                  ? "确认开始执行"
+                  ? t("workspace.taskProposal.card.confirmStart")
                   : targetsQuery
-                    ? "按条件确认创建"
-                    : `确认创建 ${selectedTargets.length} 个任务`}
+                    ? t("workspace.taskProposal.card.confirmQuery")
+                    : t("workspace.taskProposal.card.confirmCreateCount", {
+                        count: selectedTargets.length,
+                      })}
             </button>
           </div>
         </>

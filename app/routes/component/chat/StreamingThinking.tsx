@@ -1,21 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { formatThinkingDuration, THINKING_I18N_PREFIX } from "../../../lib/thinkingDuration";
 import styles from "./StreamingThinking.module.css";
 
-/** 思考耗时格式化：优先秒，超过 60s 用分秒 */
-function formatThinkingDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  if (totalSeconds < 60) return `${totalSeconds} 秒`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes} 分 ${seconds} 秒`;
-}
-
 /** 等待首个响应时的轻量指示器（无思考正文、无答案时显示） */
-export function ThinkingIndicator({ label = "正在思考" }: { label?: string }) {
+export function ThinkingIndicator({ label }: { label?: string }) {
+  const { t } = useTranslation();
   return (
     <div className={styles.indicator}>
       <span className={styles.pulseDot} />
-      <span className={styles.shimmerLabel}>{label}</span>
+      <span className={styles.shimmerLabel}>{label ?? t(`${THINKING_I18N_PREFIX}.idle`)}</span>
     </div>
   );
 }
@@ -41,6 +35,7 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 /** 历史消息中的思考回看：默认折叠，点击展开查看完整思考过程，无计时。 */
 export function ThinkingReview({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   if (!text.trim()) return null;
   return (
@@ -52,7 +47,7 @@ export function ThinkingReview({ text }: { text: string }) {
         aria-expanded={open}
       >
         <span className={styles.checkDot} />
-        <span className={styles.staticLabel}>已深度思考</span>
+        <span className={styles.staticLabel}>{t(`${THINKING_I18N_PREFIX}.done`)}</span>
         <ChevronIcon open={open} />
       </button>
       {open ? (
@@ -67,7 +62,7 @@ export function ThinkingReview({ text }: { text: string }) {
 /**
  * Claude 风格思考面板。
  * - 思考进行中：展开显示流光标题 + 实时计时 + 正文自动滚动到底部。
- * - 答案开始生成或思考结束：自动折叠为「已深度思考 · 用时 N」，可点击展开回看。
+ * - 答案开始生成或思考结束：自动折叠为完成态 + 耗时，可点击展开回看。
  */
 export function ThinkingPanel({
   isStreaming,
@@ -78,6 +73,7 @@ export function ThinkingPanel({
   text: string;
   answerStarted: boolean;
 }) {
+  const { t } = useTranslation();
   const startRef = useRef<number>(Date.now());
   const frozenRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -112,6 +108,7 @@ export function ThinkingPanel({
 
   // 默认展开规则：思考中展开，结束后折叠；用户手动操作后以用户选择为准
   const open = userToggled ?? thinkingActive;
+  const duration = formatThinkingDuration(elapsedMs, t);
 
   return (
     <div className={styles.panel}>
@@ -124,16 +121,16 @@ export function ThinkingPanel({
         {thinkingActive ? (
           <>
             <span className={styles.pulseDot} />
-            <span className={styles.shimmerLabel}>正在深度思考</span>
+            <span className={styles.shimmerLabel}>{t(`${THINKING_I18N_PREFIX}.active`)}</span>
           </>
         ) : (
           <>
             <span className={styles.checkDot} />
-            <span className={styles.staticLabel}>已深度思考</span>
+            <span className={styles.staticLabel}>{t(`${THINKING_I18N_PREFIX}.done`)}</span>
           </>
         )}
         <span className={styles.timer}>
-          {thinkingActive ? formatThinkingDuration(elapsedMs) : `用时 ${formatThinkingDuration(elapsedMs)}`}
+          {thinkingActive ? duration : t(`${THINKING_I18N_PREFIX}.elapsed`, { duration })}
         </span>
         <ChevronIcon open={open} />
       </button>

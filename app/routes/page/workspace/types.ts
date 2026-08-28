@@ -20,6 +20,9 @@ export type QueryableObjectType = "product" | "article";
 /** 文件在上下文中的角色：决定 AI 如何使用该文件内容 */
 export type FileRole = "reference" | "data" | "style";
 
+/** 历史上传文件的 note 哨兵，展示时再走 i18n */
+export const WORKSPACE_HISTORY_UPLOAD_NOTE = "__history_upload__";
+
 export const fileRoleLabels: Record<FileRole, string> = {
   reference: "参考文档",
   data: "数据源",
@@ -50,10 +53,12 @@ export type WorkspaceConversationMessage = {
 /** 侧栏「本会话任务」的批次条目（从消息流的 taskRun / 历史 aiTask 派生） */
 export type ConversationTaskRunEntry = {
   runId: string;
+  skillId?: string;
   title: string;
   taskIds: string[];
   errorCount: number;
   paramsSummary: string[];
+  params?: Record<string, string>;
   startedAt: string;
 };
 

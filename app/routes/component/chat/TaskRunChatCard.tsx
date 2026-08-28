@@ -10,6 +10,10 @@ import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { BATCH_PRODUCT_IMPROVE_SKILL_ID } from "../../../lib/taskProposalPayload";
+import {
+  resolveTaskRunParamsSummaryLines,
+  resolveTaskRunTitle,
+} from "../../../lib/taskProposalDisplay";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import { useTranslation } from "react-i18next";
 
@@ -138,12 +142,22 @@ export function TaskRunChatCard({
     matchedTasks.every(
       (task) => task.taskType === "picture_translate" || task.taskType === "image_generation",
     );
+  const displayTitle = resolveTaskRunTitle(run, t);
+  const paramsLines = resolveTaskRunParamsSummaryLines(run, t);
   const progressParts: string[] = [];
   if (agg.known > 0) {
-    if (agg.running > 0) progressParts.push(`进行中 ${agg.running}`);
-    if (agg.pendingReview > 0) progressParts.push(`待审核 ${agg.pendingReview}`);
-    if (agg.succeeded > 0) progressParts.push(`已完成 ${agg.succeeded}`);
-    if (agg.failed > 0) progressParts.push(`失败 ${agg.failed}`);
+    if (agg.running > 0) {
+      progressParts.push(`${t("workspace.shell.contextSidebar.bucketRunning")} ${agg.running}`);
+    }
+    if (agg.pendingReview > 0) {
+      progressParts.push(`${t("workspace.shell.contextSidebar.bucketPendingReview")} ${agg.pendingReview}`);
+    }
+    if (agg.succeeded > 0) {
+      progressParts.push(`${t("workspace.shell.contextSidebar.bucketSucceeded")} ${agg.succeeded}`);
+    }
+    if (agg.failed > 0) {
+      progressParts.push(`${t("workspace.shell.contextSidebar.bucketFailed")} ${agg.failed}`);
+    }
   }
 
   return (
@@ -177,25 +191,31 @@ export function TaskRunChatCard({
             color: "#fff",
           }}
         >
-          任务已开始
+          {t("workspace.taskProposal.taskRunCard.startedBadge")}
         </span>
         <span style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textPrimary, flex: 1 }}>
-          {run.title}
+          {displayTitle}
         </span>
         {inProgress ? (
-          <span style={{ fontSize: 11, color: pageColorTokens.textFootnote }}>执行中…</span>
+          <span style={{ fontSize: 11, color: pageColorTokens.textFootnote }}>
+            {t("workspace.taskProposal.taskRunCard.running")}
+          </span>
         ) : null}
       </div>
 
       <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ color: pageColorTokens.textPrimary, fontWeight: 600 }}>
-          已创建 {run.taskIds.length} 个任务
-          {run.errors.length > 0 ? `，${run.errors.length} 个对象创建失败` : ""}
+          {run.errors.length > 0
+            ? t("workspace.taskProposal.taskRunCard.createdPartial", {
+                count: run.taskIds.length,
+                failed: run.errors.length,
+              })
+            : t("workspace.taskProposal.taskRunCard.createdCount", { count: run.taskIds.length })}
         </div>
 
-        {run.paramsSummary.length > 0 ? (
+        {paramsLines.length > 0 ? (
           <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-            {run.paramsSummary.join(" · ")}
+            {paramsLines.join(" · ")}
           </div>
         ) : null}
 
@@ -210,7 +230,7 @@ export function TaskRunChatCard({
               padding: "7px 10px",
             }}
           >
-            进度：{progressParts.join(" · ")}
+            {t("workspace.taskProposal.taskRunCard.progress", { parts: progressParts.join(" · ") })}
           </div>
         ) : null}
 
@@ -242,7 +262,7 @@ export function TaskRunChatCard({
         ))}
         {run.errors.length > 3 ? (
           <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-            还有 {run.errors.length - 3} 个失败
+            {t("workspace.taskProposal.card.doneMoreErrors", { count: run.errors.length - 3 })}
           </div>
         ) : null}
 

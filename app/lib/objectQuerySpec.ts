@@ -8,6 +8,7 @@
  * 客户端（弹窗条件构建、上下文块、TaskProposalCard）与服务端
  * （/api/shopify/objects 筛选、/api/task-proposal 执行期求值）共用本文件。
  */
+import type { TFunction } from "i18next";
 
 export type ObjectQueryKind = "product" | "article";
 
@@ -60,6 +61,35 @@ export function describeObjectQuery(spec: ObjectQuerySpec): string {
   }
   if (parts.length === 0) return `全部${objectQueryKindLabel(spec.kind)}`;
   return parts.join("；");
+}
+
+/** 商户可见的圈定条件摘要；AI 注入仍用 describeObjectQuery。 */
+export function describeObjectQueryI18n(spec: ObjectQuerySpec, t: TFunction): string {
+  const kind =
+    spec.kind === "product"
+      ? t("workspace.shell.contextPicker.kindProduct")
+      : t("workspace.shell.contextPicker.kindArticle");
+  const parts: string[] = [];
+  if (spec.keyword?.trim()) {
+    parts.push(
+      t("workspace.shell.contextPicker.queryKeyword", { keyword: spec.keyword.trim() }),
+    );
+  }
+  if (spec.status && spec.status !== "all") {
+    parts.push(
+      t("workspace.shell.contextPicker.queryStatus", {
+        status: t(`workspace.shell.contextPicker.status.${spec.status}`),
+      }),
+    );
+  }
+  if (spec.kind === "product" && spec.tag?.trim()) {
+    parts.push(t("workspace.shell.contextPicker.queryTag", { tag: spec.tag.trim() }));
+  }
+  if (spec.kind === "product" && typeof spec.maxInventory === "number") {
+    parts.push(t("workspace.shell.contextPicker.queryInventory", { count: spec.maxInventory }));
+  }
+  if (parts.length === 0) return t("workspace.shell.contextPicker.queryAll", { kind });
+  return parts.join(t("workspace.shell.contextPicker.queryJoin"));
 }
 
 /** 机器可读的单行格式，注入上下文块供 AI 透传回 TaskProposal。 */

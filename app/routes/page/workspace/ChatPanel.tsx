@@ -156,10 +156,12 @@ export function ChatPanel({
       if (message.taskRun) {
         runs.push({
           runId: message.taskRun.runId,
+          skillId: message.taskRun.skillId,
           title: message.taskRun.title,
           taskIds: message.taskRun.taskIds,
           errorCount: message.taskRun.errors.length,
           paramsSummary: message.taskRun.paramsSummary,
+          params: message.taskRun.params,
           startedAt: message.taskRun.startedAt,
         });
       } else if (message.aiTask) {
@@ -413,7 +415,7 @@ export function ChatPanel({
           {selectedSummaryBubbles.map((item) => (
             <span key={item.key} style={selectionBubbleStyle}>
               <span>{item.label}</span>
-              <button type="button" style={selectionBubbleCloseStyle} onClick={() => clearToolSelection(item.key)} aria-label={`清空${item.label}`}>
+              <button type="button" style={selectionBubbleCloseStyle} onClick={() => clearToolSelection(item.key)} aria-label={t("workspace.shell.chat.clearSelectionAria", { label: item.label })}>
                 ×
               </button>
             </span>
@@ -608,7 +610,7 @@ export function ChatPanel({
           {isScrolledUp ? (
             <div style={scrollBottomOverlayStyle}>
               <button type="button" style={scrollBottomButtonStyle} onClick={() => scrollToBottom(true)}>
-                ↓ 查看最新消息
+                ↓ {t("workspace.shell.chat.jumpToLatest")}
               </button>
             </div>
           ) : null}

@@ -129,10 +129,11 @@ function clampPageSize(pageSize?: number): number {
 }
 
 function productStatusLabel(status: string | null | undefined): string {
-  if (status === "ACTIVE") return "正常";
-  if (status === "DRAFT") return "草稿";
-  if (status === "ARCHIVED") return "已归档";
-  return status?.toLowerCase() ?? "未知";
+  const normalized = status?.trim().toUpperCase();
+  if (normalized === "ACTIVE") return "active";
+  if (normalized === "DRAFT") return "draft";
+  if (normalized === "ARCHIVED") return "archived";
+  return "unknown";
 }
 
 function productStatusTone(status: string | null | undefined): ShopifyObjectItem["statusTone"] {
@@ -249,16 +250,17 @@ export async function listShopifyProducts(
       const price = node?.priceRangeV2?.minVariantPrice;
       const amount = price?.amount?.trim();
       const currency = price?.currencyCode?.trim() ?? "";
-      const priceText = amount ? `${amount} ${currency}`.trim() : "价格未知";
+      const priceText = amount ? `${amount} ${currency}`.trim() : "";
       const inventory = node?.totalInventory ?? 0;
       items.push({
         id,
-        title: (node?.title ?? "").trim() || "未命名商品",
+        title: (node?.title ?? "").trim(),
         subtitle: `${shopName} / ${status?.toLowerCase() ?? "unknown"}`,
-        meta: `${priceText} · 库存 ${inventory}`,
+        meta: priceText,
         imageUrl: node?.featuredImage?.url?.trim() || null,
         statusLabel: productStatusLabel(status),
         statusTone: productStatusTone(status),
+        inventory,
       });
     }
 
@@ -300,15 +302,15 @@ export async function listShopifyArticles(
       const id = node?.id?.trim();
       if (!id) continue;
       const blogTitle = (node?.blog?.title ?? "").trim() || "Blog";
-      const author = (node?.author?.name ?? "").trim() || "未知作者";
+      const author = (node?.author?.name ?? "").trim();
       const published = node?.isPublished === true;
       items.push({
         id,
-        title: (node?.title ?? "").trim() || "未命名文章",
-        subtitle: `${blogTitle} / ${author} / ${published ? "已发布" : "草稿"}`,
-        meta: published ? "已发布" : "暂无更多信息",
+        title: (node?.title ?? "").trim(),
+        subtitle: [blogTitle, author].filter(Boolean).join(" / "),
+        meta: "",
         imageUrl: null,
-        statusLabel: published ? "已发布" : "待处理",
+        statusLabel: published ? "published" : "unpublished",
         statusTone: published ? "positive" : "warning",
       });
     }
