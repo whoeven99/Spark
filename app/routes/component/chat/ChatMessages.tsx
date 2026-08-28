@@ -1,6 +1,9 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
+import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
+import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
+import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
@@ -24,6 +27,11 @@ type ChatMessagesProps = {
   onOpenTasks?: (opts?: OpenWorkspaceTasksOptions) => void;
   /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
+  /** 工作台已选商品，供 TaskProposalCard 空目标时补全 */
+  contextProducts?: BatchTaskProduct[];
+  contextProductQuery?: ObjectQuerySelection | null;
+  /** 卡片内单选商品写回工作台上下文 */
+  onContextProductPicked?: (product: SelectedShopifyObject) => void;
   /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */
   tasksById?: Record<string, AITaskItem>;
 };
@@ -34,6 +42,9 @@ export function ChatMessages({
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
+  contextProducts = [],
+  contextProductQuery = null,
+  onContextProductPicked,
   tasksById,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
@@ -203,6 +214,9 @@ export function ChatMessages({
                       <TaskProposalCard
                         embedded
                         proposal={item.taskProposal}
+                        contextProducts={contextProducts}
+                        contextProductQuery={contextProductQuery}
+                        onContextProductPicked={onContextProductPicked}
                         onExecuted={onTaskProposalExecuted}
                       />
                     </div>

@@ -1,6 +1,6 @@
 /** 工作台对话 Panel：消息列表 + 输入区 + 上下文工具栏（从 WorkspaceAppShellPage 拆出）。 */
 import type { KeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
@@ -145,7 +145,15 @@ export function ChatPanel({
     clearContext,
     clearToolSelection,
     workspaceBatchProducts,
+    replaceObjectSelection,
   } = context;
+
+  const handleContextProductPicked = useCallback(
+    (product: { id: string; title: string; imageUrl?: string | null }) => {
+      replaceObjectSelection("product", [product]);
+    },
+    [replaceObjectSelection],
+  );
 
   const contextTokens = useMemo(
     () => estimateMessagesTokens(messages),
@@ -600,6 +608,7 @@ export function ChatPanel({
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
+                  onContextProductPicked={handleContextProductPicked}
                   onTaskProposalExecuted={(run) =>
                     onTaskProposalExecuted(conversation.id, run)
                   }
@@ -612,6 +621,9 @@ export function ChatPanel({
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
+              contextProducts={workspaceBatchProducts}
+              contextProductQuery={objectQuerySelectionByType.product}
+              onContextProductPicked={handleContextProductPicked}
               tasksById={tasksById}
             />
           </div>

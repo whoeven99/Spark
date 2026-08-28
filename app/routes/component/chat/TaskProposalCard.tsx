@@ -13,10 +13,15 @@ import type {
   TaskProposalPayload,
   TaskProposalTarget,
 } from "../../../lib/taskProposalPayload";
-import { mergeTaskProposalTargets } from "../../../lib/taskProposalPayload";
+import {
+  BATCH_PICTURE_TRANSLATE_SKILL_ID,
+  mergeTaskProposalTargets,
+} from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { describeObjectQueryI18n } from "../../../lib/objectQuerySpec";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
+import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
+import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import { buildTaskRunPayload, type TaskRunPayload } from "../../../lib/taskRunPayload";
 import {
   buildTaskRunParamsSummary,
@@ -29,6 +34,7 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import { formatThinkingDuration } from "../../../lib/thinkingDuration";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import { ProductSelector } from "../product/ProductSelector";
 
 // ─── Styles（与 BatchTasksChatCard 视觉对齐） ────────────────────────────────
 
@@ -266,30 +272,76 @@ type Props = {
   contextProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query；items 与手动选择都为空时兜底 */
   contextProductQuery?: ObjectQuerySelection | null;
+  /**
+   * 卡片内单选商品时写回工作台上下文（替换当前商品选择）。
+   * 与底部工具栏共用同一上下文。
+   */
+  onContextProductPicked?: (product: SelectedShopifyObject) => void;
   onTasksCreated?: (taskIds: string[]) => void;
   /** 执行成功后回调（工作台用于向对话追加「任务已开始」新一轮） */
   onExecuted?: (run: TaskRunPayload) => void;
 };
+
+function productSelectionToTarget(
+  product: ProductSelectorSelection,
+  requiresImage: boolean,
+): TaskProposalTarget {
+  const imageUrl = product.featuredImageUrl ?? null;
+  return {
+    id: product.id,
+    title: product.title,
+    imageUrl,
+    ...(requiresImage && !imageUrl ? { disabledReason: "no_primary_image" } : {}),
+  };
+}
 
 export function TaskProposalCard({
   embedded = false,
   proposal,
   contextProducts = [],
   contextProductQuery = null,
+  onContextProductPicked,
   onTasksCreated,
   onExecuted,
 }: Props) {
   const { t } = useTranslation();
-  const resolved = useMemo(
-    () => mergeTaskProposalTargets(proposal, contextProducts, contextProductQuery),
-    [proposal, contextProducts, contextProductQuery],
-  );
+  /** 卡片内单选结果（在上下文回写前也能立刻用于勾选/提交） */
+  const [cardPickedProduct, setCardPickedProduct] =
+    useState<ProductSelectorSelection | null>(null);
+
+  const resolved = useMemo(() => {
+    const fromContext = mergeTaskProposalTargets(
+      proposal,
+      contextProducts,
+      contextProductQuery,
+    );
+    if (fromContext.targets.items.length > 0 || fromContext.targets.query) {
+      return fromContext;
+    }
+    if (!cardPickedProduct || fromContext.targets.kind !== "products") {
+      return fromContext;
+    }
+    const requiresImage = proposal.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
+    return {
+      ...fromContext,
+      targets: {
+        ...fromContext.targets,
+        items: [productSelectionToTarget(cardPickedProduct, requiresImage)],
+      },
+    };
+  }, [proposal, contextProducts, contextProductQuery, cardPickedProduct]);
+
   const targets = resolved.targets.items;
   /** 按条件圈定模式：无具体 items 时按 query 执行（服务端重新求值） */
   const targetsQuery = targets.length === 0 ? (resolved.targets.query ?? null) : null;
   const queryCount = targetsQuery?.matchCount ?? null;
   /** 无目标对象技能（如文生图）：确认参数后直接执行一次 */
   const targetless = resolved.targets.kind === "none";
+  const showProductPicker =
+    !targetless &&
+    resolved.targets.kind === "products" &&
+    targets.length === 0 &&
+    !targetsQuery;
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(targets.filter((t) => !t.disabledReason).map((t) => t.id)),
@@ -365,6 +417,22 @@ export function TaskProposalCard({
       return next;
     });
   };
+
+  const locationSearch =
+    typeof window !== "undefined" ? window.location.search : "";
+
+  const handleCardProductPicked = useCallback(
+    (next: ProductSelectorSelection | null) => {
+      setCardPickedProduct(next);
+      if (!next) return;
+      onContextProductPicked?.({
+        id: next.id,
+        title: next.title,
+        imageUrl: next.featuredImageUrl ?? null,
+      });
+    },
+    [onContextProductPicked],
+  );
 
   const handleConfirm = useCallback(async () => {
     if (!canSubmit) return;
@@ -592,6 +660,28 @@ export function TaskProposalCard({
                         : "",
                   })}
                 </span>
+              </div>
+            ) : showProductPicker ? (
+              <div>
+                <div style={fieldLabelStyle}>
+                  {t("workspace.taskProposal.card.pickProduct")}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: pageColorTokens.textFootnote,
+                    marginBottom: 8,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {t("workspace.taskProposal.card.pickProductHint")}
+                </div>
+                <ProductSelector
+                  locationSearch={locationSearch}
+                  embedded
+                  selected={cardPickedProduct}
+                  onSelectedChange={handleCardProductPicked}
+                />
               </div>
             ) : (
               <div

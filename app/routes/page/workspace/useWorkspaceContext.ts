@@ -120,6 +120,19 @@ export function useWorkspaceContext() {
     }
   }, []);
 
+  /** 覆盖某类型的手动选择（如任务卡单选商品写入上下文）。 */
+  const replaceObjectSelection = useCallback(
+    (type: ObjectType, objects: SelectedShopifyObject[]) => {
+      setSelectedObjectsByType((current) => ({ ...current, [type]: objects }));
+      if (isQueryableObjectType(type)) {
+        setObjectQuerySelectionByType((current) =>
+          current[type] ? { ...current, [type]: null } : current,
+        );
+      }
+    },
+    [],
+  );
+
   /** 按条件圈定（与手动勾选互斥：保存 query 时清空该类型的手动选择）。传 null 取消圈定。 */
   const setObjectQuerySelection = useCallback(
     (type: QueryableObjectType, selection: ObjectQuerySelection | null) => {
@@ -291,6 +304,7 @@ export function useWorkspaceContext() {
     setObjectQuery,
     selectedObjectsByType,
     toggleObjectSelection,
+    replaceObjectSelection,
     objectQuerySelectionByType,
     setObjectQuerySelection,
     fileRolesById,
