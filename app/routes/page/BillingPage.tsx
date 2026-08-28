@@ -17,7 +17,6 @@ import {
   getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
-  isShopifySubscriptionTrialActive,
   listSubscriptionPlansForInterval,
   normalizePlanDisplayName,
   pickSubscriptionPlan,
@@ -70,7 +69,6 @@ function planCompareValue(
   plan: PlanRecord | null,
   capability:
     | "credits"
-    | "trial"
     | "text"
     | "image"
     | "video"
@@ -87,8 +85,6 @@ function planCompareValue(
       return t("billing.creditsPerPeriod", {
         count: plan.tokens.toLocaleString(locale),
       });
-    case "trial":
-      return plan.trialDays ? `${plan.trialDays}` : EMPTY;
     case "text":
       return "Google、ChatGPT、Claude";
     case "image":
@@ -314,7 +310,6 @@ function PaidPlanCard({
   interval,
   isRecommended,
   isCurrent,
-  isTrialCurrent,
   isPending,
   isSubmitting,
   submittingMode,
@@ -326,10 +321,9 @@ function PaidPlanCard({
   interval: BillingIntervalView;
   isRecommended: boolean;
   isCurrent: boolean;
-  isTrialCurrent: boolean;
   isPending: boolean;
   isSubmitting: boolean;
-  submittingMode: "trial" | "paid" | null;
+  submittingMode: "paid" | null;
   locale: string;
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => PlanFeatureItem[];
@@ -337,7 +331,6 @@ function PaidPlanCard({
   const periodSuffix = interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
   const monthlyEquivalent =
     interval === "ANNUAL" ? formatAnnualMonthlyEquivalent(plan, locale) : null;
-  const hasTrial = Boolean(plan.trialDays && plan.trialDays > 0);
 
   return (
     <article
@@ -382,14 +375,8 @@ function PaidPlanCard({
 
       <div className={styles.planCta}>
         {isCurrent ? (
-          <div
-            className={`${styles.planCurrentCta} ${isTrialCurrent ? styles.planCurrentCtaTrial : ""}`}
-            role="status"
-            aria-current="true"
-          >
-            {isTrialCurrent
-              ? t("billing.subscriptionTrialCurrentPlan")
-              : t("billing.currentPlan")}
+          <div className={styles.planCurrentCta} role="status" aria-current="true">
+            {t("billing.currentPlan")}
           </div>
         ) : isPending ? (
           <div className={styles.planPendingCta} role="status">
@@ -397,29 +384,13 @@ function PaidPlanCard({
           </div>
         ) : (
           <div className={styles.planCtaGroup}>
-            {hasTrial ? (
-              <Form method="post" className={styles.planActionForm}>
-                <input type="hidden" name="intent" value="subscribe" />
-                <input type="hidden" name="planKey" value={plan.planKey} />
-                <input type="hidden" name="trialMode" value="trial" />
-                <button
-                  type="submit"
-                  className={styles.planPrimaryCta}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting && submittingMode === "trial"
-                    ? t("billing.redirectingToCheckout")
-                    : t("billing.startTrial", { count: plan.trialDays ?? 0 })}
-                </button>
-              </Form>
-            ) : null}
             <Form method="post" className={styles.planActionForm}>
               <input type="hidden" name="intent" value="subscribe" />
               <input type="hidden" name="planKey" value={plan.planKey} />
               <input type="hidden" name="trialMode" value="paid" />
               <button
                 type="submit"
-                className={hasTrial ? styles.planSecondaryCta : styles.planPrimaryCta}
+                className={styles.planPrimaryCta}
                 disabled={isSubmitting}
               >
                 {isSubmitting && submittingMode === "paid"
@@ -468,7 +439,7 @@ export function BillingPage() {
   const subscribingMode =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "subscribe"
-      ? ((navigation.formData.get("trialMode")?.toString() ?? "trial") as "trial" | "paid")
+      ? "paid"
       : null;
   const buyingPackKey =
     navigation.state !== "idle" && navigation.formData?.get("intent") === "buy_pack"
@@ -531,13 +502,6 @@ export function BillingPage() {
   const showSubscriptionPeriodMeta =
     sub?.status === "ACTIVE" && !!sub.currentPeriodEnd;
 
-  const isSubscriptionTrialActive = isShopifySubscriptionTrialActive(sub);
-
-  const isTrialCurrent =
-    sub?.status !== "ACTIVE" &&
-    sub?.status !== "PENDING" &&
-    billing.account.trialTokens > 0;
-
   const currentPlanRecord = useMemo(
     () => subscriptionPlans.find((plan) => plan.planKey === sub?.planKey) ?? null,
     [sub?.planKey, subscriptionPlans],
@@ -546,53 +510,14 @@ export function BillingPage() {
     if (currentPlanRecord) {
       return formatPlanTagLabel(currentPlanRecord.displayName, currentPlanRecord.planKey);
     }
-    if (isTrialCurrent) {
-      return t("billing.planFree");
-    }
     return t("billing.planFree");
-  }, [currentPlanRecord, isTrialCurrent, t]);
+  }, [currentPlanRecord, t]);
   const quotaMetaDescription = useMemo(() => {
-    const meta: string[] = [];
-    if (isSubscriptionTrialActive && sub?.trialEndsAt) {
-      meta.push(
-        `${t("billing.subscriptionTrialStatus")} · ${t("billing.trialEnds")}: ${formatBillingMetaDate(sub.trialEndsAt, locale)}`,
-      );
-    }
     if (showSubscriptionPeriodMeta && sub?.currentPeriodEnd) {
-      meta.push(`${t("billing.periodEnd")}: ${formatBillingMetaDate(sub.currentPeriodEnd, locale)}`);
-    } else if (!isSubscriptionTrialActive && sub?.trialEndsAt) {
-      meta.push(`${t("billing.trialEnds")}: ${formatBillingMetaDate(sub.trialEndsAt, locale)}`);
+      return `${t("billing.periodEnd")}: ${formatBillingMetaDate(sub.currentPeriodEnd, locale)}`;
     }
-    return meta.join(" · ");
-  }, [
-    isSubscriptionTrialActive,
-    locale,
-    showSubscriptionPeriodMeta,
-    sub?.currentPeriodEnd,
-    sub?.trialEndsAt,
-    t,
-  ]);
-
-  const subscriptionTrialBannerCopy = useMemo(() => {
-    if (!isSubscriptionTrialActive || !sub?.trialEndsAt || !currentPlanRecord) return null;
-    const periodSuffix =
-      currentPlanRecord.billingInterval === "ANNUAL"
-        ? t("billing.perYear")
-        : t("billing.perMonth");
-    return t("billing.subscriptionTrialBanner", {
-      plan: normalizePlanDisplayName(
-        currentPlanRecord.displayName,
-        currentPlanRecord.planKey,
-      ),
-      date: formatBillingMetaDate(sub.trialEndsAt, locale),
-      price: formatPlanPrice(
-        currentPlanRecord.priceAmount,
-        currentPlanRecord.currencyCode,
-        locale,
-      ),
-      period: periodSuffix,
-    });
-  }, [currentPlanRecord, isSubscriptionTrialActive, locale, sub?.trialEndsAt, t]);
+    return "";
+  }, [locale, showSubscriptionPeriodMeta, sub?.currentPeriodEnd, t]);
 
   const tokenCapacity = billing.availableTokens;
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
@@ -755,10 +680,6 @@ export function BillingPage() {
       values: paidPlansToShow.map((plan) => planCompareValue(plan, "credits", locale, t)),
     },
     {
-      label: t("billing.compareTrialDays"),
-      values: paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
-    },
-    {
       label: t("billing.compareImageModels"),
       values: paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale, t)),
     },
@@ -838,9 +759,7 @@ export function BillingPage() {
                     </span>
                     <span className={styles.subscriptionStatusValue}>
                       {sub
-                        ? isSubscriptionTrialActive
-                          ? t("billing.subscriptionTrialStatus")
-                          : t(`billing.status.${sub.status}`)
+                        ? t(`billing.status.${sub.status}`)
                         : t("billing.noSubscription")}
                     </span>
                   </div>
@@ -1105,9 +1024,6 @@ export function BillingPage() {
           </div>
         </s-banner>
       ) : null}
-      {subscriptionTrialBannerCopy ? (
-        <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
-      ) : null}
       {promoCampaign ? (
         <div
           className={`${styles.promoStrip} ${
@@ -1196,9 +1112,6 @@ export function BillingPage() {
             </div>
             <div className={styles.usagePlanRow}>
               <span className={styles.planBadge}>{currentPlanTagLabel}</span>
-              {isSubscriptionTrialActive ? (
-                <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
-              ) : null}
               <button
                 type="button"
                 className={`${styles.secondaryEntryButton} ${styles.usageDetailsButton}`}
@@ -1478,10 +1391,6 @@ export function BillingPage() {
                   interval={interval}
                   isRecommended={isRecommended}
                   isCurrent={isActiveSubscriptionPlan(plan.planKey, sub)}
-                  isTrialCurrent={
-                    isActiveSubscriptionPlan(plan.planKey, sub) &&
-                    isSubscriptionTrialActive
-                  }
                   isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
                   isSubmitting={subscribingPlanKey === plan.planKey}
                   submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}

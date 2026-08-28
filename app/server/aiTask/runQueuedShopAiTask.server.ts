@@ -2,7 +2,7 @@
  * 店铺 AI 异步任务：排队限流 + 开跑前额度复核。
  * 没额度时 fail 当前任务并释放槽位，后续排队任务同样会在开跑时被拦下。
  */
-import { BillingAccessDeniedError, TrialDailyLimitError } from "../billing/errors.server";
+import { BillingAccessDeniedError } from "../billing/errors.server";
 import { requireBillingAccess } from "../billing/requireBilling.server";
 import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
 import { failTask } from "./aiTaskLogger.server";
@@ -22,7 +22,7 @@ async function assertShopAiTaskBilling(
 }
 
 function billingFailMessage(error: unknown): string {
-  if (error instanceof BillingAccessDeniedError || error instanceof TrialDailyLimitError) {
+  if (error instanceof BillingAccessDeniedError) {
     return error.message;
   }
   if (error instanceof Error && error.message.trim()) return error.message;

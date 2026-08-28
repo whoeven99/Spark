@@ -333,15 +333,12 @@ export default function SparkBilling() {
           size="small"
         >
           {ledger?.account ? (
-            <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} style={{ marginBottom: 12 }}>
+            <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} style={{ marginBottom: 12 }}>
               <Descriptions.Item label="订阅池">
                 {fmtNumber(ledger.account.subscriptionTokens)}
               </Descriptions.Item>
               <Descriptions.Item label="按量池">
                 {fmtNumber(ledger.account.purchasedTokens)}
-              </Descriptions.Item>
-              <Descriptions.Item label="试用池">
-                {fmtNumber(ledger.account.trialTokens)}
               </Descriptions.Item>
               <Descriptions.Item label="用量">
                 {ledger.account.usagePercent}%（{fmtNumber(ledger.account.usedTokens)} /{" "}

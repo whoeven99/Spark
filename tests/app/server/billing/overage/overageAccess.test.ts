@@ -81,7 +81,6 @@ function sub(partial: Partial<AppSubscription>): AppSubscription {
     overageEnabled: true,
     overageSpendingEnabled: true,
     overageSpendLimit: "50.00",
-    trialEndsAt: null,
     currentPeriodStart: new Date(),
     currentPeriodEnd: new Date(),
     cancelledAt: null,
@@ -101,7 +100,6 @@ describe("computeAccess", () => {
   const account = {
     subscriptionTokens: 1000,
     purchasedTokens: 0,
-    trialTokens: 0,
     usedTokens: 500,
   };
 
@@ -164,16 +162,5 @@ describe("computeAccess", () => {
     expect(access.hasAccess).toBe(false);
     expect(access.overageAvailable).toBe(false);
     expect(access.denialReason).toBe("overage_cap_reached");
-  });
-
-  it("does not allow overage during trial", () => {
-    const access = computeAccess({
-      account: { ...account, usedTokens: 1000 },
-      subscription: sub({
-        trialEndsAt: new Date(Date.now() + 86400000),
-      }),
-    });
-    expect(access.overageAvailable).toBe(false);
-    expect(access.hasAccess).toBe(false);
   });
 });

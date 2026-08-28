@@ -10,7 +10,6 @@ export type PlanRecord = {
   tokens: number;
   priceAmount: string;
   currencyCode: string;
-  trialDays: number | null;
   shopifyPlanName: string | null;
   overagePricePerThousand: string | null;
   defaultOverageCapAmount: string | null;
@@ -50,7 +49,6 @@ function rowToPlanRecord(row: {
   tokens: number;
   priceAmount: string;
   currencyCode: string;
-  trialDays: number | null;
   shopifyPlanName: string | null;
   overagePricePerThousand?: string | null;
   defaultOverageCapAmount?: string | null;
@@ -64,7 +62,6 @@ function rowToPlanRecord(row: {
     tokens: row.tokens,
     priceAmount: row.priceAmount,
     currencyCode: row.currencyCode,
-    trialDays: row.trialDays,
     shopifyPlanName: row.shopifyPlanName,
     overagePricePerThousand: row.overagePricePerThousand ?? null,
     defaultOverageCapAmount: row.defaultOverageCapAmount ?? null,

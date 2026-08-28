@@ -268,24 +268,19 @@ export default function SparkCredits() {
         ) : (
           <>
             <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col xs={24} sm={12} lg={6}>
+              <Col xs={24} sm={12} lg={8}>
                 <Card>
                   <Statistic title="可用 Token" value={account.remainingTokens} />
                 </Card>
               </Col>
-              <Col xs={24} sm={12} lg={6}>
+              <Col xs={24} sm={12} lg={8}>
                 <Card>
                   <Statistic title="订阅池" value={account.subscriptionTokens} />
                 </Card>
               </Col>
-              <Col xs={24} sm={12} lg={6}>
+              <Col xs={24} sm={12} lg={8}>
                 <Card>
                   <Statistic title="按量池（可调）" value={account.purchasedTokens} />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic title="试用池" value={account.trialTokens} />
                 </Card>
               </Col>
             </Row>

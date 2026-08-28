@@ -100,7 +100,6 @@ export type ShopRow = {
   appName: string;
   subscriptionTokens: number;
   purchasedTokens: number;
-  trialTokens: number;
   usedTokens: number;
   accountCreatedAt: string;
   accountUpdatedAt: string;
@@ -154,7 +153,6 @@ export type UsageRow = {
   appName: string;
   subscriptionTokens: number;
   purchasedTokens: number;
-  trialTokens: number;
   usedTokens: number;
   totalTokens: number;
   usagePercent: number;
@@ -522,7 +520,6 @@ export type SubscriptionRow = {
   currentPeriodEnd: string | null;
   subscriptionTokens: number;
   purchasedTokens: number;
-  trialTokens: number;
   usedTokens: number;
   accountCreatedAt: string | null;
 };
@@ -577,7 +574,6 @@ export type SparkCreditsAccount = {
   shop: string;
   subscriptionTokens: number;
   purchasedTokens: number;
-  trialTokens: number;
   usedTokens: number;
   totalTokens: number;
   remainingTokens: number;
@@ -588,7 +584,6 @@ export type SparkCreditsAccount = {
   subStatus: string | null;
   billingInterval: string | null;
   currentPeriodEnd: string | null;
-  trialEndsAt: string | null;
 };
 
 export type SparkCreditsBillingLog = {
@@ -608,7 +603,6 @@ export type SparkCreditsPeriodHistory = {
   usedTokens: number;
   subscriptionTokensAllocated: number;
   purchasedTokensRemaining: number;
-  trialTokensRemaining: number;
   planKey: string | null;
   archivedAt: string;
 };
@@ -660,7 +654,6 @@ export type SparkBillingLowBalanceShop = {
   subStatus: string | null;
   subscriptionTokens: number;
   purchasedTokens: number;
-  trialTokens: number;
   usedTokens: number;
   totalTokens: number;
   remainingTokens: number;
@@ -697,7 +690,6 @@ export type SparkBillingLedgerData = {
     shop: string;
     subscriptionTokens: number;
     purchasedTokens: number;
-    trialTokens: number;
     usedTokens: number;
     totalTokens: number;
     remainingTokens: number;

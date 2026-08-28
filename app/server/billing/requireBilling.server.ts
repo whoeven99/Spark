@@ -1,4 +1,4 @@
-import { BillingAccessDeniedError, TrialDailyLimitError, BILLING_ERROR_CODE } from "./errors.server";
+import { BillingAccessDeniedError, BILLING_ERROR_CODE } from "./errors.server";
 import { loadBillingContext, type BillingContext } from "./billingContext.server";
 
 export async function requireBillingAccess(shop: string): Promise<BillingContext> {
@@ -38,12 +38,6 @@ export function billingErrorToResponse(error: unknown): Response | null {
         errorMsg: error.message,
         billing: error.details ?? {},
       },
-      { status: error.status },
-    );
-  }
-  if (error instanceof TrialDailyLimitError) {
-    return Response.json(
-      { success: false, errorCode: error.code, errorMsg: error.message, billing: {} },
       { status: error.status },
     );
   }

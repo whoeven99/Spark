@@ -21,7 +21,6 @@ const plans: PlanRecord[] = [
     tokens: 500000,
     priceAmount: "29.99",
     currencyCode: "USD",
-    trialDays: 7,
     shopifyPlanName: null,
     overagePricePerThousand: "0.025",
     defaultOverageCapAmount: "50.00",
@@ -35,7 +34,6 @@ const plans: PlanRecord[] = [
     tokens: 26000000,
     priceAmount: "799.99",
     currencyCode: "USD",
-    trialDays: 7,
     shopifyPlanName: null,
     overagePricePerThousand: "0.025",
     defaultOverageCapAmount: "100.00",
@@ -49,7 +47,6 @@ const plans: PlanRecord[] = [
     tokens: 10000000,
     priceAmount: "99.99",
     currencyCode: "USD",
-    trialDays: 7,
     shopifyPlanName: null,
     overagePricePerThousand: "0.025",
     defaultOverageCapAmount: "200.00",
@@ -119,16 +116,16 @@ describe("plan display labels", () => {
     );
   });
 
-  it("试用账户展示免费计划而不是免费试用", () => {
+  it("无订阅时展示体验版", () => {
     expect(
       resolveCurrentPlanLabel({
         subscription: null,
         trialPlan: plans[0],
         subscriptionPlans: plans,
-        account: { trialTokens: 1000 },
-        t: (key) => (key === "billing.planFree" ? "免费计划" : key),
+        account: {},
+        t: (key) => (key === "billing.planFree" ? "体验版" : key),
       }),
-    ).toBe("免费计划");
+    ).toBe("体验版");
   });
 });
 

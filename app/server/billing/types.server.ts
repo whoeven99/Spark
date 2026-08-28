@@ -20,7 +20,6 @@ export type BillingLogEventType =
 export const PLAN_CATALOG_KIND = {
   SUBSCRIPTION: "SUBSCRIPTION",
   ONE_TIME_PACK: "ONE_TIME_PACK",
-  INTERNAL_TRIAL: "INTERNAL_TRIAL",
 } as const;
 
 export type PlanCatalogKind =

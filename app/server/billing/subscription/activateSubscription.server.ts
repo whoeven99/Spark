@@ -24,7 +24,6 @@ export async function applyActiveSubscription(params: {
   planKey: string;
   billingInterval: string;
   tokensPerPeriod: number;
-  trialEndsAt?: Date | null;
   period: SubscriptionPeriodSnapshot;
   overage?: {
     usageLineItemId?: string | null;
@@ -42,7 +41,6 @@ export async function applyActiveSubscription(params: {
     planKey,
     billingInterval,
     tokensPerPeriod,
-    trialEndsAt,
     period,
     overage,
     rawPayload,
@@ -111,7 +109,6 @@ export async function applyActiveSubscription(params: {
       billingInterval,
       status: APP_SUBSCRIPTION_STATUS.ACTIVE,
       tokensPerPeriod,
-      trialEndsAt: trialEndsAt ?? null,
       currentPeriodStart: period.currentPeriodStart,
       currentPeriodEnd: period.currentPeriodEnd,
       usageLineItemId: overage?.usageLineItemId ?? null,
@@ -134,7 +131,6 @@ export async function applyActiveSubscription(params: {
       billingInterval,
       status: APP_SUBSCRIPTION_STATUS.ACTIVE,
       tokensPerPeriod,
-      trialEndsAt: trialEndsAt ?? null,
       currentPeriodStart: period.currentPeriodStart,
       currentPeriodEnd: period.currentPeriodEnd,
       cancelledAt: null,
@@ -169,9 +165,8 @@ export async function applyActiveSubscription(params: {
     },
   });
 
-  // 更新后可用积分 = purchasedTokens + trialTokens + 新 subscriptionTokens
-  const creditsAfter =
-    account.purchasedTokens + account.trialTokens + tokensPerPeriod;
+  // 更新后可用积分 = purchasedTokens + 新 subscriptionTokens
+  const creditsAfter = account.purchasedTokens + tokensPerPeriod;
 
   if (isFirstActivation) {
     await appendBillingLog({

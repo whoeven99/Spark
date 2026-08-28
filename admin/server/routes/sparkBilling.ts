@@ -90,15 +90,15 @@ sparkBillingRouter.get("/overview", async (req, res) => {
       }),
       db.execute(`
         SELECT a.shop,
-               a.subscriptionTokens, a.purchasedTokens, a.trialTokens, a.usedTokens,
+               a.subscriptionTokens, a.purchasedTokens, a.usedTokens,
                sub.planKey, sub.status AS subStatus
         FROM Account a
         LEFT JOIN AppSubscription sub ON a.shop = sub.shop
-        WHERE (a.subscriptionTokens + a.purchasedTokens + a.trialTokens) > 0
+        WHERE (a.subscriptionTokens + a.purchasedTokens) > 0
           AND CAST(a.usedTokens AS REAL) * 100.0
-              / (a.subscriptionTokens + a.purchasedTokens + a.trialTokens) >= 85
+              / (a.subscriptionTokens + a.purchasedTokens) >= 85
         ORDER BY CAST(a.usedTokens AS REAL)
-              / (a.subscriptionTokens + a.purchasedTokens + a.trialTokens) DESC
+              / (a.subscriptionTokens + a.purchasedTokens) DESC
         LIMIT 20
       `),
       db.execute({
@@ -131,16 +131,14 @@ sparkBillingRouter.get("/overview", async (req, res) => {
     const lowBalanceShops = lowBalanceResult.rows.map((r) => {
       const subscriptionTokens = Number(r.subscriptionTokens ?? 0);
       const purchasedTokens = Number(r.purchasedTokens ?? 0);
-      const trialTokens = Number(r.trialTokens ?? 0);
       const usedTokens = Number(r.usedTokens ?? 0);
-      const total = subscriptionTokens + purchasedTokens + trialTokens;
+      const total = subscriptionTokens + purchasedTokens;
       return {
         shop: r.shop as string,
         planKey: (r.planKey as string | null) ?? null,
         subStatus: (r.subStatus as string | null) ?? null,
         subscriptionTokens,
         purchasedTokens,
-        trialTokens,
         usedTokens,
         totalTokens: total,
         remainingTokens: Math.max(0, total - usedTokens),
@@ -219,7 +217,7 @@ sparkBillingRouter.get("/ledger", async (req, res) => {
       shop
         ? db.execute({
             sql: `
-              SELECT a.shop, a.subscriptionTokens, a.purchasedTokens, a.trialTokens, a.usedTokens,
+              SELECT a.shop, a.subscriptionTokens, a.purchasedTokens, a.usedTokens,
                      sub.planKey, sub.status AS subStatus, sub.billingInterval, sub.currentPeriodEnd
               FROM Account a
               LEFT JOIN AppSubscription sub ON a.shop = sub.shop
@@ -247,14 +245,12 @@ sparkBillingRouter.get("/ledger", async (req, res) => {
     if (row) {
       const subscriptionTokens = Number(row.subscriptionTokens ?? 0);
       const purchasedTokens = Number(row.purchasedTokens ?? 0);
-      const trialTokens = Number(row.trialTokens ?? 0);
       const usedTokens = Number(row.usedTokens ?? 0);
-      const total = subscriptionTokens + purchasedTokens + trialTokens;
+      const total = subscriptionTokens + purchasedTokens;
       account = {
         shop: row.shop as string,
         subscriptionTokens,
         purchasedTokens,
-        trialTokens,
         usedTokens,
         totalTokens: total,
         remainingTokens: Math.max(0, total - usedTokens),

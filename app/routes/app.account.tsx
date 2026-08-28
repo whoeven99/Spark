@@ -77,6 +77,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = form.get("intent")?.toString();
   const planKey = form.get("planKey")?.toString();
   const trialMode = form.get("trialMode")?.toString();
+  void trialMode;
 
   if (!intent) {
     return { ok: false as const, error: "缺少 intent" };
@@ -142,12 +143,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "subscribe") {
+      // Shopify 套餐试用已关闭（额度改走账户页营销领 Token）；始终不传 trialDays。
       const { confirmationUrl } = await startSubscriptionCheckout({
         admin,
         shop: session.shop,
         planKey,
         request,
-        trialDays: trialMode === "paid" ? null : undefined,
+        trialDays: null,
       });
       if (confirmationUrl) {
         throw shopifyRedirect(confirmationUrl, { target: "_top" });

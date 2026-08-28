@@ -7,14 +7,14 @@
 | 路径 | 职责 |
 |------|------|
 | `index.server.ts` | 对外导出（context、checkout、webhook、gateway） |
-| `billingContext.server.ts` | 加载账户/订阅快照；首次访问可 `grantProductTrialIfEligible` |
+| `billingContext.server.ts` | 加载账户/订阅快照 |
 | `requireBilling.server.ts` | `requireBillingAccess`、`billingErrorToResponse` |
 | `billingActions.server.ts` | 订阅 / 按量包结账 / 提高超额封顶（返回 Shopify `confirmationUrl`） |
 | `gateway/` | `getBillingGateway`：Shopify GraphQL 或 `noop`（含 usage record、改 cap） |
 | `overage/` | 超额数学、门禁 `computeAccess`、批量 `flushOveragePending` |
 | `subscription/` | 开通、续费、`app_subscriptions/update` webhook |
 | `purchase/` | 按量购包（售卖已下线，入账兼容保留）、`purchases_one_time/update` webhook |
-| `account/` | `ensureAccount`、`grantTrial` |
+| `account/` | `ensureAccount` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog`（含超额单价 / 默认封顶） |
 | `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`；`recordBilled*` 之后会 `trackAndFlushOverage`；续费结算见 `tokenPools.server.ts`；含内余额见 `getAvailableTokens` / `hasTokenQuota` |
 | `../aiTask/concurrencyLimiter.server.ts` | 进程内信号量：全局文生图 / 图翻 + **按店** `SHOP_AI_TASK_CONCURRENCY`（默认 2）；异步任务经 `runQueuedShopAiTask` 排队，开跑前复核额度，不足则 fail 并停烧 |
@@ -38,9 +38,9 @@
 
 | 表 | 职责 |
 |----|------|
-| `Account` | 当前 token 分池与 `usedTokens` |
+| `Account` | 当前 token 分池（`subscriptionTokens` + `purchasedTokens`）与 `usedTokens` |
 | `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop])`）；取消 / 过期时**删除行**；含 usage line / cappedAmount / pending overage；换套餐时主行保持 ACTIVE，新 checkout 写入 `pendingShopifySubscriptionId` / `pendingPlanKey` / `pendingConfirmationUrl` / `pendingCreatedAt` |
-| `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`）；订阅含 `overagePricePerThousand` / `defaultOverageCapAmount`；`ONE_TIME_PACK` 默认 `enabled=0` |
+| `PlanCatalog` | 套餐/按量包定义（种子见 `prisma/billing-plan-catalog-seed.sql`）；订阅含 `overagePricePerThousand` / `defaultOverageCapAmount`；`ONE_TIME_PACK` 默认 `enabled=0`；无 Shopify 套餐试用天数 |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
 | `OverageUsageCharge` | Shopify usage 超额扣费幂等流水（PENDING/POSTED/FAILED） |
@@ -49,10 +49,10 @@
 ## 超额计费（Cursor 式）
 
 - 新订阅 `appSubscriptionCreate` **同时**带 recurring + usage 行（默认封顶来自 PlanCatalog）。
-- 含内额度（订阅+购包剩余+试用）用完后，ACTIVE 且非试用期可继续使用，按 `overagePricePerThousand` 累计，达阈值后 `appUsageRecordCreate`。
+- 含内额度（订阅+购包剩余）用完后，ACTIVE 可继续使用，按 `overagePricePerThousand` 累计，达阈值后 `appUsageRecordCreate`。
 - 封顶用尽：`requireBillingAccess` 抛 `OVERAGE_CAP_REACHED`；`/chat-stream` SSE 提示去账户页提高上限。
 - 提高上限：`appSubscriptionLineItemUpdate` → 商户批准 `confirmationUrl`；noop 本地直接生效。
-- 试用期（`trialEndsAt` 未过）**不**走超额。
+- **当前产品**：无 Shopify 订阅试用期 / 无 `trialTokens` 三池；新客额度走账户页营销领 Token（`SPARK_PROMO_*`）。
 - **Disabled（`overageSpendingEnabled=false`）**：本地关闭按需扣费（一分钱不扣），不降低 Shopify `cappedAmount`；含内用尽后按额度耗尽拦截。UI：固定金额 / 禁用。
 - **本地上限 `overageSpendLimit`**：门禁与展示用 `min(spendLimit, Shopify cappedAmount)`。下调或不超过 Shopify 授权 → 只改本地；超过授权 → `appSubscriptionLineItemUpdate` 需 Shopify 确认。
 - 老订阅无 `usageLineItemId`：`overageEnabled=false`，用尽即拦，须重新批准含 usage 的订阅。
@@ -84,21 +84,21 @@
 2. `AccountPeriodUsage.create`（归档即将结束的周期）
 3. `BillingLog` → `SUBSCRIPTION_RENEWED`
 4. `AppSubscription.update`（新周期）
-5. `Account.update`：`usedTokens = 0`，`subscriptionTokens = tokensPerPeriod`；`purchasedTokens` / `trialTokens` 按本周期 `usedTokens` 结算为真实剩余（`settlePoolsAtRenewal`，仅当 `usedTokens ≤` 三池之和时结算，见 `tokenPools.server.ts`）（**仅续费**；开通/升级/换套餐不清零 `usedTokens`，见 `activateSubscription.server.ts`）
+5. `Account.update`：`usedTokens = 0`，`subscriptionTokens = tokensPerPeriod`；`purchasedTokens` 按本周期 `usedTokens` 结算为真实剩余（`settlePoolsAtRenewal`，仅当 `usedTokens ≤` 双池之和时结算，见 `tokenPools.server.ts`）（**仅续费**；开通/升级/换套餐不清零 `usedTokens`，见 `activateSubscription.server.ts`）
 
 ## Token 续费结算顺序
 
-1. 周期内：`recordTokenUsage` 只累加 `usedTokens`，**不**改 `subscriptionTokens` / `purchasedTokens` / `trialTokens`
-2. 续费时：`trialTokens` → `subscriptionTokens` → `purchasedTokens` 扣减本周期 `usedTokens`，写入真实剩余后刷新订阅池
+1. 周期内：`recordTokenUsage` 只累加 `usedTokens`，**不**改 `subscriptionTokens` / `purchasedTokens`
+2. 续费时：`subscriptionTokens` → `purchasedTokens` 扣减本周期 `usedTokens`，写入真实剩余后刷新订阅池
 
 ## BillingLog 事件
 
 | eventType | 含义 |
 |-----------|------|
-| `TRIAL_GRANTED` | 免费试用发放 |
+| `TRIAL_GRANTED` | 历史：免费试用发放（保留事件名；新路径不再发放 trialTokens） |
 | `SUBSCRIPTION_ACTIVATED` | 订阅确认生效 |
 | `SUBSCRIPTION_RENEWED` | 周期续费 |
-| `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`subscriptionTokens` 扣减该套餐 `tokensPerPeriod`，`trialTokens` 不动） |
+| `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`subscriptionTokens` 扣减该套餐 `tokensPerPeriod`，`purchasedTokens` 不动） |
 | `TOKEN_PACK_INITIATED` | 按量购包待确认（售卖已下线，兼容旧路径） |
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 | `PROMO_TOKEN_CLAIMED` | 营销活动领取 Token（`referenceId` = campaignId；入账 `purchasedTokens`） |
@@ -110,7 +110,7 @@
 - 默认活动：`install-welcome-1m`，安装后可在 `/app/account` 领取 **1000000** Token；每店每活动一次。
 - 环境变量：`SPARK_PROMO_ENABLED`（默认开，`false` 关闭）、`SPARK_PROMO_CAMPAIGN_ID`、`SPARK_PROMO_TOKEN_AMOUNT`、`SPARK_PROMO_STARTS_AT` / `SPARK_PROMO_ENDS_AT`（ISO；可选）。
 - 换活动：改 `SPARK_PROMO_CAMPAIGN_ID`（新 id 可再领一次）并按需改额度/文案（i18n `billing.promo*`）。
-- Admin：`/credits` 可查三池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览。
+- Admin：`/credits` 可查双池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览。
 
 门禁错误码（非 BillingLog）：`QUOTA_EXHAUSTED` / `OVERAGE_CAP_REACHED` → `BillingAccessDeniedError`（402；对话 SSE 文案分流）。
 
@@ -162,7 +162,7 @@
 
 ## Turso 迁移（首选）
 
-- 可用余额由应用层 `getAvailableTokens()` 计算（`subscription + purchased + trial`），**不要**在 Turso 上依赖 `Account.availableTokens` 生成列。
+- 可用余额由应用层 `getAvailableTokens()` 计算（`subscription + purchased`），**不要**在 Turso 上依赖 `Account.availableTokens` 生成列。
 - **日常**：`npm run turso:migrate:test` / `turso:migrate:prod`（维护 `_prisma_migrations`，只跑未应用的 `prisma/migrations/*/migration.sql`）。
 - 详情见 `docs/PROJECT_CONTEXT.md`「Turso 数据库」一节。
 

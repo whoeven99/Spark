@@ -7,7 +7,6 @@ export type PlanRecord = {
   tokens: number;
   priceAmount: string;
   currencyCode: string;
-  trialDays: number | null;
   shopifyPlanName: string | null;
   overagePricePerThousand: string | null;
   defaultOverageCapAmount: string | null;
@@ -44,7 +43,6 @@ export type BillingPageSnapshot = {
   account: {
     subscriptionTokens: number;
     purchasedTokens: number;
-    trialTokens: number;
   };
   subscription: {
     planKey: string;
@@ -53,7 +51,6 @@ export type BillingPageSnapshot = {
     tokensPerPeriod: number;
     currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
-    trialEndsAt: string | null;
     overageEnabled: boolean;
   } | null;
 };
@@ -97,7 +94,6 @@ export type BillingUsagePeriodItem = {
   usedTokens: number;
   subscriptionTokensAllocated: number;
   purchasedTokensRemaining: number;
-  trialTokensRemaining: number;
   archivedAt: string;
 };
 

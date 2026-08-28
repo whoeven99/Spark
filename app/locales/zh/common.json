@@ -1275,7 +1275,7 @@
     "toggleAnnual": "切换年付",
     "annualDiscountBadge": "年付折扣 {{percent}}%",
     "recommended": "推荐",
-    "planFree": "免费试用",
+    "planFree": "体验版",
     "currentPlan": "当前方案",
     "pendingConfirmation": "待确认付款",
     "pendingPlanLabel": "待确认付款 · {{plan}}",

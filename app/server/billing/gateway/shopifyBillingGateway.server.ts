@@ -65,7 +65,7 @@ export const shopifyBillingGateway: BillingGateway = {
         currencyCode: plan.currencyCode,
         billingInterval: plan.billingInterval,
         returnUrl,
-        trialDays: trialDays !== undefined ? trialDays : plan.trialDays,
+        trialDays,
         overage: overage
           ? {
               terms: overage.terms,

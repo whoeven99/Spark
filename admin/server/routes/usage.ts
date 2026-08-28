@@ -13,7 +13,6 @@ usageRouter.get("/", async (req, res) => {
         a.shop,
         a.subscriptionTokens,
         a.purchasedTokens,
-        a.trialTokens,
         a.usedTokens,
         a.updatedAt,
         sub.planKey,
@@ -34,15 +33,13 @@ usageRouter.get("/", async (req, res) => {
     const rows = result.rows.map((r) => {
       const sub = Number(r.subscriptionTokens ?? 0);
       const purchased = Number(r.purchasedTokens ?? 0);
-      const trial = Number(r.trialTokens ?? 0);
       const used = Number(r.usedTokens ?? 0);
-      const total = sub + purchased + trial;
+      const total = sub + purchased;
       return {
         shop: r.shop,
         appName: "spark",
         subscriptionTokens: sub,
         purchasedTokens: purchased,
-        trialTokens: trial,
         usedTokens: used,
         totalTokens: total,
         usagePercent: total > 0 ? Math.round((used / total) * 100) : 0,
@@ -69,7 +66,7 @@ usageRouter.get("/:shop/history", async (req, res) => {
     const result = await db.execute({
       sql: `
         SELECT periodStart, periodEnd, usedTokens, subscriptionTokensAllocated,
-               purchasedTokensRemaining, trialTokensRemaining, planKey, archivedAt
+               purchasedTokensRemaining, planKey, archivedAt
         FROM AccountPeriodUsage
         WHERE shop = ?
         ORDER BY periodEnd DESC
