@@ -287,7 +287,7 @@ export default function Support({
                 <Input
                   size="small"
                   prefix={<CheckOutlined style={{ color: "#bbb" }} />}
-                  placeholder="你的客服名（会显示给商家，可选）"
+                  placeholder="你的署名（仅运营后台可见，可选）"
                   value={opsName}
                   onChange={(e) => setOpsName(e.target.value)}
                   style={{ marginBottom: 8 }}
