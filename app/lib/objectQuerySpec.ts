@@ -8,6 +8,7 @@
  * 客户端（弹窗条件构建、上下文块、TaskProposalCard）与服务端
  * （/api/shopify/objects 筛选、/api/task-proposal 执行期求值）共用本文件。
  */
+import type { TFunction } from "i18next";
 
 export type ObjectQueryKind = "product" | "article";
 
@@ -63,10 +64,7 @@ export function describeObjectQuery(spec: ObjectQuerySpec): string {
 }
 
 /** 商户可见的圈定条件摘要；AI 注入仍用 describeObjectQuery。 */
-export function describeObjectQueryI18n(
-  spec: ObjectQuerySpec,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
+export function describeObjectQueryI18n(spec: ObjectQuerySpec, t: TFunction): string {
   const kind =
     spec.kind === "product"
       ? t("workspace.shell.contextPicker.kindProduct")

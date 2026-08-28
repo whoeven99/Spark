@@ -3,6 +3,7 @@
  * 弹窗内的临时表单状态（待上传文件、订单筛选）随弹窗关闭而重置。
  */
 import { useEffect, useRef, useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { WorkspaceContextObjectPicker } from "../../component/chat/WorkspaceContextObjectPicker";
 import { useContextResourceSearch } from "../../../hooks/useContextResourceSearch";
@@ -49,6 +50,13 @@ import {
 const ORDER_FILTERS: OrderFilterKey[] = ["all", "paid", "unfulfilled", "refunded"];
 const FILE_ROLES: FileRole[] = ["reference", "data", "style"];
 const PICKER = "workspace.shell.contextPicker";
+
+function orderFilterLabel(filter: OrderFilterKey, t: TFunction): string {
+  if (filter === "paid") return t(`${PICKER}.orderFilterPaid`);
+  if (filter === "unfulfilled") return t(`${PICKER}.orderFilterUnfulfilled`);
+  if (filter === "refunded") return t(`${PICKER}.orderFilterRefunded`);
+  return t(`${PICKER}.filterAll`);
+}
 
 export function ContextToolModal({ context }: { context: WorkspaceContextController }) {
   const { t } = useTranslation();
@@ -238,13 +246,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                   style={filterChipStyle(orderFilter === filter)}
                   onClick={() => setOrderFilter(filter)}
                 >
-                  {filter === "all"
-                    ? t(`${PICKER}.filterAll`)
-                    : filter === "paid"
-                      ? t(`${PICKER}.orderFilterPaid`)
-                      : filter === "unfulfilled"
-                        ? t(`${PICKER}.orderFilterUnfulfilled`)
-                        : t(`${PICKER}.orderFilterRefunded`)}
+                  {orderFilterLabel(filter, t)}
                 </button>
               ))}
             </div>
