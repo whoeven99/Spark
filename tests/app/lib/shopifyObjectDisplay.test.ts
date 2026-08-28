@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { describeObjectQueryI18n } from "../../../app/lib/objectQuerySpec";
 import {
+  contextResourceMetaText,
+  contextResourceTitle,
   shopifyObjectMetaText,
   shopifyObjectStatusText,
   shopifyObjectTitle,
@@ -61,5 +63,75 @@ describe("shopifyObjectDisplay", () => {
     expect(shopifyObjectStatusText(item, t)).toBe("Active");
     expect(shopifyObjectTitle(item, "product", t)).toBe("Untitled product");
     expect(shopifyObjectMetaText(item, t)).toBe("20.0 EUR · Inventory 4");
+  });
+});
+
+describe("contextResourceDisplay", () => {
+  const t = fakeT({
+    "workspace.shell.contextPicker.untitledOrder": "Untitled order",
+    "workspace.shell.contextPicker.orderMeta": "{{price}} · Created {{date}}",
+    "workspace.shell.contextPicker.orderCreatedAt": "Created {{date}}",
+    "workspace.shell.contextPicker.noMoreInfo": "No more details",
+    "workspace.shell.contextPicker.productMeta": "{{price}} · Inventory {{count}}",
+    "workspace.shell.contextPicker.priceUnknown": "Price unavailable",
+    "workspace.shell.contextPicker.articlePublishedAt": "Published {{date}}",
+  });
+
+  it("formats order created-at with locale, not server Chinese", () => {
+    expect(
+      contextResourceMetaText(
+        {
+          id: "gid://shopify/Order/1",
+          type: "order",
+          title: "#1122",
+          subtitle: "REFUNDED / UNFULFILLED",
+          meta: "46.92 EUR",
+          status: "REFUNDED",
+          imageUrl: null,
+          promptSummary: {
+            id: "gid://shopify/Order/1",
+            name: "#1122",
+            createdAt: "2026-08-10T12:00:00Z",
+            customerName: null,
+            totalPrice: "46.92",
+            currencyCode: "EUR",
+            financialStatus: "REFUNDED",
+            fulfillmentStatus: "UNFULFILLED",
+            tags: [],
+            lineItemsSummary: [],
+          },
+        },
+        t,
+      ),
+    ).toBe("46.92 EUR · Created 2026-08-10");
+  });
+
+  it("falls back to untitled order", () => {
+    expect(
+      contextResourceTitle(
+        {
+          id: "gid://shopify/Order/1",
+          type: "order",
+          title: "  ",
+          subtitle: "",
+          meta: "",
+          status: null,
+          imageUrl: null,
+          promptSummary: {
+            id: "gid://shopify/Order/1",
+            name: "",
+            createdAt: null,
+            customerName: null,
+            totalPrice: null,
+            currencyCode: null,
+            financialStatus: null,
+            fulfillmentStatus: null,
+            tags: [],
+            lineItemsSummary: [],
+          },
+        },
+        t,
+      ),
+    ).toBe("Untitled order");
   });
 });

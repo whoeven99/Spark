@@ -248,7 +248,7 @@ async function searchProducts(
       const node = edge?.node;
       const id = node?.id?.trim();
       if (!id) return null;
-      const title = node?.title?.trim() || "未命名商品";
+      const title = node?.title?.trim() || "";
       const status = node?.status?.trim() || null;
       const vendor = node?.vendor?.trim() || null;
       const productType = node?.productType?.trim() || null;
@@ -262,8 +262,8 @@ async function searchProducts(
         id,
         type: "product",
         title,
-        subtitle: [vendor, productType, statusLabel(status)].filter(Boolean).join(" / ") || "Shopify 商品",
-        meta: [priceRange, inventory === null ? null : `库存 ${inventory}`].filter(Boolean).join(" · ") || "暂无更多信息",
+        subtitle: [vendor, productType, statusLabel(status)].filter(Boolean).join(" / "),
+        meta: priceRange ?? "",
         status,
         imageUrl: node?.featuredImage?.url?.trim() || null,
         promptSummary: {
@@ -330,7 +330,7 @@ async function searchArticles(
       const node = edge?.node;
       const id = node?.id?.trim();
       if (!id) return null;
-      const title = node?.title?.trim() || "未命名文章";
+      const title = node?.title?.trim() || "";
       const isPublished = typeof node?.isPublished === "boolean" ? node.isPublished : null;
       const blogTitle = node?.blog?.title?.trim() || null;
       const author = node?.author?.name?.trim() || null;
@@ -340,8 +340,8 @@ async function searchArticles(
         id,
         type: "article",
         title,
-        subtitle: [blogTitle, author, isPublished === null ? null : isPublished ? "已发布" : "草稿"].filter(Boolean).join(" / ") || "Shopify 文章",
-        meta: [publishedAt ? `发布时间 ${formatDate(publishedAt)}` : null, excerpt].filter(Boolean).join(" · ") || "暂无更多信息",
+        subtitle: [blogTitle, author].filter(Boolean).join(" / "),
+        meta: excerpt ?? "",
         status: isPublished === null ? null : isPublished ? "published" : "draft",
         imageUrl: node?.image?.url?.trim() || null,
         promptSummary: {
@@ -411,7 +411,7 @@ async function searchOrders(
       const node = edge?.node;
       const id = node?.id?.trim();
       if (!id) return null;
-      const name = node?.name?.trim() || "未命名订单";
+      const name = node?.name?.trim() || "";
       const amount = node?.totalPriceSet?.shopMoney?.amount ?? null;
       const currencyCode = node?.totalPriceSet?.shopMoney?.currencyCode ?? null;
       const createdAt = node?.createdAt?.trim() || null;
@@ -421,11 +421,8 @@ async function searchOrders(
         id,
         type: "order",
         title: name,
-        subtitle: [financialStatus, fulfillmentStatus].filter(Boolean).join(" / ") || "Shopify 订单",
-        meta: [
-          amount && currencyCode ? `${amount} ${currencyCode}` : null,
-          createdAt ? `创建于 ${formatDate(createdAt)}` : null,
-        ].filter(Boolean).join(" · ") || "暂无更多信息",
+        subtitle: [financialStatus, fulfillmentStatus].filter(Boolean).join(" / "),
+        meta: amount && currencyCode ? `${amount} ${currencyCode}` : "",
         status: financialStatus || fulfillmentStatus,
         imageUrl: null,
         promptSummary: {
@@ -598,14 +595,6 @@ function stripHtml(value: string | null) {
 function clipText(value: string | null, maxLength: number) {
   if (!value) return null;
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function statusLabel(status: string | null) {

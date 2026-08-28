@@ -9,7 +9,11 @@ import { WorkspaceContextObjectPicker } from "../../component/chat/WorkspaceCont
 import { useContextResourceSearch } from "../../../hooks/useContextResourceSearch";
 import type { ContextResourceSortDirection } from "../../../lib/contextResourceTypes";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
-import { translatePickerError } from "../../../lib/shopifyObjectDisplay";
+import {
+  contextResourceMetaText,
+  contextResourceTitle,
+  translatePickerError,
+} from "../../../lib/shopifyObjectDisplay";
 import { ObjectQueryBuilder } from "./ObjectQueryBuilder";
 import {
   isObjectType,
@@ -269,18 +273,17 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
               {!orderErrorText &&
                 orderSearchResults.map((item) => {
                   const checked = selectedOrderIds.has(item.id);
+                  const title = contextResourceTitle(item, t);
                   return (
                     <label key={item.id} style={selectorItemStyle(checked)}>
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() =>
-                          toggleObjectSelection("order", { id: item.id, title: item.title })
-                        }
+                        onChange={() => toggleObjectSelection("order", { id: item.id, title })}
                       />
                       <div style={resourceItemContentStyle}>
                         <div style={resourceItemTopRowStyle}>
-                          <span style={sectionTitleSmallStyle}>{item.title}</span>
+                          <span style={sectionTitleSmallStyle}>{title}</span>
                           {item.status ? (
                             <span style={resourceStatusPillStyle}>
                               {item.status.replace(/_/g, " ")}
@@ -288,7 +291,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                           ) : null}
                         </div>
                         <span style={sectionTextStyle}>{item.subtitle}</span>
-                        <span style={mutedMetaStyle}>{item.meta}</span>
+                        <span style={mutedMetaStyle}>{contextResourceMetaText(item, t)}</span>
                       </div>
                     </label>
                   );
