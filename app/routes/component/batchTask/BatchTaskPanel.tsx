@@ -86,6 +86,7 @@ function SelectedChip({
   title: string;
   onRemove: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <span
       style={{
@@ -126,7 +127,8 @@ function SelectedChip({
           color: pageColorTokens.textFootnote,
           fontSize: 11,
         }}
-        aria-label={`移除 ${title}`}
+        aria-label={t("common.delete")}
+        title={title}
       >
         ×
       </button>
@@ -172,12 +174,14 @@ function DoneSummary({
           }}
         >
           {created > 0
-            ? `✓ 已成功创建 ${created}/${total} 个任务`
-            : `创建失败`}
+            ? t("workspace.taskProposal.card.doneSuccess", { created, total })
+            : t("workspace.taskProposal.card.doneFailed")}
         </span>
         {errors.length > 0 && (
           <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-            {errors.length} 个商品创建失败
+            {t("workspace.taskProposal.batchPanel.createFailedCount", {
+              count: errors.length,
+            })}
           </span>
         )}
       </div>
@@ -185,7 +189,9 @@ function DoneSummary({
       {/* Error list */}
       {errors.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={sectionLabelStyle}>失败详情</div>
+          <div style={sectionLabelStyle}>
+            {t("workspace.taskProposal.batchPanel.failureDetails")}
+          </div>
           <div
             style={{
               display: "flex",
@@ -234,7 +240,7 @@ function DoneSummary({
               color: pageColorTokens.textPrimary,
             }}
           >
-            查看任务
+            {t("workspace.taskProposal.batchPanel.viewTasks")}
           </button>
         )}
         <button
@@ -251,7 +257,7 @@ function DoneSummary({
             cursor: "pointer",
           }}
         >
-          完成
+          {t("common.close")}
         </button>
       </div>
     </div>
@@ -362,7 +368,7 @@ export function BatchTaskPanel({
     } catch (e) {
       setDoneCreated(0);
       setDoneErrors([
-        { index: 0, productId: "", error: e instanceof Error ? e.message : "网络错误" },
+        { index: 0, productId: "", error: e instanceof Error ? e.message : t("workspace.shell.contextPicker.networkError") },
       ]);
     }
     setStep("done");
@@ -374,21 +380,24 @@ export function BatchTaskPanel({
     translateTargetLanguage,
     selectedProducts,
     onBatchCreated,
+    t,
   ]);
 
   // ── Panel title ────────────────────────────────────────────────────────────
   const panelTitle =
     step === "done"
-      ? "批量创建结果"
+      ? t("workspace.taskProposal.batchPanel.resultTitle")
       : taskType === "product_improve"
-        ? "批量生成商品描述"
-        : "批量翻译商品图片";
+        ? t("workspace.taskProposal.skills.batchProductImprove.title")
+        : t("workspace.taskProposal.skills.batchPictureTranslate.title");
 
   // ── Language settings section ──────────────────────────────────────────────
   const languageSection =
     taskType === "product_improve" ? (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={sectionLabelStyle}>目标语言</div>
+        <div style={sectionLabelStyle}>
+          {t("workspace.taskProposal.fields.targetLanguage")}
+        </div>
         <select
           style={{ ...pageSelectStyle, width: "100%" }}
           value={targetLanguage}
@@ -402,12 +411,12 @@ export function BatchTaskPanel({
               ))
             : (
                 <>
-                  <option value="zh-CN">简体中文</option>
-                  <option value="en">English</option>
-                  <option value="ja">日本語</option>
-                  <option value="ko">한국어</option>
-                  <option value="de">Deutsch</option>
-                  <option value="fr">Français</option>
+                  <option value="zh-CN">{t("language.zh")}</option>
+                  <option value="en">{t("language.en")}</option>
+                  <option value="ja">{t("language.ja")}</option>
+                  <option value="ko">{t("language.ko")}</option>
+                  <option value="de">{t("language.de")}</option>
+                  <option value="fr">{t("language.fr")}</option>
                 </>
               )}
         </select>
@@ -421,7 +430,9 @@ export function BatchTaskPanel({
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={sectionLabelStyle}>源语言</div>
+          <div style={sectionLabelStyle}>
+            {t("workspace.taskProposal.fields.sourceLanguage")}
+          </div>
           <select
             style={{ ...pageSelectStyle, width: "100%" }}
             value={sourceLanguage}
@@ -435,7 +446,9 @@ export function BatchTaskPanel({
           </select>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={sectionLabelStyle}>目标语言</div>
+          <div style={sectionLabelStyle}>
+            {t("workspace.taskProposal.fields.targetLanguage")}
+          </div>
           <select
             style={{ ...pageSelectStyle, width: "100%" }}
             value={translateTargetLanguage}
@@ -458,7 +471,10 @@ export function BatchTaskPanel({
       {selectedProducts.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={sectionLabelStyle}>
-            已选商品（{selectedProducts.length}/{MAX_BATCH}）
+            {t("workspace.taskProposal.batchPanel.selectedProducts", {
+              count: selectedProducts.length,
+              max: MAX_BATCH,
+            })}
           </div>
           <div style={selectedChipRowStyle}>
             {selectedProducts.map((p) => (
@@ -477,15 +493,20 @@ export function BatchTaskPanel({
       {/* Picture translate: warn products without featured image */}
       {taskType === "picture_translate" && productsWithoutImage.length > 0 && (
         <div style={warnBoxStyle}>
-          ⚠️ 以下 {productsWithoutImage.length} 个商品没有主图，将被跳过：
-          {productsWithoutImage.map((p) => p.title).join("、")}
+          ⚠️{" "}
+          {t("workspace.taskProposal.batchPanel.noPrimaryImageWarn", {
+            count: productsWithoutImage.length,
+            titles: productsWithoutImage
+              .map((p) => p.title)
+              .join(t("workspace.taskProposal.batchPanel.listJoin")),
+          })}
         </div>
       )}
 
       {/* Max limit warning */}
       {selectedProducts.length >= MAX_BATCH && (
         <div style={{ ...warnBoxStyle, color: pageColorTokens.criticalText }}>
-          最多批量创建 {MAX_BATCH} 个任务，请减少选择
+          {t("workspace.taskProposal.batchPanel.maxExceeded", { max: MAX_BATCH })}
         </div>
       )}
 
@@ -495,9 +516,9 @@ export function BatchTaskPanel({
       {/* Product selector */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={sectionLabelStyle}>
-          选择商品{" "}
+          {t("workspace.taskProposal.batchPanel.selectProducts")}{" "}
           <span style={{ fontWeight: 400, color: pageColorTokens.textFootnote }}>
-            （点击添加到批量列表）
+            {t("workspace.taskProposal.batchPanel.clickToAdd")}
           </span>
         </div>
         <div
@@ -541,7 +562,7 @@ export function BatchTaskPanel({
           color: pageColorTokens.textPrimary,
         }}
       >
-        取消
+        {t("common.cancel")}
       </button>
       <button
         type="button"
@@ -559,8 +580,12 @@ export function BatchTaskPanel({
         }}
       >
         {taskType === "product_improve"
-          ? `批量生成（${selectedProducts.length} 个）`
-          : `批量翻译（${selectedProducts.filter((p) => p.featuredImageUrl).length} 个）`}
+          ? t("workspace.taskProposal.batchPanel.submitImprove", {
+              count: selectedProducts.length,
+            })
+          : t("workspace.taskProposal.batchPanel.submitTranslate", {
+              count: selectedProducts.filter((p) => p.featuredImageUrl).length,
+            })}
       </button>
     </div>
   );
@@ -587,7 +612,7 @@ export function BatchTaskPanel({
         >
           <Spin size="large" />
           <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
-            正在批量创建任务，请稍候…
+            {t("workspace.taskProposal.batchPanel.creating")}
           </span>
         </div>
       ) : step === "done" ? (

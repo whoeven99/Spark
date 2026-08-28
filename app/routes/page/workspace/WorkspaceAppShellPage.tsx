@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
-import { SupportChatWidget } from "../../component/SupportChatWidget";
+import { SupportChatWidget, SupportChatIcon } from "../../component/SupportChatWidget";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { SparkMark } from "../../component/common/SparkMark";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
@@ -65,6 +65,8 @@ import {
   brandMetaStyle,
   brandRowStyle,
   brandTitleStyle,
+  accountFooterMetaStyle,
+  accountFooterTitleStyle,
   contentStyle,
   conversationListStyle,
   footerBadgeStyle,
@@ -85,6 +87,7 @@ import {
   shellStyle,
   sidebarDividerStyle,
   sidebarFooterButtonStyle,
+  sidebarCollapsedHelpButtonStyle,
   sidebarFooterHelpButtonStyle,
   sidebarFooterRowStyle,
   sidebarSectionHeadStyle,
@@ -1400,8 +1403,8 @@ export function WorkspaceAppShellPage({
             onClick={() => setAccountMenuOpen((current) => !current)}
           >
             <div style={{ minWidth: 0 }}>
-              <div style={brandTitleStyle}>{displayName}</div>
-              <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
+              <div style={accountFooterTitleStyle}>{displayName}</div>
+              <div style={accountFooterMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
             </div>
           </button>
           <SupportChatWidget
@@ -1410,9 +1413,11 @@ export function WorkspaceAppShellPage({
                 type="button"
                 onClick={toggleOpen}
                 style={sidebarFooterHelpButtonStyle(open)}
-                aria-label="Need Help"
+                aria-label={t("support.buttonAria")}
+                title={t("support.needHelp")}
               >
-                <span>Need Help</span>
+                <SupportChatIcon size={12} />
+                <span>{t("support.needHelp")}</span>
                 {unread > 0 ? (
                   <span style={footerBadgeStyle}>{unread > 9 ? "9+" : unread}</span>
                 ) : null}
@@ -1456,6 +1461,36 @@ export function WorkspaceAppShellPage({
         </button>
         <div style={{ height: 1, width: 28, background: "#e1e3e5", margin: "2px 0" }} />
       </div>
+      <SupportChatWidget
+        renderLauncher={({ open, unread, toggleOpen }) => (
+          <button
+            type="button"
+            onClick={toggleOpen}
+            style={sidebarCollapsedHelpButtonStyle(open)}
+            aria-label={t("support.buttonAria")}
+            title={t("support.needHelp")}
+          >
+            <SupportChatIcon size={14} />
+            {unread > 0 ? (
+              <span
+                style={{
+                  ...footerBadgeStyle,
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  minWidth: 16,
+                  height: 16,
+                  lineHeight: "16px",
+                  fontSize: 10,
+                  padding: "0 4px",
+                }}
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            ) : null}
+          </button>
+        )}
+      />
       <button
         type="button"
         style={{ ...collapsedIconButtonStyle(false), borderRadius: "50%" }}

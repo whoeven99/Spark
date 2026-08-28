@@ -278,12 +278,17 @@ export const historyTitleStyle = (active: boolean): CSSProperties => ({
 export const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
+  paddingBottom: 12,
   borderTop: `1px solid ${shopifyUi.border}`,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
 };
 export const sidebarFooterRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
+  width: "100%",
 };
 export const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
@@ -293,26 +298,65 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   border: "1px solid transparent",
   borderRadius: 12,
   background: "transparent",
-  padding: "10px 10px 0",
+  padding: "0 8px",
   textAlign: "left",
   cursor: "pointer",
 };
+/** 侧栏底账户文案：大于顶栏 brand，横线 padding 不动 */
+export const accountFooterTitleStyle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1.25,
+  color: shopifyUi.text,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+export const accountFooterMetaStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.3,
+  letterSpacing: "-0.01em",
+  color: shopifyUi.textMuted,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
 export const sidebarFooterHelpButtonStyle = (active: boolean): CSSProperties => ({
+  position: "relative",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: 6,
+  gap: 4,
   flexShrink: 0,
-  minHeight: 34,
-  border: `1px solid ${active ? "#c9cccf" : "#dfe3e8"}`,
-  borderRadius: 12,
-  background: active ? "#f6f6f7" : "#ffffff",
-  color: "#1f2124",
-  padding: "0 12px",
-  fontSize: 12,
-  fontWeight: 700,
+  minHeight: 28,
+  border: `1px solid ${active ? "#006e52" : "#008060"}`,
+  borderRadius: 8,
+  background: active ? "#006e52" : "#008060",
+  color: "#ffffff",
+  padding: "0 8px",
+  fontSize: 11,
+  fontWeight: 650,
   cursor: "pointer",
   whiteSpace: "nowrap",
+  boxShadow: active ? "none" : "0 1px 2px rgba(0, 128, 96, 0.2)",
+});
+
+/** 侧栏折叠时：与右下角 FAB 同语意的绿色圆形客服入口 */
+export const sidebarCollapsedHelpButtonStyle = (active: boolean): CSSProperties => ({
+  position: "relative",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 32,
+  height: 32,
+  borderRadius: "50%",
+  border: `1px solid ${active ? "#006e52" : "#008060"}`,
+  background: active ? "#006e52" : "#008060",
+  color: "#ffffff",
+  cursor: "pointer",
+  flexShrink: 0,
+  boxShadow: "0 1px 3px rgba(0, 128, 96, 0.28)",
+  padding: 0,
 });
 export const accountMenuStyle: CSSProperties = {
   position: "absolute",

@@ -24,6 +24,17 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.summary`,
 };
 
+/** 历史消息仅有 taskType 时映射到 skillId，便于侧栏标题 i18n */
+const TASK_TYPE_TO_SKILL_ID: Record<string, string> = {
+  product_improve: BATCH_PRODUCT_IMPROVE_SKILL_ID,
+  picture_translate: BATCH_PICTURE_TRANSLATE_SKILL_ID,
+  image_generation: IMAGE_GENERATION_SKILL_ID,
+};
+
+export function skillIdFromAiTaskType(taskType: string): string | undefined {
+  return TASK_TYPE_TO_SKILL_ID[taskType];
+}
+
 const FIELD_LABEL_KEYS: Record<string, string> = {
   targetLanguage: `${PREFIX}.fields.targetLanguage`,
   sourceLanguage: `${PREFIX}.fields.sourceLanguage`,
@@ -37,8 +48,9 @@ const TARGET_KIND_KEYS: Record<TaskProposalTargetKind, string> = {
   none: `${PREFIX}.targetKinds.none`,
 };
 
-/** 已知 disabledReason 中文/英文 → i18n key */
+/** 已知 disabledReason 稳定码 / 历史文案 → i18n key */
 const DISABLED_REASON_KEYS: Record<string, string> = {
+  no_primary_image: `${PREFIX}.disabledReasons.noImage`,
   无主图: `${PREFIX}.disabledReasons.noImage`,
   "No main image": `${PREFIX}.disabledReasons.noImage`,
 };
@@ -77,20 +89,36 @@ export function resolveTaskProposalFieldLabel(field: Pick<TaskProposalField, "ke
   return translated === key ? field.label : translated;
 }
 
+function languageCatalogKeys(code: string): string[] {
+  const trimmed = code.trim();
+  if (!trimmed) return [];
+  const lower = trimmed.toLowerCase();
+  const underscored = lower.replace(/-/g, "_");
+  const keys = [`language.${underscored}`, `language.${lower}`, `language.${trimmed}`];
+  if (lower === "zh-cn" || lower === "zh_cn" || lower === "zh-hans") {
+    keys.push("language.zh");
+  }
+  if (lower === "zh-tw" || lower === "zh_tw" || lower === "zh-hant") {
+    keys.push("language.zh-tw");
+  }
+  return keys;
+}
+
 export function resolveTaskProposalParamValueLabel(
-  fieldKey: string,
+  _fieldKey: string,
   value: string,
   t: TFunction,
 ): string {
   const trimmed = value.trim();
   if (!trimmed) return value;
 
+  for (const languageKey of languageCatalogKeys(trimmed)) {
+    const languageLabel = t(languageKey, { defaultValue: "" });
+    if (languageLabel) return languageLabel;
+  }
+
   const productImproveOption = PRODUCT_IMPROVE_LANGUAGE_OPTIONS.find((o) => o.value === trimmed);
   if (productImproveOption) return productImproveOption.label;
-
-  const languageKey = `language.${trimmed.replace(/-/g, "_")}`;
-  const languageLabel = t(languageKey, { defaultValue: "" });
-  if (languageLabel) return languageLabel;
 
   return trimmed;
 }

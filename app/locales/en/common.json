@@ -291,6 +291,21 @@
     "paginationNext": "Next",
     "backToPrevious": "Back"
   },
+  "support": {
+    "title": "Contact support",
+    "needHelp": "Support",
+    "buttonAria": "Open support chat",
+    "greeting": "Hi! Leave a message here and our support team will get back to you soon.",
+    "emailPrompt": "Add a contact email so we can reply:",
+    "emailPlaceholder": "you@example.com",
+    "emailSave": "Save",
+    "emailSaved": "Email saved. We’ll notify you by email.",
+    "emailInvalid": "Please enter a valid email address",
+    "empty": "No messages yet — say hello.",
+    "placeholder": "Type a message…",
+    "sendError": "Couldn’t send. Please try again.",
+    "opsDefaultName": "Spark Support"
+  },
   "language": {
     "auto": "Auto detect",
     "af": "Afrikaans",
@@ -3530,7 +3545,8 @@
         },
         "imageGeneration": {
           "title": "Generate product image with AI",
-          "summary": "Generate one product image from your description. View and apply it in Tasks when done."
+          "summary": "Generate one product image from your description. View and apply it in Tasks when done.",
+          "placeholder": "Describe the image, e.g. minimal ceramic mug on a white background"
         }
       },
       "fields": {
@@ -3583,7 +3599,23 @@
         "running": "Running…",
         "createdCount": "Created {{count}} tasks",
         "createdPartial": "Created {{count}} tasks, {{failed}} targets failed to create",
-        "progress": "Progress: {{parts}}"
+        "progress": "Progress: {{parts}}",
+        "moreErrors": "{{count}} more failures"
+      },
+      "batchPanel": {
+        "resultTitle": "Batch create result",
+        "selectedProducts": "Selected products ({{count}}/{{max}})",
+        "selectProducts": "Select products",
+        "noPrimaryImageWarn": "{{count}} products have no primary image and will be skipped: {{titles}}",
+        "maxExceeded": "You can create at most {{max}} tasks. Reduce the selection.",
+        "clickToAdd": "(click to add to batch)",
+        "listJoin": ", ",
+        "submitImprove": "Batch generate ({{count}})",
+        "submitTranslate": "Batch translate ({{count}})",
+        "creating": "Creating batch tasks…",
+        "createFailedCount": "{{count}} products failed to create",
+        "failureDetails": "Failure details",
+        "viewTasks": "View tasks"
       }
     },
     "execution": {

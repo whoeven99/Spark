@@ -207,7 +207,9 @@ export function mergeTaskProposalTargets(
           id: p.id,
           title: p.title,
           imageUrl: p.imageUrl ?? null,
-          ...(requiresImage && !p.imageUrl ? { disabledReason: "无主图" } : {}),
+          ...(requiresImage && !p.imageUrl
+            ? { disabledReason: "no_primary_image" }
+            : {}),
         })),
       },
     };
@@ -326,7 +328,7 @@ export function buildBatchPictureTranslateProposal(args: {
         id: p.id,
         title: p.title,
         imageUrl: p.imageUrl ?? null,
-        ...(p.imageUrl ? {} : { disabledReason: "无主图" }),
+        ...(p.imageUrl ? {} : { disabledReason: "no_primary_image" }),
       })),
     },
     params: [
