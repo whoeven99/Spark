@@ -328,7 +328,7 @@ Package-backed：
 
 CI：
 
-- `.github/scripts/render-deploy-and-wait.sh` — `spark-deploy.yml`（Admin Test / Spark Prod 等）部署轮询；飞书部署通知在 workflow 内直接 `curl`，不依赖本地 digest 脚本
+- `.github/scripts/render-deploy-and-wait.sh` — `spark-deploy.yml` 部署轮询；飞书部署通知仅 Spark Prod / Admin Prod，测环境不发
 
 不要恢复已删除的 Render 日志 digest 脚本（`render-daily-log-digest` 等）或缺失的 `turso-drop-schema-*` npm 入口。临时探针放仓库外，或用完即删；`scripts/tmp*` 未跟踪文件勿擅自纳入改动。
 
