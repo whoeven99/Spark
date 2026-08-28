@@ -2,6 +2,60 @@
   margin: 0;
 }
 
+/* 营销领 Token：单行紧凑条，避免占高 */
+.promoStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #c4d4f5;
+  background: #eef4ff;
+  color: #1f2124;
+}
+
+.promoStripClaimed {
+  border-color: rgba(0, 128, 96, 0.28);
+  background: #e9f7ef;
+}
+
+.promoStripText {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: #61666c;
+}
+
+.promoStripTitle {
+  font-weight: 650;
+  color: #1f2124;
+}
+
+.promoStripSep {
+  margin: 0 0.35rem;
+  color: #8c9196;
+}
+
+.promoStripAction {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .promoStrip {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .promoStripAction {
+    width: 100%;
+  }
+}
+
 /* —— 额度卡片 —— */
 .quotaSection {
   margin-bottom: 0.75rem;

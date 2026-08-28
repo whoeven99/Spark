@@ -1099,36 +1099,44 @@ export function BillingPage() {
         <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
       ) : null}
       {promoCampaign ? (
-        <s-banner tone={promoCampaign.claimed ? "success" : "info"}>
-          <p>
-            <strong>{t("billing.promoTitle")}</strong>
-          </p>
-          <p>
-            {promoCampaign.claimed
-              ? t("billing.promoClaimedBody", {
-                  count: promoCampaign.tokenAmount.toLocaleString(locale),
-                })
-              : t("billing.promoBody", {
-                  count: promoCampaign.tokenAmount.toLocaleString(locale),
-                })}
+        <div
+          className={`${styles.promoStrip} ${
+            promoCampaign.claimed ? styles.promoStripClaimed : ""
+          }`}
+          role="status"
+        >
+          <p className={styles.promoStripText}>
+            <strong className={styles.promoStripTitle}>
+              {t("billing.promoTitle")}
+            </strong>
+            <span className={styles.promoStripSep} aria-hidden>
+              ·
+            </span>
+            <span>
+              {promoCampaign.claimed
+                ? t("billing.promoClaimedBody", {
+                    count: promoCampaign.tokenAmount.toLocaleString(locale),
+                  })
+                : t("billing.promoBody", {
+                    count: promoCampaign.tokenAmount.toLocaleString(locale),
+                  })}
+            </span>
           </p>
           {!promoCampaign.claimed ? (
-            <div style={{ marginTop: "8px" }}>
-              <Form method="post">
-                <input type="hidden" name="intent" value="claim_promo_tokens" />
-                <s-button
-                  type="submit"
-                  variant="primary"
-                  {...(isClaimingPromo ? { loading: true } : {})}
-                >
-                  {isClaimingPromo
-                    ? t("billing.promoClaiming")
-                    : t("billing.promoClaim")}
-                </s-button>
-              </Form>
-            </div>
+            <Form method="post" className={styles.promoStripAction}>
+              <input type="hidden" name="intent" value="claim_promo_tokens" />
+              <s-button
+                type="submit"
+                variant="primary"
+                {...(isClaimingPromo ? { loading: true } : {})}
+              >
+                {isClaimingPromo
+                  ? t("billing.promoClaiming")
+                  : t("billing.promoClaim")}
+              </s-button>
+            </Form>
           ) : null}
-        </s-banner>
+        </div>
       ) : null}
 
       <section className={styles.quotaSection}>
