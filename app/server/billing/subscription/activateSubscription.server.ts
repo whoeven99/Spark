@@ -85,13 +85,21 @@ export async function applyActiveSubscription(params: {
     return;
   }
 
+  const isPlanChangeFromPending =
+    existing?.pendingShopifySubscriptionId === shopifySubscriptionId;
+
   const wasPending =
     existing?.status === APP_SUBSCRIPTION_STATUS.PENDING ||
     !existing ||
-    existing.shopifySubscriptionId !== shopifySubscriptionId;
+    existing.shopifySubscriptionId !== shopifySubscriptionId ||
+    isPlanChangeFromPending;
+
+  /** 首次开通（含首次 PENDING→ACTIVE）；换套餐走 changed 邮件，不发 started / 运营飞书 */
+  const isFirstActivation =
+    !existing || existing.status === APP_SUBSCRIPTION_STATUS.PENDING;
 
   console.info(
-    `${LOG} activation-context shop=${shop} existingStatus=${existing?.status ?? "(none)"} existingPlanKey=${existing?.planKey ?? "(none)"} wasPending=${wasPending}`,
+    `${LOG} activation-context shop=${shop} existingStatus=${existing?.status ?? "(none)"} existingPlanKey=${existing?.planKey ?? "(none)"} wasPending=${wasPending} isFirstActivation=${isFirstActivation} isPlanChangeFromPending=${isPlanChangeFromPending}`,
   );
 
   await prisma.appSubscription.upsert({
@@ -113,6 +121,10 @@ export async function applyActiveSubscription(params: {
       usageBalanceUsed: overage?.usageBalanceUsed ?? "0",
       overageEnabled: overage?.overageEnabled ?? Boolean(overage?.usageLineItemId),
       overagePendingTokens: 0,
+      pendingShopifySubscriptionId: null,
+      pendingPlanKey: null,
+      pendingConfirmationUrl: null,
+      pendingCreatedAt: null,
       rawPayload: rawPayload as Prisma.InputJsonValue,
     },
     update: {
@@ -125,6 +137,10 @@ export async function applyActiveSubscription(params: {
       currentPeriodStart: period.currentPeriodStart,
       currentPeriodEnd: period.currentPeriodEnd,
       cancelledAt: null,
+      pendingShopifySubscriptionId: null,
+      pendingPlanKey: null,
+      pendingConfirmationUrl: null,
+      pendingCreatedAt: null,
       ...(overage
         ? {
             usageLineItemId: overage.usageLineItemId ?? null,
@@ -154,7 +170,7 @@ export async function applyActiveSubscription(params: {
   const creditsAfter =
     account.purchasedTokens + account.trialTokens + tokensPerPeriod;
 
-  if (wasPending) {
+  if (isFirstActivation) {
     await appendBillingLog({
       shop,
       eventType: BILLING_LOG_EVENT.SUBSCRIPTION_ACTIVATED,
@@ -176,6 +192,22 @@ export async function applyActiveSubscription(params: {
     } catch (error) {
       console.error(`${LOG} notify-feishu-failed shop=${shop}:`, error);
     }
+  } else if (wasPending) {
+    await appendBillingLog({
+      shop,
+      eventType: BILLING_LOG_EVENT.SUBSCRIPTION_ACTIVATED,
+      planKey,
+      referenceId: shopifySubscriptionId,
+      tokensDelta: tokensPerPeriod,
+      metadata: {
+        billingInterval,
+        changeType: "plan_change",
+        previousPlanKey: existing?.planKey ?? null,
+      },
+    });
+    console.info(
+      `${LOG} notify-feishu-skip shop=${shop} reason=plan-change (only first activation sends ops feishu)`,
+    );
   } else {
     console.info(
       `${LOG} notify-feishu-skip shop=${shop} reason=not-was-pending (only first activation sends ops feishu)`,
@@ -187,7 +219,7 @@ export async function applyActiveSubscription(params: {
   const currentPlan = await getPlanByKey(planKey).catch(() => null);
   const currentPlanName = currentPlan?.displayName ?? planKey;
   const appName = "spark";
-  if (wasPending) {
+  if (isFirstActivation) {
     console.info(`${LOG} notify-email-start shop=${shop} event=subscriptionStarted`);
     await notifySubscriptionEmail({
       shop,
@@ -202,7 +234,11 @@ export async function applyActiveSubscription(params: {
         creditReasonKey: "subscription_started",
       }),
     });
-  } else if (previousPlanKey && previousPlanKey !== planKey) {
+  } else if (
+    (isPlanChangeFromPending || wasPending) &&
+    previousPlanKey &&
+    previousPlanKey !== planKey
+  ) {
     console.info(
       `${LOG} notify-email-start shop=${shop} event=subscriptionChanged previousPlanKey=${previousPlanKey}`,
     );
@@ -256,20 +292,19 @@ export function subscriptionTokensAfterCancel(
   };
 }
 
-async function findAppSubscriptionForWebhook(params: {
+/**
+ * 仅匹配当前主行 `shopifySubscriptionId`。
+ * 不按 shop 回落：换套餐后旧 GID 的 cancel webhook 必须 no-op，避免误删新 ACTIVE。
+ */
+async function findActiveMainSubscriptionForCancel(params: {
   shop: string;
   shopifySubscriptionId: string;
 }) {
-  const byShopifyId = await prisma.appSubscription.findFirst({
+  return prisma.appSubscription.findFirst({
     where: {
       shop: params.shop,
       shopifySubscriptionId: params.shopifySubscriptionId,
     },
-  });
-  if (byShopifyId) return byShopifyId;
-
-  return prisma.appSubscription.findUnique({
-    where: { shop: params.shop },
   });
 }
 
@@ -279,11 +314,24 @@ export async function markSubscriptionNonActive(params: {
   status: string;
   rawPayload?: Record<string, unknown>;
 }): Promise<void> {
-  const sub = await findAppSubscriptionForWebhook({
+  const sub = await findActiveMainSubscriptionForCancel({
     shop: params.shop,
     shopifySubscriptionId: params.shopifySubscriptionId,
   });
-  if (!sub) return;
+  if (!sub) {
+    console.info(
+      `${LOG} mark-non-active-skip shop=${params.shop} reason=no-matching-main-id subscriptionId=${params.shopifySubscriptionId}`,
+    );
+    return;
+  }
+
+  // 换套餐 pending 期间：勿因旧主行 CANCELLED 误删仍有效的本地 ACTIVE
+  if (sub.pendingShopifySubscriptionId) {
+    console.info(
+      `${LOG} mark-non-active-skip shop=${params.shop} reason=pending-plan-change subscriptionId=${params.shopifySubscriptionId}`,
+    );
+    return;
+  }
 
   const isTerminalCancel =
     params.status === APP_SUBSCRIPTION_STATUS.CANCELLED ||

@@ -438,6 +438,8 @@ export function BillingPage() {
     toolUsageHistory,
     overageCharges,
     showDevCancelSubscription,
+    pendingPlanChange,
+    billingReturnFlash,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -445,6 +447,9 @@ export function BillingPage() {
   const isCancelling =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "cancel_subscription";
+  const isDismissingPending =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "dismiss_pending_plan_change";
   const subscribingPlanKey =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "subscribe"
@@ -587,6 +592,8 @@ export function BillingPage() {
 
   if (actionData?.ok && "raisedCap" in actionData && actionData.raisedCap) {
     shopify.toast.show(t("billing.overageRaiseCapDone"));
+  } else if (actionData?.ok && "dismissedPending" in actionData && actionData.dismissedPending) {
+    shopify.toast.show(t("billing.pendingPlanChangeDismissed"));
   } else if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
     shopify.toast.show(t("billing.checkoutCompleteNoRedirect"));
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
@@ -594,6 +601,14 @@ export function BillingPage() {
   } else if (actionData && !actionData.ok) {
     shopify.toast.show(actionData.error);
   }
+
+  useEffect(() => {
+    if (billingReturnFlash === "awaiting_shopify_confirm") {
+      shopify.toast.show(t("billing.pendingPlanChangeAwaitConfirm"));
+    } else if (billingReturnFlash === "plan_unchanged_declined") {
+      shopify.toast.show(t("billing.pendingPlanChangeDeclined"));
+    }
+  }, [billingReturnFlash, shopify, t]);
 
   const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale, t);
 
@@ -1002,6 +1017,50 @@ export function BillingPage() {
       ) : null}
       {billing.overage?.approaching && billing.hasAccess ? (
         <s-banner tone="warning">{t("billing.overageApproachingWarning")}</s-banner>
+      ) : null}
+      {pendingPlanChange ? (
+        <s-banner tone="info">
+          <p>
+            {t("billing.pendingPlanChangeBanner", {
+              plan: normalizePlanDisplayName(
+                pendingPlanChange.planName,
+                pendingPlanChange.planKey,
+              ),
+            })}
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              marginTop: "8px",
+            }}
+          >
+            {pendingPlanChange.confirmationUrl ? (
+              <a
+                href={pendingPlanChange.confirmationUrl}
+                target="_top"
+                rel="noopener noreferrer"
+              >
+                <s-button variant="primary">
+                  {t("billing.pendingPlanChangeContinue")}
+                </s-button>
+              </a>
+            ) : null}
+            <Form method="post">
+              <input type="hidden" name="intent" value="dismiss_pending_plan_change" />
+              <s-button
+                type="submit"
+                variant="tertiary"
+                {...(isDismissingPending ? { loading: true } : {})}
+              >
+                {isDismissingPending
+                  ? t("billing.pendingPlanChangeDismissing")
+                  : t("billing.pendingPlanChangeDismiss")}
+              </s-button>
+            </Form>
+          </div>
+        </s-banner>
       ) : null}
       {subscriptionTrialBannerCopy ? (
         <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>

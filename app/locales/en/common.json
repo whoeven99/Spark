@@ -1241,7 +1241,8 @@
       "ACTIVE": "Active",
       "CANCELLED": "Cancelled",
       "EXPIRED": "Expired",
-      "FROZEN": "Frozen"
+      "FROZEN": "Frozen",
+      "DECLINED": "Declined"
     },
     "quotaTitle": "Current balance",
     "quotaUsageAria": "Used {{used}}, available {{available}} tokens",
@@ -1256,6 +1257,13 @@
     "currentPlan": "Current plan",
     "pendingConfirmation": "Awaiting payment",
     "pendingPlanLabel": "Awaiting payment · {{plan}}",
+    "pendingPlanChangeBanner": "Plan change awaiting Shopify confirmation: {{plan}}. Your current plan and quota stay active.",
+    "pendingPlanChangeContinue": "Open confirmation page",
+    "pendingPlanChangeDismiss": "Discard change",
+    "pendingPlanChangeDismissing": "Working…",
+    "pendingPlanChangeDismissed": "Plan change discarded. Your current plan is unchanged.",
+    "pendingPlanChangeAwaitConfirm": "Please finish confirmation in Shopify to change plans",
+    "pendingPlanChangeDeclined": "Plan unchanged. You are still on your current plan.",
     "redirectingToCheckout": "Redirecting…",
     "checkoutCompleteNoRedirect": "Subscription created (test mode, no redirect)",
     "getStarted": "Get started",

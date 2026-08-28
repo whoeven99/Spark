@@ -53,6 +53,18 @@ export type BillingPageSnapshot = {
   } | null;
 };
 
+export type PendingPlanChangeSnapshot = {
+  planKey: string;
+  planName: string;
+  confirmationUrl: string | null;
+  createdAt: string | null;
+};
+
+export type BillingReturnFlash =
+  | "awaiting_shopify_confirm"
+  | "plan_unchanged_declined"
+  | null;
+
 export type BillingHistoryItem = {
   id: string;
   eventType: string;
@@ -104,6 +116,10 @@ export type BillingPageLoaderData = {
   overageCharges: BillingOverageChargeItem[];
   /** NODE_ENV=test 且存在可取消订阅时为 true */
   showDevCancelSubscription: boolean;
+  /** 换套餐待 Shopify 确认 */
+  pendingPlanChange: PendingPlanChangeSnapshot | null;
+  /** 从 Shopify 结账回跳时的一次性提示 */
+  billingReturnFlash: BillingReturnFlash;
 };
 
 /** 其它页面仅需展示访问状态时使用。 */

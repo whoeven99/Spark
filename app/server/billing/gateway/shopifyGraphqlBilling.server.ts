@@ -70,6 +70,7 @@ const APP_SUBSCRIPTION_CREATE = `#graphql
     $lineItems: [AppSubscriptionLineItemInput!]!
     $test: Boolean
     $trialDays: Int
+    $replacementBehavior: AppSubscriptionReplacementBehavior
   ) {
     appSubscriptionCreate(
       name: $name
@@ -77,6 +78,7 @@ const APP_SUBSCRIPTION_CREATE = `#graphql
       lineItems: $lineItems
       test: $test
       trialDays: $trialDays
+      replacementBehavior: $replacementBehavior
     ) {
       appSubscription {
         id
@@ -287,6 +289,10 @@ export async function shopifyCreateSubscription(
       cappedAmount: string;
       currencyCode: string;
     } | null;
+    replacementBehavior?:
+      | "APPLY_IMMEDIATELY"
+      | "APPLY_ON_NEXT_BILLING_CYCLE"
+      | "STANDARD";
   },
 ): Promise<{
   confirmationUrl: string | null;
@@ -338,6 +344,7 @@ export async function shopifyCreateSubscription(
     test: isBillingTestMode(),
     trialDays: params.trialDays ?? undefined,
     lineItems,
+    replacementBehavior: params.replacementBehavior,
   });
 
   const payload = data.appSubscriptionCreate;
@@ -592,6 +599,6 @@ export function mapShopifySubscriptionStatus(status: string): string {
   }
   if (normalized === "EXPIRED") return "EXPIRED";
   if (normalized === "FROZEN") return "FROZEN";
-  if (normalized === "DECLINED") return "CANCELLED";
+  if (normalized === "DECLINED") return "DECLINED";
   return normalized;
 }

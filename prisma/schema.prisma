@@ -251,7 +251,7 @@ model AppSubscription {
   planKey                String
   shopifySubscriptionId  String   @unique
   billingInterval        String
-  /// PENDING | ACTIVE | CANCELLED | EXPIRED | FROZEN
+  /// PENDING | ACTIVE | CANCELLED | EXPIRED | FROZEN | DECLINED（DECLINED 仅瞬态/日志，主行一般不长期停在此）
   status                 String
   tokensPerPeriod        Int
   /// Shopify usage line item id；无则老订阅不支持超额
@@ -271,6 +271,11 @@ model AppSubscription {
   currentPeriodEnd       DateTime?
   cancelledAt            DateTime?
   confirmationUrl        String?
+  /// 换套餐待 Shopify 确认的新订阅 GID（主行保持旧 ACTIVE）
+  pendingShopifySubscriptionId String?
+  pendingPlanKey         String?
+  pendingConfirmationUrl String?
+  pendingCreatedAt       DateTime?
   rawPayload             Json?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
@@ -281,6 +286,7 @@ model AppSubscription {
 
   @@unique([shop])
   @@index([status])
+  @@index([pendingShopifySubscriptionId])
 }
 
 /// Shopify usage 超额扣费流水（幂等）。

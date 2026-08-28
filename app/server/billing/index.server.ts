@@ -28,4 +28,9 @@ export { handleAppSubscriptionWebhook } from "./subscription/handleSubscriptionW
 export { handleAppPurchaseOneTimeWebhook } from "./purchase/handlePurchaseWebhook.server";
 export { reconcilePendingTokenPackPurchases } from "./purchase/reconcilePendingTokenPackPurchases.server";
 export { reconcilePendingSubscriptions } from "./subscription/reconcilePendingSubscriptions.server";
+export {
+  clearPendingPlanChange,
+  handleDeclinedSubscriptionCheckout,
+} from "./subscription/pendingPlanChange.server";
+export { resolveReplacementBehavior } from "./subscription/replacementBehavior.server";
 export { getBillingGateway } from "./gateway/getBillingGateway.server";

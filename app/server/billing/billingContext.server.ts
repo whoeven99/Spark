@@ -18,6 +18,8 @@ import type {
   BillingOverageChargeItem,
   BillingToolUsageItem,
   BillingUsagePeriodItem,
+  BillingReturnFlash,
+  PendingPlanChangeSnapshot,
 } from "../../lib/billingPageTypes";
 import { listEnabledPlans, type PlanRecord } from "./plans/planCatalog.server";
 import {
@@ -28,6 +30,7 @@ import {
   computeAccess,
   isSubscriptionInTrial,
 } from "./overage/flushOverage.server";
+import type { ReconcileSubscriptionResult } from "./subscription/reconcilePendingSubscriptions.server";
 import {
   isCapApproaching,
   remainingCapAmount,
@@ -151,6 +154,10 @@ export function toBillingAccessSnapshot(ctx: BillingContext): BillingAccessSnaps
 
 export async function loadBillingPageData(
   shop: string,
+  options?: {
+    reconcileResult?: ReconcileSubscriptionResult | null;
+    isBillingReturn?: boolean;
+  },
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop);
   const [usageHistoryRows, billingHistoryRows, toolUsageRows, overageRows] =
@@ -183,6 +190,26 @@ export async function loadBillingPageData(
     (sub.status === APP_SUBSCRIPTION_STATUS.ACTIVE ||
       sub.status === APP_SUBSCRIPTION_STATUS.PENDING);
 
+  let pendingPlanChange: PendingPlanChangeSnapshot | null = null;
+  if (sub?.pendingShopifySubscriptionId && sub.pendingPlanKey) {
+    const pendingPlan = ctx.plans.find((p) => p.planKey === sub.pendingPlanKey);
+    pendingPlanChange = {
+      planKey: sub.pendingPlanKey,
+      planName: pendingPlan?.displayName ?? sub.pendingPlanKey,
+      confirmationUrl: sub.pendingConfirmationUrl ?? null,
+      createdAt: sub.pendingCreatedAt?.toISOString() ?? null,
+    };
+  }
+
+  let billingReturnFlash: BillingReturnFlash = null;
+  if (options?.isBillingReturn) {
+    if (pendingPlanChange) {
+      billingReturnFlash = "awaiting_shopify_confirm";
+    } else if (options.reconcileResult?.clearedDeclined) {
+      billingReturnFlash = "plan_unchanged_declined";
+    }
+  }
+
   return {
     billing: toBillingPageSnapshot(ctx),
     trialPlan: null,
@@ -196,6 +223,8 @@ export async function loadBillingPageData(
     toolUsageHistory: toolUsageRows.map(toBillingToolUsageItem),
     overageCharges: overageRows.map(toOverageChargeItem),
     showDevCancelSubscription,
+    pendingPlanChange,
+    billingReturnFlash,
   };
 }
 

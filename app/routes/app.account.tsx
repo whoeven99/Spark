@@ -16,6 +16,7 @@ import {
   startSubscriptionCheckout,
   startTokenPackCheckout,
 } from "../server/billing/index.server";
+import { clearPendingPlanChange } from "../server/billing/subscription/pendingPlanChange.server";
 import {
   BILLING_PAGE_PATH,
   BILLING_RETURN_QUERY_FLAG,
@@ -31,32 +32,40 @@ const BillingPage = lazy(() =>
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
   const url = new URL(request.url);
-  const chargeId =
-    url.searchParams.get(BILLING_RETURN_QUERY_FLAG) === "1"
-      ? url.searchParams.get("charge_id")
-      : null;
+  const isBillingReturn =
+    url.searchParams.get(BILLING_RETURN_QUERY_FLAG) === "1";
+  const chargeId = isBillingReturn
+    ? url.searchParams.get("charge_id")
+    : null;
 
-  const reconcileWork = Promise.all([
-    reconcilePendingTokenPackPurchases({
+  let reconcileResult: Awaited<
+    ReturnType<typeof reconcilePendingSubscriptions>
+  > | null = null;
+
+  const runReconcile = async () => {
+    await reconcilePendingTokenPackPurchases({
       shop: session.shop,
       admin,
       chargeId,
-    }),
-    reconcilePendingSubscriptions({
+    });
+    reconcileResult = await reconcilePendingSubscriptions({
       shop: session.shop,
       admin,
-    }),
-  ]);
+    });
+  };
 
-  if (chargeId) {
-    await reconcileWork;
+  if (isBillingReturn) {
+    await runReconcile();
   } else {
-    void reconcileWork.catch((error) => {
+    void runReconcile().catch((error) => {
       console.error("[billing] background reconcile failed:", error);
     });
   }
 
-  return loadBillingPageData(session.shop);
+  return loadBillingPageData(session.shop, {
+    isBillingReturn,
+    reconcileResult,
+  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -87,6 +96,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop: session.shop,
       });
       return { ok: true as const, cancelled: true as const };
+    }
+
+    if (intent === "dismiss_pending_plan_change") {
+      await clearPendingPlanChange(session.shop);
+      return { ok: true as const, dismissedPending: true as const };
     }
 
     if (intent === "raise_overage_cap") {

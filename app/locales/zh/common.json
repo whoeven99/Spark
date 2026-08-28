@@ -1241,7 +1241,8 @@
       "ACTIVE": "生效中",
       "CANCELLED": "已取消",
       "EXPIRED": "已过期",
-      "FROZEN": "已冻结"
+      "FROZEN": "已冻结",
+      "DECLINED": "已拒绝"
     },
     "quotaTitle": "当前额度",
     "quotaUsageAria": "已用 {{used}}，可用 {{available}} Token",
@@ -1256,6 +1257,13 @@
     "currentPlan": "当前方案",
     "pendingConfirmation": "待确认付款",
     "pendingPlanLabel": "待确认付款 · {{plan}}",
+    "pendingPlanChangeBanner": "套餐变更待在 Shopify 确认：{{plan}}。当前仍使用原套餐与额度。",
+    "pendingPlanChangeContinue": "打开确认页",
+    "pendingPlanChangeDismiss": "放弃变更",
+    "pendingPlanChangeDismissing": "处理中…",
+    "pendingPlanChangeDismissed": "已放弃套餐变更，仍使用原计划",
+    "pendingPlanChangeAwaitConfirm": "请在 Shopify 完成确认以更改套餐",
+    "pendingPlanChangeDeclined": "未更改套餐，仍使用原计划",
     "redirectingToCheckout": "正在跳转…",
     "checkoutCompleteNoRedirect": "订阅已创建（测试模式，无跳转）",
     "getStarted": "开始使用",

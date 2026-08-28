@@ -38,7 +38,7 @@
 | 表 | 职责 |
 |----|------|
 | `Account` | 当前 token 分池与 `usedTokens` |
-| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop])`）；取消 / 过期时**删除行**；含 usage line / cappedAmount / pending overage |
+| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop])`）；取消 / 过期时**删除行**；含 usage line / cappedAmount / pending overage；换套餐时主行保持 ACTIVE，新 checkout 写入 `pendingShopifySubscriptionId` / `pendingPlanKey` / `pendingConfirmationUrl` / `pendingCreatedAt` |
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`）；订阅含 `overagePricePerThousand` / `defaultOverageCapAmount`；`ONE_TIME_PACK` 默认 `enabled=0` |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
@@ -101,6 +101,17 @@
 
 门禁错误码（非 BillingLog）：`QUOTA_EXHAUSTED` / `OVERAGE_CAP_REACHED` → `BillingAccessDeniedError`（402；对话 SSE 文案分流）。
 
+## 换套餐与 DECLINED
+
+- **DECLINED ≠ CANCELLED**：`mapShopifySubscriptionStatus` 将 Shopify `DECLINED` 映射为独立状态 `DECLINED`，**不得**走 `markSubscriptionNonActive` 删行+扣 `subscriptionTokens`。
+- **首次订阅 PENDING** 被拒：删除本地 PENDING 行，不扣额度。
+- **换套餐**：`createSubscription` 在已有 ACTIVE 时**只写 pending\***，不把主行打成 PENDING、不覆盖 `shopifySubscriptionId`。
+- **replacementBehavior**：新价 > 旧价 → `APPLY_IMMEDIATELY`；新价 ≤ 旧价 → `APPLY_ON_NEXT_BILLING_CYCLE`（`resolveReplacementBehavior`）。
+- Webhook `ACTIVE` 且 id = pending GID：用 `pendingPlanKey` 激活并清空 pending。
+- Webhook `CANCELLED`/`EXPIRED`：仅当 id **精确等于**当前主 `shopifySubscriptionId` 且**无** pending 时才真取消；pending 槽上的终态按拒绝清 pending。
+- `reconcilePendingSubscriptions`：同时核对 pending 槽与首次 PENDING；支持 ACTIVE 补激活与 DECLINED/EXPIRED 清理。
+- 账户页：有 pending 时展示 banner（继续确认 / 放弃）；回跳 toast 区分「待确认」与「已拒绝未改套餐」。
+
 ## 测试环境取消按钮
 
 - 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `prod`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
@@ -110,7 +121,7 @@
 ## Webhook（`shopify.app.test.toml` 已注册）
 
 - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
-- 订阅批准后若 webhook 未到，计费页 loader 会 `reconcilePendingSubscriptions`（Admin API 核对 PENDING → ACTIVE，与购包 `reconcilePendingTokenPackPurchases` 同理）
+- 订阅批准后若 webhook 未到，计费页 loader 会 `reconcilePendingSubscriptions`（Admin API 核对 pending 换套餐 / 首次 PENDING → ACTIVE，或 DECLINED 清槽；与购包 `reconcilePendingTokenPackPurchases` 同理）
 - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
 - `app/uninstalled` → `webhooks.app.uninstalled.tsx`（`CommonEventLog`）
 - `app/scopes_update` → `webhooks.app.scopes_update.tsx`（`CommonEventLog`）
