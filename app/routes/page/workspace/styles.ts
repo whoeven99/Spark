@@ -278,12 +278,17 @@ export const historyTitleStyle = (active: boolean): CSSProperties => ({
 export const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
+  paddingBottom: 12,
   borderTop: `1px solid ${shopifyUi.border}`,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
 };
 export const sidebarFooterRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
+  width: "100%",
 };
 export const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
@@ -293,7 +298,7 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   border: "1px solid transparent",
   borderRadius: 12,
   background: "transparent",
-  padding: "10px 10px 0",
+  padding: "0 8px",
   textAlign: "left",
   cursor: "pointer",
 };
