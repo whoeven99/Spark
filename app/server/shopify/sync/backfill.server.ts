@@ -9,9 +9,10 @@ import { getOrderBackfillDays } from "./orderBackfillConfig.server";
  * 历史订单回补（Admin GraphQL → Turso）。
  * 与 webhook 增量共用 syncOrder / syncRefund；勿把镜像迁到 Cosmos/Blob。
  *
- * 不请求 Partner「受保护的客户字段」四类：名称 / 邮箱 / 电话 / 地址
- *（Order.email|phone、Customer.firstName|lastName|email|phone、billing/shippingAddress）。
- * 产应用未勾选这些字段时 GraphQL 会整页失败。经营诊断不依赖 PII。
+ * 故意不请求：
+ * - Partner「受保护的客户字段」：名称 / 邮箱 / 电话 / 地址
+ * - Order.customer（任意子字段都要 `read_customers`；产 toml 未申请该 scope）
+ * 经营诊断只依赖订单金额/状态等；客户关联留给 webhook 增量或以后加 scope。
  */
 
 const ORDERS_BACKFILL_QUERY = `#graphql
@@ -57,15 +58,6 @@ const ORDERS_BACKFILL_QUERY = `#graphql
           }
         }
         tags
-        customer {
-          id
-          numberOfOrders
-          amountSpent { amount }
-          state
-          tags
-          createdAt
-          updatedAt
-        }
         lineItems(first: 50) {
           nodes {
             id
@@ -143,15 +135,6 @@ type GraphQLOrderNode = {
     lastVisit: { landingPage: string | null; referrerUrl: string | null } | null;
   } | null;
   tags: string[];
-  customer: {
-    id: string;
-    numberOfOrders: number;
-    amountSpent: { amount: string };
-    state: string;
-    tags: string[];
-    createdAt: string;
-    updatedAt: string;
-  } | null;
   lineItems: {
     nodes: Array<{
       id: string;
@@ -203,12 +186,11 @@ function gidToId(gid: string): string {
 
 export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
   const orderNumber = parseInt(node.name.replace("#", ""), 10) || 0;
-  const customerId = node.customer ? gidToId(node.customer.id) : undefined;
 
   return {
     id: parseInt(gidToId(node.id), 10),
     order_number: orderNumber,
-    // 未勾选受保护客户字段：名称/邮箱/电话/地址一律不镜像
+    // 未勾选受保护客户字段 + 无 read_customers：不镜像客户 PII / Customer 关联
     email: null,
     phone: null,
     financial_status: node.displayFinancialStatus?.toLowerCase() ?? null,
@@ -247,22 +229,7 @@ export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload
     billing_address: null,
     shipping_address: null,
     tags: (node.tags ?? []).join(","),
-    customer: node.customer
-      ? {
-          id: parseInt(customerId ?? "0", 10),
-          email: null,
-          phone: null,
-          first_name: null,
-          last_name: null,
-          orders_count: node.customer.numberOfOrders,
-          total_spent: node.customer.amountSpent.amount,
-          state: node.customer.state,
-          tags: (node.customer.tags ?? []).join(","),
-          accepts_marketing: false,
-          created_at: node.customer.createdAt,
-          updated_at: node.customer.updatedAt,
-        }
-      : null,
+    customer: null,
     line_items: node.lineItems.nodes.map((li) => ({
       id: parseInt(gidToId(li.id), 10),
       variant_id: li.variant ? parseInt(gidToId(li.variant.id), 10) : null,

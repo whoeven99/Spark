@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mapGraphQLToPayload } from "../../../../../app/server/shopify/sync/backfill.server";
 
 describe("mapGraphQLToPayload", () => {
-  it("maps order metrics without protected customer fields", () => {
+  it("maps order metrics without customer or protected fields", () => {
     const node: Parameters<typeof mapGraphQLToPayload>[0] = {
       id: "gid://shopify/Order/1001",
       name: "#1001",
@@ -35,15 +35,6 @@ describe("mapGraphQLToPayload", () => {
         },
       },
       tags: ["vip"],
-      customer: {
-        id: "gid://shopify/Customer/55",
-        numberOfOrders: 3,
-        amountSpent: { amount: "300.00" },
-        state: "ENABLED",
-        tags: ["vip"],
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-08-01T00:00:00.000Z",
-      },
       lineItems: { nodes: [] },
       refunds: [],
     };
@@ -54,20 +45,7 @@ describe("mapGraphQLToPayload", () => {
     expect(payload.phone).toBeNull();
     expect(payload.billing_address).toBeNull();
     expect(payload.shipping_address).toBeNull();
-    expect(payload.customer).toEqual({
-      id: 55,
-      email: null,
-      phone: null,
-      first_name: null,
-      last_name: null,
-      orders_count: 3,
-      total_spent: "300.00",
-      state: "ENABLED",
-      tags: "vip",
-      accepts_marketing: false,
-      created_at: "2026-01-01T00:00:00.000Z",
-      updated_at: "2026-08-01T00:00:00.000Z",
-    });
+    expect(payload.customer).toBeNull();
     expect(payload.presentment_currency).toBe("EUR");
     expect(payload.customer_locale).toBe("fr-FR");
     expect(payload.landing_site).toBe("https://example.com/products/bar");
