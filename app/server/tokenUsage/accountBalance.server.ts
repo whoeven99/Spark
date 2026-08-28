@@ -7,7 +7,7 @@ export type AccountBalanceFields = {
   usedTokens: number;
 };
 
-/** 可用 token（优先用库生成列，否则本地求和）。 */
+/** 含内可用 token（订阅池 + 购包 + 试用；不含超额）。 */
 export function getAvailableTokens(account: AccountBalanceFields): number {
   if (typeof account.availableTokens === "number") {
     return account.availableTokens;
@@ -17,6 +17,12 @@ export function getAvailableTokens(account: AccountBalanceFields): number {
   );
 }
 
+/** 仅判断含内额度是否还有剩余（不含超额）。 */
 export function hasTokenQuota(account: AccountBalanceFields): boolean {
   return account.usedTokens < getAvailableTokens(account);
+}
+
+/** 含内已用完后落入超额的 token 数。 */
+export function getOverageTokensUsed(account: AccountBalanceFields): number {
+  return Math.max(0, account.usedTokens - getAvailableTokens(account));
 }

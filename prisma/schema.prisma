@@ -207,10 +207,11 @@ model Account {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  appSubscription   AppSubscription?
-  periodUsages      AccountPeriodUsage[]
-  billingLogs       BillingLog[]
+  appSubscription    AppSubscription?
+  periodUsages       AccountPeriodUsage[]
+  billingLogs        BillingLog[]
   toolTokenUsageLogs ToolTokenUsageLog[]
+  overageUsageCharges OverageUsageCharge[]
 
   @@unique([shop])
 }
@@ -229,6 +230,12 @@ model PlanCatalog {
   currencyCode     String   @default("USD")
   trialDays        Int?
   shopifyPlanName  String?
+  /// 超额单价：USD / 1,000 tokens（订阅套餐用；购包可空）
+  overagePricePerThousand String?
+  /// 订阅默认超额封顶金额（USD 字符串）
+  defaultOverageCapAmount String?
+  /// Shopify usage pricing terms（英文条款）
+  overageTerms     String?
   sortOrder        Int      @default(0)
   enabled          Boolean  @default(true)
   createdAt        DateTime @default(now())
@@ -244,23 +251,71 @@ model AppSubscription {
   planKey                String
   shopifySubscriptionId  String   @unique
   billingInterval        String
-  /// PENDING | ACTIVE | CANCELLED | EXPIRED | FROZEN
+  /// PENDING | ACTIVE | CANCELLED | EXPIRED | FROZEN | DECLINED（DECLINED 仅瞬态/日志，主行一般不长期停在此）
   status                 String
   tokensPerPeriod        Int
+  /// Shopify usage line item id；无则老订阅不支持超额
+  usageLineItemId        String?
+  /// 激活时快照的超额单价（USD / 1,000 tokens）
+  overagePricePerThousand String?
+  cappedAmount           String?
+  cappedCurrency         String?
+  /// 本周期已记入 Shopify 的 usage 金额
+  usageBalanceUsed       String?
+  /// 本地生效的按需上限（可低于 Shopify cappedAmount；提高超过 Shopify 授权才需确认）
+  overageSpendLimit      String?
+  /// 本地尚未冲销到 Shopify 的超额 token
+  overagePendingTokens   Int      @default(0)
+  /// 无 usage 行的老订阅为 false
+  overageEnabled         Boolean  @default(false)
+  /// 商户是否允许按需扣费；false=Disabled（一分钱不扣；不改 Shopify cappedAmount）
+  overageSpendingEnabled Boolean  @default(true)
   trialEndsAt            DateTime?
   currentPeriodStart     DateTime?
   currentPeriodEnd       DateTime?
   cancelledAt            DateTime?
   confirmationUrl        String?
+  /// 换套餐待 Shopify 确认的新订阅 GID（主行保持旧 ACTIVE）
+  pendingShopifySubscriptionId String?
+  pendingPlanKey         String?
+  pendingConfirmationUrl String?
+  pendingCreatedAt       DateTime?
   rawPayload             Json?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  account      Account?             @relation(fields: [shop], references: [shop])
-  periodUsages AccountPeriodUsage[]
+  account             Account?             @relation(fields: [shop], references: [shop])
+  periodUsages        AccountPeriodUsage[]
+  overageUsageCharges OverageUsageCharge[]
 
   @@unique([shop])
   @@index([status])
+  @@index([pendingShopifySubscriptionId])
+}
+
+/// Shopify usage 超额扣费流水（幂等）。
+model OverageUsageCharge {
+  id                   String   @id @default(cuid())
+  shop                 String
+  appSubscriptionId    String?
+  idempotencyKey       String   @unique
+  tokens               Int
+  amount               String
+  currency             String   @default("USD")
+  /// PENDING | POSTED | FAILED
+  status               String
+  shopifyUsageRecordId String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  errorMessage         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  account         Account          @relation(fields: [shop], references: [shop])
+  appSubscription AppSubscription? @relation(fields: [appSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([shop, createdAt])
+  @@index([appSubscriptionId, status])
 }
 
 /// 每个订阅周期结束时的 token 用量归档（续费时写入）。

@@ -1,27 +1,111 @@
 import prisma from "../../../db.server";
 import { appendBillingLog } from "../billingLog.server";
+import { getPlanByKey } from "../plans/planCatalog.server";
 import { BILLING_LOG_EVENT } from "../types.server";
 import type { BillingGateway } from "./billingGateway.types";
 import {
   shopifyCreateOneTimePurchase,
   shopifyCreateSubscription,
+  shopifyCreateUsageRecord,
+  shopifyUpdateUsageCappedAmount,
 } from "./shopifyGraphqlBilling.server";
 import { APP_SUBSCRIPTION_STATUS } from "../types.server";
+import { resolveReplacementBehavior } from "../subscription/replacementBehavior.server";
+
+function overageFromPlan(plan: {
+  overagePricePerThousand: string | null;
+  defaultOverageCapAmount: string | null;
+  overageTerms: string | null;
+  currencyCode: string;
+}) {
+  if (!plan.defaultOverageCapAmount || !plan.overagePricePerThousand) {
+    return null;
+  }
+  return {
+    terms:
+      plan.overageTerms ??
+      `Overage tokens beyond plan allowance at $${plan.overagePricePerThousand} per 1,000 tokens.`,
+    cappedAmount: plan.defaultOverageCapAmount,
+    currencyCode: plan.currencyCode || "USD",
+    pricePerThousand: plan.overagePricePerThousand,
+  };
+}
 
 export const shopifyBillingGateway: BillingGateway = {
   async createSubscription({ admin, shop, plan, returnUrl, trialDays }) {
     const name = plan.shopifyPlanName ?? plan.displayName;
-    const { confirmationUrl, subscriptionId } = await shopifyCreateSubscription(
-      admin,
-      {
+    const overage = overageFromPlan(plan);
+
+    const existing = await prisma.appSubscription.findUnique({
+      where: { shop },
+    });
+    const isPlanChange =
+      existing?.status === APP_SUBSCRIPTION_STATUS.ACTIVE;
+
+    let replacementBehavior:
+      | "APPLY_IMMEDIATELY"
+      | "APPLY_ON_NEXT_BILLING_CYCLE"
+      | undefined;
+    if (isPlanChange && existing) {
+      const currentPlan = await getPlanByKey(existing.planKey).catch(() => null);
+      if (currentPlan) {
+        replacementBehavior = resolveReplacementBehavior({
+          currentPriceAmount: currentPlan.priceAmount,
+          newPriceAmount: plan.priceAmount,
+        });
+      } else {
+        replacementBehavior = "APPLY_IMMEDIATELY";
+      }
+    }
+
+    const { confirmationUrl, subscriptionId, usageLineItem } =
+      await shopifyCreateSubscription(admin, {
         planName: name,
         priceAmount: plan.priceAmount,
         currencyCode: plan.currencyCode,
         billingInterval: plan.billingInterval,
         returnUrl,
         trialDays: trialDays !== undefined ? trialDays : plan.trialDays,
-      },
-    );
+        overage: overage
+          ? {
+              terms: overage.terms,
+              cappedAmount: overage.cappedAmount,
+              currencyCode: overage.currencyCode,
+            }
+          : null,
+        replacementBehavior,
+      });
+
+    if (isPlanChange) {
+      // 保留旧 ACTIVE 主行；新 checkout 只进 pending 槽
+      await prisma.appSubscription.update({
+        where: { shop },
+        data: {
+          pendingShopifySubscriptionId: subscriptionId,
+          pendingPlanKey: plan.planKey,
+          pendingConfirmationUrl: confirmationUrl,
+          pendingCreatedAt: new Date(),
+        },
+      });
+
+      return {
+        confirmationUrl,
+        shopifySubscriptionId: subscriptionId,
+      };
+    }
+
+    const usageFields = {
+      usageLineItemId: usageLineItem?.id ?? null,
+      overagePricePerThousand: overage?.pricePerThousand ?? null,
+      cappedAmount: usageLineItem?.cappedAmount ?? overage?.cappedAmount ?? null,
+      cappedCurrency:
+        usageLineItem?.cappedCurrency ?? overage?.currencyCode ?? null,
+      usageBalanceUsed: usageLineItem?.balanceUsed ?? "0",
+      overageEnabled: Boolean(usageLineItem?.id || overage),
+      overageSpendLimit:
+        usageLineItem?.cappedAmount ?? overage?.cappedAmount ?? null,
+      overagePendingTokens: 0,
+    };
 
     await prisma.appSubscription.upsert({
       where: { shop },
@@ -33,6 +117,7 @@ export const shopifyBillingGateway: BillingGateway = {
         status: APP_SUBSCRIPTION_STATUS.PENDING,
         tokensPerPeriod: plan.tokens,
         confirmationUrl,
+        ...usageFields,
       },
       update: {
         planKey: plan.planKey,
@@ -41,6 +126,11 @@ export const shopifyBillingGateway: BillingGateway = {
         status: APP_SUBSCRIPTION_STATUS.PENDING,
         tokensPerPeriod: plan.tokens,
         confirmationUrl,
+        ...usageFields,
+        pendingShopifySubscriptionId: null,
+        pendingPlanKey: null,
+        pendingConfirmationUrl: null,
+        pendingCreatedAt: null,
       },
     });
 
@@ -74,5 +164,36 @@ export const shopifyBillingGateway: BillingGateway = {
       confirmationUrl,
       shopifyPurchaseId: purchaseId,
     };
+  },
+
+  async createUsageRecord({
+    admin,
+    subscriptionLineItemId,
+    description,
+    amount,
+    currencyCode,
+    idempotencyKey,
+  }) {
+    const { usageRecordId } = await shopifyCreateUsageRecord(admin, {
+      subscriptionLineItemId,
+      description,
+      amount,
+      currencyCode,
+      idempotencyKey,
+    });
+    return { usageRecordId };
+  },
+
+  async updateOverageCap({
+    admin,
+    usageLineItemId,
+    cappedAmount,
+    currencyCode,
+  }) {
+    return shopifyUpdateUsageCappedAmount(admin, {
+      usageLineItemId,
+      cappedAmount,
+      currencyCode,
+    });
   },
 };
