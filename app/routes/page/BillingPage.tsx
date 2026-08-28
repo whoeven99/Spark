@@ -582,6 +582,17 @@ export function BillingPage() {
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
   const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
+  const overageUsagePercent = billing.overage?.enabled
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          (Number.parseFloat(billing.overage.usageBalanceUsed ?? "0") /
+            Math.max(Number.parseFloat(billing.overage.cappedAmount ?? "0"), 0.01)) *
+            100,
+        ),
+      )
+    : 0;
   const currentSubscriptionTier =
     sub?.status === "ACTIVE" || sub?.status === "PENDING"
       ? planTierFromPlanKey(sub.planKey)
@@ -1126,41 +1137,50 @@ export function BillingPage() {
             </div>
             {billing.overage?.enabled ? (
               <div className={styles.overageBlock}>
-                <h3 className={styles.overageSectionHeading}>{t("billing.overageTitle")}</h3>
-                <div className={styles.overageSettingRow}>
-                  <div className={styles.overageSettingCopy}>
-                    <span className={styles.overageSettingLabel}>
-                      {t("billing.overageStatusLabel")}
-                    </span>
-                    <p className={styles.overageHint}>{t("billing.overageStatusDesc")}</p>
-                    <p className={styles.overageHint}>
-                      {t("billing.overageUsageLabel", {
-                        used: formatPlanPrice(
-                          billing.overage.usageBalanceUsed ?? "0",
-                          billing.overage.cappedCurrency ?? "USD",
-                          locale,
-                        ),
-                        cap: formatPlanPrice(
-                          billing.overage.cappedAmount ?? "0",
-                          billing.overage.cappedCurrency ?? "USD",
-                          locale,
-                        ),
-                      })}
-                    </p>
-                    <p className={styles.overageHint}>
-                      {t("billing.overagePriceHint", {
-                        price: formatPlanPrice(
-                          billing.overage.pricePerThousand ?? "0",
-                          billing.overage.cappedCurrency ?? "USD",
-                          locale,
-                        ),
-                      })}
-                    </p>
-                  </div>
-                  <span className={styles.overageStatusBadge}>
-                    {t("billing.overageStatusEnabled")}
+                <div className={styles.overageUsageHeader}>
+                  <span className={styles.overageSettingLabel}>
+                    {t("billing.overageStatusLabel")}
+                  </span>
+                  <span className={styles.overageUsageAmounts}>
+                    {t("billing.overageUsageCompact", {
+                      used: formatPlanPrice(
+                        billing.overage.usageBalanceUsed ?? "0",
+                        billing.overage.cappedCurrency ?? "USD",
+                        locale,
+                      ),
+                      cap: formatPlanPrice(
+                        billing.overage.cappedAmount ?? "0",
+                        billing.overage.cappedCurrency ?? "USD",
+                        locale,
+                      ),
+                    })}
                   </span>
                 </div>
+                <div
+                  className={styles.overageProgressTrack}
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(overageUsagePercent)}
+                  aria-label={t("billing.overageUsageLabel", {
+                    used: formatPlanPrice(
+                      billing.overage.usageBalanceUsed ?? "0",
+                      billing.overage.cappedCurrency ?? "USD",
+                      locale,
+                    ),
+                    cap: formatPlanPrice(
+                      billing.overage.cappedAmount ?? "0",
+                      billing.overage.cappedCurrency ?? "USD",
+                      locale,
+                    ),
+                  })}
+                >
+                  <div
+                    className={styles.overageProgressFill}
+                    style={{ width: `${overageUsagePercent}%` }}
+                  />
+                </div>
+                <p className={styles.overageHint}>{t("billing.overageStatusDesc")}</p>
                 <Form method="post" className={styles.overageRaiseForm}>
                   <input type="hidden" name="intent" value="raise_overage_cap" />
                   <div className={styles.overageSettingRow}>
@@ -1192,9 +1212,9 @@ export function BillingPage() {
                         className={styles.overageCapInput}
                         defaultValue={String(
                           Math.max(
-                            50,
+                            1,
                             Math.ceil(
-                              Number.parseFloat(billing.overage.cappedAmount ?? "0") + 50,
+                              Number.parseFloat(billing.overage.cappedAmount ?? "0"),
                             ),
                           ),
                         )}
@@ -1212,7 +1232,6 @@ export function BillingPage() {
                       </button>
                     </div>
                   </div>
-                  <p className={styles.overageRaiseHint}>{t("billing.overageRaiseCapHint")}</p>
                 </Form>
               </div>
             ) : null}
