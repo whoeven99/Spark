@@ -116,16 +116,16 @@ describe("plan display labels", () => {
     );
   });
 
-  it("无订阅时展示免费计划", () => {
+  it("无订阅时展示体验版", () => {
     expect(
       resolveCurrentPlanLabel({
         subscription: null,
         trialPlan: plans[0],
         subscriptionPlans: plans,
         account: {},
-        t: (key) => (key === "billing.planFree" ? "免费计划" : key),
+        t: (key) => (key === "billing.planFree" ? "体验版" : key),
       }),
-    ).toBe("免费计划");
+    ).toBe("体验版");
   });
 });
 
