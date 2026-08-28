@@ -192,8 +192,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function App() {
   const { apiKey, locale, nav, buildInfo } = useLoaderData<typeof loader>();
+  const location = useLocation();
   // 尽早缓存 shop/host，供客户端 navigate / fetch 在 query 丢失后兜底。
   useEmbeddedLocationSearch();
+  const normalizedPath = location.pathname.replace(/\/+$/, "");
+  const isWorkspace = normalizedPath === "/app" || normalizedPath === "/app/assistant";
 
   useEffect(() => {
     warnIfLegacySpringRequests();
@@ -221,7 +224,7 @@ export default function App() {
       <AppProvider embedded apiKey={apiKey}>
         <AppNav nav={nav} />
         <AppShellContent />
-        <SupportChatWidget />
+        {!isWorkspace ? <SupportChatWidget /> : null}
       </AppProvider>
     </AppI18nProvider>
   );

@@ -280,11 +280,16 @@ export const accountMenuWrapStyle: CSSProperties = {
   paddingTop: 12,
   borderTop: `1px solid ${shopifyUi.border}`,
 };
+export const sidebarFooterRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
 export const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
   alignItems: "center",
-  width: "100%",
+  flex: "1 1 auto",
+  minWidth: 0,
   border: "1px solid transparent",
   borderRadius: 12,
   background: "transparent",
@@ -292,6 +297,23 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
 };
+export const sidebarFooterHelpButtonStyle = (active: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  flexShrink: 0,
+  minHeight: 34,
+  border: `1px solid ${active ? "#c9cccf" : "#dfe3e8"}`,
+  borderRadius: 12,
+  background: active ? "#f6f6f7" : "#ffffff",
+  color: "#1f2124",
+  padding: "0 12px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+});
 export const accountMenuStyle: CSSProperties = {
   position: "absolute",
   left: 0,
@@ -343,13 +365,17 @@ export const accountUsageFillStyle: CSSProperties = {
   background: shopifyUi.primary,
   transition: "width 180ms ease",
 };
-export const footerTagStyle: CSSProperties = {
-  padding: "4px 8px",
+export const footerBadgeStyle: CSSProperties = {
+  minWidth: 18,
+  height: 18,
+  padding: "0 5px",
   borderRadius: 999,
-  background: shopifyUi.primarySurface,
-  color: shopifyUi.primary,
-  fontSize: 12,
-  fontWeight: 600,
+  background: "#d72c0d",
+  color: "#ffffff",
+  fontSize: 11,
+  lineHeight: "18px",
+  textAlign: "center",
+  fontWeight: 700,
 };
 
 export const panelStackStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 20, minWidth: 0 };
