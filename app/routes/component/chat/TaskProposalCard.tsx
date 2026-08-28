@@ -13,7 +13,10 @@ import type {
   TaskProposalPayload,
   TaskProposalTarget,
 } from "../../../lib/taskProposalPayload";
-import { mergeTaskProposalTargets } from "../../../lib/taskProposalPayload";
+import {
+  BATCH_PICTURE_TRANSLATE_SKILL_ID,
+  mergeTaskProposalTargets,
+} from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { describeObjectQueryI18n } from "../../../lib/objectQuerySpec";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
@@ -29,6 +32,14 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import { formatThinkingDuration } from "../../../lib/thinkingDuration";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import {
+  TaskProposalProductImageGrid,
+  type ProductImagesCacheEntry,
+} from "./TaskProposalProductImageGrid";
+
+function buildPictureTranslateTargetId(productId: string, imageUrl: string): string {
+  return `${productId}::${imageUrl}`;
+}
 
 // ─── Styles（与 BatchTasksChatCard 视觉对齐） ────────────────────────────────
 
@@ -74,6 +85,12 @@ const targetListStyle = {
   gap: 6,
   maxHeight: 220,
   overflowY: "auto",
+} as const;
+
+const targetListStyleWithImages = {
+  ...targetListStyle,
+  maxHeight: 360,
+  gap: 10,
 } as const;
 
 const targetRowStyle = (checked: boolean, disabled: boolean) =>
@@ -413,13 +430,42 @@ export function TaskProposalCard({
     resolved.targets.kind === "products" &&
     targets.length === 0 &&
     !targetsQuery;
+  const isPictureTranslate = resolved.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(targets.filter((t) => !t.disabledReason).map((t) => t.id)),
   );
+  /** 图片翻译：每个商品下勾选的图片 URL */
+  const [selectedImageUrlsByProduct, setSelectedImageUrlsByProduct] = useState<
+    Record<string, string[]>
+  >(() => {
+    const initial: Record<string, string[]> = {};
+    for (const target of targets) {
+      if (target.disabledReason || !target.imageUrl) continue;
+      initial[target.id] = [target.imageUrl];
+    }
+    return initial;
+  });
+  const [productImagesCache, setProductImagesCache] = useState<
+    Record<string, ProductImagesCacheEntry>
+  >({});
+
   useEffect(() => {
     if (targets.length === 0) return;
-    setCheckedIds(new Set(targets.filter((t) => !t.disabledReason).map((t) => t.id)));
+    const nextChecked = new Set(targets.filter((t) => !t.disabledReason).map((t) => t.id));
+    setCheckedIds(nextChecked);
+    setSelectedImageUrlsByProduct((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const target of targets) {
+        if (!nextChecked.has(target.id) || target.disabledReason) continue;
+        if (prev[target.id]?.length) {
+          next[target.id] = prev[target.id]!;
+        } else if (target.imageUrl) {
+          next[target.id] = [target.imageUrl];
+        }
+      }
+      return next;
+    });
   }, [targets]);
 
   const [paramValues, setParamValues] = useState<Record<string, string>>(() =>
@@ -471,10 +517,39 @@ export function TaskProposalCard({
   const selectedTargets = targets.filter(
     (t) => checkedIds.has(t.id) && !t.disabledReason,
   );
+  /** 图片翻译：按勾选图片展开为执行目标；其它技能仍按商品 */
+  const executeTargets = useMemo((): TaskProposalTarget[] => {
+    if (!isPictureTranslate) return selectedTargets;
+    const out: TaskProposalTarget[] = [];
+    for (const product of selectedTargets) {
+      const urls = selectedImageUrlsByProduct[product.id] ?? [];
+      for (const imageUrl of urls) {
+        out.push({
+          id: buildPictureTranslateTargetId(product.id, imageUrl),
+          productId: product.id,
+          title: product.title,
+          imageUrl,
+        });
+      }
+    }
+    return out;
+  }, [isPictureTranslate, selectedTargets, selectedImageUrlsByProduct]);
+
   const canSubmit =
-    (targetless || selectedTargets.length > 0 || targetsQuery !== null) && !submitting && !done;
+    (targetless ||
+      (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
+      targetsQuery !== null) &&
+    !submitting &&
+    !done;
   /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标技能恒为 1 */
-  const effectiveCount = targetless ? 1 : targetsQuery ? (queryCount ?? 0) : selectedTargets.length;
+  const effectiveCount = targetless
+    ? 1
+    : targetsQuery
+      ? (queryCount ?? 0)
+      : isPictureTranslate
+        ? executeTargets.length
+        : selectedTargets.length;
+  const selectedImageCount = executeTargets.length;
   const displayTitle = resolveTaskProposalTitle(resolved, t);
   const displaySummary = resolveTaskProposalSummary(resolved, t);
   const targetKindLabel = resolveTaskProposalTargetKind(resolved.targets.kind, t);
@@ -487,7 +562,43 @@ export function TaskProposalCard({
       else next.add(target.id);
       return next;
     });
+    if (!isPictureTranslate) return;
+    setSelectedImageUrlsByProduct((prev) => {
+      if (checkedIds.has(target.id)) {
+        const next = { ...prev };
+        delete next[target.id];
+        return next;
+      }
+      if (target.imageUrl) {
+        return { ...prev, [target.id]: [target.imageUrl] };
+      }
+      return prev;
+    });
   };
+
+  const handleImageSelectionChange = useCallback((productId: string, urls: string[]) => {
+    setSelectedImageUrlsByProduct((prev) => {
+      if (urls.length === 0) {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      }
+      return { ...prev, [productId]: urls };
+    });
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (urls.length === 0) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  }, []);
+
+  const handleProductImagesCacheUpdate = useCallback(
+    (productId: string, entry: ProductImagesCacheEntry) => {
+      setProductImagesCache((prev) => ({ ...prev, [productId]: entry }));
+    },
+    [],
+  );
 
   const handleConfirm = useCallback(async () => {
     if (!canSubmit) return;
@@ -513,10 +624,11 @@ export function TaskProposalCard({
                 },
               }
             : {
-                targets: selectedTargets.map((t) => ({
+                targets: executeTargets.map((t) => ({
                   id: t.id,
                   title: t.title,
                   imageUrl: t.imageUrl ?? null,
+                  ...(t.productId ? { productId: t.productId } : {}),
                 })),
               }),
         }),
@@ -545,8 +657,8 @@ export function TaskProposalCard({
                 paramValues,
                 t,
               }),
-              targets: selectedTargets.map((target) => ({
-                id: target.id,
+              targets: executeTargets.map((target) => ({
+                id: target.productId ?? target.id,
                 title: target.title,
                 imageUrl: target.imageUrl ?? null,
               })),
@@ -566,17 +678,23 @@ export function TaskProposalCard({
       setSubmitting(false);
       setDone(true);
     }
-  }, [canSubmit, resolved, paramValues, selectedTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
+  }, [canSubmit, resolved, paramValues, executeTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
 
   const headerSubtitle = done
     ? t("workspace.taskProposal.card.submitted")
     : targetless
       ? t("workspace.taskProposal.card.confirmParamsToRun")
       : targets.length > 0
-        ? t("workspace.taskProposal.card.targetsSelected", {
-            count: targets.length,
-            kind: targetKindLabel,
-          })
+        ? isPictureTranslate && selectedImageCount > 0
+          ? t("workspace.taskProposal.card.targetsSelectedWithImages", {
+              products: checkedIds.size,
+              images: selectedImageCount,
+              kind: targetKindLabel,
+            })
+          : t("workspace.taskProposal.card.targetsSelected", {
+              count: targets.length,
+              kind: targetKindLabel,
+            })
         : targetsQuery
           ? t("workspace.taskProposal.card.queryTargets", {
               approx:
@@ -651,11 +769,18 @@ export function TaskProposalCard({
                       1
                     </span>
                     <span style={setupTitleStyle}>
-                      {t("workspace.taskProposal.card.selectedTargets", {
-                        kind: targetKindLabel,
-                        checked: checkedIds.size,
-                        total: targets.length,
-                      })}
+                      {isPictureTranslate
+                        ? t("workspace.taskProposal.card.selectedTargetsWithImages", {
+                            kind: targetKindLabel,
+                            checked: checkedIds.size,
+                            total: targets.length,
+                            images: selectedImageCount,
+                          })
+                        : t("workspace.taskProposal.card.selectedTargets", {
+                            kind: targetKindLabel,
+                            checked: checkedIds.size,
+                            total: targets.length,
+                          })}
                     </span>
                   </div>
                   {onOpenProductPicker && resolved.targets.kind === "products" ? (
@@ -668,56 +793,85 @@ export function TaskProposalCard({
                     </button>
                   ) : null}
                 </div>
-                <div style={targetListStyle as React.CSSProperties}>
+                <div
+                  style={
+                    (isPictureTranslate ? targetListStyleWithImages : targetListStyle) as React.CSSProperties
+                  }
+                >
                   {targets.map((target) => {
                     const checked = checkedIds.has(target.id) && !target.disabledReason;
+                    const selectedUrls = selectedImageUrlsByProduct[target.id] ?? [];
                     return (
-                      <label
-                        key={target.id}
-                        style={targetRowStyle(checked, Boolean(target.disabledReason))}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={Boolean(target.disabledReason)}
-                          onChange={() => toggleTarget(target)}
-                          style={{ flexShrink: 0 }}
-                        />
-                        {target.imageUrl ? (
-                          <img src={target.imageUrl} alt="" style={thumbStyle} />
-                        ) : (
-                          <div style={thumbPlaceholderStyle}>{targetKindLabel}</div>
-                        )}
-                        <span
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: pageColorTokens.textPrimary,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
+                      <div key={target.id}>
+                        <label
+                          style={targetRowStyle(checked, Boolean(target.disabledReason))}
                         >
-                          {target.title}
-                        </span>
-                        {target.disabledReason ? (
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={Boolean(target.disabledReason)}
+                            onChange={() => toggleTarget(target)}
+                            style={{ flexShrink: 0 }}
+                          />
+                          {target.imageUrl ? (
+                            <img src={target.imageUrl} alt="" style={thumbStyle} />
+                          ) : (
+                            <div style={thumbPlaceholderStyle}>{targetKindLabel}</div>
+                          )}
                           <span
                             style={{
-                              fontSize: 10,
-                              color: "#92400e",
-                              background: "#fffbeb",
-                              border: "1px solid #fde68a",
-                              borderRadius: 4,
-                              padding: "1px 5px",
-                              flexShrink: 0,
+                              flex: 1,
+                              minWidth: 0,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: pageColorTokens.textPrimary,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
                           >
-                            {resolveTaskProposalDisabledReason(target.disabledReason, t)}
+                            {target.title}
                           </span>
+                          {isPictureTranslate && checked && selectedUrls.length > 0 ? (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: pageColorTokens.textFootnote,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {t("workspace.taskProposal.card.imageSelectedCount", {
+                                count: selectedUrls.length,
+                              })}
+                            </span>
+                          ) : null}
+                          {target.disabledReason ? (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: "#92400e",
+                                background: "#fffbeb",
+                                border: "1px solid #fde68a",
+                                borderRadius: 4,
+                                padding: "1px 5px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {resolveTaskProposalDisabledReason(target.disabledReason, t)}
+                            </span>
+                          ) : null}
+                        </label>
+                        {isPictureTranslate && checked && !target.disabledReason ? (
+                          <TaskProposalProductImageGrid
+                            productId={target.id}
+                            fallbackImageUrl={target.imageUrl}
+                            selectedUrls={selectedUrls}
+                            cache={productImagesCache[target.id]}
+                            onCacheUpdate={handleProductImagesCacheUpdate}
+                            onChangeSelected={handleImageSelectionChange}
+                          />
                         ) : null}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>

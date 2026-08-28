@@ -38,6 +38,11 @@ export type TaskProposalTarget = {
   id: string;
   title: string;
   imageUrl?: string | null;
+  /**
+   * 图片翻译等多图场景：id 可能是「商品::图片」复合键，真正的商品 GID 放这里。
+   * 未设时执行端回退用 id（商品级目标）。
+   */
+  productId?: string;
   /** 不可执行原因（如图片翻译但无主图）；有值时默认不勾选 */
   disabledReason?: string;
 };
@@ -121,10 +126,12 @@ function coerceTarget(raw: unknown): TaskProposalTarget | null {
   const r = raw as Record<string, unknown>;
   const id = safeString(r.id);
   if (!id) return null;
+  const productId = safeString(r.productId);
   return {
     id,
     title: safeString(r.title, "未命名对象"),
     imageUrl: typeof r.imageUrl === "string" ? r.imageUrl : null,
+    ...(productId ? { productId } : {}),
     ...(safeString(r.disabledReason) ? { disabledReason: safeString(r.disabledReason) } : {}),
   };
 }
@@ -321,7 +328,7 @@ export function buildBatchPictureTranslateProposal(args: {
     proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
     skillId: BATCH_PICTURE_TRANSLATE_SKILL_ID,
     title: "批量翻译商品图片",
-    summary: "为每个勾选商品的主图创建一个图片翻译任务，完成后可在任务列表逐个审核应用。",
+    summary: "为勾选商品中选中的图片创建翻译任务，完成后可在任务列表逐个审核应用。",
     targets: {
       kind: "products",
       items: args.products.map((p) => ({

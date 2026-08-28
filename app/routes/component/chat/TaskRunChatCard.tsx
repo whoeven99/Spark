@@ -17,6 +17,7 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import { useTranslation } from "react-i18next";
+import styles from "./TaskRunChatCard.module.css";
 
 const POLL_INTERVAL_MS = 5000;
 /** 卡片挂载后最长轮询时长，避免长期占用请求 */
@@ -310,6 +311,9 @@ export function TaskRunChatCard({
       >
         <span
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
             fontSize: 11,
             fontWeight: 700,
             padding: "2px 8px",
@@ -318,6 +322,7 @@ export function TaskRunChatCard({
             color: badgeColors.color,
           }}
         >
+          {badgeKind === "running" ? <span className={styles.pulseDot} aria-hidden="true" /> : null}
           {badgeLabel}
         </span>
         <span style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textPrimary, flex: 1 }}>
@@ -377,6 +382,7 @@ export function TaskRunChatCard({
 
         {!embedTaskDetails && progressParts.length > 0 ? (
           <div
+            className={inProgress ? styles.progressRunning : undefined}
             style={{
               fontSize: 12,
               color: pageColorTokens.textSecondary,
@@ -392,6 +398,7 @@ export function TaskRunChatCard({
 
         {inProgress && !embedTaskDetails ? (
           <div
+            className={styles.hintRunning}
             style={{
               fontSize: 12,
               fontWeight: 600,

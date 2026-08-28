@@ -669,7 +669,9 @@ export const recommendedMenuStyle: CSSProperties = {
   position: "absolute",
   left: 0,
   bottom: "calc(100% + 8px)",
-  width: "min(320px, calc(100vw - 48px))",
+  width: "min(360px, calc(100vw - 48px))",
+  maxHeight: "min(60vh, 460px)",
+  overflowY: "auto",
   padding: 10,
   border: `1px solid ${shopifyUi.border}`,
   borderRadius: shopifyUi.radiusCard,
@@ -683,14 +685,25 @@ export const recommendedMenuTitleStyle: CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
 };
-export const recommendedMenuGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 6,
+export const recommendedMenuGroupStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+export const recommendedMenuGroupLabelStyle: CSSProperties = {
+  margin: "6px 2px 2px",
+  color: shopifyUi.textSecondary,
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: 0.2,
 };
 export const recommendedMenuItemStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
   minWidth: 0,
-  padding: "9px 10px",
+  padding: "8px 10px",
   border: `1px solid ${shopifyUi.border}`,
   borderRadius: shopifyUi.radiusControl,
   background: shopifyUi.surface,
@@ -700,6 +713,16 @@ export const recommendedMenuItemStyle: CSSProperties = {
   lineHeight: 1.35,
   textAlign: "left",
   cursor: "pointer",
+};
+export const recommendedMenuItemBadgeStyle: CSSProperties = {
+  flexShrink: 0,
+  padding: "1px 6px",
+  borderRadius: 999,
+  background: shopifyUi.surfaceSubtle,
+  color: shopifyUi.textSecondary,
+  fontSize: 10,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 export const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   width: 32,

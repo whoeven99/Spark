@@ -3355,6 +3355,54 @@
         "clearSelectionAria": "清空{{label}}",
         "recommended": "推荐",
         "recommendedActions": "推荐操作",
+        "recommend": {
+          "titleWithProduct": "针对已选商品的推荐操作",
+          "createsTask": "会建任务",
+          "groupOperations": "经营诊断",
+          "groupProduct": "商品优化",
+          "groupImage": "图片生成",
+          "todayOverview": {
+            "label": "今日经营概况",
+            "prompt": "帮我查看今天的销售额、订单数、转化率与客单价，并说明与上一周期相比的变化。"
+          },
+          "todayTodos": {
+            "label": "今日待办与风险",
+            "prompt": "根据今日健康诊断，按影响从高到低列出今天最该处理的 3 件事，并引用支撑数字。"
+          },
+          "inventoryHealth": {
+            "label": "库存健康检查",
+            "prompt": "帮我检查库存健康情况，列出低库存与缺货风险的商品，并给出补货优先级。"
+          },
+          "abandonRefund": {
+            "label": "弃购与退款排查",
+            "prompt": "帮我查看弃购率、退款率和流量来源表现，指出异常项并分析可能原因。"
+          },
+          "qualityScore": {
+            "label": "商品页质量评分",
+            "prompt": {
+              "shop": "帮我给店内商品做商品页质量评分，指出标题、图片、描述、规格上的主要问题。",
+              "selected": "帮我给已选中的商品做商品页质量评分，逐项指出问题并给出改进建议。"
+            }
+          },
+          "optimizeCopy": {
+            "label": "优化商品文案",
+            "prompt": {
+              "shop": "帮我优化商品的标题与描述，风格偏 SEO 与转化。",
+              "selected": "帮我优化已选中商品的标题与描述，风格偏 SEO 与转化。"
+            }
+          },
+          "translateImage": {
+            "label": "翻译商品图文字",
+            "prompt": {
+              "shop": "帮我翻译商品图片中的文字，并尽量保持原图的排版和视觉风格。",
+              "selected": "帮我翻译已选中商品图片中的文字，并尽量保持原图的排版和视觉风格。"
+            }
+          },
+          "generateImage": {
+            "label": "生成商品主图",
+            "prompt": "帮我生成一张适合独立站的商品主图，风格干净、白底、突出产品。"
+          }
+        },
         "replying": "AI Assistant 正在回复",
         "stop": "停止",
         "send": "发送",
@@ -3543,7 +3591,7 @@
         },
         "batchPictureTranslate": {
           "title": "批量翻译商品图片",
-          "summary": "为每个勾选商品的主图创建一个图片翻译任务，完成后可在任务列表逐个审核应用。"
+          "summary": "为勾选商品中选中的图片创建翻译任务，完成后可在任务列表逐个审核应用。"
         },
         "imageGeneration": {
           "title": "AI 生成商品图片",
@@ -3569,10 +3617,17 @@
         "submitted": "已提交",
         "confirmParamsToRun": "确认参数后开始执行",
         "targetsSelected": "{{count}} 个{{kind}} · 确认后批量创建",
+        "targetsSelectedWithImages": "{{products}} 个{{kind}} · {{images}} 张图 · 确认后批量创建",
         "queryTargets": "按条件圈定{{approx}} · 执行时重新求值",
         "queryApprox": " · 约 {{count}} 个{{kind}}",
         "waitingForTargets": "先选择商品",
         "selectedTargets": "已选{{kind}}（{{checked}} / {{total}}）",
+        "selectedTargetsWithImages": "已选{{kind}}（{{checked}} / {{total}}）· {{images}} 张图",
+        "selectImages": "选择要翻译的图片",
+        "imageSelectedCount": "{{count}} 张",
+        "imagesLoading": "加载商品图片…",
+        "imagesLoadFailed": "商品图片加载失败",
+        "imagesEmpty": "该商品暂无图片",
         "queryByCriteria": "按条件圈定：{{description}}",
         "queryHint": "{{approx}}执行时将按条件重新求值（适合保存为自动化后定期执行）",
         "queryApproxCount": "圈定时匹配约 {{count}} 个；",
@@ -3782,25 +3837,7 @@
       "assistantTitle": "描述目标，Spark AI 会查询店铺并协助执行",
       "composerPlaceholder": "例如：查看今天的经营情况，并告诉我最需要处理的 3 件事…",
       "recommendationsTitle": "推荐操作",
-      "recommendationsHint": "从常用任务快速开始",
-      "quickPrompts": {
-        "todayOperations": {
-          "label": "查看今日经营",
-          "prompt": "帮我查看今天的销售、订单、转化与退款情况，并告诉我最需要优先处理的 3 件事。"
-        },
-        "optimizeCopy": {
-          "label": "优化商品文案",
-          "prompt": "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。"
-        },
-        "generateImage": {
-          "label": "生成商品图",
-          "prompt": "帮我生成一张适合独立站的商品主图，风格干净、白底、突出产品。"
-        },
-        "translateImage": {
-          "label": "翻译商品图",
-          "prompt": "帮我翻译商品图片中的文字，并尽量保持原图的排版和视觉风格。"
-        }
-      }
+      "recommendationsHint": "从常用任务快速开始"
     }
   }
 }

@@ -3355,6 +3355,54 @@
         "clearSelectionAria": "Clear {{label}}",
         "recommended": "Recommended",
         "recommendedActions": "Recommended actions",
+        "recommend": {
+          "titleWithProduct": "Recommended for the selected products",
+          "createsTask": "Creates task",
+          "groupOperations": "Store diagnostics",
+          "groupProduct": "Product optimization",
+          "groupImage": "Image generation",
+          "todayOverview": {
+            "label": "Today's performance",
+            "prompt": "Show me today's revenue, order count, conversion rate and average order value, and how they compare with the previous period."
+          },
+          "todayTodos": {
+            "label": "Today's todos and risks",
+            "prompt": "Based on today's health diagnosis, list the top 3 things I should handle today by impact, and cite the supporting numbers."
+          },
+          "inventoryHealth": {
+            "label": "Inventory health check",
+            "prompt": "Check my inventory health, list products that are low on stock or out of stock, and rank restocking priority."
+          },
+          "abandonRefund": {
+            "label": "Abandonment and refunds",
+            "prompt": "Review my abandoned checkout rate, refund rate and traffic source performance, point out anomalies and analyze likely causes."
+          },
+          "qualityScore": {
+            "label": "Product page quality score",
+            "prompt": {
+              "shop": "Score the product page quality for my products, and point out the main issues in titles, images, descriptions and specs.",
+              "selected": "Score the product page quality for the selected products, listing issues item by item with improvement suggestions."
+            }
+          },
+          "optimizeCopy": {
+            "label": "Optimize product copy",
+            "prompt": {
+              "shop": "Optimize product titles and descriptions, leaning toward SEO and conversion.",
+              "selected": "Optimize the titles and descriptions of the selected products, leaning toward SEO and conversion."
+            }
+          },
+          "translateImage": {
+            "label": "Translate text in images",
+            "prompt": {
+              "shop": "Translate the text inside product images while keeping the original layout and visual style.",
+              "selected": "Translate the text inside the selected products' images while keeping the original layout and visual style."
+            }
+          },
+          "generateImage": {
+            "label": "Generate a product image",
+            "prompt": "Generate a product hero image suitable for a DTC store: clean, white background, product-focused."
+          }
+        },
         "replying": "AI Assistant is replying",
         "stop": "Stop",
         "send": "Send",
@@ -3543,7 +3591,7 @@
         },
         "batchPictureTranslate": {
           "title": "Batch translate product images",
-          "summary": "Create an image translation task for each selected product's main image. Review and apply them one by one in Tasks when done."
+          "summary": "Create an image translation task for each selected image under the checked products. Review and apply them one by one in Tasks when done."
         },
         "imageGeneration": {
           "title": "Generate product image with AI",
@@ -3569,10 +3617,17 @@
         "submitted": "Submitted",
         "confirmParamsToRun": "Confirm parameters to start",
         "targetsSelected": "{{count}} {{kind}} · batch create after confirm",
+        "targetsSelectedWithImages": "{{products}} {{kind}} · {{images}} images · batch create after confirm",
         "queryTargets": "Filter by criteria{{approx}} · re-evaluated at run time",
         "queryApprox": " · ~{{count}} {{kind}}",
         "waitingForTargets": "Select a product first",
         "selectedTargets": "Selected {{kind}} ({{checked}} / {{total}})",
+        "selectedTargetsWithImages": "Selected {{kind}} ({{checked}} / {{total}}) · {{images}} images",
+        "selectImages": "Select images to translate",
+        "imageSelectedCount": "{{count}} images",
+        "imagesLoading": "Loading product images…",
+        "imagesLoadFailed": "Failed to load product images",
+        "imagesEmpty": "This product has no images",
         "queryByCriteria": "Filter by criteria: {{description}}",
         "queryHint": "{{approx}}Re-evaluated at run time (suitable for saved automations)",
         "queryApproxCount": "Matched ~{{count}} when saved; ",
@@ -3782,25 +3837,7 @@
       "assistantTitle": "Describe your goal and Spark AI will inspect your store and help execute it",
       "composerPlaceholder": "For example: review today’s business and tell me the top 3 things to handle…",
       "recommendationsTitle": "Recommended actions",
-      "recommendationsHint": "Start quickly with a common task",
-      "quickPrompts": {
-        "todayOperations": {
-          "label": "Review today’s business",
-          "prompt": "Review today’s sales, orders, conversion, and refunds, then tell me the top 3 things to handle first."
-        },
-        "optimizeCopy": {
-          "label": "Optimize product copy",
-          "prompt": "Help me optimize a batch of product titles and descriptions with an SEO and conversion-focused style."
-        },
-        "generateImage": {
-          "label": "Generate a product image",
-          "prompt": "Help me generate a clean, white-background product hero image that highlights the item for a DTC store."
-        },
-        "translateImage": {
-          "label": "Translate a product image",
-          "prompt": "Translate the text in my product image while preserving its original layout and visual style."
-        }
-      }
+      "recommendationsHint": "Start quickly with a common task"
     }
   }
 }

@@ -29,6 +29,7 @@ import {
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
 import { ProductImproveTaskDetailPage } from "../../component/productImprove/ProductImproveTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
@@ -51,7 +52,9 @@ import {
   mobileToolbarStatusGroupStyle,
   mutedMetaStyle,
   primaryButtonStyle,
-  recommendedMenuGridStyle,
+  recommendedMenuGroupLabelStyle,
+  recommendedMenuGroupStyle,
+  recommendedMenuItemBadgeStyle,
   recommendedMenuItemStyle,
   recommendedMenuStyle,
   recommendedMenuTitleStyle,
@@ -306,26 +309,12 @@ export function ChatPanel({
     { key: "article", label: queryToolLabel("article", t("workspace.shell.chat.toolArticle")), icon: "≣", active: activeContextTool === "article" },
     { key: "file", label: selectedFileIds.length > 0 ? `${t("workspace.shell.chat.toolFile")} ${selectedFileIds.length}` : t("workspace.shell.chat.toolFile"), icon: "↑", active: activeContextTool === "file" },
   ];
-  const recommendedActions = useMemo(
-    () => [
-      {
-        label: t("workspace.homeV2.quickPrompts.todayOperations.label"),
-        prompt: t("workspace.homeV2.quickPrompts.todayOperations.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.optimizeCopy.label"),
-        prompt: t("workspace.homeV2.quickPrompts.optimizeCopy.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.generateImage.label"),
-        prompt: t("workspace.homeV2.quickPrompts.generateImage.prompt"),
-      },
-      {
-        label: t("workspace.homeV2.quickPrompts.translateImage.label"),
-        prompt: t("workspace.homeV2.quickPrompts.translateImage.prompt"),
-      },
-    ],
-    [t],
+  // 已选商品（含按条件圈定）时，商品优化类推荐改为针对当前上下文，并排到最前
+  const hasProductContext =
+    selectedObjectsByType.product.length > 0 || objectQuerySelectionByType.product != null;
+  const recommendedGroups = useMemo(
+    () => buildWorkspaceRecommendedGroups(t, hasProductContext),
+    [hasProductContext, t],
   );
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
@@ -567,25 +556,35 @@ export function ChatPanel({
               {isRecommendedMenuOpen ? (
                 <div style={recommendedMenuStyle} role="menu">
                   <div style={recommendedMenuTitleStyle}>
-                    {t("workspace.shell.chat.recommendedActions")}
+                    {hasProductContext
+                      ? t("workspace.shell.chat.recommend.titleWithProduct")
+                      : t("workspace.shell.chat.recommendedActions")}
                   </div>
-                  <div style={recommendedMenuGridStyle}>
-                    {recommendedActions.map((action) => (
-                      <button
-                        key={action.label}
-                        type="button"
-                        className="workspace-recommended-action"
-                        style={recommendedMenuItemStyle}
-                        role="menuitem"
-                        onClick={() => {
-                          setIsRecommendedMenuOpen(false);
-                          void onRecommendedPrompt(action.prompt);
-                        }}
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
+                  {recommendedGroups.map((group) => (
+                    <div key={group.key} style={recommendedMenuGroupStyle}>
+                      <div style={recommendedMenuGroupLabelStyle}>{group.label}</div>
+                      {group.items.map((action) => (
+                        <button
+                          key={action.key}
+                          type="button"
+                          className="workspace-recommended-action"
+                          style={recommendedMenuItemStyle}
+                          role="menuitem"
+                          onClick={() => {
+                            setIsRecommendedMenuOpen(false);
+                            void onRecommendedPrompt(action.prompt);
+                          }}
+                        >
+                          <span>{action.label}</span>
+                          {action.createsTask ? (
+                            <span style={recommendedMenuItemBadgeStyle}>
+                              {t("workspace.shell.chat.recommend.createsTask")}
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>
