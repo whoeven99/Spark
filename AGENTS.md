@@ -233,7 +233,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 - Turso 运行时由 `app/db.server.ts` 读 `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`（测/产各环境各自配值，无 `TURSO_TARGET`）；Prisma datasource 的 `DATABASE_URL` 主要用于 CLI、本地 SQLite 和生成流程。
 - 测试/生产 Turso 迁移使用仓库脚本：`npm run turso:migrate:test`、`npm run turso:migrate:prod`。
 - 不要把 `prisma migrate deploy` 直接指向 `libsql://`。
-- 当前迁移目录中部分 `add_*` 迁移时间早于 `init`；新建本地库前先核对迁移顺序。必要时使用本地 SQLite + `prisma db push`，不要擅自重排或改写已上线迁移。
+- 当前迁移目录为单条 baseline：`prisma/migrations/20260829010320_init`（2026-08 squash，旧增量已删除）。测/产 Turso 需硬重置后 `turso:migrate:*` 对齐；脚本见 `scripts/turso-hard-reset.mjs`（产库须 `--confirm-prod`）。本地也可 `prisma db push`。不要再把已删除的历史 migration 加回来。
 - 未经用户明确授权，不执行生产迁移、删表、drop schema、批量数据回填或真实 Shopify 写操作。
 
 ## 9. Admin 后台
@@ -313,6 +313,7 @@ npm run turso:migrate:test
 Package-backed：
 
 - `scripts/turso-migrate.cjs` — `npm run turso:migrate:test|prod`
+- `scripts/turso-hard-reset.mjs` — 硬删 Turso 全部用户表（默认测环境；产库需 `--env=.env.prod --confirm-prod`），配合 migration squash 后重建
 - `scripts/cursor-push-pr.mjs` — `npm run push:pr`
 - `scripts/deploy-test-render.mjs` — `npm run deploy:test`
 - `scripts/create-test-orders.mjs` — `npm run orders:create`
