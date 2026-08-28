@@ -29,7 +29,19 @@ export const APP_SUBSCRIPTION_STATUS = {
   CANCELLED: "CANCELLED",
   EXPIRED: "EXPIRED",
   FROZEN: "FROZEN",
+  /** Shopify 拒绝扣款；本地主行一般不长期停在此（清 pending / 删首次 PENDING） */
+  DECLINED: "DECLINED",
 } as const;
+
+/** Shopify `appSubscriptionCreate.replacementBehavior` */
+export const APP_SUBSCRIPTION_REPLACEMENT_BEHAVIOR = {
+  APPLY_IMMEDIATELY: "APPLY_IMMEDIATELY",
+  APPLY_ON_NEXT_BILLING_CYCLE: "APPLY_ON_NEXT_BILLING_CYCLE",
+  STANDARD: "STANDARD",
+} as const;
+
+export type AppSubscriptionReplacementBehavior =
+  (typeof APP_SUBSCRIPTION_REPLACEMENT_BEHAVIOR)[keyof typeof APP_SUBSCRIPTION_REPLACEMENT_BEHAVIOR];
 
 export type AppSubscriptionStatus =
   (typeof APP_SUBSCRIPTION_STATUS)[keyof typeof APP_SUBSCRIPTION_STATUS];

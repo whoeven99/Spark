@@ -12,6 +12,9 @@ export type PlanRecord = {
   currencyCode: string;
   trialDays: number | null;
   shopifyPlanName: string | null;
+  overagePricePerThousand: string | null;
+  defaultOverageCapAmount: string | null;
+  overageTerms: string | null;
 };
 
 /** 套餐目录变更频率低，进程内缓存减轻 Turso 往返。 */
@@ -49,6 +52,9 @@ function rowToPlanRecord(row: {
   currencyCode: string;
   trialDays: number | null;
   shopifyPlanName: string | null;
+  overagePricePerThousand?: string | null;
+  defaultOverageCapAmount?: string | null;
+  overageTerms?: string | null;
 }): PlanRecord {
   return {
     planKey: row.planKey,
@@ -60,6 +66,9 @@ function rowToPlanRecord(row: {
     currencyCode: row.currencyCode,
     trialDays: row.trialDays,
     shopifyPlanName: row.shopifyPlanName,
+    overagePricePerThousand: row.overagePricePerThousand ?? null,
+    defaultOverageCapAmount: row.defaultOverageCapAmount ?? null,
+    overageTerms: row.overageTerms ?? null,
   };
 }
 
