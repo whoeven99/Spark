@@ -36,7 +36,12 @@ export function ChatEmbeddedAiTaskCard({
     task,
     locationSearch,
     onDelete: () => void handleDelete(),
-    onOpenDetail: () => onOpenTasks?.(),
+    onOpenDetail: () =>
+      onOpenTasks?.({
+        taskType: task.taskType,
+        taskId: task.id,
+        intent: "review",
+      }),
     onTaskUpdated,
     deleting,
   };

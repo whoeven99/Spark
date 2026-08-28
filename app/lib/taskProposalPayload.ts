@@ -193,23 +193,33 @@ export const PRODUCT_IMPROVE_LANGUAGE_OPTIONS: Array<{ value: string; label: str
 
 /**
  * 客户端兜底合并：AI 没填 targets 时，用工作台已选商品（或按条件圈定）补全。
- * 优先级：proposal 自带 items > 工作台手动勾选 > 工作台按条件圈定（query）。
+ * 默认优先级：proposal 自带 items/query > 工作台手动勾选 > 工作台按条件圈定。
+ * preferContext=true（用户在本卡点了「更换/选择商品」）时改为：工作台当前选择优先，
+ * 避免历史消息里固化的 targets 挡住更换结果；其它卡片不受影响。
  * 图片翻译类提案补全时，无主图的商品自动标记不可执行。
  */
 export function mergeTaskProposalTargets(
   proposal: TaskProposalPayload,
   contextProducts: Array<{ id: string; title: string; imageUrl?: string | null }>,
   contextProductQuery?: ObjectQuerySelection | null,
+  options?: { preferContext?: boolean },
 ): TaskProposalPayload {
   // 无目标对象的技能（如文生图）不做上下文兜底
   if (proposal.targets.kind === "none") return proposal;
-  if (proposal.targets.items.length > 0 || proposal.targets.query) return proposal;
+
+  const preferContext = Boolean(options?.preferContext);
+  const shouldKeepProposalTargets =
+    !preferContext &&
+    (proposal.targets.items.length > 0 || Boolean(proposal.targets.query));
+  if (shouldKeepProposalTargets) return proposal;
+
   const requiresImage = proposal.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
   if (contextProducts.length > 0) {
     return {
       ...proposal,
       targets: {
         ...proposal.targets,
+        query: undefined,
         items: contextProducts.map((p) => ({
           id: p.id,
           title: p.title,
@@ -224,7 +234,14 @@ export function mergeTaskProposalTargets(
   if (contextProductQuery && contextProductQuery.kind === "product") {
     return {
       ...proposal,
-      targets: { ...proposal.targets, query: contextProductQuery },
+      targets: { ...proposal.targets, items: [], query: contextProductQuery },
+    };
+  }
+  // 用户主动改选后清空了上下文：露出「选择商品」空态，而不是继续显示旧 proposal
+  if (preferContext) {
+    return {
+      ...proposal,
+      targets: { ...proposal.targets, items: [], query: undefined },
     };
   }
   return proposal;

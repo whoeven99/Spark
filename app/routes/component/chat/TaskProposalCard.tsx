@@ -396,7 +396,7 @@ type Props = {
   contextProductQuery?: ObjectQuerySelection | null;
   /**
    * 打开与底部「添加上下文 → 商品」相同的选择弹窗。
-   * 选中结果写入工作台上下文后，本卡通过 contextProducts 自动补全。
+   * 选中结果写入工作台上下文后，本卡跟随 contextProducts 更新（点「更换」后）。
    */
   onOpenProductPicker?: () => void;
   onTasksCreated?: (taskIds: string[]) => void;
@@ -414,10 +414,23 @@ export function TaskProposalCard({
   onExecuted,
 }: Props) {
   const { t } = useTranslation();
+  /**
+   * 用户在本卡点了「更换/选择商品」后，跟随工作台当前选品；
+   * 未点过则仍以消息里固化的 proposal.targets 为准（避免历史卡被全局上下文带跑）。
+   */
+  const [followContextTargets, setFollowContextTargets] = useState(false);
   const resolved = useMemo(
-    () => mergeTaskProposalTargets(proposal, contextProducts, contextProductQuery),
-    [proposal, contextProducts, contextProductQuery],
+    () =>
+      mergeTaskProposalTargets(proposal, contextProducts, contextProductQuery, {
+        preferContext: followContextTargets,
+      }),
+    [proposal, contextProducts, contextProductQuery, followContextTargets],
   );
+
+  const openProductPicker = useCallback(() => {
+    setFollowContextTargets(true);
+    onOpenProductPicker?.();
+  }, [onOpenProductPicker]);
 
   const targets = resolved.targets.items;
   /** 按条件圈定模式：无具体 items 时按 query 执行（服务端重新求值） */
@@ -787,7 +800,7 @@ export function TaskProposalCard({
                     <button
                       type="button"
                       style={changeProductLinkStyle}
-                      onClick={() => onOpenProductPicker()}
+                      onClick={openProductPicker}
                     >
                       {t("workspace.taskProposal.card.changeProduct")}
                     </button>
@@ -915,7 +928,7 @@ export function TaskProposalCard({
                 <button
                   type="button"
                   style={pickProductButtonStyle(!onOpenProductPicker)}
-                  onClick={() => onOpenProductPicker?.()}
+                  onClick={openProductPicker}
                   disabled={!onOpenProductPicker}
                 >
                   <span aria-hidden="true">◫</span>

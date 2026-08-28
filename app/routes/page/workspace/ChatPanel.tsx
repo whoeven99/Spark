@@ -31,8 +31,20 @@ import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
 import { ProductImproveTaskDetailPage } from "../../component/productImprove/ProductImproveTaskDetailPage";
+import { PictureTranslateTaskDetailPage } from "../../component/imageStudio/PictureTranslateTaskDetailPage";
+import { ImageGenerationTaskDetailPage } from "../../component/imageStudio/ImageGenerationTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
+
+const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
+  "product_improve",
+  "picture_translate",
+  "image_generation",
+]);
+
+function isChatInlineReviewTask(taskType?: string | null): boolean {
+  return Boolean(taskType && CHAT_INLINE_REVIEW_TASK_TYPES.has(taskType));
+}
 import {
   chatLayoutStyle,
   composerBoxStyle,
@@ -217,7 +229,7 @@ export function ChatPanel({
 
   const handleOpenTasks = useCallback(
     (opts?: OpenWorkspaceTasksOptions) => {
-      if (opts?.taskType === "product_improve" && opts.intent === "review" && opts.taskId) {
+      if (opts?.intent === "review" && opts.taskId && isChatInlineReviewTask(opts.taskType)) {
         setReviewTaskId(opts.taskId);
         return;
       }
@@ -234,7 +246,7 @@ export function ChatPanel({
     }
 
     const cached = tasksById[reviewTaskId];
-    if (cached?.taskType === "product_improve") {
+    if (cached && isChatInlineReviewTask(cached.taskType)) {
       setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : cached));
       setReviewLoading(false);
       return;
@@ -266,7 +278,7 @@ export function ChatPanel({
           return;
         }
         const body = (await resp.json()) as { task?: AITaskItem };
-        if (body.task?.taskType === "product_improve") {
+        if (body.task && isChatInlineReviewTask(body.task.taskType)) {
           setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : body.task!));
           return;
         }
@@ -734,8 +746,38 @@ export function ChatPanel({
         title={t("productImproveStage1.chatReviewDialogTitle")}
         destroyOnHidden
       >
-        {reviewTask ? (
+        {reviewTask?.taskType === "product_improve" ? (
           <ProductImproveTaskDetailPage
+            task={reviewTask}
+            locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "picture_translate" ? (
+          <PictureTranslateTaskDetailPage
+            task={reviewTask}
+            locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "image_generation" ? (
+          <ImageGenerationTaskDetailPage
             task={reviewTask}
             locationSearch={locationSearch}
             onBack={closeReviewDialog}

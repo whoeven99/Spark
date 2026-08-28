@@ -180,21 +180,36 @@ function ConversationTasksCard({
                   key={run.runId}
                   type="button"
                   onClick={() => {
-                    if (!needsReview) {
-                      onLocateRun(run.runId);
-                      return;
-                    }
-                    const firstPendingProduct = runTasks.find(
+                    const firstPendingReviewable = runTasks.find(
                       (task) =>
                         task.status === "pending_review" &&
-                        task.taskType === "product_improve",
+                        (task.taskType === "product_improve" ||
+                          task.taskType === "picture_translate" ||
+                          task.taskType === "image_generation"),
                     );
-                    if (firstPendingProduct) {
+                    if (firstPendingReviewable) {
                       onOpenTasks({
-                        taskType: "product_improve",
-                        taskId: firstPendingProduct.id,
+                        taskType: firstPendingReviewable.taskType,
+                        taskId: firstPendingReviewable.id,
                         intent: "review",
                       });
+                      return;
+                    }
+                    const firstImageResult = runTasks.find(
+                      (task) =>
+                        task.taskType === "picture_translate" ||
+                        task.taskType === "image_generation",
+                    );
+                    if (firstImageResult) {
+                      onOpenTasks({
+                        taskType: firstImageResult.taskType,
+                        taskId: firstImageResult.id,
+                        intent: "review",
+                      });
+                      return;
+                    }
+                    if (!needsReview) {
+                      onLocateRun(run.runId);
                       return;
                     }
                     onOpenTasks();
