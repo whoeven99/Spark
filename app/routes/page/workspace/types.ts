@@ -5,6 +5,7 @@ import type {
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
 import type { ProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
+import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import type { ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext";
 import type { ManagedAiOutputParseResult } from "../../../lib/managedAiOutputRuntime";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
@@ -45,6 +46,8 @@ export type WorkspaceConversationMessage = {
   productImproveCardPayload?: ProductImproveCardPayload;
   productQualityCard?: boolean;
   productQualityCardPayload?: ProductQualityFormPayload;
+  healthDiagnosisCard?: boolean;
+  healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
   taskProposal?: TaskProposalPayload;
   taskRun?: TaskRunPayload;
   aiTask?: AITaskItem;

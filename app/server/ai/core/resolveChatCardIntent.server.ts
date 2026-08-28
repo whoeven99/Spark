@@ -28,6 +28,10 @@ import {
   defaultProductQualityFormPayload,
 } from "../../../lib/productQualityFormPayload";
 import {
+  coerceHealthDiagnosisFormPayload,
+  defaultHealthDiagnosisFormPayload,
+} from "../../../lib/healthDiagnosisCardPayload";
+import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
@@ -46,6 +50,7 @@ export const CHAT_CARD_TYPES = [
   "picture_translate_form",
   "product_improve_form",
   "product_quality_form",
+  "health_diagnosis_form",
   "batch_tasks_form",
 ] as const;
 
@@ -84,6 +89,7 @@ const CARD_TYPE_GUIDE = `卡片类型说明：
 - picture_translate_form：整图翻译（翻译图片中的文字）
 - product_improve_form：单个商品描述/文案生成
 - product_quality_form：商品页质量评分（诊断标题/主图/描述/规格/标签）
+- health_diagnosis_form：店铺今日健康诊断与待办（规则引擎快照，非商品页评分）
 - batch_tasks_form：工作台已选多个商品时的批量文案或批量图片翻译
 - none：普通问答，不需要卡片
 （整店批量翻译已迁移至 Ciwi Translator，Spark 内不提供 translation_task_form）`;
@@ -94,6 +100,7 @@ export function hasAnyChatCardInUiPayloads(uiPayloads: Record<string, unknown>):
       uiPayloads.pictureTranslateCard ||
       uiPayloads.productImproveCardPayload ||
       uiPayloads.productQualityCard ||
+      uiPayloads.healthDiagnosisCard ||
       uiPayloads.taskProposal ||
       uiPayloads.batchTasksCard,
   );
@@ -173,6 +180,12 @@ export function buildChatCardPayloadFromIntent(
           productId: normalized.productQualityProductId,
         }),
       };
+    case "health_diagnosis_form":
+      return {
+        healthDiagnosisCard: coerceHealthDiagnosisFormPayload(
+          defaultHealthDiagnosisFormPayload(),
+        ),
+      };
     case "batch_tasks_form": {
       const workspaceProducts = parseWorkspaceProductsFromText(lastUserText);
       if (workspaceProducts.length < 2) return {};
@@ -231,6 +244,13 @@ function streamChunksForUiPayloads(
       args: uiPayloads.productQualityCard,
     });
   }
+  if (uiPayloads.healthDiagnosisCard && !emittedFlags.has("healthDiagnosisForm")) {
+    chunks.push({
+      type: "tool_call",
+      name: "open_health_diagnosis_form",
+      args: uiPayloads.healthDiagnosisCard,
+    });
+  }
   if (uiPayloads.taskProposal && !emittedFlags.has("batchTasksForm")) {
     chunks.push({
       type: "task_proposal",
@@ -264,6 +284,7 @@ export async function resolveChatCardIntentWithLlm(params: {
 4. 批量任务卡片仅当用户消息含工作台已选商品（≥2）且意图为批量处理时使用 batch_tasks_form。
 5. 禁止在 shouldShowCard=false 时让 assistantClaimsCardOpened=true（不一致）。
 6. 商品页质量评分（诊断）用 product_quality_form，不要与商品文案 product_improve_form 混淆。
+7. 店铺「今日健康诊断 / 待办与风险」用 health_diagnosis_form，不要与商品页质量评分混淆。
 
 ${CARD_TYPE_GUIDE}`,
     ),
@@ -345,7 +366,14 @@ export function defaultPayloadForCardType(cardType: ChatCardType): Record<string
       return { productImproveCardPayload: defaultProductImproveFormPayload() };
     case "product_quality_form":
       return { productQualityCard: defaultProductQualityFormPayload() };
-    default:
+    case "health_diagnosis_form":
+      return { healthDiagnosisCard: defaultHealthDiagnosisFormPayload() };
+    case "batch_tasks_form":
+    case "none":
       return {};
+    default: {
+      const _exhaustive: never = cardType;
+      return _exhaustive;
+    }
   }
 }

@@ -156,6 +156,8 @@ export function ChatPanel({
     streamingGeneratePayload,
     streamingQualityCard,
     streamingQualityPayload,
+    streamingHealthDiagnosisCard,
+    streamingHealthDiagnosisPayload,
     streamingTaskProposal,
     skillSteps,
   } = stream;
@@ -738,6 +740,8 @@ export function ChatPanel({
                   streamingGeneratePayload={streamingGeneratePayload}
                   streamingQualityCard={streamingQualityCard}
                   streamingQualityPayload={streamingQualityPayload}
+                  streamingHealthDiagnosisCard={streamingHealthDiagnosisCard}
+                  streamingHealthDiagnosisPayload={streamingHealthDiagnosisPayload}
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}

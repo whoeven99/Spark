@@ -8,6 +8,10 @@ import {
   coerceProductQualityFormPayload,
   type ProductQualityFormPayload,
 } from "../../../lib/productQualityFormPayload";
+import {
+  coerceHealthDiagnosisFormPayload,
+  type HealthDiagnosisFormPayload,
+} from "../../../lib/healthDiagnosisCardPayload";
 import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
@@ -65,6 +69,12 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.productQualityCardPayload
       ? { productQualityCardPayload: message.productQualityCardPayload }
       : {}),
+    ...(message.healthDiagnosisCard || message.healthDiagnosisCardPayload
+      ? { healthDiagnosisCard: true }
+      : {}),
+    ...(message.healthDiagnosisCardPayload
+      ? { healthDiagnosisCardPayload: message.healthDiagnosisCardPayload }
+      : {}),
     ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
@@ -88,6 +98,8 @@ export function buildAssistantWorkspaceMessage(
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
   const hasProductQualityCard =
     payload.productQualityCard || Boolean(payload.productQualityCardPayload);
+  const hasHealthDiagnosisCard =
+    payload.healthDiagnosisCard || Boolean(payload.healthDiagnosisCardPayload);
 
   return {
     role: "assistant",
@@ -103,6 +115,14 @@ export function buildAssistantWorkspaceMessage(
       ? {
           productQualityCardPayload: coerceProductQualityFormPayload(
             payload.productQualityCardPayload,
+          ),
+        }
+      : {}),
+    ...(hasHealthDiagnosisCard ? { healthDiagnosisCard: true } : {}),
+    ...(payload.healthDiagnosisCardPayload
+      ? {
+          healthDiagnosisCardPayload: coerceHealthDiagnosisFormPayload(
+            payload.healthDiagnosisCardPayload,
           ),
         }
       : {}),
@@ -160,6 +180,14 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
       );
     }
   }
+  if (payload.healthDiagnosisCard || payload.healthDiagnosisCardPayload) {
+    result.healthDiagnosisCard = true;
+    if (payload.healthDiagnosisCardPayload) {
+      result.healthDiagnosisCardPayload = coerceHealthDiagnosisFormPayload(
+        payload.healthDiagnosisCardPayload,
+      );
+    }
+  }
   if (payload.taskProposal) {
     result.taskProposal = payload.taskProposal;
   }
@@ -181,6 +209,12 @@ export function serializeWorkspaceMessagePayloads(
     result.productQualityCard = true;
     if (message.productQualityCardPayload) {
       result.productQualityCardPayload = message.productQualityCardPayload;
+    }
+  }
+  if (message.healthDiagnosisCard || message.healthDiagnosisCardPayload) {
+    result.healthDiagnosisCard = true;
+    if (message.healthDiagnosisCardPayload) {
+      result.healthDiagnosisCardPayload = message.healthDiagnosisCardPayload;
     }
   }
   if (message.taskProposal) result.taskProposal = message.taskProposal;
@@ -223,6 +257,16 @@ export function dbMessageToUiMessage(msg: {
           productQualityCardPayload: coerceProductQualityFormPayload(
             extras.productQualityCardPayload,
           ) as ProductQualityFormPayload,
+        }
+      : {}),
+    ...(extras.healthDiagnosisCard || extras.healthDiagnosisCardPayload
+      ? { healthDiagnosisCard: true }
+      : {}),
+    ...(extras.healthDiagnosisCardPayload
+      ? {
+          healthDiagnosisCardPayload: coerceHealthDiagnosisFormPayload(
+            extras.healthDiagnosisCardPayload,
+          ) as HealthDiagnosisFormPayload,
         }
       : {}),
     // taskProposal 优先；旧批量/单图翻译/文生图卡片（历史落库消息）统一转为通用提案卡

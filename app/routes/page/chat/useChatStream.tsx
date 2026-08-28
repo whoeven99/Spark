@@ -5,6 +5,7 @@ import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { trackFeature } from "../../../lib/featureTrack";
 import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
 import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
+import { coerceHealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import {
@@ -66,6 +67,7 @@ type StreamChunk =
         uiPayloads?: {
           productImproveCardPayload?: unknown;
           productQualityCard?: unknown;
+          healthDiagnosisCard?: unknown;
           pictureTranslateCard?: unknown;
           imageGenerationCard?: unknown;
           batchTasksCard?: unknown;
@@ -88,6 +90,8 @@ export type ChatStreamFinishPayload = {
   productImproveCardPayload?: unknown;
   productQualityCard?: boolean;
   productQualityCardPayload?: unknown;
+  healthDiagnosisCard?: boolean;
+  healthDiagnosisCardPayload?: unknown;
   taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
@@ -102,6 +106,8 @@ type Snapshot = {
   productImproveCardPayload?: unknown;
   productQualityCard: boolean;
   productQualityCardPayload?: unknown;
+  healthDiagnosisCard: boolean;
+  healthDiagnosisCardPayload?: unknown;
   taskProposal?: TaskProposalPayload;
 };
 
@@ -115,6 +121,8 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     productImproveCardPayload: snapshot.productImproveCardPayload,
     productQualityCard: snapshot.productQualityCard,
     productQualityCardPayload: snapshot.productQualityCardPayload,
+    healthDiagnosisCard: snapshot.healthDiagnosisCard,
+    healthDiagnosisCardPayload: snapshot.healthDiagnosisCardPayload,
     taskProposal: snapshot.taskProposal,
   };
 }
@@ -131,6 +139,9 @@ export function useChatStream() {
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
   const [streamingQualityCard, setStreamingQualityCard] = useState(false);
   const [streamingQualityPayload, setStreamingQualityPayload] = useState<unknown>();
+  const [streamingHealthDiagnosisCard, setStreamingHealthDiagnosisCard] = useState(false);
+  const [streamingHealthDiagnosisPayload, setStreamingHealthDiagnosisPayload] =
+    useState<unknown>();
   const [streamingTaskProposal, setStreamingTaskProposal] =
     useState<TaskProposalPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
@@ -145,6 +156,8 @@ export function useChatStream() {
     productImproveCardPayload: undefined,
     productQualityCard: false,
     productQualityCardPayload: undefined,
+    healthDiagnosisCard: false,
+    healthDiagnosisCardPayload: undefined,
     taskProposal: undefined,
   });
 
@@ -159,6 +172,8 @@ export function useChatStream() {
       productImproveCardPayload: undefined,
       productQualityCard: false,
       productQualityCardPayload: undefined,
+      healthDiagnosisCard: false,
+      healthDiagnosisCardPayload: undefined,
       taskProposal: undefined,
     };
   };
@@ -170,6 +185,8 @@ export function useChatStream() {
     setStreamingGeneratePayload(undefined);
     setStreamingQualityCard(false);
     setStreamingQualityPayload(undefined);
+    setStreamingHealthDiagnosisCard(false);
+    setStreamingHealthDiagnosisPayload(undefined);
     setStreamingTaskProposal(undefined);
     setSkillSteps([]);
   };
@@ -361,6 +378,12 @@ export function useChatStream() {
                   snapshotRef.current.productQualityCardPayload = qualityPayload;
                   setStreamingQualityCard(true);
                   setStreamingQualityPayload(qualityPayload);
+                } else if (chunk.name === "open_health_diagnosis_form") {
+                  const healthPayload = coerceHealthDiagnosisFormPayload(chunk.args);
+                  snapshotRef.current.healthDiagnosisCard = true;
+                  snapshotRef.current.healthDiagnosisCardPayload = healthPayload;
+                  setStreamingHealthDiagnosisCard(true);
+                  setStreamingHealthDiagnosisPayload(healthPayload);
                 } else if (chunk.name === "open_batch_tasks_form") {
                   // 旧服务端兼容：批量卡片 chunk 统一转为通用 TaskProposal
                   applyTaskProposal(
@@ -438,6 +461,13 @@ export function useChatStream() {
                   snapshotRef.current.productQualityCardPayload = qualityPayload;
                   setStreamingQualityCard(true);
                   setStreamingQualityPayload(qualityPayload);
+                }
+                if (ui?.healthDiagnosisCard && !snapshotRef.current.healthDiagnosisCard) {
+                  const healthPayload = coerceHealthDiagnosisFormPayload(ui.healthDiagnosisCard);
+                  snapshotRef.current.healthDiagnosisCard = true;
+                  snapshotRef.current.healthDiagnosisCardPayload = healthPayload;
+                  setStreamingHealthDiagnosisCard(true);
+                  setStreamingHealthDiagnosisPayload(healthPayload);
                 }
                 if (
                   ui?.productImproveCardPayload &&
@@ -558,6 +588,8 @@ export function useChatStream() {
     streamingGeneratePayload,
     streamingQualityCard,
     streamingQualityPayload,
+    streamingHealthDiagnosisCard,
+    streamingHealthDiagnosisPayload,
     streamingTaskProposal,
     skillSteps,
     streamingThinkingText,

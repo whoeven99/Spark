@@ -7,7 +7,9 @@ import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
+import { HealthDiagnosisChatCard } from "./HealthDiagnosisChatCard";
 import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
+import { coerceHealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -28,6 +30,8 @@ type StreamingAssistantReplyProps = {
   streamingGeneratePayload?: unknown;
   streamingQualityCard?: boolean;
   streamingQualityPayload?: unknown;
+  streamingHealthDiagnosisCard?: boolean;
+  streamingHealthDiagnosisPayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
@@ -90,6 +94,8 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   open_product_improve_form: "productCopy",
   open_product_quality_form: "productQuality",
   score_product_quality: "productQuality",
+  open_health_diagnosis_form: "healthDiagnosis",
+  get_daily_operations: "dailyOperations",
 };
 
 function StreamingCursor() {
@@ -271,6 +277,8 @@ export function StreamingAssistantReply({
   streamingGeneratePayload,
   streamingQualityCard = false,
   streamingQualityPayload,
+  streamingHealthDiagnosisCard = false,
+  streamingHealthDiagnosisPayload,
   streamingTaskProposal,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
@@ -288,15 +296,18 @@ export function StreamingAssistantReply({
     workspaceBatchProducts.length < 2;
   const qualityPayload = coerceProductQualityFormPayload(streamingQualityPayload);
   const showQualityCard = streamingQualityCard;
+  const healthPayload = coerceHealthDiagnosisFormPayload(streamingHealthDiagnosisPayload);
+  const showHealthDiagnosisCard = streamingHealthDiagnosisCard;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingGenerateCard: showProductImproveCard,
     streamingQualityCard: showQualityCard,
+    streamingHealthDiagnosisCard: showHealthDiagnosisCard,
     streamingTaskProposal,
   });
   const hasEmbeddedCard = Boolean(
-    showProductImproveCard || showQualityCard || streamingTaskProposal,
+    showProductImproveCard || showQualityCard || showHealthDiagnosisCard || streamingTaskProposal,
   );
 
   return (
@@ -344,7 +355,18 @@ export function StreamingAssistantReply({
 
               {showQualityCard ? (
                 <div style={cardSlotStyle}>
-                  <ProductQualityScoreChatCard embedded initialPayload={qualityPayload} />
+                  <ProductQualityScoreChatCard
+                    embedded
+                    initialPayload={qualityPayload}
+                    contextProducts={workspaceBatchProducts}
+                    onOpenProductPicker={onOpenProductPicker}
+                  />
+                </div>
+              ) : null}
+
+              {showHealthDiagnosisCard ? (
+                <div style={cardSlotStyle}>
+                  <HealthDiagnosisChatCard embedded initialPayload={healthPayload} />
                 </div>
               ) : null}
 

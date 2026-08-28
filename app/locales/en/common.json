@@ -2117,10 +2117,15 @@
   },
   "qualityScore": {
     "sectionTitle": "Product page quality score",
-    "intro": "Select a product to diagnose title, images, description, variants, and tags.",
+    "intro": "Select one product to diagnose title, images, description, variants, and tags.",
+    "pickProduct": "Product",
+    "pickProductHint": "Same picker as the toolbar (scoring uses a single product)",
+    "pickProductButton": "Select product",
+    "selectedProduct": "Selected product",
+    "singleSelectHint": "{{count}} products are selected in context; scoring uses the first. Tap Change to reselect.",
     "startAction": "Start scoring",
     "rescoreAction": "Score again",
-    "changeProduct": "Change product",
+    "changeProduct": "Change",
     "creditsUsed": "{{count}} credits used",
     "scoreAction": "Score quality",
     "scoring": "Scoring...",
@@ -3373,7 +3378,7 @@
           },
           "todayTodos": {
             "label": "Today's todos and risks",
-            "prompt": "Based on today's health diagnosis, list the top 3 things I should handle today by impact, and cite the supporting numbers."
+            "prompt": "Open today's health diagnosis and todos card, and show current risks and priority actions."
           },
           "inventoryHealth": {
             "label": "Inventory health check",
@@ -3585,7 +3590,30 @@
         "networkError": "Network error. Please try again.",
         "requestFailed": "Request failed ({{status}})",
         "thumbProduct": "P",
-        "thumbArticle": "A"
+        "thumbArticle": "A",
+        "healthDiagnosis": {
+          "title": "Today's health diagnosis & todos",
+          "subtitle": "Rule-engine snapshot — no LLM cost",
+          "snapshotMeta": "Snapshot {{date}} · generated {{generated}}",
+          "loading": "Loading diagnosis…",
+          "loadFailed": "Failed to load diagnosis. Please try again.",
+          "noData": "No synced order data yet, so diagnosis can't be generated. Backfill historical orders in Settings first.",
+          "metricRisk": "Risks",
+          "metricWatch": "Watch",
+          "metricOpenTasks": "Open todos",
+          "priorityTasks": "Priority todos",
+          "noPriorityTasks": "No open tasks right now",
+          "riskItems": "Diagnosis highlights",
+          "status": {
+            "risk": "Risk",
+            "watch": "Watch",
+            "healthy": "Healthy"
+          },
+          "refresh": "Refresh diagnosis",
+          "refreshing": "Refreshing…",
+          "refreshDone": "Diagnosis refreshed",
+          "refreshFailed": "Refresh failed. Please try again."
+        }
       }
     },
     "taskProposal": {
@@ -3735,6 +3763,8 @@
         "pictureTranslation": "Preparing an image translation task",
         "productCopy": "Preparing a product copy task",
         "productQuality": "Preparing a product page quality score",
+        "healthDiagnosis": "Preparing health diagnosis & todos",
+        "dailyOperations": "Loading today's operations diagnosis",
         "fallback": "Using tool: {{name}}"
       }
     },

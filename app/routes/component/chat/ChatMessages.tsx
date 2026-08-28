@@ -7,6 +7,7 @@ import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
+import { HealthDiagnosisChatCard } from "./HealthDiagnosisChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -80,6 +81,9 @@ export function ChatMessages({
         const hasQualityScoreCard =
           item.role === "assistant" &&
           (Boolean(item.productQualityCard) || Boolean(item.productQualityCardPayload));
+        const hasHealthDiagnosisCard =
+          item.role === "assistant" &&
+          (Boolean(item.healthDiagnosisCard) || Boolean(item.healthDiagnosisCardPayload));
         const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
         const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const hasManagedAiCard = item.role === "assistant" && Boolean(item.managedAiResult);
@@ -91,6 +95,7 @@ export function ChatMessages({
         const hasEmbeddedCard =
           hasGenerateDescriptionCard ||
           hasQualityScoreCard ||
+          hasHealthDiagnosisCard ||
           hasTaskProposalCard ||
           hasTaskRunCard ||
           hasAiTaskCard ||
@@ -218,6 +223,17 @@ export function ChatMessages({
                       <ProductQualityScoreChatCard
                         embedded
                         initialPayload={item.productQualityCardPayload}
+                        contextProducts={contextProducts}
+                        onOpenProductPicker={onOpenProductPicker}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasHealthDiagnosisCard && item.role === "assistant" ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <HealthDiagnosisChatCard
+                        embedded
+                        initialPayload={item.healthDiagnosisCardPayload}
                       />
                     </div>
                   ) : null}

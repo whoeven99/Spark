@@ -590,6 +590,17 @@ export function invokeChatAgentStream(
                   });
                 }
               }
+
+              if (
+                def.name === "healthDiagnosisForm" &&
+                !streamContext.emittedFlags.has("healthDiagnosisForm")
+              ) {
+                controller.enqueue({
+                  type: "tool_call",
+                  name: "open_health_diagnosis_form",
+                  args: payload,
+                });
+              }
             }
           }
         }

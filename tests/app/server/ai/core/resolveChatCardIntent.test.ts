@@ -46,6 +46,18 @@ describe("buildChatCardPayloadFromIntent", () => {
     });
   });
 
+  it("injects health diagnosis card for 今日待办 intent", () => {
+    const payloads = buildChatCardPayloadFromIntent(
+      {
+        cardType: "health_diagnosis_form",
+        shouldShowCard: true,
+        assistantClaimsCardOpened: true,
+      },
+      "今日待办与风险",
+    );
+    expect(payloads.healthDiagnosisCard).toBeDefined();
+  });
+
   it("returns empty when cardType is none", () => {
     const payloads = buildChatCardPayloadFromIntent(
       {
