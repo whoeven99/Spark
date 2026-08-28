@@ -10,6 +10,7 @@ import {
   type DailyOperationsOverviewResult,
 } from "../server/operations/dailyInspection.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
+import { getOrderBackfillDays } from "../server/shopify/sync/orderBackfillConfig.server";
 
 const LOG_PREFIX = "[HealthDiagnosis][Route]";
 
@@ -90,7 +91,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.info(
       `${LOG_PREFIX} load done requestId=${requestId} hasData=${view.hasData} date=${view.snapshotDate}`,
     );
-    return jsonResponse({ success: true, response: view }, 200);
+    return jsonResponse(
+      {
+        success: true,
+        response: view,
+        defaultBackfillDays: getOrderBackfillDays(),
+      },
+      200,
+    );
   } catch (e) {
     console.error(`${LOG_PREFIX} load failed requestId=${requestId}`, e);
     return jsonResponse(
@@ -99,6 +107,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         errorCode: 500,
         errorMsg: e instanceof Error ? e.message : String(e),
         response: null,
+        defaultBackfillDays: getOrderBackfillDays(),
       },
       500,
     );
@@ -149,7 +158,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.info(
       `${LOG_PREFIX} refresh done requestId=${requestId} hasData=${view.hasData} date=${view.snapshotDate}`,
     );
-    return jsonResponse({ success: true, response: view }, 200);
+    return jsonResponse(
+      {
+        success: true,
+        response: view,
+        defaultBackfillDays: getOrderBackfillDays(),
+      },
+      200,
+    );
   } catch (e) {
     console.error(`${LOG_PREFIX} refresh failed requestId=${requestId}`, e);
     return jsonResponse(
@@ -158,6 +174,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         errorCode: 500,
         errorMsg: e instanceof Error ? e.message : String(e),
         response: null,
+        defaultBackfillDays: getOrderBackfillDays(),
       },
       500,
     );

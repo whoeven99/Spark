@@ -39,6 +39,7 @@ import {
   type WorkspacePanel,
 } from "./types";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import { resolveTaskRunTitle } from "../../../lib/taskProposalDisplay";
 import {
   isProductImproveTaskOpen,
@@ -1220,6 +1221,57 @@ export function WorkspaceAppShellPage({
     );
   };
 
+  const handleHealthDiagnosisRefreshed = (
+    conversationId: string,
+    payload: HealthDiagnosisFormPayload,
+  ) => {
+    const view = payload.view;
+    const userText = t("workspace.shell.chat.healthDiagnosis.refreshUserText");
+    const assistantText = view?.hasData
+      ? t("workspace.shell.chat.healthDiagnosis.refreshAssistantText", {
+          risk: view.overview.activeRiskCount,
+          watch: view.overview.watchRiskCount,
+          open: view.overview.openTaskCount,
+        })
+      : t("workspace.shell.chat.healthDiagnosis.refreshAssistantNoData");
+    const userMessage: WorkspaceConversationMessage = {
+      role: "user",
+      text: userText,
+      time: t("workspace.shell.chat.justNow"),
+    };
+    const assistantMessage: WorkspaceConversationMessage = {
+      role: "assistant",
+      text: assistantText,
+      time: t("workspace.shell.chat.justNow"),
+      healthDiagnosisCard: true,
+      healthDiagnosisCardPayload: payload,
+    };
+
+    setMessagesByConversation((current) => ({
+      ...current,
+      [conversationId]: [...(current[conversationId] ?? []), userMessage, assistantMessage],
+    }));
+
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    fetch(`/api/conversations/${conversationId}${authQuery}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "user", content: userText },
+          {
+            role: "assistant",
+            content: assistantText,
+            payloads: serializeWorkspaceMessagePayloads(assistantMessage),
+          },
+        ],
+        preview: userText,
+      }),
+    }).catch((err) =>
+      console.error("[WorkspaceAppShellPage] persist health diagnosis result failed:", err),
+    );
+  };
+
   const handleAiTaskUpdated = (
     conversationId: string,
     taskId: string,
@@ -1811,6 +1863,7 @@ export function WorkspaceAppShellPage({
               navigate("/app/tasks");
             }}
             onTaskProposalExecuted={handleTaskProposalExecuted}
+            onHealthDiagnosisRefreshed={handleHealthDiagnosisRefreshed}
           />
         ) : null}
       </main>

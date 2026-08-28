@@ -8,6 +8,11 @@ import { getOrderBackfillDays } from "./orderBackfillConfig.server";
 /**
  * 历史订单回补（Admin GraphQL → Turso）。
  * 与 webhook 增量共用 syncOrder / syncRefund；勿把镜像迁到 Cosmos/Blob。
+ *
+ * 故意不请求：
+ * - Partner「受保护的客户字段」：名称 / 邮箱 / 电话 / 地址
+ * - Order.customer（任意子字段都要 `read_customers`；产 toml 未申请该 scope）
+ * 经营诊断只依赖订单金额/状态等；客户关联留给 webhook 增量或以后加 scope。
  */
 
 const ORDERS_BACKFILL_QUERY = `#graphql
@@ -20,8 +25,6 @@ const ORDERS_BACKFILL_QUERY = `#graphql
       nodes {
         id
         name
-        email
-        phone
         displayFinancialStatus
         displayFulfillmentStatus
         cancelledAt
@@ -44,31 +47,17 @@ const ORDERS_BACKFILL_QUERY = `#graphql
           }
         }
         sourceName
-        landingPageUrl
-        referringSite
-        billingAddress {
-          countryCodeV2
-          provinceCode
-        }
-        shippingAddress {
-          countryCodeV2
-          provinceCode
+        customerJourneySummary {
+          firstVisit {
+            landingPage
+            referrerUrl
+          }
+          lastVisit {
+            landingPage
+            referrerUrl
+          }
         }
         tags
-        customer {
-          id
-          email
-          phone
-          firstName
-          lastName
-          numberOfOrders
-          amountSpent { amount }
-          state
-          tags
-          emailMarketingConsent { marketingState }
-          createdAt
-          updatedAt
-        }
         lineItems(first: 50) {
           nodes {
             id
@@ -119,8 +108,6 @@ const ORDERS_BACKFILL_QUERY = `#graphql
 type GraphQLOrderNode = {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string | null;
   cancelledAt: string | null;
@@ -143,35 +130,11 @@ type GraphQLOrderNode = {
     }>;
   } | null;
   sourceName: string | null;
-  landingPageUrl: string | null;
-  referringSite: string | null;
-  billingAddress:
-    | {
-        countryCodeV2: string | null;
-        provinceCode: string | null;
-      }
-    | null;
-  shippingAddress:
-    | {
-        countryCodeV2: string | null;
-        provinceCode: string | null;
-      }
-    | null;
-  tags: string[];
-  customer: {
-    id: string;
-    email: string | null;
-    phone: string | null;
-    firstName: string | null;
-    lastName: string | null;
-    numberOfOrders: number;
-    amountSpent: { amount: string };
-    state: string;
-    tags: string[];
-    emailMarketingConsent: { marketingState: string } | null;
-    createdAt: string;
-    updatedAt: string;
+  customerJourneySummary: {
+    firstVisit: { landingPage: string | null; referrerUrl: string | null } | null;
+    lastVisit: { landingPage: string | null; referrerUrl: string | null } | null;
   } | null;
+  tags: string[];
   lineItems: {
     nodes: Array<{
       id: string;
@@ -223,13 +186,13 @@ function gidToId(gid: string): string {
 
 export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
   const orderNumber = parseInt(node.name.replace("#", ""), 10) || 0;
-  const customerId = node.customer ? gidToId(node.customer.id) : undefined;
 
   return {
     id: parseInt(gidToId(node.id), 10),
     order_number: orderNumber,
-    email: node.email,
-    phone: node.phone,
+    // 未勾选受保护客户字段 + 无 read_customers：不镜像客户 PII / Customer 关联
+    email: null,
+    phone: null,
     financial_status: node.displayFinancialStatus?.toLowerCase() ?? null,
     fulfillment_status: node.displayFulfillmentStatus?.toLowerCase() ?? null,
     cancel_reason: node.cancelReason?.toLowerCase() ?? null,
@@ -254,38 +217,19 @@ export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload
         : undefined,
     })),
     source_name: node.sourceName,
-    landing_site: node.landingPageUrl,
-    referring_site: node.referringSite,
-    billing_address: node.billingAddress
-      ? {
-          country_code: node.billingAddress.countryCodeV2,
-          province_code: node.billingAddress.provinceCode,
-        }
-      : null,
-    shipping_address: node.shippingAddress
-      ? {
-          country_code: node.shippingAddress.countryCodeV2,
-          province_code: node.shippingAddress.provinceCode,
-        }
-      : null,
+    // API 2026-07+：Order.landingPageUrl / referringSite 已移除，改走 customerJourneySummary
+    landing_site:
+      node.customerJourneySummary?.lastVisit?.landingPage ??
+      node.customerJourneySummary?.firstVisit?.landingPage ??
+      null,
+    referring_site:
+      node.customerJourneySummary?.lastVisit?.referrerUrl ??
+      node.customerJourneySummary?.firstVisit?.referrerUrl ??
+      null,
+    billing_address: null,
+    shipping_address: null,
     tags: (node.tags ?? []).join(","),
-    customer: node.customer
-      ? {
-          id: parseInt(customerId ?? "0", 10),
-          email: node.customer.email,
-          phone: node.customer.phone,
-          first_name: node.customer.firstName,
-          last_name: node.customer.lastName,
-          orders_count: node.customer.numberOfOrders,
-          total_spent: node.customer.amountSpent.amount,
-          state: node.customer.state,
-          tags: (node.customer.tags ?? []).join(","),
-          accepts_marketing:
-            node.customer.emailMarketingConsent?.marketingState === "SUBSCRIBED",
-          created_at: node.customer.createdAt,
-          updated_at: node.customer.updatedAt,
-        }
-      : null,
+    customer: null,
     line_items: node.lineItems.nodes.map((li) => ({
       id: parseInt(gidToId(li.id), 10),
       variant_id: li.variant ? parseInt(gidToId(li.variant.id), 10) : null,
@@ -355,6 +299,7 @@ export async function backfillOrders(
   let synced = 0;
   let skipped = 0;
   let errors = 0;
+  let lastError: string | undefined;
 
   while (page < maxPages) {
     const variables: Record<string, unknown> = {
@@ -378,6 +323,7 @@ export async function backfillOrders(
     } catch (err) {
       console.error(`[Backfill] GraphQL error page=${page}`, err);
       errors++;
+      lastError = err instanceof Error ? err.message : String(err);
       break;
     }
 
@@ -397,6 +343,7 @@ export async function backfillOrders(
       } catch (err) {
         console.error(`[Backfill] order sync error orderId=${node.id}`, err);
         errors++;
+        lastError = err instanceof Error ? err.message : String(err);
       }
     }
 
@@ -425,5 +372,5 @@ export async function backfillOrders(
     `[Backfill] orders done shop=${shop} synced=${synced} skipped=${skipped} errors=${errors} pages=${page}`,
   );
 
-  return { synced, skipped, errors, cursor };
+  return { synced, skipped, errors, cursor, lastError };
 }

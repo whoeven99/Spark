@@ -2,12 +2,10 @@ import { describe, expect, it } from "vitest";
 import { mapGraphQLToPayload } from "../../../../../app/server/shopify/sync/backfill.server";
 
 describe("mapGraphQLToPayload", () => {
-  it("maps market-related address and locale fields from GraphQL orders", () => {
+  it("maps order metrics without customer or protected fields", () => {
     const node: Parameters<typeof mapGraphQLToPayload>[0] = {
       id: "gid://shopify/Order/1001",
       name: "#1001",
-      email: "buyer@example.com",
-      phone: null,
       displayFinancialStatus: "PAID",
       displayFulfillmentStatus: "UNFULFILLED",
       cancelledAt: null,
@@ -26,33 +24,31 @@ describe("mapGraphQLToPayload", () => {
       totalShippingPriceSet: { shopMoney: { amount: "12.00" } },
       shippingLines: { nodes: [] },
       sourceName: "web",
-      landingPageUrl: "https://example.com/products/foo",
-      referringSite: "https://instagram.com",
-      billingAddress: {
-        countryCodeV2: "FR",
-        provinceCode: "IDF",
-      },
-      shippingAddress: {
-        countryCodeV2: "DE",
-        provinceCode: "BE",
+      customerJourneySummary: {
+        firstVisit: {
+          landingPage: "https://example.com/products/foo",
+          referrerUrl: "https://instagram.com",
+        },
+        lastVisit: {
+          landingPage: "https://example.com/products/bar",
+          referrerUrl: "https://facebook.com",
+        },
       },
       tags: ["vip"],
-      customer: null,
       lineItems: { nodes: [] },
       refunds: [],
     };
 
     const payload = mapGraphQLToPayload(node);
 
+    expect(payload.email).toBeNull();
+    expect(payload.phone).toBeNull();
+    expect(payload.billing_address).toBeNull();
+    expect(payload.shipping_address).toBeNull();
+    expect(payload.customer).toBeNull();
     expect(payload.presentment_currency).toBe("EUR");
     expect(payload.customer_locale).toBe("fr-FR");
-    expect(payload.billing_address).toEqual({
-      country_code: "FR",
-      province_code: "IDF",
-    });
-    expect(payload.shipping_address).toEqual({
-      country_code: "DE",
-      province_code: "BE",
-    });
+    expect(payload.landing_site).toBe("https://example.com/products/bar");
+    expect(payload.referring_site).toBe("https://facebook.com");
   });
 });
