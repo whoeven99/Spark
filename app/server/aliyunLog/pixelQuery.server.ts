@@ -15,6 +15,7 @@
 
 import { getAliyunLogConfig } from "./config.server";
 import { getSlsClient } from "./slsClient.server";
+import { isStorefrontPixelCollectionEnabled } from "../../lib/storefrontPixelCollection";
 
 /** 漏斗各环节对应的 SLS 事件名（与 shopifyAnalyticsModule 上报口径一致）。 */
 export const PIXEL_FUNNEL_EVENTS = {
@@ -188,6 +189,7 @@ export async function queryPixelFunnelWindow(
  * 已配置但单窗口失败时该窗口为 null（仍可计算可用部分）。
  */
 export const loadPixelFunnel: PixelFunnelLoader = async (shop, ranges) => {
+  if (!isStorefrontPixelCollectionEnabled()) return null;
   if (!getAliyunLogConfig()) return null;
   const [current, previous] = await Promise.all([
     queryPixelFunnelWindow(shop, ranges.currentFrom, ranges.currentTo),

@@ -21,8 +21,8 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 
 - **主应用（仓库根目录）**：React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端，默认由 Shopify CLI 启动。
 - **Admin 后台（`admin/`）**：Express API（本地默认 `3099`）+ Vite React 前端（本地默认 `5174`）。它有独立的 `package.json`、依赖和构建流程。
-- **Web Pixel 扩展（`extensions/ciwi-spark-web-pixel/`）**：采集 Shopify analytics/custom events，经主应用 `/api/pixel-ingest` 上报。
-- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：受 Shopify 单应用 Theme Extension 数量上限约束（每应用仅 1 个），同一扩展包内包含相互隔离的 App Embed：TikTok Pixel、Google Remarketing、Ciwi Image Switcher。TikTok 配置经 `spark_tiktok.pixel_config` 下发；Google 再营销/转化配置经 app-owned Shop metafield `google_remarketing_config` 下发（含 `tagId`=AW-数字、可选 `conversionLabel`、`enhancedConversions`，配置了 label 时店面事件按 `send_to=AW-ID/label` 上报为 Google Ads 转化），并受 Customer Privacy API 营销同意门禁控制；Image Switcher 经 App Proxy 做图片替换与 IP 地区跳转。不要再新增第二个 `type = "theme"` 扩展目录。Google Pixel 三步向导入口在 `/app/ads/google-pixel`（Nabu 风格：添加像素 / 开启 App Embed / 创建像素），App Embed 启用状态经 `read_themes` 读取主题 `config/settings_data.json` 检测。
+- **Web Pixel 扩展**：源码暂存在 `archives/ciwi-spark-web-pixel/`，**当前不随 `shopify app deploy` 发布**。进 `/app` 时改为 `webPixelDelete`（Deploy 1 仍保留 `write_pixels` 以便清已装店）。
+- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：受 Shopify 单应用 Theme Extension 数量上限约束（每应用仅 1 个）。当前部署包只保留 Ciwi Image Switcher App Embed。TikTok / Google / Meta Pixel Embed 已移到 `archives/spark-pixel-embeds/`，本轮不采集店面广告事件。Image Switcher 经 App Proxy 做图片替换与 IP 地区跳转。不要再新增第二个 `type = "theme"` 扩展目录。Google/Meta Pixel 深链改为下线说明页。`read_themes` 仍留在 `shopify.app.test.toml`（Deploy 1），Deploy 2 再去掉 Pixel 相关 scope。
 
 重要边界：
 
@@ -59,7 +59,7 @@ Spark/
 │  ├─ routes.ts               @react-router/fs-routes 入口
 │  └─ root.tsx                React Router 根组件
 ├─ admin/                     独立 Express + Vite 管理后台
-├─ extensions/                Shopify 扩展：Web Pixel + Theme（TikTok / Google Remarketing / Image Switcher）
+├─ extensions/                Shopify 扩展：Theme（当前仅 Image Switcher；Pixel Embed 见 archives/）
 ├─ prisma/                    schema、迁移和计费种子 SQL
 ├─ tests/                     与 app/ 大体镜像的 Vitest 测试
 ├─ scripts/                   运维脚本（Turso 迁移、部署、飞书文档、广告沙盒探针等）；共用 `scripts/lib/loadEnv.mjs`
@@ -111,7 +111,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/task-proposal`：TaskProposal 确认卡的估算/执行入口（由聊天流里的 `task_proposal` 卡片触发，不是独立工具栏按钮）。
 - `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
-- `/api/pixel-ingest`：Web Pixel 采集入口。
+- `/api/pixel-ingest`：Web Pixel 采集入口（当前总闸关闭时只返回 skipped，不写 SLS）。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单（paid/cancelled）、退款、库存、履约、GDPR 合规（`/webhooks/compliance`：`customers/data_request` / `customers/redact` / `shop/redact`），以及 Google Merchant 商品状态与 Meta Catalog Webhook；公共执行/调试工具在 `app/server/webhook/`。
 - `meta.data-deletion.tsx`、`favicon[.]ico.ts`：Meta 数据删除合规回调与 favicon 204 兜底，不属于业务入口。
 
@@ -173,7 +173,7 @@ AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assista
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。历史指标报表走 `shopifyqlQuery`（需 `read_reports`），入口 `/app/settings/shopify-reports`。
 - **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。
-- **Google Ads 再营销**：Ads Catalog 使用 `product_link` / `product_link_invitation` 完成 GMC↔Ads 幂等关联，并从 Ads customer 设置发现 AW 标签。Theme block 只发送非 purchase 店面事件；purchase 由商户手动安装的实验性 Custom Pixel 发送，Google 官方不支持该运行方式，UI 必须持续展示数据损失、重复上报与 Support 不保障告警。
+- **Google Ads 再营销**：Ads Catalog 仍可做 GMC↔Ads 关联。店面 gtag Theme Embed 本轮不部署（文件在 `archives/spark-pixel-embeds/`）。商户若曾粘贴 purchase Custom Pixel，需在客户事件中自行删除。
 - **Google Analytics 4 Data API / Search Console API**：Settings 下 GA4 与 GSC 的连接、属性/站点发现与报表读取，均为只读分析数据；OAuth 凭证经 `app/server/googleAnalytics/ga4Credentials.server.ts`、`app/server/googleSearchConsole/gscCredentials.server.ts` 存取。
 - **火山引擎（Volcengine）视觉模型**：图片生成与图片翻译的模型调用，凭证在 `app/server/volcengine/`。
 - **Shopify Partner API**：仅用于拉取卸载反馈（`app/server/partner/`），不是业务写入通道。

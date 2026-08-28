@@ -20,6 +20,10 @@ vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", 
   };
 });
 
+vi.mock("../../../../app/lib/storefrontPixelCollection", () => ({
+  isStorefrontPixelCollectionEnabled: () => true,
+}));
+
 import {
   clearTiktokPixelTestEventMode,
   maybeTrackTiktokCompletePayment,

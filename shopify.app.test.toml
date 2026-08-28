@@ -59,6 +59,8 @@ uri = "/webhooks/fulfillments/update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+# Deploy 1: keep write_pixels / read_pixels / read_customer_events / read_themes so /app can webPixelDelete.
+# Deploy 2 (after test shops have opened /app once): remove those four scopes, then shopify app deploy -c shopify.app.test.toml
 scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content,write_pixels,read_customer_events,read_pixels,read_fulfillments,read_inventory,read_locations,read_products,read_themes,read_reports"
 
 [auth]

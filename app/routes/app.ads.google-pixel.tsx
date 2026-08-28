@@ -1,11 +1,10 @@
 /**
- * Google Pixel 布局：向导（_index）、数据页（data）、Activity（activity）共用鉴权父路由。
- * 父级只做 Outlet；否则 child 路由会继续渲染向导页。
+ * Google Pixel 布局：本轮停店面采集，深链统一展示下线说明。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { PixelCollectionDisabledPage } from "./page/PixelCollectionDisabledPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -13,7 +12,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function AppAdsGooglePixelLayout() {
-  return <Outlet />;
+  return <PixelCollectionDisabledPage />;
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

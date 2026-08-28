@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { isStorefrontPixelCollectionEnabled } from "../lib/storefrontPixelCollection";
 import { pushSlsLog } from "../server/aliyunLog/pushLog.server";
 import {
   PIXEL_INGEST_LIMITS,
@@ -94,6 +95,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const result = validatePixelEnvelope(parsed);
   if (!result.ok) {
     return jsonResponse({ error: result.error }, { status: result.status, headers });
+  }
+  if (!isStorefrontPixelCollectionEnabled()) {
+    return jsonResponse({ ok: true, skipped: true, reason: "collection_disabled" }, { status: 200, headers });
   }
   const env = result.envelope;
 

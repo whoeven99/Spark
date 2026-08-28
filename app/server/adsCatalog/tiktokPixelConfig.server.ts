@@ -19,6 +19,7 @@ import {
   type TiktokPixelEventName,
   type TiktokPixelStorefrontConfig,
 } from "../../lib/tiktokPixelEvents";
+import { isStorefrontPixelCollectionEnabled } from "../../lib/storefrontPixelCollection";
 
 const LOG_PREFIX = "[AdsCatalog][TikTokPixelConfig]";
 
@@ -165,6 +166,9 @@ export async function trackTiktokStorefrontTestEvent(params: {
   properties?: Record<string, unknown>;
   pageUrl?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
+  if (!isStorefrontPixelCollectionEnabled()) {
+    return { sent: false, reason: "collection_disabled" };
+  }
   const shop = params.shop.trim().toLowerCase();
   if (!shop) return { sent: false, reason: "no_shop" };
 
@@ -410,6 +414,9 @@ export async function maybeTrackTiktokCompletePayment(params: {
   currency?: string;
   email?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
+  if (!isStorefrontPixelCollectionEnabled()) {
+    return { sent: false, reason: "collection_disabled" };
+  }
   const credential = await getTiktokCatalogCredential(params.shop);
   if (!credential) return { sent: false, reason: "no_credential" };
 

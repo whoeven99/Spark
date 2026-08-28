@@ -1,5 +1,6 @@
 import prisma from "../../db.server";
 import { TODAY_ALL_COUNTRIES } from "../../lib/todayGeo.shared";
+import { isStorefrontPixelCollectionEnabled } from "../../lib/storefrontPixelCollection";
 import {
   addUtcDays,
   resolveDisplayTimeZone,
@@ -4199,7 +4200,7 @@ export async function loadTodayDecisionReportData(params: {
       loadDecisionObjectData(params.shop, filters.selectedCountry, now),
     ]);
     if (params.metric === "traffic") {
-      if (objectData.pageSignalStatus === "loaded") {
+      if (isStorefrontPixelCollectionEnabled() && objectData.pageSignalStatus === "loaded") {
         filters.dataNotes.push("流量页的页面对象已接入 web pixel 的 page_viewed / product_added_to_cart / checkout_started 事件，再用 landingSite 订单结果补齐后段承接。");
       } else if (objectData.pageSignalStatus === "country_unavailable") {
         filters.dataNotes.push("当前切到单地区后，页面级像素事件暂不支持按国家拆分，页面对象先回退为 landingSite 订单代理口径。");
@@ -4208,7 +4209,7 @@ export async function loadTodayDecisionReportData(params: {
       }
     }
     if (params.metric === "conversion") {
-      if (objectData.pageSignalStatus === "loaded") {
+      if (isStorefrontPixelCollectionEnabled() && objectData.pageSignalStatus === "loaded") {
         filters.dataNotes.push("转化页的页面对象已接入 web pixel 的 page_viewed / product_added_to_cart / checkout_started / payment_info_submitted / checkout_completed 事件，再用 landingSite 订单结果补齐成交后风险。");
       } else if (objectData.pageSignalStatus === "country_unavailable") {
         filters.dataNotes.push("当前切到单地区后，页面级像素事件暂不支持按国家拆分，页面对象先回退为 landingSite 订单代理口径。");

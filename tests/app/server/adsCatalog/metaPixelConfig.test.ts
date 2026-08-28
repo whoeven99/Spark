@@ -41,6 +41,10 @@ vi.mock("../../../../app/server/adsCatalog/clients/facebookGraphClient.server", 
   listMetaBusinessPixels: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("../../../../app/lib/storefrontPixelCollection", () => ({
+  isStorefrontPixelCollectionEnabled: () => true,
+}));
+
 import { MetaCapiTrackError } from "../../../../app/server/adsCatalog/clients/metaConversionsApiClient.server";
 import {
   formatMetaCapiTokenForLog,

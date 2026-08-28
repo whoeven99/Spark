@@ -21,6 +21,7 @@ import {
   setFacebookCatalogCredential,
   type FacebookCatalogCredential,
 } from "./credentialStore.server";
+import { isStorefrontPixelCollectionEnabled } from "../../lib/storefrontPixelCollection";
 import {
   buildMetaStorefrontTrackUrl,
   isMetaPixelEventName,
@@ -755,6 +756,9 @@ export async function trackMetaStorefrontTestEvent(params: {
   clientIpAddress?: string;
   clientUserAgent?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
+  if (!isStorefrontPixelCollectionEnabled()) {
+    return { sent: false, reason: "collection_disabled" };
+  }
   const shop = params.shop.trim().toLowerCase();
   if (!shop) return { sent: false, reason: "no_shop" };
 
@@ -998,6 +1002,9 @@ export async function maybeTrackMetaPurchase(params: {
   currency?: string;
   email?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
+  if (!isStorefrontPixelCollectionEnabled()) {
+    return { sent: false, reason: "collection_disabled" };
+  }
   const credential = await getFacebookCatalogCredential(params.shop);
   if (!credential) return { sent: false, reason: "no_credential" };
 

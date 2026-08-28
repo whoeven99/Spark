@@ -8,8 +8,8 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
 - 主应用：仓库根目录，React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端。
 - Admin 后台：`admin/` 独立 Express API + Vite React 前端。
-- Web Pixel 扩展：`extensions/ciwi-spark-web-pixel/`，采集 Shopify analytics/custom events 并上报 `/api/pixel-ingest`。
-- Theme App Extension：`extensions/spark-tiktok-pixel/`，店面 App embed 注入 TikTok `ttq`；Pixel / Events API 配置在 Ads Catalog，经 Shop metafield `spark_tiktok.pixel_config` 下发。
+- Web Pixel 扩展：实现在 `archives/ciwi-spark-web-pixel/`，当前不部署；运行时默认不采集，`/app` 走 `webPixelDelete`。
+- Theme App Extension：`extensions/spark-tiktok-pixel/` 目前只部署 Ciwi Image Switcher。广告 Pixel Embed 在 `archives/spark-pixel-embeds/`。
 
 整店/多语言翻译执行链路归 TypeScriptFrontend（TSF）所有。Spark 主应用不再注册整店翻译工具，也没有 `worker/` 目录或 Translation Worker 可部署服务。Spark 仍保留图片翻译、兼容 Blob 读取和 Admin 只读观测/运维页。
 
@@ -46,7 +46,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - `/api/task-proposal`：聊天中的任务建议/确认载荷。
 - `/api/automation-overview`：Today 和工作台自动化概览。
 - `/api/support`：客服会话入口。
-- `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集。
+- `/api/feature-track`、`/api/pixel-ingest`：功能埋点与 Web Pixel 采集（ingest 当前默认 skipped）。
 - `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console。
 - `POST /api/pagespeed`：PageSpeed Insights 实验室分析（不落库）。
 - 广告 Catalog / Insights OAuth：`app.ads-catalog.tsx`、`app.insights.performance.tsx`（旧路径 `app.settings.ads-insights.tsx` 只做重定向）、`app.ads.*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx`、`ads.meta-ads.callback.tsx`、`ads.google-*.callback.tsx`、`ads.tiktok-catalog.callback.tsx`。
@@ -150,10 +150,7 @@ npm run turso:migrate:test
 - Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
 - 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
 - PageSpeed Insights：仅走 Google PSI API v5；可选平台级 `GOOGLE_PAGESPEED_API_KEY`（不是商户 OAuth）。
-- TikTok Pixel（Ads Catalog）：
-  - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
-  - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。
-  - 服务端：`orders/paid` 按勾选上报 `CompletePayment`（Events API `pixel/track`；凭证含 Test Event Code 时带 `test_event_code`）。
+- TikTok Pixel（Ads Catalog）：当前版本停店面采集。凭证连接仍在；Pixel 配置 UI 改为下线说明。`orders/paid` 的 CompletePayment 被 `isStorefrontPixelCollectionEnabled()` 挡住。
 - TikTok Insights 沙盒（`app/server/adsInsights/tiktokSandbox.server.ts`）：
   - `TIKTOK_SANDBOX_ACCESS_TOKEN`、`TIKTOK_SANDBOX_ADVERTISER_ID`（必需）
   - `TIKTOK_SANDBOX_IDENTITY_ID`、`TIKTOK_SANDBOX_IDENTITY_TYPE`（seed 建 Ad 必需）
@@ -170,10 +167,10 @@ npm run turso:migrate:test
 - 改 Today/运营诊断：`app/routes/app.today.*`、`app/server/operations/`。
 - 改订单回补/数据同步：`app/routes/app.settings.data.tsx`、`app/server/shopify/sync/`。
 - 改广告 OAuth / Catalog / Insights：`app/server/adsCatalog/**`、`app/server/adsInsights/**`、相关 `app/routes/app.ads-catalog.tsx`、`app.insights.*` 与 OAuth start/callback。
-- 改 TikTok Pixel / Theme App Embed：`extensions/spark-tiktok-pixel/`、`app/server/adsCatalog/`（metafield 下发与 Events API）。
+- 改 TikTok Pixel / Theme App Embed：当前部署只含 Image Switcher；Pixel Embed 在 `archives/spark-pixel-embeds/`。
 - 改计费：先读 `app/server/billing/agent.md`，再改 `app/server/billing/`、`app/server/tokenUsage/`、`app/routes/app.settings.billing.tsx` 和 Webhook。
 - 改 Admin：在 `admin/` 内修改并运行 `npm run build`。
-- 改 Web Pixel：`extensions/ciwi-spark-web-pixel/`，同时检查 `/api/pixel-ingest`。
+- 改 Web Pixel：源码在 `archives/ciwi-spark-web-pixel/`，总闸在 `app/lib/storefrontPixelCollection.ts`，同时检查 `/api/pixel-ingest`。
 
 ## 10. 验证原则
 

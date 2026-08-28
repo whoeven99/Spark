@@ -19,6 +19,7 @@ const LOG = "[WebPixel]";
 /** 同一进程内每个 shop 的校验间隔，避免每次页面加载都打 Admin API。 */
 const ENSURE_TTL_MS = 10 * 60 * 1000;
 const lastEnsuredAt = new Map<string, number>();
+const lastDeletedAt = new Map<string, number>();
 
 const WEB_PIXEL_QUERY = `#graphql
   query SparkWebPixel {
@@ -61,6 +62,19 @@ const WEB_PIXEL_UPDATE_MUTATION = `#graphql
   }
 `;
 
+const WEB_PIXEL_DELETE_MUTATION = `#graphql
+  mutation SparkWebPixelDelete($id: ID!) {
+    webPixelDelete(id: $id) {
+      deletedWebPixelId
+      userErrors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;
+
 type WebPixelNode = { id?: string; settings?: string | null };
 
 type WebPixelQueryData = { webPixel?: WebPixelNode | null };
@@ -68,7 +82,17 @@ type WebPixelQueryData = { webPixel?: WebPixelNode | null };
 type WebPixelMutationData = {
   webPixelCreate?: WebPixelMutationPayload;
   webPixelUpdate?: WebPixelMutationPayload;
+  webPixelDelete?: {
+    deletedWebPixelId?: string | null;
+    userErrors?: Array<{ field?: string[] | null; message?: string; code?: string }>;
+  };
 };
+
+export type DeleteShopWebPixelResult =
+  | { status: "deleted"; id?: string }
+  | { status: "ok" }
+  | { status: "skipped"; reason: string }
+  | { status: "failed"; reason: string };
 
 type WebPixelMutationPayload = {
   webPixel?: WebPixelNode | null;
@@ -171,6 +195,11 @@ async function queryExistingWebPixel(
 
 function shouldSkipByTtl(shop: string, now: number): boolean {
   const last = lastEnsuredAt.get(shop);
+  return last !== undefined && now - last < ENSURE_TTL_MS;
+}
+
+function shouldSkipDeleteByTtl(shop: string, now: number): boolean {
+  const last = lastDeletedAt.get(shop);
   return last !== undefined && now - last < ENSURE_TTL_MS;
 }
 
@@ -293,7 +322,84 @@ export async function ensureWebPixel(
   }
 }
 
+/**
+ * 删除当前店铺的 Spark Web Pixel（Deploy 1：停采集后清已装店）。
+ * 像素不存在、缺 scope 只记日志，不阻断 /app。
+ */
+export async function deleteShopWebPixel(
+  admin: ShopifyAdminGraphqlClient,
+  shop: string,
+  options?: { force?: boolean },
+): Promise<DeleteShopWebPixelResult> {
+  const now = Date.now();
+  if (!options?.force && shouldSkipDeleteByTtl(shop, now)) {
+    return { status: "skipped", reason: "ttl" };
+  }
+
+  try {
+    const queried = await queryExistingWebPixel(admin);
+    if (!queried.ok) {
+      const reason = queried.reason;
+      if (/access denied|not authorized|insufficient|scope/i.test(reason)) {
+        console.warn(`${LOG} delete skipped shop=${shop}: missing write_pixels (${reason})`);
+        lastDeletedAt.set(shop, now);
+        return { status: "skipped", reason: "missing-scope" };
+      }
+      console.warn(`${LOG} delete query errors shop=${shop}: ${reason}`);
+      return { status: "failed", reason };
+    }
+
+    const existing = queried.pixel;
+    if (!existing?.id) {
+      lastDeletedAt.set(shop, now);
+      return { status: "ok" };
+    }
+
+    const response = await admin.graphql(WEB_PIXEL_DELETE_MUTATION, {
+      variables: { id: existing.id },
+    });
+    if (!response.ok) {
+      return { status: "failed", reason: `HTTP ${response.status}` };
+    }
+
+    const payload = await parseAdminGraphqlJson<WebPixelMutationData>(response);
+    if (payload.errors?.length) {
+      const reason = formatGraphqlErrors(payload.errors);
+      if (/access denied|not authorized|insufficient|scope/i.test(reason)) {
+        console.warn(`${LOG} delete skipped shop=${shop}: missing write_pixels (${reason})`);
+        lastDeletedAt.set(shop, now);
+        return { status: "skipped", reason: "missing-scope" };
+      }
+      console.warn(`${LOG} delete failed shop=${shop}: ${reason}`);
+      return { status: "failed", reason };
+    }
+
+    const userErrors = payload.data?.webPixelDelete?.userErrors ?? [];
+    if (userErrors.length) {
+      const reason = userErrors
+        .map((e) => `${e.code ?? ""} ${e.message ?? ""}`.trim())
+        .join("；");
+      console.warn(`${LOG} delete userErrors shop=${shop}: ${reason}`);
+      return { status: "failed", reason };
+    }
+
+    lastDeletedAt.set(shop, now);
+    const deletedId = payload.data?.webPixelDelete?.deletedWebPixelId ?? existing.id;
+    console.info(`${LOG} deleted shop=${shop} id=${deletedId}`);
+    return { status: "deleted", id: deletedId ?? undefined };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (isPixelNotFoundThrownError(error)) {
+      lastDeletedAt.set(shop, now);
+      return { status: "ok" };
+    }
+    console.warn(`${LOG} delete failed shop=${shop}: ${reason}`);
+    return { status: "failed", reason };
+  }
+}
+
 /** 仅供测试：清空 TTL 缓存。 */
 export function __resetWebPixelEnsureCacheForTest(): void {
   lastEnsuredAt.clear();
+  lastDeletedAt.clear();
 }

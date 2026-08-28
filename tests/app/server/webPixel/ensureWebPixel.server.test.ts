@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetWebPixelEnsureCacheForTest,
   buildDesiredWebPixelSettings,
+  deleteShopWebPixel,
   ensureWebPixel,
   resolvePixelIngestEndpoint,
 } from "../../../../app/server/webPixel/ensureWebPixel.server";
@@ -222,5 +223,54 @@ describe("ensureWebPixel", () => {
     const result = await ensureWebPixel(admin, SHOP);
 
     expect(result.status).toBe("failed");
+  });
+});
+
+describe("deleteShopWebPixel", () => {
+  it("returns ok when no pixel exists", async () => {
+    const { admin, graphql } = mockAdmin([
+      jsonResponse({
+        data: { webPixel: null },
+        errors: [{ message: "No web pixel was found" }],
+      }),
+    ]);
+
+    const result = await deleteShopWebPixel(admin, SHOP);
+    expect(result).toEqual({ status: "ok" });
+    expect(graphql).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes an existing pixel", async () => {
+    const { admin, graphql } = mockAdmin([
+      jsonResponse({
+        data: { webPixel: { id: "gid://shopify/WebPixel/1", settings: "{}" } },
+      }),
+      jsonResponse({
+        data: {
+          webPixelDelete: {
+            deletedWebPixelId: "gid://shopify/WebPixel/1",
+            userErrors: [],
+          },
+        },
+      }),
+    ]);
+
+    const result = await deleteShopWebPixel(admin, SHOP);
+    expect(result).toEqual({ status: "deleted", id: "gid://shopify/WebPixel/1" });
+    expect(graphql).toHaveBeenCalledTimes(2);
+    expect(graphql.mock.calls[1][1]).toEqual({
+      variables: { id: "gid://shopify/WebPixel/1" },
+    });
+  });
+
+  it("skips within TTL after a successful delete", async () => {
+    const { admin, graphql } = mockAdmin([
+      jsonResponse({ data: { webPixel: null } }),
+    ]);
+
+    await deleteShopWebPixel(admin, SHOP);
+    const second = await deleteShopWebPixel(admin, SHOP);
+    expect(second).toEqual({ status: "skipped", reason: "ttl" });
+    expect(graphql).toHaveBeenCalledTimes(1);
   });
 });

@@ -23,7 +23,8 @@ import {
 import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
-import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import { deleteShopWebPixel, ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import { isStorefrontPixelCollectionEnabled } from "../lib/storefrontPixelCollection";
 import { ensureInstallOrderBackfill } from "../server/shopify/sync/ensureInstallOrderBackfill.server";
 import {
   syncSessionShopProfile,
@@ -111,7 +112,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
-  void ensureWebPixel(admin, session.shop);
+  if (isStorefrontPixelCollectionEnabled()) {
+    void ensureWebPixel(admin, session.shop);
+  } else {
+    void deleteShopWebPixel(admin, session.shop);
+  }
 
   const locale = await resolveUiLocale(request, {
     admin,

@@ -1,12 +1,9 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import type { CredentialsView } from "./types";
-import { MetaPixelConfigPanel } from "./MetaPixelConfigPanel";
-import { MetaPixelSetupWizard } from "./MetaPixelSetupWizard";
-import { buildMetaPixelThemeEditorUrl } from "../../../lib/metaPixelEvents";
+import { PixelCollectionDisabledNote } from "./PixelCollectionDisabledNote";
 
 type Props = {
   credentials: CredentialsView;
@@ -53,28 +50,15 @@ export function MetaConnectPanels({
   credentials,
   locationSearch,
   languageCode,
-  shopDomain,
-  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [setupRevision, setSetupRevision] = useState(0);
   const metaUnifiedOAuth = useOAuthPopup("meta_unified_oauth");
 
   const meta = credentials.meta;
 
-  const themeEditorUrl = useMemo(
-    () =>
-      buildMetaPixelThemeEditorUrl({
-        shopDomain,
-        apiKey: shopifyApiKey,
-      }),
-    [shopDomain, shopifyApiKey],
-  );
-
   function notifyChanged() {
-    setSetupRevision((n) => n + 1);
     onChanged();
   }
 
@@ -163,48 +147,7 @@ export function MetaConnectPanels({
               {t("adsCatalog.metaUnifiedAuthButton")}
             </button>
           </div>
-          <MetaPixelSetupWizard
-            metaConnected={meta.connected}
-            metaAdsConnected={meta.metaAdsConnected}
-            pixelId={meta.pixelId}
-            hasCapiAccessToken={meta.hasCapiAccessToken}
-            hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
-            capiEnabled={meta.capiEnabled}
-            locationSearch={locationSearch}
-            themeEditorUrl={themeEditorUrl}
-            onConnectMetaAds={connectMetaUnified}
-            busy={busy}
-            setupRevision={setupRevision}
-          />
-          <MetaPixelConfigPanel
-            locationSearch={locationSearch}
-            shopDomain={shopDomain}
-            shopifyApiKey={shopifyApiKey}
-            pixelId={meta.pixelId}
-            hasCapiAccessToken={meta.hasCapiAccessToken}
-            hasStoredCapiAccessToken={meta.hasStoredCapiAccessToken}
-            capiAccessToken={meta.capiAccessToken}
-            metaOAuthCapiAvailable={meta.metaOAuthCapiAvailable}
-            metaCapiBisuConfigured={meta.metaCapiBisuConfigured}
-            capiTokenType={meta.capiTokenType}
-            pendingCapiPixels={meta.pendingCapiPixels}
-            testEventCode={meta.testEventCode}
-            capiEnabled={meta.capiEnabled}
-            enabledEvents={meta.enabledEvents}
-            metaAdsConnected={meta.metaAdsConnected}
-            metaAdsAdAccountId={meta.metaAdsAdAccountId}
-            busy={busy}
-            setBusy={setBusy}
-            onChanged={notifyChanged}
-          />
-          {meta.pixelId ? (
-            <Link
-              to={`/app/ads/meta-pixel/data${locationSearch}`}
-              style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
-            >
-              {t("adsCatalog.metaPixelViewData")}
-            </Link>
-          ) : null}
+          <PixelCollectionDisabledNote />
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} onClick={connectMetaUnified} disabled={busy}>
               {t("adsCatalog.metaReauth")}

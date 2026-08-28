@@ -1,9 +1,6 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import { getGoogleAdsCredential } from "../server/adsCatalog/credentialStore.server";
-import { resolvePixelIngestEndpoint } from "../server/webPixel/ensureWebPixel.server";
-import { GooglePixelOnboardingPage } from "./page/GooglePixelOnboardingPage";
 
 export type GooglePixelLoaderData = {
   shopDomain: string;
@@ -22,28 +19,17 @@ export type GooglePixelLoaderData = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const ads = await getGoogleAdsCredential(session.shop);
-  const remarketing = ads?.remarketing;
   return {
     shopDomain: session.shop,
-    shopifyApiKey: process.env.SHOPIFY_API_KEY?.trim() ?? "",
-    ingestEndpoint: resolvePixelIngestEndpoint() ?? "",
-    connected: Boolean(ads),
-    config: remarketing
-      ? {
-          tagId: remarketing.tagId,
-          pixelName: remarketing.pixelName ?? "",
-          conversionLabel: remarketing.conversionLabel ?? "",
-          enabledEvents: remarketing.enabledEvents ?? [],
-          enhancedConversions: remarketing.enhancedConversions ?? false,
-          customPixelConfirmedAt: remarketing.customPixelConfirmedAt ?? null,
-        }
-      : null,
+    shopifyApiKey: "",
+    ingestEndpoint: "",
+    connected: false,
+    config: null,
   } satisfies GooglePixelLoaderData;
 };
 
 export default function AppAdsGooglePixelIndex() {
-  return <GooglePixelOnboardingPage />;
+  return null;
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

@@ -59,6 +59,10 @@ uri = "/webhooks/fulfillments/update"
 [access_scopes]
 # 第一版 + PCD：经营/订单查询与镜像、履约、商品文案评分查找与写回、语言、文章
 # 未包含：translations（归 TSF）、pixels、themes、reports、inventory/locations
+# 店面 Pixel 已停采集：Web Pixel 与三个 Pixel App Embed 不在 extensions/。
+# 本文件本来就没有 write_pixels / read_pixels / read_customer_events / read_themes，
+# 不要为了 Deploy 1 加回去（商家会收到 scope 更新；且无 write_pixels 时本来也创建不了 Web Pixel）。
+# 下次 `shopify app deploy -c shopify.app.prod.toml` 会从 Theme 包拿掉 Pixel Embed，只留 Image Switcher。
 scopes = "read_orders,read_fulfillments,read_products,write_products,read_locales,read_content"
 
 [auth]

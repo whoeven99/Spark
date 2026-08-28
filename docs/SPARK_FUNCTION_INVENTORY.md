@@ -69,7 +69,7 @@
 | PageSpeed Insights | 对公网 URL 跑 Google 实验室分析，展示性能/无障碍/SEO/最佳做法分数、指标与审核项 | `/app/settings/pagespeed` |
 | 邮件与通知 | 安装、卸载、订阅、购包、任务状态等邮件与飞书运营通知 | 后台服务 / Webhook |
 | Webhook 同步 | 订单、退款、库存、履约、订阅、购包、卸载、scope 更新、GDPR 合规（`/webhooks/compliance`，当前仅 ack） | `app/routes/webhooks.*` |
-| Web Pixel | 浏览、购物车、checkout 等行为采集 | `extensions/ciwi-spark-web-pixel/`、`/api/pixel-ingest` |
+| Web Pixel | 源码在 archives；当前不部署、默认不采集 | `archives/ciwi-spark-web-pixel/`、`/api/pixel-ingest`（skipped） |
 | 内部 Admin | 店铺、用量、订阅、收入、Agent 执行、客服、日志、巡检、TSF 翻译观测、定价 | `/admin` |
 
 ## 当前信息架构归纳
