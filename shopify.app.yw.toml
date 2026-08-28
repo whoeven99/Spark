@@ -13,6 +13,10 @@ include_config_on_deploy = true
 api_version = "2026-07"
 
   [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks/compliance"
+
+  [[webhooks.subscriptions]]
   topics = ["orders/paid"]
   uri = "/webhooks/orders/paid"
 

@@ -1,49 +1,36 @@
-import { AppProvider } from "@shopify/shopify-app-react-router/react";
-import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData } from "react-router";
+import { redirect } from "react-router";
 
 import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+function shopFromQuery(request: Request): string | null {
+  const shop = new URL(request.url).searchParams.get("shop")?.trim();
+  return shop || null;
+}
+
+/** 仅接受 URL 上的 `?shop=`（Shopify 发起的安装）。手填域名表单会违反 App Store 2.3.1。 */
+async function startShopifyLoginOrRedirectHome(request: Request) {
+  if (!shopFromQuery(request)) {
+    throw redirect("/");
+  }
+
   const errors = loginErrorMessage(await login(request));
+  if (errors.shop) {
+    throw redirect("/");
+  }
 
   return { errors };
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  return startShopifyLoginOrRedirectHome(request);
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
-
-  return {
-    errors,
-  };
+  return startShopifyLoginOrRedirectHome(request);
 };
 
 export default function Auth() {
-  const loaderData = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const [shop, setShop] = useState("");
-  const { errors } = actionData || loaderData;
-
-  return (
-    <AppProvider embedded={false}>
-      <s-page>
-        <Form method="post">
-        <s-section heading="Log in">
-          <s-text-field
-            name="shop"
-            label="Shop domain"
-            details="example.myshopify.com"
-            value={shop}
-            onChange={(e) => setShop(e.currentTarget.value)}
-            autocomplete="on"
-            error={errors.shop}
-          ></s-text-field>
-          <s-button type="submit">Log in</s-button>
-        </s-section>
-        </Form>
-      </s-page>
-    </AppProvider>
-  );
+  return null;
 }

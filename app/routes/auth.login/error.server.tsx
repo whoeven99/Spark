@@ -7,9 +7,9 @@ interface LoginErrorMessage {
 
 export function loginErrorMessage(loginErrors: LoginError): LoginErrorMessage {
   if (loginErrors?.shop === LoginErrorType.MissingShop) {
-    return { shop: "Please enter your shop domain to log in" };
+    return { shop: "Install Spark from Shopify Admin or the Shopify App Store." };
   } else if (loginErrors?.shop === LoginErrorType.InvalidShop) {
-    return { shop: "Please enter a valid shop domain to log in" };
+    return { shop: "This shop could not start installation. Open Spark from Shopify Admin or the App Store." };
   }
 
   return {};
