@@ -17,7 +17,8 @@ import { usePictureTranslateContext } from "../component/pictureTranslate/pictur
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
 import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
-import { ImageSwitcherBanner } from "../component/imageStudio/ImageSwitcherBanner";
+// 审核期临时关闭 5.1.1：隐藏 Image Switcher 入口。过审后恢复。
+// import { ImageSwitcherBanner } from "../component/imageStudio/ImageSwitcherBanner";
 import {
   PageHeaderNav,
   PageSurface,
@@ -106,8 +107,8 @@ function ImageStudioPageInner({
   navTab,
   setNavTab,
   locationSearch,
-  shop,
-  appEmbedId,
+  shop: _shop,
+  appEmbedId: _appEmbedId,
   onTaskCreated,
   onTaskDeleted,
   onTaskUpdated,
@@ -229,9 +230,10 @@ function ImageStudioPageInner({
               </PageSurface>
             </div>
 
-            {navTab === "translate" && (
-              <ImageSwitcherBanner shop={shop} appEmbedId={appEmbedId} />
-            )}
+            {/* 审核期临时关闭 5.1.1：隐藏 Image Switcher Banner。过审后恢复。 */}
+            {/* {navTab === "translate" && (
+              <ImageSwitcherBanner shop={_shop} appEmbedId={_appEmbedId} />
+            )} */}
 
             {navTab === "translate" && (
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>

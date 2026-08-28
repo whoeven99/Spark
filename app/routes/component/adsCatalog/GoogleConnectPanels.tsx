@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+// 审核期临时关闭 5.1.5：隐藏 Google Pixel 入口，过审后恢复 Link。
+// import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
@@ -380,65 +381,7 @@ export function GoogleConnectPanels({
           </>
         )}
       </div>
-      {/* ── Google Pixel（Nabu 风格三步向导入口）── */}
-      <div style={panelStyle}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-          {t("adsCatalog.googlePixelPanelTitle")}
-        </h3>
-        <p style={pageHintTextStyle}>{t("adsCatalog.googlePixelPanelHint")}</p>
-        {ads.remarketing.tagId ? (
-          <div style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ color: pageColorTokens.brandGreenDeep, fontWeight: 600 }}>
-              {t("adsCatalog.googlePixelSummaryTag", { tag: ads.remarketing.tagId })}
-            </div>
-            {ads.remarketing.conversionLabel ? (
-              <div>
-                {t("adsCatalog.googlePixelSummaryLabel", {
-                  label: ads.remarketing.conversionLabel,
-                })}
-              </div>
-            ) : null}
-            <div style={pageHintTextStyle}>
-              {t("adsCatalog.googlePixelSummaryEvents", {
-                count: ads.remarketing.enabledEvents.length,
-              })}
-            </div>
-          </div>
-        ) : (
-          <p style={pageHintTextStyle}>{t("adsCatalog.googlePixelNotConfigured")}</p>
-        )}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {ads.remarketing.tagId ? (
-            <>
-              <Link
-                to={`/app/ads/google-pixel/data${locationSearch}`}
-                style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
-              >
-                {t("adsCatalog.googlePixelViewData")}
-              </Link>
-              <Link
-                to={`/app/ads/google-pixel/activity${locationSearch}`}
-                style={{ ...secondaryBtn, display: "inline-block", textDecoration: "none" }}
-              >
-                {t("adsCatalog.googlePixelViewActivity")}
-              </Link>
-              <Link
-                to={`/app/ads/google-pixel${locationSearch}`}
-                style={{ ...secondaryBtn, display: "inline-block", textDecoration: "none" }}
-              >
-                {t("adsCatalog.googlePixelManage")}
-              </Link>
-            </>
-          ) : (
-            <Link
-              to={`/app/ads/google-pixel${locationSearch}`}
-              style={{ ...primaryBtn, display: "inline-block", textDecoration: "none" }}
-            >
-              {t("adsCatalog.googlePixelSetup")}
-            </Link>
-          )}
-        </div>
-      </div>
+      {/* 审核期临时关闭 5.1.5：隐藏 Google Pixel 向导入口。过审后恢复本面板。 */}
     </div>
   );
 }

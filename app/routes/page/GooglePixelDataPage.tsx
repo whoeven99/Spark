@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData, useRevalidator } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import {
@@ -10,10 +10,11 @@ import {
 } from "./pageUiStyles";
 import {
   buildGoogleRemarketingThemeEditorUrl,
-  buildShopifyCustomerEventsUrl,
   GOOGLE_REMARKETING_CORE_EVENTS,
   GOOGLE_REMARKETING_FIELD_GROUPS,
 } from "../../lib/googleRemarketing";
+// 审核期临时关闭 5.1.1：不打开 Customer Events 粘贴页。过审后恢复。
+// import { buildShopifyCustomerEventsUrl } from "../../lib/googleRemarketing";
 import type { GooglePixelDataLoaderData } from "../app.ads.google-pixel.data";
 import { GoogleAdsPerformancePanel } from "../component/googlePixel/GoogleAdsPerformancePanel";
 
@@ -112,11 +113,9 @@ function StatusPill({
 export function GooglePixelDataPage() {
   const { t } = useTranslation();
   const data = useLoaderData<GooglePixelDataLoaderData>();
-  const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
   const connectionPath = `/app/settings/connections/google${locationSearch}`;
   const [busy, setBusy] = useState(false);
-  const [hint, setHint] = useState("");
   const [error, setError] = useState("");
   const [embed, setEmbed] = useState(data.embed);
 
@@ -132,10 +131,11 @@ export function GooglePixelDataPage() {
       }),
     [data.shopDomain, data.shopifyApiKey],
   );
-  const customerEventsUrl = useMemo(
-    () => buildShopifyCustomerEventsUrl(data.shopDomain),
-    [data.shopDomain],
-  );
+  // 审核期临时关闭 5.1.1：不打开 Customer Events 粘贴页。过审后恢复。
+  // const customerEventsUrl = useMemo(
+  //   () => buildShopifyCustomerEventsUrl(data.shopDomain),
+  //   [data.shopDomain],
+  // );
 
   const refreshEmbed = useCallback(async () => {
     setBusy(true);
@@ -159,67 +159,10 @@ export function GooglePixelDataPage() {
     }
   }, [locationSearch, t]);
 
-  async function copyScript() {
-    if (!data.customPixelScript) return;
-    try {
-      await navigator.clipboard.writeText(data.customPixelScript);
-      setHint(t("adsCatalog.googleRemarketing.pixelCopied"));
-    } catch {
-      setHint(t("adsCatalog.googleRemarketing.pixelCopyFailed"));
-    }
-  }
-
-  async function confirmCustomPixel() {
-    if (!data.config) return;
-    setBusy(true);
-    setError("");
-    try {
-      const resp = await fetch(`/api/ads-catalog/google-remarketing${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tagId: data.config.tagId,
-          source: data.config.source,
-          enabledEvents: data.config.enabledEvents,
-          enabledFieldGroups: data.config.enabledFieldGroups,
-          pixelName: data.config.pixelName,
-          conversionLabel: data.config.conversionLabel,
-          enhancedConversions: data.config.enhancedConversions,
-          customPixelConfirmed: true,
-        }),
-      });
-      const json = (await resp.json()) as { ok?: boolean; error?: string };
-      if (!resp.ok || !json.ok) {
-        throw new Error(json.error || t("googlePixelData.confirmFailed"));
-      }
-      revalidator.revalidate();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("googlePixelData.confirmFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resetCustomPixel() {
-    setBusy(true);
-    setError("");
-    try {
-      const resp = await fetch(`/api/ads-catalog/google-remarketing${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operation: "reset_custom_pixel" }),
-      });
-      const json = (await resp.json()) as { ok?: boolean; error?: string };
-      if (!resp.ok || !json.ok) {
-        throw new Error(json.error || t("googlePixelData.resetFailed"));
-      }
-      revalidator.revalidate();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("googlePixelData.resetFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
+  // 审核期临时关闭 5.1.1：不复制/确认 purchase Custom Pixel。过审后恢复。
+  // async function copyScript() { ... }
+  // async function confirmCustomPixel() { ... }
+  // async function resetCustomPixel() { ... }
 
   if (!data.config) {
     return (
@@ -384,7 +327,8 @@ export function GooglePixelDataPage() {
           enabled={config.enabledEvents}
           labelOf={(value) => t(`adsCatalog.googleRemarketing.events.${value}`)}
         />
-        <p style={pageHintTextStyle}>{t("googlePixelData.purchaseNote")}</p>
+        {/* 审核期临时关闭 5.1.1：不再提示下方 Custom Pixel。过审后恢复。 */}
+        {/* <p style={pageHintTextStyle}>{t("googlePixelData.purchaseNote")}</p> */}
       </div>
 
       <div style={cardStyle}>
@@ -396,47 +340,16 @@ export function GooglePixelDataPage() {
         />
       </div>
 
-      <div style={cardStyle}>
+      {/* 审核期临时关闭 5.1.1：隐藏 purchase Custom Pixel 粘贴卡片。过审后恢复。 */}
+      {/* <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelData.sectionCustomPixel")}</h3>
-        <p style={{ margin: 0, fontSize: 13 }}>
-          {config.customPixelConfirmedAt
-            ? t("adsCatalog.googleRemarketing.pixelConfirmed", {
-                time: formatTime(config.customPixelConfirmedAt, t("googlePixelData.none")),
-              })
-            : t("adsCatalog.googleRemarketing.pixelUnconfirmed")}
-        </p>
-        {data.customPixelScript ? (
-          <textarea
-            readOnly
-            value={data.customPixelScript}
-            rows={10}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 12, boxSizing: "border-box" }}
-          />
-        ) : (
-          <p style={pageHintTextStyle}>{t("adsCatalog.googleRemarketing.pixelNeedsConfig")}</p>
-        )}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" style={primaryBtn} disabled={busy || !data.customPixelScript} onClick={() => void copyScript()}>
-            {t("adsCatalog.googleRemarketing.copyPixel")}
-          </button>
-          <a href={customerEventsUrl} target="_blank" rel="noreferrer" style={secondaryBtn}>
-            {t("adsCatalog.googleRemarketing.openCustomerEvents")}
-          </a>
-          <button type="button" style={secondaryBtn} disabled={busy} onClick={() => void confirmCustomPixel()}>
-            {t("adsCatalog.googleRemarketing.confirmPixelInstalled")}
-          </button>
-          <button type="button" style={secondaryBtn} disabled={busy || !config.customPixelConfirmedAt} onClick={() => void resetCustomPixel()}>
-            {t("adsCatalog.googleRemarketing.resetPixelConfirmation")}
-          </button>
-        </div>
-      </div>
-
+        ... copy / Customer Events / confirm ...
+      </div> */}
       <div style={cardStyle}>
         <h3 style={{ margin: 0, fontSize: 15 }}>{t("googlePixelData.sectionLimits")}</h3>
         <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>{t("googlePixelData.limitsBody")}</p>
       </div>
 
-      {hint ? <div style={pageHintTextStyle}>{hint}</div> : null}
       {error ? <div style={{ color: pageColorTokens.critical, fontSize: 13 }}>{error}</div> : null}
     </div>
   );
