@@ -148,12 +148,10 @@ export const brandBadgeStyle: CSSProperties = {
   width: 32,
   height: 32,
   borderRadius: 8,
-  background: shopifyUi.primary,
-  color: "#ffffff",
+  overflow: "hidden",
+  flexShrink: 0,
   display: "grid",
   placeItems: "center",
-  fontWeight: 700,
-  fontSize: 13,
 };
 export const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: shopifyUi.text };
 export const brandMetaStyle: CSSProperties = {

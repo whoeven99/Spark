@@ -1142,7 +1142,7 @@ export function WorkspaceAppShellPage({
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <div style={brandRowStyle}>
           <div style={brandBadgeStyle}>
-            <SparkMark />
+            <SparkMark size={32} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
@@ -1404,7 +1404,7 @@ export function WorkspaceAppShellPage({
     <>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flex: 1, minHeight: 0 }}>
         <div style={brandBadgeStyle}>
-          <SparkMark />
+          <SparkMark size={32} />
         </div>
         <button
           type="button"

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Spark Support">
+  <rect width="512" height="512" rx="112" fill="#005BD3"/>
+  <g transform="translate(96 96) scale(16)" fill="#ffffff">
+    <path d="M10 1.7c.55 4.72 3.58 7.75 8.3 8.3-4.72.55-7.75 3.58-8.3 8.3C9.45 13.58 6.42 10.55 1.7 10 6.42 9.45 9.45 6.42 10 1.7Z"/>
+    <circle cx="16.25" cy="3.75" r="1.35" opacity="0.72"/>
+  </g>
+</svg>
