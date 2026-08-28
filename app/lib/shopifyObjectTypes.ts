@@ -13,10 +13,13 @@ export type ShopifyObjectItem = {
   id: string;
   title: string;
   subtitle: string;
+  /** 价格等非本地化摘要；库存数量走 inventory，由客户端拼文案 */
   meta: string;
   imageUrl: string | null;
+  /** 状态机 key：active / draft / archived / published / unpublished / unknown */
   statusLabel: string;
   statusTone: "positive" | "neutral" | "warning";
+  inventory?: number | null;
 };
 
 export type ShopifyObjectPageInfo = {

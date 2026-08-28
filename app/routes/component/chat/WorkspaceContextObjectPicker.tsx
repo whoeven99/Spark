@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { useShopifyObjectList } from "../../../hooks/useShopifyObjectList";
+import {
+  shopifyObjectMetaText,
+  shopifyObjectStatusText,
+  shopifyObjectTitle,
+  translatePickerError,
+} from "../../../lib/shopifyObjectDisplay";
 import type {
   SelectedShopifyObject,
   ShopifyObjectKind,
@@ -10,23 +17,10 @@ import type {
 type ProductFilter = Extract<ShopifyObjectStatusFilter, "all" | "active" | "draft" | "archived">;
 type ArticleFilter = Extract<ShopifyObjectStatusFilter, "all" | "published" | "draft">;
 
-const PRODUCT_FILTERS: Array<{ key: ProductFilter; label: string }> = [
-  { key: "all", label: "全部" },
-  { key: "active", label: "Active" },
-  { key: "draft", label: "Draft" },
-  { key: "archived", label: "Archived" },
-];
-
-const ARTICLE_FILTERS: Array<{ key: ArticleFilter; label: string }> = [
-  { key: "all", label: "全部" },
-  { key: "published", label: "已发布" },
-  { key: "draft", label: "草稿" },
-];
-
-const SORT_OPTIONS: Array<{ key: ShopifyObjectSort; label: string }> = [
-  { key: "updated_desc", label: "最近更新" },
-  { key: "title_asc", label: "标题 A-Z" },
-];
+const PRODUCT_FILTERS: ProductFilter[] = ["all", "active", "draft", "archived"];
+const ARTICLE_FILTERS: ArticleFilter[] = ["all", "published", "draft"];
+const SORT_OPTIONS: ShopifyObjectSort[] = ["updated_desc", "title_asc"];
+const PICKER = "workspace.shell.contextPicker";
 
 type Props = {
   kind: ShopifyObjectKind;
@@ -47,10 +41,16 @@ export function WorkspaceContextObjectPicker({
   onToggle,
   locationSearch,
 }: Props) {
+  const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<ShopifyObjectStatusFilter>("all");
   const [sort, setSort] = useState<ShopifyObjectSort>("updated_desc");
   const [pageIndex, setPageIndex] = useState(0);
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
+
+  const filterLabel = (key: string) =>
+    key === "all" ? t(`${PICKER}.filterAll`) : t(`${PICKER}.status.${key}`);
+  const sortLabel = (key: ShopifyObjectSort) =>
+    key === "title_asc" ? t(`${PICKER}.sortTitle`) : t(`${PICKER}.sortUpdated`);
 
   const after = cursors[pageIndex] ?? null;
   const { items, pageInfo, isLoading, errorText } = useShopifyObjectList({
@@ -70,6 +70,7 @@ export function WorkspaceContextObjectPicker({
 
   const selectedIds = useMemo(() => new Set(selected.map((item) => item.id)), [selected]);
   const filters = kind === "product" ? PRODUCT_FILTERS : ARTICLE_FILTERS;
+  const listError = translatePickerError(errorText, t);
 
   const goNext = () => {
     if (!pageInfo.hasNextPage || !pageInfo.endCursor) return;
@@ -92,19 +93,19 @@ export function WorkspaceContextObjectPicker({
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={`搜索${label}`}
+          placeholder={t(`${PICKER}.searchPlaceholder`, { label })}
           style={searchInputStyle}
         />
         <label style={sortLabelStyle}>
-          <span style={sortCaptionStyle}>排序</span>
+          <span style={sortCaptionStyle}>{t(`${PICKER}.sort`)}</span>
           <select
             value={sort}
             onChange={(event) => setSort(event.target.value as ShopifyObjectSort)}
             style={sortSelectStyle}
           >
             {SORT_OPTIONS.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
+              <option key={option} value={option}>
+                {sortLabel(option)}
               </option>
             ))}
           </select>
@@ -114,38 +115,39 @@ export function WorkspaceContextObjectPicker({
       <div style={filterChipRowStyle}>
         {filters.map((filter) => (
           <button
-            key={filter.key}
+            key={filter}
             type="button"
-            style={filterChipStyle(statusFilter === filter.key)}
-            onClick={() => setStatusFilter(filter.key)}
+            style={filterChipStyle(statusFilter === filter)}
+            onClick={() => setStatusFilter(filter)}
           >
-            {filter.label}
+            {filterLabel(filter)}
           </button>
         ))}
       </div>
 
       <div style={statusRowStyle}>
-        <span style={hintTextStyle}>已连接 Shopify 实时数据，可搜索、筛选并将目标对象直接传给 AI</span>
-        <span style={countTextStyle}>已选 {selected.length} 个</span>
+        <span style={hintTextStyle}>{t(`${PICKER}.connectedHint`)}</span>
+        <span style={countTextStyle}>{t(`${PICKER}.selectedCount`, { count: selected.length })}</span>
       </div>
 
-      {errorText ? <div style={errorBoxStyle}>{errorText}</div> : null}
+      {listError ? <div style={errorBoxStyle}>{listError}</div> : null}
 
       <div style={listStyle}>
         {isLoading && items.length === 0 ? (
-          <div style={loadingStyle}>正在加载{label}…</div>
+          <div style={loadingStyle}>{t(`${PICKER}.loadingKind`, { label })}</div>
         ) : null}
         {!isLoading && items.length === 0 ? (
-          <div style={emptyStyle}>暂无匹配的{label}</div>
+          <div style={emptyStyle}>{t(`${PICKER}.emptyKind`, { label })}</div>
         ) : null}
         {items.map((item) => {
           const checked = selectedIds.has(item.id);
+          const title = shopifyObjectTitle(item, kind, t);
           return (
             <label key={item.id} style={itemCardStyle(checked)}>
               <input
                 type="checkbox"
                 checked={checked}
-                onChange={() => onToggle({ id: item.id, title: item.title, imageUrl: item.imageUrl ?? null })}
+                onChange={() => onToggle({ id: item.id, title, imageUrl: item.imageUrl ?? null })}
               />
               {item.imageUrl ? (
                 <img src={item.imageUrl} alt="" style={thumbStyle} />
@@ -154,11 +156,11 @@ export function WorkspaceContextObjectPicker({
               )}
               <div style={itemContentStyle}>
                 <div style={itemTitleRowStyle}>
-                  <span style={itemTitleStyle}>{item.title}</span>
-                  <span style={statusBadgeStyle(item.statusTone)}>{item.statusLabel}</span>
+                  <span style={itemTitleStyle}>{title}</span>
+                  <span style={statusBadgeStyle(item.statusTone)}>{shopifyObjectStatusText(item, t)}</span>
                 </div>
                 <span style={itemSubtitleStyle}>{item.subtitle}</span>
-                <span style={itemMetaStyle}>{item.meta}</span>
+                <span style={itemMetaStyle}>{shopifyObjectMetaText(item, t)}</span>
               </div>
             </label>
           );
@@ -167,16 +169,16 @@ export function WorkspaceContextObjectPicker({
 
       <div style={paginationRowStyle}>
         <button type="button" style={ghostButtonStyle} onClick={goPrev} disabled={pageIndex <= 0 || isLoading}>
-          上一页
+          {t(`${PICKER}.prevPage`)}
         </button>
-        <span style={pageIndicatorStyle}>第 {pageIndex + 1} 页</span>
+        <span style={pageIndicatorStyle}>{t(`${PICKER}.pageIndicator`, { page: pageIndex + 1 })}</span>
         <button
           type="button"
           style={ghostButtonStyle}
           onClick={goNext}
           disabled={!pageInfo.hasNextPage || isLoading}
         >
-          下一页
+          {t(`${PICKER}.nextPage`)}
         </button>
       </div>
     </div>

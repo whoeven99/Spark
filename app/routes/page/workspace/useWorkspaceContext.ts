@@ -3,6 +3,7 @@
  * 从 WorkspaceAppShellPage 抽出。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { selectedShopifyObjectsToBatchProducts } from "../../../lib/workspaceContextProducts";
@@ -10,6 +11,7 @@ import { buildWorkspaceContextBlock } from "./messageTransforms";
 import {
   isObjectType,
   isQueryableObjectType,
+  WORKSPACE_HISTORY_UPLOAD_NOTE,
   type ContextTool,
   type FileRole,
   type LocalFileItem,
@@ -38,13 +40,13 @@ function workspaceFileToLocalItem(file: WorkspaceFileListRecord): LocalFileItem 
     serverId: file.id,
     name: file.name,
     size: formatFileSizeLabel(file.originalSize),
-    note: "历史上传",
+    note: WORKSPACE_HISTORY_UPLOAD_NOTE,
     charCount: file.charCount,
   };
 }
 
 export function useWorkspaceContext() {
-  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
+  const { t } = useTranslation();  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
     article: "",
@@ -142,8 +144,7 @@ export function useWorkspaceContext() {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
       const res = await fetch(`/api/files${authQuery}`);
       if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errData.error ?? `加载失败 (${res.status})`);
+        throw new Error(t("workspace.shell.contextPicker.loadFailedStatus", { status: res.status }));
       }
       const data = (await res.json()) as { files: WorkspaceFileListRecord[] };
       setLocalFiles((current) => {
@@ -161,7 +162,7 @@ export function useWorkspaceContext() {
     } finally {
       setWorkspaceFilesLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (activeContextTool === "file") {
@@ -192,8 +193,7 @@ export function useWorkspaceContext() {
       formData.append("note", payload.note?.trim() ?? "");
       const res = await fetch(`/api/upload-file${authQuery}`, { method: "POST", body: formData });
       if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errData.error ?? `上传失败 (${res.status})`);
+        throw new Error(t("workspace.shell.contextPicker.uploadFailedStatus", { status: res.status }));
       }
       const data = (await res.json()) as { id: string; charCount?: number };
       setLocalFiles((current) =>
@@ -227,7 +227,7 @@ export function useWorkspaceContext() {
         ),
       );
     }
-  }, []);
+  }, [t]);
 
   const deleteLocalFile = useCallback(async (localId: string, serverId: string | null) => {
     setLocalFiles((current) => current.filter((f) => f.id !== localId));

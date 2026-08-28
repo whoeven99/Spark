@@ -48,7 +48,9 @@ describe("listShopifyProducts", () => {
     const result = await listShopifyProducts(admin, { first: 20 });
     expect(result.items).toHaveLength(2);
     expect(result.items[0]?.title).toBe("Product A");
-    expect(result.items[0]?.meta).toContain("库存 4");
+    expect(result.items[0]?.statusLabel).toBe("active");
+    expect(result.items[0]?.inventory).toBe(4);
+    expect(result.items[0]?.meta).toContain("EUR");
     expect(result.pageInfo).toEqual({ hasNextPage: true, endCursor: "cursor-2" });
   });
 });
@@ -93,7 +95,8 @@ describe("listShopifyArticles", () => {
     const result = await listShopifyArticles(admin, { first: 20 });
     expect(result.items).toHaveLength(2);
     expect(result.items[0]?.title).toBe("test article123");
-    expect(result.items[1]?.statusLabel).toBe("已发布");
+    expect(result.items[1]?.statusLabel).toBe("published");
+    expect(result.items[0]?.statusLabel).toBe("unpublished");
   });
 });
 

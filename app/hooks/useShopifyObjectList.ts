@@ -102,14 +102,13 @@ export function useShopifyObjectList({
           if (ac.signal.aborted) return;
 
           if (!res.ok || payload.success === false) {
-            const msg =
-              payload.success === false
-                ? payload.errorMsg
-                : `请求失败（${res.status}）`;
+            const msg = !res.ok || payload.success === false
+              ? `HTTP:${res.status}`
+              : "LOAD_FAILED";
             setItems([]);
             setPageInfo({ hasNextPage: false, endCursor: null });
             setCount(null);
-            setErrorText(msg || `请求失败（${res.status}）`);
+            setErrorText(msg);
             return;
           }
 
@@ -123,7 +122,7 @@ export function useShopifyObjectList({
           setItems([]);
           setPageInfo({ hasNextPage: false, endCursor: null });
           setCount(null);
-          setErrorText("网络异常，请稍后重试");
+          setErrorText("NETWORK");
         } finally {
           if (!ac.signal.aborted) setIsLoading(false);
         }

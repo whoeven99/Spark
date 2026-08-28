@@ -20,6 +20,9 @@ export type QueryableObjectType = "product" | "article";
 /** 文件在上下文中的角色：决定 AI 如何使用该文件内容 */
 export type FileRole = "reference" | "data" | "style";
 
+/** 历史上传文件的 note 哨兵，展示时再走 i18n */
+export const WORKSPACE_HISTORY_UPLOAD_NOTE = "__history_upload__";
+
 export const fileRoleLabels: Record<FileRole, string> = {
   reference: "参考文档",
   data: "数据源",

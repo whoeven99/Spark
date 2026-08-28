@@ -3,17 +3,17 @@
  * 弹窗内的临时表单状态（待上传文件、订单筛选）随弹窗关闭而重置。
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { WorkspaceContextObjectPicker } from "../../component/chat/WorkspaceContextObjectPicker";
 import { useContextResourceSearch } from "../../../hooks/useContextResourceSearch";
 import type { ContextResourceSortDirection } from "../../../lib/contextResourceTypes";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
+import { translatePickerError } from "../../../lib/shopifyObjectDisplay";
 import { ObjectQueryBuilder } from "./ObjectQueryBuilder";
 import {
-  fileRoleDescriptions,
-  fileRoleLabels,
   isObjectType,
   isQueryableObjectType,
-  objectTypeLabels,
+  WORKSPACE_HISTORY_UPLOAD_NOTE,
   type FileRole,
   type OrderFilterKey,
 } from "./types";
@@ -46,24 +46,12 @@ import {
   toolModalHeaderStyle,
 } from "./styles";
 
-const orderFilterLabels: Array<{ key: OrderFilterKey; label: string }> = [
-  { key: "all", label: "全部" },
-  { key: "paid", label: "已付款" },
-  { key: "unfulfilled", label: "待履约" },
-  { key: "refunded", label: "退款中" },
-];
-
-const FILE_ROLE_OPTIONS = (Object.keys(fileRoleLabels) as FileRole[]).map((role) => ({
-  value: role,
-  label: fileRoleLabels[role],
-}));
-
-function normalizeResourceStatus(status: string | null | undefined): string {
-  if (!status) return "未知";
-  return status.replace(/_/g, " ");
-}
+const ORDER_FILTERS: OrderFilterKey[] = ["all", "paid", "unfulfilled", "refunded"];
+const FILE_ROLES: FileRole[] = ["reference", "data", "style"];
+const PICKER = "workspace.shell.contextPicker";
 
 export function ContextToolModal({ context }: { context: WorkspaceContextController }) {
+  const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const {
     activeContextTool,
@@ -172,17 +160,15 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
         <div style={toolModalHeaderStyle}>
           <div>
             <div style={sectionTitleSmallStyle}>
-              {isObjectType(activeContextTool)
-                ? `${objectTypeLabels[activeContextTool]}选择器`
-                : "文件选择"}
+              {t(`${PICKER}.title.${activeContextTool}`)}
             </div>
             <div style={sectionTextStyle}>
               {isObjectType(activeContextTool)
-                ? "逐个勾选，或按条件圈定（执行时重新求值）。"
-                : "选择附加文件，并标注其角色（参考/数据/风格）。"}
+                ? t(`${PICKER}.subtitleObject`)
+                : t(`${PICKER}.subtitleFile`)}
             </div>
           </div>
-          <button type="button" style={toolModalCloseStyle} onClick={handleDismiss} aria-label="关闭">
+          <button type="button" style={toolModalCloseStyle} onClick={handleDismiss} aria-label={t(`${PICKER}.closeAria`)}>
             ✕
           </button>
         </div>
@@ -195,21 +181,25 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                 style={filterChipStyle(selectionMode === "manual")}
                 onClick={() => setSelectionMode("manual")}
               >
-                逐个勾选
+                {t(`${PICKER}.modeManual`)}
               </button>
               <button
                 type="button"
                 style={filterChipStyle(selectionMode === "query")}
                 onClick={() => setSelectionMode("query")}
               >
-                按条件圈定
+                {t(`${PICKER}.modeQuery`)}
                 {objectQuerySelectionByType[activeContextTool] ? " ✓" : ""}
               </button>
             </div>
             {selectionMode === "manual" ? (
               <WorkspaceContextObjectPicker
                 kind={activeContextTool}
-                label={objectTypeLabels[activeContextTool]}
+                label={
+                  activeContextTool === "product"
+                    ? t("workspace.shell.chat.toolProduct")
+                    : t("workspace.shell.chat.toolArticle")
+                }
                 query={objectQueryByType[activeContextTool]}
                 onQueryChange={(value) => setObjectQuery(activeContextTool, value)}
                 selected={selectedObjectsByType[activeContextTool]}
@@ -237,34 +227,42 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
             <input
               value={objectQueryByType.order}
               onChange={(event) => setObjectQuery("order", event.target.value)}
-              placeholder="搜索订单号、站点或状态"
+              placeholder={t(`${PICKER}.orderSearchPlaceholder`)}
               style={selectorSearchInputStyle}
             />
             <div style={filterChipRowStyle}>
-              {orderFilterLabels.map((filter) => (
+              {ORDER_FILTERS.map((filter) => (
                 <button
-                  key={filter.key}
+                  key={filter}
                   type="button"
-                  style={filterChipStyle(orderFilter === filter.key)}
-                  onClick={() => setOrderFilter(filter.key)}
+                  style={filterChipStyle(orderFilter === filter)}
+                  onClick={() => setOrderFilter(filter)}
                 >
-                  {filter.label}
+                  {filter === "all"
+                    ? t(`${PICKER}.filterAll`)
+                    : filter === "paid"
+                      ? t(`${PICKER}.orderFilterPaid`)
+                      : filter === "unfulfilled"
+                        ? t(`${PICKER}.orderFilterUnfulfilled`)
+                        : t(`${PICKER}.orderFilterRefunded`)}
                 </button>
               ))}
             </div>
             <div style={resourcePickerHintStyle}>
-              <span style={mutedMetaStyle}>已连接 Shopify 实时数据，可搜索、筛选并将目标订单直接传给 AI。</span>
-              <span style={mutedMetaStyle}>已选 {selectedObjectsByType.order.length} 个</span>
+              <span style={mutedMetaStyle}>{t(`${PICKER}.orderHint`)}</span>
+              <span style={mutedMetaStyle}>
+                {t(`${PICKER}.selectedCount`, { count: selectedObjectsByType.order.length })}
+              </span>
             </div>
             <div style={selectorListCompactStyle}>
               {orderErrorText ? (
-                <div style={pickerInfoBoxStyle("critical")}>{orderErrorText}</div>
+                <div style={pickerInfoBoxStyle("critical")}>{translatePickerError(orderErrorText, t)}</div>
               ) : null}
               {!orderErrorText && isOrderLoading ? (
-                <div style={pickerInfoBoxStyle("neutral")}>正在加载 Shopify 订单...</div>
+                <div style={pickerInfoBoxStyle("neutral")}>{t(`${PICKER}.loadingOrders`)}</div>
               ) : null}
               {!orderErrorText && !isOrderLoading && orderSearchResults.length === 0 ? (
-                <div style={pickerInfoBoxStyle("neutral")}>暂无匹配结果，试试调整关键词、筛选器或排序。</div>
+                <div style={pickerInfoBoxStyle("neutral")}>{t(`${PICKER}.emptyOrders`)}</div>
               ) : null}
               {!orderErrorText &&
                 orderSearchResults.map((item) => {
@@ -282,7 +280,9 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                         <div style={resourceItemTopRowStyle}>
                           <span style={sectionTitleSmallStyle}>{item.title}</span>
                           {item.status ? (
-                            <span style={resourceStatusPillStyle}>{normalizeResourceStatus(item.status)}</span>
+                            <span style={resourceStatusPillStyle}>
+                              {item.status.replace(/_/g, " ")}
+                            </span>
                           ) : null}
                         </div>
                         <span style={sectionTextStyle}>{item.subtitle}</span>
@@ -299,7 +299,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                 onClick={goToPreviousOrderPage}
                 disabled={!orderPageInfo.hasPreviousPage || isOrderLoading}
               >
-                上一页
+                {t(`${PICKER}.prevPage`)}
               </button>
               <button
                 type="button"
@@ -307,7 +307,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                 onClick={goToNextOrderPage}
                 disabled={!orderPageInfo.hasNextPage || isOrderLoading}
               >
-                下一页
+                {t(`${PICKER}.nextPage`)}
               </button>
             </div>
           </>
@@ -328,16 +328,16 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
               />
               {newFileObj ? (
                 <div style={{ fontSize: 12, color: "#202223", marginTop: 6 }}>
-                  已选择：{newFileObj.name}
+                  {t(`${PICKER}.fileSelected`, { fileName: newFileObj.name })}
                 </div>
               ) : null}
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB。选好后点确认即可上传并附加。
+                {t(`${PICKER}.fileSupport`)}
               </div>
             </div>
             <div style={selectorListCompactStyle}>
               {workspaceFilesLoading && localFiles.length === 0 ? (
-                <div style={sectionTextStyle}>正在加载历史上传…</div>
+                <div style={sectionTextStyle}>{t(`${PICKER}.loadingHistory`)}</div>
               ) : null}
               {workspaceFilesError ? (
                 <div style={{ ...sectionTextStyle, color: "#d72c0d" }}>
@@ -347,12 +347,12 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                     style={{ ...ghostButtonStyle, marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
                     onClick={() => void loadWorkspaceFiles()}
                   >
-                    重试
+                    {t(`${PICKER}.retry`)}
                   </button>
                 </div>
               ) : null}
               {!workspaceFilesLoading && !workspaceFilesError && localFiles.length === 0 ? (
-                <div style={sectionTextStyle}>暂无历史上传文件，可在上方选择文件后点确认上传。</div>
+                <div style={sectionTextStyle}>{t(`${PICKER}.emptyHistory`)}</div>
               ) : null}
               {localFiles.map((file) => {
                 const checked = selectedFileIds.includes(file.id);
@@ -367,33 +367,41 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                     />
                     <div style={selectorItemContentStyle}>
                       <span style={sectionTitleSmallStyle}>{file.name}</span>
-                      {file.note ? <span style={sectionTextStyle}>{file.note}</span> : null}
+                      {file.note ? (
+                        <span style={sectionTextStyle}>
+                          {file.note === WORKSPACE_HISTORY_UPLOAD_NOTE
+                            ? t(`${PICKER}.historyUpload`)
+                            : file.note}
+                        </span>
+                      ) : null}
                       <span style={mutedMetaStyle}>
                         {file.size}
-                        {file.uploading ? " · 上传中…" : ""}
+                        {file.uploading ? ` · ${t(`${PICKER}.uploading`)}` : ""}
                         {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
                         {!file.uploading && !file.uploadError && file.serverId && file.charCount
-                          ? ` · 已解析 (${(file.charCount / 1000).toFixed(0)}k 字符)`
+                          ? ` · ${t(`${PICKER}.parsedChars`, { count: (file.charCount / 1000).toFixed(0) })}`
                           : ""}
                       </span>
                       {checked && !file.uploading ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                          <span style={{ fontSize: 11, color: "#6d7175", flexShrink: 0 }}>角色</span>
+                          <span style={{ fontSize: 11, color: "#6d7175", flexShrink: 0 }}>
+                            {t(`${PICKER}.role`)}
+                          </span>
                           <select
                             value={fileRolesById[file.id] ?? "reference"}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => setFileRole(file.id, e.target.value as FileRole)}
                             style={{ ...selectFieldStyle, padding: "2px 6px", fontSize: 11 }}
-                            title={fileRoleDescriptions[fileRolesById[file.id] ?? "reference"]}
+                            title={t(`${PICKER}.fileRoleHint.${fileRolesById[file.id] ?? "reference"}`)}
                           >
-                            {FILE_ROLE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
+                            {FILE_ROLES.map((role) => (
+                              <option key={role} value={role}>
+                                {t(`${PICKER}.fileRole.${role}`)}
                               </option>
                             ))}
                           </select>
                           <span style={{ fontSize: 10, color: "#94a3b8" }}>
-                            {fileRoleDescriptions[fileRolesById[file.id] ?? "reference"]}
+                            {t(`${PICKER}.fileRoleHint.${fileRolesById[file.id] ?? "reference"}`)}
                           </span>
                         </div>
                       ) : null}
@@ -406,7 +414,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                             style={{ fontSize: 11, color: "rgba(44,110,203,0.8)" }}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            下载原始文件
+                            {t(`${PICKER}.downloadOriginal`)}
                           </a>
                           <button
                             type="button"
@@ -424,7 +432,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                               void deleteLocalFile(file.id, file.serverId);
                             }}
                           >
-                            删除
+                            {t(`${PICKER}.delete`)}
                           </button>
                         </div>
                       ) : null}
@@ -439,11 +447,13 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
         <div style={toolModalFooterStyle}>
           <span style={mutedMetaStyle}>
             {activeContextSelectionCount > 0
-              ? `已选择 ${activeContextSelectionCount} 项，确认后将附加到本次对话`
-              : "勾选后点击确认附加到对话"}
+              ? t(`${PICKER}.footerHasSelection`, { count: activeContextSelectionCount })
+              : t(`${PICKER}.footerEmpty`)}
           </span>
           <button type="button" className="workspace-primary-btn" style={primaryButtonStyle} onClick={handleConfirm}>
-            {activeContextSelectionCount > 0 ? `确认（${activeContextSelectionCount}）` : "确认"}
+            {activeContextSelectionCount > 0
+              ? t(`${PICKER}.confirmCount`, { count: activeContextSelectionCount })
+              : t(`${PICKER}.confirm`)}
           </button>
         </div>
       </div>

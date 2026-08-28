@@ -108,7 +108,7 @@ export function useContextResourceSearch({
           if (!res.ok || payload.success === false || !payload.response) {
             setItems([]);
             setPageInfo(EMPTY_PAGE_INFO);
-            setErrorText(payload.errorMsg || `请求失败（${res.status}）`);
+            setErrorText(payload.errorMsg ? "LOAD_FAILED" : `HTTP:${res.status}`);
             return;
           }
 
@@ -120,7 +120,7 @@ export function useContextResourceSearch({
           if (error instanceof DOMException && error.name === "AbortError") return;
           setItems([]);
           setPageInfo(EMPTY_PAGE_INFO);
-          setErrorText("资源加载失败，请稍后重试");
+          setErrorText("NETWORK");
         } finally {
           if (!ac.signal.aborted) {
             setIsLoading(false);
