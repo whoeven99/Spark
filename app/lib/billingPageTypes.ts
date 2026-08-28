@@ -110,6 +110,13 @@ export type BillingToolUsageItem = {
   createdAt: string;
 };
 
+/** 账户页营销活动条（配置驱动；无活动时为 null）。 */
+export type PromoCampaignSnapshot = {
+  campaignId: string;
+  tokenAmount: number;
+  claimed: boolean;
+};
+
 export type BillingPageLoaderData = {
   billing: BillingPageSnapshot;
   trialPlan: PlanRecord | null;
@@ -125,6 +132,8 @@ export type BillingPageLoaderData = {
   pendingPlanChange: PendingPlanChangeSnapshot | null;
   /** 从 Shopify 结账回跳时的一次性提示 */
   billingReturnFlash: BillingReturnFlash;
+  /** 当前可展示的营销领 Token 活动 */
+  promoCampaign: PromoCampaignSnapshot | null;
 };
 
 /** 其它页面仅需展示访问状态时使用。 */

@@ -172,6 +172,8 @@ function resolveBillingEventLabel(
       return t("billing.eventTokenPackInitiated");
     case "TOKEN_PACK_PURCHASED":
       return t("billing.eventTokenPackPurchased");
+    case "PROMO_TOKEN_CLAIMED":
+      return t("billing.eventPromoTokenClaimed");
     default:
       return eventType;
   }
@@ -190,6 +192,7 @@ function resolveBillingEventToneClass(
     case "SUBSCRIPTION_ACTIVATED":
     case "SUBSCRIPTION_RENEWED":
     case "TOKEN_PACK_PURCHASED":
+    case "PROMO_TOKEN_CLAIMED":
       return stylesMap.historyTonePositive;
     default:
       return stylesMap.historyToneNeutral;
@@ -440,6 +443,7 @@ export function BillingPage() {
     showDevCancelSubscription,
     pendingPlanChange,
     billingReturnFlash,
+    promoCampaign,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -447,6 +451,9 @@ export function BillingPage() {
   const isCancelling =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "cancel_subscription";
+  const isClaimingPromo =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "claim_promo_tokens";
   const isDismissingPending =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "dismiss_pending_plan_change";
@@ -616,6 +623,14 @@ export function BillingPage() {
     shopify.toast.show(t("billing.overageDisabledDone"));
   } else if (actionData?.ok && "dismissedPending" in actionData && actionData.dismissedPending) {
     shopify.toast.show(t("billing.pendingPlanChangeDismissed"));
+  } else if (actionData?.ok && "claimedPromo" in actionData && actionData.claimedPromo) {
+    shopify.toast.show(
+      actionData.alreadyClaimed
+        ? t("billing.promoAlreadyClaimedToast")
+        : t("billing.promoClaimSuccessToast", {
+            count: Number(actionData.tokensDelta ?? 0).toLocaleString(locale),
+          }),
+    );
   } else if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
     shopify.toast.show(t("billing.checkoutCompleteNoRedirect"));
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
@@ -1082,6 +1097,38 @@ export function BillingPage() {
       ) : null}
       {subscriptionTrialBannerCopy ? (
         <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
+      ) : null}
+      {promoCampaign ? (
+        <s-banner tone={promoCampaign.claimed ? "success" : "info"}>
+          <p>
+            <strong>{t("billing.promoTitle")}</strong>
+          </p>
+          <p>
+            {promoCampaign.claimed
+              ? t("billing.promoClaimedBody", {
+                  count: promoCampaign.tokenAmount.toLocaleString(locale),
+                })
+              : t("billing.promoBody", {
+                  count: promoCampaign.tokenAmount.toLocaleString(locale),
+                })}
+          </p>
+          {!promoCampaign.claimed ? (
+            <div style={{ marginTop: "8px" }}>
+              <Form method="post">
+                <input type="hidden" name="intent" value="claim_promo_tokens" />
+                <s-button
+                  type="submit"
+                  variant="primary"
+                  {...(isClaimingPromo ? { loading: true } : {})}
+                >
+                  {isClaimingPromo
+                    ? t("billing.promoClaiming")
+                    : t("billing.promoClaim")}
+                </s-button>
+              </Form>
+            </div>
+          ) : null}
+        </s-banner>
       ) : null}
 
       <section className={styles.quotaSection}>
