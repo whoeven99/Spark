@@ -754,10 +754,14 @@ export function BillingPage() {
       label: t("billing.compareTokens"),
       values: paidPlansToShow.map((plan) => planCompareValue(plan, "credits", locale, t)),
     },
-    {
-      label: t("billing.compareTrialDays"),
-      values: paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
-    },
+    ...(paidPlansToShow.some((plan) => Boolean(plan.trialDays && plan.trialDays > 0))
+      ? [
+          {
+            label: t("billing.compareTrialDays"),
+            values: paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
+          },
+        ]
+      : []),
     {
       label: t("billing.compareImageModels"),
       values: paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale, t)),
