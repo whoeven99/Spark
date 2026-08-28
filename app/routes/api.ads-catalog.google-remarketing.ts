@@ -8,7 +8,8 @@ import {
   discoverGoogleAwCandidates,
   saveGoogleRemarketingConfig,
 } from "../server/adsCatalog/googleRemarketing.server";
-import { generateGooglePurchaseCustomPixel } from "../lib/googleCustomPixel";
+// 审核期临时关闭 5.1.1：不下发 purchase Custom Pixel 脚本。过审后恢复。
+// import { generateGooglePurchaseCustomPixel } from "../lib/googleCustomPixel";
 import { resolvePixelIngestEndpoint } from "../server/webPixel/ensureWebPixel.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -23,16 +24,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     candidates,
     config: credential?.remarketing ?? null,
     ingestEndpoint,
-    customPixelScript: credential?.remarketing
-      ? generateGooglePurchaseCustomPixel({
-          tagId: credential.remarketing.tagId,
-          enabledFieldGroups: credential.remarketing.enabledFieldGroups,
-          conversionLabel: credential.remarketing.conversionLabel,
-          enhancedConversions: credential.remarketing.enhancedConversions,
-          shopName: session.shop,
-          ingestEndpoint,
-        })
-      : null,
+    // 审核期临时关闭 5.1.1：不下发 purchase Custom Pixel 脚本。过审后恢复 generateGooglePurchaseCustomPixel。
+    customPixelScript: null,
   });
 };
 

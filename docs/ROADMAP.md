@@ -211,14 +211,16 @@ app/server/ai/playbooks/{name}/
 
 ### App Store AI self-review（2026-08-28，AiAssistant-Test / `shopify.app.test.toml`）
 
-对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements)。本轮代码侧 **无 ❌**；Public + Unlisted 提交前把下面 ⚠️ 用人测或配置核对。Listing / 隐私政策 / GDPR 真擦除 **不在** 本检查覆盖范围（提交时仍会审）。
+对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements)（CLI `doc fetch`，Shopify CLI 4.7.0）。本轮代码侧 **无 ❌**（✅ 28 / ⚠️ 6 / ⏭️ 9 组）。Public + Unlisted 提交前把下面 ⚠️ 用人测或配置核对。Listing 文案、隐私政策、GDPR 真擦除 **不在** 本检查覆盖范围（提交时仍会审）。
 
 代码侧 ⚠️（提交前用人测 / 配置核对）：
 
 - [ ] **1.2.2 / 1.2.3** 换套餐：`appSubscriptionCreate` 未设 `replacementBehavior`；账户页其它档仍可点订阅。确认 Render 上 `BILLING_GATEWAY` 不是 `noop`，正式店关闭 `BILLING_TEST`。测：升/降配、拒费、重装后再订。
-- [x] **5.1.5** 审核期暂停（不提交采集能力）：已从版本中排除 Web Pixel 扩展与 Theme Pixel App Embed，并注释 pixel scope / `ensureWebPixel` / Ads Catalog Pixel 入口。过审后恢复：还原 toml 的 `write_pixels,read_customer_events,read_pixels`；`shopify.extension.toml.off` → `shopify.extension.toml`；把 `_disabled_pixel_blocks/*.liquid` 移回 `blocks/`；恢复 `app.tsx` 调用与 ConnectPanels 入口；再对该配置 `shopify app deploy`。
-- [ ] **5.1.1** 只读 Theme Files（`settings_data.json`）用于检测 App Embed；若审核员按 Theme API 追问，说明是检测而非改主题。
+- [ ] **2.3.3** 安装后进 UI：OAuth 回调走 `shopify-app-react-router` 默认重定向，代码无死胡同；提交前在开发店点一遍「安装 → 授权 → 进入嵌入式首页」。
 - [ ] **3.1.1** 证书：`application_url` 已是 HTTPS Render，提交前在浏览器确认无证书告警。
+- [x] **5.1.1** 审核期暂停 Theme 扩展与粘贴代码：Theme 整包 `shopify.extension.toml.off`（Pixel Embed + Image Switcher 均在 `_disabled_pixel_blocks/`）；Google Pixel 向导/数据页不再生成或展示 purchase Custom Pixel 粘贴。过审后把 toml.off 改回并移回 `blocks/*.liquid`，恢复粘贴 UI 与 Studio Banner。
+- [x] **5.1.5** Pixel 采集已从本版本排除（Web Pixel `shopify.extension.toml.off`；Pixel App Embed 在 `_disabled_pixel_blocks/`；toml 去掉 pixel scopes；`ensureWebPixel` 与 Ads Catalog Pixel 入口已注释）。过审后恢复：还原 toml 的 `write_pixels,read_customer_events,read_pixels`；`.toml.off` → `shopify.extension.toml`；把 `_disabled_pixel_blocks/*.liquid` 移回 `blocks/`；恢复 `app.tsx` 调用与 ConnectPanels 入口；再对该配置 `shopify app deploy`。
+- [x] **5.1.5 残留** Image Switcher 审核期一并停用（Theme 扩展不部署、Studio Banner 已注释）。`/api/image-proxy` 与 toml `[app_proxy]` 保留但无 Embed 不会被调用。
 
 已知、本检查未覆盖、仍挡公开上架（M3；Unlisted 也可能被追问）：
 

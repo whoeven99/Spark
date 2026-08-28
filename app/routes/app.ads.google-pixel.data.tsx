@@ -4,7 +4,8 @@ import { authenticate } from "../shopify.server";
 import { getGoogleAdsCredential } from "../server/adsCatalog/credentialStore.server";
 import { getGoogleAppEmbedStatus } from "../server/adsCatalog/appEmbedStatus.server";
 import { ensureGoogleRemarketingIngestEndpoint } from "../server/adsCatalog/googleRemarketing.server";
-import { generateGooglePurchaseCustomPixel } from "../lib/googleCustomPixel";
+// 审核期临时关闭 5.1.1：不下发 purchase Custom Pixel 脚本。过审后恢复。
+// import { generateGooglePurchaseCustomPixel } from "../lib/googleCustomPixel";
 import { resolvePixelIngestEndpoint } from "../server/webPixel/ensureWebPixel.server";
 import { GooglePixelDataPage } from "./page/GooglePixelDataPage";
 
@@ -72,16 +73,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           metafieldSyncError: remarketing.metafieldSync?.error ?? "",
         }
       : null,
-    customPixelScript: remarketing
-      ? generateGooglePurchaseCustomPixel({
-          tagId: remarketing.tagId,
-          enabledFieldGroups: remarketing.enabledFieldGroups,
-          conversionLabel: remarketing.conversionLabel,
-          enhancedConversions: remarketing.enhancedConversions,
-          shopName: session.shop,
-          ingestEndpoint,
-        })
-      : null,
+    // 审核期临时关闭 5.1.1：不下发 purchase Custom Pixel 脚本。过审后恢复 generateGooglePurchaseCustomPixel。
+    customPixelScript: null,
     embed: {
       enabled: embed.enabled,
       checkedAt: embed.checkedAt,
