@@ -3419,7 +3419,7 @@
       },
       "account": {
         "language": "Language",
-        "workspaceLabel": "Spark workspace",
+        "workspaceLabel": "Spark AI Workspace",
         "tokenUsage": "Token usage",
         "tokenUsageValue": "{{used}} / {{total}}",
         "tokenUsageHint": "Used / total",

@@ -283,7 +283,7 @@ export const accountMenuWrapStyle: CSSProperties = {
 export const sidebarFooterRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 6,
+  gap: 8,
 };
 export const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
@@ -291,30 +291,11 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   flex: "1 1 auto",
   minWidth: 0,
   border: "1px solid transparent",
-  borderRadius: 10,
+  borderRadius: 12,
   background: "transparent",
-  padding: "4px 6px 0",
+  padding: "10px 10px 0",
   textAlign: "left",
   cursor: "pointer",
-};
-/** 侧栏底账户名（小于顶栏 brand，避免与客服钮抢占比） */
-export const accountFooterTitleStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 650,
-  color: shopifyUi.text,
-  lineHeight: 1.2,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-export const accountFooterMetaStyle: CSSProperties = {
-  fontSize: 10,
-  lineHeight: 1.2,
-  letterSpacing: "-0.01em",
-  color: shopifyUi.textMuted,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
 };
 export const sidebarFooterHelpButtonStyle = (active: boolean): CSSProperties => ({
   position: "relative",
