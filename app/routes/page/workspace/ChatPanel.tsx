@@ -138,6 +138,7 @@ export function ChatPanel({
   const {
     activeContextTool,
     toggleContextTool,
+    openContextTool,
     selectedObjectsByType,
     objectQuerySelectionByType,
     selectedFileIds,
@@ -145,15 +146,11 @@ export function ChatPanel({
     clearContext,
     clearToolSelection,
     workspaceBatchProducts,
-    replaceObjectSelection,
   } = context;
 
-  const handleContextProductPicked = useCallback(
-    (product: { id: string; title: string; imageUrl?: string | null }) => {
-      replaceObjectSelection("product", [product]);
-    },
-    [replaceObjectSelection],
-  );
+  const handleOpenProductPicker = useCallback(() => {
+    openContextTool("product");
+  }, [openContextTool]);
 
   const contextTokens = useMemo(
     () => estimateMessagesTokens(messages),
@@ -608,7 +605,7 @@ export function ChatPanel({
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
-                  onContextProductPicked={handleContextProductPicked}
+                  onOpenProductPicker={handleOpenProductPicker}
                   onTaskProposalExecuted={(run) =>
                     onTaskProposalExecuted(conversation.id, run)
                   }
@@ -623,7 +620,7 @@ export function ChatPanel({
               }
               contextProducts={workspaceBatchProducts}
               contextProductQuery={objectQuerySelectionByType.product}
-              onContextProductPicked={handleContextProductPicked}
+              onOpenProductPicker={handleOpenProductPicker}
               tasksById={tasksById}
             />
           </div>

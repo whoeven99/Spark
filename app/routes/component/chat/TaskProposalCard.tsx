@@ -13,15 +13,10 @@ import type {
   TaskProposalPayload,
   TaskProposalTarget,
 } from "../../../lib/taskProposalPayload";
-import {
-  BATCH_PICTURE_TRANSLATE_SKILL_ID,
-  mergeTaskProposalTargets,
-} from "../../../lib/taskProposalPayload";
+import { mergeTaskProposalTargets } from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { describeObjectQueryI18n } from "../../../lib/objectQuerySpec";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
-import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
-import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import { buildTaskRunPayload, type TaskRunPayload } from "../../../lib/taskRunPayload";
 import {
   buildTaskRunParamsSummary,
@@ -34,7 +29,6 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import { formatThinkingDuration } from "../../../lib/thinkingDuration";
 import { pageColorTokens } from "../../page/pageUiStyles";
-import { ProductSelector } from "../product/ProductSelector";
 
 // ─── Styles（与 BatchTasksChatCard 视觉对齐） ────────────────────────────────
 
@@ -273,63 +267,45 @@ type Props = {
   /** 工作台按条件圈定的商品 query；items 与手动选择都为空时兜底 */
   contextProductQuery?: ObjectQuerySelection | null;
   /**
-   * 卡片内单选商品时写回工作台上下文（替换当前商品选择）。
-   * 与底部工具栏共用同一上下文。
+   * 打开与底部「添加上下文 → 商品」相同的选择弹窗。
+   * 选中结果写入工作台上下文后，本卡通过 contextProducts 自动补全。
    */
-  onContextProductPicked?: (product: SelectedShopifyObject) => void;
+  onOpenProductPicker?: () => void;
   onTasksCreated?: (taskIds: string[]) => void;
   /** 执行成功后回调（工作台用于向对话追加「任务已开始」新一轮） */
   onExecuted?: (run: TaskRunPayload) => void;
 };
 
-function productSelectionToTarget(
-  product: ProductSelectorSelection,
-  requiresImage: boolean,
-): TaskProposalTarget {
-  const imageUrl = product.featuredImageUrl ?? null;
-  return {
-    id: product.id,
-    title: product.title,
-    imageUrl,
-    ...(requiresImage && !imageUrl ? { disabledReason: "no_primary_image" } : {}),
-  };
-}
+const pickProductButtonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  width: "100%",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 8,
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 600,
+  color: pageColorTokens.textPrimary,
+  background: pageColorTokens.surfaceSubtle,
+  cursor: "pointer",
+} as const;
 
 export function TaskProposalCard({
   embedded = false,
   proposal,
   contextProducts = [],
   contextProductQuery = null,
-  onContextProductPicked,
+  onOpenProductPicker,
   onTasksCreated,
   onExecuted,
 }: Props) {
   const { t } = useTranslation();
-  /** 卡片内单选结果（在上下文回写前也能立刻用于勾选/提交） */
-  const [cardPickedProduct, setCardPickedProduct] =
-    useState<ProductSelectorSelection | null>(null);
-
-  const resolved = useMemo(() => {
-    const fromContext = mergeTaskProposalTargets(
-      proposal,
-      contextProducts,
-      contextProductQuery,
-    );
-    if (fromContext.targets.items.length > 0 || fromContext.targets.query) {
-      return fromContext;
-    }
-    if (!cardPickedProduct || fromContext.targets.kind !== "products") {
-      return fromContext;
-    }
-    const requiresImage = proposal.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
-    return {
-      ...fromContext,
-      targets: {
-        ...fromContext.targets,
-        items: [productSelectionToTarget(cardPickedProduct, requiresImage)],
-      },
-    };
-  }, [proposal, contextProducts, contextProductQuery, cardPickedProduct]);
+  const resolved = useMemo(
+    () => mergeTaskProposalTargets(proposal, contextProducts, contextProductQuery),
+    [proposal, contextProducts, contextProductQuery],
+  );
 
   const targets = resolved.targets.items;
   /** 按条件圈定模式：无具体 items 时按 query 执行（服务端重新求值） */
@@ -417,22 +393,6 @@ export function TaskProposalCard({
       return next;
     });
   };
-
-  const locationSearch =
-    typeof window !== "undefined" ? window.location.search : "";
-
-  const handleCardProductPicked = useCallback(
-    (next: ProductSelectorSelection | null) => {
-      setCardPickedProduct(next);
-      if (!next) return;
-      onContextProductPicked?.({
-        id: next.id,
-        title: next.title,
-        imageUrl: next.featuredImageUrl ?? null,
-      });
-    },
-    [onContextProductPicked],
-  );
 
   const handleConfirm = useCallback(async () => {
     if (!canSubmit) return;
@@ -676,12 +636,14 @@ export function TaskProposalCard({
                 >
                   {t("workspace.taskProposal.card.pickProductHint")}
                 </div>
-                <ProductSelector
-                  locationSearch={locationSearch}
-                  embedded
-                  selected={cardPickedProduct}
-                  onSelectedChange={handleCardProductPicked}
-                />
+                <button
+                  type="button"
+                  style={pickProductButtonStyle}
+                  onClick={() => onOpenProductPicker?.()}
+                  disabled={!onOpenProductPicker}
+                >
+                  ◫ {t("workspace.taskProposal.card.pickProductButton")}
+                </button>
               </div>
             ) : (
               <div

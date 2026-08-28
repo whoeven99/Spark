@@ -75,6 +75,11 @@ export function useWorkspaceContext() {
     setActiveContextTool((current) => (current === tool ? null : tool));
   }, []);
 
+  /** 强制打开某上下文工具弹窗（不 toggle 关闭），供任务卡「选择商品」等入口复用。 */
+  const openContextTool = useCallback((tool: ContextTool) => {
+    setActiveContextTool(tool);
+  }, []);
+
   const closeContextTool = useCallback(() => {
     setActiveContextTool(null);
   }, []);
@@ -299,6 +304,7 @@ export function useWorkspaceContext() {
   return {
     activeContextTool,
     toggleContextTool,
+    openContextTool,
     closeContextTool,
     objectQueryByType,
     setObjectQuery,

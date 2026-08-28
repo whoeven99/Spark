@@ -10,7 +10,6 @@ import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
-import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import { SparkMark } from "../common/SparkMark";
 import {
   hasStreamingVisualContent,
@@ -29,8 +28,8 @@ type StreamingAssistantReplyProps = {
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
-  /** 卡片内单选商品写回工作台上下文 */
-  onContextProductPicked?: (product: SelectedShopifyObject) => void;
+  /** 打开与底部工具栏相同的商品选择弹窗 */
+  onOpenProductPicker?: () => void;
   /** TaskProposal 执行成功（向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
 };
@@ -267,7 +266,7 @@ export function StreamingAssistantReply({
   streamingTaskProposal,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
-  onContextProductPicked,
+  onOpenProductPicker,
   onTaskProposalExecuted,
 }: StreamingAssistantReplyProps) {
   const { t } = useTranslation();
@@ -337,7 +336,7 @@ export function StreamingAssistantReply({
                     proposal={streamingTaskProposal}
                     contextProducts={workspaceBatchProducts}
                     contextProductQuery={workspaceProductQuery}
-                    onContextProductPicked={onContextProductPicked}
+                    onOpenProductPicker={onOpenProductPicker}
                     onExecuted={onTaskProposalExecuted}
                   />
                 </div>
