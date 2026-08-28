@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
+import { SupportChatWidget } from "../../component/SupportChatWidget";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { SparkMark } from "../../component/common/SparkMark";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
@@ -66,7 +67,7 @@ import {
   brandTitleStyle,
   contentStyle,
   conversationListStyle,
-  footerTagStyle,
+  footerBadgeStyle,
   historyDeleteButtonStyle,
   historyItemStyle,
   historyRowStyle,
@@ -84,6 +85,8 @@ import {
   shellStyle,
   sidebarDividerStyle,
   sidebarFooterButtonStyle,
+  sidebarFooterHelpButtonStyle,
+  sidebarFooterRowStyle,
   sidebarSectionHeadStyle,
   sidebarSectionStyle,
   sidebarStyle,
@@ -1390,13 +1393,33 @@ export function WorkspaceAppShellPage({
             </div>
           </div>
         ) : null}
-        <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
-          <div>
-            <div style={brandTitleStyle}>{displayName}</div>
-            <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
-          </div>
-          <div style={footerTagStyle}>{t("workspace.shell.status.online")}</div>
-        </button>
+        <div style={sidebarFooterRowStyle}>
+          <button
+            type="button"
+            style={sidebarFooterButtonStyle}
+            onClick={() => setAccountMenuOpen((current) => !current)}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={brandTitleStyle}>{displayName}</div>
+              <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
+            </div>
+          </button>
+          <SupportChatWidget
+            renderLauncher={({ open, unread, toggleOpen }) => (
+              <button
+                type="button"
+                onClick={toggleOpen}
+                style={sidebarFooterHelpButtonStyle(open)}
+                aria-label="Need Help"
+              >
+                <span>Need Help</span>
+                {unread > 0 ? (
+                  <span style={footerBadgeStyle}>{unread > 9 ? "9+" : unread}</span>
+                ) : null}
+              </button>
+            )}
+          />
+        </div>
       </div>
     </>
   );

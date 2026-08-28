@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { appendEmbeddedSearchToPath } from "../../lib/embeddedLocationSearch";
@@ -67,7 +68,17 @@ async function postSupport(
   };
 }
 
-export function SupportChatWidget() {
+export type SupportChatLauncherRenderProps = {
+  open: boolean;
+  unread: number;
+  toggleOpen: () => void;
+};
+
+export function SupportChatWidget({
+  renderLauncher,
+}: {
+  renderLauncher?: (props: SupportChatLauncherRenderProps) => ReactNode;
+}) {
   const { t } = useTranslation();
   const locationSearch = useEmbeddedLocationSearch();
   const [open, setOpen] = useState(false);
@@ -148,9 +159,15 @@ export function SupportChatWidget() {
   const showEmailPrompt =
     open && conversation != null && !conversation.contactEmail && !emailSaved;
 
+  const toggleOpen = useCallback(() => {
+    setOpen((current) => !current);
+  }, []);
+
   return (
     <>
-      {!open && (
+      {renderLauncher ? (
+        renderLauncher({ open, unread, toggleOpen })
+      ) : !open ? (
         <button
           type="button"
           aria-label={t("support.buttonAria")}
@@ -160,7 +177,7 @@ export function SupportChatWidget() {
           <ChatIcon />
           {unread > 0 && <span style={styles.badge}>{unread > 9 ? "9+" : unread}</span>}
         </button>
-      )}
+      ) : null}
 
       {open && (
         <div style={styles.panel} role="dialog" aria-label={t("support.title")}>
