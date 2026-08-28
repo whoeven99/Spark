@@ -16,6 +16,8 @@ type Props = {
   locationSearch: string;
   onBack: () => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
+  /** 弹窗内嵌时隐藏「返回任务列表」，改用 DialogShell 关闭 */
+  showBackButton?: boolean;
 };
 
 type ResultRecord = {
@@ -315,6 +317,7 @@ export function ProductImproveTaskDetailPage({
   locationSearch,
   onBack,
   onTaskUpdated,
+  showBackButton = true,
 }: Props) {
   const { t, i18n } = useTranslation();
   const unknownText = t("common.unknown");
@@ -621,23 +624,25 @@ export function ProductImproveTaskDetailPage({
                 marginBottom: 10,
               }}
             >
-              <button
-                type="button"
-                onClick={onBack}
-                style={{
-                  padding: "0.35rem 0.7rem",
-                  borderRadius: pageColorTokens.radiusControl,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  background: "#ffffff",
-                  color: pageColorTokens.textBody,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {t("productImproveStage1.backToTaskList")}
-              </button>
+              {showBackButton ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{
+                    padding: "0.35rem 0.7rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                    background: "#ffffff",
+                    color: pageColorTokens.textBody,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {t("productImproveStage1.backToTaskList")}
+                </button>
+              ) : null}
               <span
                 style={{
                   fontSize: 11,

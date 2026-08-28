@@ -20,7 +20,7 @@ import {
   type ConversationTaskRunEntry,
   type WorkspaceConversationMessage,
 } from "./types";
-import type { AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import {
   resolveTaskRunTitle,
@@ -29,6 +29,9 @@ import {
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import { ProductImproveTaskDetailPage } from "../../component/productImprove/ProductImproveTaskDetailPage";
+import { DialogShell } from "../../component/shared/DialogShell";
+import { pageColorTokens } from "../pageUiStyles";
 import {
   chatLayoutStyle,
   composerBoxStyle,
@@ -124,6 +127,9 @@ export function ChatPanel({
   const [isRecommendedMenuOpen, setIsRecommendedMenuOpen] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
+  const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
+  const [reviewTask, setReviewTask] = useState<AITaskItem | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   const {
     isStreaming,
@@ -199,6 +205,81 @@ export function ChatPanel({
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
   const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
+
+  const closeReviewDialog = useCallback(() => {
+    setReviewTaskId(null);
+    setReviewTask(null);
+    setReviewLoading(false);
+  }, []);
+
+  const handleOpenTasks = useCallback(
+    (opts?: OpenWorkspaceTasksOptions) => {
+      if (opts?.taskType === "product_improve" && opts.intent === "review" && opts.taskId) {
+        setReviewTaskId(opts.taskId);
+        return;
+      }
+      onOpenTasks(opts);
+    },
+    [onOpenTasks],
+  );
+
+  useEffect(() => {
+    if (!reviewTaskId) {
+      setReviewTask(null);
+      setReviewLoading(false);
+      return;
+    }
+
+    const cached = tasksById[reviewTaskId];
+    if (cached?.taskType === "product_improve") {
+      setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : cached));
+      setReviewLoading(false);
+      return;
+    }
+
+    let alreadyLoaded = false;
+    setReviewTask((prev) => {
+      if (prev?.id === reviewTaskId) {
+        alreadyLoaded = true;
+        return prev;
+      }
+      return null;
+    });
+    if (alreadyLoaded) {
+      setReviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setReviewLoading(true);
+    const query = new URLSearchParams(
+      locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+    );
+    void fetch(`/api/ai-task/${encodeURIComponent(reviewTaskId)}?${query.toString()}`)
+      .then(async (resp) => {
+        if (cancelled) return;
+        if (!resp.ok) {
+          closeReviewDialog();
+          return;
+        }
+        const body = (await resp.json()) as { task?: AITaskItem };
+        if (body.task?.taskType === "product_improve") {
+          setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : body.task!));
+          return;
+        }
+        closeReviewDialog();
+      })
+      .catch(() => {
+        if (!cancelled) closeReviewDialog();
+      })
+      .finally(() => {
+        if (!cancelled) setReviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [closeReviewDialog, locationSearch, reviewTaskId, tasksById]);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -614,7 +695,7 @@ export function ChatPanel({
               onAiTaskUpdated={(taskId, status, result) =>
                 onAiTaskUpdated(conversation.id, taskId, status, result)
               }
-              onOpenTasks={onOpenTasks}
+              onOpenTasks={handleOpenTasks}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
@@ -647,12 +728,50 @@ export function ChatPanel({
 
       <ContextToolModal context={context} />
 
+      <DialogShell
+        open={Boolean(reviewTaskId)}
+        width={980}
+        onClose={closeReviewDialog}
+        title={t("productImproveStage1.chatReviewDialogTitle")}
+        destroyOnHidden
+      >
+        {reviewTask ? (
+          <ProductImproveTaskDetailPage
+            task={reviewTask}
+            locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewLoading ? (
+          <div
+            style={{
+              minHeight: 160,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: pageColorTokens.textSecondary,
+              fontSize: 14,
+            }}
+          >
+            {t("common.loading")}
+          </div>
+        ) : null}
+      </DialogShell>
+
       {!isMobile && showContextSidebar ? (
         <ChatContextSidebar
           context={context}
           taskRuns={conversationRuns}
           tasksById={tasksById}
-          onOpenTasks={onOpenTasks}
+          onOpenTasks={handleOpenTasks}
           onLocateRun={locateRun}
         />
       ) : null}

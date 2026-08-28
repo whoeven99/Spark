@@ -34,26 +34,38 @@ import { pageColorTokens } from "../../page/pageUiStyles";
 
 const cardStyle = {
   border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: 12,
+  borderRadius: 14,
   background: pageColorTokens.surface,
   overflow: "hidden",
   fontSize: 13,
+  boxShadow: "0 1px 0 rgba(0, 0, 0, 0.04)",
 } as const;
 
 const headerStyle = {
   display: "flex",
   alignItems: "center",
-  gap: 8,
-  padding: "10px 14px",
+  gap: 10,
+  padding: "12px 14px",
   borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surfaceMuted,
+  background: pageColorTokens.surface,
+} as const;
+
+const titleBadgeStyle = {
+  fontSize: 12,
+  fontWeight: 700,
+  padding: "3px 10px",
+  borderRadius: 999,
+  background: pageColorTokens.brandGreenLight,
+  color: pageColorTokens.brandGreenDeep,
+  border: `1px solid rgba(0, 128, 96, 0.18)`,
+  flexShrink: 0,
 } as const;
 
 const bodyStyle = {
-  padding: "12px 14px",
+  padding: "14px 14px 12px",
   display: "flex",
   flexDirection: "column",
-  gap: 12,
+  gap: 14,
 } as const;
 
 const targetListStyle = {
@@ -69,10 +81,10 @@ const targetRowStyle = (checked: boolean, disabled: boolean) =>
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "7px 10px",
-    borderRadius: 8,
-    border: `1px solid ${checked ? "#c9cccf" : pageColorTokens.borderSubtle}`,
-    background: checked ? "#fff" : pageColorTokens.surfaceSubtle,
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: `1px solid ${checked ? "rgba(0, 128, 96, 0.35)" : pageColorTokens.borderSubtle}`,
+    background: checked ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceSubtle,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
   }) as const;
@@ -80,7 +92,7 @@ const targetRowStyle = (checked: boolean, disabled: boolean) =>
 const thumbStyle = {
   width: 36,
   height: 36,
-  borderRadius: 6,
+  borderRadius: 8,
   objectFit: "cover" as const,
   background: pageColorTokens.surfaceMuted,
   flexShrink: 0,
@@ -89,7 +101,7 @@ const thumbStyle = {
 const thumbPlaceholderStyle = {
   width: 36,
   height: 36,
-  borderRadius: 6,
+  borderRadius: 8,
   background: pageColorTokens.surfaceMuted,
   display: "grid",
   placeItems: "center",
@@ -99,18 +111,18 @@ const thumbPlaceholderStyle = {
 } as const;
 
 const fieldLabelStyle = {
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   color: pageColorTokens.textSecondary,
-  marginBottom: 4,
+  marginBottom: 6,
 } as const;
 
 const inputStyle = {
   width: "100%",
   border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: 8,
-  padding: "6px 8px",
-  fontSize: 12,
+  borderRadius: 10,
+  padding: "8px 10px",
+  fontSize: 13,
   background: "#fff",
   color: pageColorTokens.textPrimary,
 } as const;
@@ -120,8 +132,8 @@ const estimateBoxStyle = {
   color: pageColorTokens.textSecondary,
   background: pageColorTokens.surfaceSubtle,
   border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: 8,
-  padding: "7px 10px",
+  borderRadius: 10,
+  padding: "8px 10px",
   display: "flex",
   alignItems: "center",
   gap: 6,
@@ -130,23 +142,55 @@ const estimateBoxStyle = {
 const footerStyle = {
   display: "flex",
   justifyContent: "flex-end",
-  gap: 8,
-  padding: "10px 14px",
+  alignItems: "center",
+  gap: 10,
+  padding: "12px 14px",
   borderTop: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surfaceMuted,
+  background: pageColorTokens.surface,
 } as const;
 
 const confirmBtnStyle = (disabled: boolean) =>
   ({
-    padding: "7px 16px",
-    borderRadius: 8,
+    padding: "8px 16px",
+    borderRadius: 10,
     border: "none",
-    background: disabled ? pageColorTokens.borderSubtle : pageColorTokens.brandGreenDark,
+    background: disabled ? pageColorTokens.borderSubtle : pageColorTokens.brandGreen,
     color: disabled ? pageColorTokens.textSecondary : "#fff",
     fontSize: 13,
     fontWeight: 600,
     cursor: disabled ? "not-allowed" : "pointer",
   }) as const;
+
+const pickProductZoneStyle = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  width: "100%",
+  border: `1.5px dashed rgba(0, 128, 96, 0.35)`,
+  borderRadius: 12,
+  padding: "18px 14px",
+  background: "rgba(233, 247, 239, 0.45)",
+  cursor: "pointer",
+  textAlign: "center" as const,
+} as const;
+
+const pickProductZoneDisabledStyle = {
+  ...pickProductZoneStyle,
+  cursor: "not-allowed",
+  opacity: 0.55,
+} as const;
+
+const changeProductLinkStyle = {
+  border: "none",
+  background: "transparent",
+  color: pageColorTokens.brandGreenDeep,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  padding: 0,
+} as const;
 
 // ─── Done state ───────────────────────────────────────────────────────────────
 
@@ -275,22 +319,6 @@ type Props = {
   /** 执行成功后回调（工作台用于向对话追加「任务已开始」新一轮） */
   onExecuted?: (run: TaskRunPayload) => void;
 };
-
-const pickProductButtonStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  width: "100%",
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: 8,
-  padding: "10px 12px",
-  fontSize: 13,
-  fontWeight: 600,
-  color: pageColorTokens.textPrimary,
-  background: pageColorTokens.surfaceSubtle,
-  cursor: "pointer",
-} as const;
 
 export function TaskProposalCard({
   embedded = false,
@@ -493,19 +521,8 @@ export function TaskProposalCard({
     <div style={{ ...cardStyle, maxWidth: embedded ? 480 : 560 }}>
       {/* Header */}
       <div style={headerStyle}>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            padding: "2px 8px",
-            borderRadius: 999,
-            background: "#4070f4",
-            color: "#fff",
-          }}
-        >
-          {displayTitle}
-        </span>
-        <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, flex: 1 }}>
+        <span style={titleBadgeStyle}>{displayTitle}</span>
+        <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, flex: 1, minWidth: 0 }}>
           {headerSubtitle}
         </span>
       </div>
@@ -524,7 +541,13 @@ export function TaskProposalCard({
         <>
           <div style={bodyStyle as React.CSSProperties}>
             {displaySummary ? (
-              <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  color: pageColorTokens.textSecondary,
+                }}
+              >
                 {displaySummary}
               </div>
             ) : null}
@@ -532,12 +555,31 @@ export function TaskProposalCard({
             {/* Targets */}
             {targets.length > 0 ? (
               <div>
-                <div style={fieldLabelStyle}>
-                  {t("workspace.taskProposal.card.selectedTargets", {
-                    kind: targetKindLabel,
-                    checked: checkedIds.size,
-                    total: targets.length,
-                  })}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    marginBottom: 6,
+                  }}
+                >
+                  <div style={{ ...fieldLabelStyle, marginBottom: 0 }}>
+                    {t("workspace.taskProposal.card.selectedTargets", {
+                      kind: targetKindLabel,
+                      checked: checkedIds.size,
+                      total: targets.length,
+                    })}
+                  </div>
+                  {onOpenProductPicker && resolved.targets.kind === "products" ? (
+                    <button
+                      type="button"
+                      style={changeProductLinkStyle}
+                      onClick={() => onOpenProductPicker()}
+                    >
+                      {t("workspace.taskProposal.card.changeProduct")}
+                    </button>
+                  ) : null}
                 </div>
                 <div style={targetListStyle as React.CSSProperties}>
                   {targets.map((target) => {
@@ -563,7 +605,7 @@ export function TaskProposalCard({
                           style={{
                             flex: 1,
                             minWidth: 0,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: 600,
                             color: pageColorTokens.textPrimary,
                             overflow: "hidden",
@@ -600,8 +642,8 @@ export function TaskProposalCard({
                   color: pageColorTokens.textPrimary,
                   background: pageColorTokens.surfaceSubtle,
                   border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  borderRadius: 8,
-                  padding: "8px 10px",
+                  borderRadius: 10,
+                  padding: "10px 12px",
                   display: "flex",
                   flexDirection: "column",
                   gap: 4,
@@ -626,23 +668,42 @@ export function TaskProposalCard({
                 <div style={fieldLabelStyle}>
                   {t("workspace.taskProposal.card.pickProduct")}
                 </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: pageColorTokens.textFootnote,
-                    marginBottom: 8,
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {t("workspace.taskProposal.card.pickProductHint")}
-                </div>
                 <button
                   type="button"
-                  style={pickProductButtonStyle}
+                  style={
+                    onOpenProductPicker ? pickProductZoneStyle : pickProductZoneDisabledStyle
+                  }
                   onClick={() => onOpenProductPicker?.()}
                   disabled={!onOpenProductPicker}
                 >
-                  ◫ {t("workspace.taskProposal.card.pickProductButton")}
+                  <span
+                    style={{
+                      fontSize: 20,
+                      lineHeight: 1,
+                      color: pageColorTokens.brandGreenDeep,
+                    }}
+                    aria-hidden="true"
+                  >
+                    ◫
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: pageColorTokens.textPrimary,
+                    }}
+                  >
+                    {t("workspace.taskProposal.card.pickProductButton")}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: pageColorTokens.textFootnote,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {t("workspace.taskProposal.card.pickProductHint")}
+                  </span>
                 </button>
               </div>
             ) : (
@@ -652,11 +713,11 @@ export function TaskProposalCard({
                   color: "#92400e",
                   background: "#fffbeb",
                   border: "1px solid #fde68a",
-                  borderRadius: 8,
-                  padding: "7px 10px",
+                  borderRadius: 10,
+                  padding: "8px 10px",
                 }}
               >
-                ⚠️ {t("workspace.taskProposal.card.missingTargets", { kind: targetKindLabel })}
+                {t("workspace.taskProposal.card.missingTargets", { kind: targetKindLabel })}
               </div>
             )}
 
@@ -697,13 +758,15 @@ export function TaskProposalCard({
               </div>
             ))}
 
-            {/* Estimation */}
-            <EstimateLine
-              loading={estimateLoading}
-              perItemCredits={perItemCredits}
-              perItemSeconds={perItemSeconds}
-              count={effectiveCount}
-            />
+            {/* Estimation：未选对象时不占版面 */}
+            {effectiveCount > 0 || targetless ? (
+              <EstimateLine
+                loading={estimateLoading}
+                perItemCredits={perItemCredits}
+                perItemSeconds={perItemSeconds}
+                count={effectiveCount}
+              />
+            ) : null}
           </div>
 
           {/* Footer */}
@@ -745,9 +808,11 @@ export function TaskProposalCard({
                   ? t("workspace.taskProposal.card.confirmStart")
                   : targetsQuery
                     ? t("workspace.taskProposal.card.confirmQuery")
-                    : t("workspace.taskProposal.card.confirmCreateCount", {
-                        count: selectedTargets.length,
-                      })}
+                    : selectedTargets.length === 0
+                      ? t("workspace.taskProposal.card.confirmNeedProduct")
+                      : t("workspace.taskProposal.card.confirmCreateCount", {
+                          count: selectedTargets.length,
+                        })}
             </button>
           </div>
         </>

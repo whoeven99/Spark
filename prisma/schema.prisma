@@ -746,6 +746,8 @@ model Conversation {
   shop      String
   title     String    @default("新对话")
   preview   String    @default("")
+  /// 工作台上下文快照 JSON（商品/文章/订单/文件选择）；见 workspaceConversationContext
+  contextJson String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]

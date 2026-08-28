@@ -271,9 +271,6 @@ function ConversationTasksCard({
 
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
               borderTop: "1px solid #e1e3e5",
               marginTop: 12,
               paddingTop: 10,
@@ -285,21 +282,6 @@ function ConversationTasksCard({
                 tasks: totalTaskCount,
               })}
             </span>
-            <button
-              type="button"
-              onClick={() => onOpenTasks()}
-              style={{
-                fontSize: 12,
-                color: "rgba(44,110,203,0.9)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                fontWeight: 600,
-              }}
-            >
-              {t("workspace.shell.contextSidebar.viewAllTasks")}
-            </button>
           </div>
         </>
       )}

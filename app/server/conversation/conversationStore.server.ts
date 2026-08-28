@@ -1,4 +1,9 @@
 import prisma from "../../db.server";
+import {
+  parseWorkspaceConversationContext,
+  serializeWorkspaceConversationContext,
+  type WorkspaceConversationContext,
+} from "../../lib/workspaceConversationContext";
 
 export type ConversationSummary = {
   id: string;
@@ -43,25 +48,62 @@ export async function createConversation(shop: string): Promise<ConversationSumm
   };
 }
 
-export async function getConversationMessages(conversationId: string, shop: string): Promise<MessageRow[]> {
+export async function getConversationDetail(
+  conversationId: string,
+  shop: string,
+): Promise<{ messages: MessageRow[]; context: WorkspaceConversationContext | null } | null> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { shop: true },
+    select: { shop: true, contextJson: true },
   });
-  if (!conversation || conversation.shop !== shop) return [];
+  if (!conversation || conversation.shop !== shop) return null;
 
   const rows = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "asc" },
     select: { id: true, role: true, content: true, payloads: true, createdAt: true },
   });
-  return rows.map((m) => ({
-    id: m.id,
-    role: m.role,
-    content: m.content,
-    payloads: m.payloads,
-    createdAt: m.createdAt.toISOString(),
-  }));
+  return {
+    messages: rows.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      payloads: m.payloads,
+      createdAt: m.createdAt.toISOString(),
+    })),
+    context: parseWorkspaceConversationContext(conversation.contextJson),
+  };
+}
+
+/** @deprecated 用 getConversationDetail；保留兼容旧调用 */
+export async function getConversationMessages(
+  conversationId: string,
+  shop: string,
+): Promise<MessageRow[]> {
+  const detail = await getConversationDetail(conversationId, shop);
+  return detail?.messages ?? [];
+}
+
+export async function updateConversationContext(params: {
+  conversationId: string;
+  shop: string;
+  context: WorkspaceConversationContext | null;
+}): Promise<boolean> {
+  const { conversationId, shop, context } = params;
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { shop: true },
+  });
+  if (!conversation || conversation.shop !== shop) return false;
+
+  const contextJson = context ? serializeWorkspaceConversationContext(context) : null;
+  // 仅写 contextJson，避免频繁勾选上下文把会话顶到列表最前
+  await prisma.$executeRaw`
+    UPDATE "Conversation"
+    SET "contextJson" = ${contextJson}
+    WHERE "id" = ${conversationId} AND "shop" = ${shop}
+  `;
+  return true;
 }
 
 export async function deleteConversation(conversationId: string, shop: string): Promise<boolean> {

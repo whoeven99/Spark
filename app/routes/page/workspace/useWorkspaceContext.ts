@@ -7,6 +7,10 @@ import { useTranslation } from "react-i18next";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { selectedShopifyObjectsToBatchProducts } from "../../../lib/workspaceContextProducts";
+import {
+  emptyWorkspaceConversationContext,
+  type WorkspaceConversationContext,
+} from "../../../lib/workspaceConversationContext";
 import { buildWorkspaceContextBlock } from "./messageTransforms";
 import {
   isObjectType,
@@ -301,6 +305,67 @@ export function useWorkspaceContext() {
     ],
   );
 
+  const getSnapshot = useCallback((): WorkspaceConversationContext => {
+    const persistedFileIds = selectedFileIds
+      .map((id) => {
+        const file = localFiles.find((item) => item.id === id);
+        return file?.serverId ?? (file && !file.uploading ? file.id : null);
+      })
+      .filter((id): id is string => Boolean(id));
+    const roles: WorkspaceConversationContext["fileRolesById"] = {};
+    for (const id of persistedFileIds) {
+      const role = fileRolesById[id];
+      if (role === "reference" || role === "data" || role === "style") {
+        roles[id] = role;
+      }
+    }
+    return {
+      v: 1,
+      selectedObjectsByType: {
+        product: selectedObjectsByType.product,
+        article: selectedObjectsByType.article,
+        order: selectedObjectsByType.order,
+      },
+      objectQuerySelectionByType: {
+        product: objectQuerySelectionByType.product,
+        article: objectQuerySelectionByType.article,
+      },
+      selectedFileIds: persistedFileIds,
+      fileRolesById: roles,
+    };
+  }, [
+    fileRolesById,
+    localFiles,
+    objectQuerySelectionByType.article,
+    objectQuerySelectionByType.product,
+    selectedFileIds,
+    selectedObjectsByType.article,
+    selectedObjectsByType.order,
+    selectedObjectsByType.product,
+  ]);
+
+  const hydrateFromSnapshot = useCallback(
+    (snapshot: WorkspaceConversationContext | null | undefined) => {
+      const next = snapshot ?? emptyWorkspaceConversationContext();
+      setSelectedObjectsByType({
+        product: next.selectedObjectsByType.product,
+        article: next.selectedObjectsByType.article,
+        order: next.selectedObjectsByType.order,
+      });
+      setObjectQuerySelectionByType({
+        product: next.objectQuerySelectionByType.product,
+        article: next.objectQuerySelectionByType.article,
+      });
+      setSelectedFileIds(next.selectedFileIds);
+      setFileRolesById(next.fileRolesById);
+      setActiveContextTool(null);
+      if (next.selectedFileIds.length > 0) {
+        void loadWorkspaceFiles();
+      }
+    },
+    [loadWorkspaceFiles],
+  );
+
   return {
     activeContextTool,
     toggleContextTool,
@@ -331,6 +396,8 @@ export function useWorkspaceContext() {
     uploadedFileIds,
     workspaceBatchProducts,
     buildContextBlock,
+    getSnapshot,
+    hydrateFromSnapshot,
   };
 }
 
