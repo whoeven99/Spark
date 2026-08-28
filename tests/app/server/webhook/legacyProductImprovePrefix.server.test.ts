@@ -26,6 +26,7 @@ describe("canonicalPathFromLegacyProductImproveSplat", () => {
 describe("isShopifyWebhookPath", () => {
   it("accepts webhook routes and rejects UI paths", () => {
     expect(isShopifyWebhookPath("/webhooks/app/uninstalled")).toBe(true);
+    expect(isShopifyWebhookPath("/webhooks/compliance")).toBe(true);
     expect(isShopifyWebhookPath("/app/studio/copy")).toBe(false);
   });
 });

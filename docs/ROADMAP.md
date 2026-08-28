@@ -30,7 +30,7 @@
 1. `shopify.app.test.toml` 已写入订单 / 退款 / 库存 / 履约 webhook 订阅（与 yw / spark-zz 对齐）。**必须**对该配置 `shopify app deploy` 后，已装店铺才会收到增量；只改 toml 不生效。
 2. 安装后自动回补近 N 天订单（默认 `SPARK_ORDER_BACKFILL_DAYS=30`）需收完并部署；仅靠 webhook 吃不到历史单。
 3. 卸载目前只删 Session，不清理该店业务镜像。
-4. 没有 Shopify 强制合规 webhook（`customers/data_request` / `customers/redact` / `shop/redact`）。邀请制可后补；公开上架会被拒。
+4. GDPR 强制 webhook 路由与 toml 订阅已落地（`/webhooks/compliance`），当前只 ack + 日志，未真正删除镜像。须 `shopify app deploy` 后 Partner 自动化检查才会过。隐私政策页仍缺。
 5. 物流凭证写在 Render 本地 JSON，重启即丢；内测不要把它当核心路径。
 
 ---
@@ -139,7 +139,7 @@
 | Partner 分发方式选定（见下文） | P0 | **选定后不可改**；选错会锁死计费或多店安装 |
 | 1–2 家店走通安装 / 回补 / Today / 订阅 / 卸载 | P0 | |
 | 卸载清理该店镜像 | P1 | 邀请制建议做；上架必做 |
-| GDPR 强制 webhook + 隐私政策 | P1 | 公开上架才变成 P0 |
+| GDPR 真实擦除 + 隐私政策 | P1 | 端点已接；公开上架前要真删数据和隐私页 |
 | 独立告警中心 / case 复盘 | P2 | 不挡首批邀请 |
 | 风控链路、回收期/长期 ROI | 本周期不做 | 页面不展示；短期 ROI 等产品公式 |
 | 写回治理 / 促销 / 竞品 / WMS | P2+ | 内测后 |
@@ -192,7 +192,7 @@ app/server/ai/playbooks/{name}/
 | M0 数据地基 | 🟡 toml 已补订阅，待 `shopify app deploy` | 安装后近 N 天订单进 Turso，新单走 webhook |
 | M1 邀请制内测 | ⬜ 当前周期 | 指定店铺能安装；Today/Ask/Studio/计费可走通；不公开搜索 |
 | M2 告警 + 复盘 | ⬜ | 缺货 / SLA / 退款率告警；case 采纳与 7 天复盘 |
-| M3 公开上架 | ⬜ | GDPR webhook、卸载清数据、PCD、隐私政策、App Store 审核 |
+| M3 公开上架 | ⬜ | 合规 webhook 真实擦除、卸载清数据、PCD、隐私政策、App Store 审核 |
 | M4 受控写回 | ⬜ | 商品/促销写回带 dry-run + 审计 + 回滚 |
 | M5 广告归因 / SEO 周报 / 履约增强 | ⬜ | 在已有 Catalog 之上补齐，而不是重做广告接入 |
 
@@ -201,13 +201,30 @@ app/server/ai/playbooks/{name}/
 ## 七、当前周期任务（邀请制内测）
 
 - [x] Test 应用 toml 已补齐订单类 webhook 订阅（`shopify.app.test.toml`）
-- [ ] 对 Test 应用 `shopify app deploy -c shopify.app.test.toml`，让已装店铺真正收到增量
+- [x] 对 Test 应用 `shopify app deploy -c shopify.app.test.toml`，让已装店铺真正收到增量（2026-08-28 已发 `aiassistant-test-119`）
 - [ ] 收完并部署安装自动回补（`ensureInstallOrderBackfill`）与同步中空态
 - [ ] 核对内测环境：`BILLING_GATEWAY`、`BILLING_TEST`、`PlanCatalog` 种子、SES / 飞书
 - [ ] Partner Dashboard **选定分发方式**（选定后不可改，见下节）
 - [ ] 用 1–2 家店冒烟：安装 → 回补 → Today → Ask → Studio → 订阅/试用 → 卸载
 - [ ] （P1）卸载删除该店业务镜像
 - [ ] 不要把告警中心、writeBack、竞品、WMS、App Store 素材当成本周期门禁
+
+### App Store AI self-review（2026-08-28，AiAssistant-Test / `shopify.app.test.toml`）
+
+对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements)。本轮代码侧 **无 ❌**；Public + Unlisted 提交前把下面 ⚠️ 用人测或配置核对。Listing / 隐私政策 / GDPR 真擦除 **不在** 本检查覆盖范围（提交时仍会审）。
+
+代码侧 ⚠️（提交前用人测 / 配置核对）：
+
+- [ ] **1.2.2 / 1.2.3** 换套餐：`appSubscriptionCreate` 未设 `replacementBehavior`；账户页其它档仍可点订阅。确认 Render 上 `BILLING_GATEWAY` 不是 `noop`，正式店关闭 `BILLING_TEST`。测：升/降配、拒费、重装后再订。
+- [ ] **5.1.5** Theme/Pixel 采集：Today / Google Pixel activity 有汇总；TikTok 主要链到 Events Manager。准备审核说明：商户能在何处看到店面事件。Google purchase 走 Customer Events 粘贴脚本（非改 theme.liquid），审核员可能追问。
+- [ ] **5.1.1** 只读 Theme Files（`settings_data.json`）用于检测 App Embed；若审核员按 Theme API 追问，说明是检测而非改主题。
+- [ ] **3.1.1** 证书：`application_url` 已是 HTTPS Render，提交前在浏览器确认无证书告警。
+
+已知、本检查未覆盖、仍挡公开上架（M3；Unlisted 也可能被追问）：
+
+- GDPR `customers/redact` / `shop/redact` 只 ack 不擦除（见上文缺口 4）
+- 无隐私政策页
+- 卸载不清理 `ShopOrder*` / 广告凭证
 
 本周期明确**不做，页面也不展示**：
 

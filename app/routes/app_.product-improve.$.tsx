@@ -22,6 +22,7 @@ import {
   loader as metaCatalogLoader,
 } from "./webhooks.meta.catalog";
 import { action as gmcProductStatusAction } from "./webhooks.google-merchant.product-status";
+import { action as complianceAction } from "./webhooks.compliance";
 
 type WebhookAction = (
   args: ActionFunctionArgs,
@@ -40,6 +41,7 @@ const WEBHOOK_ACTIONS: Record<string, WebhookAction> = {
   "/webhooks/fulfillments/update": fulfillmentsUpdateAction,
   "/webhooks/meta/catalog": metaCatalogAction,
   "/webhooks/google-merchant/product-status": gmcProductStatusAction,
+  "/webhooks/compliance": complianceAction,
 };
 
 function resolveLegacyWebhookPath(
