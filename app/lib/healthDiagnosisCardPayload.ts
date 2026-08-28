@@ -47,8 +47,18 @@ export type HealthDiagnosisFormPayload = {
 };
 
 export type HealthDiagnosisApiResponse =
-  | { success: true; response: HealthDiagnosisCardView }
-  | { success: false; errorCode: number; errorMsg: string; response: null };
+  | {
+      success: true;
+      response: HealthDiagnosisCardView;
+      defaultBackfillDays: number;
+    }
+  | {
+      success: false;
+      errorCode: number;
+      errorMsg: string;
+      response: null;
+      defaultBackfillDays?: number;
+    };
 
 export function defaultHealthDiagnosisFormPayload(): HealthDiagnosisFormPayload {
   return { openedAt: new Date().toISOString(), mode: "live" };
