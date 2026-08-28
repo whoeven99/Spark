@@ -117,7 +117,7 @@ export function ProductImproveReviewDialog({
         <ProductImproveTaskDetailPage
           task={task}
           locationSearch={locationSearch}
-          presentation="dialog"
+          showBackButton={false}
           onBack={onClose}
           onTaskUpdated={onTaskUpdated}
         />
