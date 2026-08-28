@@ -46,7 +46,6 @@ export async function archivePeriodAndRenew(params: {
         usedTokens: account.usedTokens,
         subscriptionTokensAllocated: subscription.tokensPerPeriod,
         purchasedTokensRemaining: account.purchasedTokens,
-        trialTokensRemaining: account.trialTokens,
       },
       update: {},
     });
@@ -82,7 +81,6 @@ export async function archivePeriodAndRenew(params: {
     : {
         subscriptionTokens: account.subscriptionTokens,
         purchasedTokens: account.purchasedTokens,
-        trialTokens: account.trialTokens,
       };
 
   await prisma.account.update({
@@ -91,7 +89,6 @@ export async function archivePeriodAndRenew(params: {
       usedTokens: 0,
       subscriptionTokens: next.tokensPerPeriod,
       purchasedTokens: settledPools.purchasedTokens,
-      trialTokens: settledPools.trialTokens,
     },
   });
 }

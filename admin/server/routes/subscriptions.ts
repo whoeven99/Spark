@@ -42,7 +42,7 @@ subscriptionsRouter.get("/", async (req, res) => {
 
     const listSql = `
       SELECT s.shop, s.planKey, s.status, s.billingInterval, s.currentPeriodEnd,
-             a.subscriptionTokens, a.purchasedTokens, a.trialTokens, a.usedTokens,
+             a.subscriptionTokens, a.purchasedTokens, a.usedTokens,
              a.createdAt as accountCreatedAt
       FROM AppSubscription s
       LEFT JOIN Account a ON s.shop = a.shop
@@ -86,7 +86,6 @@ subscriptionsRouter.get("/", async (req, res) => {
       currentPeriodEnd: (r.currentPeriodEnd as string | null) ?? null,
       subscriptionTokens: Number(r.subscriptionTokens ?? 0),
       purchasedTokens: Number(r.purchasedTokens ?? 0),
-      trialTokens: Number(r.trialTokens ?? 0),
       usedTokens: Number(r.usedTokens ?? 0),
       accountCreatedAt: (r.accountCreatedAt as string | null) ?? null,
     }));

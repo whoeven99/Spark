@@ -14,11 +14,6 @@ import { getAvailableTokens } from "../../tokenUsage/accountBalance.server";
 
 const LOG = "[Billing][OverageFlush]";
 
-export function isSubscriptionInTrial(sub: AppSubscription | null | undefined): boolean {
-  if (!sub?.trialEndsAt) return false;
-  return sub.trialEndsAt.getTime() > Date.now();
-}
-
 function effectiveCapOf(sub: AppSubscription | null | undefined): string | null {
   if (!sub) return null;
   return effectiveOverageCapAmount({
@@ -31,7 +26,6 @@ export function isOverageAvailable(sub: AppSubscription | null | undefined): boo
   if (!sub) return false;
   if (!sub.overageEnabled || !sub.usageLineItemId) return false;
   if (sub.overageSpendingEnabled === false) return false;
-  if (isSubscriptionInTrial(sub)) return false;
   if (sub.status !== "ACTIVE") return false;
   return remainingCapAmount({
     cappedAmount: effectiveCapOf(sub),
@@ -42,7 +36,7 @@ export function isOverageAvailable(sub: AppSubscription | null | undefined): boo
 export function computeAccess(params: {
   account: Pick<
     Account,
-    "subscriptionTokens" | "purchasedTokens" | "trialTokens" | "usedTokens"
+    "subscriptionTokens" | "purchasedTokens" | "usedTokens"
   >;
   subscription: AppSubscription | null;
 }): {
@@ -89,8 +83,7 @@ export function computeAccess(params: {
 
   const hadOverage =
     Boolean(params.subscription?.overageEnabled && params.subscription?.usageLineItemId) &&
-    params.subscription?.overageSpendingEnabled !== false &&
-    !isSubscriptionInTrial(params.subscription);
+    params.subscription?.overageSpendingEnabled !== false;
 
   return {
     hasIncludedQuota: false,
@@ -121,7 +114,6 @@ export async function trackAndFlushOverage(params: {
   if (!account || !subscription) return;
   if (!subscription.overageEnabled || !subscription.usageLineItemId) return;
   if (subscription.overageSpendingEnabled === false) return;
-  if (isSubscriptionInTrial(subscription)) return;
 
   const included = getAvailableTokens(account);
   const overageTokens = Math.max(0, account.usedTokens - included);

@@ -2,19 +2,16 @@
 export type AccountBalanceFields = {
   subscriptionTokens: number;
   purchasedTokens: number;
-  trialTokens: number;
   availableTokens?: number;
   usedTokens: number;
 };
 
-/** 含内可用 token（订阅池 + 购包 + 试用；不含超额）。 */
+/** 含内可用 token（订阅池 + 购包；不含超额）。 */
 export function getAvailableTokens(account: AccountBalanceFields): number {
   if (typeof account.availableTokens === "number") {
     return account.availableTokens;
   }
-  return (
-    account.subscriptionTokens + account.purchasedTokens + account.trialTokens
-  );
+  return account.subscriptionTokens + account.purchasedTokens;
 }
 
 /** 仅判断含内额度是否还有剩余（不含超额）。 */

@@ -276,12 +276,12 @@ function SubscriptionOverview() {
       title: "Token 使用率",
       key: "usagePercent",
       sorter: (a: SubscriptionRow, b: SubscriptionRow) => {
-        const tA = a.subscriptionTokens + a.purchasedTokens + a.trialTokens;
-        const tB = b.subscriptionTokens + b.purchasedTokens + b.trialTokens;
+        const tA = a.subscriptionTokens + a.purchasedTokens;
+        const tB = b.subscriptionTokens + b.purchasedTokens;
         return (tA > 0 ? a.usedTokens / tA : 0) - (tB > 0 ? b.usedTokens / tB : 0);
       },
       render: (_: unknown, r: SubscriptionRow) => {
-        const total = r.subscriptionTokens + r.purchasedTokens + r.trialTokens;
+        const total = r.subscriptionTokens + r.purchasedTokens;
         const pct = total > 0 ? Math.round((r.usedTokens / total) * 100) : 0;
         return (
           <Progress

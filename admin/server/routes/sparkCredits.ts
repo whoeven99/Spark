@@ -77,15 +77,13 @@ sparkCreditsRouter.get("/", async (req, res) => {
               a.shop,
               a.subscriptionTokens,
               a.purchasedTokens,
-              a.trialTokens,
               a.usedTokens,
               a.createdAt,
               a.updatedAt,
               sub.planKey,
               sub.status AS subStatus,
               sub.billingInterval,
-              sub.currentPeriodEnd,
-              sub.trialEndsAt
+              sub.currentPeriodEnd
             FROM Account a
             LEFT JOIN AppSubscription sub ON a.shop = sub.shop
             WHERE a.shop = ?
@@ -106,7 +104,7 @@ sparkCreditsRouter.get("/", async (req, res) => {
         db.execute({
           sql: `
             SELECT periodStart, periodEnd, usedTokens, subscriptionTokensAllocated,
-                   purchasedTokensRemaining, trialTokensRemaining, planKey, archivedAt
+                   purchasedTokensRemaining, planKey, archivedAt
             FROM AccountPeriodUsage
             WHERE shop = ?
             ORDER BY periodEnd DESC
@@ -132,15 +130,13 @@ sparkCreditsRouter.get("/", async (req, res) => {
     if (row) {
       const subscriptionTokens = Number(row.subscriptionTokens ?? 0);
       const purchasedTokens = Number(row.purchasedTokens ?? 0);
-      const trialTokens = Number(row.trialTokens ?? 0);
       const usedTokens = Number(row.usedTokens ?? 0);
-      const totalTokens = subscriptionTokens + purchasedTokens + trialTokens;
+      const totalTokens = subscriptionTokens + purchasedTokens;
 
       account = {
         shop: row.shop as string,
         subscriptionTokens,
         purchasedTokens,
-        trialTokens,
         usedTokens,
         totalTokens,
         remainingTokens: Math.max(0, totalTokens - usedTokens),
@@ -152,7 +148,6 @@ sparkCreditsRouter.get("/", async (req, res) => {
         subStatus: (row.subStatus as string | null) ?? null,
         billingInterval: (row.billingInterval as string | null) ?? null,
         currentPeriodEnd: (row.currentPeriodEnd as string | null) ?? null,
-        trialEndsAt: (row.trialEndsAt as string | null) ?? null,
       };
     }
 
@@ -176,7 +171,6 @@ sparkCreditsRouter.get("/", async (req, res) => {
       usedTokens: Number(r.usedTokens ?? 0),
       subscriptionTokensAllocated: Number(r.subscriptionTokensAllocated ?? 0),
       purchasedTokensRemaining: Number(r.purchasedTokensRemaining ?? 0),
-      trialTokensRemaining: Number(r.trialTokensRemaining ?? 0),
       planKey: (r.planKey as string | null) ?? null,
       archivedAt: r.archivedAt as string,
     }));

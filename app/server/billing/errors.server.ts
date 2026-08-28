@@ -5,7 +5,6 @@ export const BILLING_ERROR_CODE = {
   PLAN_NOT_FOUND: "PLAN_NOT_FOUND",
   INVALID_PLAN_KIND: "INVALID_PLAN_KIND",
   SHOPIFY_BILLING_FAILED: "SHOPIFY_BILLING_FAILED",
-  TRIAL_DAILY_LIMIT_EXCEEDED: "TRIAL_DAILY_LIMIT_EXCEEDED",
 } as const;
 
 export class BillingError extends Error {
@@ -28,16 +27,5 @@ export class BillingAccessDeniedError extends BillingError {
   ) {
     super(message, code, 402, details);
     this.name = "BillingAccessDeniedError";
-  }
-}
-
-export class TrialDailyLimitError extends BillingError {
-  constructor(dailyLimit: number, used: number) {
-    super(
-      `试用期每日积分上限为 ${dailyLimit.toLocaleString()}，今日已使用 ${used.toLocaleString()}，请明日再试或直接订阅以解除限制`,
-      BILLING_ERROR_CODE.TRIAL_DAILY_LIMIT_EXCEEDED,
-      429,
-    );
-    this.name = "TrialDailyLimitError";
   }
 }

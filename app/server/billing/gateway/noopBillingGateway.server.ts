@@ -10,10 +10,9 @@ const NOOP_USAGE_LINE_PREFIX = "gid://shopify/AppSubscriptionLineItem/noop-";
 const NOOP_USAGE_RECORD_PREFIX = "gid://shopify/AppUsageRecord/noop-";
 
 export const noopBillingGateway: BillingGateway = {
-  async createSubscription({ shop, plan, trialDays }) {
+  async createSubscription({ shop, plan, trialDays: _trialDays }) {
     const subscriptionId = `${NOOP_SUBSCRIPTION_GID}-${plan.planKey}`;
     const now = new Date();
-    const effectiveTrialDays = trialDays !== undefined ? trialDays : plan.trialDays;
     const periodEnd = new Date();
     if (plan.billingInterval === "ANNUAL") {
       periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
@@ -31,10 +30,6 @@ export const noopBillingGateway: BillingGateway = {
       planKey: plan.planKey,
       billingInterval: plan.billingInterval ?? "MONTHLY",
       tokensPerPeriod: plan.tokens,
-      trialEndsAt:
-        effectiveTrialDays && effectiveTrialDays > 0
-          ? new Date(now.getTime() + effectiveTrialDays * 24 * 60 * 60 * 1000)
-          : null,
       period: {
         planKey: plan.planKey,
         tokensPerPeriod: plan.tokens,
@@ -51,7 +46,7 @@ export const noopBillingGateway: BillingGateway = {
             overageEnabled: true,
           }
         : undefined,
-      rawPayload: { noop: true, trialDays: effectiveTrialDays ?? 0 },
+      rawPayload: { noop: true },
     });
 
     return {

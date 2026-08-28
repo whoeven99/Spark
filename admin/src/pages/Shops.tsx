@@ -91,7 +91,7 @@ export default function Shops() {
       title: "已用 / 订阅 Tokens",
       key: "tokens",
       render: (_: unknown, r: ShopRow) => {
-        const total = r.subscriptionTokens + r.purchasedTokens + r.trialTokens;
+        const total = r.subscriptionTokens + r.purchasedTokens;
         const pct = total > 0 ? Math.round((r.usedTokens / total) * 100) : 0;
         return (
           <span>

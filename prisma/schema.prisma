@@ -194,16 +194,10 @@ model Account {
   shop               String
   /// 当前订阅周期套餐 token（周期内不随用量减少；续费刷新）
   subscriptionTokens Int      @default(0)
-  /// 按量购买 token（续费结算后写入真实剩余；周期内不随用量减少）
+  /// 按量购买 / 营销领取 token（续费结算后写入真实剩余；周期内不随用量减少）
   purchasedTokens    Int      @default(0)
-  /// 产品层免费试用 token（续费结算后写入真实剩余）
-  trialTokens        Int      @default(0)
   /// 本周期累计已用 token（续费清零；续费时用于结算按量包剩余）
   usedTokens         Int      @default(0)
-  /// Shopify 试用期当日已用 token（每日 UTC 0 点重置）
-  trialDailyUsed     Int      @default(0)
-  /// 上次重置 trialDailyUsed 的日期（UTC 0 点）
-  trialDailyResetAt  DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -216,11 +210,11 @@ model Account {
   @@unique([shop])
 }
 
-/// 套餐目录（订阅 / 按量包 / 内置试用定义）。
+/// 套餐目录（订阅 / 按量包）。
 model PlanCatalog {
   planKey          String   @id
   appName          String   @default("spark")
-  /// SUBSCRIPTION | ONE_TIME_PACK | INTERNAL_TRIAL
+  /// SUBSCRIPTION | ONE_TIME_PACK
   kind             String
   /// MONTHLY | ANNUAL；一次性包为 null
   billingInterval  String?
@@ -228,7 +222,6 @@ model PlanCatalog {
   tokens           Int
   priceAmount      String
   currencyCode     String   @default("USD")
-  trialDays        Int?
   shopifyPlanName  String?
   /// 超额单价：USD / 1,000 tokens（订阅套餐用；购包可空）
   overagePricePerThousand String?
@@ -270,7 +263,6 @@ model AppSubscription {
   overageEnabled         Boolean  @default(false)
   /// 商户是否允许按需扣费；false=Disabled（一分钱不扣；不改 Shopify cappedAmount）
   overageSpendingEnabled Boolean  @default(true)
-  trialEndsAt            DateTime?
   currentPeriodStart     DateTime?
   currentPeriodEnd       DateTime?
   cancelledAt            DateTime?
@@ -329,7 +321,6 @@ model AccountPeriodUsage {
   usedTokens                  Int
   subscriptionTokensAllocated Int
   purchasedTokensRemaining    Int      @default(0)
-  trialTokensRemaining        Int      @default(0)
   archivedAt                  DateTime @default(now())
 
   account        Account         @relation(fields: [shop], references: [shop])

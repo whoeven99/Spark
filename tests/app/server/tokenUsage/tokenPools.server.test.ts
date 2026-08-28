@@ -10,33 +10,14 @@ describe("deductTokenUsage", () => {
     expect(
       deductTokenUsage(
         {
-          trialTokens: 0,
           subscriptionTokens: 500_000,
           purchasedTokens: 100_000,
         },
         510_000,
       ),
     ).toEqual({
-      trialTokens: 0,
       subscriptionTokens: 0,
       purchasedTokens: 90_000,
-    });
-  });
-
-  it("有试用时先扣试用", () => {
-    expect(
-      deductTokenUsage(
-        {
-          trialTokens: 5_000,
-          subscriptionTokens: 100,
-          purchasedTokens: 50,
-        },
-        7_000,
-      ),
-    ).toEqual({
-      trialTokens: 0,
-      subscriptionTokens: 0,
-      purchasedTokens: 0,
     });
   });
 });
@@ -46,23 +27,20 @@ describe("settlePoolsAtRenewal", () => {
     const account = {
       subscriptionTokens: 500_000,
       purchasedTokens: 100_000,
-      trialTokens: 0,
       usedTokens: 510_000,
     };
     expect(canSettlePoolsAtRenewal(account)).toBe(true);
     expect(settlePoolsAtRenewal(account)).toEqual({
-      trialTokens: 0,
       subscriptionTokens: 0,
       purchasedTokens: 90_000,
     });
   });
 
-  it("used 超过三池之和时不应结算（避免重复扣减）", () => {
+  it("used 超过双池之和时不应结算（避免重复扣减）", () => {
     expect(
       canSettlePoolsAtRenewal({
         subscriptionTokens: 0,
         purchasedTokens: 90_000,
-        trialTokens: 0,
         usedTokens: 510_000,
       }),
     ).toBe(false);

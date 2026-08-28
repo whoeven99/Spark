@@ -25,7 +25,6 @@ export async function recordTokenUsage(
         shop,
         subscriptionTokens: 0,
         purchasedTokens: 0,
-        trialTokens: 0,
         usedTokens: usage.totalTokens,
       },
       update: {

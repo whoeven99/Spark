@@ -28,7 +28,6 @@ import {
 } from "./types.server";
 import {
   computeAccess,
-  isSubscriptionInTrial,
 } from "./overage/flushOverage.server";
 import type { ReconcileSubscriptionResult } from "./subscription/reconcilePendingSubscriptions.server";
 import {
@@ -64,7 +63,6 @@ function toBillingUsagePeriodItem(row: AccountPeriodUsage): BillingUsagePeriodIt
     usedTokens: row.usedTokens,
     subscriptionTokensAllocated: row.subscriptionTokensAllocated,
     purchasedTokensRemaining: row.purchasedTokensRemaining,
-    trialTokensRemaining: row.trialTokensRemaining,
     archivedAt: row.archivedAt.toISOString(),
   };
 }
@@ -148,7 +146,6 @@ export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot 
     account: {
       subscriptionTokens: ctx.account.subscriptionTokens,
       purchasedTokens: ctx.account.purchasedTokens,
-      trialTokens: ctx.account.trialTokens,
     },
     subscription: sub
       ? {
@@ -158,7 +155,6 @@ export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot 
           tokensPerPeriod: sub.tokensPerPeriod,
           currentPeriodStart: toIso(sub.currentPeriodStart),
           currentPeriodEnd: toIso(sub.currentPeriodEnd),
-          trialEndsAt: toIso(sub.trialEndsAt),
           overageEnabled: Boolean(sub.overageEnabled && sub.usageLineItemId),
         }
       : null,
@@ -306,6 +302,6 @@ export async function loadBillingContext(shop: string): Promise<BillingContext> 
     account,
     subscription,
     plans,
-    inTrial: isSubscriptionInTrial(subscription),
+    inTrial: false,
   };
 }

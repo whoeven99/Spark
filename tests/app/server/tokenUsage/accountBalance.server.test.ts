@@ -7,10 +7,9 @@ describe("getAvailableTokens", () => {
       getAvailableTokens({
         subscriptionTokens: 100,
         purchasedTokens: 50,
-        trialTokens: 10,
         usedTokens: 0,
       }),
-    ).toBe(160);
+    ).toBe(150);
   });
 
   it("prefers DB generated column when present", () => {
@@ -18,7 +17,6 @@ describe("getAvailableTokens", () => {
       getAvailableTokens({
         subscriptionTokens: 1,
         purchasedTokens: 1,
-        trialTokens: 1,
         availableTokens: 999,
         usedTokens: 0,
       }),
@@ -32,7 +30,6 @@ describe("hasTokenQuota", () => {
       hasTokenQuota({
         subscriptionTokens: 100,
         purchasedTokens: 0,
-        trialTokens: 0,
         usedTokens: 99,
       }),
     ).toBe(true);
@@ -43,7 +40,6 @@ describe("hasTokenQuota", () => {
       hasTokenQuota({
         subscriptionTokens: 10,
         purchasedTokens: 0,
-        trialTokens: 0,
         usedTokens: 10,
       }),
     ).toBe(false);

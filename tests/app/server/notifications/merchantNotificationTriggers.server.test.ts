@@ -112,7 +112,6 @@ const samplePlan = {
   priceAmount: "9.99",
   currencyCode: "USD",
   tokens: 10_000,
-  trialDays: null,
   shopifyPlanName: null,
   overagePricePerThousand: null,
   defaultOverageCapAmount: null,
@@ -126,7 +125,6 @@ describe("merchant notification triggers", () => {
     appName: APP_NAME,
     subscriptionTokens: 500_000,
     purchasedTokens: 0,
-    trialTokens: 0,
     usedTokens: 0,
   } as const;
 
@@ -395,7 +393,6 @@ describe("merchant notification triggers", () => {
             findUnique: vi.fn().mockResolvedValue({
               subscriptionTokens: 500_000,
               purchasedTokens: 0,
-              trialTokens: 0,
               usedTokens: 0,
             }),
             update: vi.fn().mockResolvedValue({}),

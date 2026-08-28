@@ -70,7 +70,6 @@ export async function handleAppSubscriptionWebhook(params: {
   let tokensPerPeriod = existingSub?.tokensPerPeriod ?? 0;
   let periodStart: Date | null = null;
   let periodEnd: Date | null = null;
-  let trialEndsAt: Date | null = null;
   let fetchedUsageLineItem: {
     id: string;
     cappedAmount: string | null;
@@ -88,10 +87,6 @@ export async function handleAppSubscriptionWebhook(params: {
       periodEnd = node.currentPeriodEnd
         ? new Date(node.currentPeriodEnd)
         : null;
-      if (node.trialDays > 0) {
-        trialEndsAt = new Date(periodStart);
-        trialEndsAt.setUTCDate(trialEndsAt.getUTCDate() + node.trialDays);
-      }
       if (node.usageLineItem) {
         fetchedUsageLineItem = node.usageLineItem;
       }
@@ -151,7 +146,6 @@ export async function handleAppSubscriptionWebhook(params: {
       planKey,
       billingInterval,
       tokensPerPeriod,
-      trialEndsAt,
       period: {
         planKey,
         tokensPerPeriod,

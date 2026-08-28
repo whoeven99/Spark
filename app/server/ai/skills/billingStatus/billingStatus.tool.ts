@@ -35,7 +35,6 @@ function createGetBillingStatusTool(context: AgentContext): DynamicStructuredToo
                 planKey: ctx.subscription.planKey,
                 status: ctx.subscription.status,
                 currentPeriodEnd: ctx.subscription.currentPeriodEnd?.toISOString() ?? null,
-                trialEndsAt: ctx.subscription.trialEndsAt?.toISOString() ?? null,
               }
             : null,
         });
