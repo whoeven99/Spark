@@ -106,7 +106,7 @@
 ## 营销领 Token（账户页）
 
 - 配置：`app/server/billing/promo/promoCampaign.server.ts`（环境变量可覆盖）。
-- 默认活动：`install-welcome-100k`，安装后可在 `/app/account` 领取 **100000** Token；每店每活动一次。
+- 默认活动：`install-welcome-1m`，安装后可在 `/app/account` 领取 **1000000** Token；每店每活动一次。
 - 环境变量：`SPARK_PROMO_ENABLED`（默认开，`false` 关闭）、`SPARK_PROMO_CAMPAIGN_ID`、`SPARK_PROMO_TOKEN_AMOUNT`、`SPARK_PROMO_STARTS_AT` / `SPARK_PROMO_ENDS_AT`（ISO；可选）。
 - 换活动：改 `SPARK_PROMO_CAMPAIGN_ID`（新 id 可再领一次）并按需改额度/文案（i18n `billing.promo*`）。
 

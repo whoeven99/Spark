@@ -3,8 +3,8 @@ import { ensureAccount } from "../account/ensureAccount.server";
 import { BillingError } from "../errors.server";
 import { BILLING_LOG_EVENT } from "../types.server";
 
-const DEFAULT_CAMPAIGN_ID = "install-welcome-100k";
-const DEFAULT_TOKEN_AMOUNT = 100_000;
+const DEFAULT_CAMPAIGN_ID = "install-welcome-1m";
+const DEFAULT_TOKEN_AMOUNT = 1_000_000;
 
 export type PromoCampaignDefinition = {
   id: string;
@@ -36,7 +36,7 @@ function parseTokenAmount(raw: string | undefined): number {
   return parsed;
 }
 
-/** 从环境变量解析活动配置；未设时默认：安装可领 100000 Token。 */
+/** 从环境变量解析活动配置；未设时默认：安装可领 1000000 Token。 */
 export function resolvePromoCampaignConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): PromoCampaignDefinition {

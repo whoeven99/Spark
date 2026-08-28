@@ -6,12 +6,12 @@ import {
 } from "../../../../../app/server/billing/promo/promoCampaign.server";
 
 describe("resolvePromoCampaignConfig", () => {
-  it("默认开启安装福利 100000 Token", () => {
+  it("默认开启安装福利 1000000 Token", () => {
     const campaign = resolvePromoCampaignConfig({});
     expect(campaign).toEqual({
-      id: "install-welcome-100k",
+      id: "install-welcome-1m",
       enabled: true,
-      tokenAmount: 100_000,
+      tokenAmount: 1_000_000,
       startsAt: null,
       endsAt: null,
     });
@@ -66,7 +66,7 @@ describe("isPromoCampaignActive / getVisiblePromoCampaign", () => {
       },
       new Date("2026-08-28T00:00:00.000Z"),
     );
-    expect(visible?.id).toBe("install-welcome-100k");
-    expect(visible?.tokenAmount).toBe(100_000);
+    expect(visible?.id).toBe("install-welcome-1m");
+    expect(visible?.tokenAmount).toBe(1_000_000);
   });
 });
