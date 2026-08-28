@@ -81,6 +81,18 @@ export async function handleAppSubscriptionWebhook(params: {
         trialEndsAt = new Date(periodStart);
         trialEndsAt.setUTCDate(trialEndsAt.getUTCDate() + node.trialDays);
       }
+      if (node.usageLineItem) {
+        await prisma.appSubscription.updateMany({
+          where: { shop: params.shop },
+          data: {
+            usageLineItemId: node.usageLineItem.id,
+            cappedAmount: node.usageLineItem.cappedAmount,
+            cappedCurrency: node.usageLineItem.cappedCurrency,
+            usageBalanceUsed: node.usageLineItem.balanceUsed,
+            overageEnabled: true,
+          },
+        });
+      }
     }
   }
 
@@ -119,6 +131,10 @@ export async function handleAppSubscriptionWebhook(params: {
     }
 
     console.info(`${LOG} apply-active-subscription shop=${params.shop} planKey=${planKey}`);
+    const existingSub = await prisma.appSubscription.findUnique({
+      where: { shop: params.shop },
+    });
+    const plan = await getPlanByKey(planKey).catch(() => null);
     await applyActiveSubscription({
       shop: params.shop,
       shopifySubscriptionId,
@@ -132,6 +148,27 @@ export async function handleAppSubscriptionWebhook(params: {
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
       },
+      overage: existingSub?.usageLineItemId
+        ? {
+            usageLineItemId: existingSub.usageLineItemId,
+            overagePricePerThousand:
+              existingSub.overagePricePerThousand ??
+              plan?.overagePricePerThousand ??
+              null,
+            cappedAmount: existingSub.cappedAmount,
+            cappedCurrency: existingSub.cappedCurrency,
+            usageBalanceUsed: existingSub.usageBalanceUsed ?? "0",
+            overageEnabled: true,
+          }
+        : plan?.defaultOverageCapAmount
+          ? {
+              overagePricePerThousand: plan.overagePricePerThousand,
+              cappedAmount: plan.defaultOverageCapAmount,
+              cappedCurrency: plan.currencyCode,
+              usageBalanceUsed: "0",
+              overageEnabled: Boolean(existingSub?.usageLineItemId),
+            }
+          : undefined,
       rawPayload,
     });
     console.info(`${LOG} done-active shop=${params.shop} subscriptionId=${shopifySubscriptionId}`);

@@ -9,13 +9,14 @@
 | `index.server.ts` | 对外导出（context、checkout、webhook、gateway） |
 | `billingContext.server.ts` | 加载账户/订阅快照；首次访问可 `grantProductTrialIfEligible` |
 | `requireBilling.server.ts` | `requireBillingAccess`、`billingErrorToResponse` |
-| `billingActions.server.ts` | 订阅 / 按量包结账（返回 Shopify `confirmationUrl`） |
-| `gateway/` | `getBillingGateway`：Shopify GraphQL 或 `noop` |
+| `billingActions.server.ts` | 订阅 / 按量包结账 / 提高超额封顶（返回 Shopify `confirmationUrl`） |
+| `gateway/` | `getBillingGateway`：Shopify GraphQL 或 `noop`（含 usage record、改 cap） |
+| `overage/` | 超额数学、门禁 `computeAccess`、批量 `flushOveragePending` |
 | `subscription/` | 开通、续费、`app_subscriptions/update` webhook |
-| `purchase/` | 按量购包、`purchases_one_time/update` webhook |
+| `purchase/` | 按量购包（售卖已下线，入账兼容保留）、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount`、`grantTrial` |
-| `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
-| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`（按 Turso `TokenBillingRule` 乘数，种子见 `prisma/token-billing-rule-seed.sql`）；续费结算见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
+| `plans/planCatalog.server.ts` | 读 `PlanCatalog`（含超额单价 / 默认封顶） |
+| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`；`recordBilled*` 之后会 `trackAndFlushOverage`；续费结算见 `tokenPools.server.ts`；含内余额见 `getAvailableTokens` / `hasTokenQuota` |
 
 ## 环境变量
 
@@ -37,11 +38,22 @@
 | 表 | 职责 |
 |----|------|
 | `Account` | 当前 token 分池与 `usedTokens` |
-| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop])`）；取消 / 过期时**删除行** |
-| `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
+| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop])`）；取消 / 过期时**删除行**；含 usage line / cappedAmount / pending overage |
+| `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`）；订阅含 `overagePricePerThousand` / `defaultOverageCapAmount`；`ONE_TIME_PACK` 默认 `enabled=0` |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
+| `OverageUsageCharge` | Shopify usage 超额扣费幂等流水（PENDING/POSTED/FAILED） |
 | `ToolTokenUsageLog` | **统一**工具/聊天 token 消耗明细（`feature` × `modelKey`；含 chat / 文案 / 质量评分 / 文生图 / 图片翻译等） |
+
+## 超额计费（Cursor 式）
+
+- 新订阅 `appSubscriptionCreate` **同时**带 recurring + usage 行（默认封顶来自 PlanCatalog）。
+- 含内额度（订阅+购包剩余+试用）用完后，ACTIVE 且非试用期可继续使用，按 `overagePricePerThousand` 累计，达阈值后 `appUsageRecordCreate`。
+- 封顶用尽：`requireBillingAccess` 抛 `OVERAGE_CAP_REACHED`；`/chat-stream` SSE 提示去账户页提高上限。
+- 提高上限：`appSubscriptionLineItemUpdate` → 商户批准 `confirmationUrl`；noop 本地直接生效。
+- 试用期（`trialEndsAt` 未过）**不**走超额。
+- 老订阅无 `usageLineItemId`：`overageEnabled=false`，用尽即拦，须重新批准含 usage 的订阅。
+- 计费页下线购包售卖；已入账 `purchasedTokens` 仍可扣。
 
 ## Token 消耗记账约定（强制）
 
@@ -84,14 +96,16 @@
 | `SUBSCRIPTION_ACTIVATED` | 订阅确认生效 |
 | `SUBSCRIPTION_RENEWED` | 周期续费 |
 | `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`subscriptionTokens` 扣减该套餐 `tokensPerPeriod`，`trialTokens` 不动） |
+| `TOKEN_PACK_INITIATED` | 按量购包待确认（售卖已下线，兼容旧路径） |
+| `TOKEN_PACK_PURCHASED` | 按量购包入账 |
+
+门禁错误码（非 BillingLog）：`QUOTA_EXHAUSTED` / `OVERAGE_CAP_REACHED` → `BillingAccessDeniedError`（402；对话 SSE 文案分流）。
 
 ## 测试环境取消按钮
 
 - 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `prod`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
 - 还需 Turso 中存在 `ACTIVE` / `PENDING` 的 `AppSubscription` 行。
 - 调用 `appSubscriptionCancel`（`BILLING_GATEWAY=noop` 时仅同步本地）。见 `cancelActiveSubscription.server.ts`。
-| `TOKEN_PACK_INITIATED` | 按量购包待确认 |
-| `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 
 ## Webhook（`shopify.app.test.toml` 已注册）
 

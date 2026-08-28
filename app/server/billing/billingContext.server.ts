@@ -3,13 +3,11 @@ import type {
   AccountPeriodUsage,
   AppSubscription,
   BillingLog,
+  OverageUsageCharge,
   ToolTokenUsageLog,
 } from "../../generated/prisma";
 import prisma from "../../db.server";
-import {
-  getAvailableTokens,
-  hasTokenQuota,
-} from "../tokenUsage/accountBalance.server";
+import { getAvailableTokens } from "../tokenUsage/accountBalance.server";
 import { isBillingEnabled, isBillingDevCancelEnabled } from "./constants.server";
 import { ensureAccount } from "./account/ensureAccount.server";
 import type {
@@ -17,6 +15,7 @@ import type {
   BillingPageLoaderData,
   BillingPageSnapshot,
   BillingHistoryItem,
+  BillingOverageChargeItem,
   BillingToolUsageItem,
   BillingUsagePeriodItem,
 } from "../../lib/billingPageTypes";
@@ -25,6 +24,15 @@ import {
   APP_SUBSCRIPTION_STATUS,
   PLAN_CATALOG_KIND,
 } from "./types.server";
+import {
+  computeAccess,
+  isSubscriptionInTrial,
+} from "./overage/flushOverage.server";
+import {
+  isCapApproaching,
+  remainingCapAmount,
+  overageAmountToTokens,
+} from "./overage/overageMath.server";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -67,27 +75,68 @@ function toBillingToolUsageItem(row: ToolTokenUsageLog): BillingToolUsageItem {
   };
 }
 
+function toOverageChargeItem(row: OverageUsageCharge): BillingOverageChargeItem {
+  return {
+    id: row.id,
+    tokens: row.tokens,
+    amount: row.amount,
+    currency: row.currency,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot {
+  const sub = ctx.subscription;
+  const overageEnabled = Boolean(sub?.overageEnabled && sub?.usageLineItemId);
+  const capRemainingUsd = remainingCapAmount({
+    cappedAmount: sub?.cappedAmount,
+    usageBalanceUsed: sub?.usageBalanceUsed,
+  });
+
   return {
     shop: ctx.shop,
     billingRequired: ctx.billingRequired,
     hasAccess: ctx.hasAccess,
     availableTokens: ctx.availableTokens,
     usedTokens: ctx.usedTokens,
+    denialReason: ctx.denialReason,
+    overage:
+      overageEnabled && sub
+        ? {
+            enabled: true,
+            cappedAmount: sub.cappedAmount,
+            cappedCurrency: sub.cappedCurrency,
+            usageBalanceUsed: sub.usageBalanceUsed,
+            pricePerThousand: sub.overagePricePerThousand,
+            pendingTokens: sub.overagePendingTokens,
+            capRemainingUsd,
+            estimatedTokensLeft: overageAmountToTokens(
+              capRemainingUsd,
+              sub.overagePricePerThousand,
+            ),
+            approaching: isCapApproaching({
+              cappedAmount: sub.cappedAmount,
+              usageBalanceUsed: sub.usageBalanceUsed,
+            }),
+            capReached: !ctx.hasAccess && ctx.denialReason === "overage_cap_reached",
+          }
+        : null,
     account: {
       subscriptionTokens: ctx.account.subscriptionTokens,
       purchasedTokens: ctx.account.purchasedTokens,
       trialTokens: ctx.account.trialTokens,
     },
-    subscription: ctx.subscription
+    subscription: sub
       ? {
-          planKey: ctx.subscription.planKey,
-          status: ctx.subscription.status,
-          billingInterval: ctx.subscription.billingInterval,
-          tokensPerPeriod: ctx.subscription.tokensPerPeriod,
-          currentPeriodStart: toIso(ctx.subscription.currentPeriodStart),
-          currentPeriodEnd: toIso(ctx.subscription.currentPeriodEnd),
-          trialEndsAt: toIso(ctx.subscription.trialEndsAt),
+          planKey: sub.planKey,
+          status: sub.status,
+          billingInterval: sub.billingInterval,
+          tokensPerPeriod: sub.tokensPerPeriod,
+          currentPeriodStart: toIso(sub.currentPeriodStart),
+          currentPeriodEnd: toIso(sub.currentPeriodEnd),
+          trialEndsAt: toIso(sub.trialEndsAt),
+          overageEnabled: Boolean(sub.overageEnabled && sub.usageLineItemId),
         }
       : null,
   };
@@ -104,23 +153,29 @@ export async function loadBillingPageData(
   shop: string,
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop);
-  const [usageHistoryRows, billingHistoryRows, toolUsageRows] = await Promise.all([
-    prisma.accountPeriodUsage.findMany({
-      where: { shop },
-      orderBy: { periodEnd: "desc" },
-      take: 6,
-    }),
-    prisma.billingLog.findMany({
-      where: { shop },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
-    prisma.toolTokenUsageLog.findMany({
-      where: { shop },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-  ]);
+  const [usageHistoryRows, billingHistoryRows, toolUsageRows, overageRows] =
+    await Promise.all([
+      prisma.accountPeriodUsage.findMany({
+        where: { shop },
+        orderBy: { periodEnd: "desc" },
+        take: 6,
+      }),
+      prisma.billingLog.findMany({
+        where: { shop },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+      }),
+      prisma.toolTokenUsageLog.findMany({
+        where: { shop },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.overageUsageCharge.findMany({
+        where: { shop },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
   const sub = ctx.subscription;
   const showDevCancelSubscription =
     isBillingDevCancelEnabled() &&
@@ -134,10 +189,12 @@ export async function loadBillingPageData(
     subscriptionPlans: ctx.plans.filter(
       (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
     ),
-    tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
+    // Packs disabled for sale; still return empty list (legacy remaining tokens shown via account)
+    tokenPacks: [],
     usageHistory: usageHistoryRows.map(toBillingUsagePeriodItem),
     billingHistory: billingHistoryRows.map(toBillingHistoryItem),
     toolUsageHistory: toolUsageRows.map(toBillingToolUsageItem),
+    overageCharges: overageRows.map(toOverageChargeItem),
     showDevCancelSubscription,
   };
 }
@@ -146,11 +203,13 @@ export type BillingContext = {
   shop: string;
   billingRequired: boolean;
   hasAccess: boolean;
+  denialReason: "none" | "quota_exhausted" | "overage_cap_reached";
   availableTokens: number;
   usedTokens: number;
   account: Account;
   subscription: AppSubscription | null;
   plans: PlanRecord[];
+  inTrial: boolean;
 };
 
 export type BillingUsageSummary = {
@@ -169,7 +228,6 @@ export async function loadBillingUsageSummary(
 }
 
 export async function loadBillingContext(shop: string): Promise<BillingContext> {
-
   const account = await ensureAccount(shop);
   const subscription = await prisma.appSubscription.findUnique({
     where: { shop },
@@ -179,16 +237,19 @@ export async function loadBillingContext(shop: string): Promise<BillingContext> 
 
   const billingRequired = isBillingEnabled();
   const availableTokens = getAvailableTokens(account);
-  const hasAccess = !billingRequired || hasTokenQuota(account);
+  const access = computeAccess({ account, subscription });
+  const hasAccess = !billingRequired || access.hasAccess;
 
   return {
     shop,
     billingRequired,
     hasAccess,
+    denialReason: billingRequired ? access.denialReason : "none",
     availableTokens,
     usedTokens: account.usedTokens,
     account,
     subscription,
     plans,
+    inTrial: isSubscriptionInTrial(subscription),
   };
 }

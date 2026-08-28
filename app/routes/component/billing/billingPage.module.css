@@ -173,6 +173,85 @@
   margin-top: 0.65rem;
 }
 
+.overageBlock {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e1e3e5;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.overageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.overageTitle {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.overageMeta {
+  font-size: 0.8125rem;
+  color: #5c6066;
+  font-weight: 600;
+}
+
+.overageHint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6d7175;
+  line-height: 1.4;
+}
+
+.overageRaiseForm {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.overageRaiseLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.overageRaiseRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.overageCapSelect {
+  appearance: none;
+  min-width: 7rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #d2d5d8;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: #202223;
+}
+
+.overageRaiseHint {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: #8c9196;
+}
+
+.planOverageFootnote {
+  margin: 0.65rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #6d7175;
+}
+
 .poolChips {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

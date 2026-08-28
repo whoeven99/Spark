@@ -1,16 +1,29 @@
-import { BillingAccessDeniedError, TrialDailyLimitError } from "./errors.server";
+import { BillingAccessDeniedError, TrialDailyLimitError, BILLING_ERROR_CODE } from "./errors.server";
 import { loadBillingContext, type BillingContext } from "./billingContext.server";
 
 export async function requireBillingAccess(shop: string): Promise<BillingContext> {
   const ctx = await loadBillingContext(shop);
 
   if (!ctx.hasAccess) {
-    throw new BillingAccessDeniedError("Token 余额不足或尚未订阅，请前往计费页开通", {
-      shop,
-      availableTokens: ctx.availableTokens,
-      usedTokens: ctx.usedTokens,
-      subscriptionStatus: ctx.subscription?.status ?? null,
-    });
+    const code =
+      ctx.denialReason === "overage_cap_reached"
+        ? BILLING_ERROR_CODE.OVERAGE_CAP_REACHED
+        : BILLING_ERROR_CODE.QUOTA_EXHAUSTED;
+    const message =
+      ctx.denialReason === "overage_cap_reached"
+        ? "Token 与超额额度已用完，请前往账户页提高超额上限或升级套餐。"
+        : "Token 余额不足或尚未订阅，请前往账户页开通";
+    throw new BillingAccessDeniedError(
+      message,
+      {
+        shop,
+        availableTokens: ctx.availableTokens,
+        usedTokens: ctx.usedTokens,
+        subscriptionStatus: ctx.subscription?.status ?? null,
+        denialReason: ctx.denialReason,
+      },
+      code,
+    );
   }
 
   return ctx;

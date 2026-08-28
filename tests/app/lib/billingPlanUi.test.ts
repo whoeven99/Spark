@@ -23,6 +23,9 @@ const plans: PlanRecord[] = [
     currencyCode: "USD",
     trialDays: 7,
     shopifyPlanName: null,
+    overagePricePerThousand: "0.025",
+    defaultOverageCapAmount: "50.00",
+    overageTerms: null,
   },
   {
     planKey: "spark_pro_annual",
@@ -34,6 +37,9 @@ const plans: PlanRecord[] = [
     currencyCode: "USD",
     trialDays: 7,
     shopifyPlanName: null,
+    overagePricePerThousand: "0.025",
+    defaultOverageCapAmount: "100.00",
+    overageTerms: null,
   },
   {
     planKey: "spark_premium_monthly",
@@ -45,6 +51,9 @@ const plans: PlanRecord[] = [
     currencyCode: "USD",
     trialDays: 7,
     shopifyPlanName: null,
+    overagePricePerThousand: "0.025",
+    defaultOverageCapAmount: "200.00",
+    overageTerms: null,
   },
 ];
 

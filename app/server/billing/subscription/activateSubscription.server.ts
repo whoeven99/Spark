@@ -26,6 +26,14 @@ export async function applyActiveSubscription(params: {
   tokensPerPeriod: number;
   trialEndsAt?: Date | null;
   period: SubscriptionPeriodSnapshot;
+  overage?: {
+    usageLineItemId?: string | null;
+    overagePricePerThousand?: string | null;
+    cappedAmount?: string | null;
+    cappedCurrency?: string | null;
+    usageBalanceUsed?: string | null;
+    overageEnabled?: boolean;
+  };
   rawPayload?: Record<string, unknown>;
 }): Promise<void> {
   const {
@@ -36,6 +44,7 @@ export async function applyActiveSubscription(params: {
     tokensPerPeriod,
     trialEndsAt,
     period,
+    overage,
     rawPayload,
   } = params;
 
@@ -97,6 +106,13 @@ export async function applyActiveSubscription(params: {
       trialEndsAt: trialEndsAt ?? null,
       currentPeriodStart: period.currentPeriodStart,
       currentPeriodEnd: period.currentPeriodEnd,
+      usageLineItemId: overage?.usageLineItemId ?? null,
+      overagePricePerThousand: overage?.overagePricePerThousand ?? null,
+      cappedAmount: overage?.cappedAmount ?? null,
+      cappedCurrency: overage?.cappedCurrency ?? null,
+      usageBalanceUsed: overage?.usageBalanceUsed ?? "0",
+      overageEnabled: overage?.overageEnabled ?? Boolean(overage?.usageLineItemId),
+      overagePendingTokens: 0,
       rawPayload: rawPayload as Prisma.InputJsonValue,
     },
     update: {
@@ -109,6 +125,17 @@ export async function applyActiveSubscription(params: {
       currentPeriodStart: period.currentPeriodStart,
       currentPeriodEnd: period.currentPeriodEnd,
       cancelledAt: null,
+      ...(overage
+        ? {
+            usageLineItemId: overage.usageLineItemId ?? null,
+            overagePricePerThousand: overage.overagePricePerThousand ?? null,
+            cappedAmount: overage.cappedAmount ?? null,
+            cappedCurrency: overage.cappedCurrency ?? null,
+            usageBalanceUsed: overage.usageBalanceUsed ?? "0",
+            overageEnabled:
+              overage.overageEnabled ?? Boolean(overage.usageLineItemId),
+          }
+        : {}),
       rawPayload: rawPayload as Prisma.InputJsonValue,
     },
   });

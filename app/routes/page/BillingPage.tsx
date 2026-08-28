@@ -356,6 +356,22 @@ function PaidPlanCard({
           <p className={styles.planPriceMeta}>{`${monthlyEquivalent}${t("billing.perMonth")}`}</p>
         ) : null}
         <PlanFeatureList items={paidFeatures(plan)} />
+        {plan.overagePricePerThousand && plan.defaultOverageCapAmount ? (
+          <p className={styles.planOverageFootnote}>
+            {t("billing.planOverageFootnote", {
+              price: formatPlanPrice(
+                plan.overagePricePerThousand,
+                plan.currencyCode,
+                locale,
+              ),
+              cap: formatPlanPrice(
+                plan.defaultOverageCapAmount,
+                plan.currencyCode,
+                locale,
+              ),
+            })}
+          </p>
+        ) : null}
       </div>
 
       <div className={styles.planCta}>
@@ -420,6 +436,7 @@ export function BillingPage() {
     tokenPacks,
     billingHistory,
     toolUsageHistory,
+    overageCharges,
     showDevCancelSubscription,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -568,7 +585,9 @@ export function BillingPage() {
   const emphasizedTier = currentSubscriptionTier ?? recommendedTier;
   const usageLow = usagePercent >= 85;
 
-  if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
+  if (actionData?.ok && "raisedCap" in actionData && actionData.raisedCap) {
+    shopify.toast.show(t("billing.overageRaiseCapDone"));
+  } else if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
     shopify.toast.show(t("billing.checkoutCompleteNoRedirect"));
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
     shopify.toast.show(t("billing.cancelSubscriptionSuccess"));
@@ -798,6 +817,44 @@ export function BillingPage() {
                 </dl>
               </article>
 
+              {overageCharges.length > 0 ? (
+                <article className={styles.accountCard}>
+                  <div className={styles.accountCardHeader}>
+                    <h3 className={styles.accountCardTitle}>
+                      {t("billing.overageSectionTitle")}
+                    </h3>
+                  </div>
+                  <div className={styles.historyList}>
+                    {overageCharges.map((charge) => (
+                      <div key={charge.id} className={styles.historyItem}>
+                        <div className={styles.historyItemTop}>
+                          <div className={styles.historyMain}>
+                            <span className={styles.historyTone}>
+                              {t(`billing.overageChargeStatus.${charge.status}`, {
+                                defaultValue: charge.status,
+                              })}
+                            </span>
+                            <div className={styles.historyMeta}>
+                              <span>
+                                {charge.tokens.toLocaleString()} {t("billing.tokenUnit")}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={styles.historySide}>
+                            <span className={styles.historyDeltaNegative}>
+                              {formatPlanPrice(charge.amount, charge.currency, locale)}
+                            </span>
+                            <span className={styles.historyTimestamp}>
+                              {formatDateTime(charge.createdAt, locale)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
               <article className={styles.accountCard}>
                 <div className={styles.accountCardHeader}>
                   <h3 className={styles.accountCardTitle}>{t("billing.historyTitle")}</h3>
@@ -937,7 +994,14 @@ export function BillingPage() {
       />
 
       {!billing.hasAccess && billing.billingRequired ? (
-        <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
+        <s-banner tone="warning">
+          {billing.denialReason === "overage_cap_reached"
+            ? t("billing.overageCapReachedWarning")
+            : t("billing.lowBalanceWarning")}
+        </s-banner>
+      ) : null}
+      {billing.overage?.approaching && billing.hasAccess ? (
+        <s-banner tone="warning">{t("billing.overageApproachingWarning")}</s-banner>
       ) : null}
       {subscriptionTrialBannerCopy ? (
         <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
@@ -1001,6 +1065,82 @@ export function BillingPage() {
                 {t("billing.openAccountDetailPage")}
               </button>
             </div>
+            {billing.overage?.enabled ? (
+              <div className={styles.overageBlock}>
+                <div className={styles.overageHeader}>
+                  <span className={styles.overageTitle}>{t("billing.overageTitle")}</span>
+                  <span className={styles.overageMeta}>
+                    {t("billing.overageUsageLabel", {
+                      used: formatPlanPrice(
+                        billing.overage.usageBalanceUsed ?? "0",
+                        billing.overage.cappedCurrency ?? "USD",
+                        locale,
+                      ),
+                      cap: formatPlanPrice(
+                        billing.overage.cappedAmount ?? "0",
+                        billing.overage.cappedCurrency ?? "USD",
+                        locale,
+                      ),
+                    })}
+                  </span>
+                </div>
+                <p className={styles.overageHint}>
+                  {t("billing.overagePriceHint", {
+                    price: formatPlanPrice(
+                      billing.overage.pricePerThousand ?? "0",
+                      billing.overage.cappedCurrency ?? "USD",
+                      locale,
+                    ),
+                  })}
+                </p>
+                <p className={styles.overageHint}>
+                  {t("billing.overageRemainingTokens", {
+                    tokens: billing.overage.estimatedTokensLeft.toLocaleString(),
+                  })}
+                </p>
+                <Form method="post" className={styles.overageRaiseForm}>
+                  <input type="hidden" name="intent" value="raise_overage_cap" />
+                  <label className={styles.overageRaiseLabel} htmlFor="overage-cap-select">
+                    {t("billing.overageRaiseCap")}
+                  </label>
+                  <div className={styles.overageRaiseRow}>
+                    <select
+                      id="overage-cap-select"
+                      name="cappedAmount"
+                      className={styles.overageCapSelect}
+                      defaultValue={String(
+                        Math.max(
+                          50,
+                          Math.ceil(Number.parseFloat(billing.overage.cappedAmount ?? "0") + 50),
+                        ),
+                      )}
+                    >
+                      {[50, 100, 200, 500]
+                        .filter(
+                          (n) =>
+                            n > Number.parseFloat(billing.overage?.cappedAmount ?? "0"),
+                        )
+                        .map((n) => (
+                          <option key={n} value={String(n)}>
+                            {t("billing.overageCapOption", { amount: n })}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="submit"
+                      className={styles.secondaryEntryButton}
+                      disabled={
+                        navigation.state !== "idle" &&
+                        navigation.formData?.get("intent") === "raise_overage_cap"
+                      }
+                    >
+                      {t("billing.overageRaiseCap")}
+                    </button>
+                  </div>
+                  <p className={styles.overageRaiseHint}>{t("billing.overageRaiseCapHint")}</p>
+                </Form>
+              </div>
+            ) : null}
           </div>
         </div>
         <div className={styles.quotaFooter}>

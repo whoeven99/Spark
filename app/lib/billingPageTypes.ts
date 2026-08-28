@@ -9,6 +9,22 @@ export type PlanRecord = {
   currencyCode: string;
   trialDays: number | null;
   shopifyPlanName: string | null;
+  overagePricePerThousand: string | null;
+  defaultOverageCapAmount: string | null;
+  overageTerms: string | null;
+};
+
+export type BillingOverageSnapshot = {
+  enabled: boolean;
+  cappedAmount: string | null;
+  cappedCurrency: string | null;
+  usageBalanceUsed: string | null;
+  pricePerThousand: string | null;
+  pendingTokens: number;
+  capRemainingUsd: number;
+  estimatedTokensLeft: number;
+  approaching: boolean;
+  capReached: boolean;
 };
 
 /** 计费页 loader 可序列化快照（避免 Prisma Date 等类型）。 */
@@ -18,6 +34,8 @@ export type BillingPageSnapshot = {
   hasAccess: boolean;
   availableTokens: number;
   usedTokens: number;
+  denialReason: "none" | "quota_exhausted" | "overage_cap_reached";
+  overage: BillingOverageSnapshot | null;
   account: {
     subscriptionTokens: number;
     purchasedTokens: number;
@@ -31,6 +49,7 @@ export type BillingPageSnapshot = {
     currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
     trialEndsAt: string | null;
+    overageEnabled: boolean;
   } | null;
 };
 
@@ -41,6 +60,15 @@ export type BillingHistoryItem = {
   referenceId: string | null;
   tokensDelta: number | null;
   usedTokens: number | null;
+  createdAt: string;
+};
+
+export type BillingOverageChargeItem = {
+  id: string;
+  tokens: number;
+  amount: string;
+  currency: string;
+  status: string;
   createdAt: string;
 };
 
@@ -73,6 +101,7 @@ export type BillingPageLoaderData = {
   usageHistory: BillingUsagePeriodItem[];
   billingHistory: BillingHistoryItem[];
   toolUsageHistory: BillingToolUsageItem[];
+  overageCharges: BillingOverageChargeItem[];
   /** NODE_ENV=test 且存在可取消订阅时为 true */
   showDevCancelSubscription: boolean;
 };

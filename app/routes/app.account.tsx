@@ -12,6 +12,7 @@ import {
   loadBillingPageData,
   reconcilePendingSubscriptions,
   reconcilePendingTokenPackPurchases,
+  startRaiseOverageCap,
   startSubscriptionCheckout,
   startTokenPackCheckout,
 } from "../server/billing/index.server";
@@ -86,6 +87,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop: session.shop,
       });
       return { ok: true as const, cancelled: true as const };
+    }
+
+    if (intent === "raise_overage_cap") {
+      const cappedAmount = form.get("cappedAmount")?.toString();
+      if (!cappedAmount) {
+        return { ok: false as const, error: "缺少 cappedAmount" };
+      }
+      const { confirmationUrl } = await startRaiseOverageCap({
+        admin,
+        shop: session.shop,
+        cappedAmount,
+      });
+      if (confirmationUrl) {
+        throw shopifyRedirect(confirmationUrl, { target: "_top" });
+      }
+      return { ok: true as const, noopCheckout: true as const, raisedCap: true as const };
     }
 
     if (!planKey) {

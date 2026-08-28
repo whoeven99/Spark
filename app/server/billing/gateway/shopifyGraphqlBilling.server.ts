@@ -81,8 +81,65 @@ const APP_SUBSCRIPTION_CREATE = `#graphql
       appSubscription {
         id
         status
+        lineItems {
+          id
+          plan {
+            pricingDetails {
+              ... on AppUsagePricing {
+                cappedAmount {
+                  amount
+                  currencyCode
+                }
+                balanceUsed {
+                  amount
+                  currencyCode
+                }
+                terms
+              }
+            }
+          }
+        }
       }
       confirmationUrl
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const APP_USAGE_RECORD_CREATE = `#graphql
+  mutation AppUsageRecordCreate(
+    $subscriptionLineItemId: ID!
+    $description: String!
+    $price: MoneyInput!
+    $idempotencyKey: String
+  ) {
+    appUsageRecordCreate(
+      subscriptionLineItemId: $subscriptionLineItemId
+      description: $description
+      price: $price
+      idempotencyKey: $idempotencyKey
+    ) {
+      appUsageRecord {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const APP_SUBSCRIPTION_LINE_ITEM_UPDATE = `#graphql
+  mutation AppSubscriptionLineItemUpdate($id: ID!, $cappedAmount: MoneyInput!) {
+    appSubscriptionLineItemUpdate(id: $id, cappedAmount: $cappedAmount) {
+      confirmationUrl
+      appSubscription {
+        id
+      }
       userErrors {
         field
         message
@@ -128,6 +185,24 @@ const APP_SUBSCRIPTION_NODE_QUERY = `#graphql
         currentPeriodEnd
         trialDays
         test
+        lineItems {
+          id
+          plan {
+            pricingDetails {
+              ... on AppUsagePricing {
+                cappedAmount {
+                  amount
+                  currencyCode
+                }
+                balanceUsed {
+                  amount
+                  currencyCode
+                }
+                terms
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -147,6 +222,14 @@ const APP_PURCHASE_ONE_TIME_NODE_QUERY = `#graphql
   }
 `;
 
+export type ShopifyUsageLineItem = {
+  id: string;
+  cappedAmount: string;
+  cappedCurrency: string;
+  balanceUsed: string;
+  terms: string | null;
+};
+
 export type ShopifyAppSubscriptionNode = {
   id: string;
   name: string;
@@ -155,7 +238,40 @@ export type ShopifyAppSubscriptionNode = {
   currentPeriodEnd: string | null;
   trialDays: number;
   test: boolean;
+  usageLineItem: ShopifyUsageLineItem | null;
 };
+
+type ShopifyLineItemNode = {
+  id: string;
+  plan?: {
+    pricingDetails?: {
+      cappedAmount?: { amount: string; currencyCode: string } | null;
+      balanceUsed?: { amount: string; currencyCode: string } | null;
+      terms?: string | null;
+    } | null;
+  } | null;
+};
+
+function extractUsageLineItem(
+  lineItems: ShopifyLineItemNode[] | null | undefined,
+): ShopifyUsageLineItem | null {
+  if (!lineItems?.length) return null;
+  for (const item of lineItems) {
+    const details = item.plan?.pricingDetails;
+    if (details?.cappedAmount?.amount != null) {
+      return {
+        id: item.id,
+        cappedAmount: String(details.cappedAmount.amount),
+        cappedCurrency: details.cappedAmount.currencyCode ?? "USD",
+        balanceUsed: details.balanceUsed?.amount
+          ? String(details.balanceUsed.amount)
+          : "0",
+        terms: details.terms ?? null,
+      };
+    }
+  }
+  return null;
+}
 
 export async function shopifyCreateSubscription(
   admin: ShopifyAdminGraphqlClient,
@@ -166,12 +282,53 @@ export async function shopifyCreateSubscription(
     billingInterval: string | null;
     returnUrl: string;
     trialDays?: number | null;
+    overage?: {
+      terms: string;
+      cappedAmount: string;
+      currencyCode: string;
+    } | null;
   },
-): Promise<{ confirmationUrl: string | null; subscriptionId: string }> {
+): Promise<{
+  confirmationUrl: string | null;
+  subscriptionId: string;
+  usageLineItem: ShopifyUsageLineItem | null;
+}> {
   const interval = shopifySubscriptionInterval(params.billingInterval);
+  const lineItems: Record<string, unknown>[] = [
+    {
+      plan: {
+        appRecurringPricingDetails: {
+          interval,
+          price: {
+            amount: parseFloat(params.priceAmount),
+            currencyCode: params.currencyCode,
+          },
+        },
+      },
+    },
+  ];
+
+  if (params.overage) {
+    lineItems.push({
+      plan: {
+        appUsagePricingDetails: {
+          terms: params.overage.terms,
+          cappedAmount: {
+            amount: parseFloat(params.overage.cappedAmount),
+            currencyCode: params.overage.currencyCode,
+          },
+        },
+      },
+    });
+  }
+
   const data = await runGraphql<{
     appSubscriptionCreate: {
-      appSubscription: { id: string; status: string } | null;
+      appSubscription: {
+        id: string;
+        status: string;
+        lineItems?: ShopifyLineItemNode[] | null;
+      } | null;
       confirmationUrl: string | null;
       userErrors: { field: string[]; message: string }[];
     };
@@ -180,19 +337,7 @@ export async function shopifyCreateSubscription(
     returnUrl: params.returnUrl,
     test: isBillingTestMode(),
     trialDays: params.trialDays ?? undefined,
-    lineItems: [
-      {
-        plan: {
-          appRecurringPricingDetails: {
-            interval,
-            price: {
-              amount: parseFloat(params.priceAmount),
-              currencyCode: params.currencyCode,
-            },
-          },
-        },
-      },
-    ],
+    lineItems,
   });
 
   const payload = data.appSubscriptionCreate;
@@ -215,7 +360,84 @@ export async function shopifyCreateSubscription(
   return {
     confirmationUrl: payload.confirmationUrl,
     subscriptionId: sub.id,
+    usageLineItem: extractUsageLineItem(sub.lineItems),
   };
+}
+
+export async function shopifyCreateUsageRecord(
+  admin: ShopifyAdminGraphqlClient,
+  params: {
+    subscriptionLineItemId: string;
+    description: string;
+    amount: number;
+    currencyCode: string;
+    idempotencyKey: string;
+  },
+): Promise<{ usageRecordId: string }> {
+  const data = await runGraphql<{
+    appUsageRecordCreate: {
+      appUsageRecord: { id: string } | null;
+      userErrors: { field: string[]; message: string }[];
+    };
+  }>(admin, APP_USAGE_RECORD_CREATE, {
+    subscriptionLineItemId: params.subscriptionLineItemId,
+    description: params.description,
+    price: {
+      amount: params.amount,
+      currencyCode: params.currencyCode,
+    },
+    idempotencyKey: params.idempotencyKey,
+  });
+
+  const payload = data.appUsageRecordCreate;
+  if (payload.userErrors?.length) {
+    throw new BillingError(
+      joinUserErrors(payload.userErrors),
+      BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
+      400,
+    );
+  }
+  if (!payload.appUsageRecord?.id) {
+    throw new BillingError(
+      "appUsageRecordCreate 未返回记录 ID",
+      BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
+      502,
+    );
+  }
+  return { usageRecordId: payload.appUsageRecord.id };
+}
+
+export async function shopifyUpdateUsageCappedAmount(
+  admin: ShopifyAdminGraphqlClient,
+  params: {
+    usageLineItemId: string;
+    cappedAmount: string;
+    currencyCode: string;
+  },
+): Promise<{ confirmationUrl: string | null }> {
+  const data = await runGraphql<{
+    appSubscriptionLineItemUpdate: {
+      confirmationUrl: string | null;
+      appSubscription: { id: string } | null;
+      userErrors: { field: string[]; message: string }[];
+    };
+  }>(admin, APP_SUBSCRIPTION_LINE_ITEM_UPDATE, {
+    id: params.usageLineItemId,
+    cappedAmount: {
+      amount: parseFloat(params.cappedAmount),
+      currencyCode: params.currencyCode,
+    },
+  });
+
+  const payload = data.appSubscriptionLineItemUpdate;
+  if (payload.userErrors?.length) {
+    throw new BillingError(
+      joinUserErrors(payload.userErrors),
+      BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
+      400,
+    );
+  }
+  return { confirmationUrl: payload.confirmationUrl };
 }
 
 export async function shopifyCreateOneTimePurchase(
@@ -317,10 +539,17 @@ export async function shopifyFetchAppSubscription(
   subscriptionId: string,
 ): Promise<ShopifyAppSubscriptionNode | null> {
   const data = await runGraphql<{
-    node: ShopifyAppSubscriptionNode | null;
+    node: (Omit<ShopifyAppSubscriptionNode, "usageLineItem"> & {
+      lineItems?: ShopifyLineItemNode[] | null;
+    }) | null;
   }>(admin, APP_SUBSCRIPTION_NODE_QUERY, { id: subscriptionId });
 
-  return data.node;
+  if (!data.node) return null;
+  const { lineItems, ...rest } = data.node;
+  return {
+    ...rest,
+    usageLineItem: extractUsageLineItem(lineItems),
+  };
 }
 
 export type ShopifyAppPurchaseOneTimeNode = {
