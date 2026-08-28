@@ -3555,7 +3555,8 @@
         "tokenUsageValue": "{{used}} / {{total}}",
         "tokenUsageHint": "已使用 / 总额度",
         "loadingUsage": "正在读取额度…",
-        "unavailableUsage": "暂时无法读取"
+        "unavailableUsage": "暂时无法读取",
+        "viewAccount": "查看账户与订阅"
       },
       "contextPicker": {
         "title": {

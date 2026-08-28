@@ -62,9 +62,11 @@ import {
   accountMenuSectionStyle,
   accountMenuStyle,
   accountMenuWrapStyle,
-  accountUsageCardStyle,
+  accountUsageCardButtonStyle,
   accountUsageFillStyle,
+  accountUsageFooterStyle,
   accountUsageHintStyle,
+  accountUsageLinkStyle,
   accountUsageTrackStyle,
   accountUsageValueStyle,
   brandBadgeStyle,
@@ -1571,15 +1573,20 @@ export function WorkspaceAppShellPage({
           <div style={accountMenuStyle}>
             <div style={accountMenuSectionStyle}>
               <div style={accountMenuLabelStyle}>{t("workspace.shell.account.language")}</div>
-              <div style={accountUsageCardStyle}>
-                <LanguageSelector variant="fill" />
-              </div>
+              <LanguageSelector variant="fill" />
             </div>
             <div style={accountMenuSectionStyle}>
               <div style={accountMenuLabelStyle}>
                 {t("workspace.shell.account.tokenUsage")}
               </div>
-              <div style={accountUsageCardStyle}>
+              <button
+                type="button"
+                style={accountUsageCardButtonStyle}
+                onClick={() => {
+                  setAccountMenuOpen(false);
+                  navigate("/app/account");
+                }}
+              >
                 <div style={accountUsageValueStyle}>
                   {billingUsage
                     ? t("workspace.shell.account.tokenUsageValue", {
@@ -1606,15 +1613,21 @@ export function WorkspaceAppShellPage({
                     }}
                   />
                 </div>
-              </div>
+                <div style={accountUsageFooterStyle}>
+                  <span style={accountUsageLinkStyle}>
+                    {t("workspace.shell.account.viewAccount")} ›
+                  </span>
+                </div>
+              </button>
             </div>
           </div>
         ) : null}
         <div style={sidebarFooterRowStyle}>
           <button
             type="button"
-            style={sidebarFooterButtonStyle}
+            style={sidebarFooterButtonStyle(accountMenuOpen)}
             onClick={() => setAccountMenuOpen((current) => !current)}
+            aria-expanded={accountMenuOpen}
           >
             <div style={{ minWidth: 0 }}>
               <div style={accountFooterTitleStyle}>{displayName}</div>

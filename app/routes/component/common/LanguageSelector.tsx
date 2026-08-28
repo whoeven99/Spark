@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocaleActions } from "../../../i18n/provider";
 import {
@@ -10,6 +11,7 @@ import {
 import {
   languageSelectorBarStyle,
   languageSelectorLabelStyle,
+  pageColorTokens,
   pageSelectCompactStyle,
 } from "../../page/pageUiStyles";
 
@@ -18,6 +20,30 @@ const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
   en: "English",
   "zh-CN": "中文（简体）",
 };
+
+/** 自定义居中箭头，避免原生 select 箭头在 Windows 上偏上/偏下。 */
+const SELECT_CHEVRON_SVG = encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="${pageColorTokens.textSecondary}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+);
+
+function withCenteredChevron(base: CSSProperties, disabled: boolean): CSSProperties {
+  // 去掉 pageSelect 的 background 简写，改用 color + image 才能把箭头垂直居中
+  const rest = { ...base };
+  delete rest.background;
+  return {
+    ...rest,
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    backgroundColor: disabled ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+    backgroundImage: `url("data:image/svg+xml,${SELECT_CHEVRON_SVG}")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 0.65rem center",
+    backgroundSize: "12px 12px",
+    paddingRight: "1.85rem",
+    cursor: disabled ? "default" : "pointer",
+  };
+}
 
 type LanguageSelectorProps = {
   locale?: SupportedLocale;
@@ -34,21 +60,24 @@ export function LanguageSelector({
   const isInline = variant === "inline";
   const isFill = variant === "fill";
 
-  const selectStyle = isFill
-    ? {
-        ...pageSelectCompactStyle(isSyncingLocale),
-        width: "100%",
-        minWidth: 0,
-        maxWidth: "100%",
-        flex: "none",
-      }
-    : isInline
+  const selectStyle = withCenteredChevron(
+    isFill
       ? {
           ...pageSelectCompactStyle(isSyncingLocale),
-          minWidth: "8.5rem",
-          maxWidth: "12rem",
+          width: "100%",
+          minWidth: 0,
+          maxWidth: "100%",
+          flex: "none",
         }
-      : pageSelectCompactStyle(isSyncingLocale);
+      : isInline
+        ? {
+            ...pageSelectCompactStyle(isSyncingLocale),
+            minWidth: "8.5rem",
+            maxWidth: "12rem",
+          }
+        : pageSelectCompactStyle(isSyncingLocale),
+    isSyncingLocale,
+  );
 
   return (
     <div

@@ -305,21 +305,21 @@ export const sidebarFooterRowStyle: CSSProperties = {
   gap: 8,
   width: "100%",
 };
-export const sidebarFooterButtonStyle: CSSProperties = {
+export const sidebarFooterButtonStyle = (active = false): CSSProperties => ({
   display: "flex",
   alignItems: "center",
   flex: "1 1 auto",
   minWidth: 0,
-  border: "1px solid transparent",
+  border: `1px solid ${active ? shopifyUi.border : "transparent"}`,
   borderRadius: 12,
-  background: "transparent",
-  padding: "0 8px",
+  background: active ? shopifyUi.surfaceSubtle : "transparent",
+  padding: "6px 8px",
   textAlign: "left",
   cursor: "pointer",
-};
+});
 /** 侧栏底账户文案：大于顶栏 brand，横线 padding 不动 */
 export const accountFooterTitleStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 14,
   fontWeight: 700,
   lineHeight: 1.25,
   color: shopifyUi.text,
@@ -328,7 +328,7 @@ export const accountFooterTitleStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 export const accountFooterMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 11,
   lineHeight: 1.3,
   letterSpacing: "-0.01em",
   color: shopifyUi.textMuted,
@@ -380,36 +380,62 @@ export const accountMenuStyle: CSSProperties = {
   bottom: "calc(100% + 10px)",
   display: "flex",
   flexDirection: "column",
-  gap: 12,
-  padding: 12,
+  gap: 14,
+  padding: "12px 12px 14px",
   borderRadius: 12,
   border: `1px solid ${shopifyUi.border}`,
   background: shopifyUi.surface,
   boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
   zIndex: 10,
 };
-export const accountMenuSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
-export const accountMenuLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
+export const accountMenuSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6 };
+export const accountMenuLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.02em",
+  color: shopifyUi.textMuted,
+};
 export const accountUsageCardStyle: CSSProperties = {
   padding: "10px 12px",
   border: `1px solid ${shopifyUi.border}`,
-  borderRadius: 8,
+  borderRadius: 10,
   background: shopifyUi.surfaceSubtle,
   boxSizing: "border-box",
   width: "100%",
   minWidth: 0,
   overflow: "hidden",
 };
+export const accountUsageCardButtonStyle: CSSProperties = {
+  ...accountUsageCardStyle,
+  display: "block",
+  textAlign: "left",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  color: "inherit",
+};
 export const accountUsageValueStyle: CSSProperties = {
-  color: "#202223",
-  fontSize: 12,
-  fontWeight: 600,
+  color: shopifyUi.text,
+  fontSize: 13,
+  fontWeight: 650,
   fontVariantNumeric: "tabular-nums",
 };
 export const accountUsageHintStyle: CSSProperties = {
   marginTop: 2,
-  color: "#8c9196",
+  color: shopifyUi.textMuted,
   fontSize: 11,
+};
+export const accountUsageFooterStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  marginTop: 8,
+};
+export const accountUsageLinkStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: shopifyUi.link,
+  whiteSpace: "nowrap",
 };
 export const accountUsageTrackStyle: CSSProperties = {
   height: 5,

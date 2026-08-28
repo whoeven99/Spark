@@ -3555,7 +3555,8 @@
         "tokenUsageValue": "{{used}} / {{total}}",
         "tokenUsageHint": "Used / total",
         "loadingUsage": "Loading usage…",
-        "unavailableUsage": "Unavailable"
+        "unavailableUsage": "Unavailable",
+        "viewAccount": "View account & billing"
       },
       "contextPicker": {
         "title": {
