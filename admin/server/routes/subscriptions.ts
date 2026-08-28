@@ -41,11 +41,11 @@ subscriptionsRouter.get("/", async (req, res) => {
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const listSql = `
-      SELECT s.shop, s.appName, s.planKey, s.status, s.billingInterval, s.currentPeriodEnd,
+      SELECT s.shop, s.planKey, s.status, s.billingInterval, s.currentPeriodEnd,
              a.subscriptionTokens, a.purchasedTokens, a.trialTokens, a.usedTokens,
              a.createdAt as accountCreatedAt
       FROM AppSubscription s
-      LEFT JOIN Account a ON s.shop = a.shop AND s.appName = a.appName
+      LEFT JOIN Account a ON s.shop = a.shop
       ${where}
       ORDER BY
         CASE s.status WHEN 'ACTIVE' THEN 0 WHEN 'PENDING' THEN 1 WHEN 'FROZEN' THEN 2
@@ -79,7 +79,7 @@ subscriptionsRouter.get("/", async (req, res) => {
 
     const subscriptions = listResult.rows.map((r) => ({
       shop: r.shop as string,
-      appName: r.appName as string,
+      appName: "spark",
       planKey: (r.planKey as string | null) ?? null,
       status: r.status as string,
       billingInterval: (r.billingInterval as string | null) ?? null,
@@ -181,12 +181,12 @@ subscriptionsRouter.get("/billing/events", async (req, res) => {
         : db.execute(`SELECT COUNT(*) as total FROM BillingLog ${where}`),
       args.length
         ? db.execute({
-            sql: `SELECT shop, appName, eventType, planKey, tokensDelta, usedTokens, createdAt
+            sql: `SELECT shop, eventType, planKey, tokensDelta, usedTokens, createdAt
                   FROM BillingLog ${where} ORDER BY createdAt DESC LIMIT ? OFFSET ?`,
             args: [...args, pageSize, offset],
           })
         : db.execute(
-            `SELECT shop, appName, eventType, planKey, tokensDelta, usedTokens, createdAt
+            `SELECT shop, eventType, planKey, tokensDelta, usedTokens, createdAt
              FROM BillingLog ${where} ORDER BY createdAt DESC LIMIT ${pageSize} OFFSET ${offset}`,
           ),
     ]);
@@ -195,7 +195,7 @@ subscriptionsRouter.get("/billing/events", async (req, res) => {
       total: Number(countResult.rows[0]?.total ?? 0),
       events: eventsResult.rows.map((r) => ({
         shop: r.shop as string,
-        appName: r.appName as string,
+        appName: "spark",
         eventType: r.eventType as string,
         planKey: (r.planKey as string | null) ?? null,
         tokensDelta: Number(r.tokensDelta ?? 0),
@@ -215,14 +215,14 @@ subscriptionsRouter.get("/:shop/billing", async (req, res) => {
     const shop = req.params.shop;
 
     const result = await db.execute({
-      sql: `SELECT shop, appName, eventType, planKey, tokensDelta, usedTokens, createdAt
+      sql: `SELECT shop, eventType, planKey, tokensDelta, usedTokens, createdAt
             FROM BillingLog WHERE shop = ? ORDER BY createdAt DESC LIMIT 50`,
       args: [shop],
     });
 
     const billingLogs = result.rows.map((r) => ({
       shop: r.shop as string,
-      appName: r.appName as string,
+      appName: "spark",
       eventType: r.eventType as string,
       planKey: (r.planKey as string | null) ?? null,
       tokensDelta: Number(r.tokensDelta ?? 0),

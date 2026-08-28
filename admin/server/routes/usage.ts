@@ -11,7 +11,6 @@ usageRouter.get("/", async (req, res) => {
     const sql = `
       SELECT
         a.shop,
-        a.appName,
         a.subscriptionTokens,
         a.purchasedTokens,
         a.trialTokens,
@@ -22,7 +21,7 @@ usageRouter.get("/", async (req, res) => {
         sub.currentPeriodEnd
       FROM Account a
       LEFT JOIN AppSubscription sub
-        ON a.shop = sub.shop AND a.appName = sub.appName
+        ON a.shop = sub.shop
       ${search ? "WHERE a.shop LIKE ?" : ""}
       ORDER BY a.usedTokens DESC
       LIMIT 200
@@ -40,7 +39,7 @@ usageRouter.get("/", async (req, res) => {
       const total = sub + purchased + trial;
       return {
         shop: r.shop,
-        appName: r.appName,
+        appName: "spark",
         subscriptionTokens: sub,
         purchasedTokens: purchased,
         trialTokens: trial,
