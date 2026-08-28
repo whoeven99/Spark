@@ -3555,7 +3555,8 @@
         "tokenUsageValue": "{{used}} / {{total}}",
         "tokenUsageHint": "Used / total",
         "loadingUsage": "Loading usage…",
-        "unavailableUsage": "Unavailable"
+        "unavailableUsage": "Unavailable",
+        "viewAccount": "View account & billing"
       },
       "contextPicker": {
         "title": {
@@ -3926,11 +3927,16 @@
       }
     },
     "homeV2": {
-      "subtitle": "What should Spark AI help you with today?",
+      "subtitle": "Spark AI can read your store data, improve product content, and generate product images — just describe the goal.",
       "assistantTitle": "Describe your goal and Spark AI will inspect your store and help execute it",
       "composerPlaceholder": "For example: review today’s business and tell me the top 3 things to handle…",
-      "recommendationsTitle": "Recommended actions",
-      "recommendationsHint": "Start quickly with a common task"
+      "recommendationsTitle": "What Spark can do for you",
+      "recommendationsHint": "Pick any item to start",
+      "capabilityDesc": {
+        "operations": "Check sales, conversion, inventory and refund anomalies, then get today’s priority list.",
+        "productOptimization": "Score product pages, rewrite titles and descriptions, translate text inside product images.",
+        "imageGeneration": "Generate product images from your description, ready for product pages and ads."
+      }
     }
   }
 }

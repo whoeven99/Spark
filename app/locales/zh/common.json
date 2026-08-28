@@ -3555,7 +3555,8 @@
         "tokenUsageValue": "{{used}} / {{total}}",
         "tokenUsageHint": "已使用 / 总额度",
         "loadingUsage": "正在读取额度…",
-        "unavailableUsage": "暂时无法读取"
+        "unavailableUsage": "暂时无法读取",
+        "viewAccount": "查看账户与订阅"
       },
       "contextPicker": {
         "title": {
@@ -3926,11 +3927,16 @@
       }
     },
     "homeV2": {
-      "subtitle": "今天想让 Spark AI 帮你做什么？",
+      "subtitle": "Spark AI 能读店铺数据、优化商品内容、生成商品图片——描述目标即可，不用切换页面。",
       "assistantTitle": "描述目标，Spark AI 会查询店铺并协助执行",
       "composerPlaceholder": "例如：查看今天的经营情况，并告诉我最需要处理的 3 件事…",
-      "recommendationsTitle": "推荐操作",
-      "recommendationsHint": "从常用任务快速开始"
+      "recommendationsTitle": "Spark 能帮你做这些事",
+      "recommendationsHint": "点任意一条，直接开始",
+      "capabilityDesc": {
+        "operations": "查销售、转化、库存与退款异常，给出今天优先处理的清单。",
+        "productOptimization": "给商品页打分，重写标题与描述，翻译商品图里的文字。",
+        "imageGeneration": "按你的描述生成商品主图，直接用于商品页与广告。"
+      }
     }
   }
 }

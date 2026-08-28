@@ -133,27 +133,85 @@ const homeV2Styles = {
       placeItems: "center",
       flexShrink: 0,
     }) as const,
-  recommendGroups: {
+  capabilityGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gap: 12,
+  },
+  capabilityCard: {
     display: "flex",
     flexDirection: "column" as const,
-    gap: 8,
+    border: `1px solid ${shopifyUi.border}`,
+    borderRadius: shopifyUi.radiusCard,
+    background: shopifyUi.surface,
+    padding: "13px 14px 9px",
   },
-  recommendGroup: {
+  capabilityHeader: {
     display: "flex",
-    flexDirection: "column" as const,
-    gap: 5,
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 6,
   },
-  recommendGroupLabel: {
-    margin: 0,
-    fontSize: 11,
-    fontWeight: 700,
+  capabilityIcon: {
+    fontSize: 13,
+    lineHeight: 1,
     color: shopifyUi.textMuted,
-    letterSpacing: 0.2,
   },
-  quickPillRow: {
+  capabilityTitle: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 700,
+    color: shopifyUi.text,
+  },
+  capabilityBadge: {
+    marginLeft: "auto",
+    padding: "1px 6px",
+    borderRadius: 999,
+    border: `1px solid ${shopifyUi.border}`,
+    background: shopifyUi.surfaceSubtle,
+    color: shopifyUi.textMuted,
+    fontSize: 11,
+    fontWeight: 600,
+    whiteSpace: "nowrap" as const,
+  },
+  capabilityDesc: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: shopifyUi.textSecondary,
+  },
+  capabilityDivider: {
+    height: 1,
+    background: shopifyUi.border,
+    margin: "11px 0 5px",
+  },
+  capabilityActions: {
     display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 6,
+    flexDirection: "column" as const,
+    margin: "0 -7px",
+  },
+  capabilityAction: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    width: "100%",
+    padding: "7px",
+    borderRadius: shopifyUi.radiusControl,
+    border: "1px solid transparent",
+    background: "transparent",
+    color: shopifyUi.text,
+    fontSize: 13,
+    fontWeight: 500,
+    fontFamily: "inherit",
+    lineHeight: 1.3,
+    textAlign: "left" as const,
+    cursor: "pointer",
+  },
+  capabilityActionChevron: {
+    flexShrink: 0,
+    fontSize: 13,
+    color: shopifyUi.textMuted,
   },
   recommendations: {
     borderTop: `1px solid ${shopifyUi.border}`,
@@ -168,7 +226,7 @@ const homeV2Styles = {
   },
   recommendationsTitle: {
     margin: 0,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 700,
     color: shopifyUi.text,
   },
@@ -176,23 +234,13 @@ const homeV2Styles = {
     fontSize: 12,
     color: shopifyUi.textMuted,
   },
-  quickPill: {
-    border: `1px solid ${shopifyUi.border}`,
-    borderRadius: 999,
-    background: shopifyUi.surface,
-    color: shopifyUi.textSecondary,
-    padding: "5px 10px",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    textAlign: "left" as const,
+  capabilityActionLabel: {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    lineHeight: 1.25,
+    minWidth: 0,
   },
-  quickPillBadge: {
+  capabilityActionBadge: {
     padding: "0 5px",
     borderRadius: 999,
     background: shopifyUi.surfaceSubtle,
@@ -201,6 +249,13 @@ const homeV2Styles = {
     fontWeight: 700,
     whiteSpace: "nowrap" as const,
   },
+};
+
+/** 推荐分组 key → 首页能力卡图标；缺失时降级为通用方块。 */
+const CAPABILITY_ICONS: Record<string, string> = {
+  operations: "▤",
+  productOptimization: "◫",
+  imageGeneration: "▣",
 };
 
 export function HomeV2Panel({
@@ -314,30 +369,54 @@ export function HomeV2Panel({
               {t("workspace.homeV2.recommendationsHint")}
             </span>
           </div>
-          <div style={homeV2Styles.recommendGroups}>
-            {recommendedGroups.map((group) => (
-              <div key={group.key} style={homeV2Styles.recommendGroup}>
-                <div style={homeV2Styles.recommendGroupLabel}>{group.label}</div>
-                <div style={homeV2Styles.quickPillRow}>
-                  {group.items.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className="workspace-home-quick-action"
-                      style={homeV2Styles.quickPill}
-                      onClick={() => onSubmitPrompt(item.prompt)}
-                    >
-                      <span>{item.label}</span>
-                      {item.createsTask ? (
-                        <span style={homeV2Styles.quickPillBadge}>
-                          {t("workspace.shell.chat.recommend.createsTask")}
+          <div style={homeV2Styles.capabilityGrid}>
+            {recommendedGroups.map((group) => {
+              // 整组都会建任务时徽标提到卡头，避免每行重复；混合分组回落到逐行标注
+              const allCreateTasks =
+                group.items.length > 0 && group.items.every((item) => item.createsTask);
+              return (
+                <div key={group.key} style={homeV2Styles.capabilityCard}>
+                  <div style={homeV2Styles.capabilityHeader}>
+                    <span style={homeV2Styles.capabilityIcon} aria-hidden="true">
+                      {CAPABILITY_ICONS[group.key] ?? "▣"}
+                    </span>
+                    <h4 style={homeV2Styles.capabilityTitle}>{group.label}</h4>
+                    {allCreateTasks ? (
+                      <span style={homeV2Styles.capabilityBadge}>
+                        {t("workspace.shell.chat.recommend.createsTask")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p style={homeV2Styles.capabilityDesc}>
+                    {t(`workspace.homeV2.capabilityDesc.${group.key}`)}
+                  </p>
+                  <div style={homeV2Styles.capabilityDivider} />
+                  <div style={homeV2Styles.capabilityActions}>
+                    {group.items.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className="workspace-home-quick-action"
+                        style={homeV2Styles.capabilityAction}
+                        onClick={() => onSubmitPrompt(item.prompt)}
+                      >
+                        <span style={homeV2Styles.capabilityActionLabel}>
+                          <span>{item.label}</span>
+                          {!allCreateTasks && item.createsTask ? (
+                            <span style={homeV2Styles.capabilityActionBadge}>
+                              {t("workspace.shell.chat.recommend.createsTask")}
+                            </span>
+                          ) : null}
                         </span>
-                      ) : null}
-                    </button>
-                  ))}
+                        <span style={homeV2Styles.capabilityActionChevron} aria-hidden="true">
+                          ›
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
