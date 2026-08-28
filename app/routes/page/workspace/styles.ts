@@ -297,6 +297,25 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
 };
+/** 侧栏底账户文案：大于顶栏 brand，横线 padding 不动 */
+export const accountFooterTitleStyle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1.25,
+  color: shopifyUi.text,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+export const accountFooterMetaStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.3,
+  letterSpacing: "-0.01em",
+  color: shopifyUi.textMuted,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
 export const sidebarFooterHelpButtonStyle = (active: boolean): CSSProperties => ({
   position: "relative",
   display: "inline-flex",

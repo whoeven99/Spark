@@ -65,6 +65,8 @@ import {
   brandMetaStyle,
   brandRowStyle,
   brandTitleStyle,
+  accountFooterMetaStyle,
+  accountFooterTitleStyle,
   contentStyle,
   conversationListStyle,
   footerBadgeStyle,
@@ -1401,8 +1403,8 @@ export function WorkspaceAppShellPage({
             onClick={() => setAccountMenuOpen((current) => !current)}
           >
             <div style={{ minWidth: 0 }}>
-              <div style={brandTitleStyle}>{displayName}</div>
-              <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
+              <div style={accountFooterTitleStyle}>{displayName}</div>
+              <div style={accountFooterMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
             </div>
           </button>
           <SupportChatWidget
