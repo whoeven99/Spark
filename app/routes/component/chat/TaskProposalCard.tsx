@@ -182,6 +182,31 @@ const pickProductZoneDisabledStyle = {
   opacity: 0.55,
 } as const;
 
+/** 目标语言等关键参数：与「选择商品」同级的强调区块 */
+const prominentParamZoneStyle = {
+  width: "100%",
+  border: `1.5px dashed rgba(0, 128, 96, 0.35)`,
+  borderRadius: 12,
+  padding: "14px 14px",
+  background: "rgba(233, 247, 239, 0.45)",
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 8,
+} as const;
+
+const prominentSelectStyle = {
+  width: "100%",
+  border: `1px solid rgba(0, 128, 96, 0.28)`,
+  borderRadius: 10,
+  padding: "12px 14px",
+  fontSize: 15,
+  fontWeight: 700,
+  background: "#fff",
+  color: pageColorTokens.textPrimary,
+  cursor: "pointer",
+  appearance: "auto" as const,
+} as const;
+
 const changeProductLinkStyle = {
   border: "none",
   background: "transparent",
@@ -722,9 +747,45 @@ export function TaskProposalCard({
             )}
 
             {/* Params（schema 驱动） */}
-            {resolved.params.map((field) => (
+            {resolved.params.map((field) => {
+              const isProminentSelect =
+                field.type === "select" &&
+                (field.key === "targetLanguage" || field.key === "sourceLanguage");
+              const label = resolveTaskProposalFieldLabel(field, t);
+              if (isProminentSelect) {
+                return (
+                  <div key={field.key} style={prominentParamZoneStyle}>
+                    <div
+                      style={{
+                        ...fieldLabelStyle,
+                        marginBottom: 0,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: pageColorTokens.textPrimary,
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <select
+                      style={prominentSelectStyle}
+                      value={paramValues[field.key] ?? field.value}
+                      onChange={(e) =>
+                        setParamValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      }
+                      aria-label={label}
+                    >
+                      {(field.options ?? []).map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {resolveTaskProposalParamValueLabel(field.key, opt.value, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+              return (
               <div key={field.key}>
-                <div style={fieldLabelStyle}>{resolveTaskProposalFieldLabel(field, t)}</div>
+                <div style={fieldLabelStyle}>{label}</div>
                 {field.type === "select" ? (
                   <select
                     style={inputStyle}
@@ -756,7 +817,8 @@ export function TaskProposalCard({
                   />
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {/* Estimation：未选对象时不占版面 */}
             {effectiveCount > 0 || targetless ? (

@@ -3604,10 +3604,17 @@
       "taskRunCard": {
         "startedBadge": "任务已开始",
         "running": "执行中…",
+        "runningHint": "任务进行中，完成后可在此审核结果",
         "createdCount": "已创建 {{count}} 个任务",
         "createdPartial": "已创建 {{count}} 个任务，{{failed}} 个对象创建失败",
         "progress": "进度：{{parts}}",
-        "moreErrors": "还有 {{count}} 个失败"
+        "moreErrors": "还有 {{count}} 个失败",
+        "metaProduct": "商品",
+        "metaProductCount": "{{count}} 个商品",
+        "metaLanguage": "语言",
+        "metaTokens": "Token",
+        "tokensUsed": "{{count}}",
+        "tokensEstimated": "预计 {{count}}"
       },
       "batchPanel": {
         "resultTitle": "批量创建结果",

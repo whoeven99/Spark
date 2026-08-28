@@ -3604,10 +3604,17 @@
       "taskRunCard": {
         "startedBadge": "Run started",
         "running": "Running…",
+        "runningHint": "Task in progress. Review will be available here when it finishes.",
         "createdCount": "Created {{count}} tasks",
         "createdPartial": "Created {{count}} tasks, {{failed}} targets failed to create",
         "progress": "Progress: {{parts}}",
-        "moreErrors": "{{count}} more failures"
+        "moreErrors": "{{count}} more failures",
+        "metaProduct": "Product",
+        "metaProductCount": "{{count}} products",
+        "metaLanguage": "Language",
+        "metaTokens": "Token",
+        "tokensUsed": "{{count}}",
+        "tokensEstimated": "~{{count}}"
       },
       "batchPanel": {
         "resultTitle": "Batch create result",
