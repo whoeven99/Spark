@@ -1,6 +1,7 @@
 import type { AITaskItem } from "./aiTaskTypes";
 import type { ManagedAiLaunchContext } from "./managedAiLaunchContext";
 import type { ManagedAiOutputParseResult } from "./managedAiOutputRuntime";
+import type { ProductQualityFormPayload } from "./productQualityFormPayload";
 import type { TaskProposalPayload } from "./taskProposalPayload";
 import type { TaskRunPayload } from "./taskRunPayload";
 
@@ -63,6 +64,9 @@ export type ChatMessage =
       /** 「任务已开始」回执卡片（TaskProposal 执行成功后追加的新对话轮）。 */
       taskRun?: TaskRunPayload;
       productImproveCardPayload?: ProductImproveCardPayload;
+      /** 为 true 时在气泡内渲染「商品页质量评分」表单/结果卡。 */
+      productQualityCard?: boolean;
+      productQualityCardPayload?: ProductQualityFormPayload;
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;

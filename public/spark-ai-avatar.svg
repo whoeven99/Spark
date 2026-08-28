@@ -2,18 +2,10 @@
   <defs>
     <linearGradient id="spark-avatar-bg" x1="48" y1="40" x2="470" y2="486" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#11105f"/>
-      <stop offset="0.48" stop-color="#45118a"/>
-      <stop offset="0.78" stop-color="#8d1bb0"/>
       <stop offset="1" stop-color="#ef3d9a"/>
     </linearGradient>
-    <radialGradient id="spark-avatar-glow" cx="0" cy="0" r="1" gradientTransform="translate(350 238) rotate(126) scale(286)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#b23be7" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#b23be7" stop-opacity="0"/>
-    </radialGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#spark-avatar-bg)"/>
-  <rect width="512" height="512" rx="112" fill="url(#spark-avatar-glow)"/>
-  <rect x="75" y="75" width="362" height="362" rx="116" fill="none" stroke="#fff" stroke-width="28"/>
-  <path fill="#fff" d="M253 151c8 59 47 98 106 106-59 8-98 47-106 106-8-59-47-98-106-106 59-8 98-47 106-106Z"/>
-  <circle cx="361" cy="154" r="25" fill="#fff"/>
+  <rect x="78" y="78" width="356" height="356" rx="112" fill="none" stroke="#fff" stroke-width="30"/>
+  <path fill="#fff" d="M256 151c8 59 46 97 105 105-59 8-97 46-105 105-8-59-46-97-105-105 59-8 97-46 105-105Z"/>
 </svg>

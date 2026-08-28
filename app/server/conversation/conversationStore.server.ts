@@ -31,7 +31,7 @@ export async function listConversations(shop: string, limit = 50): Promise<Conve
     id: r.id,
     title: r.title,
     preview: r.preview,
-    updatedAt: r.updatedAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(), // Prisma DateTime，ISO UTC
   }));
 }
 

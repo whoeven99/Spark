@@ -16,6 +16,7 @@ import {
   failTask,
   pendingReviewTask,
 } from "../aiTask/aiTaskLogger.server";
+import { runQueuedShopAiTask } from "../aiTask/runQueuedShopAiTask.server";
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "./constants.server";
 import { initI18n } from "../../i18n";
 import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
@@ -69,83 +70,90 @@ async function runProductImproveTask(params: {
   console.info(`${LOG_PREFIX} start taskId=${taskId} shop=${shop}`);
 
   await appendLog({ taskId, startedAt, message: msg("productImproveStage1.asyncWaiting") });
-  await appendLog({ taskId, startedAt, message: msg("productImproveStage1.asyncContextLoaded") });
 
-  const systemPrompt = buildDescriptionSystemPrompt();
-  const userPrompt = buildDescriptionUserPrompt(context, targetLanguage);
-  const temperature = params.temperature ?? DEFAULT_DESCRIPTION_TEMPERATURE;
-
-  let raw: { rawText: string; modelLabel: string; usageMeta?: unknown };
-  try {
-    await appendLog({
-      taskId,
-      startedAt,
-      message: msg("productImproveStage1.asyncGeneratingTitleDraft"),
-    });
-    raw = await invokeDescriptionModels(systemPrompt, userPrompt, temperature, taskId);
-    await appendLog({
-      taskId,
-      startedAt,
-      message: msg("productImproveStage1.asyncGeneratingDescriptionDraft"),
-    });
-  } catch (e) {
-    logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "invokeDescriptionModels failed", e);
-    await failTask({
-      taskId,
-      errorMsg: msg("productImproveStage1.asyncModelInvocationFailed"),
-      startedAt,
-      finalMessage: msg("productImproveStage1.asyncModelInvocationFinalMessage"),
-    });
-    return;
-  }
-
-  let title: string;
-  let description: string;
-  try {
-    const aiPayload = parseAndValidateProductDescriptionJson(raw.rawText);
-    title = aiPayload.title;
-    description = aiPayload.description;
-  } catch (e) {
-    logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "parseAndValidate failed", e);
-    await failTask({
-      taskId,
-      errorMsg: msg("productImproveStage1.asyncOutputParseFailed"),
-      startedAt,
-      finalMessage: msg("productImproveStage1.asyncOutputParseFinalMessage"),
-    });
-    return;
-  }
-
-  // Calculate usage for actualCredits
-  const usage = parseUsageMetadata(raw.usageMeta);
-  const actualCredits = usage.totalTokens > 0 ? usage.totalTokens : undefined;
-
-  await pendingReviewTask({
+  await runQueuedShopAiTask({
+    shop,
     taskId,
-    result: {
-      title,
-      description,
-    },
-    actualCredits,
     startedAt,
-    finalMessage: msg("productImproveStage1.asyncCompletedPendingReview"),
-  });
+    billingGate: "copy",
+    fn: async () => {
+      await appendLog({ taskId, startedAt, message: msg("productImproveStage1.asyncContextLoaded") });
 
-  // Record billing
-  try {
-    if (usage.totalTokens > 0) {
-      await recordBilledTokenUsage({
-        shop,
-        feature: "product_copy",
-        modelKey: normalizeBillingModelKey(raw.modelLabel),
-        usage,
+      const systemPrompt = buildDescriptionSystemPrompt();
+      const userPrompt = buildDescriptionUserPrompt(context, targetLanguage);
+      const temperature = params.temperature ?? DEFAULT_DESCRIPTION_TEMPERATURE;
+
+      let raw: { rawText: string; modelLabel: string; usageMeta?: unknown };
+      try {
+        await appendLog({
+          taskId,
+          startedAt,
+          message: msg("productImproveStage1.asyncGeneratingTitleDraft"),
+        });
+        raw = await invokeDescriptionModels(systemPrompt, userPrompt, temperature, taskId);
+        await appendLog({
+          taskId,
+          startedAt,
+          message: msg("productImproveStage1.asyncGeneratingDescriptionDraft"),
+        });
+      } catch (e) {
+        logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "invokeDescriptionModels failed", e);
+        await failTask({
+          taskId,
+          errorMsg: msg("productImproveStage1.asyncModelInvocationFailed"),
+          startedAt,
+          finalMessage: msg("productImproveStage1.asyncModelInvocationFinalMessage"),
+        });
+        return;
+      }
+
+      let title: string;
+      let description: string;
+      try {
+        const aiPayload = parseAndValidateProductDescriptionJson(raw.rawText);
+        title = aiPayload.title;
+        description = aiPayload.description;
+      } catch (e) {
+        logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "parseAndValidate failed", e);
+        await failTask({
+          taskId,
+          errorMsg: msg("productImproveStage1.asyncOutputParseFailed"),
+          startedAt,
+          finalMessage: msg("productImproveStage1.asyncOutputParseFinalMessage"),
+        });
+        return;
+      }
+
+      const usage = parseUsageMetadata(raw.usageMeta);
+      const actualCredits = usage.totalTokens > 0 ? usage.totalTokens : undefined;
+
+      await pendingReviewTask({
+        taskId,
+        result: {
+          title,
+          description,
+        },
+        actualCredits,
+        startedAt,
+        finalMessage: msg("productImproveStage1.asyncCompletedPendingReview"),
       });
-    }
-  } catch (e) {
-    console.error(`${LOG_PREFIX} billing failed taskId=${taskId}`, e);
-  }
 
-  console.info(
-    `${LOG_PREFIX} ok taskId=${taskId} elapsedMs=${Date.now() - startedAt}`,
-  );
+      try {
+        if (usage.totalTokens > 0) {
+          await recordBilledTokenUsage({
+            shop,
+            feature: "product_copy",
+            modelKey: normalizeBillingModelKey(raw.modelLabel),
+            usage,
+          });
+        }
+      } catch (e) {
+        console.error(`${LOG_PREFIX} billing failed taskId=${taskId}`, e);
+      }
+
+      console.info(
+        `${LOG_PREFIX} ok taskId=${taskId} elapsedMs=${Date.now() - startedAt}`,
+      );
+    },
+  });
 }

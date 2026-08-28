@@ -299,6 +299,7 @@ export function WorkspaceAppShellPage({
   autoCreateConversation = false,
   homeVariant = "default",
   homeRenderTimeIso,
+  conversationTimeZone = "UTC",
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
@@ -308,6 +309,8 @@ export function WorkspaceAppShellPage({
   /** 并行首页预览：v2 用精简 HomeV2Panel，发送后仍在本页进入 ChatPanel。 */
   homeVariant?: "default" | "v2";
   homeRenderTimeIso?: string;
+  /** 对话更新时间展示时区：默认 UTC，确认中国 IP 时为 Asia/Shanghai。 */
+  conversationTimeZone?: string;
 }) {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
@@ -1080,6 +1083,7 @@ export function WorkspaceAppShellPage({
                 buildAssistantWorkspaceMessage(assistantText, payload, {
                   assistantLaunchContext: managedAiContext,
                   managedAiResult,
+                  time: t("workspace.shell.chat.justNow"),
                 }),
               ],
             }));
@@ -1779,6 +1783,7 @@ export function WorkspaceAppShellPage({
         {activePanel === "chat" && activeConversation ? (
           <ChatPanel
             conversation={activeConversation}
+            conversationTimeZone={conversationTimeZone}
             messages={activeMessages}
             draft={draftByConversation[activeConversation.id] ?? ""}
             context={workspaceContext}

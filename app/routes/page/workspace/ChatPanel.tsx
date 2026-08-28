@@ -99,6 +99,7 @@ const MAX_CONTEXT_TOKENS = 8000;
 
 export function ChatPanel({
   conversation,
+  conversationTimeZone = "UTC",
   messages,
   draft,
   context,
@@ -113,6 +114,7 @@ export function ChatPanel({
   onTaskProposalExecuted,
 }: {
   conversation: Conversation;
+  conversationTimeZone?: string;
   messages: WorkspaceConversationMessage[];
   draft: string;
   context: WorkspaceContextController;
@@ -152,6 +154,8 @@ export function ChatPanel({
     streamingThinkingText,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingQualityCard,
+    streamingQualityPayload,
     streamingTaskProposal,
     skillSteps,
   } = stream;
@@ -710,7 +714,9 @@ export function ChatPanel({
       >
         <div style={isMobile ? mobileConversationMetaRowStyle : conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
-          <span style={mutedMetaStyle}>{formatConversationTimestamp(conversation.updatedAt)}</span>
+          <span style={mutedMetaStyle}>
+            {formatConversationTimestamp(conversation.updatedAt, conversationTimeZone)}
+          </span>
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
@@ -730,6 +736,8 @@ export function ChatPanel({
                   skillSteps={skillSteps}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
+                  streamingQualityCard={streamingQualityCard}
+                  streamingQualityPayload={streamingQualityPayload}
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}

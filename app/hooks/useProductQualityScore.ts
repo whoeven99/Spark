@@ -10,6 +10,7 @@ const LOG_PREFIX = "[useProductQualityScore]";
 export type ProductQualityScoreResult = {
   productId: string;
   title: string;
+  billedTokens?: number;
 } & ProductQualityScoreData;
 
 export type SubmitScoreOutcome =

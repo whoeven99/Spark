@@ -6,6 +6,7 @@ import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -76,6 +77,9 @@ export function ChatMessages({
           item.role === "assistant" &&
           Boolean(item.productImproveCard) &&
           !hasTaskProposalCard;
+        const hasQualityScoreCard =
+          item.role === "assistant" &&
+          (Boolean(item.productQualityCard) || Boolean(item.productQualityCardPayload));
         const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
         const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const hasManagedAiCard = item.role === "assistant" && Boolean(item.managedAiResult);
@@ -86,6 +90,7 @@ export function ChatMessages({
         const hasImageAttachments = imageAttachments.length > 0;
         const hasEmbeddedCard =
           hasGenerateDescriptionCard ||
+          hasQualityScoreCard ||
           hasTaskProposalCard ||
           hasTaskRunCard ||
           hasAiTaskCard ||
@@ -204,6 +209,15 @@ export function ChatMessages({
                       <ProductImproveChatCard
                         embedded
                         initialResult={item.productImproveCardPayload}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasQualityScoreCard && item.role === "assistant" ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ProductQualityScoreChatCard
+                        embedded
+                        initialPayload={item.productQualityCardPayload}
                       />
                     </div>
                   ) : null}

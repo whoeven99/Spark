@@ -16,6 +16,7 @@ import {
   emptyWorkspaceDashboardSnapshot,
 } from "../server/operations/workspaceDashboard.server";
 import { authenticate } from "../shopify.server";
+import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
 const WorkspaceAppShellPage = lazy(() =>
@@ -62,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     dashboardSnapshot,
     accountName,
     homeRenderTimeIso: new Date().toISOString(),
+    conversationTimeZone: resolveConversationDisplayTimeZone(request.headers),
   };
 };
 
@@ -91,6 +93,7 @@ export default function Index() {
           defaultPanel="home"
           homeVariant="v2"
           homeRenderTimeIso={data?.homeRenderTimeIso}
+          conversationTimeZone={data?.conversationTimeZone}
         />
       </Suspense>
     </ClientMount>

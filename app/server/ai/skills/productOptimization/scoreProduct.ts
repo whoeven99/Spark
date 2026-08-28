@@ -320,6 +320,7 @@ export async function runProductQualityScore(params: {
     const parsed = JSON.parse(jsonMatch[0]) as ProductQualityScoreData;
     const merged = mergeWithVisionImageScore(parsed, visionScore.dimension);
 
+    let billedTokens = 0;
     const shopKey = shop?.trim();
     if (shopKey) {
       const billItems: BilledTokenUsageItem[] = [];
@@ -342,15 +343,15 @@ export async function runProductQualityScore(params: {
         });
       }
       if (billItems.length > 0) {
-        const billed = await recordBilledTokenUsages({ shop: shopKey, items: billItems });
+        billedTokens = await recordBilledTokenUsages({ shop: shopKey, items: billItems });
         console.info(
-          `${LOG_PREFIX} requestId=${requestId} billedTokens=${billed} items=${billItems.length}`,
+          `${LOG_PREFIX} requestId=${requestId} billedTokens=${billedTokens} items=${billItems.length}`,
         );
       }
     }
 
     console.info(`${LOG_PREFIX} done requestId=${requestId} score=${String(merged.score)}`);
-    return { ok: true, productId: data.id, title: data.title, ...merged };
+    return { ok: true, productId: data.id, title: data.title, billedTokens, ...merged };
   } catch (e) {
     logDetailedError(LOG_PREFIX, `requestId=${requestId} failed`, e);
     return { ok: false, errorCode: "INTERNAL_ERROR", errorMsg: String(e) };
@@ -362,7 +363,7 @@ export function createScoreProductQualityTool(context: AgentContext): DynamicStr
   return new DynamicStructuredTool({
     name: SCORE_PRODUCT_QUALITY_TOOL_NAME,
     description:
-      "对 Shopify 商品页面质量进行评分，覆盖标题、主图（视觉模型看图）、描述、Variant、标签五个维度，并返回各维度评分与改进建议。当用户想了解商品页质量、要求评分或诊断商品页时使用。",
+      "对已明确的 Shopify 商品立即评分，覆盖标题、主图（视觉模型看图）、描述、Variant、标签五个维度，并返回各维度评分、改进建议与 billedTokens。仅当用户已提供商品 ID 且要求立刻出分时使用。若用户尚未选商品或只需打开配置卡片，应改用 open_product_quality_form。",
     schema: z.object({
       productId: z
         .string()
@@ -390,6 +391,6 @@ export const scoreProductQualityToolDefinition: ToolDefinition = {
   stage: "diagnose",
   description: "评估商品页面质量（标题/图片视觉/描述/Variant/标签）并给出改进建议",
   systemPromptExtension:
-    "当用户想要评估、诊断或了解某个商品的页面质量，或要求对商品页内容进行评分时，调用工具 score_product_quality，传入 productId。工具返回各维度评分（0-10分）与改进建议；图片维度会结合视觉模型看图。请用简洁中文向用户说明评分结果，重点突出低分项与改进优先级。若用户未提供商品 ID，先请其提供。",
+    "当用户想要评估、诊断或了解某个商品的页面质量时，优先调用 open_product_quality_form 打开卡片。仅当用户已明确提供商品 ID 且要求立刻出分时，才调用 score_product_quality。工具返回各维度评分（0-10分）、改进建议与 billedTokens；图片维度会结合视觉模型看图。请用简洁中文向用户说明评分结果，重点突出低分项与改进优先级。",
   createTool: (context) => createScoreProductQualityTool(context),
 };

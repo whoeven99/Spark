@@ -2116,10 +2116,16 @@
     "selectAria": "Select {{title}}"
   },
   "qualityScore": {
+    "sectionTitle": "Product page quality score",
+    "intro": "Select a product to diagnose title, images, description, variants, and tags.",
+    "startAction": "Start scoring",
+    "rescoreAction": "Score again",
+    "changeProduct": "Change product",
+    "creditsUsed": "{{count}} credits used",
     "scoreAction": "Score quality",
     "scoring": "Scoring...",
     "scoreSuccess": "Scoring complete",
-    "emptyResult": "Select a product and click Score quality.",
+    "emptyResult": "Select a product, then start scoring.",
     "overallScore": "Overall quality score",
     "levelGood": "Good — product page quality is strong",
     "levelFair": "Fair — room for improvement",
@@ -3728,6 +3734,7 @@
         "imageGeneration": "Preparing an image generation task",
         "pictureTranslation": "Preparing an image translation task",
         "productCopy": "Preparing a product copy task",
+        "productQuality": "Preparing a product page quality score",
         "fallback": "Using tool: {{name}}"
       }
     },

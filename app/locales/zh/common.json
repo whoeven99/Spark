@@ -2116,10 +2116,16 @@
     "selectAria": "选择 {{title}}"
   },
   "qualityScore": {
+    "sectionTitle": "商品页质量评分",
+    "intro": "选择商品后开始诊断标题、主图、描述、规格与标签。",
+    "startAction": "开始评分",
+    "rescoreAction": "重新评分",
+    "changeProduct": "更换商品",
+    "creditsUsed": "本次消耗 {{count}} 积分",
     "scoreAction": "质量评分",
     "scoring": "正在评分...",
     "scoreSuccess": "评分完成",
-    "emptyResult": "请在左侧选择商品并点击质量评分。",
+    "emptyResult": "选择商品后点击开始评分。",
     "overallScore": "综合质量评分",
     "levelGood": "优秀 — 商品页面质量良好",
     "levelFair": "良好 — 还有提升空间",
@@ -3728,6 +3734,7 @@
         "imageGeneration": "准备图片生成任务",
         "pictureTranslation": "准备图片翻译任务",
         "productCopy": "准备商品文案任务",
+        "productQuality": "准备商品页质量评分",
         "fallback": "调用工具：{{name}}"
       }
     },

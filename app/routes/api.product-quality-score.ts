@@ -96,13 +96,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }),
     );
 
-    const { productId: pid, title, score, dimensions, overallSuggestions } = result;
+    const { productId: pid, title, score, dimensions, overallSuggestions, billedTokens } = result;
     return jsonResponse(
       {
         success: true,
         errorCode: 0,
         errorMsg: "",
-        response: { productId: pid, title, score, dimensions, overallSuggestions },
+        response: { productId: pid, title, score, dimensions, overallSuggestions, billedTokens },
       },
       200,
     );

@@ -43,21 +43,46 @@ export class Semaphore {
   }
 }
 
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 let imageGenLimiter: Semaphore | null = null;
 let picTranslateLimiter: Semaphore | null = null;
+const shopAiTaskLimiters = new Map<string, Semaphore>();
 
 export function getImageGenLimiter(): Semaphore {
   if (!imageGenLimiter) {
-    const slots = parseInt(process.env.IMAGE_GEN_CONCURRENCY ?? "3", 10);
-    imageGenLimiter = new Semaphore(slots);
+    imageGenLimiter = new Semaphore(readPositiveIntEnv("IMAGE_GEN_CONCURRENCY", 3));
   }
   return imageGenLimiter;
 }
 
 export function getPicTranslateLimiter(): Semaphore {
   if (!picTranslateLimiter) {
-    const slots = parseInt(process.env.PIC_TRANSLATE_CONCURRENCY ?? "3", 10);
-    picTranslateLimiter = new Semaphore(slots);
+    picTranslateLimiter = new Semaphore(readPositiveIntEnv("PIC_TRANSLATE_CONCURRENCY", 3));
   }
   return picTranslateLimiter;
+}
+
+/**
+ * 按店铺限制 AI 异步任务并发；超额请求在店内排队。
+ * 默认每店 2 路，可用 SHOP_AI_TASK_CONCURRENCY 覆盖。
+ */
+export function getShopAiTaskLimiter(shop: string): Semaphore {
+  const key = shop.trim().toLowerCase() || "unknown-shop";
+  let limiter = shopAiTaskLimiters.get(key);
+  if (!limiter) {
+    limiter = new Semaphore(readPositiveIntEnv("SHOP_AI_TASK_CONCURRENCY", 2));
+    shopAiTaskLimiters.set(key, limiter);
+  }
+  return limiter;
+}
+
+/** 测试用：清空店铺限流器缓存 */
+export function resetShopAiTaskLimitersForTests(): void {
+  shopAiTaskLimiters.clear();
 }

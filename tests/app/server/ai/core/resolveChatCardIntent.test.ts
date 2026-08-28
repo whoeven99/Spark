@@ -31,6 +31,21 @@ describe("buildChatCardPayloadFromIntent", () => {
     expect(payloads.imageGenerationCard).toBeDefined();
   });
 
+  it("injects product quality card for 质量评分 intent", () => {
+    const payloads = buildChatCardPayloadFromIntent(
+      {
+        cardType: "product_quality_form",
+        shouldShowCard: true,
+        assistantClaimsCardOpened: true,
+        productQualityProductId: "gid://shopify/Product/9",
+      },
+      "帮我做商品页质量评分",
+    );
+    expect(payloads.productQualityCard).toEqual({
+      productId: "gid://shopify/Product/9",
+    });
+  });
+
   it("returns empty when cardType is none", () => {
     const payloads = buildChatCardPayloadFromIntent(
       {
@@ -60,6 +75,14 @@ describe("hasAnyChatCardInUiPayloads", () => {
     expect(
       hasAnyChatCardInUiPayloads({
         productImproveCardPayload: { productId: "1", title: "t", description: "d" },
+      }),
+    ).toBe(true);
+  });
+
+  it("detects product quality card payload", () => {
+    expect(
+      hasAnyChatCardInUiPayloads({
+        productQualityCard: { productId: "1" },
       }),
     ).toBe(true);
   });

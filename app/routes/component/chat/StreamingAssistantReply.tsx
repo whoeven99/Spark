@@ -6,6 +6,8 @@ import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ProductQualityScoreChatCard } from "./ProductQualityScoreChatCard";
+import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -24,6 +26,8 @@ type StreamingAssistantReplyProps = {
   skillSteps: SkillStepProgress[];
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
+  streamingQualityCard?: boolean;
+  streamingQualityPayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
@@ -84,6 +88,8 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   open_image_generation_form: "imageGeneration",
   open_picture_translate_form: "pictureTranslation",
   open_product_improve_form: "productCopy",
+  open_product_quality_form: "productQuality",
+  score_product_quality: "productQuality",
 };
 
 function StreamingCursor() {
@@ -263,6 +269,8 @@ export function StreamingAssistantReply({
   skillSteps,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingQualityCard = false,
+  streamingQualityPayload,
   streamingTaskProposal,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
@@ -278,13 +286,18 @@ export function StreamingAssistantReply({
     streamingGenerateCard &&
     !streamingTaskProposal &&
     workspaceBatchProducts.length < 2;
+  const qualityPayload = coerceProductQualityFormPayload(streamingQualityPayload);
+  const showQualityCard = streamingQualityCard;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingGenerateCard: showProductImproveCard,
+    streamingQualityCard: showQualityCard,
     streamingTaskProposal,
   });
-  const hasEmbeddedCard = Boolean(showProductImproveCard || streamingTaskProposal);
+  const hasEmbeddedCard = Boolean(
+    showProductImproveCard || showQualityCard || streamingTaskProposal,
+  );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -326,6 +339,12 @@ export function StreamingAssistantReply({
               {showProductImproveCard ? (
                 <div style={cardSlotStyle}>
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
+                </div>
+              ) : null}
+
+              {showQualityCard ? (
+                <div style={cardSlotStyle}>
+                  <ProductQualityScoreChatCard embedded initialPayload={qualityPayload} />
                 </div>
               ) : null}
 
