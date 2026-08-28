@@ -34,7 +34,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 
 发布姿态与 Partner 应用（邀请制内测，不是 App Store 公开）：
 
-- 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）只发 Spark Test / Admin，不发独立生产应用。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
+- 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.prod.toml`（→ Render `Spark-Prod` / `spark-prod.onrender.com`）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）可手动勾选发布 Spark Test / Spark Prod / Admin / Admin Test。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
 - **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
 - Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
 - 卸载目前只删 Session、记日志、发通知，不清理该店 `ShopOrder*` / 广告凭证等镜像。GDPR 强制 webhook 已订阅到 `/webhooks/compliance`（`customers/data_request`、`customers/redact`、`shop/redact`），当前仅 HMAC 校验后 200 确认并记日志，不执行真实擦除。改 toml 后须对该配置 `shopify app deploy`。公开上架仍缺隐私政策页与真实擦除。
@@ -328,7 +328,7 @@ Package-backed：
 
 CI：
 
-- `.github/scripts/render-deploy-and-wait.sh` — `spark-deploy.yml` Admin Test 部署轮询；飞书部署通知在 workflow 内直接 `curl`，不依赖本地 digest 脚本
+- `.github/scripts/render-deploy-and-wait.sh` — `spark-deploy.yml`（Admin Test / Spark Prod 等）部署轮询；飞书部署通知在 workflow 内直接 `curl`，不依赖本地 digest 脚本
 
 不要恢复已删除的 Render 日志 digest 脚本（`render-daily-log-digest` 等）或缺失的 `turso-drop-schema-*` npm 入口。临时探针放仓库外，或用完即删；`scripts/tmp*` 未跟踪文件勿擅自纳入改动。
 
