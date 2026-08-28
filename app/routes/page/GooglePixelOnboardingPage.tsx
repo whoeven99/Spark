@@ -12,11 +12,12 @@ import {
 } from "./pageUiStyles";
 import {
   buildGoogleRemarketingThemeEditorUrl,
-  buildShopifyCustomerEventsUrl,
   GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS,
   normalizeGoogleConversionId,
 } from "../../lib/googleRemarketing";
-import { generateGooglePurchaseCustomPixel } from "../../lib/googleCustomPixel";
+// 审核期临时关闭 5.1.1：不生成/粘贴 purchase Custom Pixel。过审后恢复。
+// import { buildShopifyCustomerEventsUrl } from "../../lib/googleRemarketing";
+// import { generateGooglePurchaseCustomPixel } from "../../lib/googleCustomPixel";
 import type { GooglePixelLoaderData } from "../app.ads.google-pixel._index";
 
 const STOREFRONT_EVENTS = ["page_view", "add_to_cart", "begin_checkout"] as const;
@@ -103,8 +104,9 @@ export function GooglePixelOnboardingPage() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [savedScript, setSavedScript] = useState("");
-  const [copiedHint, setCopiedHint] = useState("");
+  // 审核期临时关闭 5.1.1：不生成/粘贴 purchase Custom Pixel。过审后恢复。
+  // const [savedScript, setSavedScript] = useState("");
+  // const [copiedHint, setCopiedHint] = useState("");
 
   const themeEditorUrl = useMemo(
     () =>
@@ -114,10 +116,11 @@ export function GooglePixelOnboardingPage() {
       }),
     [loaderData.shopDomain, loaderData.shopifyApiKey],
   );
-  const customerEventsUrl = useMemo(
-    () => buildShopifyCustomerEventsUrl(loaderData.shopDomain),
-    [loaderData.shopDomain],
-  );
+  // 审核期临时关闭 5.1.1：不打开 Customer Events 粘贴页。过审后恢复。
+  // const customerEventsUrl = useMemo(
+  //   () => buildShopifyCustomerEventsUrl(loaderData.shopDomain),
+  //   [loaderData.shopDomain],
+  // );
 
   const normalizedTag = normalizeGoogleConversionId(conversionId);
 
@@ -189,14 +192,15 @@ export function GooglePixelOnboardingPage() {
     setStep(2);
   }
 
-  async function copyScript(script: string) {
-    try {
-      await navigator.clipboard.writeText(script);
-      setCopiedHint(t("adsCatalog.googleRemarketing.pixelCopied"));
-    } catch {
-      setCopiedHint(t("adsCatalog.googleRemarketing.pixelCopyFailed"));
-    }
-  }
+  // 审核期临时关闭 5.1.1：不复制 purchase Custom Pixel。过审后恢复。
+  // async function copyScript(script: string) {
+  //   try {
+  //     await navigator.clipboard.writeText(script);
+  //     setCopiedHint(t("adsCatalog.googleRemarketing.pixelCopied"));
+  //   } catch {
+  //     setCopiedHint(t("adsCatalog.googleRemarketing.pixelCopyFailed"));
+  //   }
+  // }
 
   async function finish() {
     if (!normalizedTag) {
@@ -227,19 +231,19 @@ export function GooglePixelOnboardingPage() {
       if (!resp.ok || !data.ok) {
         throw new Error(data.error || t("googlePixelOnboarding.saveFailed"));
       }
-      // 勾选 purchase 时先生成并复制 Custom Pixel，再进入 Pixel 数据页。
-      if (events.includes("purchase")) {
-        const script = generateGooglePurchaseCustomPixel({
-          tagId: normalizedTag,
-          enabledFieldGroups: [...GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS],
-          conversionLabel: conversionLabel.trim(),
-          enhancedConversions: enhanced,
-          shopName: loaderData.shopDomain,
-          ingestEndpoint: loaderData.ingestEndpoint,
-        });
-        setSavedScript(script);
-        await copyScript(script);
-      }
+      // 审核期临时关闭 5.1.1：勾选 purchase 时不再生成/复制 Custom Pixel。过审后恢复。
+      // if (events.includes("purchase")) {
+      //   const script = generateGooglePurchaseCustomPixel({
+      //     tagId: normalizedTag,
+      //     enabledFieldGroups: [...GOOGLE_REMARKETING_DEFAULT_FIELD_GROUPS],
+      //     conversionLabel: conversionLabel.trim(),
+      //     enhancedConversions: enhanced,
+      //     shopName: loaderData.shopDomain,
+      //     ingestEndpoint: loaderData.ingestEndpoint,
+      //   });
+      //   setSavedScript(script);
+      //   await copyScript(script);
+      // }
       navigate(`/app/ads/google-pixel/data${locationSearch}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("googlePixelOnboarding.saveFailed"));
@@ -289,11 +293,6 @@ export function GooglePixelOnboardingPage() {
           onToggleEvent={toggleEvent}
           enhanced={enhanced}
           setEnhanced={setEnhanced}
-          savedScript={savedScript}
-          customerEventsUrl={customerEventsUrl}
-          copiedHint={copiedHint}
-          onCopy={() => void copyScript(savedScript)}
-          onDoneToCatalog={() => navigate(`/app/ads/google-pixel/data${locationSearch}`)}
         />
       )}
 
@@ -549,11 +548,12 @@ function StepCreatePixel(props: {
   onToggleEvent: (value: string) => void;
   enhanced: boolean;
   setEnhanced: (value: boolean) => void;
-  savedScript: string;
-  customerEventsUrl: string;
-  copiedHint: string;
-  onCopy: () => void;
-  onDoneToCatalog: () => void;
+  // 审核期临时关闭 5.1.1：不展示粘贴 Custom Pixel。过审后恢复下列 props。
+  // savedScript: string;
+  // customerEventsUrl: string;
+  // copiedHint: string;
+  // onCopy: () => void;
+  // onDoneToCatalog: () => void;
 }) {
   const { t } = useTranslation();
   const eventLabel = (value: string) =>
@@ -604,7 +604,8 @@ function StepCreatePixel(props: {
         </button>
       </div>
 
-      {props.events.includes("purchase") ? (
+      {/* 审核期临时关闭 5.1.1：不展示 purchase Custom Pixel 粘贴块。过审后恢复。 */}
+      {/* {props.events.includes("purchase") ? (
         <div
           style={{
             border: "1px solid #f1c96b",
@@ -645,7 +646,7 @@ function StepCreatePixel(props: {
             <div style={pageHintTextStyle}>{t("googlePixelOnboarding.purchaseNeedsSave")}</div>
           )}
         </div>
-      ) : null}
+      ) : null} */}
     </div>
   );
 }

@@ -57,8 +57,10 @@ uri = "/webhooks/fulfillments/update"
   prefix = "a"
 
 [access_scopes]
+# 审核期与 test 同一姿态：不包含 write_pixels,read_customer_events,read_pixels。过审后若恢复 Pixel 再加回。
 # 第一版 + PCD：经营/订单查询与镜像、履约、商品文案评分查找与写回、语言、文章
 # 未包含：translations（归 TSF）、pixels、themes、reports、inventory/locations
+# 有意比 test 更窄：不申请 read_themes / read_reports / 翻译 / 库存，减小 5.1.1 与审核面。
 scopes = "read_orders,read_fulfillments,read_products,write_products,read_locales,read_content"
 
 [auth]

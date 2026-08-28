@@ -209,22 +209,36 @@ app/server/ai/playbooks/{name}/
 - [ ] （P1）卸载删除该店业务镜像
 - [ ] 不要把告警中心、writeBack、竞品、WMS、App Store 素材当成本周期门禁
 
-### App Store AI self-review（2026-08-28，AiAssistant-Test / `shopify.app.test.toml`）
+### App Store AI self-review
 
-对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements)。本轮代码侧 **无 ❌**；Public + Unlisted 提交前把下面 ⚠️ 用人测或配置核对。Listing / 隐私政策 / GDPR 真擦除 **不在** 本检查覆盖范围（提交时仍会审）。
+对照 [官方可本地检查条款](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements) 与 [Pass app review](https://shopify.dev/docs/apps/launch/app-store-review/pass-app-review)。**以当前要提交的 Partner 应用 toml 为准**（test 审 test、prod 审 prod）。Listing / 隐私政策 / GDPR 真擦除 / Partner 自动化检查 **不在** AI self-review 覆盖范围，提交时仍会审。
+
+#### 最近一次：Spark AI / `shopify.app.prod.toml`（2026-08-28）
+
+**Summary（代码可检查子集）**：✅ 约 30 · ❌ 0 · ⚠️ 4 · ⏭️ 8 组跳过（Payment / Purchase option / Checkout UI / Sales channel / Post-purchase / Donation 等；**5.1 Online store** 因扩展仅 `shopify.extension.toml.off`、未随版本提交 Theme / Web Pixel）
 
 代码侧 ⚠️（提交前用人测 / 配置核对）：
 
-- [ ] **1.2.2 / 1.2.3** 换套餐：`appSubscriptionCreate` 未设 `replacementBehavior`；账户页其它档仍可点订阅。确认 Render 上 `BILLING_GATEWAY` 不是 `noop`，正式店关闭 `BILLING_TEST`。测：升/降配、拒费、重装后再订。
-- [ ] **5.1.5** Theme/Pixel 采集：Today / Google Pixel activity 有汇总；TikTok 主要链到 Events Manager。准备审核说明：商户能在何处看到店面事件。Google purchase 走 Customer Events 粘贴脚本（非改 theme.liquid），审核员可能追问。
-- [ ] **5.1.1** 只读 Theme Files（`settings_data.json`）用于检测 App Embed；若审核员按 Theme API 追问，说明是检测而非改主题。
-- [ ] **3.1.1** 证书：`application_url` 已是 HTTPS Render，提交前在浏览器确认无证书告警。
+- [ ] **1.2.2 / 1.2.3** 计费：`replacementBehavior` 已在 `shopifyGraphqlBilling.server.ts` 接入；Render prod 确认 `BILLING_GATEWAY`≠`noop`、正式店勿开 `BILLING_TEST`。测：升/降配、拒费、卸载重装后再订。
+- [ ] **3.2.1** `read_orders` 无 `read_all_orders`：订单镜像/Today 仅保证近 60 天 GraphQL 可读；若 listing 宣称更长历史，需申请 scope 或在文案中限定。
+- [ ] **3.1.1** TLS：`https://spark-prod.onrender.com` 提交前浏览器确认证书无告警。
+- [ ] **2.3.x / 安装** OAuth 与重装：对 prod 配置 `shopify app deploy` 后在开发店走一遍安装 → 授权 → 进 `/app` → 卸载 → 重装。
 
-已知、本检查未覆盖、仍挡公开上架（M3；Unlisted 也可能被追问）：
+审核期已做、过审后恢复 Pixel / Theme（与 test 同姿态，prod scope 更窄）：
 
-- GDPR `customers/redact` / `shop/redact` 只 ack 不擦除（见上文缺口 4）
-- 无隐私政策页
-- 卸载不清理 `ShopOrder*` / 广告凭证
+- [x] 版本内不提交 Web Pixel / Theme App Extension（`*.toml.off`，Pixel 块在 `_disabled_pixel_blocks/`）；`ensureWebPixel`、ConnectPanels Pixel 入口、5.1.5 相关 scope 已关。
+- [ ] 过审后：按需加回 pixel scope、还原 toml/blocks/入口，再 `shopify app deploy -c shopify.app.prod.toml`。
+
+已知、AI self-review **未覆盖**、仍挡 Public / Unlisted（M3；审核员可能追问）：
+
+- [ ] GDPR `customers/redact` / `shop/redact` 只 ack 不擦除（`complianceWebhooks.server.ts`）
+- [ ] 无隐私政策 URL（Listing + 应用内链接）
+- [ ] 卸载只删 Session，不清理 `ShopOrder*` / 广告凭证
+- [ ] Partner Dashboard：分发方式、PCD、Listing 素材、测试说明与凭据
+
+#### 历史：AiAssistant-Test / `shopify.app.test.toml`（2026-08-28）
+
+结论与 prod 同：**代码侧无 ❌**；⚠️ 主要为 Billing 人测、TLS、60 天订单 scope；5.1 组因扩展 `.off` 跳过。test 已 deploy `aiassistant-test-119`。
 
 本周期明确**不做，页面也不展示**：
 
