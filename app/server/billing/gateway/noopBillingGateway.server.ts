@@ -89,6 +89,8 @@ export const noopBillingGateway: BillingGateway = {
       data: {
         cappedAmount,
         cappedCurrency: currencyCode,
+        overageSpendLimit: cappedAmount,
+        overageSpendingEnabled: true,
       },
     });
     return { confirmationUrl: null };

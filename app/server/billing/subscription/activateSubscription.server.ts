@@ -120,6 +120,7 @@ export async function applyActiveSubscription(params: {
       cappedCurrency: overage?.cappedCurrency ?? null,
       usageBalanceUsed: overage?.usageBalanceUsed ?? "0",
       overageEnabled: overage?.overageEnabled ?? Boolean(overage?.usageLineItemId),
+      overageSpendLimit: overage?.cappedAmount ?? null,
       overagePendingTokens: 0,
       pendingShopifySubscriptionId: null,
       pendingPlanKey: null,
@@ -150,6 +151,8 @@ export async function applyActiveSubscription(params: {
             usageBalanceUsed: overage.usageBalanceUsed ?? "0",
             overageEnabled:
               overage.overageEnabled ?? Boolean(overage.usageLineItemId),
+            overageSpendLimit: overage.cappedAmount ?? null,
+            overageSpendingEnabled: true,
           }
         : {}),
       rawPayload: rawPayload as Prisma.InputJsonValue,

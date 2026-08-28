@@ -35,6 +35,7 @@ import {
   isCapApproaching,
   remainingCapAmount,
   overageAmountToTokens,
+  effectiveOverageCapAmount,
 } from "./overage/overageMath.server";
 
 function toIso(value: Date | null | undefined): string | null {
@@ -92,10 +93,19 @@ function toOverageChargeItem(row: OverageUsageCharge): BillingOverageChargeItem 
 export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot {
   const sub = ctx.subscription;
   const overageEnabled = Boolean(sub?.overageEnabled && sub?.usageLineItemId);
-  const capRemainingUsd = remainingCapAmount({
-    cappedAmount: sub?.cappedAmount,
-    usageBalanceUsed: sub?.usageBalanceUsed,
-  });
+  const spendingEnabled = sub?.overageSpendingEnabled !== false;
+  const effectiveCap = sub
+    ? effectiveOverageCapAmount({
+        cappedAmount: sub.cappedAmount,
+        overageSpendLimit: sub.overageSpendLimit,
+      })
+    : "0";
+  const capRemainingUsd = spendingEnabled
+    ? remainingCapAmount({
+        cappedAmount: effectiveCap,
+        usageBalanceUsed: sub?.usageBalanceUsed,
+      })
+    : 0;
 
   return {
     shop: ctx.shop,
@@ -108,21 +118,30 @@ export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot 
       overageEnabled && sub
         ? {
             enabled: true,
-            cappedAmount: sub.cappedAmount,
+            spendingEnabled,
+            cappedAmount: effectiveCap,
+            shopifyCappedAmount: sub.cappedAmount,
             cappedCurrency: sub.cappedCurrency,
             usageBalanceUsed: sub.usageBalanceUsed,
             pricePerThousand: sub.overagePricePerThousand,
             pendingTokens: sub.overagePendingTokens,
             capRemainingUsd,
-            estimatedTokensLeft: overageAmountToTokens(
-              capRemainingUsd,
-              sub.overagePricePerThousand,
-            ),
-            approaching: isCapApproaching({
-              cappedAmount: sub.cappedAmount,
-              usageBalanceUsed: sub.usageBalanceUsed,
-            }),
-            capReached: !ctx.hasAccess && ctx.denialReason === "overage_cap_reached",
+            estimatedTokensLeft: spendingEnabled
+              ? overageAmountToTokens(
+                  capRemainingUsd,
+                  sub.overagePricePerThousand,
+                )
+              : 0,
+            approaching:
+              spendingEnabled &&
+              isCapApproaching({
+                cappedAmount: effectiveCap,
+                usageBalanceUsed: sub.usageBalanceUsed,
+              }),
+            capReached:
+              spendingEnabled &&
+              !ctx.hasAccess &&
+              ctx.denialReason === "overage_cap_reached",
           }
         : null,
     account: {

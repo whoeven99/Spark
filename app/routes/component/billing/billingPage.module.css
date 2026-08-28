@@ -261,6 +261,19 @@
   color: #202223;
 }
 
+.overageModeSelect {
+  appearance: auto;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid #d2d5d8;
+  background: #f6f6f7;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #202223;
+  max-width: 11rem;
+}
+
 .overageCurrencyPrefix {
   font-size: 0.8125rem;
   font-weight: 600;

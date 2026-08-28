@@ -16,7 +16,12 @@ export type PlanRecord = {
 
 export type BillingOverageSnapshot = {
   enabled: boolean;
+  /** false = Disabled：按需一分钱不扣 */
+  spendingEnabled: boolean;
+  /** 本地生效上限（可低于 Shopify 授权） */
   cappedAmount: string | null;
+  /** Shopify 已授权封顶；提高超过此值才需 Shopify 确认 */
+  shopifyCappedAmount: string | null;
   cappedCurrency: string | null;
   usageBalanceUsed: string | null;
   pricePerThousand: string | null;

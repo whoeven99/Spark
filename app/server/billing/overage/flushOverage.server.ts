@@ -6,6 +6,7 @@ import {
   formatMoney,
   overageAmountToTokens,
   remainingCapAmount,
+  effectiveOverageCapAmount,
   shouldFlushOverage,
   tokensToOverageAmount,
 } from "./overageMath.server";
@@ -18,13 +19,22 @@ export function isSubscriptionInTrial(sub: AppSubscription | null | undefined): 
   return sub.trialEndsAt.getTime() > Date.now();
 }
 
+function effectiveCapOf(sub: AppSubscription | null | undefined): string | null {
+  if (!sub) return null;
+  return effectiveOverageCapAmount({
+    cappedAmount: sub.cappedAmount,
+    overageSpendLimit: sub.overageSpendLimit,
+  });
+}
+
 export function isOverageAvailable(sub: AppSubscription | null | undefined): boolean {
   if (!sub) return false;
   if (!sub.overageEnabled || !sub.usageLineItemId) return false;
+  if (sub.overageSpendingEnabled === false) return false;
   if (isSubscriptionInTrial(sub)) return false;
   if (sub.status !== "ACTIVE") return false;
   return remainingCapAmount({
-    cappedAmount: sub.cappedAmount,
+    cappedAmount: effectiveCapOf(sub),
     usageBalanceUsed: sub.usageBalanceUsed,
   }) > 0;
 }
@@ -47,7 +57,7 @@ export function computeAccess(params: {
   const hasIncludedQuota = params.account.usedTokens < included;
   const overageAvailable = isOverageAvailable(params.subscription);
   const capRemainingUsd = remainingCapAmount({
-    cappedAmount: params.subscription?.cappedAmount,
+    cappedAmount: effectiveCapOf(params.subscription),
     usageBalanceUsed: params.subscription?.usageBalanceUsed,
   });
   const estimatedOverageTokensLeft = overageAmountToTokens(
@@ -79,6 +89,7 @@ export function computeAccess(params: {
 
   const hadOverage =
     Boolean(params.subscription?.overageEnabled && params.subscription?.usageLineItemId) &&
+    params.subscription?.overageSpendingEnabled !== false &&
     !isSubscriptionInTrial(params.subscription);
 
   return {
@@ -109,6 +120,7 @@ export async function trackAndFlushOverage(params: {
   ]);
   if (!account || !subscription) return;
   if (!subscription.overageEnabled || !subscription.usageLineItemId) return;
+  if (subscription.overageSpendingEnabled === false) return;
   if (isSubscriptionInTrial(subscription)) return;
 
   const included = getAvailableTokens(account);
@@ -159,7 +171,7 @@ export async function flushOveragePending(params: {
   }
 
   const capLeft = remainingCapAmount({
-    cappedAmount: sub.cappedAmount,
+    cappedAmount: effectiveCapOf(sub),
     usageBalanceUsed: sub.usageBalanceUsed,
   });
   if (capLeft <= 0) {

@@ -504,6 +504,9 @@ export function BillingPage() {
   );
   const [showAccountDetailPage, setShowAccountDetailPage] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [overageMode, setOverageMode] = useState<"fixed" | "disabled">(
+    () => (billing.overage?.spendingEnabled === false ? "disabled" : "fixed"),
+  );
 
   const paidPlansForInterval = useMemo(
     () => sortPlansByTier(listSubscriptionPlansForInterval(subscriptionPlans, interval)),
@@ -582,17 +585,23 @@ export function BillingPage() {
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
   const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
-  const overageUsagePercent = billing.overage?.enabled
-    ? Math.min(
-        100,
-        Math.max(
-          0,
-          (Number.parseFloat(billing.overage.usageBalanceUsed ?? "0") /
-            Math.max(Number.parseFloat(billing.overage.cappedAmount ?? "0"), 0.01)) *
-            100,
-        ),
-      )
-    : 0;
+  const overageUsagePercent =
+    billing.overage?.enabled && billing.overage.spendingEnabled
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            (Number.parseFloat(billing.overage.usageBalanceUsed ?? "0") /
+              Math.max(Number.parseFloat(billing.overage.cappedAmount ?? "0"), 0.01)) *
+              100,
+          ),
+        )
+      : 0;
+
+  useEffect(() => {
+    setOverageMode(billing.overage?.spendingEnabled === false ? "disabled" : "fixed");
+  }, [billing.overage?.spendingEnabled]);
+
   const currentSubscriptionTier =
     sub?.status === "ACTIVE" || sub?.status === "PENDING"
       ? planTierFromPlanKey(sub.planKey)
@@ -603,6 +612,8 @@ export function BillingPage() {
 
   if (actionData?.ok && "raisedCap" in actionData && actionData.raisedCap) {
     shopify.toast.show(t("billing.overageRaiseCapDone"));
+  } else if (actionData?.ok && "overageDisabled" in actionData && actionData.overageDisabled) {
+    shopify.toast.show(t("billing.overageDisabledDone"));
   } else if (actionData?.ok && "dismissedPending" in actionData && actionData.dismissedPending) {
     shopify.toast.show(t("billing.pendingPlanChangeDismissed"));
   } else if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
@@ -756,10 +767,6 @@ export function BillingPage() {
     {
       question: t("billing.faqBillingQuestion"),
       answer: t("billing.faqBillingAnswer"),
-    },
-    {
-      question: t("billing.faqPackQuestion"),
-      answer: t("billing.faqPackAnswer"),
     },
     {
       question: t("billing.faqWhenQuestion"),
@@ -1142,18 +1149,31 @@ export function BillingPage() {
                     {t("billing.overageStatusLabel")}
                   </span>
                   <span className={styles.overageUsageAmounts}>
-                    {t("billing.overageUsageCompact", {
-                      used: formatPlanPrice(
-                        billing.overage.usageBalanceUsed ?? "0",
-                        billing.overage.cappedCurrency ?? "USD",
-                        locale,
-                      ),
-                      cap: formatPlanPrice(
-                        billing.overage.cappedAmount ?? "0",
-                        billing.overage.cappedCurrency ?? "USD",
-                        locale,
-                      ),
-                    })}
+                    {billing.overage.spendingEnabled
+                      ? t("billing.overageUsageCompact", {
+                          used: formatPlanPrice(
+                            billing.overage.usageBalanceUsed ?? "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                          cap: formatPlanPrice(
+                            billing.overage.cappedAmount ?? "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                        })
+                      : t("billing.overageUsageCompact", {
+                          used: formatPlanPrice(
+                            "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                          cap: formatPlanPrice(
+                            "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                        })}
                   </span>
                 </div>
                 <div
@@ -1164,12 +1184,16 @@ export function BillingPage() {
                   aria-valuenow={Math.round(overageUsagePercent)}
                   aria-label={t("billing.overageUsageLabel", {
                     used: formatPlanPrice(
-                      billing.overage.usageBalanceUsed ?? "0",
+                      billing.overage.spendingEnabled
+                        ? (billing.overage.usageBalanceUsed ?? "0")
+                        : "0",
                       billing.overage.cappedCurrency ?? "USD",
                       locale,
                     ),
                     cap: formatPlanPrice(
-                      billing.overage.cappedAmount ?? "0",
+                      billing.overage.spendingEnabled
+                        ? (billing.overage.cappedAmount ?? "0")
+                        : "0",
                       billing.overage.cappedCurrency ?? "USD",
                       locale,
                     ),
@@ -1185,41 +1209,51 @@ export function BillingPage() {
                   <input type="hidden" name="intent" value="raise_overage_cap" />
                   <div className={styles.overageSettingRow}>
                     <div className={styles.overageSettingCopy}>
-                      <label className={styles.overageSettingLabel} htmlFor="overage-cap-input">
+                      <label className={styles.overageSettingLabel} htmlFor="overage-mode">
                         {t("billing.overageLimitLabel")}
                       </label>
                       <p className={styles.overageHint}>{t("billing.overageLimitDesc")}</p>
                     </div>
                     <div className={styles.overageRaiseRow}>
-                      <span className={styles.overageModeChip}>
-                        {t("billing.overageLimitModeFixed")}
-                      </span>
-                      <span className={styles.overageCurrencyPrefix} aria-hidden>
-                        {t("billing.overageCurrencyPrefix")}
-                      </span>
-                      <input
-                        id="overage-cap-input"
-                        name="cappedAmount"
-                        type="number"
-                        inputMode="decimal"
-                        min={String(
-                          Math.ceil(
-                            Number.parseFloat(billing.overage.cappedAmount ?? "0") + 0.01,
-                          ),
-                        )}
-                        step="1"
-                        required
-                        className={styles.overageCapInput}
-                        defaultValue={String(
-                          Math.max(
-                            1,
-                            Math.ceil(
-                              Number.parseFloat(billing.overage.cappedAmount ?? "0"),
-                            ),
-                          ),
-                        )}
+                      <select
+                        id="overage-mode"
+                        name="overageMode"
+                        className={styles.overageModeSelect}
+                        value={overageMode}
+                        onChange={(event) =>
+                          setOverageMode(event.target.value === "disabled" ? "disabled" : "fixed")
+                        }
                         aria-label={t("billing.overageLimitLabel")}
-                      />
+                      >
+                        <option value="fixed">{t("billing.overageLimitModeFixed")}</option>
+                        <option value="disabled">{t("billing.overageLimitModeDisabled")}</option>
+                      </select>
+                      {overageMode === "fixed" ? (
+                        <>
+                          <span className={styles.overageCurrencyPrefix} aria-hidden>
+                            {t("billing.overageCurrencyPrefix")}
+                          </span>
+                          <input
+                            id="overage-cap-input"
+                            name="cappedAmount"
+                            type="number"
+                            inputMode="decimal"
+                            min="1"
+                            step="1"
+                            required
+                            className={styles.overageCapInput}
+                            defaultValue={String(
+                              Math.max(
+                                1,
+                                Math.ceil(
+                                  Number.parseFloat(billing.overage.cappedAmount ?? "0"),
+                                ),
+                              ),
+                            )}
+                            aria-label={t("billing.overageLimitLabel")}
+                          />
+                        </>
+                      ) : null}
                       <button
                         type="submit"
                         className={styles.overageSaveButton}

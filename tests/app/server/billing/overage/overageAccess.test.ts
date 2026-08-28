@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  effectiveOverageCapAmount,
   isCapApproaching,
   overageAmountToTokens,
   remainingCapAmount,
@@ -23,6 +24,21 @@ describe("overageMath", () => {
     expect(
       remainingCapAmount({ cappedAmount: "50", usageBalanceUsed: "12.5" }),
     ).toBeCloseTo(37.5, 5);
+  });
+
+  it("effective cap uses local spend limit when lower than Shopify", () => {
+    expect(
+      effectiveOverageCapAmount({
+        cappedAmount: "100.00",
+        overageSpendLimit: "40.00",
+      }),
+    ).toBe("40.00");
+    expect(
+      effectiveOverageCapAmount({
+        cappedAmount: "100.00",
+        overageSpendLimit: null,
+      }),
+    ).toBe("100.00");
   });
 
   it("flushes at token or dollar threshold", () => {
@@ -63,6 +79,8 @@ function sub(partial: Partial<AppSubscription>): AppSubscription {
     usageBalanceUsed: "0",
     overagePendingTokens: 0,
     overageEnabled: true,
+    overageSpendingEnabled: true,
+    overageSpendLimit: "50.00",
     trialEndsAt: null,
     currentPeriodStart: new Date(),
     currentPeriodEnd: new Date(),
@@ -122,6 +140,30 @@ describe("computeAccess", () => {
     });
     expect(access.hasAccess).toBe(false);
     expect(access.denialReason).toBe("quota_exhausted");
+  });
+
+  it("denies with quota_exhausted when overage spending is disabled", () => {
+    const access = computeAccess({
+      account: { ...account, usedTokens: 1000 },
+      subscription: sub({ overageSpendingEnabled: false }),
+    });
+    expect(access.hasAccess).toBe(false);
+    expect(access.overageAvailable).toBe(false);
+    expect(access.denialReason).toBe("quota_exhausted");
+  });
+
+  it("respects local spend limit below Shopify cappedAmount", () => {
+    const access = computeAccess({
+      account: { ...account, usedTokens: 1000 },
+      subscription: sub({
+        cappedAmount: "50.00",
+        overageSpendLimit: "10.00",
+        usageBalanceUsed: "10.00",
+      }),
+    });
+    expect(access.hasAccess).toBe(false);
+    expect(access.overageAvailable).toBe(false);
+    expect(access.denialReason).toBe("overage_cap_reached");
   });
 
   it("does not allow overage during trial", () => {

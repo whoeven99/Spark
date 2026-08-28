@@ -262,10 +262,14 @@ model AppSubscription {
   cappedCurrency         String?
   /// 本周期已记入 Shopify 的 usage 金额
   usageBalanceUsed       String?
+  /// 本地生效的按需上限（可低于 Shopify cappedAmount；提高超过 Shopify 授权才需确认）
+  overageSpendLimit      String?
   /// 本地尚未冲销到 Shopify 的超额 token
   overagePendingTokens   Int      @default(0)
   /// 无 usage 行的老订阅为 false
   overageEnabled         Boolean  @default(false)
+  /// 商户是否允许按需扣费；false=Disabled（一分钱不扣；不改 Shopify cappedAmount）
+  overageSpendingEnabled Boolean  @default(true)
   trialEndsAt            DateTime?
   currentPeriodStart     DateTime?
   currentPeriodEnd       DateTime?

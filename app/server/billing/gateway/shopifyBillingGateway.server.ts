@@ -102,6 +102,8 @@ export const shopifyBillingGateway: BillingGateway = {
         usageLineItem?.cappedCurrency ?? overage?.currencyCode ?? null,
       usageBalanceUsed: usageLineItem?.balanceUsed ?? "0",
       overageEnabled: Boolean(usageLineItem?.id || overage),
+      overageSpendLimit:
+        usageLineItem?.cappedAmount ?? overage?.cappedAmount ?? null,
       overagePendingTokens: 0,
     };
 

@@ -41,6 +41,24 @@ export function remainingCapAmount(params: {
   return Math.max(0, cap - used);
 }
 
+/**
+ * 门禁/展示用的生效上限：本地 overageSpendLimit（若有）与 Shopify cappedAmount 取较小值。
+ * spendLimit 为空时等同 Shopify 授权封顶。
+ */
+export function effectiveOverageCapAmount(params: {
+  cappedAmount: string | null | undefined;
+  overageSpendLimit?: string | null | undefined;
+}): string {
+  const shopifyCap = parseMoney(params.cappedAmount);
+  const hasLocal =
+    params.overageSpendLimit != null && String(params.overageSpendLimit).trim() !== "";
+  const localCap = hasLocal ? parseMoney(params.overageSpendLimit) : shopifyCap;
+  if (shopifyCap <= 0) {
+    return formatMoney(Math.max(0, localCap), 2);
+  }
+  return formatMoney(Math.min(Math.max(0, localCap), shopifyCap), 2);
+}
+
 export function shouldFlushOverage(params: {
   pendingTokens: number;
   pricePerThousand: string | null | undefined;

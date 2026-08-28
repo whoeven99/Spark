@@ -12,6 +12,7 @@ import {
   loadBillingPageData,
   reconcilePendingSubscriptions,
   reconcilePendingTokenPackPurchases,
+  setOverageSpendingDisabled,
   startRaiseOverageCap,
   startSubscriptionCheckout,
   startTokenPackCheckout,
@@ -104,6 +105,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "raise_overage_cap") {
+      const overageMode = form.get("overageMode")?.toString() ?? "fixed";
+      if (overageMode === "disabled") {
+        await setOverageSpendingDisabled({ shop: session.shop });
+        return { ok: true as const, overageDisabled: true as const };
+      }
+
       const cappedAmount = form.get("cappedAmount")?.toString();
       if (!cappedAmount) {
         return { ok: false as const, error: "缺少 cappedAmount" };

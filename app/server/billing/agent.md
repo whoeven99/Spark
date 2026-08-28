@@ -52,6 +52,8 @@
 - 封顶用尽：`requireBillingAccess` 抛 `OVERAGE_CAP_REACHED`；`/chat-stream` SSE 提示去账户页提高上限。
 - 提高上限：`appSubscriptionLineItemUpdate` → 商户批准 `confirmationUrl`；noop 本地直接生效。
 - 试用期（`trialEndsAt` 未过）**不**走超额。
+- **Disabled（`overageSpendingEnabled=false`）**：本地关闭按需扣费（一分钱不扣），不降低 Shopify `cappedAmount`；含内用尽后按额度耗尽拦截。UI：固定金额 / 禁用。
+- **本地上限 `overageSpendLimit`**：门禁与展示用 `min(spendLimit, Shopify cappedAmount)`。下调或不超过 Shopify 授权 → 只改本地；超过授权 → `appSubscriptionLineItemUpdate` 需 Shopify 确认。
 - 老订阅无 `usageLineItemId`：`overageEnabled=false`，用尽即拦，须重新批准含 usage 的订阅。
 - 计费页下线购包售卖；已入账 `purchasedTokens` 仍可扣。
 
