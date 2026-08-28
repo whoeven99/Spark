@@ -11,7 +11,7 @@ export async function requireBillingAccess(shop: string): Promise<BillingContext
         : BILLING_ERROR_CODE.QUOTA_EXHAUSTED;
     const message =
       ctx.denialReason === "overage_cap_reached"
-        ? "Token 与超额额度已用完，请前往账户页提高超额上限或升级套餐。"
+        ? "含内 Token 与按需上限都已用完，请前往账户页提高按需上限或升级套餐。"
         : "Token 余额不足或尚未订阅，请前往账户页开通";
     throw new BillingAccessDeniedError(
       message,

@@ -1067,75 +1067,91 @@ export function BillingPage() {
             </div>
             {billing.overage?.enabled ? (
               <div className={styles.overageBlock}>
-                <div className={styles.overageHeader}>
-                  <span className={styles.overageTitle}>{t("billing.overageTitle")}</span>
-                  <span className={styles.overageMeta}>
-                    {t("billing.overageUsageLabel", {
-                      used: formatPlanPrice(
-                        billing.overage.usageBalanceUsed ?? "0",
-                        billing.overage.cappedCurrency ?? "USD",
-                        locale,
-                      ),
-                      cap: formatPlanPrice(
-                        billing.overage.cappedAmount ?? "0",
-                        billing.overage.cappedCurrency ?? "USD",
-                        locale,
-                      ),
-                    })}
+                <h3 className={styles.overageSectionHeading}>{t("billing.overageTitle")}</h3>
+                <div className={styles.overageSettingRow}>
+                  <div className={styles.overageSettingCopy}>
+                    <span className={styles.overageSettingLabel}>
+                      {t("billing.overageStatusLabel")}
+                    </span>
+                    <p className={styles.overageHint}>{t("billing.overageStatusDesc")}</p>
+                    <p className={styles.overageHint}>
+                      {t("billing.overageUsageLabel", {
+                        used: formatPlanPrice(
+                          billing.overage.usageBalanceUsed ?? "0",
+                          billing.overage.cappedCurrency ?? "USD",
+                          locale,
+                        ),
+                        cap: formatPlanPrice(
+                          billing.overage.cappedAmount ?? "0",
+                          billing.overage.cappedCurrency ?? "USD",
+                          locale,
+                        ),
+                      })}
+                    </p>
+                    <p className={styles.overageHint}>
+                      {t("billing.overagePriceHint", {
+                        price: formatPlanPrice(
+                          billing.overage.pricePerThousand ?? "0",
+                          billing.overage.cappedCurrency ?? "USD",
+                          locale,
+                        ),
+                      })}
+                    </p>
+                  </div>
+                  <span className={styles.overageStatusBadge}>
+                    {t("billing.overageStatusEnabled")}
                   </span>
                 </div>
-                <p className={styles.overageHint}>
-                  {t("billing.overagePriceHint", {
-                    price: formatPlanPrice(
-                      billing.overage.pricePerThousand ?? "0",
-                      billing.overage.cappedCurrency ?? "USD",
-                      locale,
-                    ),
-                  })}
-                </p>
-                <p className={styles.overageHint}>
-                  {t("billing.overageRemainingTokens", {
-                    tokens: billing.overage.estimatedTokensLeft.toLocaleString(),
-                  })}
-                </p>
                 <Form method="post" className={styles.overageRaiseForm}>
                   <input type="hidden" name="intent" value="raise_overage_cap" />
-                  <label className={styles.overageRaiseLabel} htmlFor="overage-cap-select">
-                    {t("billing.overageRaiseCap")}
-                  </label>
-                  <div className={styles.overageRaiseRow}>
-                    <select
-                      id="overage-cap-select"
-                      name="cappedAmount"
-                      className={styles.overageCapSelect}
-                      defaultValue={String(
-                        Math.max(
-                          50,
-                          Math.ceil(Number.parseFloat(billing.overage.cappedAmount ?? "0") + 50),
-                        ),
-                      )}
-                    >
-                      {[50, 100, 200, 500]
-                        .filter(
-                          (n) =>
-                            n > Number.parseFloat(billing.overage?.cappedAmount ?? "0"),
-                        )
-                        .map((n) => (
-                          <option key={n} value={String(n)}>
-                            {t("billing.overageCapOption", { amount: n })}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      type="submit"
-                      className={styles.secondaryEntryButton}
-                      disabled={
-                        navigation.state !== "idle" &&
-                        navigation.formData?.get("intent") === "raise_overage_cap"
-                      }
-                    >
-                      {t("billing.overageRaiseCap")}
-                    </button>
+                  <div className={styles.overageSettingRow}>
+                    <div className={styles.overageSettingCopy}>
+                      <label className={styles.overageSettingLabel} htmlFor="overage-cap-input">
+                        {t("billing.overageLimitLabel")}
+                      </label>
+                      <p className={styles.overageHint}>{t("billing.overageLimitDesc")}</p>
+                    </div>
+                    <div className={styles.overageRaiseRow}>
+                      <span className={styles.overageModeChip}>
+                        {t("billing.overageLimitModeFixed")}
+                      </span>
+                      <span className={styles.overageCurrencyPrefix} aria-hidden>
+                        {t("billing.overageCurrencyPrefix")}
+                      </span>
+                      <input
+                        id="overage-cap-input"
+                        name="cappedAmount"
+                        type="number"
+                        inputMode="decimal"
+                        min={String(
+                          Math.ceil(
+                            Number.parseFloat(billing.overage.cappedAmount ?? "0") + 0.01,
+                          ),
+                        )}
+                        step="1"
+                        required
+                        className={styles.overageCapInput}
+                        defaultValue={String(
+                          Math.max(
+                            50,
+                            Math.ceil(
+                              Number.parseFloat(billing.overage.cappedAmount ?? "0") + 50,
+                            ),
+                          ),
+                        )}
+                        aria-label={t("billing.overageLimitLabel")}
+                      />
+                      <button
+                        type="submit"
+                        className={styles.overageSaveButton}
+                        disabled={
+                          navigation.state !== "idle" &&
+                          navigation.formData?.get("intent") === "raise_overage_cap"
+                        }
+                      >
+                        {t("billing.overageRaiseCap")}
+                      </button>
+                    </div>
                   </div>
                   <p className={styles.overageRaiseHint}>{t("billing.overageRaiseCapHint")}</p>
                 </Form>
