@@ -7,6 +7,7 @@ import {
 } from "../server/aiTask/aiTaskStore.server";
 import { cleanupTaskBlobs } from "../server/aiTask/aiTaskBlobCleanup.server";
 import type { AITaskDeleteResponse } from "../lib/aiTaskTypes";
+import { AI_TASK_NO_STORE_HEADERS } from "../lib/aiTaskStatusSync";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs): Promise<Response> => {
   const { session } = await authenticate.admin(request);
@@ -22,7 +23,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs): Promise<R
   }
 
   const logs = await listTaskLogs(taskId);
-  return Response.json({ task, logs });
+  return Response.json({ task, logs }, { headers: AI_TASK_NO_STORE_HEADERS });
 };
 
 export const action = async ({

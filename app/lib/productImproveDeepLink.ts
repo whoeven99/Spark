@@ -21,6 +21,15 @@ export function isProductImproveTaskOpen(
   );
 }
 
+/** 对话页「待审核 / 去审核结果」：商品文案且带 taskId 的 review 在本页弹层，不跳转任务页。 */
+export function shouldOpenInPageReview(
+  opts?: OpenWorkspaceTasksOptions,
+): opts is OpenWorkspaceTasksOptions & { taskId: string } {
+  return Boolean(
+    opts?.intent === "review" && opts.taskId && isProductImproveTaskOpen(opts),
+  );
+}
+
 export function readProductImproveTaskIdFromSearch(search: string): string | null {
   const params = new URLSearchParams(
     search.startsWith("?") ? search.slice(1) : search,

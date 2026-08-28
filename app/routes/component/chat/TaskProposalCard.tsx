@@ -15,6 +15,7 @@ import type {
 } from "../../../lib/taskProposalPayload";
 import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
+  IMAGE_GENERATION_SKILL_ID,
   mergeTaskProposalTargets,
 } from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
@@ -142,6 +143,14 @@ const inputStyle = {
   fontSize: 13,
   background: "#fff",
   color: pageColorTokens.textPrimary,
+} as const;
+
+const textareaStyle = {
+  ...inputStyle,
+  minHeight: 96,
+  resize: "vertical" as const,
+  fontFamily: "inherit",
+  lineHeight: 1.45,
 } as const;
 
 const estimateBoxStyle = {
@@ -436,8 +445,10 @@ export function TaskProposalCard({
   /** 按条件圈定模式：无具体 items 时按 query 执行（服务端重新求值） */
   const targetsQuery = targets.length === 0 ? (resolved.targets.query ?? null) : null;
   const queryCount = targetsQuery?.matchCount ?? null;
-  /** 无目标对象技能（如文生图）：确认参数后直接执行一次 */
+  /** 无目标对象技能（如无参考商品的文生图）：确认参数后直接执行一次 */
   const targetless = resolved.targets.kind === "none";
+  /** 文生图参考商品可选：未勾选时仍可执行 */
+  const targetsOptional = resolved.skillId === IMAGE_GENERATION_SKILL_ID;
   const showProductPicker =
     !targetless &&
     resolved.targets.kind === "products" &&
@@ -548,20 +559,26 @@ export function TaskProposalCard({
     return out;
   }, [isPictureTranslate, selectedTargets, selectedImageUrlsByProduct]);
 
+  const descriptionReady =
+    resolved.skillId !== IMAGE_GENERATION_SKILL_ID ||
+    (paramValues.description ?? "").trim().length >= 4;
   const canSubmit =
+    descriptionReady &&
     (targetless ||
+      targetsOptional ||
       (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
       targetsQuery !== null) &&
     !submitting &&
     !done;
-  /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标技能恒为 1 */
-  const effectiveCount = targetless
-    ? 1
-    : targetsQuery
-      ? (queryCount ?? 0)
-      : isPictureTranslate
-        ? executeTargets.length
-        : selectedTargets.length;
+  /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标 / 可选目标技能恒为 1 */
+  const effectiveCount =
+    targetless || targetsOptional
+      ? 1
+      : targetsQuery
+        ? (queryCount ?? 0)
+        : isPictureTranslate
+          ? executeTargets.length
+          : selectedTargets.length;
   const selectedImageCount = executeTargets.length;
   const displayTitle = resolveTaskProposalTitle(resolved, t);
   const displaySummary = resolveTaskProposalSummary(resolved, t);
@@ -695,7 +712,7 @@ export function TaskProposalCard({
 
   const headerSubtitle = done
     ? t("workspace.taskProposal.card.submitted")
-    : targetless
+    : targetless || targetsOptional
       ? t("workspace.taskProposal.card.confirmParamsToRun")
       : targets.length > 0
         ? isPictureTranslate && selectedImageCount > 0
@@ -742,7 +759,7 @@ export function TaskProposalCard({
         <DoneState
           created={doneCreated}
           total={
-            targetsQuery || targetless
+            targetsQuery || targetless || targetsOptional
               ? doneCreated + doneErrors.length
               : selectedTargets.length
           }
@@ -889,7 +906,7 @@ export function TaskProposalCard({
                   })}
                 </div>
               </div>
-            ) : targetless ? null : targetsQuery ? (
+            ) : targetless || targetsOptional ? null : targetsQuery ? (
               <div style={setupBlockStyle(true) as React.CSSProperties}>
                 <div style={setupLabelStyle}>
                   <span style={setupStepStyle} aria-hidden="true">
@@ -999,6 +1016,22 @@ export function TaskProposalCard({
                       </option>
                     ))}
                   </select>
+                ) : field.type === "textarea" ? (
+                  <textarea
+                    style={textareaStyle}
+                    rows={4}
+                    value={paramValues[field.key] ?? field.value}
+                    placeholder={
+                      field.key === "description"
+                        ? t("workspace.taskProposal.skills.imageGeneration.placeholder", {
+                            defaultValue: field.placeholder ?? "",
+                          })
+                        : field.placeholder
+                    }
+                    onChange={(e) =>
+                      setParamValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                  />
                 ) : (
                   <input
                     style={inputStyle}

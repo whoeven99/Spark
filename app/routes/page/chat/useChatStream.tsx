@@ -6,7 +6,10 @@ import { trackFeature } from "../../../lib/featureTrack";
 import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
 import { coerceProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
 import { coerceHealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
-import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import {
+  coerceImageGenerationFormPayload,
+  type ImageGenerationFormPayload,
+} from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import {
   coerceBatchTasksFormPayload,
@@ -88,6 +91,8 @@ export type ChatStreamFinishPayload = {
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: unknown;
+  imageGenerationCard?: boolean;
+  imageGenerationCardPayload?: ImageGenerationFormPayload;
   productQualityCard?: boolean;
   productQualityCardPayload?: unknown;
   healthDiagnosisCard?: boolean;
@@ -104,6 +109,8 @@ type Snapshot = {
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
+  imageGenerationCard: boolean;
+  imageGenerationCardPayload?: ImageGenerationFormPayload;
   productQualityCard: boolean;
   productQualityCardPayload?: unknown;
   healthDiagnosisCard: boolean;
@@ -119,6 +126,8 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     attachments: snapshot.attachments,
     productImproveCard: snapshot.productImproveCard,
     productImproveCardPayload: snapshot.productImproveCardPayload,
+    imageGenerationCard: snapshot.imageGenerationCard,
+    imageGenerationCardPayload: snapshot.imageGenerationCardPayload,
     productQualityCard: snapshot.productQualityCard,
     productQualityCardPayload: snapshot.productQualityCardPayload,
     healthDiagnosisCard: snapshot.healthDiagnosisCard,
@@ -154,6 +163,8 @@ export function useChatStream() {
     attachments: [],
     productImproveCard: false,
     productImproveCardPayload: undefined,
+    imageGenerationCard: false,
+    imageGenerationCardPayload: undefined,
     productQualityCard: false,
     productQualityCardPayload: undefined,
     healthDiagnosisCard: false,
@@ -170,6 +181,8 @@ export function useChatStream() {
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
+      imageGenerationCard: false,
+      imageGenerationCardPayload: undefined,
       productQualityCard: false,
       productQualityCardPayload: undefined,
       healthDiagnosisCard: false,
@@ -230,6 +243,8 @@ export function useChatStream() {
         snapshotRef.current.taskProposal = merged;
         snapshotRef.current.productImproveCard = false;
         snapshotRef.current.productImproveCardPayload = undefined;
+        snapshotRef.current.imageGenerationCard = false;
+        snapshotRef.current.imageGenerationCardPayload = undefined;
         setStreamingGenerateCard(false);
         setStreamingGeneratePayload(undefined);
         setStreamingTaskProposal(merged);
@@ -368,9 +383,7 @@ export function useChatStream() {
                   );
                 } else if (chunk.name === "open_image_generation_form") {
                   applyTaskProposal(
-                    buildImageGenerationProposal(
-                      coerceImageGenerationFormPayload(chunk.args),
-                    ),
+                    buildImageGenerationProposal(coerceImageGenerationFormPayload(chunk.args)),
                   );
                 } else if (chunk.name === "open_product_quality_form") {
                   const qualityPayload = coerceProductQualityFormPayload(chunk.args);

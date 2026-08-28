@@ -1559,7 +1559,20 @@
     "historyStatusPending": "生成中",
     "historyStatusDone": "已完成",
     "historyStatusFailed": "失败",
-    "pageFootnote": "图片异步生成并保存在云端；重新进入本页可在「最近生成」中查看，不会自动写入 Shopify 商品。"
+    "pageFootnote": "图片异步生成并保存在云端；重新进入本页可在「最近生成」中查看，不会自动写入 Shopify 商品。",
+    "chat": {
+      "title": "AI 生成商品图片",
+      "intro": "按商品描述和画面要求生成一张图，结果留在本对话，不会跳转到其他页面。",
+      "productOptional": "参考商品（可选）",
+      "productHint": "选中后会结合商品标题与描述生成提示词；可不选，仅用画面描述生成。",
+      "submitted": "已开始生成图片",
+      "goToAccount": "前往账户与订阅",
+      "running": "正在生成图片…",
+      "usedCredits": "本次消耗 {{actual}} 积分（预计 {{estimated}}）",
+      "referencedProduct": "参考：{{title}}",
+      "download": "下载",
+      "regenerate": "再生成一张"
+    }
   },
   "generate": {
     "pageTitle": "商品文案生成与优化",
@@ -2227,6 +2240,11 @@
     "chatGoReview": "去审核结果",
     "chatReviewDialogTitle": "审核结果",
     "chatViewTaskList": "查看任务列表",
+    "reviewDialogTitle": "审核结果",
+    "reviewDialogLoading": "正在加载审核内容",
+    "reviewDialogLoadError": "无法加载该任务，请稍后重试",
+    "reviewDialogEmptyResult": "该任务还没有可审核的结果",
+    "reviewDialogRemaining": "还有 {{count}} 条待审核",
     "actionViewAppliedResult": "查看已应用结果",
     "actionRerunTask": "重新执行",
     "actionViewFailureDetail": "查看失败详情",
@@ -3473,6 +3491,7 @@
         "tasksSummary": "共 {{runs}} 次执行 · {{tasks}} 个任务",
         "viewAllTasks": "查看全部任务 →",
         "bucketSucceeded": "完成",
+        "bucketApplied": "已应用",
         "bucketPendingReview": "待审核",
         "bucketRunning": "进行中",
         "bucketFailed": "失败"
@@ -3629,7 +3648,7 @@
         },
         "imageGeneration": {
           "title": "AI 生成商品图片",
-          "summary": "根据描述生成一张商品图片，完成后可在任务列表查看与应用。",
+          "summary": "根据描述生成一张商品图片，结果在对话卡片中查看。",
           "placeholder": "描述想要的图片，如：白底极简风格的陶瓷马克杯"
         }
       },

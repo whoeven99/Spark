@@ -4,6 +4,7 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
+import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import type { ProductQualityFormPayload } from "../../../lib/productQualityFormPayload";
 import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import type { ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext";
@@ -44,6 +45,8 @@ export type WorkspaceConversationMessage = {
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
+  imageGenerationCard?: boolean;
+  imageGenerationCardPayload?: ImageGenerationFormPayload;
   productQualityCard?: boolean;
   productQualityCardPayload?: ProductQualityFormPayload;
   healthDiagnosisCard?: boolean;

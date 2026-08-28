@@ -14,8 +14,31 @@ const SYSTEM_PROMPT = `你是 Shopify 电商商品图提示词专家。商户会
 要求：
 - 输出必须可直接用于 AI 绘图，包含主体、构图、背景、光线、风格等可画面化细节；
 - 面向电商商品主图/场景图，风格真实、干净，避免夸张虚假承诺；
+- 若提供了参考商品标题与描述，必须忠实体现该商品的主体、材质、用途等可画面化事实，不要编造商品没有的特征，也不要换成其他商品；
 - 不要输出 Markdown、编号列表、引号包裹或「提示词：」等前缀；
 - 只输出一段提示词正文（中文或英文均可，以画面清晰为准）。`;
+
+const MAX_PRODUCT_TEXT_CHARS = 1500;
+
+export type ImagePromptProductContext = {
+  title: string;
+  text: string;
+};
+
+export function buildImagePromptUserMessage(params: {
+  description: string;
+  product?: ImagePromptProductContext | null;
+}): string {
+  const normalized = normalizeImageDescription(params.description);
+  const parts = [`商户画面描述：\n${normalized}`];
+  const title = params.product?.title.trim() ?? "";
+  const text = (params.product?.text ?? "").trim().slice(0, MAX_PRODUCT_TEXT_CHARS);
+  if (title || text) {
+    parts.push(`参考商品标题：${title || "（无标题）"}`);
+    parts.push(`参考商品描述：\n${text || "（无描述）"}`);
+  }
+  return parts.join("\n\n");
+}
 
 export const MIN_DESCRIPTION_CHARS = 4;
 export const MAX_DESCRIPTION_CHARS = 2000;
@@ -54,6 +77,7 @@ export type GenerateImagePromptResult =
 export async function generateImagePromptFromDescription(params: {
   description: string;
   requestId: string;
+  product?: ImagePromptProductContext | null;
 }): Promise<GenerateImagePromptResult> {
   const validationError = validateImageDescription(params.description);
   if (validationError) {
@@ -61,7 +85,10 @@ export async function generateImagePromptFromDescription(params: {
   }
 
   const normalizedDescription = normalizeImageDescription(params.description);
-  const userPrompt = `商户画面描述：\n${normalizedDescription}`;
+  const userPrompt = buildImagePromptUserMessage({
+    description: normalizedDescription,
+    product: params.product,
+  });
 
   console.info(
     `${IMAGE_GENERATION_LOG_PREFIX}[PromptAi] start requestId=${params.requestId} descriptionLen=${normalizedDescription.length}`,

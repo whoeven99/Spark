@@ -13,6 +13,7 @@ const bodySchema = z
   .object({
     prompt: z.string().optional(),
     description: z.string().optional(),
+    productId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     const hasPrompt = Boolean(data.prompt?.trim());
@@ -51,6 +52,7 @@ export async function executeImageGenerationRequest(params: {
   sessionShop: string;
   prompt?: string;
   description?: string;
+  productId?: string;
 }): Promise<{ status: number; body: ImageGenerationHttpResponse }> {
   try {
     await requireVisualToolBillingAccess(params.sessionShop);
@@ -102,6 +104,7 @@ export async function executeImageGenerationRequest(params: {
   }
 
   const description = params.description?.trim() || undefined;
+  const productId = params.productId?.trim() || undefined;
   const imageProvider = resolveImageGenerationProvider() ?? "openai";
 
   const estimatedCredits = await getEstimatedCredits(
@@ -112,8 +115,8 @@ export async function executeImageGenerationRequest(params: {
   const { taskId, batchId } = await createBatchWithTask({
     shop: params.sessionShop,
     taskType: "image_generation",
-    batchConfig: { description, prompt: trimmedPrompt, imageProvider },
-    taskConfig: { description, prompt: trimmedPrompt, imageProvider },
+    batchConfig: { description, prompt: trimmedPrompt, imageProvider, productId },
+    taskConfig: { description, prompt: trimmedPrompt, imageProvider, productId },
     estimatedCredits,
   });
 
@@ -122,6 +125,7 @@ export async function executeImageGenerationRequest(params: {
     shop: params.sessionShop,
     prompt: trimmedPrompt,
     description,
+    productId,
     imageProvider,
   });
 

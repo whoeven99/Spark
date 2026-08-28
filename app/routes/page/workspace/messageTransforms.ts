@@ -4,6 +4,7 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
+import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import {
   coerceProductQualityFormPayload,
   type ProductQualityFormPayload,
@@ -12,14 +13,15 @@ import {
   coerceHealthDiagnosisFormPayload,
   type HealthDiagnosisFormPayload,
 } from "../../../lib/healthDiagnosisCardPayload";
-import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import {
+  buildBatchProductImproveProposal,
   buildImageGenerationProposal,
   buildSinglePictureTranslateProposal,
   coerceTaskProposalPayload,
   taskProposalFromBatchTasksPayload,
+  type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import { coerceTaskRunPayload } from "../../../lib/taskRunPayload";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
@@ -48,10 +50,31 @@ export function workspaceMessageToApiMessage(message: WorkspaceConversationMessa
   return { role: message.role, content: message.text };
 }
 
+/** 历史文生图专用卡 → 通用 TaskProposal（与图片翻译回放对齐）。 */
+function taskProposalFromLegacyImageGeneration(raw: unknown): TaskProposalPayload {
+  return buildImageGenerationProposal(coerceImageGenerationFormPayload(raw ?? {}));
+}
+
+function resolveImageGenerationTaskProposal(input: {
+  taskProposal?: TaskProposalPayload | null;
+  imageGenerationCard?: boolean;
+  imageGenerationCardPayload?: unknown;
+}): TaskProposalPayload | undefined {
+  if (input.taskProposal) return input.taskProposal;
+  if (!input.imageGenerationCard && input.imageGenerationCardPayload == null) return undefined;
+  return taskProposalFromLegacyImageGeneration(input.imageGenerationCardPayload);
+}
+
 export function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): ChatMessage {
   if (message.role === "user") {
     return { role: "user", content: message.text };
   }
+
+  const taskProposal = resolveImageGenerationTaskProposal({
+    taskProposal: message.taskProposal,
+    imageGenerationCard: message.imageGenerationCard,
+    imageGenerationCardPayload: message.imageGenerationCardPayload,
+  });
 
   return {
     role: "assistant",
@@ -75,7 +98,7 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.healthDiagnosisCardPayload
       ? { healthDiagnosisCardPayload: message.healthDiagnosisCardPayload }
       : {}),
-    ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
+    ...(taskProposal ? { taskProposal } : {}),
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
     ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
@@ -100,6 +123,11 @@ export function buildAssistantWorkspaceMessage(
     payload.productQualityCard || Boolean(payload.productQualityCardPayload);
   const hasHealthDiagnosisCard =
     payload.healthDiagnosisCard || Boolean(payload.healthDiagnosisCardPayload);
+  const taskProposal = resolveImageGenerationTaskProposal({
+    taskProposal: payload.taskProposal,
+    imageGenerationCard: payload.imageGenerationCard,
+    imageGenerationCardPayload: payload.imageGenerationCardPayload,
+  });
 
   return {
     role: "assistant",
@@ -126,7 +154,7 @@ export function buildAssistantWorkspaceMessage(
           ),
         }
       : {}),
-    ...(payload.taskProposal ? { taskProposal: payload.taskProposal } : {}),
+    ...(taskProposal ? { taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
     ...(options?.assistantLaunchContext ? { assistantLaunchContext: options.assistantLaunchContext } : {}),
     ...(options?.managedAiResult ? { managedAiResult: options.managedAiResult } : {}),
@@ -172,6 +200,11 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
     result.productImproveCard = true;
     if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
   }
+  const taskProposal = resolveImageGenerationTaskProposal({
+    taskProposal: payload.taskProposal,
+    imageGenerationCard: payload.imageGenerationCard,
+    imageGenerationCardPayload: payload.imageGenerationCardPayload,
+  });
   if (payload.productQualityCard || payload.productQualityCardPayload) {
     result.productQualityCard = true;
     if (payload.productQualityCardPayload) {
@@ -188,8 +221,8 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
       );
     }
   }
-  if (payload.taskProposal) {
-    result.taskProposal = payload.taskProposal;
+  if (taskProposal) {
+    result.taskProposal = taskProposal;
   }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
@@ -205,6 +238,11 @@ export function serializeWorkspaceMessagePayloads(
       result.productImproveCardPayload = message.productImproveCardPayload;
     }
   }
+  const taskProposal = resolveImageGenerationTaskProposal({
+    taskProposal: message.taskProposal,
+    imageGenerationCard: message.imageGenerationCard,
+    imageGenerationCardPayload: message.imageGenerationCardPayload,
+  });
   if (message.productQualityCard || message.productQualityCardPayload) {
     result.productQualityCard = true;
     if (message.productQualityCardPayload) {
@@ -217,7 +255,7 @@ export function serializeWorkspaceMessagePayloads(
       result.healthDiagnosisCardPayload = message.healthDiagnosisCardPayload;
     }
   }
-  if (message.taskProposal) result.taskProposal = message.taskProposal;
+  if (taskProposal) result.taskProposal = taskProposal;
   if (message.taskRun) result.taskRun = message.taskRun;
   if (message.aiTask) result.aiTask = message.aiTask;
   if (message.thinkingContent) result.thinkingContent = message.thinkingContent;
@@ -273,7 +311,9 @@ export function dbMessageToUiMessage(msg: {
     ...(() => {
       if (extras.taskProposal) {
         const proposal = coerceTaskProposalPayload(extras.taskProposal);
-        if (proposal) return { taskProposal: proposal };
+        if (proposal) {
+          return { taskProposal: proposal };
+        }
       }
       if (extras.batchTasksFormPayload) {
         const proposal = taskProposalFromBatchTasksPayload(
@@ -288,10 +328,14 @@ export function dbMessageToUiMessage(msg: {
           ),
         };
       }
-      if (extras.imageGenerationCard || extras.imageGenerationFormPayload) {
+      if (
+        extras.imageGenerationCard ||
+        extras.imageGenerationCardPayload ||
+        extras.imageGenerationFormPayload
+      ) {
         return {
-          taskProposal: buildImageGenerationProposal(
-            coerceImageGenerationFormPayload(extras.imageGenerationFormPayload ?? {}),
+          taskProposal: taskProposalFromLegacyImageGeneration(
+            extras.imageGenerationCardPayload ?? extras.imageGenerationFormPayload ?? {},
           ),
         };
       }

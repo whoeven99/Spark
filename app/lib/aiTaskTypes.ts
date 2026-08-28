@@ -103,6 +103,7 @@ export interface ImageGenTaskConfig {
   description?: string;
   prompt: string;
   imageProvider: "openai" | "volc";
+  productId?: string;
 }
 
 export interface PicTranslateTaskConfig {

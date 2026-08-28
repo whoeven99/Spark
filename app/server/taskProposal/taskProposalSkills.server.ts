@@ -186,7 +186,7 @@ const imageGenerationHandler: TaskProposalSkillHandler = {
     };
   },
   // 计费校验由 executeImageGenerationRequest 内部完成（402 → BillingError）
-  execute: async ({ shop, params }) => {
+  execute: async ({ shop, params, targets }) => {
     const description = params.description?.trim();
     if (!description) {
       throw new Error("请填写图片描述");
@@ -195,6 +195,7 @@ const imageGenerationHandler: TaskProposalSkillHandler = {
       requestId: `task-proposal-${Date.now()}`,
       sessionShop: shop,
       description,
+      productId: targets[0]?.id?.trim() || params.productId?.trim() || undefined,
     });
     if (result.status === 402) {
       throw new TaskProposalBillingError();

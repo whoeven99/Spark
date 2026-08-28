@@ -27,7 +27,7 @@ export const TASK_PROPOSAL_VERSION = 1;
 export type TaskProposalField = {
   key: string;
   label: string;
-  type: "select" | "text";
+  type: "select" | "text" | "textarea";
   value: string;
   /** type === "select" 时必填 */
   options?: Array<{ value: string; label: string }>;
@@ -104,7 +104,7 @@ function coerceField(raw: unknown): TaskProposalField | null {
   const key = safeString(r.key);
   const label = safeString(r.label, key);
   if (!key) return null;
-  const type = r.type === "select" ? "select" : "text";
+  const type = r.type === "select" ? "select" : r.type === "textarea" ? "textarea" : "text";
   const options = Array.isArray(r.options)
     ? r.options
         .filter((o): o is Record<string, unknown> => o !== null && typeof o === "object")
@@ -204,7 +204,26 @@ export function mergeTaskProposalTargets(
   contextProductQuery?: ObjectQuerySelection | null,
   options?: { preferContext?: boolean },
 ): TaskProposalPayload {
-  // 无目标对象的技能（如文生图）不做上下文兜底
+  // 文生图参考商品可选：工具未预填时，只用工作台第一个已选商品补全
+  if (proposal.skillId === IMAGE_GENERATION_SKILL_ID) {
+    if (proposal.targets.items.length > 0) return proposal;
+    const first = contextProducts[0];
+    if (!first?.id.trim()) return proposal;
+    return {
+      ...proposal,
+      targets: {
+        kind: "products",
+        items: [
+          {
+            id: first.id,
+            title: first.title,
+            imageUrl: first.imageUrl ?? null,
+          },
+        ],
+      },
+    };
+  }
+  // 无目标对象的技能不做上下文兜底
   if (proposal.targets.kind === "none") return proposal;
 
   const preferContext = Boolean(options?.preferContext);
@@ -271,24 +290,42 @@ export function taskProposalFromBatchTasksPayload(payload: {
   });
 }
 
-// ─── 文生图（无目标对象技能：targets.kind === "none"，确认参数后直接执行） ────
+// ─── 文生图（参考商品可选：无商品时 kind=none；有商品时 kind=products 且仅 1 个） ────
 
 export const IMAGE_GENERATION_SKILL_ID = "image_generation";
 
 /** 文生图表单 → 提案（旧 open_image_generation_form 卡片的替代）。 */
-export function buildImageGenerationProposal(form: { description?: string }): TaskProposalPayload {
+export function buildImageGenerationProposal(form: {
+  description?: string;
+  productId?: string;
+  productTitle?: string;
+  imageUrl?: string | null;
+}): TaskProposalPayload {
+  const productId = form.productId?.trim() ?? "";
+  const productTitle = form.productTitle?.trim() ?? "";
   return {
     version: TASK_PROPOSAL_VERSION,
     proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
     skillId: IMAGE_GENERATION_SKILL_ID,
     title: "AI 生成商品图片",
     summary: "根据描述生成一张商品图片，完成后可在任务列表查看与应用。",
-    targets: { kind: "none", items: [] },
+    targets: productId
+      ? {
+          kind: "products",
+          items: [
+            {
+              id: productId,
+              title: productTitle || productId,
+              imageUrl: form.imageUrl ?? null,
+            },
+          ],
+        }
+      : { kind: "none", items: [] },
     params: [
       {
         key: "description",
         label: "图片描述",
-        type: "text",
+        type: "textarea",
         value: form.description?.trim() ?? "",
         placeholder: "描述想要的图片，如：白底极简风格的陶瓷马克杯",
       },

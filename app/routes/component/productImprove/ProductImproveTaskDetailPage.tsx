@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
@@ -10,6 +10,7 @@ import type {
   ProductImproveTaskResult,
 } from "../../../lib/aiTaskTypes";
 import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
+import { shouldRetainLocalAiTaskStatus } from "../../../lib/aiTaskStatusSync";
 
 type Props = {
   task: AITaskItem;
@@ -368,12 +369,20 @@ export function ProductImproveTaskDetailPage({
   const activeRecord =
     resultRecords.find((record) => record.id === activeRecordId) ?? resultRecords[0] ?? null;
   const editingLocked = refining || applying || localStatus === "applied";
+  const localStatusRef = useRef(localStatus);
+  localStatusRef.current = localStatus;
 
   useEffect(() => {
+    if (shouldRetainLocalAiTaskStatus(localStatusRef.current, task.status)) {
+      return;
+    }
     setLocalStatus(task.status);
   }, [task.status]);
 
   useEffect(() => {
+    if (shouldRetainLocalAiTaskStatus(localStatusRef.current, task.status)) {
+      return;
+    }
     setLocalResult(task.result);
     const nextRecords = buildInitialResultRecords(task);
     if (nextRecords[0]) {
@@ -431,7 +440,7 @@ export function ProductImproveTaskDetailPage({
         }),
       });
       const updateBody = (await updateResp.json()) as { success: boolean; errorMsg?: string };
-      if (!updateBody.success) {
+      if (!updateResp.ok || !updateBody.success) {
         setApplyError(
           updateBody.errorMsg
             ? safeTranslateAITaskMessage({
@@ -442,7 +451,7 @@ export function ProductImproveTaskDetailPage({
         );
         return;
       }
-      await fetch(`/api/ai-task${locationSearch}`, {
+      const applyResp = await fetch(`/api/ai-task${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -451,6 +460,21 @@ export function ProductImproveTaskDetailPage({
           result: reviewedResult,
         }),
       });
+      const applyBody = (await applyResp.json().catch(() => ({}))) as {
+        success?: boolean;
+        errorMsg?: string;
+      };
+      if (!applyResp.ok || applyBody.success === false) {
+        setApplyError(
+          applyBody.errorMsg
+            ? safeTranslateAITaskMessage({
+                t,
+                message: applyBody.errorMsg,
+              })
+            : t("productImproveStage1.applyWriteShopifyFailed"),
+        );
+        return;
+      }
       setLocalResult(reviewedResult);
       setResultRecords((prev) =>
         prev.map((item) => ({

@@ -5,6 +5,7 @@ import {
   readProductImproveTabFromSearch,
   readProductImproveTaskIdFromSearch,
   resolveProductImproveOpenPath,
+  shouldOpenInPageReview,
 } from "../../../app/lib/productImproveDeepLink";
 
 describe("productImproveDeepLink", () => {
@@ -48,6 +49,37 @@ describe("productImproveDeepLink", () => {
         intent: "review",
       }),
     ).toBe("/app/studio/copy?tab=tasks");
+  });
+
+  it("opens in-page review only when intent is review and taskId exists", () => {
+    expect(
+      shouldOpenInPageReview({
+        taskType: "product_improve",
+        taskId: "t1",
+        intent: "review",
+      }),
+    ).toBe(true);
+    expect(
+      shouldOpenInPageReview({
+        taskType: "product_improve",
+        intent: "review",
+      }),
+    ).toBe(false);
+    expect(
+      shouldOpenInPageReview({
+        taskType: "product_improve",
+        taskId: "t1",
+        intent: "list",
+      }),
+    ).toBe(false);
+    expect(
+      shouldOpenInPageReview({
+        taskType: "image_generation",
+        taskId: "t1",
+        intent: "review",
+      }),
+    ).toBe(false);
+    expect(shouldOpenInPageReview()).toBe(false);
   });
 
   it("detects product copy open targets", () => {

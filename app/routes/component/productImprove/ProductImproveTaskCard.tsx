@@ -13,6 +13,7 @@ import type {
   ProductImproveTaskConfig,
 } from "../../../lib/aiTaskTypes";
 import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
+import { shouldRetainLocalAiTaskStatus } from "../../../lib/aiTaskStatusSync";
 import { translateLegacyProductImproveTaskMessage } from "../../../lib/productImproveTaskMessage";
 
 type Props = {
@@ -301,8 +302,11 @@ export function ProductImproveTaskCard({
   const [runningElapsed, setRunningElapsed] = useState<string | null>(null);
 
   useEffect(() => {
+    if (shouldRetainLocalAiTaskStatus(localStatus, task.status)) {
+      return;
+    }
     setLocalStatus(task.status);
-  }, [task.status]);
+  }, [localStatus, task.status]);
 
   useEffect(() => {
     if (localStatus !== "running") {

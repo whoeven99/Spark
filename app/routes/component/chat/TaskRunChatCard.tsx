@@ -6,6 +6,11 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import type { AITaskItem, AITaskStatus, ProductImproveTaskConfig } from "../../../lib/aiTaskTypes";
+import {
+  AI_TASK_FETCH_INIT,
+  mergeFetchedAiTask,
+  shouldKeepPollingAiTaskStatus,
+} from "../../../lib/aiTaskStatusSync";
 import type { TaskRunPayload, TaskRunTarget } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { pageColorTokens } from "../../page/pageUiStyles";
@@ -28,6 +33,7 @@ const EMBED_DETAIL_MAX_TASKS = 2;
 type StatusAggregate = {
   running: number;
   pendingReview: number;
+  applied: number;
   succeeded: number;
   failed: number;
   known: number;
@@ -36,10 +42,18 @@ type StatusAggregate = {
 type BadgeKind = "running" | "pendingReview" | "succeeded" | "failed";
 
 function aggregate(statuses: AITaskStatus[]): StatusAggregate {
-  const agg: StatusAggregate = { running: 0, pendingReview: 0, succeeded: 0, failed: 0, known: statuses.length };
+  const agg: StatusAggregate = {
+    running: 0,
+    pendingReview: 0,
+    applied: 0,
+    succeeded: 0,
+    failed: 0,
+    known: statuses.length,
+  };
   for (const status of statuses) {
     if (status === "running") agg.running += 1;
-    else if (status === "pending_review") agg.pendingReview += 1;
+    else if (status === "pending_review" || status === "scored") agg.pendingReview += 1;
+    else if (status === "applied") agg.applied += 1;
     else if (status === "failed" || status === "cancelled") agg.failed += 1;
     else agg.succeeded += 1;
   }
@@ -140,14 +154,21 @@ export function TaskRunChatCard({
         );
         params.set("view", "current");
         params.set("pageSize", "50");
-        const res = await fetch(`/api/ai-task?${params.toString()}`);
+        const res = await fetch(`/api/ai-task?${params.toString()}`, AI_TASK_FETCH_INIT);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { tasks?: AITaskItem[] };
         if (cancelled) return;
         const matched = (data.tasks ?? []).filter((task) => taskIdSet.has(task.id));
-        setSelfPolledTasks(matched);
+        setSelfPolledTasks((prev) => {
+          const prevById = new Map(prev.map((task) => [task.id, task]));
+          return matched.map((task) => {
+            const existing = prevById.get(task.id);
+            return existing ? mergeFetchedAiTask(existing, task) : task;
+          });
+        });
         const allTerminal =
-          matched.length > 0 && matched.every((task) => task.status !== "running");
+          matched.length > 0 &&
+          matched.every((task) => !shouldKeepPollingAiTaskStatus(task.status));
         if (allTerminal || Date.now() - startedPollingAt > MAX_POLL_MS) return;
         timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
       } catch {
@@ -242,6 +263,9 @@ export function TaskRunChatCard({
     }
     if (agg.pendingReview > 0) {
       progressParts.push(`${t("workspace.shell.contextSidebar.bucketPendingReview")} ${agg.pendingReview}`);
+    }
+    if (agg.applied > 0) {
+      progressParts.push(`${t("workspace.shell.contextSidebar.bucketApplied")} ${agg.applied}`);
     }
     if (agg.succeeded > 0) {
       progressParts.push(`${t("workspace.shell.contextSidebar.bucketSucceeded")} ${agg.succeeded}`);
