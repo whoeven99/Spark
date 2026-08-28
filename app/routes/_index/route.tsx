@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
-import { redirect, Form, useLoaderData } from "react-router";
+import { redirect, useLoaderData } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { buildEmbeddedAppPath, getAppHomePath } from "../../config/appEntry.server";
 import {
@@ -13,8 +14,10 @@ import {
   resolveShopQueryFromRequest,
   shouldRecoverEmbeddedHome,
 } from "../../server/shopify/embeddedEntry.server";
-import { login, authenticate } from "../../shopify.server";
+import { authenticate } from "../../shopify.server";
 import { buildEmbeddedHomeRedirectPath } from "../../lib/embeddedLocationSearch";
+import { AppI18nProvider } from "../../i18n/provider";
+import { detectRequestLocale } from "../../i18n/detector.server";
 
 import styles from "./styles.module.css";
 
@@ -46,11 +49,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(buildEmbeddedHomeRecoveryPath(home, request));
   }
 
-  return { showForm: Boolean(login), home };
+  return { home, locale: detectRequestLocale(request) };
 };
 
+function InstallLanding() {
+  const { t } = useTranslation();
+
+  return (
+    <div className={styles.index}>
+      <div className={styles.content}>
+        <h1 className={styles.heading}>{t("installLanding.heading")}</h1>
+        <p className={styles.text}>{t("installLanding.tagline")}</p>
+        <p className={styles.hint}>{t("installLanding.installHint")}</p>
+        <ul className={styles.list}>
+          <li>
+            <strong>{t("installLanding.features.operations.title")}</strong>.{" "}
+            {t("installLanding.features.operations.body")}
+          </li>
+          <li>
+            <strong>{t("installLanding.features.studio.title")}</strong>.{" "}
+            {t("installLanding.features.studio.body")}
+          </li>
+          <li>
+            <strong>{t("installLanding.features.ads.title")}</strong>.{" "}
+            {t("installLanding.features.ads.body")}
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { showForm, home } = useLoaderData<typeof loader>();
+  const { home, locale } = useLoaderData<typeof loader>();
   const [iframeRecovering, setIframeRecovering] = useState(false);
 
   useEffect(() => {
@@ -64,39 +95,8 @@ export default function App() {
   }
 
   return (
-    <div className={styles.index}>
-      <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
-        <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
-        </p>
-        {showForm && (
-          <Form className={styles.form} method="post" action="/auth/login">
-            <label className={styles.label}>
-              <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>e.g: my-shop-domain.myshopify.com</span>
-            </label>
-            <button className={styles.button} type="submit">
-              Log in
-            </button>
-          </Form>
-        )}
-        <ul className={styles.list}>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-        </ul>
-      </div>
-    </div>
+    <AppI18nProvider locale={locale}>
+      <InstallLanding />
+    </AppI18nProvider>
   );
 }

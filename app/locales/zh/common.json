@@ -363,6 +363,25 @@
     "settings": "设置",
     "adsCatalog": "广告 Catalog"
   },
+  "installLanding": {
+    "heading": "Spark",
+    "tagline": "面向 Shopify 商家的 AI Assistant，把经营、商品内容和广告接入放在同一处。",
+    "installHint": "请从 Shopify Admin 或 Shopify App Store 安装 Spark。在店铺后台的「应用」中打开即可继续。",
+    "features": {
+      "operations": {
+        "title": "日常经营",
+        "body": "收入、健康度和今日待办集中在一个经营视图里。"
+      },
+      "studio": {
+        "title": "创作工作台",
+        "body": "优化商品文案、生成图片，并翻译商品图。"
+      },
+      "ads": {
+        "title": "广告 Catalog",
+        "body": "在 Shopify 内连接 Meta、Google 和 TikTok 商品目录。"
+      }
+    }
+  },
   "healthMonitor": {
     "environmentNewArrivals": "上新管理",
     "environmentInventory": "库存管理",

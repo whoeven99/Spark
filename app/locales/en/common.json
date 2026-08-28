@@ -363,6 +363,25 @@
     "settings": "Settings",
     "adsCatalog": "Ads Catalog"
   },
+  "installLanding": {
+    "heading": "Spark",
+    "tagline": "AI Assistant for Shopify merchants — operations, catalog content, and ads in one place.",
+    "installHint": "Spark is installed from Shopify Admin or the Shopify App Store. Open Apps in your store admin to continue.",
+    "features": {
+      "operations": {
+        "title": "Daily operations",
+        "body": "See revenue, store health, and today's follow-ups in one operating view."
+      },
+      "studio": {
+        "title": "Creative workbench",
+        "body": "Improve product copy, generate images, and translate pictures."
+      },
+      "ads": {
+        "title": "Ads catalog",
+        "body": "Connect Meta, Google, and TikTok catalogs without leaving Shopify."
+      }
+    }
+  },
   "healthMonitor": {
     "environmentNewArrivals": "New arrivals",
     "environmentInventory": "Inventory",
