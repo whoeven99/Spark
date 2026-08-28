@@ -156,10 +156,12 @@ export function ChatPanel({
       if (message.taskRun) {
         runs.push({
           runId: message.taskRun.runId,
+          skillId: message.taskRun.skillId,
           title: message.taskRun.title,
           taskIds: message.taskRun.taskIds,
           errorCount: message.taskRun.errors.length,
           paramsSummary: message.taskRun.paramsSummary,
+          params: message.taskRun.params,
           startedAt: message.taskRun.startedAt,
         });
       } else if (message.aiTask) {

@@ -1,6 +1,10 @@
 /** 对话右侧"当前上下文 + 本会话任务"侧栏（从 WorkspaceAppShellPage 的 ChatPanel 拆出，仅桌面端展示）。 */
 import { useTranslation } from "react-i18next";
 import { describeObjectQueryI18n } from "../../../lib/objectQuerySpec";
+import {
+  resolveTaskRunParamsSummaryLines,
+  resolveTaskRunTitle,
+} from "../../../lib/taskProposalDisplay";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import {
@@ -147,13 +151,29 @@ function ConversationTasksCard({
                 runCounts.pendingReview === 0;
               const doneCount = runCounts.succeeded + runCounts.failed + runCounts.pendingReview;
               const timeLabel = formatTimeLabel(new Date(run.startedAt));
+              const displayTitle =
+                run.skillId != null
+                  ? resolveTaskRunTitle({ skillId: run.skillId, title: run.title }, t)
+                  : run.title;
+              const paramsLines =
+                run.skillId != null
+                  ? resolveTaskRunParamsSummaryLines(
+                      {
+                        skillId: run.skillId,
+                        title: run.title,
+                        paramsSummary: run.paramsSummary,
+                        params: run.params,
+                      },
+                      t,
+                    )
+                  : run.paramsSummary;
               const metaParts = [
                 t("workspace.shell.contextSidebar.tasksSummary", {
                   runs: 1,
                   tasks: run.taskIds.length,
                 }),
                 ...(Number.isNaN(new Date(run.startedAt).getTime()) ? [] : [timeLabel]),
-                ...(run.paramsSummary.length > 0 ? [run.paramsSummary[0]] : []),
+                ...(paramsLines.length > 0 ? [paramsLines[0]] : []),
               ];
               return (
                 <button
@@ -202,7 +222,7 @@ function ConversationTasksCard({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {run.title}
+                      {displayTitle}
                     </span>
                     {needsReview ? (
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#9a5b00", flexShrink: 0 }}>

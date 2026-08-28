@@ -53,10 +53,12 @@ export type WorkspaceConversationMessage = {
 /** 侧栏「本会话任务」的批次条目（从消息流的 taskRun / 历史 aiTask 派生） */
 export type ConversationTaskRunEntry = {
   runId: string;
+  skillId?: string;
   title: string;
   taskIds: string[];
   errorCount: number;
   paramsSummary: string[];
+  params?: Record<string, string>;
   startedAt: string;
 };
 

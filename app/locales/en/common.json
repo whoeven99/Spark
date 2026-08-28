@@ -3327,6 +3327,14 @@
         "clearContext": "Clear context",
         "keyboardHint": "Enter to send · Shift+Enter for new line",
         "jumpToLatest": "Jump to latest",
+        "thinking": {
+          "idle": "Thinking",
+          "active": "Thinking deeply",
+          "done": "Finished thinking",
+          "elapsed": "Took {{duration}}",
+          "durationSeconds": "{{seconds}}s",
+          "durationMinutes": "{{minutes}}m {{seconds}}s"
+        },
         "clearSelectionAria": "Clear {{label}}",
         "recommended": "Recommended",
         "recommendedActions": "Recommended actions",
@@ -3507,6 +3515,75 @@
         "requestFailed": "Request failed ({{status}})",
         "thumbProduct": "P",
         "thumbArticle": "A"
+      }
+    },
+    "taskProposal": {
+      "paramSummary": "{{label}}: {{value}}",
+      "skills": {
+        "batchProductImprove": {
+          "title": "Batch generate product descriptions",
+          "summary": "Create an AI description task for each selected product. Review and apply them one by one in Tasks when done."
+        },
+        "batchPictureTranslate": {
+          "title": "Batch translate product images",
+          "summary": "Create an image translation task for each selected product's main image. Review and apply them one by one in Tasks when done."
+        },
+        "imageGeneration": {
+          "title": "Generate product image with AI",
+          "summary": "Generate one product image from your description. View and apply it in Tasks when done."
+        }
+      },
+      "fields": {
+        "targetLanguage": "Target language",
+        "sourceLanguage": "Source language",
+        "description": "Image description"
+      },
+      "targetKinds": {
+        "products": "products",
+        "articles": "articles",
+        "orders": "orders",
+        "none": "items"
+      },
+      "disabledReasons": {
+        "noImage": "No main image"
+      },
+      "card": {
+        "submitted": "Submitted",
+        "confirmParamsToRun": "Confirm parameters to start",
+        "targetsSelected": "{{count}} {{kind}} · batch create after confirm",
+        "queryTargets": "Filter by criteria{{approx}} · re-evaluated at run time",
+        "queryApprox": " · ~{{count}} {{kind}}",
+        "waitingForTargets": "Waiting for targets",
+        "selectedTargets": "Selected {{kind}} ({{checked}} / {{total}})",
+        "queryByCriteria": "Filter by criteria: {{description}}",
+        "queryHint": "{{approx}}Re-evaluated at run time (suitable for saved automations)",
+        "queryApproxCount": "Matched ~{{count}} when saved; ",
+        "missingTargets": "No targets found. Select {{kind}} from the toolbar below and send again.",
+        "estimateLoading": "Estimating cost…",
+        "estimateEmpty": "No historical runs yet. Estimates calibrate after the first batch.",
+        "estimateCredits": "~{{credits}} credits estimated",
+        "estimateDuration": "~{{duration}} per item",
+        "estimateCalibrated": "(calibrated from past runs)",
+        "footerCreateOne": "Will create 1 task",
+        "footerCreateQuery": "Will create tasks by filter{{approx}}",
+        "footerCreateQueryApprox": " (~{{count}})",
+        "footerSelectOne": "Select at least 1 target",
+        "footerCreateCount": "Will create {{count}} tasks",
+        "confirmSubmitting": "Creating…",
+        "confirmStart": "Confirm and start",
+        "confirmQuery": "Confirm by filter",
+        "confirmCreateCount": "Confirm {{count}} tasks",
+        "doneSuccess": "✓ Created {{created}}/{{total}} tasks",
+        "doneFailed": "Failed to create tasks",
+        "doneHint": "Track progress and results in Tasks.",
+        "doneMoreErrors": "{{count}} more failures"
+      },
+      "taskRunCard": {
+        "startedBadge": "Run started",
+        "running": "Running…",
+        "createdCount": "Created {{count}} tasks",
+        "createdPartial": "Created {{count}} tasks, {{failed}} targets failed to create",
+        "progress": "Progress: {{parts}}"
       }
     },
     "execution": {

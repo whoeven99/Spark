@@ -26,6 +26,8 @@ export type TaskRunPayload = {
   errors: TaskRunError[];
   /** 人读参数摘要，如 ["源语言：自动检测", "目标语言：English"] */
   paramsSummary: string[];
+  /** 参数快照（key → value），用于 UI 语言切换后重新本地化摘要 */
+  params?: Record<string, string>;
   startedAt: string;
 };
 
@@ -39,6 +41,7 @@ export function buildTaskRunPayload(args: {
   taskIds: string[];
   errors: TaskRunError[];
   paramsSummary: string[];
+  params?: Record<string, string>;
 }): TaskRunPayload {
   return {
     version: TASK_RUN_VERSION,
@@ -48,6 +51,7 @@ export function buildTaskRunPayload(args: {
     taskIds: args.taskIds,
     errors: args.errors,
     paramsSummary: args.paramsSummary,
+    ...(args.params && Object.keys(args.params).length > 0 ? { params: args.params } : {}),
     startedAt: new Date().toISOString(),
   };
 }
@@ -77,6 +81,15 @@ export function coerceTaskRunPayload(raw: unknown): TaskRunPayload | null {
   const paramsSummary = Array.isArray(r.paramsSummary)
     ? r.paramsSummary.filter((p): p is string => typeof p === "string" && p.trim() !== "")
     : [];
+  const paramsRaw = r.params;
+  const params =
+    paramsRaw && typeof paramsRaw === "object" && !Array.isArray(paramsRaw)
+      ? Object.fromEntries(
+          Object.entries(paramsRaw as Record<string, unknown>)
+            .filter(([, v]) => typeof v === "string" && v.trim() !== "")
+            .map(([k, v]) => [k, (v as string).trim()]),
+        )
+      : undefined;
   return {
     version: TASK_RUN_VERSION,
     runId: safeString(r.runId, `run-${Date.now()}`),
@@ -85,6 +98,7 @@ export function coerceTaskRunPayload(raw: unknown): TaskRunPayload | null {
     taskIds,
     errors,
     paramsSummary,
+    ...(params && Object.keys(params).length > 0 ? { params } : {}),
     startedAt: safeString(r.startedAt, new Date().toISOString()),
   };
 }

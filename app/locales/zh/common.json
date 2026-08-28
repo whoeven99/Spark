@@ -3327,6 +3327,14 @@
         "clearContext": "清空上下文",
         "keyboardHint": "Enter 发送 · Shift+Enter 换行",
         "jumpToLatest": "查看最新消息",
+        "thinking": {
+          "idle": "正在思考",
+          "active": "正在深度思考",
+          "done": "已深度思考",
+          "elapsed": "用时 {{duration}}",
+          "durationSeconds": "{{seconds}} 秒",
+          "durationMinutes": "{{minutes}} 分 {{seconds}} 秒"
+        },
         "clearSelectionAria": "清空{{label}}",
         "recommended": "推荐",
         "recommendedActions": "推荐操作",
@@ -3507,6 +3515,75 @@
         "requestFailed": "请求失败（{{status}}）",
         "thumbProduct": "品",
         "thumbArticle": "文"
+      }
+    },
+    "taskProposal": {
+      "paramSummary": "{{label}}：{{value}}",
+      "skills": {
+        "batchProductImprove": {
+          "title": "批量生成商品描述",
+          "summary": "为每个勾选的商品创建一个 AI 描述生成任务，完成后可在任务列表逐个审核应用。"
+        },
+        "batchPictureTranslate": {
+          "title": "批量翻译商品图片",
+          "summary": "为每个勾选商品的主图创建一个图片翻译任务，完成后可在任务列表逐个审核应用。"
+        },
+        "imageGeneration": {
+          "title": "AI 生成商品图片",
+          "summary": "根据描述生成一张商品图片，完成后可在任务列表查看与应用。"
+        }
+      },
+      "fields": {
+        "targetLanguage": "目标语言",
+        "sourceLanguage": "源语言",
+        "description": "图片描述"
+      },
+      "targetKinds": {
+        "products": "商品",
+        "articles": "文章",
+        "orders": "订单",
+        "none": "对象"
+      },
+      "disabledReasons": {
+        "noImage": "无主图"
+      },
+      "card": {
+        "submitted": "已提交",
+        "confirmParamsToRun": "确认参数后开始执行",
+        "targetsSelected": "{{count}} 个{{kind}} · 确认后批量创建",
+        "queryTargets": "按条件圈定{{approx}} · 执行时重新求值",
+        "queryApprox": " · 约 {{count}} 个{{kind}}",
+        "waitingForTargets": "等待补充操作对象",
+        "selectedTargets": "已选{{kind}}（{{checked}} / {{total}}）",
+        "queryByCriteria": "按条件圈定：{{description}}",
+        "queryHint": "{{approx}}执行时将按条件重新求值（适合保存为自动化后定期执行）",
+        "queryApproxCount": "圈定时匹配约 {{count}} 个；",
+        "missingTargets": "未找到操作对象，请先在工作台下方工具栏选择{{kind}}后重新发送。",
+        "estimateLoading": "正在估算执行成本…",
+        "estimateEmpty": "暂无历史执行数据；完成首批任务后预估会自动校准。",
+        "estimateCredits": "预计消耗 ~{{credits}} 积分",
+        "estimateDuration": "单项约 {{duration}}",
+        "estimateCalibrated": "（基于历史执行自动校准）",
+        "footerCreateOne": "将创建 1 个任务",
+        "footerCreateQuery": "将按条件创建任务{{approx}}",
+        "footerCreateQueryApprox": "（约 {{count}} 个）",
+        "footerSelectOne": "请至少勾选 1 个对象",
+        "footerCreateCount": "将创建 {{count}} 个任务",
+        "confirmSubmitting": "创建中…",
+        "confirmStart": "确认开始执行",
+        "confirmQuery": "按条件确认创建",
+        "confirmCreateCount": "确认创建 {{count}} 个任务",
+        "doneSuccess": "✓ 已成功创建 {{created}}/{{total}} 个任务",
+        "doneFailed": "任务创建失败",
+        "doneHint": "可在「任务列表」面板查看执行进度与结果。",
+        "doneMoreErrors": "还有 {{count}} 个失败"
+      },
+      "taskRunCard": {
+        "startedBadge": "任务已开始",
+        "running": "执行中…",
+        "createdCount": "已创建 {{count}} 个任务",
+        "createdPartial": "已创建 {{count}} 个任务，{{failed}} 个对象创建失败",
+        "progress": "进度：{{parts}}"
       }
     },
     "execution": {

@@ -38,6 +38,7 @@ import {
   type WorkspacePanel,
 } from "./types";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import { resolveTaskRunTitle } from "../../../lib/taskProposalDisplay";
 import {
   isProductImproveTaskOpen,
   resolveProductImproveOpenPath,
@@ -1012,7 +1013,7 @@ export function WorkspaceAppShellPage({
     // 导航徽章乐观更新（30s 轮询会校正）
     setRunningTaskCount((current) => current + run.taskIds.length);
     const userText = t("workspace.shell.taskRun.userText", {
-      title: run.title,
+      title: resolveTaskRunTitle(run, t),
       count: run.taskIds.length,
     });
     const assistantText =
