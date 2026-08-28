@@ -8,6 +8,10 @@ import { getOrderBackfillDays } from "./orderBackfillConfig.server";
 /**
  * 历史订单回补（Admin GraphQL → Turso）。
  * 与 webhook 增量共用 syncOrder / syncRefund；勿把镜像迁到 Cosmos/Blob。
+ *
+ * 不请求 Partner「受保护的客户字段」四类：名称 / 邮箱 / 电话 / 地址
+ *（Order.email|phone、Customer.firstName|lastName|email|phone、billing/shippingAddress）。
+ * 产应用未勾选这些字段时 GraphQL 会整页失败。经营诊断不依赖 PII。
  */
 
 const ORDERS_BACKFILL_QUERY = `#graphql
@@ -20,8 +24,6 @@ const ORDERS_BACKFILL_QUERY = `#graphql
       nodes {
         id
         name
-        email
-        phone
         displayFinancialStatus
         displayFulfillmentStatus
         cancelledAt
@@ -54,26 +56,13 @@ const ORDERS_BACKFILL_QUERY = `#graphql
             referrerUrl
           }
         }
-        billingAddress {
-          countryCodeV2
-          provinceCode
-        }
-        shippingAddress {
-          countryCodeV2
-          provinceCode
-        }
         tags
         customer {
           id
-          email
-          phone
-          firstName
-          lastName
           numberOfOrders
           amountSpent { amount }
           state
           tags
-          emailMarketingConsent { marketingState }
           createdAt
           updatedAt
         }
@@ -127,8 +116,6 @@ const ORDERS_BACKFILL_QUERY = `#graphql
 type GraphQLOrderNode = {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string | null;
   cancelledAt: string | null;
@@ -155,30 +142,13 @@ type GraphQLOrderNode = {
     firstVisit: { landingPage: string | null; referrerUrl: string | null } | null;
     lastVisit: { landingPage: string | null; referrerUrl: string | null } | null;
   } | null;
-  billingAddress:
-    | {
-        countryCodeV2: string | null;
-        provinceCode: string | null;
-      }
-    | null;
-  shippingAddress:
-    | {
-        countryCodeV2: string | null;
-        provinceCode: string | null;
-      }
-    | null;
   tags: string[];
   customer: {
     id: string;
-    email: string | null;
-    phone: string | null;
-    firstName: string | null;
-    lastName: string | null;
     numberOfOrders: number;
     amountSpent: { amount: string };
     state: string;
     tags: string[];
-    emailMarketingConsent: { marketingState: string } | null;
     createdAt: string;
     updatedAt: string;
   } | null;
@@ -238,8 +208,9 @@ export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload
   return {
     id: parseInt(gidToId(node.id), 10),
     order_number: orderNumber,
-    email: node.email,
-    phone: node.phone,
+    // 未勾选受保护客户字段：名称/邮箱/电话/地址一律不镜像
+    email: null,
+    phone: null,
     financial_status: node.displayFinancialStatus?.toLowerCase() ?? null,
     fulfillment_status: node.displayFulfillmentStatus?.toLowerCase() ?? null,
     cancel_reason: node.cancelReason?.toLowerCase() ?? null,
@@ -273,32 +244,21 @@ export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload
       node.customerJourneySummary?.lastVisit?.referrerUrl ??
       node.customerJourneySummary?.firstVisit?.referrerUrl ??
       null,
-    billing_address: node.billingAddress
-      ? {
-          country_code: node.billingAddress.countryCodeV2,
-          province_code: node.billingAddress.provinceCode,
-        }
-      : null,
-    shipping_address: node.shippingAddress
-      ? {
-          country_code: node.shippingAddress.countryCodeV2,
-          province_code: node.shippingAddress.provinceCode,
-        }
-      : null,
+    billing_address: null,
+    shipping_address: null,
     tags: (node.tags ?? []).join(","),
     customer: node.customer
       ? {
           id: parseInt(customerId ?? "0", 10),
-          email: node.customer.email,
-          phone: node.customer.phone,
-          first_name: node.customer.firstName,
-          last_name: node.customer.lastName,
+          email: null,
+          phone: null,
+          first_name: null,
+          last_name: null,
           orders_count: node.customer.numberOfOrders,
           total_spent: node.customer.amountSpent.amount,
           state: node.customer.state,
           tags: (node.customer.tags ?? []).join(","),
-          accepts_marketing:
-            node.customer.emailMarketingConsent?.marketingState === "SUBSCRIBED",
+          accepts_marketing: false,
           created_at: node.customer.createdAt,
           updated_at: node.customer.updatedAt,
         }
@@ -372,6 +332,7 @@ export async function backfillOrders(
   let synced = 0;
   let skipped = 0;
   let errors = 0;
+  let lastError: string | undefined;
 
   while (page < maxPages) {
     const variables: Record<string, unknown> = {
@@ -395,6 +356,7 @@ export async function backfillOrders(
     } catch (err) {
       console.error(`[Backfill] GraphQL error page=${page}`, err);
       errors++;
+      lastError = err instanceof Error ? err.message : String(err);
       break;
     }
 
@@ -414,6 +376,7 @@ export async function backfillOrders(
       } catch (err) {
         console.error(`[Backfill] order sync error orderId=${node.id}`, err);
         errors++;
+        lastError = err instanceof Error ? err.message : String(err);
       }
     }
 
@@ -442,5 +405,5 @@ export async function backfillOrders(
     `[Backfill] orders done shop=${shop} synced=${synced} skipped=${skipped} errors=${errors} pages=${page}`,
   );
 
-  return { synced, skipped, errors, cursor };
+  return { synced, skipped, errors, cursor, lastError };
 }

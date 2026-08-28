@@ -66,7 +66,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         {
           success: false,
           errorCode: 502,
-          errorMsg: `订单回补失败（errors=${result.errors}）。请查看服务端日志 [Backfill] 详情。`,
+          errorMsg: result.lastError
+            ? `订单回补失败：${result.lastError}`
+            : `订单回补失败（errors=${result.errors}）。请查看服务端日志 [Backfill] 详情。`,
           response: null,
         },
         502,

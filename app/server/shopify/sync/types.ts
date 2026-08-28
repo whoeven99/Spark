@@ -150,4 +150,6 @@ export interface BackfillResult {
   skipped: number;
   errors: number;
   cursor: string | null;
+  /** 最近一次失败原因（GraphQL / 单条 sync），便于 API 透出 */
+  lastError?: string;
 }

@@ -71,7 +71,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (result.errors > 0 && result.synced === 0) {
     return {
-      error: `订单回补失败（errors=${result.errors}）。请查看服务端日志 [Backfill] 详情。`,
+      error:
+        result.lastError ??
+        `订单回补失败（errors=${result.errors}）。请查看服务端日志 [Backfill] 详情。`,
       result,
     };
   }
