@@ -161,50 +161,93 @@ const confirmBtnStyle = (disabled: boolean) =>
     cursor: disabled ? "not-allowed" : "pointer",
   }) as const;
 
-const pickProductZoneStyle = {
+/** 关键字段（对象 + 目标语言）统一放进一张设置面板，逐行同级展示 */
+const setupPanelStyle = {
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 12,
+  background: pageColorTokens.surface,
+  overflow: "hidden",
+} as const;
+
+const setupBlockStyle = (first: boolean) =>
+  ({
+    padding: "11px 12px",
+    ...(first ? null : { borderTop: `1px solid ${pageColorTokens.borderSubtle}` }),
+  }) as const;
+
+const setupRowStyle = (first: boolean) =>
+  ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "11px 12px",
+    ...(first ? null : { borderTop: `1px solid ${pageColorTokens.borderSubtle}` }),
+  }) as const;
+
+const setupLabelStyle = {
   display: "flex",
-  flexDirection: "column",
   alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  width: "100%",
-  border: `1.5px dashed rgba(0, 128, 96, 0.35)`,
-  borderRadius: 12,
-  padding: "18px 14px",
-  background: "rgba(233, 247, 239, 0.45)",
-  cursor: "pointer",
-  textAlign: "center" as const,
+  gap: 7,
+  minWidth: 0,
 } as const;
 
-const pickProductZoneDisabledStyle = {
-  ...pickProductZoneStyle,
-  cursor: "not-allowed",
-  opacity: 0.55,
-} as const;
-
-/** 目标语言等关键参数：与「选择商品」同级的强调区块 */
-const prominentParamZoneStyle = {
-  width: "100%",
-  border: `1.5px dashed rgba(0, 128, 96, 0.35)`,
-  borderRadius: 12,
-  padding: "14px 14px",
-  background: "rgba(233, 247, 239, 0.45)",
-  display: "flex",
-  flexDirection: "column" as const,
-  gap: 8,
-} as const;
-
-const prominentSelectStyle = {
-  width: "100%",
-  border: `1px solid rgba(0, 128, 96, 0.28)`,
-  borderRadius: 10,
-  padding: "12px 14px",
-  fontSize: 15,
+const setupStepStyle = {
+  width: 18,
+  height: 18,
+  borderRadius: 999,
+  background: pageColorTokens.brandGreenLight,
+  border: `1px solid rgba(0, 128, 96, 0.2)`,
+  color: pageColorTokens.brandGreenDeep,
+  fontSize: 11,
   fontWeight: 700,
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
+} as const;
+
+const setupTitleStyle = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+} as const;
+
+const setupHintStyle = {
+  fontSize: 12,
+  color: pageColorTokens.textFootnote,
+  marginTop: 3,
+  marginLeft: 25,
+} as const;
+
+const pickProductButtonStyle = (disabled: boolean) =>
+  ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 13px",
+    borderRadius: 999,
+    border: `1px solid rgba(0, 128, 96, ${disabled ? 0.16 : 0.32})`,
+    background: pageColorTokens.brandGreenLight,
+    color: pageColorTokens.brandGreenDeep,
+    fontSize: 13,
+    fontWeight: 700,
+    whiteSpace: "nowrap" as const,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+    flexShrink: 0,
+  }) as const;
+
+const setupSelectStyle = {
+  maxWidth: 210,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 8,
+  padding: "7px 10px",
+  fontSize: 13,
+  fontWeight: 600,
   background: "#fff",
   color: pageColorTokens.textPrimary,
   cursor: "pointer",
-  appearance: "auto" as const,
+  flexShrink: 0,
 } as const;
 
 const changeProductLinkStyle = {
@@ -298,10 +341,9 @@ function EstimateLine({
       <div style={estimateBoxStyle}>⏱ {t("workspace.taskProposal.card.estimateLoading")}</div>
     );
   }
+  // 无历史校准数据时不占版面（有真实预估后再展示）
   if (perItemCredits == null && perItemSeconds == null) {
-    return (
-      <div style={estimateBoxStyle}>⏱ {t("workspace.taskProposal.card.estimateEmpty")}</div>
-    );
+    return null;
   }
   const parts: string[] = [];
   if (perItemCredits != null && count > 0) {
@@ -503,6 +545,11 @@ export function TaskProposalCard({
                 paramValues,
                 t,
               }),
+              targets: selectedTargets.map((target) => ({
+                id: target.id,
+                title: target.title,
+                imageUrl: target.imageUrl ?? null,
+              })),
             }),
           );
         }
@@ -542,6 +589,14 @@ export function TaskProposalCard({
             })
           : t("workspace.taskProposal.card.waitingForTargets");
 
+  /** 目标语言 / 源语言与对象选择同级，放进设置面板；其余参数保持普通表单 */
+  const prominentFieldKeys = new Set(["targetLanguage", "sourceLanguage"]);
+  const prominentFields = resolved.params.filter(
+    (field) => field.type === "select" && prominentFieldKeys.has(field.key),
+  );
+  const plainFields = resolved.params.filter((field) => !prominentFields.includes(field));
+  const hasTargetBlock = !targetless;
+
   return (
     <div style={{ ...cardStyle, maxWidth: embedded ? 480 : 560 }}>
       {/* Header */}
@@ -577,24 +632,31 @@ export function TaskProposalCard({
               </div>
             ) : null}
 
-            {/* Targets */}
+            {/* 关键字段面板：对象 + 目标语言同级 */}
+            {hasTargetBlock || prominentFields.length > 0 ? (
+            <div style={setupPanelStyle}>
             {targets.length > 0 ? (
-              <div>
+              <div style={setupBlockStyle(true) as React.CSSProperties}>
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 8,
-                    marginBottom: 6,
+                    marginBottom: 8,
                   }}
                 >
-                  <div style={{ ...fieldLabelStyle, marginBottom: 0 }}>
-                    {t("workspace.taskProposal.card.selectedTargets", {
-                      kind: targetKindLabel,
-                      checked: checkedIds.size,
-                      total: targets.length,
-                    })}
+                  <div style={setupLabelStyle}>
+                    <span style={setupStepStyle} aria-hidden="true">
+                      1
+                    </span>
+                    <span style={setupTitleStyle}>
+                      {t("workspace.taskProposal.card.selectedTargets", {
+                        kind: targetKindLabel,
+                        checked: checkedIds.size,
+                        total: targets.length,
+                      })}
+                    </span>
                   </div>
                   {onOpenProductPicker && resolved.targets.kind === "products" ? (
                     <button
@@ -661,74 +723,49 @@ export function TaskProposalCard({
                 </div>
               </div>
             ) : targetless ? null : targetsQuery ? (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: pageColorTokens.textPrimary,
-                  background: pageColorTokens.surfaceSubtle,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                }}
-              >
-                <span style={{ fontWeight: 700 }}>
-                  {t("workspace.taskProposal.card.queryByCriteria", {
-                    description: describeObjectQueryI18n(targetsQuery, t),
-                  })}
-                </span>
-                <span style={{ color: pageColorTokens.textFootnote }}>
+              <div style={setupBlockStyle(true) as React.CSSProperties}>
+                <div style={setupLabelStyle}>
+                  <span style={setupStepStyle} aria-hidden="true">
+                    1
+                  </span>
+                  <span style={setupTitleStyle}>
+                    {t("workspace.taskProposal.card.queryByCriteria", {
+                      description: describeObjectQueryI18n(targetsQuery, t),
+                    })}
+                  </span>
+                </div>
+                <div style={setupHintStyle}>
                   {t("workspace.taskProposal.card.queryHint", {
                     approx:
                       queryCount != null
                         ? t("workspace.taskProposal.card.queryApproxCount", { count: queryCount })
                         : "",
                   })}
-                </span>
+                </div>
               </div>
             ) : showProductPicker ? (
-              <div>
-                <div style={fieldLabelStyle}>
-                  {t("workspace.taskProposal.card.pickProduct")}
+              <div style={setupRowStyle(true) as React.CSSProperties}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={setupLabelStyle}>
+                    <span style={setupStepStyle} aria-hidden="true">
+                      1
+                    </span>
+                    <span style={setupTitleStyle}>
+                      {t("workspace.taskProposal.card.pickProduct")}
+                    </span>
+                  </div>
+                  <div style={setupHintStyle}>
+                    {t("workspace.taskProposal.card.pickProductHint")}
+                  </div>
                 </div>
                 <button
                   type="button"
-                  style={
-                    onOpenProductPicker ? pickProductZoneStyle : pickProductZoneDisabledStyle
-                  }
+                  style={pickProductButtonStyle(!onOpenProductPicker)}
                   onClick={() => onOpenProductPicker?.()}
                   disabled={!onOpenProductPicker}
                 >
-                  <span
-                    style={{
-                      fontSize: 20,
-                      lineHeight: 1,
-                      color: pageColorTokens.brandGreenDeep,
-                    }}
-                    aria-hidden="true"
-                  >
-                    ◫
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: pageColorTokens.textPrimary,
-                    }}
-                  >
-                    {t("workspace.taskProposal.card.pickProductButton")}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: pageColorTokens.textFootnote,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {t("workspace.taskProposal.card.pickProductHint")}
-                  </span>
+                  <span aria-hidden="true">◫</span>
+                  {t("workspace.taskProposal.card.pickProductButton")}
                 </button>
               </div>
             ) : (
@@ -737,55 +774,50 @@ export function TaskProposalCard({
                   fontSize: 12,
                   color: "#92400e",
                   background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  borderRadius: 10,
-                  padding: "8px 10px",
+                  padding: "10px 12px",
                 }}
               >
                 {t("workspace.taskProposal.card.missingTargets", { kind: targetKindLabel })}
               </div>
             )}
 
-            {/* Params（schema 驱动） */}
-            {resolved.params.map((field) => {
-              const isProminentSelect =
-                field.type === "select" &&
-                (field.key === "targetLanguage" || field.key === "sourceLanguage");
+            {prominentFields.map((field, index) => {
               const label = resolveTaskProposalFieldLabel(field, t);
-              if (isProminentSelect) {
-                return (
-                  <div key={field.key} style={prominentParamZoneStyle}>
-                    <div
-                      style={{
-                        ...fieldLabelStyle,
-                        marginBottom: 0,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: pageColorTokens.textPrimary,
-                      }}
-                    >
-                      {label}
-                    </div>
-                    <select
-                      style={prominentSelectStyle}
-                      value={paramValues[field.key] ?? field.value}
-                      onChange={(e) =>
-                        setParamValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
-                      aria-label={label}
-                    >
-                      {(field.options ?? []).map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {resolveTaskProposalParamValueLabel(field.key, opt.value, t)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              }
               return (
+                <div
+                  key={field.key}
+                  style={setupRowStyle(!hasTargetBlock && index === 0) as React.CSSProperties}
+                >
+                  <div style={setupLabelStyle}>
+                    <span style={setupStepStyle} aria-hidden="true">
+                      {(hasTargetBlock ? 2 : 1) + index}
+                    </span>
+                    <span style={setupTitleStyle}>{label}</span>
+                  </div>
+                  <select
+                    style={setupSelectStyle}
+                    value={paramValues[field.key] ?? field.value}
+                    onChange={(e) =>
+                      setParamValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                    aria-label={label}
+                  >
+                    {(field.options ?? []).map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {resolveTaskProposalParamValueLabel(field.key, opt.value, t)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+            </div>
+            ) : null}
+
+            {/* 其余参数（schema 驱动） */}
+            {plainFields.map((field) => (
               <div key={field.key}>
-                <div style={fieldLabelStyle}>{label}</div>
+                <div style={fieldLabelStyle}>{resolveTaskProposalFieldLabel(field, t)}</div>
                 {field.type === "select" ? (
                   <select
                     style={inputStyle}
@@ -817,8 +849,7 @@ export function TaskProposalCard({
                   />
                 )}
               </div>
-              );
-            })}
+            ))}
 
             {/* Estimation：未选对象时不占版面 */}
             {effectiveCount > 0 || targetless ? (

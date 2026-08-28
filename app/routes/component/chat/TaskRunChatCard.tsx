@@ -1,12 +1,12 @@
 /**
- * TaskRunChatCard — 「任务已开始」对话卡片。
+ * TaskRunChatCard — 任务执行进度对话卡片。
  *
  * TaskProposal 确认执行后追加到对话流：展示已创建任务数、参数摘要与创建失败项，
  * 并轮询任务列表聚合执行进度（进行中 / 待审核 / 完成 / 失败），全部终态后停止轮询。
  */
 import { useEffect, useMemo, useState } from "react";
 import type { AITaskItem, AITaskStatus, ProductImproveTaskConfig } from "../../../lib/aiTaskTypes";
-import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import type { TaskRunPayload, TaskRunTarget } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { BATCH_PRODUCT_IMPROVE_SKILL_ID } from "../../../lib/taskProposalPayload";
@@ -32,6 +32,8 @@ type StatusAggregate = {
   known: number;
 };
 
+type BadgeKind = "running" | "pendingReview" | "succeeded" | "failed";
+
 function aggregate(statuses: AITaskStatus[]): StatusAggregate {
   const agg: StatusAggregate = { running: 0, pendingReview: 0, succeeded: 0, failed: 0, known: statuses.length };
   for (const status of statuses) {
@@ -41,6 +43,13 @@ function aggregate(statuses: AITaskStatus[]): StatusAggregate {
     else agg.succeeded += 1;
   }
   return agg;
+}
+
+function resolveBadgeKind(agg: StatusAggregate): BadgeKind {
+  if (agg.known === 0 || agg.running > 0) return "running";
+  if (agg.pendingReview > 0) return "pendingReview";
+  if (agg.failed > 0) return "failed";
+  return "succeeded";
 }
 
 function resolveProductImproveReviewOptions(
@@ -64,7 +73,7 @@ function resolveProductImproveReviewOptions(
 const metaChipStyle = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 4,
+  gap: 6,
   maxWidth: "100%",
   fontSize: 12,
   fontWeight: 600,
@@ -74,6 +83,22 @@ const metaChipStyle = {
   border: "1px solid rgba(0, 128, 96, 0.22)",
   color: pageColorTokens.brandGreenDeep,
 } as const;
+
+const productThumbStyle = {
+  width: 22,
+  height: 22,
+  borderRadius: 5,
+  objectFit: "cover" as const,
+  background: pageColorTokens.surfaceMuted,
+  flexShrink: 0,
+} as const;
+
+const badgeStyleByKind: Record<BadgeKind, { background: string; color: string }> = {
+  running: { background: "#00a67c", color: "#fff" },
+  pendingReview: { background: "#b98900", color: "#fff" },
+  succeeded: { background: "#008060", color: "#fff" },
+  failed: { background: "#d82c0d", color: "#fff" },
+};
 
 export function TaskRunChatCard({
   run,
@@ -142,6 +167,7 @@ export function TaskRunChatCard({
 
   const agg = aggregate(matchedTasks.map((task) => task.status));
   const inProgress = agg.known === 0 || agg.running > 0;
+  const badgeKind = resolveBadgeKind(agg);
   const isProductImprove =
     run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID ||
     matchedTasks.some((task) => task.taskType === "product_improve");
@@ -157,15 +183,19 @@ export function TaskRunChatCard({
   const displayTitle = resolveTaskRunTitle(run, t);
   const paramsLines = resolveTaskRunParamsSummaryLines(run, t);
 
-  const productTitles = useMemo(() => {
-    const titles: string[] = [];
+  const productTargets = useMemo((): TaskRunTarget[] => {
+    if (run.targets && run.targets.length > 0) return run.targets;
+    const fromTasks: TaskRunTarget[] = [];
     for (const task of matchedTasks) {
       const cfg = task.config as Partial<ProductImproveTaskConfig>;
-      const title = cfg.originalTitle?.trim() || cfg.productId?.trim();
-      if (title && !titles.includes(title)) titles.push(title);
+      const id = cfg.productId?.trim();
+      const title = cfg.originalTitle?.trim() || id;
+      if (!id || !title) continue;
+      if (fromTasks.some((item) => item.id === id)) continue;
+      fromTasks.push({ id, title });
     }
-    return titles;
-  }, [matchedTasks]);
+    return fromTasks;
+  }, [matchedTasks, run.targets]);
 
   const languageLabel = useMemo(() => {
     const fromParams = run.params?.targetLanguage;
@@ -221,6 +251,41 @@ export function TaskRunChatCard({
   }
 
   const joinSep = t("workspace.taskProposal.batchPanel.listJoin");
+  const firstImageUrl = productTargets.find((target) => target.imageUrl)?.imageUrl ?? null;
+  const productLabel =
+    productTargets.length === 0
+      ? null
+      : productTargets.length === 1
+        ? productTargets[0]!.title
+        : t("workspace.taskProposal.taskRunCard.metaProductCount", {
+            count: productTargets.length,
+          });
+  let badgeLabel: string;
+  switch (badgeKind) {
+    case "running":
+      badgeLabel = t("workspace.taskProposal.taskRunCard.badgeRunning");
+      break;
+    case "pendingReview":
+      badgeLabel = t("workspace.taskProposal.taskRunCard.badgePendingReview");
+      break;
+    case "succeeded":
+      badgeLabel = t("workspace.taskProposal.taskRunCard.badgeSucceeded");
+      break;
+    case "failed":
+      badgeLabel = t("workspace.taskProposal.taskRunCard.badgeFailed");
+      break;
+    default: {
+      const _exhaustive: never = badgeKind;
+      badgeLabel = _exhaustive;
+      break;
+    }
+  }
+  const badgeColors = badgeStyleByKind[badgeKind];
+  const tokenLabel = tokenSummary
+    ? tokenSummary.kind === "actual"
+      ? t("workspace.taskProposal.taskRunCard.tokensUsed", { count: tokenSummary.value })
+      : t("workspace.taskProposal.taskRunCard.tokensEstimated", { count: tokenSummary.value })
+    : null;
 
   return (
     <div
@@ -249,20 +314,15 @@ export function TaskRunChatCard({
             fontWeight: 700,
             padding: "2px 8px",
             borderRadius: 999,
-            background: "#00a67c",
-            color: "#fff",
+            background: badgeColors.background,
+            color: badgeColors.color,
           }}
         >
-          {t("workspace.taskProposal.taskRunCard.startedBadge")}
+          {badgeLabel}
         </span>
         <span style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textPrimary, flex: 1 }}>
           {displayTitle}
         </span>
-        {inProgress ? (
-          <span style={{ fontSize: 11, color: pageColorTokens.textFootnote }}>
-            {t("workspace.taskProposal.taskRunCard.running")}
-          </span>
-        ) : null}
       </div>
 
       <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -275,10 +335,16 @@ export function TaskRunChatCard({
             : t("workspace.taskProposal.taskRunCard.createdCount", { count: run.taskIds.length })}
         </div>
 
-        {(productTitles.length > 0 || languageLabel || tokenSummary) ? (
+        {(productLabel || languageLabel) ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {productTitles.length > 0 ? (
-              <span style={metaChipStyle} title={productTitles.join(joinSep)}>
+            {productLabel ? (
+              <span
+                style={metaChipStyle}
+                title={productTargets.map((target) => target.title).join(joinSep)}
+              >
+                {firstImageUrl ? (
+                  <img src={firstImageUrl} alt="" style={productThumbStyle} />
+                ) : null}
                 <span style={{ opacity: 0.75 }}>
                   {t("workspace.taskProposal.taskRunCard.metaProduct")}
                 </span>
@@ -290,11 +356,7 @@ export function TaskRunChatCard({
                     maxWidth: 180,
                   }}
                 >
-                  {productTitles.length === 1
-                    ? productTitles[0]
-                    : t("workspace.taskProposal.taskRunCard.metaProductCount", {
-                        count: productTitles.length,
-                      })}
+                  {productLabel}
                 </span>
               </span>
             ) : null}
@@ -304,22 +366,6 @@ export function TaskRunChatCard({
                   {t("workspace.taskProposal.taskRunCard.metaLanguage")}
                 </span>
                 <span>{languageLabel}</span>
-              </span>
-            ) : null}
-            {tokenSummary ? (
-              <span style={metaChipStyle}>
-                <span style={{ opacity: 0.75 }}>
-                  {t("workspace.taskProposal.taskRunCard.metaTokens")}
-                </span>
-                <span>
-                  {tokenSummary.kind === "actual"
-                    ? t("workspace.taskProposal.taskRunCard.tokensUsed", {
-                        count: tokenSummary.value,
-                      })
-                    : t("workspace.taskProposal.taskRunCard.tokensEstimated", {
-                        count: tokenSummary.value,
-                      })}
-                </span>
               </span>
             ) : null}
           </div>
@@ -393,7 +439,19 @@ export function TaskRunChatCard({
         ) : null}
 
         {showReviewButton ? (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 10,
+            }}
+          >
+            {tokenLabel ? (
+              <span style={{ fontSize: 11, color: pageColorTokens.textFootnote }}>
+                {t("workspace.taskProposal.taskRunCard.metaTokens")} {tokenLabel}
+              </span>
+            ) : null}
             <button
               type="button"
               style={{

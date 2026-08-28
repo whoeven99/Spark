@@ -3603,6 +3603,10 @@
       },
       "taskRunCard": {
         "startedBadge": "Run started",
+        "badgeRunning": "Running",
+        "badgePendingReview": "Pending review",
+        "badgeSucceeded": "Completed",
+        "badgeFailed": "Failed",
         "running": "Running…",
         "runningHint": "Task in progress. Review will be available here when it finishes.",
         "createdCount": "Created {{count}} tasks",

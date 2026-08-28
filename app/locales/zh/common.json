@@ -3603,6 +3603,10 @@
       },
       "taskRunCard": {
         "startedBadge": "任务已开始",
+        "badgeRunning": "执行中",
+        "badgePendingReview": "待审核",
+        "badgeSucceeded": "已完成",
+        "badgeFailed": "失败",
         "running": "执行中…",
         "runningHint": "任务进行中，完成后可在此审核结果",
         "createdCount": "已创建 {{count}} 个任务",
