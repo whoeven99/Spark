@@ -662,7 +662,7 @@ export const recommendedChevronStyle: CSSProperties = {
   alignItems: "center",
   fontSize: 12,
   lineHeight: 1,
-  transform: "translateY(-1.5px)",
+  transform: "translateY(-3px)",
   flexShrink: 0,
 };
 export const recommendedMenuStyle: CSSProperties = {
