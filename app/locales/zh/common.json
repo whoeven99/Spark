@@ -3431,7 +3431,30 @@
         "queryProducts": "按条件圈定商品",
         "queryProductsApprox": "按条件圈定商品（约 {{count}} 个）",
         "queryArticles": "按条件圈定文章",
-        "queryArticlesApprox": "按条件圈定文章（约 {{count}} 篇）"
+        "queryArticlesApprox": "按条件圈定文章（约 {{count}} 篇）",
+        "healthDiagnosis": {
+          "title": "今日健康诊断与待办",
+          "subtitle": "基于规则引擎快照，不消耗 LLM",
+          "snapshotMeta": "快照 {{date}} · 生成于 {{generated}}",
+          "loading": "正在加载诊断…",
+          "loadFailed": "加载诊断失败，请稍后重试",
+          "noData": "暂无已同步订单数据，无法生成诊断。可先在设置中回填历史订单。",
+          "metricRisk": "风险",
+          "metricWatch": "关注",
+          "metricOpenTasks": "待办",
+          "priorityTasks": "优先待办",
+          "noPriorityTasks": "当前没有待处理任务",
+          "riskItems": "诊断要点",
+          "status": {
+            "risk": "风险",
+            "watch": "关注",
+            "healthy": "健康"
+          },
+          "refresh": "刷新诊断",
+          "refreshing": "刷新中…",
+          "refreshDone": "诊断已刷新",
+          "refreshFailed": "刷新失败，请稍后重试"
+        }
       },
       "contextSidebar": {
         "title": "当前上下文",
@@ -3590,30 +3613,7 @@
         "networkError": "网络异常，请稍后重试",
         "requestFailed": "请求失败（{{status}}）",
         "thumbProduct": "品",
-        "thumbArticle": "文",
-        "healthDiagnosis": {
-          "title": "今日健康诊断与待办",
-          "subtitle": "基于规则引擎快照，不消耗 LLM",
-          "snapshotMeta": "快照 {{date}} · 生成于 {{generated}}",
-          "loading": "正在加载诊断…",
-          "loadFailed": "加载诊断失败，请稍后重试",
-          "noData": "暂无已同步订单数据，无法生成诊断。可先在设置中回填历史订单。",
-          "metricRisk": "风险",
-          "metricWatch": "关注",
-          "metricOpenTasks": "待办",
-          "priorityTasks": "优先待办",
-          "noPriorityTasks": "当前没有待处理任务",
-          "riskItems": "诊断要点",
-          "status": {
-            "risk": "风险",
-            "watch": "关注",
-            "healthy": "健康"
-          },
-          "refresh": "刷新诊断",
-          "refreshing": "刷新中…",
-          "refreshDone": "诊断已刷新",
-          "refreshFailed": "刷新失败，请稍后重试"
-        }
+        "thumbArticle": "文"
       }
     },
     "taskProposal": {

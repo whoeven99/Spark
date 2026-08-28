@@ -3431,7 +3431,30 @@
         "queryProducts": "Products by filter",
         "queryProductsApprox": "Products by filter (~{{count}})",
         "queryArticles": "Articles by filter",
-        "queryArticlesApprox": "Articles by filter (~{{count}})"
+        "queryArticlesApprox": "Articles by filter (~{{count}})",
+        "healthDiagnosis": {
+          "title": "Today's health diagnosis & todos",
+          "subtitle": "Rule-engine snapshot — no LLM cost",
+          "snapshotMeta": "Snapshot {{date}} · generated {{generated}}",
+          "loading": "Loading diagnosis…",
+          "loadFailed": "Failed to load diagnosis. Please try again.",
+          "noData": "No synced order data yet, so diagnosis can't be generated. Backfill historical orders in Settings first.",
+          "metricRisk": "Risks",
+          "metricWatch": "Watch",
+          "metricOpenTasks": "Open todos",
+          "priorityTasks": "Priority todos",
+          "noPriorityTasks": "No open tasks right now",
+          "riskItems": "Diagnosis highlights",
+          "status": {
+            "risk": "Risk",
+            "watch": "Watch",
+            "healthy": "Healthy"
+          },
+          "refresh": "Refresh diagnosis",
+          "refreshing": "Refreshing…",
+          "refreshDone": "Diagnosis refreshed",
+          "refreshFailed": "Refresh failed. Please try again."
+        }
       },
       "contextSidebar": {
         "title": "Current context",
@@ -3590,30 +3613,7 @@
         "networkError": "Network error. Please try again.",
         "requestFailed": "Request failed ({{status}})",
         "thumbProduct": "P",
-        "thumbArticle": "A",
-        "healthDiagnosis": {
-          "title": "Today's health diagnosis & todos",
-          "subtitle": "Rule-engine snapshot — no LLM cost",
-          "snapshotMeta": "Snapshot {{date}} · generated {{generated}}",
-          "loading": "Loading diagnosis…",
-          "loadFailed": "Failed to load diagnosis. Please try again.",
-          "noData": "No synced order data yet, so diagnosis can't be generated. Backfill historical orders in Settings first.",
-          "metricRisk": "Risks",
-          "metricWatch": "Watch",
-          "metricOpenTasks": "Open todos",
-          "priorityTasks": "Priority todos",
-          "noPriorityTasks": "No open tasks right now",
-          "riskItems": "Diagnosis highlights",
-          "status": {
-            "risk": "Risk",
-            "watch": "Watch",
-            "healthy": "Healthy"
-          },
-          "refresh": "Refresh diagnosis",
-          "refreshing": "Refreshing…",
-          "refreshDone": "Diagnosis refreshed",
-          "refreshFailed": "Refresh failed. Please try again."
-        }
+        "thumbArticle": "A"
       }
     },
     "taskProposal": {
