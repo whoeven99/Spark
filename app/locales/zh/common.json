@@ -291,6 +291,21 @@
     "paginationNext": "下一页",
     "backToPrevious": "返回上一页"
   },
+  "support": {
+    "title": "联系客服",
+    "needHelp": "联系客服",
+    "buttonAria": "打开客服聊天",
+    "greeting": "你好！有问题可以直接在这里留言，我们的支持团队会尽快回复。",
+    "emailPrompt": "留下联系邮箱，方便我们回复你：",
+    "emailPlaceholder": "you@example.com",
+    "emailSave": "保存",
+    "emailSaved": "邮箱已保存，我们会通过邮件通知你。",
+    "emailInvalid": "请输入有效的邮箱地址",
+    "empty": "还没有消息，先打个招呼吧。",
+    "placeholder": "输入消息…",
+    "sendError": "发送失败，请稍后重试",
+    "opsDefaultName": "Spark 支持"
+  },
   "language": {
     "auto": "自动识别",
     "af": "南非语",
@@ -3530,7 +3545,8 @@
         },
         "imageGeneration": {
           "title": "AI 生成商品图片",
-          "summary": "根据描述生成一张商品图片，完成后可在任务列表查看与应用。"
+          "summary": "根据描述生成一张商品图片，完成后可在任务列表查看与应用。",
+          "placeholder": "描述想要的图片，如：白底极简风格的陶瓷马克杯"
         }
       },
       "fields": {
@@ -3583,7 +3599,23 @@
         "running": "执行中…",
         "createdCount": "已创建 {{count}} 个任务",
         "createdPartial": "已创建 {{count}} 个任务，{{failed}} 个对象创建失败",
-        "progress": "进度：{{parts}}"
+        "progress": "进度：{{parts}}",
+        "moreErrors": "还有 {{count}} 个失败"
+      },
+      "batchPanel": {
+        "resultTitle": "批量创建结果",
+        "selectedProducts": "已选商品（{{count}}/{{max}}）",
+        "selectProducts": "选择商品",
+        "noPrimaryImageWarn": "以下 {{count}} 个商品没有主图，将被跳过：{{titles}}",
+        "maxExceeded": "最多批量创建 {{max}} 个任务，请减少选择",
+        "clickToAdd": "（点击添加到批量列表）",
+        "listJoin": "、",
+        "submitImprove": "批量生成（{{count}} 个）",
+        "submitTranslate": "批量翻译（{{count}} 个）",
+        "creating": "正在批量创建任务，请稍候…",
+        "createFailedCount": "{{count}} 个商品创建失败",
+        "failureDetails": "失败详情",
+        "viewTasks": "查看任务"
       }
     },
     "execution": {

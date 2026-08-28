@@ -7,6 +7,7 @@ import {
 import {
   formatTaskProposalParamSummary,
   relocalizeLegacyParamSummaryLine,
+  resolveTaskProposalDisabledReason,
   resolveTaskProposalTitle,
   resolveTaskRunTitle,
 } from "../../../app/lib/taskProposalDisplay";
@@ -65,5 +66,27 @@ describe("taskProposalDisplay", () => {
         t,
       ),
     ).toBe("Batch translate product images");
+  });
+
+  it("formats zh-CN target language via language catalog in English UI", () => {
+    const i18n = initI18n("en");
+    const t = i18n.t.bind(i18n);
+    expect(
+      formatTaskProposalParamSummary({ key: "targetLanguage", label: "目标语言" }, "zh-CN", t),
+    ).toBe("Target language: Chinese");
+  });
+
+  it("formats auto source language in English", () => {
+    const i18n = initI18n("en");
+    const t = i18n.t.bind(i18n);
+    expect(
+      formatTaskProposalParamSummary({ key: "sourceLanguage", label: "源语言" }, "auto", t),
+    ).toBe("Source language: Auto detect");
+  });
+
+  it("resolves no_primary_image disabled reason in English", () => {
+    const i18n = initI18n("en");
+    const t = i18n.t.bind(i18n);
+    expect(resolveTaskProposalDisabledReason("no_primary_image", t)).toBe("No main image");
   });
 });

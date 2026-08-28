@@ -15,7 +15,6 @@ import {
   workspaceMessageToChatMessage,
 } from "./messageTransforms";
 import {
-  aiTaskTypeLabels,
   type ContextTool,
   type Conversation,
   type ConversationTaskRunEntry,
@@ -23,6 +22,10 @@ import {
 } from "./types";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import {
+  resolveTaskRunTitle,
+  skillIdFromAiTaskType,
+} from "../../../lib/taskProposalDisplay";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
@@ -165,9 +168,14 @@ export function ChatPanel({
           startedAt: message.taskRun.startedAt,
         });
       } else if (message.aiTask) {
+        const skillId = skillIdFromAiTaskType(message.aiTask.taskType);
+        const fallbackTitle = message.aiTask.taskType;
         runs.push({
           runId: message.aiTask.id,
-          title: aiTaskTypeLabels[message.aiTask.taskType] ?? message.aiTask.taskType,
+          skillId,
+          title: skillId
+            ? resolveTaskRunTitle({ skillId, title: fallbackTitle }, t)
+            : fallbackTitle,
           taskIds: [message.aiTask.id],
           errorCount: 0,
           paramsSummary: [],
@@ -176,7 +184,7 @@ export function ChatPanel({
       }
     }
     return runs.reverse();
-  }, [messages]);
+  }, [messages, t]);
 
   const conversationTaskIds = useMemo(
     () => conversationRuns.flatMap((run) => run.taskIds),

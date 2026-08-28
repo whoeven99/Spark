@@ -630,7 +630,13 @@ export function TaskProposalCard({
                   <input
                     style={inputStyle}
                     value={paramValues[field.key] ?? field.value}
-                    placeholder={field.placeholder}
+                    placeholder={
+                      field.key === "description"
+                        ? t("workspace.taskProposal.skills.imageGeneration.placeholder", {
+                            defaultValue: field.placeholder ?? "",
+                          })
+                        : field.placeholder
+                    }
                     onChange={(e) =>
                       setParamValues((prev) => ({ ...prev, [field.key]: e.target.value }))
                     }

@@ -298,21 +298,41 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 export const sidebarFooterHelpButtonStyle = (active: boolean): CSSProperties => ({
+  position: "relative",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
   flexShrink: 0,
   minHeight: 34,
-  border: `1px solid ${active ? "#c9cccf" : "#dfe3e8"}`,
+  border: `1px solid ${active ? "#006e52" : "#008060"}`,
   borderRadius: 12,
-  background: active ? "#f6f6f7" : "#ffffff",
-  color: "#1f2124",
+  background: active ? "#006e52" : "#008060",
+  color: "#ffffff",
   padding: "0 12px",
   fontSize: 12,
   fontWeight: 700,
   cursor: "pointer",
   whiteSpace: "nowrap",
+  boxShadow: active ? "none" : "0 1px 2px rgba(0, 128, 96, 0.24)",
+});
+
+/** 侧栏折叠时：与右下角 FAB 同语意的绿色圆形客服入口 */
+export const sidebarCollapsedHelpButtonStyle = (active: boolean): CSSProperties => ({
+  position: "relative",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 36,
+  height: 36,
+  borderRadius: "50%",
+  border: `1px solid ${active ? "#006e52" : "#008060"}`,
+  background: active ? "#006e52" : "#008060",
+  color: "#ffffff",
+  cursor: "pointer",
+  flexShrink: 0,
+  boxShadow: "0 1px 3px rgba(0, 128, 96, 0.28)",
+  padding: 0,
 });
 export const accountMenuStyle: CSSProperties = {
   position: "absolute",

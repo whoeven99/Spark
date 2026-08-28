@@ -62,12 +62,6 @@ export type ConversationTaskRunEntry = {
   startedAt: string;
 };
 
-export const aiTaskTypeLabels: Record<string, string> = {
-  picture_translate: "图片翻译",
-  image_generation: "AI 生成商品图片",
-  product_improve: "商品描述生成",
-};
-
 export type ConversationSummary = {
   id: string;
   title: string;
