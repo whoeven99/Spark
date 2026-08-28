@@ -37,7 +37,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）只发 Spark Test / Admin，不发独立生产应用。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
 - **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
 - Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
-- 卸载目前只删 Session、记日志、发通知，不清理该店 `ShopOrder*` / 广告凭证等镜像。公开上架前还缺 GDPR 强制 webhook（`customers/data_request`、`customers/redact`、`shop/redact`）和隐私政策页。
+- 卸载目前只删 Session、记日志、发通知，不清理该店 `ShopOrder*` / 广告凭证等镜像。GDPR 强制 webhook 已订阅到 `/webhooks/compliance`（`customers/data_request`、`customers/redact`、`shop/redact`），当前仅 HMAC 校验后 200 确认并记日志，不执行真实擦除。改 toml 后须对该配置 `shopify app deploy`。公开上架仍缺隐私政策页与真实擦除。
 - 邀请制内测**不展示**风控链路、回收期/长期 ROI，以及 Health Monitor「ROI 情况（短期和长期）」；短期 ROI 仍在经营页，等产品公式再改计算。详情见 `docs/ROADMAP.md` 第七节。
 
 ## 2. 仓库地图
@@ -112,7 +112,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。
-- `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单（paid/cancelled）、退款、库存、履约，以及 Google Merchant 商品状态与 Meta Catalog Webhook；公共执行/调试工具在 `app/server/webhook/`。
+- `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单（paid/cancelled）、退款、库存、履约、GDPR 合规（`/webhooks/compliance`：`customers/data_request` / `customers/redact` / `shop/redact`），以及 Google Merchant 商品状态与 Meta Catalog Webhook；公共执行/调试工具在 `app/server/webhook/`。
 - `meta.data-deletion.tsx`、`favicon[.]ico.ts`：Meta 数据删除合规回调与 favicon 204 兜底，不属于业务入口。
 
 React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路由时必须按文件路由规则核对最终 URL，并检查父布局/索引路由关系。
@@ -151,6 +151,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 飞书运营通知 | `app/server/feishu/` |
 | App 生命周期与事件 | `app/server/appLifecycle/`、`app/server/commonEventLog/`、`app/server/partner/`（Partner API 拉卸载反馈） |
 | Webhook 公共执行与出站错误 | `app/server/webhook/`、`app/server/common/outboundError.server.ts` |
+| GDPR 合规 webhook | `app/routes/webhooks.compliance.tsx`、`app/server/webhook/complianceWebhooks.server.ts`（仅 ack，不擦除） |
 | 会话、运行时环境、嵌入式回跳 | `app/server/session/`、`app/config/runtimeEnv.server.ts`、`app/server/shopify/embeddedEntry.server.ts`、`app/server/shopify/sessionTokenBounce.server.ts` |
 | Web Pixel / 阿里云日志 | `app/server/webPixel/`、`app/server/aliyunLog/` |
 | Agent 运行摘要 | `app/server/agentRunLog/` |

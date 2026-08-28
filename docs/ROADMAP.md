@@ -30,7 +30,7 @@
 1. `shopify.app.test.toml` 已写入订单 / 退款 / 库存 / 履约 webhook 订阅（与 yw / spark-zz 对齐）。**必须**对该配置 `shopify app deploy` 后，已装店铺才会收到增量；只改 toml 不生效。
 2. 安装后自动回补近 N 天订单（默认 `SPARK_ORDER_BACKFILL_DAYS=30`）需收完并部署；仅靠 webhook 吃不到历史单。
 3. 卸载目前只删 Session，不清理该店业务镜像。
-4. 没有 Shopify 强制合规 webhook（`customers/data_request` / `customers/redact` / `shop/redact`）。邀请制可后补；公开上架会被拒。
+4. GDPR 强制 webhook 路由与 toml 订阅已落地（`/webhooks/compliance`），当前只 ack + 日志，未真正删除镜像。须 `shopify app deploy` 后 Partner 自动化检查才会过。隐私政策页仍缺。
 5. 物流凭证写在 Render 本地 JSON，重启即丢；内测不要把它当核心路径。
 
 ---
@@ -139,7 +139,7 @@
 | Partner 分发方式选定（见下文） | P0 | **选定后不可改**；选错会锁死计费或多店安装 |
 | 1–2 家店走通安装 / 回补 / Today / 订阅 / 卸载 | P0 | |
 | 卸载清理该店镜像 | P1 | 邀请制建议做；上架必做 |
-| GDPR 强制 webhook + 隐私政策 | P1 | 公开上架才变成 P0 |
+| GDPR 真实擦除 + 隐私政策 | P1 | 端点已接；公开上架前要真删数据和隐私页 |
 | 独立告警中心 / case 复盘 | P2 | 不挡首批邀请 |
 | 风控链路、回收期/长期 ROI | 本周期不做 | 页面不展示；短期 ROI 等产品公式 |
 | 写回治理 / 促销 / 竞品 / WMS | P2+ | 内测后 |
@@ -192,7 +192,7 @@ app/server/ai/playbooks/{name}/
 | M0 数据地基 | 🟡 toml 已补订阅，待 `shopify app deploy` | 安装后近 N 天订单进 Turso，新单走 webhook |
 | M1 邀请制内测 | ⬜ 当前周期 | 指定店铺能安装；Today/Ask/Studio/计费可走通；不公开搜索 |
 | M2 告警 + 复盘 | ⬜ | 缺货 / SLA / 退款率告警；case 采纳与 7 天复盘 |
-| M3 公开上架 | ⬜ | GDPR webhook、卸载清数据、PCD、隐私政策、App Store 审核 |
+| M3 公开上架 | ⬜ | 合规 webhook 真实擦除、卸载清数据、PCD、隐私政策、App Store 审核 |
 | M4 受控写回 | ⬜ | 商品/促销写回带 dry-run + 审计 + 回滚 |
 | M5 广告归因 / SEO 周报 / 履约增强 | ⬜ | 在已有 Catalog 之上补齐，而不是重做广告接入 |
 

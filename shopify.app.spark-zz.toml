@@ -12,6 +12,10 @@ automatically_update_urls_on_dev = true
 api_version = "2026-07"
 
 [[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/webhooks/compliance"
+
+[[webhooks.subscriptions]]
 topics = ["app_subscriptions/update"]
 uri = "/webhooks/app/subscriptions_update"
 
