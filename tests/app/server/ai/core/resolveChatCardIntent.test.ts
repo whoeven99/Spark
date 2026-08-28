@@ -31,6 +31,23 @@ describe("buildChatCardPayloadFromIntent", () => {
     expect(payloads.imageGenerationCard).toBeDefined();
   });
 
+  it("prefills workspace product onto image generation card", () => {
+    const payloads = buildChatCardPayloadFromIntent(
+      {
+        cardType: "image_generation_form",
+        shouldShowCard: true,
+        assistantClaimsCardOpened: true,
+        imageDescription: "白底主图",
+      },
+      "[工作台上下文]\n- 已选商品（共 1 个）：\n  • 陶瓷马克杯 [ID: gid://shopify/Product/1]",
+    );
+    expect(payloads.imageGenerationCard).toEqual({
+      description: "白底主图",
+      productId: "gid://shopify/Product/1",
+      productTitle: "陶瓷马克杯",
+    });
+  });
+
   it("injects product quality card for 质量评分 intent", () => {
     const payloads = buildChatCardPayloadFromIntent(
       {

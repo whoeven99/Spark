@@ -13,6 +13,7 @@ import { DialogShell } from "../component/shared/DialogShell";
 import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
+import { AI_TASK_FETCH_INIT, mergeFetchedAiTask } from "../../lib/aiTaskStatusSync";
 import {
   readProductImproveTabFromSearch,
   readProductImproveTaskIdFromSearch,
@@ -214,12 +215,17 @@ export function ProductImprovePage() {
           search.startsWith("?") ? search.slice(1) : search,
         );
         params.delete("taskId");
-        const resp = await fetch(`/api/ai-task/${encodeURIComponent(taskId)}?${params.toString()}`);
+        const resp = await fetch(
+          `/api/ai-task/${encodeURIComponent(taskId)}?${params.toString()}`,
+          AI_TASK_FETCH_INIT,
+        );
         if (!resp.ok) return;
         const body = (await resp.json()) as { task?: AITaskItem };
         if (!body.task) return;
         setTasks((prev) =>
-          prev.map((task) => (task.id === taskId ? body.task! : task)),
+          prev.map((task) =>
+            task.id === taskId ? mergeFetchedAiTask(task, body.task!) : task,
+          ),
         );
       } catch {
         // ignore; user can refresh manually

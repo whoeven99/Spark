@@ -8,5 +8,8 @@ export const DEFAULT_IMAGE_GEN_HEIGHT = 1024;
 export const MIN_PROMPT_CHARS = 4;
 export const MAX_PROMPT_CHARS = 2000;
 
+/** 文生图模型调用 / Blob 上传失败后的自动重试间隔。 */
+export const IMAGE_GENERATION_RETRY_DELAY_MS = 2000;
+
 /** 火山智能视觉 CVProcess 文生图 req_key，可通过环境变量覆盖。 */
 export const DEFAULT_VOLC_IMAGE_GEN_REQ_KEY = "high_aes_general_v20";

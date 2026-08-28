@@ -268,7 +268,7 @@ export function ChatPanel({
   const showContextSidebar = filledContextCount > 0 || conversationRuns.length > 0;
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
-  const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
+  const { tasksById, upsertTaskStatus } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
 
   const closeReviewDialog = useCallback(() => {
     setReviewTaskId(null);
@@ -761,9 +761,10 @@ export function ChatPanel({
                   }
                 />
               }
-              onAiTaskUpdated={(taskId, status, result) =>
-                onAiTaskUpdated(conversation.id, taskId, status, result)
-              }
+              onAiTaskUpdated={(taskId, status, result) => {
+                upsertTaskStatus(taskId, status, result);
+                onAiTaskUpdated(conversation.id, taskId, status, result);
+              }}
               onOpenTasks={handleOpenTasks}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
@@ -814,6 +815,7 @@ export function ChatPanel({
             onBack={closeReviewDialog}
             showBackButton={false}
             onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
               setReviewTask((prev) =>
                 prev && prev.id === taskId
                   ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
@@ -829,6 +831,7 @@ export function ChatPanel({
             onBack={closeReviewDialog}
             showBackButton={false}
             onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
               setReviewTask((prev) =>
                 prev && prev.id === taskId
                   ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
@@ -844,6 +847,7 @@ export function ChatPanel({
             onBack={closeReviewDialog}
             showBackButton={false}
             onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
               setReviewTask((prev) =>
                 prev && prev.id === taskId
                   ? { ...prev, status, ...(result !== undefined ? { result } : {}) }

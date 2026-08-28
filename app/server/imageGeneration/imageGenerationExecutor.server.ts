@@ -1,5 +1,6 @@
 import {
   IMAGE_GENERATION_LOG_PREFIX,
+  IMAGE_GENERATION_RETRY_DELAY_MS,
   MAX_PROMPT_CHARS,
   MIN_PROMPT_CHARS,
 } from "./constants.server";
@@ -10,6 +11,27 @@ import {
 } from "./imageGenerationConfig.server";
 import { uploadGeneratedImageAndGetUrl } from "./imageGenerationBlob.server";
 import type { ImageGenerationFailureReason, ImageGenerationResult } from "./types";
+
+const NON_RETRYABLE_GENERATE_REASON_CODES = new Set([
+  "credentials_missing",
+  "openai_credentials_missing",
+  "volc_credentials_missing",
+  "prompt_invalid",
+  "disabled",
+]);
+
+export function isRetryableImageGenerationFailure(reasonCode: string): boolean {
+  return !NON_RETRYABLE_GENERATE_REASON_CODES.has(reasonCode);
+}
+
+function resolveRetryDelayMs(): number {
+  return process.env.VITEST ? 0 : IMAGE_GENERATION_RETRY_DELAY_MS;
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function isImageGenerationEnabled(): boolean {
   const raw = process.env.IMAGE_GENERATION_ENABLED?.trim().toLowerCase();
@@ -92,6 +114,47 @@ function mapProviderFailure(
   };
 }
 
+async function generateImageBytesWithRetry(params: {
+  prompt: string;
+  requestId: string;
+}) {
+  const first = await generateImageToBytes({ prompt: params.prompt });
+  if (first.ok || !isRetryableImageGenerationFailure(first.reasonCode)) {
+    return first;
+  }
+
+  console.info(
+    `${IMAGE_GENERATION_LOG_PREFIX} generate failed, retry once requestId=${params.requestId} reason=${first.reasonCode}`,
+  );
+  await sleep(resolveRetryDelayMs());
+  return generateImageToBytes({ prompt: params.prompt });
+}
+
+async function uploadGeneratedImageWithRetry(params: {
+  shop: string;
+  imageBytes: Buffer;
+  requestId: string;
+}) {
+  const uploadParams = {
+    shop: params.shop,
+    imageBytes: params.imageBytes,
+    requestId: params.requestId,
+    extension: "png" as const,
+  };
+
+  try {
+    return await uploadGeneratedImageAndGetUrl(uploadParams);
+  } catch (firstError) {
+    const detail =
+      firstError instanceof Error ? firstError.message : String(firstError);
+    console.info(
+      `${IMAGE_GENERATION_LOG_PREFIX} blob upload failed, retry once requestId=${params.requestId} detail=${detail}`,
+    );
+    await sleep(resolveRetryDelayMs());
+    return uploadGeneratedImageAndGetUrl(uploadParams);
+  }
+}
+
 export async function executeImageGeneration(params: {
   requestId: string;
   shop: string;
@@ -133,7 +196,10 @@ export async function executeImageGeneration(params: {
     `${IMAGE_GENERATION_LOG_PREFIX} start requestId=${requestId} shop=${params.shop} provider=${provider ?? "none"} promptLen=${normalizedPrompt.length}`,
   );
 
-  const generated = await generateImageToBytes({ prompt: normalizedPrompt });
+  const generated = await generateImageBytesWithRetry({
+    prompt: normalizedPrompt,
+    requestId,
+  });
 
   if (!generated.ok) {
     return mapProviderFailure(generated.reasonCode, generated.detail, requestId);
@@ -142,11 +208,10 @@ export async function executeImageGeneration(params: {
   let imageUrl: string;
   let blobPath: string;
   try {
-    const uploaded = await uploadGeneratedImageAndGetUrl({
+    const uploaded = await uploadGeneratedImageWithRetry({
       shop: params.shop,
       imageBytes: generated.bytes,
       requestId,
-      extension: "png",
     });
     imageUrl = uploaded.imageUrl;
     blobPath = uploaded.blobPath;
