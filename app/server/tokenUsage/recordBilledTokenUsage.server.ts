@@ -1,5 +1,6 @@
 import prisma from "../../db.server";
 import { isBillingEnabled } from "../billing/constants.server";
+import { trackAndFlushOverage } from "../billing/overage/flushOverage.server";
 import { checkAndIncrementTrialDailyUsage } from "../billing/subscription/trialDailyLimit.server";
 import type { BilledTokenUsageItem } from "./applyTokenBilling.server";
 import { billTokenUsage } from "./applyTokenBilling.server";
@@ -76,6 +77,12 @@ export async function recordBilledTokenUsages(params: {
       outputTokens: entry.billedUsage.outputTokens,
     })),
   });
+
+  try {
+    await trackAndFlushOverage({ shop, billedTokens: usage.totalTokens });
+  } catch (error) {
+    console.error(`[Billing][Overage] track/flush failed shop=${shop}:`, error);
+  }
 
   return usage.totalTokens;
 }

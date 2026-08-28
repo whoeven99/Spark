@@ -11,6 +11,14 @@ export type CreateOneTimePurchaseResult = {
   shopifyPurchaseId: string;
 };
 
+export type CreateUsageRecordResult = {
+  usageRecordId: string | null;
+};
+
+export type UpdateOverageCapResult = {
+  confirmationUrl: string | null;
+};
+
 export interface BillingGateway {
   createSubscription(params: {
     admin: ShopifyAdminGraphqlClient;
@@ -26,4 +34,22 @@ export interface BillingGateway {
     plan: PlanRecord;
     returnUrl: string;
   }): Promise<CreateOneTimePurchaseResult>;
+
+  createUsageRecord?(params: {
+    admin: ShopifyAdminGraphqlClient;
+    shop: string;
+    subscriptionLineItemId: string;
+    description: string;
+    amount: number;
+    currencyCode: string;
+    idempotencyKey: string;
+  }): Promise<CreateUsageRecordResult>;
+
+  updateOverageCap?(params: {
+    admin: ShopifyAdminGraphqlClient;
+    shop: string;
+    usageLineItemId: string;
+    cappedAmount: string;
+    currencyCode: string;
+  }): Promise<UpdateOverageCapResult>;
 }

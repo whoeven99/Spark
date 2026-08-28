@@ -173,6 +173,176 @@
   margin-top: 0.65rem;
 }
 
+.overageBlock {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e1e3e5;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.overageUsageHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.overageUsageAmounts {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #202223;
+  white-space: nowrap;
+}
+
+.overageProgressTrack {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: #e4e5e7;
+  overflow: hidden;
+}
+
+.overageProgressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: #005bd3;
+  min-width: 0;
+}
+
+.overageSettingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem 1rem;
+  margin-top: 0.35rem;
+}
+
+.overageSettingCopy {
+  flex: 1 1 10rem;
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.overageSettingLabel {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.overageHint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6d7175;
+  line-height: 1.35;
+}
+
+.overageRaiseForm {
+  display: grid;
+  gap: 0;
+}
+
+.overageRaiseRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.overageModeChip {
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid #d2d5d8;
+  background: #f6f6f7;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #202223;
+}
+
+.overageModeSelect {
+  appearance: auto;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid #d2d5d8;
+  background: #f6f6f7;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #202223;
+  max-width: 11rem;
+}
+
+.overageCurrencyPrefix {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #5c6066;
+}
+
+.overageCapInput {
+  width: 4.75rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid #d2d5d8;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #202223;
+  text-align: right;
+}
+
+.overageCapInput:focus {
+  outline: 2px solid rgba(0, 91, 211, 0.35);
+  outline-offset: 1px;
+  border-color: #005bd3;
+}
+
+.overageSaveButton {
+  appearance: none;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: none;
+  background: #005bd3;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.overageSaveButton:hover:not(:disabled) {
+  background: #004aae;
+}
+
+.overageSaveButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.planOverageFootnote {
+  margin: 0.65rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #6d7175;
+}
+
+@media (max-width: 520px) {
+  .overageRaiseRow {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .overageCapInput {
+    flex: 1 1 auto;
+  }
+
+  .overageSaveButton {
+    flex: 1 1 auto;
+  }
+}
+
 .poolChips {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -356,6 +356,22 @@ function PaidPlanCard({
           <p className={styles.planPriceMeta}>{`${monthlyEquivalent}${t("billing.perMonth")}`}</p>
         ) : null}
         <PlanFeatureList items={paidFeatures(plan)} />
+        {plan.overagePricePerThousand && plan.defaultOverageCapAmount ? (
+          <p className={styles.planOverageFootnote}>
+            {t("billing.planOverageFootnote", {
+              price: formatPlanPrice(
+                plan.overagePricePerThousand,
+                plan.currencyCode,
+                locale,
+              ),
+              cap: formatPlanPrice(
+                plan.defaultOverageCapAmount,
+                plan.currencyCode,
+                locale,
+              ),
+            })}
+          </p>
+        ) : null}
       </div>
 
       <div className={styles.planCta}>
@@ -420,7 +436,10 @@ export function BillingPage() {
     tokenPacks,
     billingHistory,
     toolUsageHistory,
+    overageCharges,
     showDevCancelSubscription,
+    pendingPlanChange,
+    billingReturnFlash,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -428,6 +447,9 @@ export function BillingPage() {
   const isCancelling =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "cancel_subscription";
+  const isDismissingPending =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "dismiss_pending_plan_change";
   const subscribingPlanKey =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "subscribe"
@@ -482,6 +504,9 @@ export function BillingPage() {
   );
   const [showAccountDetailPage, setShowAccountDetailPage] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [overageMode, setOverageMode] = useState<"fixed" | "disabled">(
+    () => (billing.overage?.spendingEnabled === false ? "disabled" : "fixed"),
+  );
 
   const paidPlansForInterval = useMemo(
     () => sortPlansByTier(listSubscriptionPlansForInterval(subscriptionPlans, interval)),
@@ -560,6 +585,23 @@ export function BillingPage() {
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
   const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
+  const overageUsagePercent =
+    billing.overage?.enabled && billing.overage.spendingEnabled
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            (Number.parseFloat(billing.overage.usageBalanceUsed ?? "0") /
+              Math.max(Number.parseFloat(billing.overage.cappedAmount ?? "0"), 0.01)) *
+              100,
+          ),
+        )
+      : 0;
+
+  useEffect(() => {
+    setOverageMode(billing.overage?.spendingEnabled === false ? "disabled" : "fixed");
+  }, [billing.overage?.spendingEnabled]);
+
   const currentSubscriptionTier =
     sub?.status === "ACTIVE" || sub?.status === "PENDING"
       ? planTierFromPlanKey(sub.planKey)
@@ -568,13 +610,27 @@ export function BillingPage() {
   const emphasizedTier = currentSubscriptionTier ?? recommendedTier;
   const usageLow = usagePercent >= 85;
 
-  if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
+  if (actionData?.ok && "raisedCap" in actionData && actionData.raisedCap) {
+    shopify.toast.show(t("billing.overageRaiseCapDone"));
+  } else if (actionData?.ok && "overageDisabled" in actionData && actionData.overageDisabled) {
+    shopify.toast.show(t("billing.overageDisabledDone"));
+  } else if (actionData?.ok && "dismissedPending" in actionData && actionData.dismissedPending) {
+    shopify.toast.show(t("billing.pendingPlanChangeDismissed"));
+  } else if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
     shopify.toast.show(t("billing.checkoutCompleteNoRedirect"));
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
     shopify.toast.show(t("billing.cancelSubscriptionSuccess"));
   } else if (actionData && !actionData.ok) {
     shopify.toast.show(actionData.error);
   }
+
+  useEffect(() => {
+    if (billingReturnFlash === "awaiting_shopify_confirm") {
+      shopify.toast.show(t("billing.pendingPlanChangeAwaitConfirm"));
+    } else if (billingReturnFlash === "plan_unchanged_declined") {
+      shopify.toast.show(t("billing.pendingPlanChangeDeclined"));
+    }
+  }, [billingReturnFlash, shopify, t]);
 
   const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale, t);
 
@@ -713,10 +769,6 @@ export function BillingPage() {
       answer: t("billing.faqBillingAnswer"),
     },
     {
-      question: t("billing.faqPackQuestion"),
-      answer: t("billing.faqPackAnswer"),
-    },
-    {
       question: t("billing.faqWhenQuestion"),
       answer: t("billing.faqWhenAnswer"),
     },
@@ -797,6 +849,44 @@ export function BillingPage() {
                   </div>
                 </dl>
               </article>
+
+              {overageCharges.length > 0 ? (
+                <article className={styles.accountCard}>
+                  <div className={styles.accountCardHeader}>
+                    <h3 className={styles.accountCardTitle}>
+                      {t("billing.overageSectionTitle")}
+                    </h3>
+                  </div>
+                  <div className={styles.historyList}>
+                    {overageCharges.map((charge) => (
+                      <div key={charge.id} className={styles.historyItem}>
+                        <div className={styles.historyItemTop}>
+                          <div className={styles.historyMain}>
+                            <span className={styles.historyTone}>
+                              {t(`billing.overageChargeStatus.${charge.status}`, {
+                                defaultValue: charge.status,
+                              })}
+                            </span>
+                            <div className={styles.historyMeta}>
+                              <span>
+                                {charge.tokens.toLocaleString()} {t("billing.tokenUnit")}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={styles.historySide}>
+                            <span className={styles.historyDeltaNegative}>
+                              {formatPlanPrice(charge.amount, charge.currency, locale)}
+                            </span>
+                            <span className={styles.historyTimestamp}>
+                              {formatDateTime(charge.createdAt, locale)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
 
               <article className={styles.accountCard}>
                 <div className={styles.accountCardHeader}>
@@ -937,7 +1027,58 @@ export function BillingPage() {
       />
 
       {!billing.hasAccess && billing.billingRequired ? (
-        <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
+        <s-banner tone="warning">
+          {billing.denialReason === "overage_cap_reached"
+            ? t("billing.overageCapReachedWarning")
+            : t("billing.lowBalanceWarning")}
+        </s-banner>
+      ) : null}
+      {billing.overage?.approaching && billing.hasAccess ? (
+        <s-banner tone="warning">{t("billing.overageApproachingWarning")}</s-banner>
+      ) : null}
+      {pendingPlanChange ? (
+        <s-banner tone="info">
+          <p>
+            {t("billing.pendingPlanChangeBanner", {
+              plan: normalizePlanDisplayName(
+                pendingPlanChange.planName,
+                pendingPlanChange.planKey,
+              ),
+            })}
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              marginTop: "8px",
+            }}
+          >
+            {pendingPlanChange.confirmationUrl ? (
+              <a
+                href={pendingPlanChange.confirmationUrl}
+                target="_top"
+                rel="noopener noreferrer"
+              >
+                <s-button variant="primary">
+                  {t("billing.pendingPlanChangeContinue")}
+                </s-button>
+              </a>
+            ) : null}
+            <Form method="post">
+              <input type="hidden" name="intent" value="dismiss_pending_plan_change" />
+              <s-button
+                type="submit"
+                variant="tertiary"
+                {...(isDismissingPending ? { loading: true } : {})}
+              >
+                {isDismissingPending
+                  ? t("billing.pendingPlanChangeDismissing")
+                  : t("billing.pendingPlanChangeDismiss")}
+              </s-button>
+            </Form>
+          </div>
+        </s-banner>
       ) : null}
       {subscriptionTrialBannerCopy ? (
         <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
@@ -1001,6 +1142,133 @@ export function BillingPage() {
                 {t("billing.openAccountDetailPage")}
               </button>
             </div>
+            {billing.overage?.enabled ? (
+              <div className={styles.overageBlock}>
+                <div className={styles.overageUsageHeader}>
+                  <span className={styles.overageSettingLabel}>
+                    {t("billing.overageStatusLabel")}
+                  </span>
+                  <span className={styles.overageUsageAmounts}>
+                    {billing.overage.spendingEnabled
+                      ? t("billing.overageUsageCompact", {
+                          used: formatPlanPrice(
+                            billing.overage.usageBalanceUsed ?? "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                          cap: formatPlanPrice(
+                            billing.overage.cappedAmount ?? "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                        })
+                      : t("billing.overageUsageCompact", {
+                          used: formatPlanPrice(
+                            "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                          cap: formatPlanPrice(
+                            "0",
+                            billing.overage.cappedCurrency ?? "USD",
+                            locale,
+                          ),
+                        })}
+                  </span>
+                </div>
+                <div
+                  className={styles.overageProgressTrack}
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(overageUsagePercent)}
+                  aria-label={t("billing.overageUsageLabel", {
+                    used: formatPlanPrice(
+                      billing.overage.spendingEnabled
+                        ? (billing.overage.usageBalanceUsed ?? "0")
+                        : "0",
+                      billing.overage.cappedCurrency ?? "USD",
+                      locale,
+                    ),
+                    cap: formatPlanPrice(
+                      billing.overage.spendingEnabled
+                        ? (billing.overage.cappedAmount ?? "0")
+                        : "0",
+                      billing.overage.cappedCurrency ?? "USD",
+                      locale,
+                    ),
+                  })}
+                >
+                  <div
+                    className={styles.overageProgressFill}
+                    style={{ width: `${overageUsagePercent}%` }}
+                  />
+                </div>
+                <p className={styles.overageHint}>{t("billing.overageStatusDesc")}</p>
+                <Form method="post" className={styles.overageRaiseForm}>
+                  <input type="hidden" name="intent" value="raise_overage_cap" />
+                  <div className={styles.overageSettingRow}>
+                    <div className={styles.overageSettingCopy}>
+                      <label className={styles.overageSettingLabel} htmlFor="overage-mode">
+                        {t("billing.overageLimitLabel")}
+                      </label>
+                      <p className={styles.overageHint}>{t("billing.overageLimitDesc")}</p>
+                    </div>
+                    <div className={styles.overageRaiseRow}>
+                      <select
+                        id="overage-mode"
+                        name="overageMode"
+                        className={styles.overageModeSelect}
+                        value={overageMode}
+                        onChange={(event) =>
+                          setOverageMode(event.target.value === "disabled" ? "disabled" : "fixed")
+                        }
+                        aria-label={t("billing.overageLimitLabel")}
+                      >
+                        <option value="fixed">{t("billing.overageLimitModeFixed")}</option>
+                        <option value="disabled">{t("billing.overageLimitModeDisabled")}</option>
+                      </select>
+                      {overageMode === "fixed" ? (
+                        <>
+                          <span className={styles.overageCurrencyPrefix} aria-hidden>
+                            {t("billing.overageCurrencyPrefix")}
+                          </span>
+                          <input
+                            id="overage-cap-input"
+                            name="cappedAmount"
+                            type="number"
+                            inputMode="decimal"
+                            min="1"
+                            step="1"
+                            required
+                            className={styles.overageCapInput}
+                            defaultValue={String(
+                              Math.max(
+                                1,
+                                Math.ceil(
+                                  Number.parseFloat(billing.overage.cappedAmount ?? "0"),
+                                ),
+                              ),
+                            )}
+                            aria-label={t("billing.overageLimitLabel")}
+                          />
+                        </>
+                      ) : null}
+                      <button
+                        type="submit"
+                        className={styles.overageSaveButton}
+                        disabled={
+                          navigation.state !== "idle" &&
+                          navigation.formData?.get("intent") === "raise_overage_cap"
+                        }
+                      >
+                        {t("billing.overageRaiseCap")}
+                      </button>
+                    </div>
+                  </div>
+                </Form>
+              </div>
+            ) : null}
           </div>
         </div>
         <div className={styles.quotaFooter}>

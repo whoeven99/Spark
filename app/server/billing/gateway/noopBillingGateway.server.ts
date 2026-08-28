@@ -6,6 +6,8 @@ import { APP_SUBSCRIPTION_STATUS } from "../types.server";
 
 const NOOP_SUBSCRIPTION_GID = "gid://shopify/AppSubscription/noop";
 const NOOP_PURCHASE_GID_PREFIX = "gid://shopify/AppPurchaseOneTime/noop-";
+const NOOP_USAGE_LINE_PREFIX = "gid://shopify/AppSubscriptionLineItem/noop-";
+const NOOP_USAGE_RECORD_PREFIX = "gid://shopify/AppUsageRecord/noop-";
 
 export const noopBillingGateway: BillingGateway = {
   async createSubscription({ shop, plan, trialDays }) {
@@ -18,6 +20,10 @@ export const noopBillingGateway: BillingGateway = {
     } else {
       periodEnd.setUTCDate(periodEnd.getUTCDate() + 30);
     }
+
+    const hasOverage = Boolean(
+      plan.defaultOverageCapAmount && plan.overagePricePerThousand,
+    );
 
     await applyActiveSubscription({
       shop,
@@ -35,6 +41,16 @@ export const noopBillingGateway: BillingGateway = {
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
       },
+      overage: hasOverage
+        ? {
+            usageLineItemId: `${NOOP_USAGE_LINE_PREFIX}${plan.planKey}`,
+            overagePricePerThousand: plan.overagePricePerThousand!,
+            cappedAmount: plan.defaultOverageCapAmount!,
+            cappedCurrency: plan.currencyCode || "USD",
+            usageBalanceUsed: "0",
+            overageEnabled: true,
+          }
+        : undefined,
       rawPayload: { noop: true, trialDays: effectiveTrialDays ?? 0 },
     });
 
@@ -57,6 +73,27 @@ export const noopBillingGateway: BillingGateway = {
       confirmationUrl: null,
       shopifyPurchaseId: purchaseId,
     };
+  },
+
+  async createUsageRecord({
+    idempotencyKey,
+  }) {
+    return {
+      usageRecordId: `${NOOP_USAGE_RECORD_PREFIX}${idempotencyKey}`,
+    };
+  },
+
+  async updateOverageCap({ shop, cappedAmount, currencyCode }) {
+    await prisma.appSubscription.update({
+      where: { shop },
+      data: {
+        cappedAmount,
+        cappedCurrency: currencyCode,
+        overageSpendLimit: cappedAmount,
+        overageSpendingEnabled: true,
+      },
+    });
+    return { confirmationUrl: null };
   },
 };
 
@@ -86,6 +123,16 @@ export async function noopActivatePendingSubscription(shop: string): Promise<voi
       currentPeriodStart: new Date(),
       currentPeriodEnd: periodEnd,
     },
+    overage: sub.usageLineItemId
+      ? {
+          usageLineItemId: sub.usageLineItemId,
+          overagePricePerThousand: sub.overagePricePerThousand,
+          cappedAmount: sub.cappedAmount,
+          cappedCurrency: sub.cappedCurrency,
+          usageBalanceUsed: sub.usageBalanceUsed ?? "0",
+          overageEnabled: true,
+        }
+      : undefined,
     rawPayload: { noop: true, activatedFromPending: true },
   });
 }

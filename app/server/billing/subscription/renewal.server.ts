@@ -72,6 +72,8 @@ export async function archivePeriodAndRenew(params: {
       currentPeriodStart: next.currentPeriodStart,
       currentPeriodEnd: next.currentPeriodEnd,
       status: "ACTIVE",
+      usageBalanceUsed: "0",
+      overagePendingTokens: 0,
     },
   });
 

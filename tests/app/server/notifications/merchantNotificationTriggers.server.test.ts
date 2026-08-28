@@ -114,6 +114,9 @@ const samplePlan = {
   tokens: 10_000,
   trialDays: null,
   shopifyPlanName: null,
+  overagePricePerThousand: null,
+  defaultOverageCapAmount: null,
+  overageTerms: null,
 };
 
 describe("merchant notification triggers", () => {
