@@ -4,7 +4,12 @@ import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessag
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { trackFeature } from "../../../lib/featureTrack";
 import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
-import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import {
+  coerceImageGenerationFormPayload,
+  imageGenerationFormFromProposal,
+  mergeImageGenerationContextProduct,
+  type ImageGenerationFormPayload,
+} from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import {
   coerceBatchTasksFormPayload,
@@ -12,7 +17,6 @@ import {
 } from "../../../lib/batchTasksFormPayload";
 import {
   buildBatchProductImproveProposal,
-  buildImageGenerationProposal,
   buildSinglePictureTranslateProposal,
   buildSingleProductImproveProposal,
   coerceTaskProposalPayload,
@@ -84,6 +88,8 @@ export type ChatStreamFinishPayload = {
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: unknown;
+  imageGenerationCard?: boolean;
+  imageGenerationCardPayload?: ImageGenerationFormPayload;
   taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
@@ -96,6 +102,8 @@ type Snapshot = {
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
+  imageGenerationCard: boolean;
+  imageGenerationCardPayload?: ImageGenerationFormPayload;
   taskProposal?: TaskProposalPayload;
 };
 
@@ -107,6 +115,8 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     attachments: snapshot.attachments,
     productImproveCard: snapshot.productImproveCard,
     productImproveCardPayload: snapshot.productImproveCardPayload,
+    imageGenerationCard: snapshot.imageGenerationCard,
+    imageGenerationCardPayload: snapshot.imageGenerationCardPayload,
     taskProposal: snapshot.taskProposal,
   };
 }
@@ -123,6 +133,8 @@ export function useChatStream() {
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
   const [streamingTaskProposal, setStreamingTaskProposal] =
     useState<TaskProposalPayload | undefined>();
+  const [streamingImageGenerationPayload, setStreamingImageGenerationPayload] =
+    useState<ImageGenerationFormPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -133,6 +145,8 @@ export function useChatStream() {
     attachments: [],
     productImproveCard: false,
     productImproveCardPayload: undefined,
+    imageGenerationCard: false,
+    imageGenerationCardPayload: undefined,
     taskProposal: undefined,
   });
 
@@ -145,6 +159,8 @@ export function useChatStream() {
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
+      imageGenerationCard: false,
+      imageGenerationCardPayload: undefined,
       taskProposal: undefined,
     };
   };
@@ -154,6 +170,7 @@ export function useChatStream() {
     setStreamingThinkingText("");
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
+    setStreamingImageGenerationPayload(undefined);
     setStreamingTaskProposal(undefined);
     setSkillSteps([]);
   };
@@ -189,6 +206,11 @@ export function useChatStream() {
       /** 应用通用提案卡（合并工作台上下文，并替换单商品即时卡） */
       const applyTaskProposal = (proposal: TaskProposalPayload | null) => {
         if (!proposal) return;
+        const imageForm = imageGenerationFormFromProposal(proposal);
+        if (imageForm) {
+          applyImageGenerationCard(imageForm);
+          return;
+        }
         const merged = mergeTaskProposalTargets(
           proposal,
           workspaceBatchProducts,
@@ -197,9 +219,24 @@ export function useChatStream() {
         snapshotRef.current.taskProposal = merged;
         snapshotRef.current.productImproveCard = false;
         snapshotRef.current.productImproveCardPayload = undefined;
+        snapshotRef.current.imageGenerationCard = false;
+        snapshotRef.current.imageGenerationCardPayload = undefined;
         setStreamingGenerateCard(false);
         setStreamingGeneratePayload(undefined);
+        setStreamingImageGenerationPayload(undefined);
         setStreamingTaskProposal(merged);
+      };
+
+      const applyImageGenerationCard = (raw: unknown) => {
+        const merged = mergeImageGenerationContextProduct(
+          coerceImageGenerationFormPayload(raw),
+          workspaceBatchProducts[0] ?? null,
+        );
+        snapshotRef.current.imageGenerationCard = true;
+        snapshotRef.current.imageGenerationCardPayload = merged;
+        snapshotRef.current.taskProposal = undefined;
+        setStreamingTaskProposal(undefined);
+        setStreamingImageGenerationPayload(merged);
       };
 
       trackFeature("chat", "send_message", {
@@ -334,11 +371,7 @@ export function useChatStream() {
                     ),
                   );
                 } else if (chunk.name === "open_image_generation_form") {
-                  applyTaskProposal(
-                    buildImageGenerationProposal(
-                      coerceImageGenerationFormPayload(chunk.args),
-                    ),
-                  );
+                  applyImageGenerationCard(chunk.args);
                 } else if (chunk.name === "open_batch_tasks_form") {
                   // 旧服务端兼容：批量卡片 chunk 统一转为通用 TaskProposal
                   applyTaskProposal(
@@ -430,11 +463,7 @@ export function useChatStream() {
                   );
                 }
                 if (ui?.imageGenerationCard && !snapshotRef.current.taskProposal) {
-                  applyTaskProposal(
-                    buildImageGenerationProposal(
-                      coerceImageGenerationFormPayload(ui.imageGenerationCard),
-                    ),
-                  );
+                  applyImageGenerationCard(ui.imageGenerationCard);
                 }
                 if (ui?.batchTasksCard && !snapshotRef.current.taskProposal) {
                   // 旧服务端 uiPayloads 兼容：batchTasksCard 统一转为通用 TaskProposal
@@ -513,6 +542,7 @@ export function useChatStream() {
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingTaskProposal,
+    streamingImageGenerationPayload,
     skillSteps,
     streamingThinkingText,
     /** @deprecated 兼容旧名 */

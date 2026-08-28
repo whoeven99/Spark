@@ -4,11 +4,15 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
-import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import {
+  coerceImageGenerationFormPayload,
+  imageGenerationFormFromProposal,
+  type ImageGenerationFormPayload,
+} from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import {
-  buildImageGenerationProposal,
+  buildBatchProductImproveProposal,
   buildSinglePictureTranslateProposal,
   coerceTaskProposalPayload,
   taskProposalFromBatchTasksPayload,
@@ -55,6 +59,12 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.productImproveCardPayload
       ? { productImproveCardPayload: message.productImproveCardPayload }
       : {}),
+    ...(message.imageGenerationCard || message.imageGenerationCardPayload
+      ? { imageGenerationCard: true }
+      : {}),
+    ...(message.imageGenerationCardPayload
+      ? { imageGenerationCardPayload: message.imageGenerationCardPayload }
+      : {}),
     ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
@@ -74,6 +84,8 @@ export function buildAssistantWorkspaceMessage(
 ): WorkspaceConversationMessage {
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
+  const hasImageGenerationCard =
+    payload.imageGenerationCard || Boolean(payload.imageGenerationCardPayload);
 
   return {
     role: "assistant",
@@ -83,6 +95,13 @@ export function buildAssistantWorkspaceMessage(
     ...(hasProductImproveCard ? { productImproveCard: true } : {}),
     ...(payload.productImproveCardPayload
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
+      : {}),
+    ...(hasImageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(payload.imageGenerationCardPayload
+      ? {
+          imageGenerationCardPayload:
+            payload.imageGenerationCardPayload as ImageGenerationFormPayload,
+        }
       : {}),
     ...(payload.taskProposal ? { taskProposal: payload.taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
@@ -123,6 +142,12 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
     result.productImproveCard = true;
     if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
   }
+  if (payload.imageGenerationCard || payload.imageGenerationCardPayload) {
+    result.imageGenerationCard = true;
+    if (payload.imageGenerationCardPayload) {
+      result.imageGenerationCardPayload = payload.imageGenerationCardPayload;
+    }
+  }
   if (payload.taskProposal) {
     result.taskProposal = payload.taskProposal;
   }
@@ -138,6 +163,12 @@ export function serializeWorkspaceMessagePayloads(
     result.productImproveCard = true;
     if (message.productImproveCardPayload) {
       result.productImproveCardPayload = message.productImproveCardPayload;
+    }
+  }
+  if (message.imageGenerationCard || message.imageGenerationCardPayload) {
+    result.imageGenerationCard = true;
+    if (message.imageGenerationCardPayload) {
+      result.imageGenerationCardPayload = message.imageGenerationCardPayload;
     }
   }
   if (message.taskProposal) result.taskProposal = message.taskProposal;
@@ -172,11 +203,30 @@ export function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
-    // taskProposal 优先；旧批量/单图翻译/文生图卡片（历史落库消息）统一转为通用提案卡
+    ...(extras.imageGenerationCard || extras.imageGenerationCardPayload
+      ? { imageGenerationCard: true }
+      : {}),
     ...(() => {
+      if (extras.imageGenerationCardPayload || extras.imageGenerationFormPayload) {
+        return {
+          imageGenerationCard: true,
+          imageGenerationCardPayload: coerceImageGenerationFormPayload(
+            extras.imageGenerationCardPayload ?? extras.imageGenerationFormPayload,
+          ),
+        };
+      }
       if (extras.taskProposal) {
         const proposal = coerceTaskProposalPayload(extras.taskProposal);
-        if (proposal) return { taskProposal: proposal };
+        if (proposal) {
+          const imageForm = imageGenerationFormFromProposal(proposal);
+          if (imageForm) {
+            return {
+              imageGenerationCard: true,
+              imageGenerationCardPayload: imageForm,
+            };
+          }
+          return { taskProposal: proposal };
+        }
       }
       if (extras.batchTasksFormPayload) {
         const proposal = taskProposalFromBatchTasksPayload(
@@ -193,8 +243,9 @@ export function dbMessageToUiMessage(msg: {
       }
       if (extras.imageGenerationCard || extras.imageGenerationFormPayload) {
         return {
-          taskProposal: buildImageGenerationProposal(
-            coerceImageGenerationFormPayload(extras.imageGenerationFormPayload ?? {}),
+          imageGenerationCard: true,
+          imageGenerationCardPayload: coerceImageGenerationFormPayload(
+            extras.imageGenerationFormPayload ?? {},
           ),
         };
       }

@@ -7,6 +7,8 @@ import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { ManagedAiResultCard } from "./ManagedAiResultCard";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
@@ -26,6 +28,7 @@ type ChatMessagesProps = {
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
   /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */
   tasksById?: Record<string, AITaskItem>;
+  workspaceBatchProducts?: BatchTaskProduct[];
 };
 
 export function ChatMessages({
@@ -35,6 +38,7 @@ export function ChatMessages({
   onOpenTasks,
   onTaskProposalExecuted,
   tasksById,
+  workspaceBatchProducts = [],
 }: ChatMessagesProps) {
   const { t } = useTranslation();
   const locationSearch =
@@ -66,6 +70,9 @@ export function ChatMessages({
           item.role === "assistant" &&
           Boolean(item.productImproveCard) &&
           !hasTaskProposalCard;
+        const hasImageGenerationCard =
+          item.role === "assistant" &&
+          Boolean(item.imageGenerationCard || item.imageGenerationCardPayload);
         const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
         const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const hasManagedAiCard = item.role === "assistant" && Boolean(item.managedAiResult);
@@ -76,6 +83,7 @@ export function ChatMessages({
         const hasImageAttachments = imageAttachments.length > 0;
         const hasEmbeddedCard =
           hasGenerateDescriptionCard ||
+          hasImageGenerationCard ||
           hasTaskProposalCard ||
           hasTaskRunCard ||
           hasAiTaskCard ||
@@ -194,6 +202,16 @@ export function ChatMessages({
                       <ProductImproveChatCard
                         embedded
                         initialResult={item.productImproveCardPayload}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasImageGenerationCard && item.role === "assistant" ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ImageGenerationChatCard
+                        embedded
+                        initial={item.imageGenerationCardPayload}
+                        contextProduct={workspaceBatchProducts[0] ?? null}
                       />
                     </div>
                   ) : null}

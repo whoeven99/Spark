@@ -1,4 +1,5 @@
 import type { AITaskItem } from "./aiTaskTypes";
+import type { ImageGenerationFormPayload } from "./imageGenerationFormPayload";
 import type { ManagedAiLaunchContext } from "./managedAiLaunchContext";
 import type { ManagedAiOutputParseResult } from "./managedAiOutputRuntime";
 import type { TaskProposalPayload } from "./taskProposalPayload";
@@ -63,6 +64,9 @@ export type ChatMessage =
       /** 「任务已开始」回执卡片（TaskProposal 执行成功后追加的新对话轮）。 */
       taskRun?: TaskRunPayload;
       productImproveCardPayload?: ProductImproveCardPayload;
+      /** 对话内文生图卡片（选商品 / 描述 / 出图 / 积分，不跳页）。 */
+      imageGenerationCard?: boolean;
+      imageGenerationCardPayload?: ImageGenerationFormPayload;
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;

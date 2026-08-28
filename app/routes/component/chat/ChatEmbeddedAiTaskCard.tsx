@@ -36,14 +36,19 @@ export function ChatEmbeddedAiTaskCard({
     task,
     locationSearch,
     onDelete: () => void handleDelete(),
-    onOpenDetail: () => onOpenTasks?.(),
     onTaskUpdated,
     deleting,
   };
 
   if (task.taskType === "picture_translate") {
-    return <PictureTranslateTaskCard {...common} />;
+    return <PictureTranslateTaskCard {...common} onOpenDetail={() => onOpenTasks?.()} />;
   }
 
-  return <ImageGenerationTaskCard {...common} />;
+  return (
+    <ImageGenerationTaskCard
+      {...common}
+      stayInChat
+      onOpenDetail={undefined}
+    />
+  );
 }

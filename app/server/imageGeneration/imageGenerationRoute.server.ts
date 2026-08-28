@@ -65,6 +65,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       sessionShop: session.shop,
       prompt: parsed.data.prompt,
       description: parsed.data.description,
+      productId: parsed.data.productId,
     });
 
     console.info(

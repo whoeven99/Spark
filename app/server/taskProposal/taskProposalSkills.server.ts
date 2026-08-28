@@ -194,6 +194,7 @@ const imageGenerationHandler: TaskProposalSkillHandler = {
       requestId: `task-proposal-${Date.now()}`,
       sessionShop: shop,
       description,
+      productId: params.productId?.trim() || undefined,
     });
     if (result.status === 402) {
       throw new TaskProposalBillingError();

@@ -14,7 +14,8 @@ type Props = {
   task: AITaskItem;
   locationSearch: string;
   onDelete: () => void;
-  onOpenDetail: () => void;
+  onOpenDetail?: () => void;
+  stayInChat?: boolean;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
   deleting: boolean;
 };
@@ -55,12 +56,37 @@ function getProgressPercent(status: AITaskStatus, hasRunningElapsed: boolean): n
 
 function getActions(params: {
   status: AITaskStatus;
-  onOpenDetail: () => void;
+  onOpenDetail?: () => void;
+  stayInChat: boolean;
   onDelete: () => void;
   deleting: boolean;
+  hasImage: boolean;
+  imageUrl: string | null;
   t: (key: string) => string;
 }): CardAction[] {
-  const { status, onOpenDetail, onDelete, deleting, t } = params;
+  const { status, onOpenDetail, stayInChat, onDelete, deleting, hasImage, imageUrl, t } = params;
+  const deleteAction: CardAction = {
+    label: deleting ? t("visualHistory.deleting") : t("visualHistory.delete"),
+    tone: "subtle",
+    onClick: onDelete,
+    disabled: deleting,
+  };
+  if (stayInChat || !onOpenDetail) {
+    const actions: CardAction[] = [];
+    if (hasImage && imageUrl) {
+      actions.push({
+        label: t("imageGeneration.openImage"),
+        tone: "primary",
+        onClick: () => window.open(imageUrl, "_blank", "noopener,noreferrer"),
+      });
+    }
+    if (status === "failed") {
+      actions.push(deleteAction);
+      return actions;
+    }
+    actions.push(deleteAction);
+    return actions;
+  }
   switch (status) {
     case "running":
       return [
@@ -101,6 +127,7 @@ export function ImageGenerationTaskCard({
   locationSearch,
   onDelete,
   onOpenDetail,
+  stayInChat = false,
   onTaskUpdated,
   deleting,
 }: Props) {
@@ -128,6 +155,7 @@ export function ImageGenerationTaskCard({
   const description = readStringField(config, "description");
   const prompt = readStringField(config, "prompt");
   const provider = readStringField(result, "provider") ?? readStringField(config, "imageProvider");
+  const imageUrl = readStringField(result, "imageUrl");
   const summary = description ?? prompt ?? t("imageGeneration.emptyBeforeSubmit");
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
   const elapsedLabel = runningElapsed ?? actualElapsed;
@@ -178,8 +206,11 @@ export function ImageGenerationTaskCard({
   const actions = getActions({
     status: localStatus,
     onOpenDetail,
+    stayInChat,
     onDelete,
     deleting,
+    hasImage: Boolean(imageUrl),
+    imageUrl,
     t: (key) => t(key),
   });
 
@@ -221,6 +252,23 @@ export function ImageGenerationTaskCard({
       secondaryCopy={secondaryCopy}
       progressPercent={getProgressPercent(localStatus, Boolean(runningElapsed))}
       progressBackground={getTaskProgressBackground(localStatus)}
+      bodyContent={
+        stayInChat && imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={t("imageGeneration.generatedImageAlt")}
+            style={{
+              display: "block",
+              maxWidth: "100%",
+              maxHeight: 280,
+              objectFit: "contain",
+              borderRadius: 10,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              background: "#fff",
+            }}
+          />
+        ) : null
+      }
       actions={actions}
       showLogViewer={localStatus === "running"}
       onStatusChange={(status, nextResult) => {

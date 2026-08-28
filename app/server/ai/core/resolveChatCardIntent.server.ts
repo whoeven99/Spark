@@ -141,12 +141,17 @@ export function buildChatCardPayloadFromIntent(
   }
 
   switch (normalized.cardType) {
-    case "image_generation_form":
+    case "image_generation_form": {
+      const products = parseWorkspaceProductsFromText(lastUserText);
+      const first = products[0];
       return {
         imageGenerationCard: coerceImageGenerationFormPayload({
           description: normalized.imageDescription ?? "",
+          productId: first?.id,
+          productTitle: first?.title,
         }),
       };
+    }
     case "picture_translate_form":
       return {
         pictureTranslateCard: coercePictureTranslateFormPayload({

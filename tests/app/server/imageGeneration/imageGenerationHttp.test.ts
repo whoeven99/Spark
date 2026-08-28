@@ -27,6 +27,17 @@ describe("parseImageGenerationBody", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("accepts optional productId with description", () => {
+    const result = parseImageGenerationBody({
+      description: "夏季跑步鞋主图",
+      productId: "gid://shopify/Product/1",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.productId).toBe("gid://shopify/Product/1");
+    }
+  });
+
   it("rejects empty body", () => {
     const result = parseImageGenerationBody({});
     expect(result.ok).toBe(false);

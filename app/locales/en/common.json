@@ -1558,7 +1558,20 @@
     "historyStatusPending": "In progress",
     "historyStatusDone": "Done",
     "historyStatusFailed": "Failed",
-    "pageFootnote": "Images are generated asynchronously and stored in the cloud. Return to this page to view Recent generations; they are not written to Shopify automatically."
+    "pageFootnote": "Images are generated asynchronously and stored in the cloud. Return to this page to view Recent generations; they are not written to Shopify automatically.",
+    "chat": {
+      "title": "Generate product image",
+      "intro": "Generate one image from the product copy and your scene notes. The result stays in this chat.",
+      "productOptional": "Reference product (optional)",
+      "productHint": "If selected, the product title and description help write the prompt. You can also generate from the scene notes alone.",
+      "submitted": "Image generation started",
+      "goToAccount": "Go to account and subscription",
+      "running": "Generating image…",
+      "usedCredits": "Used {{actual}} credits (est. {{estimated}})",
+      "referencedProduct": "Reference: {{title}}",
+      "download": "Download",
+      "regenerate": "Generate another"
+    }
   },
   "generate": {
     "pageTitle": "Product copy generation and optimization",
@@ -3389,6 +3402,7 @@
         "tasksSummary": "{{runs}} runs · {{tasks}} tasks",
         "viewAllTasks": "View all tasks →",
         "bucketSucceeded": "Done",
+        "bucketApplied": "Applied",
         "bucketPendingReview": "Needs review",
         "bucketRunning": "Running",
         "bucketFailed": "Failed"
@@ -3545,7 +3559,7 @@
         },
         "imageGeneration": {
           "title": "Generate product image with AI",
-          "summary": "Generate one product image from your description. View and apply it in Tasks when done.",
+          "summary": "Generate one product image from your description. The result stays in this chat.",
           "placeholder": "Describe the image, e.g. minimal ceramic mug on a white background"
         }
       },

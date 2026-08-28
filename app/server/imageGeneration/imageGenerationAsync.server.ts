@@ -8,13 +8,19 @@ import {
 } from "../tokenUsage/index.server";
 import { IMAGE_GENERATION_LOG_PREFIX } from "./constants.server";
 import { executeImageGeneration } from "./imageGenerationExecutor.server";
-import { generateImagePromptFromDescription } from "./generateImagePromptFromDescription.server";
+import {
+  generateImagePromptFromDescription,
+  type ImagePromptProductContext,
+} from "./generateImagePromptFromDescription.server";
 import {
   appendLog,
   completeTask,
   failTask,
 } from "../aiTask/aiTaskLogger.server";
 import { getImageGenLimiter } from "../aiTask/concurrencyLimiter.server";
+import { fetchProductDescriptionContext } from "../productImprove/productContextFetcher.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
+import { unauthenticated } from "../../shopify.server";
 
 const LOG_PREFIX = `${IMAGE_GENERATION_LOG_PREFIX}[Async]`;
 
@@ -25,6 +31,8 @@ export function enqueueImageGenerationTask(params: {
   prompt?: string;
   /** Natural-language description — AI will generate the prompt from this. */
   description?: string;
+  /** Optional Shopify product id; title + description are injected into prompt rewrite. */
+  productId?: string;
   imageProvider: "openai" | "volc";
 }): void {
   void runImageGenerationTask(params).catch((e) => {
@@ -40,11 +48,34 @@ export function enqueueImageGenerationTask(params: {
   });
 }
 
+async function loadOptionalProductContext(
+  shop: string,
+  productId: string | undefined,
+  taskId: string,
+): Promise<ImagePromptProductContext | null> {
+  const id = productId?.trim();
+  if (!id) return null;
+  try {
+    const { admin } = await unauthenticated.admin(shop);
+    const context = await fetchProductDescriptionContext(admin, id);
+    if (!context) return null;
+    return { title: context.title, text: context.text };
+  } catch (error) {
+    logDetailedError(
+      `${LOG_PREFIX} taskId=${taskId}`,
+      "optional product context failed",
+      error,
+    );
+    return null;
+  }
+}
+
 async function runImageGenerationTask(params: {
   taskId: string;
   shop: string;
   prompt?: string;
   description?: string;
+  productId?: string;
   imageProvider: "openai" | "volc";
 }): Promise<void> {
   const startedAt = Date.now();
@@ -62,9 +93,22 @@ async function runImageGenerationTask(params: {
     // Path A: generate prompt from natural-language description via AI
     await appendLog({ taskId: params.taskId, startedAt, message: "正在润色提示词生成更好的图片" });
 
+    if (params.productId) {
+      await appendLog({
+        taskId: params.taskId,
+        startedAt,
+        message: "正在读取商品描述作为画面参考",
+      });
+    }
+    const product = await loadOptionalProductContext(
+      params.shop,
+      params.productId,
+      params.taskId,
+    );
     const promptResult = await generateImagePromptFromDescription({
       description: params.description,
       requestId: params.taskId,
+      product,
     });
 
     if (!promptResult.ok) {

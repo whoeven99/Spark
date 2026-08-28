@@ -10,6 +10,7 @@ import type {
   AITaskListPageData,
   AITaskStatus,
 } from "../../../lib/aiTaskTypes";
+import { AI_TASK_FETCH_INIT } from "../../../lib/aiTaskStatusSync";
 
 type TaskViewTab = "current" | "history";
 const EMPTY_STATE_MIN_HEIGHT = 320;
@@ -65,7 +66,7 @@ async function fetchProductImproveTaskPage(params: {
   query.set("page", String(params.page));
   query.append("taskType", "product_improve");
 
-  const response = await fetch(`/api/ai-task?${query.toString()}`);
+  const response = await fetch(`/api/ai-task?${query.toString()}`, AI_TASK_FETCH_INIT);
   if (!response.ok) {
     throw new Error(`Failed to load task list: ${response.status}`);
   }
@@ -242,7 +243,7 @@ export function ProductImproveTaskListPage({
     const query = new URLSearchParams(
       locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
     );
-    void fetch(`/api/ai-task/${encodeURIComponent(selectedTaskId)}?${query.toString()}`)
+    void fetch(`/api/ai-task/${encodeURIComponent(selectedTaskId)}?${query.toString()}`, AI_TASK_FETCH_INIT)
       .then(async (resp) => {
         if (cancelled) return;
         if (!resp.ok) {

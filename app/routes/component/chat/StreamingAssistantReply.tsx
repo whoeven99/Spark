@@ -6,6 +6,8 @@ import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -25,6 +27,7 @@ type StreamingAssistantReplyProps = {
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
+  streamingImageGenerationPayload?: ImageGenerationFormPayload;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
@@ -262,6 +265,7 @@ export function StreamingAssistantReply({
   streamingGenerateCard,
   streamingGeneratePayload,
   streamingTaskProposal,
+  streamingImageGenerationPayload,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
   onTaskProposalExecuted,
@@ -274,14 +278,19 @@ export function StreamingAssistantReply({
   const showProductImproveCard =
     streamingGenerateCard &&
     !streamingTaskProposal &&
+    !streamingImageGenerationPayload &&
     workspaceBatchProducts.length < 2;
+  const showImageGenerationCard = Boolean(streamingImageGenerationPayload) && !streamingTaskProposal;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingGenerateCard: showProductImproveCard,
+    streamingImageGenerationCard: showImageGenerationCard,
     streamingTaskProposal,
   });
-  const hasEmbeddedCard = Boolean(showProductImproveCard || streamingTaskProposal);
+  const hasEmbeddedCard = Boolean(
+    showProductImproveCard || showImageGenerationCard || streamingTaskProposal,
+  );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -323,6 +332,16 @@ export function StreamingAssistantReply({
               {showProductImproveCard ? (
                 <div style={cardSlotStyle}>
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
+                </div>
+              ) : null}
+
+              {showImageGenerationCard && streamingImageGenerationPayload ? (
+                <div style={cardSlotStyle}>
+                  <ImageGenerationChatCard
+                    embedded
+                    initial={streamingImageGenerationPayload}
+                    contextProduct={workspaceBatchProducts[0] ?? null}
+                  />
                 </div>
               ) : null}
 

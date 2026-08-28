@@ -29,20 +29,22 @@ import {
 
 // ── 本会话任务：状态聚合与配色 ───────────────────────────────────────────────
 
-type TaskStatusBucket = "running" | "pendingReview" | "succeeded" | "failed";
+type TaskStatusBucket = "running" | "pendingReview" | "applied" | "succeeded" | "failed";
 
 const bucketColors: Record<TaskStatusBucket, string> = {
+  applied: "#00a67c",
   succeeded: "#00a67c",
   pendingReview: "#f0a01d",
   running: "#4070f4",
   failed: "#d72c0d",
 };
 
-const bucketOrder: TaskStatusBucket[] = ["succeeded", "pendingReview", "running", "failed"];
+const bucketOrder: TaskStatusBucket[] = ["applied", "succeeded", "pendingReview", "running", "failed"];
 
 function statusToBucket(status: AITaskStatus): TaskStatusBucket {
   if (status === "running") return "running";
-  if (status === "pending_review") return "pendingReview";
+  if (status === "pending_review" || status === "scored") return "pendingReview";
+  if (status === "applied") return "applied";
   if (status === "failed" || status === "cancelled") return "failed";
   return "succeeded";
 }
@@ -51,6 +53,7 @@ function countBuckets(tasks: AITaskItem[]): Record<TaskStatusBucket, number> {
   const counts: Record<TaskStatusBucket, number> = {
     running: 0,
     pendingReview: 0,
+    applied: 0,
     succeeded: 0,
     failed: 0,
   };
@@ -74,6 +77,7 @@ function ConversationTasksCard({
   const { t } = useTranslation();
   const bucketLabels: Record<TaskStatusBucket, string> = {
     succeeded: t("workspace.shell.contextSidebar.bucketSucceeded"),
+    applied: t("workspace.shell.contextSidebar.bucketApplied"),
     pendingReview: t("workspace.shell.contextSidebar.bucketPendingReview"),
     running: t("workspace.shell.contextSidebar.bucketRunning"),
     failed: t("workspace.shell.contextSidebar.bucketFailed"),
@@ -149,7 +153,11 @@ function ConversationTasksCard({
                 runTasks.length > 0 &&
                 runCounts.running === 0 &&
                 runCounts.pendingReview === 0;
-              const doneCount = runCounts.succeeded + runCounts.failed + runCounts.pendingReview;
+              const doneCount =
+                runCounts.succeeded +
+                runCounts.applied +
+                runCounts.failed +
+                runCounts.pendingReview;
               const timeLabel = formatTimeLabel(new Date(run.startedAt));
               const displayTitle =
                 run.skillId != null
@@ -242,7 +250,9 @@ function ConversationTasksCard({
                       >
                         {runCounts.failed > 0
                           ? `${bucketLabels.failed} ${runCounts.failed}`
-                          : bucketLabels.succeeded}
+                          : runCounts.applied > 0 && runCounts.succeeded === 0
+                            ? bucketLabels.applied
+                            : bucketLabels.succeeded}
                       </span>
                     ) : runTasks.length > 0 ? (
                       <span

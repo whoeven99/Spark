@@ -132,6 +132,7 @@ export function ChatPanel({
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingTaskProposal,
+    streamingImageGenerationPayload,
     skillSteps,
   } = stream;
 
@@ -193,7 +194,7 @@ export function ChatPanel({
   const showContextSidebar = filledContextCount > 0 || conversationRuns.length > 0;
 
   const locationSearch = typeof window !== "undefined" ? window.location.search : "";
-  const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
+  const { tasksById, upsertTaskStatus } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -598,6 +599,7 @@ export function ChatPanel({
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
                   streamingTaskProposal={streamingTaskProposal}
+                  streamingImageGenerationPayload={streamingImageGenerationPayload}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
                   onTaskProposalExecuted={(run) =>
@@ -605,14 +607,16 @@ export function ChatPanel({
                   }
                 />
               }
-              onAiTaskUpdated={(taskId, status, result) =>
-                onAiTaskUpdated(conversation.id, taskId, status, result)
-              }
+              onAiTaskUpdated={(taskId, status, result) => {
+                upsertTaskStatus(taskId, status, result);
+                onAiTaskUpdated(conversation.id, taskId, status, result);
+              }}
               onOpenTasks={onOpenTasks}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
               tasksById={tasksById}
+              workspaceBatchProducts={workspaceBatchProducts}
             />
           </div>
           {isScrolledUp ? (

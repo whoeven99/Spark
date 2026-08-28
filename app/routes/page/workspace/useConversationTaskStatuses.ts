@@ -4,8 +4,14 @@
  * 由 ChatPanel 持有一份，避免同页多张卡片各自轮询同一接口。
  * 合并式更新：掉出「当前任务」视图（>24h）的任务保留最后已知状态。
  */
-import { useEffect, useMemo, useState } from "react";
-import type { AITaskItem } from "../../../lib/aiTaskTypes";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import {
+  AI_TASK_FETCH_INIT,
+  mergeFetchedAiTask,
+  shouldKeepPollingAiTaskStatus,
+  shouldRetainLocalAiTaskStatus,
+} from "../../../lib/aiTaskStatusSync";
 
 const POLL_INTERVAL_MS = 5000;
 const ERROR_RETRY_MS = 10000;
@@ -17,9 +23,40 @@ const PENDING_APPEAR_MS = 60 * 1000;
 export function useConversationTaskStatuses(
   taskIds: string[],
   locationSearch: string,
-): { tasksById: Record<string, AITaskItem> } {
+): {
+  tasksById: Record<string, AITaskItem>;
+  upsertTaskStatus: (
+    taskId: string,
+    status: AITaskStatus,
+    result?: Record<string, unknown>,
+  ) => void;
+} {
   const [tasksById, setTasksById] = useState<Record<string, AITaskItem>>({});
   const idsKey = useMemo(() => taskIds.join(","), [taskIds]);
+
+  const upsertTaskStatus = useCallback(
+    (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => {
+      setTasksById((current) => {
+        const existing = current[taskId];
+        if (!existing) {
+          return current;
+        }
+        if (shouldRetainLocalAiTaskStatus(existing.status, status)) {
+          return current;
+        }
+        return {
+          ...current,
+          [taskId]: {
+            ...existing,
+            status,
+            result: result ?? existing.result,
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!idsKey) {
@@ -39,7 +76,7 @@ export function useConversationTaskStatuses(
         );
         params.set("view", "current");
         params.set("pageSize", "50");
-        const res = await fetch(`/api/ai-task?${params.toString()}`);
+        const res = await fetch(`/api/ai-task?${params.toString()}`, AI_TASK_FETCH_INIT);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { tasks?: AITaskItem[] };
         if (cancelled) return;
@@ -48,14 +85,17 @@ export function useConversationTaskStatuses(
         if (matched.length > 0) {
           setTasksById((current) => {
             const next = { ...current };
-            for (const task of matched) next[task.id] = task;
+            for (const task of matched) {
+              const existing = next[task.id];
+              next[task.id] = existing ? mergeFetchedAiTask(existing, task) : task;
+            }
             return next;
           });
         }
-        const anyRunning = matched.some((task) => task.status === "running");
+        const stillOpen = matched.some((task) => shouldKeepPollingAiTaskStatus(task.status));
         const elapsed = Date.now() - startedAt;
         const awaitingAppear = seenIds.size < idSet.size && elapsed < PENDING_APPEAR_MS;
-        if ((!anyRunning && !awaitingAppear) || elapsed > MAX_POLL_MS) return;
+        if ((!stillOpen && !awaitingAppear) || elapsed > MAX_POLL_MS) return;
         timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
       } catch {
         if (cancelled) return;
@@ -72,5 +112,5 @@ export function useConversationTaskStatuses(
     };
   }, [idsKey, locationSearch]);
 
-  return { tasksById };
+  return { tasksById, upsertTaskStatus };
 }

@@ -11,6 +11,7 @@ import {
 import { appendLog, pendingReviewTask } from "../server/aiTask/aiTaskLogger.server";
 import { cleanupTaskBlobs } from "../server/aiTask/aiTaskBlobCleanup.server";
 import type { AITaskDeleteResponse, AITaskListView, AITaskType } from "../lib/aiTaskTypes";
+import { AI_TASK_NO_STORE_HEADERS } from "../lib/aiTaskStatusSync";
 import type {
   ProductImproveTaskConfig,
   ProductImproveTaskResult,
@@ -63,7 +64,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         : {}),
   });
 
-  return Response.json(taskPage);
+  return Response.json(taskPage, {
+    headers: AI_TASK_NO_STORE_HEADERS,
+  });
 };
 
 function translateApiAiTaskErrorMessage(
