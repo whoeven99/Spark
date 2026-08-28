@@ -60,6 +60,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.info(
       `${LOG_PREFIX} done requestId=${requestId} shop=${session.shop} synced=${result.synced} errors=${result.errors} days=${daysBack}`,
     );
+    // GraphQL 整页失败时 synced=0 且 errors>0，勿对外报 success（UI 会误显示「已回补 0 笔」）
+    if (result.errors > 0 && result.synced === 0) {
+      return jsonResponse(
+        {
+          success: false,
+          errorCode: 502,
+          errorMsg: `订单回补失败（errors=${result.errors}）。请查看服务端日志 [Backfill] 详情。`,
+          response: null,
+        },
+        502,
+      );
+    }
     return jsonResponse(
       {
         success: true,

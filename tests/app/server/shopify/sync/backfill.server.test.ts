@@ -26,8 +26,16 @@ describe("mapGraphQLToPayload", () => {
       totalShippingPriceSet: { shopMoney: { amount: "12.00" } },
       shippingLines: { nodes: [] },
       sourceName: "web",
-      landingPageUrl: "https://example.com/products/foo",
-      referringSite: "https://instagram.com",
+      customerJourneySummary: {
+        firstVisit: {
+          landingPage: "https://example.com/products/foo",
+          referrerUrl: "https://instagram.com",
+        },
+        lastVisit: {
+          landingPage: "https://example.com/products/bar",
+          referrerUrl: "https://facebook.com",
+        },
+      },
       billingAddress: {
         countryCodeV2: "FR",
         provinceCode: "IDF",
@@ -54,5 +62,7 @@ describe("mapGraphQLToPayload", () => {
       country_code: "DE",
       province_code: "BE",
     });
+    expect(payload.landing_site).toBe("https://example.com/products/bar");
+    expect(payload.referring_site).toBe("https://facebook.com");
   });
 });

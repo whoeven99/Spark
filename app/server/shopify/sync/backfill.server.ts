@@ -44,8 +44,16 @@ const ORDERS_BACKFILL_QUERY = `#graphql
           }
         }
         sourceName
-        landingPageUrl
-        referringSite
+        customerJourneySummary {
+          firstVisit {
+            landingPage
+            referrerUrl
+          }
+          lastVisit {
+            landingPage
+            referrerUrl
+          }
+        }
         billingAddress {
           countryCodeV2
           provinceCode
@@ -143,8 +151,10 @@ type GraphQLOrderNode = {
     }>;
   } | null;
   sourceName: string | null;
-  landingPageUrl: string | null;
-  referringSite: string | null;
+  customerJourneySummary: {
+    firstVisit: { landingPage: string | null; referrerUrl: string | null } | null;
+    lastVisit: { landingPage: string | null; referrerUrl: string | null } | null;
+  } | null;
   billingAddress:
     | {
         countryCodeV2: string | null;
@@ -254,8 +264,15 @@ export function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload
         : undefined,
     })),
     source_name: node.sourceName,
-    landing_site: node.landingPageUrl,
-    referring_site: node.referringSite,
+    // API 2026-07+：Order.landingPageUrl / referringSite 已移除，改走 customerJourneySummary
+    landing_site:
+      node.customerJourneySummary?.lastVisit?.landingPage ??
+      node.customerJourneySummary?.firstVisit?.landingPage ??
+      null,
+    referring_site:
+      node.customerJourneySummary?.lastVisit?.referrerUrl ??
+      node.customerJourneySummary?.firstVisit?.referrerUrl ??
+      null,
     billing_address: node.billingAddress
       ? {
           country_code: node.billingAddress.countryCodeV2,
