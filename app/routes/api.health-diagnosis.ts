@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { z } from "zod";
 import { authenticate } from "../shopify.server";
+import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import type {
   HealthDiagnosisApiResponse,
   HealthDiagnosisCardView,
@@ -9,6 +10,13 @@ import {
   ensureDailySnapshotOverview,
   type DailyOperationsOverviewResult,
 } from "../server/operations/dailyInspection.server";
+import {
+  diagnosisItemName,
+  diagnosisItemSummary,
+  localizeOperationTaskCopy,
+  toOpsCopyLocale,
+  type OpsCopyLocale,
+} from "../server/operations/opsCopy.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { getOrderBackfillDays } from "../server/shopify/sync/orderBackfillConfig.server";
 
@@ -22,13 +30,16 @@ function jsonResponse(body: HealthDiagnosisApiResponse, status: number): Respons
   return Response.json(body, { status });
 }
 
-function toCardView(result: DailyOperationsOverviewResult): HealthDiagnosisCardView {
+function toCardView(
+  result: DailyOperationsOverviewResult,
+  locale: OpsCopyLocale,
+): HealthDiagnosisCardView {
   const riskItems = result.items
     .filter((item) => item.status === "risk" || item.status === "watch")
     .map((item) => ({
-      name: item.name,
+      name: diagnosisItemName(item.key, locale),
       status: item.status,
-      summary: item.reasoning[0] ?? item.evidence[0] ?? item.name,
+      summary: diagnosisItemSummary(item, locale),
     }));
 
   const activeTasks = result.tasks.filter((task) =>
@@ -36,14 +47,28 @@ function toCardView(result: DailyOperationsOverviewResult): HealthDiagnosisCardV
   );
   const q1 = activeTasks.filter((task) => task.quadrant === "q1");
   const prioritySource = q1.length > 0 ? q1 : activeTasks;
-  const priorityTasks = prioritySource.slice(0, 5).map((task) => ({
-    id: task.id,
-    title: task.title,
-    priority: task.priority,
-    status: task.status,
-    triggerReason: task.triggerReason,
-    quadrant: task.quadrant,
-  }));
+  const priorityTasks = prioritySource.slice(0, 5).map((task) => {
+    const copy = localizeOperationTaskCopy(
+      {
+        sourceKey: task.sourceKey,
+        title: task.title,
+        triggerReason: task.triggerReason,
+        relatedObjects: task.relatedObjects,
+        priority: task.priority,
+        quadrant: task.quadrant,
+      },
+      result.metrics,
+      locale,
+    );
+    return {
+      id: task.id,
+      title: copy.title,
+      priority: task.priority,
+      status: task.status,
+      triggerReason: copy.triggerReason,
+      quadrant: task.quadrant,
+    };
+  });
 
   return {
     snapshotDate: result.snapshotDate,
@@ -65,6 +90,7 @@ async function loadCardView(params: {
   shop: string;
   // authenticate.admin 返回的 Admin GraphQL 客户端
   admin: Parameters<typeof fetchShopBasicInfo>[0];
+  locale: OpsCopyLocale;
   force?: boolean;
 }): Promise<HealthDiagnosisCardView> {
   const shopInfo = await fetchShopBasicInfo(params.admin).catch(() => null);
@@ -74,7 +100,7 @@ async function loadCardView(params: {
     force: params.force === true,
     ...(timeZone ? { timeZone } : {}),
   });
-  return toCardView(result);
+  return toCardView(result, params.locale);
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -83,13 +109,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
+    const uiLocale = await resolveUiLocale(request, { admin, logContext: "health-diagnosis" });
+    const locale = toOpsCopyLocale(uiLocale);
     const view = await loadCardView({
       shop: session.shop,
       admin,
+      locale,
       force: false,
     });
     console.info(
-      `${LOG_PREFIX} load done requestId=${requestId} hasData=${view.hasData} date=${view.snapshotDate}`,
+      `${LOG_PREFIX} load done requestId=${requestId} locale=${locale} hasData=${view.hasData} date=${view.snapshotDate}`,
     );
     return jsonResponse(
       {
@@ -120,7 +149,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (request.method !== "POST") {
     return jsonResponse(
-      { success: false, errorCode: 405, errorMsg: "仅支持 POST", response: null },
+      { success: false, errorCode: 405, errorMsg: "Method not allowed", response: null },
       405,
     );
   }
@@ -130,7 +159,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     raw = (await request.json()) as unknown;
   } catch {
     return jsonResponse(
-      { success: false, errorCode: 400, errorMsg: "请求体不是合法 JSON", response: null },
+      { success: false, errorCode: 400, errorMsg: "Invalid JSON body", response: null },
       400,
     );
   }
@@ -141,7 +170,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       {
         success: false,
         errorCode: 400,
-        errorMsg: parsed.error.issues[0]?.message ?? "参数无效",
+        errorMsg: parsed.error.issues[0]?.message ?? "Invalid parameters",
         response: null,
       },
       400,
@@ -150,13 +179,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
+    const uiLocale = await resolveUiLocale(request, { admin, logContext: "health-diagnosis" });
+    const locale = toOpsCopyLocale(uiLocale);
     const view = await loadCardView({
       shop: session.shop,
       admin,
+      locale,
       force: true,
     });
     console.info(
-      `${LOG_PREFIX} refresh done requestId=${requestId} hasData=${view.hasData} date=${view.snapshotDate}`,
+      `${LOG_PREFIX} refresh done requestId=${requestId} locale=${locale} hasData=${view.hasData} date=${view.snapshotDate}`,
     );
     return jsonResponse(
       {
