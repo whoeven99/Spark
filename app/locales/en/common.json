@@ -293,7 +293,7 @@
   },
   "support": {
     "title": "Contact support",
-    "needHelp": "Contact support",
+    "needHelp": "Support",
     "buttonAria": "Open support chat",
     "greeting": "Hi! Leave a message here and our support team will get back to you soon.",
     "emailPrompt": "Add a contact email so we can reply:",
@@ -3419,7 +3419,7 @@
       },
       "account": {
         "language": "Language",
-        "workspaceLabel": "Spark AI Workspace",
+        "workspaceLabel": "Spark workspace",
         "tokenUsage": "Token usage",
         "tokenUsageValue": "{{used}} / {{total}}",
         "tokenUsageHint": "Used / total",

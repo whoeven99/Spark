@@ -65,6 +65,8 @@ import {
   brandMetaStyle,
   brandRowStyle,
   brandTitleStyle,
+  accountFooterMetaStyle,
+  accountFooterTitleStyle,
   contentStyle,
   conversationListStyle,
   footerBadgeStyle,
@@ -1401,8 +1403,8 @@ export function WorkspaceAppShellPage({
             onClick={() => setAccountMenuOpen((current) => !current)}
           >
             <div style={{ minWidth: 0 }}>
-              <div style={brandTitleStyle}>{displayName}</div>
-              <div style={brandMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
+              <div style={accountFooterTitleStyle}>{displayName}</div>
+              <div style={accountFooterMetaStyle}>{t("workspace.shell.account.workspaceLabel")}</div>
             </div>
           </button>
           <SupportChatWidget
@@ -1414,7 +1416,7 @@ export function WorkspaceAppShellPage({
                 aria-label={t("support.buttonAria")}
                 title={t("support.needHelp")}
               >
-                <SupportChatIcon size={14} />
+                <SupportChatIcon size={12} />
                 <span>{t("support.needHelp")}</span>
                 {unread > 0 ? (
                   <span style={footerBadgeStyle}>{unread > 9 ? "9+" : unread}</span>
@@ -1468,7 +1470,7 @@ export function WorkspaceAppShellPage({
             aria-label={t("support.buttonAria")}
             title={t("support.needHelp")}
           >
-            <SupportChatIcon size={16} />
+            <SupportChatIcon size={14} />
             {unread > 0 ? (
               <span
                 style={{

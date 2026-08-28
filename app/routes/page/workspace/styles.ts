@@ -283,7 +283,7 @@ export const accountMenuWrapStyle: CSSProperties = {
 export const sidebarFooterRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 8,
+  gap: 6,
 };
 export const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
@@ -291,30 +291,49 @@ export const sidebarFooterButtonStyle: CSSProperties = {
   flex: "1 1 auto",
   minWidth: 0,
   border: "1px solid transparent",
-  borderRadius: 12,
+  borderRadius: 10,
   background: "transparent",
-  padding: "10px 10px 0",
+  padding: "4px 6px 0",
   textAlign: "left",
   cursor: "pointer",
+};
+/** 侧栏底账户名（小于顶栏 brand，避免与客服钮抢占比） */
+export const accountFooterTitleStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 650,
+  color: shopifyUi.text,
+  lineHeight: 1.2,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+export const accountFooterMetaStyle: CSSProperties = {
+  fontSize: 10,
+  lineHeight: 1.2,
+  letterSpacing: "-0.01em",
+  color: shopifyUi.textMuted,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 export const sidebarFooterHelpButtonStyle = (active: boolean): CSSProperties => ({
   position: "relative",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: 6,
+  gap: 4,
   flexShrink: 0,
-  minHeight: 34,
+  minHeight: 28,
   border: `1px solid ${active ? "#006e52" : "#008060"}`,
-  borderRadius: 12,
+  borderRadius: 8,
   background: active ? "#006e52" : "#008060",
   color: "#ffffff",
-  padding: "0 12px",
-  fontSize: 12,
-  fontWeight: 700,
+  padding: "0 8px",
+  fontSize: 11,
+  fontWeight: 650,
   cursor: "pointer",
   whiteSpace: "nowrap",
-  boxShadow: active ? "none" : "0 1px 2px rgba(0, 128, 96, 0.24)",
+  boxShadow: active ? "none" : "0 1px 2px rgba(0, 128, 96, 0.2)",
 });
 
 /** 侧栏折叠时：与右下角 FAB 同语意的绿色圆形客服入口 */
@@ -323,8 +342,8 @@ export const sidebarCollapsedHelpButtonStyle = (active: boolean): CSSProperties 
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 36,
-  height: 36,
+  width: 32,
+  height: 32,
   borderRadius: "50%",
   border: `1px solid ${active ? "#006e52" : "#008060"}`,
   background: active ? "#006e52" : "#008060",
