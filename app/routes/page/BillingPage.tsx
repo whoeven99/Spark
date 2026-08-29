@@ -858,14 +858,22 @@ export function BillingPage() {
                             <div className={styles.historyItemMeta}>
                               {item.kind === "billing" ? (
                                 <>
-                                  <span>
-                                    {t("billing.historyPlanLabel")}:{" "}
-                                    {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
-                                  </span>
-                                  {item.usedTokens != null ? (
+                                  {item.planKey ? (
+                                    <span>
+                                      {t("billing.historyPlanLabel")}:{" "}
+                                      {resolvePlanDisplayName(
+                                        item.planKey,
+                                        allPlans,
+                                        t("billing.planFree"),
+                                      )}
+                                    </span>
+                                  ) : null}
+                                  {item.usedTokens != null &&
+                                  item.eventType !== "PROMO_TOKEN_CLAIMED" &&
+                                  item.eventType !== "SYSTEM_REWARD" ? (
                                     <span>
                                       {t("billing.historyUsedLabel", {
-                                        count: item.usedTokens.toLocaleString(),
+                                        tokens: item.usedTokens.toLocaleString(),
                                       })}
                                     </span>
                                   ) : null}
