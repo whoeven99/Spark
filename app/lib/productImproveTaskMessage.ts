@@ -40,7 +40,10 @@ const PRODUCT_IMPROVE_MESSAGE_KEY_BY_RAW: Record<string, string> = {
   "未知操作": "productImproveStage1.serverUnknownAction",
   "Insufficient credits. Please subscribe or purchase a credit pack first.":
     "productImproveStage1.billingAccessRequired",
+  "Insufficient credits. Please subscribe or upgrade your plan first.":
+    "productImproveStage1.billingAccessRequired",
   "积分不足，请先订阅或购买积分包。": "productImproveStage1.billingAccessRequired",
+  "积分不足，请先订阅或升级套餐。": "productImproveStage1.billingAccessRequired",
   "Provide the current draft together with refinement instructions before continuing.":
     "productImproveStage1.refineProvideDraftAndComment",
   "继续优化前，请先提供当前草稿和优化说明。":

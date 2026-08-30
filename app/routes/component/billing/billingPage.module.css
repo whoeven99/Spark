@@ -1,3 +1,23 @@
+.pageRoot {
+  --billing-text: #1f2124;
+  --billing-text-secondary: #61666c;
+  --billing-text-footnote: #8c9196;
+  --billing-border: #e1e3e5;
+  --billing-border-subtle: #ebedf0;
+  --billing-divider: #f1f2f3;
+  --billing-surface: #ffffff;
+  --billing-surface-muted: #f6f6f7;
+  --billing-surface-subtle: #fafbfb;
+  --billing-accent: #005bd3;
+  --billing-accent-soft: #eef4ff;
+  --billing-accent-ring: rgba(0, 91, 211, 0.14);
+  --billing-positive: #008060;
+  --billing-positive-soft: #e9f7ef;
+  --billing-warning: #b98900;
+  --billing-warning-soft: #fff7e0;
+  --billing-shadow-card: 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+
 .bannerWarning {
   margin: 0;
 }
@@ -9,16 +29,17 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin: 0 0 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  border: 1px solid #c4d4f5;
-  background: #eef4ff;
-  color: #1f2124;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--billing-border);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-card);
+  color: var(--billing-text);
 }
 
 .promoStripClaimed {
-  border-color: rgba(0, 128, 96, 0.28);
-  background: #e9f7ef;
+  border-color: rgba(0, 128, 96, 0.18);
+  background: linear-gradient(180deg, var(--billing-surface) 0%, #f7fbf8 100%);
 }
 
 .promoStripText {
@@ -27,12 +48,12 @@
   flex: 1 1 auto;
   font-size: 0.8125rem;
   line-height: 1.4;
-  color: #61666c;
+  color: var(--billing-text-secondary);
 }
 
 .promoStripTitle {
   font-weight: 650;
-  color: #1f2124;
+  color: var(--billing-text);
 }
 
 .promoStripSep {
@@ -73,21 +94,14 @@
 .compareTitle::before,
 .packTitle::before,
 .sectionTitle::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.15rem;
-  bottom: 0.15rem;
-  width: 3px;
-  border-radius: 999px;
-  background: #005bd3;
+  display: none;
 }
 
 .quotaSubtitle {
   margin: 0 0 0.5rem;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
   max-width: 36rem;
 }
 
@@ -107,9 +121,9 @@
   border-radius: 999px;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #1f2124;
-  background: #fafbfb;
-  border: 1px solid #e1e3e5;
+  color: var(--billing-text);
+  background: var(--billing-surface-subtle);
+  border: 1px solid var(--billing-border);
 }
 
 .trialBadge {
@@ -119,7 +133,7 @@
   font-size: 0.8125rem;
   font-weight: 600;
   color: #0d5e4a;
-  background: #e8f5f0;
+  background: var(--billing-positive-soft);
   border: 1px solid rgba(13, 94, 74, 0.18);
 }
 
@@ -130,16 +144,15 @@
 }
 
 .usageCard {
-  background: #ffffff;
-  border: 1px solid #e1e3e5;
-  border-left: 4px solid #005bd3;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: var(--billing-shadow-card);
 }
 
 .usageMain {
-  padding: 0.9rem 1.1rem;
+  padding: 1rem 1.1rem;
 }
 
 .usageStatsRow {
@@ -157,14 +170,14 @@
   border-radius: 999px;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: #005bd3;
-  background: #eef4ff;
-  border: 1px solid rgba(44, 110, 203, 0.14);
+  color: var(--billing-accent);
+  background: var(--billing-accent-soft);
+  border: 1px solid var(--billing-accent-ring);
 }
 
 .usagePercentBadgeLow {
   color: #8a6116;
-  background: #fff7e0;
+  background: var(--billing-warning-soft);
   border-color: rgba(185, 137, 0, 0.18);
 }
 
@@ -178,14 +191,15 @@
 
 .quotaRatioLabel {
   font-size: 0.8125rem;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
 }
 
 .quotaRatioValue {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1f2124;
+  color: var(--billing-text);
   line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 
 .quotaRatioSep {
@@ -195,13 +209,13 @@
 
 .quotaRatioUnit {
   font-size: 0.8125rem;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
 }
 
 .progressTrack {
   height: 10px;
   border-radius: 999px;
-  background: #ebedf0;
+  background: var(--billing-border-subtle);
   overflow: hidden;
   margin-bottom: 0;
 }
@@ -209,7 +223,7 @@
 .progressFill {
   height: 100%;
   border-radius: 999px;
-  background: #005bd3;
+  background: var(--billing-accent);
   box-shadow: none;
   transition: width 0.3s ease;
 }
@@ -230,7 +244,7 @@
 .overageBlock {
   margin-top: 0.85rem;
   padding-top: 0.85rem;
-  border-top: 1px solid #e1e3e5;
+  border-top: 1px solid var(--billing-divider);
   display: grid;
   gap: 0.4rem;
 }
@@ -253,7 +267,7 @@
 
 .overageCollapsedRow:hover .overageExpandHint,
 .overageCollapsedRow:focus-visible .overageExpandHint {
-  color: #005bd3;
+  color: var(--billing-accent);
 }
 
 .overageCollapsedMain {
@@ -269,7 +283,7 @@
   flex-shrink: 0;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #61666c;
+  color: var(--billing-text-secondary);
 }
 
 .overageCollapseButton {
@@ -282,12 +296,12 @@
   font: inherit;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #61666c;
+  color: var(--billing-text-secondary);
 }
 
 .overageCollapseButton:hover,
 .overageCollapseButton:focus-visible {
-  color: #005bd3;
+  color: var(--billing-accent);
 }
 
 .overageUsageHeader {
@@ -307,14 +321,14 @@
 .overageProgressTrack {
   height: 0.35rem;
   border-radius: 999px;
-  background: #e4e5e7;
+  background: var(--billing-border-subtle);
   overflow: hidden;
 }
 
 .overageProgressFill {
   height: 100%;
   border-radius: inherit;
-  background: #005bd3;
+  background: var(--billing-accent);
   min-width: 0;
 }
 
@@ -363,57 +377,58 @@
 .overageModeChip {
   padding: 0.35rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid #d2d5d8;
-  background: #f6f6f7;
+  border: 1px solid var(--billing-border);
+  background: var(--billing-surface-subtle);
   font-size: 0.75rem;
   font-weight: 600;
-  color: #202223;
+  color: var(--billing-text);
 }
 
 .overageModeSelect {
   appearance: auto;
   padding: 0.35rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid #d2d5d8;
-  background: #f6f6f7;
+  border: 1px solid var(--billing-border);
+  background: var(--billing-surface-subtle);
   font: inherit;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #202223;
+  color: var(--billing-text);
   max-width: 11rem;
 }
 
 .overageCurrencyPrefix {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
 }
 
 .overageCapInput {
   width: 4.75rem;
   padding: 0.4rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid #d2d5d8;
-  background: #ffffff;
+  border: 1px solid var(--billing-border);
+  background: var(--billing-surface);
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #202223;
+  color: var(--billing-text);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .overageCapInput:focus {
-  outline: 2px solid rgba(0, 91, 211, 0.35);
+  outline: 2px solid rgba(0, 91, 211, 0.18);
   outline-offset: 1px;
-  border-color: #005bd3;
+  border-color: var(--billing-accent);
 }
 
 .overageSaveButton {
   appearance: none;
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
-  background: #005bd3;
+  background: var(--billing-accent);
   color: #ffffff;
   font: inherit;
   font-size: 0.8125rem;
@@ -422,7 +437,7 @@
 }
 
 .overageSaveButton:hover:not(:disabled) {
-  background: #004aae;
+  background: #00449e;
 }
 
 .overageSaveButton:disabled {
@@ -465,8 +480,8 @@
   gap: 0.15rem;
   padding: 0.55rem 0.65rem;
   border-radius: 9px;
-  background: #fafbfb;
-  border: 1px solid #e1e3e5;
+  background: var(--billing-surface-subtle);
+  border: 1px solid var(--billing-border);
 }
 
 .poolChipLabel {
@@ -480,8 +495,9 @@
 .poolChipValue {
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #202223;
+  color: var(--billing-text);
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .quotaFootnote {
@@ -511,7 +527,7 @@
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
   max-width: 28rem;
 }
 
@@ -528,10 +544,10 @@
 .plansTitle {
   position: relative;
   margin: 0;
-  padding-left: 0.75rem;
+  padding-left: 0;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #1f2124;
+  color: var(--billing-text);
   flex: 1 1 12rem;
   min-width: 0;
   text-align: left;
@@ -543,9 +559,9 @@
   flex-shrink: 0;
   padding: 0.2rem;
   gap: 0.15rem;
-  border-radius: 10px;
-  background: #f6f6f7;
-  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  background: var(--billing-surface-muted);
+  border: 1px solid var(--billing-border);
   margin-left: auto;
 }
 
@@ -560,7 +576,7 @@
   font-size: 0.8125rem;
   font-weight: 500;
   font-family: inherit;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -569,21 +585,21 @@
 }
 
 .intervalOption:hover {
-  color: #1f2124;
+  color: var(--billing-text);
 }
 
 .intervalOptionActive {
-  background: #fff;
-  color: #1f2124;
+  background: var(--billing-surface);
+  color: var(--billing-text);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--billing-shadow-card);
 }
 
 .discountPill {
   display: inline-block;
   padding: 0.12rem 0.4rem;
   border-radius: 999px;
-  background: #fff7e0;
+  background: var(--billing-warning-soft);
   color: #8a6116;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -641,15 +657,15 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #e1e3e5;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
   border-radius: 14px;
   padding: 1.1rem;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: var(--billing-shadow-card);
   transition:
     border-color 0.2s,
     box-shadow 0.2s,
-    transform 0.2s;
+    background 0.2s;
 }
 
 .planCardBody {
@@ -659,10 +675,9 @@
 }
 
 .planCardRecommended {
-  border-color: transparent;
-  padding-top: 2.5rem;
-  background: #f5f9ff;
-  box-shadow: 0 0 0 2px rgba(0, 91, 211, 0.22), 0 12px 28px rgba(0, 91, 211, 0.14);
+  border-color: rgba(0, 91, 211, 0.24);
+  background: linear-gradient(180deg, var(--billing-surface) 0%, #fbfdff 100%);
+  box-shadow: 0 0 0 1px rgba(0, 91, 211, 0.1), var(--billing-shadow-card);
 }
 
 .planCardRecommended .planPrice {
@@ -670,27 +685,28 @@
 }
 
 .planCardCurrent {
-  border-color: #005bd3;
-  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.2), 0 4px 16px rgba(0, 91, 211, 0.08);
-  background: #eef4ff;
+  border-color: rgba(0, 91, 211, 0.22);
+  box-shadow: 0 0 0 1px rgba(0, 91, 211, 0.12), var(--billing-shadow-card);
+  background: var(--billing-surface);
 }
 
 .planCardPending {
-  border-color: #b98900;
-  box-shadow: 0 0 0 1px #b98900;
-  background: #fffbf0;
+  border-color: rgba(185, 137, 0, 0.28);
+  box-shadow: 0 0 0 1px rgba(185, 137, 0, 0.12), var(--billing-shadow-card);
+  background: #fffdf7;
 }
 
 .recommendedRibbon {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 0.5rem 0.9rem;
-  border-radius: 13px 13px 0 0;
-  background: #005bd3;
-  color: #ffffff;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 0.75rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--billing-accent-ring);
+  background: var(--billing-accent-soft);
+  color: var(--billing-accent);
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-align: center;
@@ -701,7 +717,7 @@
   margin: 0 0 0.5rem;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #1f2124;
+  color: var(--billing-text);
 }
 
 .planPriceRow {
@@ -715,19 +731,20 @@
 .planPrice {
   font-size: 1.625rem;
   font-weight: 700;
-  color: #1f2124;
+  color: var(--billing-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .planPriceSuffix {
   font-size: 0.875rem;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
 }
 
 .planPriceMeta {
   margin: -0.35rem 0 0.65rem;
   font-size: 0.75rem;
   line-height: 1.4;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
 }
 
 .planFeatures {
@@ -744,12 +761,12 @@
   margin-bottom: 0.4rem;
   font-size: 0.8125rem;
   line-height: 1.4;
-  color: #1f2124;
+  color: var(--billing-text);
 }
 
 .checkIcon {
   flex-shrink: 0;
-  color: #008060;
+  color: var(--billing-positive);
   font-weight: 700;
 }
 
@@ -780,9 +797,9 @@
   box-sizing: border-box;
   margin-top: auto;
   padding: 0.65rem 1rem;
-  border-radius: 9px;
+  border-radius: 10px;
   border: none;
-  background: #111213;
+  background: #1f2124;
   color: #fff;
   font-size: 0.875rem;
   font-weight: 700;
@@ -790,14 +807,13 @@
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  box-shadow: none;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
 .planPrimaryCta:hover:not(:disabled) {
-  opacity: 0.92;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
-  transform: translateY(-1px);
+  opacity: 1;
+  background: #111213;
 }
 
 .planPrimaryCta:disabled {
@@ -806,12 +822,11 @@
 }
 
 .planCardRecommended .planPrimaryCta {
-  background: #005bd3;
-  box-shadow: 0 1px 2px rgba(44, 110, 203, 0.28);
+  background: var(--billing-accent);
 }
 
 .planCardRecommended .planPrimaryCta:hover:not(:disabled) {
-  box-shadow: 0 3px 12px rgba(44, 110, 203, 0.28);
+  background: #00449e;
 }
 
 .planSecondaryCta {
@@ -822,7 +837,7 @@
   border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
-  color: #005bd3;
+  color: var(--billing-accent);
   font-size: 0.875rem;
   font-weight: 600;
   font-family: inherit;
@@ -837,8 +852,8 @@
 }
 
 .planSecondaryCta:hover:not(:disabled) {
-  background: #eef4ff;
-  border-color: rgba(44, 110, 203, 0.14);
+  background: var(--billing-accent-soft);
+  border-color: var(--billing-accent-ring);
   box-shadow: none;
   transform: none;
 }
@@ -853,7 +868,7 @@
   width: 100%;
   box-sizing: border-box;
   padding: 0.625rem 1rem;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid #b98900;
   background: #fff4e5;
   color: #7a5200;
@@ -867,10 +882,10 @@
   width: 100%;
   box-sizing: border-box;
   padding: 0.625rem 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(44, 110, 203, 0.18);
-  background: #eef4ff;
-  color: #005bd3;
+  border-radius: 10px;
+  border: 1px solid var(--billing-accent-ring);
+  background: var(--billing-accent-soft);
+  color: var(--billing-accent);
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25;
@@ -906,7 +921,7 @@
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.45;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
   text-align: center;
 }
 
@@ -1090,14 +1105,14 @@
 }
 
 .packCard {
-  background: #ffffff;
-  border: 1px solid #e1e3e5;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
   border-radius: 14px;
   padding: 1.1rem 1.2rem;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: var(--billing-shadow-card);
 }
 
 .packCardHeader {
@@ -1108,17 +1123,17 @@
 .packTitle {
   position: relative;
   margin: 0 0 0.35rem;
-  padding-left: 0.75rem;
+  padding-left: 0;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #1f2124;
+  color: var(--billing-text);
 }
 
 .packHint {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
 }
 
 .packOptions {
@@ -1153,9 +1168,9 @@
   gap: 0.08rem;
   min-height: 4.75rem;
   padding: 0.65rem 0.6rem;
-  border: 1px solid #c9cdd2;
+  border: 1px solid var(--billing-border);
   border-radius: 11px;
-  background: #ffffff;
+  background: var(--billing-surface);
   cursor: pointer;
   text-align: center;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
@@ -1169,23 +1184,24 @@
 }
 
 .packOption:hover {
-  border-color: #005bd3;
-  box-shadow: 0 2px 10px rgba(44, 110, 203, 0.12);
-  transform: translateY(-1px);
+  border-color: rgba(0, 91, 211, 0.24);
+  box-shadow: var(--billing-shadow-card);
+  transform: none;
 }
 
 .packOptionSelected {
-  border-color: #005bd3;
-  background: #eef4ff;
-  box-shadow: 0 0 0 1px #005bd3;
+  border-color: rgba(0, 91, 211, 0.24);
+  background: #fbfdff;
+  box-shadow: 0 0 0 1px rgba(0, 91, 211, 0.12);
   transform: none;
 }
 
 .packOptionTokens {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #202223;
+  color: var(--billing-text);
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .packOptionTokensUnit {
@@ -1200,7 +1216,7 @@
   margin-top: 0.2rem;
   font-size: 0.825rem;
   font-weight: 700;
-  color: #005bd3;
+  color: var(--billing-accent);
 }
 
 .packCheckoutBar {
@@ -1210,9 +1226,9 @@
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
   padding: 0.7rem 1rem;
-  border-radius: 9px;
-  background: #fafbfb;
-  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  background: var(--billing-surface-subtle);
+  border: 1px solid var(--billing-border);
 }
 
 .packSelectionSummary {
@@ -1398,12 +1414,12 @@
 .trustCheckout {
   margin: 0;
   padding: 0.85rem 1rem;
-  border-radius: 9px;
-  background: #fafbfb;
-  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  background: var(--billing-surface-subtle);
+  border: 1px solid var(--billing-border);
   font-size: 0.75rem;
   line-height: 1.45;
-  color: #61666c;
+  color: var(--billing-text-secondary);
   text-align: center;
 }
 
@@ -1430,17 +1446,17 @@
 .sectionTitle {
   position: relative;
   margin: 0;
-  padding-left: 0.75rem;
+  padding-left: 0;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #1f2124;
+  color: var(--billing-text);
 }
 
 .sectionSubtitle {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #5c6066;
+  color: var(--billing-text-secondary);
   max-width: 40rem;
 }
 
@@ -1448,10 +1464,10 @@
 .backLinkButton {
   appearance: none;
   padding: 0.55rem 0.9rem;
-  border-radius: 9px;
-  border: 1px solid #d2d5d8;
-  background: #ffffff;
-  color: #202223;
+  border-radius: 10px;
+  border: 1px solid var(--billing-border);
+  background: var(--billing-surface);
+  color: var(--billing-text);
   font-size: 0.8125rem;
   font-weight: 600;
   font-family: inherit;
@@ -1465,18 +1481,18 @@
 
 .secondaryEntryButton:hover,
 .backLinkButton:hover {
-  background: #f6f6f7;
-  border-color: #b8bdc3;
+  background: var(--billing-surface-muted);
+  border-color: #c9cdd2;
 }
 
 .accountEntryCard {
   display: grid;
   gap: 0.85rem;
   padding: 1rem 1.1rem;
-  border: 1px solid #e1e3e5;
+  border: 1px solid var(--billing-border);
   border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  background: var(--billing-surface);
+  box-shadow: var(--billing-shadow-card);
 }
 
 .accountEntrySummary {
@@ -1498,7 +1514,8 @@
 .accountEntryValue {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #202223;
+  color: var(--billing-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .accountEntryHint {
@@ -1532,11 +1549,11 @@
 
 .accountCard,
 .faqItem {
-  background: #ffffff;
-  border: 1px solid #e1e3e5;
+  background: var(--billing-surface);
+  border: 1px solid var(--billing-border);
   border-radius: 14px;
   padding: 1.1rem 1.15rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--billing-shadow-card);
 }
 
 .accountCardCompact {
@@ -1557,15 +1574,15 @@
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #202223;
+  color: var(--billing-text);
 }
 
 .accountCardBadge {
   padding: 0.25rem 0.65rem;
   border-radius: 999px;
-  background: #fafbfb;
-  border: 1px solid #e1e3e5;
-  color: #1f2124;
+  background: var(--billing-surface-subtle);
+  border: 1px solid var(--billing-border);
+  color: var(--billing-text);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -1587,7 +1604,7 @@
   gap: 0.75rem 1rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #f1f2f3;
+  border-bottom: 1px solid var(--billing-divider);
 }
 
 .subscriptionStatusBlock,
@@ -1605,9 +1622,10 @@
 .subscriptionStatusValue,
 .subscriptionPeriodValue {
   font-size: 0.875rem;
-  color: #202223;
+  color: var(--billing-text);
   font-weight: 600;
   line-height: 1.35;
+  font-variant-numeric: tabular-nums;
 }
 
 .accountFactsCompact {
@@ -1622,8 +1640,8 @@
   gap: 0.12rem;
   padding: 0.45rem 0.6rem;
   border-radius: 10px;
-  background: #fafbfb;
-  border: 1px solid #eceef0;
+  background: var(--billing-surface-subtle);
+  border: 1px solid var(--billing-border-subtle);
 }
 
 .accountFactCompact dt {
@@ -1634,9 +1652,10 @@
 .accountFactCompact dd {
   margin: 0;
   font-size: 0.8125rem;
-  color: #202223;
+  color: var(--billing-text);
   font-weight: 700;
   line-height: 1.3;
+  font-variant-numeric: tabular-nums;
 }
 
 .accountFact {
@@ -1652,8 +1671,9 @@
 .accountFact dd {
   margin: 0;
   font-size: 0.875rem;
-  color: #202223;
+  color: var(--billing-text);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 640px) {
@@ -1675,8 +1695,8 @@
 .periodItem {
   padding: 0.8rem 0.9rem;
   border-radius: 10px;
-  border: 1px solid #eef0f2;
-  background: #fafbfb;
+  border: 1px solid var(--billing-border-subtle);
+  background: var(--billing-surface-subtle);
 }
 
 .historyItemTop,
