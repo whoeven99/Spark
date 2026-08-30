@@ -605,7 +605,10 @@ export function BillingPage() {
     return (
       <>
         <TitleBar title={t("billing.accountDetailPageTitle")} />
-        <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
+        <div
+          className={styles.pageRoot}
+          style={{ ...(isMobile ? mobilePageContentStyle : pageContentStyle) }}
+        >
           <section className={styles.accountDetailPage}>
             <div className={styles.accountDetailHeader}>
               <button
@@ -841,8 +844,9 @@ export function BillingPage() {
 
   return (
     <div
+      className={styles.pageRoot}
       style={{
-        ...pageContentStyle,
+        ...(isMobile ? mobilePageContentStyle : pageContentStyle),
         overflow: "visible",
         height: "auto",
         minHeight: "auto",
@@ -852,7 +856,6 @@ export function BillingPage() {
         title={t("billing.quotaTitle")}
         titleBarTitle={t("billing.pageTitle")}
         hideBack
-        chromeless
       />
 
       {!billing.hasAccess && billing.billingRequired ? (
