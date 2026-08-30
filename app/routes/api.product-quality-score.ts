@@ -117,7 +117,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           errorMsg: body.errorMsg ?? "需要订阅或购买积分",
           response: null,
         },
-        402,
+        200,
       );
     }
 
@@ -125,7 +125,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const message = error instanceof Error ? error.message : "请求处理失败";
     return jsonResponse(
       { success: false, errorCode: 500, errorMsg: message, response: null },
-      500,
+      200,
     );
   }
 };

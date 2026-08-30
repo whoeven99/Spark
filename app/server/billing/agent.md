@@ -107,12 +107,15 @@
 ## 营销领 Token（账户页）
 
 - 配置：`app/server/billing/promo/promoCampaign.server.ts`（环境变量可覆盖）。
-- 默认活动：`install-welcome-1m`，安装后可在 `/app/account` 领取 **1000000** Token；每店每活动一次。
+- 默认活动：`install-welcome-1m`，安装后自动发放 **1000000** Token（`ensureInstallPromoTokens`）；每店每活动一次。
+- 防薅：`PromoClaimLedger` 存 `sha256(shop)` + `campaignId`（卸载 / `shop/redact` **不删**）；店内仍写 `BillingLog`/`Account` 便于当期审计（卸载时随店清掉）。
+- 触发：`app/routes/app.tsx` 壳层 loader **await** 自动领取；`requireBillingAccess` 再兜底一次。账户页只展示「已自动发放」，不再需要手动领取按钮。
+- 卸载清理：`archiveAndPurgeShopData` → Blob `shop-archives`（分析快照）后 Turso 删店数据。
 - 环境变量：`SPARK_PROMO_ENABLED`（默认开，`false` 关闭）、`SPARK_PROMO_CAMPAIGN_ID`、`SPARK_PROMO_TOKEN_AMOUNT`、`SPARK_PROMO_STARTS_AT` / `SPARK_PROMO_ENDS_AT`（ISO；可选）。
 - 换活动：改 `SPARK_PROMO_CAMPAIGN_ID`（新 id 可再领一次）并按需改额度/文案（i18n `billing.promo*`）。
 - Admin：`/credits` 可查双池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览。
 
-门禁错误码（非 BillingLog）：`QUOTA_EXHAUSTED` / `OVERAGE_CAP_REACHED` → `BillingAccessDeniedError`（402；对话 SSE 文案分流）。
+门禁错误码（非 BillingLog）：`QUOTA_EXHAUSTED` / `OVERAGE_CAP_REACHED` → `BillingAccessDeniedError`；商户已鉴权业务路径经 `billingErrorToResponse` / `merchantFriendly*` 返回 **HTTP 200** + 自然语言（对话 SSE `type: error`），避免审核场景出现 402。
 
 ## 换套餐与 DECLINED
 

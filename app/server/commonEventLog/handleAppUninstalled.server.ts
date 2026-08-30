@@ -1,5 +1,4 @@
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
-import { deleteSessionsForShop } from "./sessionTable.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
 
 /** 卸载运营通知幂等键：同店只发一次，与 webhookId 无关。 */
@@ -46,10 +45,10 @@ export async function handleAppUninstalled(params: {
     });
   } catch (error) {
     console.error(
-      `[CommonEvent] APP_UNINSTALLED log failed shop=${shop}; continuing session delete`,
+      `[CommonEvent] APP_UNINSTALLED log failed shop=${shop}; continuing`,
       error,
     );
   }
 
-  await deleteSessionsForShop(shop);
+  // Session / 全店业务删除改由 archiveAndPurgeShopData（onAppUninstalled）统一处理。
 }

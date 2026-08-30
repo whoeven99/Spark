@@ -1,8 +1,13 @@
 /**
  * Shopify App Store 强制合规 webhook。
- * 当前只校验 HMAC 后 200 确认并记结构化日志，不删除 ShopOrder* / 广告凭证等镜像。
+ * - customers/data_request：记录请求（30 天内可人工导出；当前无独立出站通道）
+ * - customers/redact：删除该客户在本应用的镜像 PII
+ * - shop/redact：归档后清 Turso 全店数据（与卸载清理幂等；保留 PromoClaimLedger）
  * @see https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance
  */
+
+import prisma from "../../db.server";
+import { archiveAndPurgeShopData } from "../shopDataLifecycle/archiveAndPurgeShop.server";
 
 export const COMPLIANCE_TOPICS = [
   "customers/data_request",
@@ -66,12 +71,12 @@ export function summarizeCompliancePayload(
   };
 }
 
-export function handleComplianceWebhook(params: {
+export async function handleComplianceWebhook(params: {
   shop: string;
   topic: string;
   payload: unknown;
   webhookId?: string;
-}): HandleComplianceWebhookResult {
+}): Promise<HandleComplianceWebhookResult> {
   const summary = summarizeCompliancePayload(params.topic, params.payload);
   if (!summary) {
     console.warn(
@@ -80,12 +85,90 @@ export function handleComplianceWebhook(params: {
     return { handled: false, summary: null };
   }
 
-  console.info("[Webhook] compliance acknowledged (no mutation)", {
-    shop: params.shop,
+  const shop = (summary.shopDomain ?? params.shop).trim();
+
+  switch (summary.topic) {
+    case "customers/data_request":
+      console.info("[Webhook] customers/data_request logged", {
+        shop,
+        webhookId: params.webhookId ?? null,
+        ...summary,
+      });
+      break;
+    case "customers/redact":
+      await redactCustomerData({
+        shop,
+        customerId: summary.customerId,
+        orderIds: summary.orderIds,
+      });
+      break;
+    case "shop/redact":
+      await archiveAndPurgeShopData({
+        shop,
+        mode: "shop_redact",
+        reason: "shop/redact",
+      });
+      break;
+    default: {
+      const _exhaustive: never = summary.topic;
+      void _exhaustive;
+      break;
+    }
+  }
+
+  console.info("[Webhook] compliance handled", {
+    shop,
     webhookId: params.webhookId ?? null,
-    ...summary,
+    topic: summary.topic,
   });
   return { handled: true, summary };
+}
+
+async function redactCustomerData(params: {
+  shop: string;
+  customerId?: number;
+  orderIds: number[];
+}): Promise<void> {
+  const shop = params.shop;
+  const customerId =
+    params.customerId != null ? String(params.customerId) : null;
+
+  if (customerId) {
+    await prisma.shopCustomerValue.deleteMany({
+      where: { shop, shopifyCustomerId: customerId },
+    });
+    await prisma.shopCustomer.deleteMany({
+      where: { shop, shopifyCustomerId: customerId },
+    });
+    await prisma.shopOrder.updateMany({
+      where: { shop, shopifyCustomerId: customerId },
+      data: {
+        email: null,
+        customerEmail: null,
+        customerFirstName: null,
+        customerLastName: null,
+        shopifyCustomerId: null,
+      },
+    });
+  }
+
+  for (const orderId of params.orderIds) {
+    const shopifyOrderId = String(orderId);
+    await prisma.shopOrder.updateMany({
+      where: { shop, shopifyOrderId },
+      data: {
+        email: null,
+        customerEmail: null,
+        customerFirstName: null,
+        customerLastName: null,
+        shopifyCustomerId: null,
+      },
+    });
+  }
+
+  console.info(
+    `[Webhook] customers/redact done shop=${shop} customerId=${customerId ?? "(none)"} orders=${params.orderIds.length}`,
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

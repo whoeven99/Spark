@@ -37,6 +37,7 @@ export { resolveReplacementBehavior } from "./subscription/replacementBehavior.s
 export { getBillingGateway } from "./gateway/getBillingGateway.server";
 export {
   claimPromoTokens,
+  ensureInstallPromoTokens,
   loadPromoCampaignSnapshot,
   getVisiblePromoCampaign,
 } from "./promo/promoCampaign.server";

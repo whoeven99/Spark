@@ -2,6 +2,10 @@ import prisma from "../../../db.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import { BillingError } from "../errors.server";
 import { BILLING_LOG_EVENT } from "../types.server";
+import {
+  hasPromoClaimLedgerEntry,
+  recordPromoClaimLedger,
+} from "./promoClaimLedger.server";
 
 const DEFAULT_CAMPAIGN_ID = "install-welcome-1m";
 const DEFAULT_TOKEN_AMOUNT = 1_000_000;
@@ -74,6 +78,9 @@ export async function hasClaimedPromoCampaign(
   shop: string,
   campaignId: string,
 ): Promise<boolean> {
+  if (await hasPromoClaimLedgerEntry(shop, campaignId)) return true;
+
+  // 兼容：账本落地前已用 BillingLog 领取过的店
   const prior = await prisma.billingLog.findFirst({
     where: {
       shop,
@@ -105,7 +112,9 @@ export type ClaimPromoTokensResult = {
 };
 
 /**
- * 领取当前活动 Token：写入 purchasedTokens，BillingLog 幂等（shop + campaignId）。
+ * 领取当前活动 Token：
+ * 1) PromoClaimLedger（shopHash，卸载后仍防薅）
+ * 2) Account.purchasedTokens + BillingLog（店内审计，卸载时会清）
  */
 export async function claimPromoTokens(shop: string): Promise<ClaimPromoTokensResult> {
   const campaign = getVisiblePromoCampaign();
@@ -113,47 +122,86 @@ export async function claimPromoTokens(shop: string): Promise<ClaimPromoTokensRe
     throw new BillingError("当前没有可领取的活动", "PROMO_NOT_AVAILABLE", 400);
   }
 
+  if (await hasClaimedPromoCampaign(shop, campaign.id)) {
+    // 旧 BillingLog 有记录但账本缺失时补写账本
+    await recordPromoClaimLedger({
+      shop,
+      campaignId: campaign.id,
+      tokensDelta: campaign.tokenAmount,
+    }).catch(() => undefined);
+    return {
+      campaignId: campaign.id,
+      tokensDelta: 0,
+      alreadyClaimed: true,
+    };
+  }
+
   await ensureAccount(shop);
 
-  const outcome = await prisma.$transaction(async (tx) => {
-    const prior = await tx.billingLog.findFirst({
-      where: {
-        shop,
-        eventType: BILLING_LOG_EVENT.PROMO_TOKEN_CLAIMED,
-        referenceId: campaign.id,
-      },
-      select: { id: true },
-    });
-    if (prior) {
-      return { alreadyClaimed: true as const };
-    }
-
-    await tx.account.update({
-      where: { shop },
-      data: {
-        purchasedTokens: { increment: campaign.tokenAmount },
-      },
-    });
-
-    await tx.billingLog.create({
-      data: {
-        shop,
-        eventType: BILLING_LOG_EVENT.PROMO_TOKEN_CLAIMED,
-        referenceId: campaign.id,
-        tokensDelta: campaign.tokenAmount,
-        metadata: {
-          source: "promo_campaign",
-          campaignId: campaign.id,
-        },
-      },
-    });
-
-    return { alreadyClaimed: false as const };
+  const ledger = await recordPromoClaimLedger({
+    shop,
+    campaignId: campaign.id,
+    tokensDelta: campaign.tokenAmount,
   });
+  if (ledger.alreadyClaimed) {
+    return {
+      campaignId: campaign.id,
+      tokensDelta: 0,
+      alreadyClaimed: true,
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { shop },
+        data: {
+          purchasedTokens: { increment: campaign.tokenAmount },
+        },
+      });
+
+      await tx.billingLog.create({
+        data: {
+          shop,
+          eventType: BILLING_LOG_EVENT.PROMO_TOKEN_CLAIMED,
+          referenceId: campaign.id,
+          tokensDelta: campaign.tokenAmount,
+          metadata: {
+            source: "promo_campaign",
+            campaignId: campaign.id,
+            autoClaimed: true,
+          },
+        },
+      });
+    });
+  } catch (error) {
+    console.error(
+      `[Promo] claim account/billing write failed shop=${shop} campaign=${campaign.id}`,
+      error,
+    );
+    throw error;
+  }
 
   return {
     campaignId: campaign.id,
-    tokensDelta: outcome.alreadyClaimed ? 0 : campaign.tokenAmount,
-    alreadyClaimed: outcome.alreadyClaimed,
+    tokensDelta: campaign.tokenAmount,
+    alreadyClaimed: false,
   };
+}
+
+/**
+ * 安装/进壳后自动领取当前活动 Token（幂等）。无活动或失败时返回 null，不抛给调用方。
+ */
+export async function ensureInstallPromoTokens(
+  shop: string,
+): Promise<ClaimPromoTokensResult | null> {
+  const campaign = getVisiblePromoCampaign();
+  if (!campaign) return null;
+
+  try {
+    return await claimPromoTokens(shop);
+  } catch (error) {
+    console.warn(`[Promo] ensureInstallPromoTokens failed shop=${shop}:`, error);
+    return null;
+  }
 }

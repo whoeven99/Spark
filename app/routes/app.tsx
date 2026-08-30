@@ -25,6 +25,7 @@ import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 // 审核期临时关闭 5.1.5：不自动创建/更新 Web Pixel。过审后恢复 import 与下面的 ensureWebPixel 调用。
 // import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import { ensureInstallPromoTokens } from "../server/billing/index.server";
 import { ensureInstallOrderBackfill } from "../server/shopify/sync/ensureInstallOrderBackfill.server";
 import {
   syncSessionShopProfile,
@@ -87,6 +88,9 @@ const NAV_ITEMS: Record<
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+
+  // 安装福利：进壳即自动领取（await，避免首条聊天抢跑额度检查）
+  await ensureInstallPromoTokens(session.shop);
 
   // fire-and-forget：不阻断页面切换（幂等 + 日志短路）
   void (async () => {
@@ -172,7 +176,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const url = new URL(request.url);
   if (!url.searchParams.has("setLocale")) {
-    return Response.json({ ok: false, message: "unsupported action" }, { status: 400 });
+    return Response.json({ ok: false, message: "unsupported action" });
   }
 
   const formData = await request.formData();

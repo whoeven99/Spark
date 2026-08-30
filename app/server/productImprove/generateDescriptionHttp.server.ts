@@ -3,6 +3,7 @@ import {
   billingErrorToResponse,
   requireBillingAccess,
 } from "../billing/index.server";
+import { MERCHANT_FRIENDLY_HTTP_STATUS } from "../http/merchantFriendlyResponse.server";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,
@@ -136,7 +137,7 @@ export async function executeGenerateDescriptionRequest(params: {
         errorMsg: "shop 与当前会话店铺不一致",
         response: null,
       },
-      403,
+      MERCHANT_FRIENDLY_HTTP_STATUS,
     );
   }
 
@@ -157,12 +158,6 @@ export async function executeGenerateDescriptionRequest(params: {
     const durationMs = Date.now() - routeStart;
 
     if (!result.ok) {
-      const status =
-        result.errorCode === 40401
-          ? 404
-          : result.errorCode === 42201
-            ? 422
-            : 503;
       console.info(
         JSON.stringify({
           event: "generateDescription",
@@ -186,7 +181,7 @@ export async function executeGenerateDescriptionRequest(params: {
           errorMsg: result.errorMsg,
           response: null,
         },
-        status,
+        MERCHANT_FRIENDLY_HTTP_STATUS,
       );
     }
 
@@ -237,7 +232,7 @@ export async function executeGenerateDescriptionRequest(params: {
           errorMsg: body.errorMsg ?? "需要订阅或购买积分",
           response: null,
         },
-        402,
+        MERCHANT_FRIENDLY_HTTP_STATUS,
       );
     }
 
@@ -255,7 +250,7 @@ export async function executeGenerateDescriptionRequest(params: {
         errorMsg: message,
         response: null,
       },
-      500,
+      MERCHANT_FRIENDLY_HTTP_STATUS,
     );
   }
 }

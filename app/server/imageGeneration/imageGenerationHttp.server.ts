@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { billingErrorToResponse } from "../billing/index.server";
+import { MERCHANT_FRIENDLY_HTTP_STATUS } from "../http/merchantFriendlyResponse.server";
 import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
 import { getEstimatedCredits } from "../aiTask/aiTaskEstimation.server";
 import { deriveBucket } from "../aiTask/estimationBucket";
@@ -61,7 +62,7 @@ export async function executeImageGenerationRequest(params: {
     if (billingResponse) {
       const body = (await billingResponse.json()) as { errorMsg?: string };
       return {
-        status: 402,
+        status: MERCHANT_FRIENDLY_HTTP_STATUS,
         body: {
           success: false,
           errorCode: 40200,
@@ -75,13 +76,13 @@ export async function executeImageGenerationRequest(params: {
 
   if (!isImageGenerationEnabled()) {
     return {
-      status: 503,
+      status: MERCHANT_FRIENDLY_HTTP_STATUS,
       body: { success: false, errorCode: 50300, errorMsg: "商品图片生成功能已关闭", status: "failed" },
     };
   }
   if (!isImageGenerationConfigured()) {
     return {
-      status: 503,
+      status: MERCHANT_FRIENDLY_HTTP_STATUS,
       body: {
         success: false,
         errorCode: 50301,
@@ -97,7 +98,7 @@ export async function executeImageGenerationRequest(params: {
     const promptError = validateImageGenerationPrompt(trimmedPrompt);
     if (promptError) {
       return {
-        status: 400,
+        status: MERCHANT_FRIENDLY_HTTP_STATUS,
         body: { success: false, errorCode: 40000, errorMsg: promptError, status: "failed" },
       };
     }

@@ -9,6 +9,7 @@ import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
 import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeishuNotify.server";
 import { notifyAppUninstalledEmail } from "../notifications/notifyMerchant.server";
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
+import { archiveAndPurgeShopData } from "../shopDataLifecycle/archiveAndPurgeShop.server";
 const LOG = "[AppLifecycle:uninstall]";
 const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
@@ -54,13 +55,35 @@ async function persistAppUninstalled(params: OnAppUninstalledParams): Promise<vo
     `${LOG} persistence-enter shop=${params.shop} topic=${params.topic} sessionId=${params.sessionId ?? "(none)"}`,
   );
 
-  await handleAppUninstalled({
-    shop: params.shop,
-    topic: params.topic,
-    payload: params.payload,
-    sessionId: params.sessionId,
-    webhookId: params.webhookId,
-  });
+  // 先记卸载事件（归档快照会带走 CommonEventLog；失败也不阻断）
+  try {
+    await handleAppUninstalled({
+      shop: params.shop,
+      topic: params.topic,
+      payload: params.payload,
+      sessionId: params.sessionId,
+      webhookId: params.webhookId,
+    });
+  } catch (error) {
+    console.error(`${LOG} handleAppUninstalled failed shop=${params.shop}:`, error);
+  }
+
+  // 归档到 Blob 后从 Turso 删除全店业务数据（含 Session / 客服；保留 PromoClaimLedger）
+  try {
+    await archiveAndPurgeShopData({
+      shop: params.shop,
+      mode: "uninstall",
+      reason: "app/uninstalled",
+    });
+  } catch (error) {
+    console.error(`${LOG} archiveAndPurge failed shop=${params.shop}:`, error);
+    // 兜底：至少删 Session，避免卸载后仍可鉴权
+    try {
+      await prisma.session.deleteMany({ where: { shop: params.shop } });
+    } catch (sessionError) {
+      console.error(`${LOG} session fallback delete failed shop=${params.shop}:`, sessionError);
+    }
+  }
 
   console.info(
     `${LOG} persistence-done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`,
@@ -107,13 +130,13 @@ async function sendAppUninstalledFeishuNotify(
 }
 
 /**
- * 卸载：两层幂等门禁，再删 Session。
+ * 卸载：两层幂等门禁，再归档并清 Turso。
  *
  * 执行顺序：
  * 1. 加载收件人快照（Session 删除前）
  * 2. shouldSkipUninstallOpsNotify（webhookId / 10min 窗口）→ 快速跳过
  * 3. appendCommonEventLog（referenceId 精确去重）→ created=true 则首次，发飞书+邮件
- * 4. persistAppUninstalled（内部 appendCommonEventLog 因 dedup 幂等，deleteSessionsForShop 正常执行）
+ * 4. persistAppUninstalled：记卸载事件 → archive(Blob) → purge Turso（含 Session/客服；保留 PromoClaimLedger）
  */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
@@ -165,7 +188,7 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     console.error(`${LOG} ops-notify-failed shop=${params.shop}`, error);
   }
 
-  // 4. 持久化（appendCommonEventLog 内部 dedup 幂等，deleteSessionsForShop 正常执行）
+  // 4. 归档 + 清库
   await persistAppUninstalled(params);
 
   console.info(`${LOG} done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`);

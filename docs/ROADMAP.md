@@ -231,9 +231,9 @@ app/server/ai/playbooks/{name}/
 
 已知、AI self-review **未覆盖**、仍挡 Public / Unlisted（M3；审核员可能追问）：
 
-- [ ] GDPR `customers/redact` / `shop/redact` 只 ack 不擦除（`complianceWebhooks.server.ts`）
-- [ ] 无隐私政策 URL（Listing + 应用内链接）
-- [ ] 卸载只删 Session，不清理 `ShopOrder*` / 广告凭证
+- [x] GDPR `customers/redact` / `shop/redact`：卸载与 redact 走归档+Turso 删除（`archiveAndPurgeShopData`）；`PromoClaimLedger` 防薅保留
+- [ ] 无隐私政策 URL（Listing + 应用内链接；需披露安装福利防滥用的 shop 域名哈希账本）
+- [x] 卸载清理店铺业务数据（Session / 订单镜像 / 广告凭证 / 对话 / 客服等）
 - [ ] Partner Dashboard：分发方式、PCD、Listing 素材、测试说明与凭据
 
 #### 历史：AiAssistant-Test / `shopify.app.test.toml`（2026-08-28）

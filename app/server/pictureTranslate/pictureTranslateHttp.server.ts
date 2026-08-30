@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { billingErrorToResponse } from "../billing/index.server";
+import { MERCHANT_FRIENDLY_HTTP_STATUS } from "../http/merchantFriendlyResponse.server";
 import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
 import { getEstimatedCredits } from "../aiTask/aiTaskEstimation.server";
 import { deriveBucket } from "../aiTask/estimationBucket";
@@ -53,9 +54,13 @@ export function parsePictureTranslateBody(
 function err(
   errorCode: number,
   errorMsg: string,
-  status: number,
+  _status?: number,
 ): { status: number; body: PictureTranslateResponse } {
-  return { status, body: { success: false, errorCode, errorMsg } };
+  void _status;
+  return {
+    status: MERCHANT_FRIENDLY_HTTP_STATUS,
+    body: { success: false, errorCode, errorMsg },
+  };
 }
 
 export async function executePictureTranslateRequest(params: {

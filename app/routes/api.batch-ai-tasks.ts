@@ -113,7 +113,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     } catch {
       return data<BatchAITasksResponse>(
         { ok: false, error: t("billing.lowBalanceWarning") },
-        { status: 402 },
+        { status: 200 },
       );
     }
 
@@ -141,7 +141,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } catch {
     return data<BatchAITasksResponse>(
       { ok: false, error: t("billing.lowBalanceWarning") },
-      { status: 402 },
+      { status: 200 },
     );
   }
 
