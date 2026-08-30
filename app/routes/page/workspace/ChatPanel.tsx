@@ -68,9 +68,13 @@ import {
   recommendedMenuGroupLabelStyle,
   recommendedMenuGroupStyle,
   recommendedMenuItemBadgeStyle,
+  recommendedMenuItemIconStyle,
+  recommendedMenuItemLabelStyle,
   recommendedMenuItemStyle,
   recommendedMenuStyle,
+  recommendedMenuTitleIconStyle,
   recommendedMenuTitleStyle,
+  recommendedTriggerGlyphStyle,
   recommendedTriggerStyle,
   recommendedChevronStyle,
   scrollBottomButtonStyle,
@@ -608,7 +612,7 @@ export function ChatPanel({
                 aria-expanded={isRecommendedMenuOpen}
                 aria-haspopup="menu"
               >
-                <span style={toolbarIconGlyphStyle}>✦</span>
+                <span style={recommendedTriggerGlyphStyle}>✦</span>
                 <span>{t("workspace.shell.chat.recommended")}</span>
                 <span aria-hidden="true" style={recommendedChevronStyle}>
                   ⌄
@@ -617,6 +621,9 @@ export function ChatPanel({
               {isRecommendedMenuOpen ? (
                 <div style={recommendedMenuStyle} role="menu">
                   <div style={recommendedMenuTitleStyle}>
+                    <span style={recommendedMenuTitleIconStyle} aria-hidden="true">
+                      ▶
+                    </span>
                     {hasProductContext
                       ? t("workspace.shell.chat.recommend.titleWithProduct")
                       : t("workspace.shell.chat.recommendedActions")}
@@ -636,7 +643,12 @@ export function ChatPanel({
                             void onRecommendedPrompt(action.prompt);
                           }}
                         >
-                          <span>{action.label}</span>
+                          <span style={recommendedMenuItemLabelStyle}>
+                            <span style={recommendedMenuItemIconStyle} aria-hidden="true">
+                              ▶
+                            </span>
+                            <span>{action.label}</span>
+                          </span>
                           {action.createsTask ? (
                             <span style={recommendedMenuItemBadgeStyle}>
                               {t("workspace.shell.chat.recommend.createsTask")}

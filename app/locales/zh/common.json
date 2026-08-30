@@ -3930,8 +3930,8 @@
       "subtitle": "Spark AI 能读店铺数据、优化商品内容、生成商品图片——描述目标即可，不用切换页面。",
       "assistantTitle": "描述目标，Spark AI 会查询店铺并协助执行",
       "composerPlaceholder": "例如：查看今天的经营情况，并告诉我最需要处理的 3 件事…",
-      "recommendationsTitle": "Spark 能帮你做这些事",
-      "recommendationsHint": "点任意一条，直接开始",
+      "recommendationsTitle": "推荐执行的操作",
+      "recommendationsHint": "点一条，Spark 直接开始执行",
       "capabilityDesc": {
         "operations": "查销售、转化、库存与退款异常，给出今天优先处理的清单。",
         "productOptimization": "给商品页打分，重写标题与描述，翻译商品图里的文字。",

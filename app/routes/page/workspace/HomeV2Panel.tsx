@@ -53,7 +53,7 @@ const homeV2Styles = {
     lineHeight: 1.45,
   },
   assistantCard: {
-    padding: "16px",
+    padding: "20px",
     borderRadius: shopifyUi.radiusCard,
     border: `1px solid ${shopifyUi.border}`,
     background: shopifyUi.surface,
@@ -78,11 +78,11 @@ const homeV2Styles = {
     border: `1px solid ${shopifyUi.border}`,
     borderRadius: 10,
     background: shopifyUi.surface,
-    padding: "12px 12px 10px",
+    padding: "14px 14px 12px",
   },
   composerInput: {
     width: "100%",
-    minHeight: 62,
+    minHeight: 130,
     border: "none",
     outline: "none",
     resize: "none" as const,
@@ -135,31 +135,31 @@ const homeV2Styles = {
     }) as const,
   capabilityGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(208px, 1fr))",
+    gap: 10,
   },
   capabilityCard: {
     display: "flex",
     flexDirection: "column" as const,
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: shopifyUi.radiusCard,
+    borderRadius: shopifyUi.radiusControl,
     background: shopifyUi.surface,
-    padding: "13px 14px 9px",
+    padding: "10px 12px 6px",
   },
   capabilityHeader: {
     display: "flex",
     alignItems: "center",
-    gap: 7,
-    marginBottom: 6,
+    gap: 6,
+    marginBottom: 5,
   },
   capabilityIcon: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 1,
     color: shopifyUi.textMuted,
   },
   capabilityTitle: {
     margin: 0,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 700,
     color: shopifyUi.text,
   },
@@ -167,28 +167,28 @@ const homeV2Styles = {
     marginLeft: "auto",
     padding: "1px 6px",
     borderRadius: 999,
-    border: `1px solid ${shopifyUi.border}`,
-    background: shopifyUi.surfaceSubtle,
-    color: shopifyUi.textMuted,
-    fontSize: 11,
-    fontWeight: 600,
+    border: `1px solid ${shopifyUi.linkBorder}`,
+    background: shopifyUi.linkSurface,
+    color: shopifyUi.link,
+    fontSize: 10,
+    fontWeight: 700,
     whiteSpace: "nowrap" as const,
   },
   capabilityDesc: {
     margin: 0,
-    fontSize: 13,
-    lineHeight: 1.5,
+    fontSize: 12,
+    lineHeight: 1.45,
     color: shopifyUi.textSecondary,
   },
   capabilityDivider: {
     height: 1,
     background: shopifyUi.border,
-    margin: "11px 0 5px",
+    margin: "8px 0 2px",
   },
   capabilityActions: {
     display: "flex",
     flexDirection: "column" as const,
-    margin: "0 -7px",
+    margin: "0 -6px",
   },
   capabilityAction: {
     display: "flex",
@@ -196,13 +196,13 @@ const homeV2Styles = {
     justifyContent: "space-between",
     gap: 8,
     width: "100%",
-    padding: "7px",
+    padding: "5px 6px",
     borderRadius: shopifyUi.radiusControl,
     border: "1px solid transparent",
     background: "transparent",
     color: shopifyUi.text,
     fontSize: 13,
-    fontWeight: 500,
+    fontWeight: 550,
     fontFamily: "inherit",
     lineHeight: 1.3,
     textAlign: "left" as const,
@@ -210,25 +210,33 @@ const homeV2Styles = {
   },
   capabilityActionChevron: {
     flexShrink: 0,
-    fontSize: 13,
+    fontSize: 12,
     color: shopifyUi.textMuted,
   },
   recommendations: {
     borderTop: `1px solid ${shopifyUi.border}`,
-    marginTop: 14,
-    paddingTop: 11,
+    marginTop: 18,
+    paddingTop: 13,
   },
   recommendationsHeader: {
     display: "flex",
     alignItems: "baseline",
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 9,
   },
   recommendationsTitle: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
     margin: 0,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 700,
     color: shopifyUi.text,
+  },
+  recommendationsTitleIcon: {
+    fontSize: 10,
+    lineHeight: 1,
+    color: shopifyUi.link,
   },
   recommendationsHint: {
     fontSize: 12,
@@ -240,11 +248,17 @@ const homeV2Styles = {
     gap: 6,
     minWidth: 0,
   },
+  capabilityActionIcon: {
+    flexShrink: 0,
+    fontSize: 10,
+    lineHeight: 1,
+    color: shopifyUi.link,
+  },
   capabilityActionBadge: {
     padding: "0 5px",
     borderRadius: 999,
-    background: shopifyUi.surfaceSubtle,
-    color: shopifyUi.textMuted,
+    background: shopifyUi.linkSurface,
+    color: shopifyUi.link,
     fontSize: 10,
     fontWeight: 700,
     whiteSpace: "nowrap" as const,
@@ -363,6 +377,9 @@ export function HomeV2Panel({
         <div style={homeV2Styles.recommendations}>
           <div style={homeV2Styles.recommendationsHeader}>
             <h3 style={homeV2Styles.recommendationsTitle}>
+              <span style={homeV2Styles.recommendationsTitleIcon} aria-hidden="true">
+                ▶
+              </span>
               {t("workspace.homeV2.recommendationsTitle")}
             </h3>
             <span style={homeV2Styles.recommendationsHint}>
@@ -401,6 +418,9 @@ export function HomeV2Panel({
                         onClick={() => onSubmitPrompt(item.prompt)}
                       >
                         <span style={homeV2Styles.capabilityActionLabel}>
+                          <span style={homeV2Styles.capabilityActionIcon} aria-hidden="true">
+                            ▶
+                          </span>
                           <span>{item.label}</span>
                           {!allCreateTasks && item.createsTask ? (
                             <span style={homeV2Styles.capabilityActionBadge}>

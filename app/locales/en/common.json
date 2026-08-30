@@ -3930,8 +3930,8 @@
       "subtitle": "Spark AI can read your store data, improve product content, and generate product images — just describe the goal.",
       "assistantTitle": "Describe your goal and Spark AI will inspect your store and help execute it",
       "composerPlaceholder": "For example: review today’s business and tell me the top 3 things to handle…",
-      "recommendationsTitle": "What Spark can do for you",
-      "recommendationsHint": "Pick any item to start",
+      "recommendationsTitle": "Recommended actions",
+      "recommendationsHint": "Pick one and Spark runs it right away",
       "capabilityDesc": {
         "operations": "Check sales, conversion, inventory and refund anomalies, then get today’s priority list.",
         "productOptimization": "Score product pages, rewrite titles and descriptions, translate text inside product images.",
