@@ -35,14 +35,6 @@ const PLAN_TIER_ORDER: Record<PlanTier, number> = {
   premium: 2,
 };
 
-function compareColumnClass(
-  column: string,
-  emphasizedTier: PlanTier | null,
-): string {
-  if (emphasizedTier && column === emphasizedTier) return styles.compareColHighlight;
-  return "";
-}
-
 function sortPlansByTier(plans: PlanRecord[]): PlanRecord[] {
   return [...plans].sort((left, right) => {
     const leftTier = planTierFromPlanKey(left.planKey);
@@ -58,51 +50,6 @@ function resolveRecommendedTier(currentTier: PlanTier | null): PlanTier | null {
   if (currentTier === "base") return "pro";
   if (currentTier === "pro") return "premium";
   return null;
-}
-
-function booleanPlanCapability(locale: string, supported: boolean): string {
-  void locale;
-  return supported ? "✅" : "❌";
-}
-
-function planCompareValue(
-  plan: PlanRecord | null,
-  capability:
-    | "credits"
-    | "text"
-    | "image"
-    | "video"
-    | "crossApp"
-    | "transfer"
-    | "support",
-  locale: string,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (!plan) return EMPTY;
-  const tier = planTierFromPlanKey(plan.planKey);
-  switch (capability) {
-    case "credits":
-      return t("billing.creditsPerPeriod", {
-        count: plan.tokens.toLocaleString(locale),
-      });
-    case "text":
-      return "Google、ChatGPT、Claude";
-    case "image":
-      return booleanPlanCapability(locale, tier === "pro" || tier === "premium");
-    case "video":
-      return booleanPlanCapability(locale, tier === "premium");
-    case "crossApp":
-      return booleanPlanCapability(locale, tier === "premium");
-    case "transfer":
-      return booleanPlanCapability(locale, tier === "premium");
-    case "support":
-      return booleanPlanCapability(locale, true);
-    default: {
-      const _exhaustive: never = capability;
-      void _exhaustive;
-      return EMPTY;
-    }
-  }
 }
 
 function formatDate(iso: string | null, locale: string): string {
@@ -258,33 +205,13 @@ function buildPaidPlanFeatures(
   locale: string,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): PlanFeatureItem[] {
-  const tier = planTierFromPlanKey(plan.planKey);
   const count = plan.tokens.toLocaleString(locale);
-  if (tier === "base") {
-    return [
-      { text: t("billing.planFeatureCredits", { count }) },
-      { text: t("billing.planFeatureTextModelsBase") },
-      { text: t("billing.planFeatureHumanSupport") },
-    ];
-  }
-  if (tier === "pro") {
-    return [
-      { text: t("billing.planFeatureCredits", { count }) },
-      { text: t("billing.planFeatureTextModels") },
-      { text: t("billing.planFeatureImageModelsPro") },
-      { text: t("billing.planFeatureHumanSupport") },
-    ];
-  }
-  if (tier === "premium") {
-    return [
-      { text: t("billing.planFeatureCredits", { count }) },
-      { text: t("billing.planFeatureTextModels") },
-      { text: t("billing.planFeatureImageModels") },
-      { text: t("billing.planFeatureVideoModels") },
-      { text: t("billing.planFeatureHumanSupport") },
-    ];
-  }
-  return [{ text: t("billing.planFeatureCreditsFallback", { count }) }];
+  void plan;
+  return [
+    { text: t("billing.planFeatureCredits", { count }) },
+    { text: t("billing.planFeatureModels") },
+    { text: t("billing.planFeatureHumanSupport") },
+  ];
 }
 
 function PlanFeatureList({ items }: { items: PlanFeatureItem[] }) {
@@ -584,12 +511,6 @@ export function BillingPage() {
 
   const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale, t);
 
-  const periodSuffix =
-    interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
-
-  const formatPlanPriceWithPeriod = (plan: PlanRecord) =>
-    `${formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}${periodSuffix}`;
-
   const allPlans = useMemo(
     () => [trialPlan, ...subscriptionPlans, ...tokenPacks].filter((plan): plan is PlanRecord => Boolean(plan)),
     [subscriptionPlans, tokenPacks, trialPlan],
@@ -650,62 +571,6 @@ export function BillingPage() {
     }
   }, [historyPage, totalHistoryPages]);
 
-  const compareRows: { label: string; values: string[] }[] = [
-    {
-      label:
-        interval === "MONTHLY"
-          ? t("billing.compareMonthlyPrice")
-          : t("billing.compareAnnualPrice"),
-      values: paidPlansToShow.map((plan) => formatPlanPriceWithPeriod(plan)),
-    },
-    {
-      label: t("billing.compareAnnualDiscount"),
-      values: paidPlansToShow.map((plan) => {
-        const tier = planTierFromPlanKey(plan.planKey);
-        const discount =
-          tier === "base"
-            ? baseAnnualDiscount
-            : tier === "pro"
-              ? proAnnualDiscount
-              : tier === "premium"
-                ? premiumAnnualDiscount
-                : null;
-        return discount != null
-          ? t("billing.discountPercent", { percent: discount })
-          : EMPTY;
-      }),
-    },
-    {
-      label: t("billing.compareTokens"),
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "credits", locale, t)),
-    },
-    {
-      label: t("billing.compareImageModels"),
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale, t)),
-    },
-    {
-      label: t("billing.compareHumanSupport"),
-      values: paidPlansToShow.map((plan) => planCompareValue(plan, "support", locale, t)),
-    },
-  ];
-  const comparePlanCards = [
-    {
-      key: "free",
-      title: t("billing.planFree"),
-      highlighted: false,
-      values: compareRows.map((row) => ({ label: row.label, value: row.values[0] })),
-    },
-    ...paidPlansToShow.map((plan, index) => {
-      const key = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
-      return {
-        key,
-        title: normalizePlanDisplayName(plan.displayName, plan.planKey),
-        highlighted: emphasizedTier === key,
-        values: compareRows.map((row) => ({ label: row.label, value: row.values[index + 1] })),
-      };
-    }),
-  ];
-
   const selectedPack =
     tokenPacks.find((p) => p.planKey === selectedPackKey) ?? tokenPacks[0];
 
@@ -715,12 +580,24 @@ export function BillingPage() {
       answer: t("billing.faqBillingAnswer"),
     },
     {
+      question: t("billing.faqFreeQuestion"),
+      answer: t("billing.faqFreeAnswer"),
+    },
+    {
+      question: t("billing.faqPlanChangeQuestion"),
+      answer: t("billing.faqPlanChangeAnswer"),
+    },
+    {
       question: t("billing.faqWhenQuestion"),
       answer: t("billing.faqWhenAnswer"),
     },
     {
-      question: t("billing.faqRefundQuestion"),
-      answer: t("billing.faqRefundAnswer"),
+      question: t("billing.faqCreditsExpireQuestion"),
+      answer: t("billing.faqCreditsExpireAnswer"),
+    },
+    {
+      question: t("billing.faqPackQuestion"),
+      answer: t("billing.faqPackAnswer"),
     },
   ];
 
@@ -1487,80 +1364,6 @@ export function BillingPage() {
               </div>
             ) : null}
           </div>
-        </section>
-      ) : null}
-
-      {paidPlansToShow.length > 0 ? (
-        <section className={styles.compareSection}>
-          <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
-          {isMobile ? (
-            <div className={styles.compareCards}>
-              {comparePlanCards.map((plan) => (
-                <article
-                  key={plan.key}
-                  className={`${styles.compareCard} ${plan.highlighted ? styles.compareCardHighlight : ""}`}
-                >
-                  <div className={styles.compareCardTitleRow}>
-                    <h3 className={styles.compareCardTitle}>{plan.title}</h3>
-                    {plan.highlighted ? (
-                      <span className={styles.compareCardBadge}>
-                        {t("billing.compareHighlighted")}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className={styles.compareList}>
-                    {plan.values.map((item) => (
-                      <div key={`${plan.key}-${item.label}`} className={styles.compareListItem}>
-                        <span className={styles.compareListLabel}>{item.label}</span>
-                        <span className={styles.compareListValue}>{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <table className={styles.compareTable}>
-              <thead>
-                <tr>
-                  <th>{t("billing.compareFeatureCol")}</th>
-                  {paidPlansToShow.map((plan) => {
-                    const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
-                    return (
-                      <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
-                        <span className={styles.comparePlanHeading}>
-                          {normalizePlanDisplayName(plan.displayName, plan.planKey)}
-                          {tier === emphasizedTier ? (
-                            <span className={styles.compareHeaderBadge}>
-                              {t("billing.compareHighlighted")}
-                            </span>
-                          ) : null}
-                        </span>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {compareRows.map((row) => (
-                  <tr key={row.label}>
-                    <td>{row.label}</td>
-                    {row.values.map((value, index) => {
-                      const key =
-                        planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
-                        paidPlansToShow[index]?.planKey ??
-                        String(index);
-                      return (
-                        <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
-                          {value}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </section>
       ) : null}
 
