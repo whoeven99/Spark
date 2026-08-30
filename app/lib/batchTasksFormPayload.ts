@@ -3,6 +3,7 @@
  * 由 AI skill 填充，前端卡片读取。
  */
 import {
+  detectProductImproveTargetLanguage,
   detectPictureTranslateTargetLanguage,
   isPictureTranslateUserIntent,
 } from "./chatCardFallback";
@@ -72,6 +73,30 @@ export function alignBatchTasksPayloadWithUserIntent(
     targetLanguage: detectPictureTranslateTargetLanguage(lastUserText) ?? "zh",
     sourceLanguage: payload.sourceLanguage?.trim() || "auto",
   };
+}
+
+export function alignProductImprovePayloadTargetLanguage(
+  payload: BatchTasksFormPayload,
+  lastUserText: string,
+): BatchTasksFormPayload {
+  if (payload.taskType !== "product_improve") return payload;
+  const targetLanguage = detectProductImproveTargetLanguage(
+    lastUserText,
+    payload.targetLanguage,
+  );
+  if (!targetLanguage || targetLanguage === payload.targetLanguage) return payload;
+  return {
+    ...payload,
+    targetLanguage,
+  };
+}
+
+export function normalizeBatchTasksPayloadWithUserIntent(
+  payload: BatchTasksFormPayload,
+  lastUserText: string,
+): BatchTasksFormPayload {
+  const alignedTaskType = alignBatchTasksPayloadWithUserIntent(payload, lastUserText);
+  return alignProductImprovePayloadTargetLanguage(alignedTaskType, lastUserText);
 }
 
 export function coerceBatchTasksFormPayload(raw: unknown): BatchTasksFormPayload {

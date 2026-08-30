@@ -1,8 +1,8 @@
 import { ToolMessage } from "@langchain/core/messages";
 import {
-  alignBatchTasksPayloadWithUserIntent,
   coerceBatchTasksFormPayload,
   mergeBatchTasksPayloadWithContext,
+  normalizeBatchTasksPayloadWithUserIntent,
   type BatchTasksFormPayload,
 } from "../../../../lib/batchTasksFormPayload";
 import { parseWorkspaceProductsFromText } from "../../../../lib/workspaceContextProducts";
@@ -13,7 +13,7 @@ function enrichFromWorkspaceContext(
   payload: BatchTasksFormPayload,
   lastUserText: string,
 ): BatchTasksFormPayload {
-  return alignBatchTasksPayloadWithUserIntent(
+  return normalizeBatchTasksPayloadWithUserIntent(
     mergeBatchTasksPayloadWithContext(
       payload,
       parseWorkspaceProductsFromText(lastUserText),

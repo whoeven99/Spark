@@ -49,7 +49,7 @@ export const pictureTranslateToolDefinition: ToolDefinition = {
   description: "识别图片中的文字并翻译，返回翻译后图片，保持原图布局",
   uiPayloadKey: "attachments",
   systemPromptExtension:
-    "当用户已提供可访问的 HTTPS 图片 URL 或图片 base64，且目标语言明确、要求立即翻译时，调用 picture_translate。若用户尚未选图或需在卡片里确认语言，应调用 open_picture_translate_form 而非本工具。不要用于普通文本翻译、PDF 或纯文本。成功后不要输出 Markdown 图片链接，译图由前端直接渲染；只需简洁说明翻译已完成。",
+    "当用户已提供可访问的 HTTPS 图片 URL 或图片 base64，且目标语言明确、要求立即翻译时，调用 picture_translate。若用户尚未选图或需在卡片里确认语言，应调用 open_picture_translate_form 而非本工具。不要用于普通文本翻译、PDF 或纯文本。成功后不要输出 Markdown 图片链接，译图由前端直接渲染；只需用与用户消息相同的语言简洁说明翻译已完成。",
   createTool: (context) => createPictureTranslateTool(context),
   extractUIPayload: (messages) =>
     extractChatImageAttachmentsFromMessages(messages),

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   detectPictureTranslateTargetLanguage,
+  detectProductImproveTargetLanguage,
   isPictureTranslateUserIntent,
 } from "~/lib/chatCardFallback";
 import {
   alignBatchTasksPayloadWithUserIntent,
+  normalizeBatchTasksPayloadWithUserIntent,
   coerceBatchTasksFormPayload,
   type BatchTasksFormPayload,
 } from "~/lib/batchTasksFormPayload";
@@ -97,5 +99,33 @@ describe("alignBatchTasksPayloadWithUserIntent", () => {
     const original = batchPayload({ taskType: "picture_translate", targetLanguage: "ja" });
     const aligned = alignBatchTasksPayloadWithUserIntent(original, WORKSPACE_CONTEXT);
     expect(aligned).toEqual(original);
+  });
+});
+
+describe("detectProductImproveTargetLanguage", () => {
+  it("recognizes explicit language requests for product copy", () => {
+    expect(
+      detectProductImproveTargetLanguage("[用户消息]optimize this product description in English", "zh-CN"),
+    ).toBe("en");
+    expect(
+      detectProductImproveTargetLanguage("[用户消息]optimize this product description in Chinese", "en"),
+    ).toBe("zh-CN");
+  });
+
+  it("falls back to English when the user input is clearly English but payload was Chinese", () => {
+    expect(
+      detectProductImproveTargetLanguage("[用户消息]product optimization", "zh-CN"),
+    ).toBe("en");
+  });
+});
+
+describe("normalizeBatchTasksPayloadWithUserIntent", () => {
+  it("corrects product_improve target language to English for English user input", () => {
+    const normalized = normalizeBatchTasksPayloadWithUserIntent(
+      batchPayload({ targetLanguage: "zh-CN" }),
+      "[用户消息]product optimization",
+    );
+    expect(normalized.taskType).toBe("product_improve");
+    expect(normalized.targetLanguage).toBe("en");
   });
 });
