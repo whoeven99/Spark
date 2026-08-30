@@ -283,6 +283,8 @@
     "delete": "删除",
     "deleting": "删除中…",
     "viewDetail": "查看详情",
+    "previous": "上一条",
+    "next": "下一条",
     "durationUnknown": "时长未知",
     "durationSeconds": "约 {{value}} 秒",
     "durationMinutes": "约 {{value}} 分钟",

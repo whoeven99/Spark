@@ -98,6 +98,18 @@ type ChatStreamController = ReturnType<typeof useChatStream>;
 
 const MAX_CONTEXT_TOKENS = 8000;
 
+const reviewNavButtonStyle = (disabled: boolean) =>
+  ({
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    borderRadius: 8,
+    background: disabled ? pageColorTokens.surfaceSubtle : "#fff",
+    color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textPrimary,
+    padding: "4px 10px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: disabled ? "not-allowed" : "pointer",
+  }) as const;
+
 export function ChatPanel({
   conversation,
   conversationTimeZone = "UTC",
@@ -151,6 +163,7 @@ export function ChatPanel({
   const [isRecommendedMenuOpen, setIsRecommendedMenuOpen] = useState(false);
   const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
+  const [reviewTaskIds, setReviewTaskIds] = useState<string[]>([]);
   const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
   const [reviewTask, setReviewTask] = useState<AITaskItem | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -271,6 +284,7 @@ export function ChatPanel({
   const { tasksById, upsertTaskStatus } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
 
   const closeReviewDialog = useCallback(() => {
+    setReviewTaskIds([]);
     setReviewTaskId(null);
     setReviewTask(null);
     setReviewLoading(false);
@@ -279,12 +293,40 @@ export function ChatPanel({
   const handleOpenTasks = useCallback(
     (opts?: OpenWorkspaceTasksOptions) => {
       if (opts?.intent === "review" && opts.taskId && isChatInlineReviewTask(opts.taskType)) {
+        const nextTaskIds = Array.isArray(opts.taskIds)
+          ? opts.taskIds.filter((id, index, list) => Boolean(id) && list.indexOf(id) === index)
+          : [];
+        const normalizedTaskIds = nextTaskIds.includes(opts.taskId)
+          ? nextTaskIds
+          : [...nextTaskIds, opts.taskId];
+        setReviewTaskIds(normalizedTaskIds.length > 0 ? normalizedTaskIds : [opts.taskId]);
         setReviewTaskId(opts.taskId);
         return;
       }
       onOpenTasks(opts);
     },
     [onOpenTasks],
+  );
+
+  const reviewTaskIndex = useMemo(() => {
+    if (!reviewTaskId) return -1;
+    return reviewTaskIds.indexOf(reviewTaskId);
+  }, [reviewTaskId, reviewTaskIds]);
+
+  const reviewTaskTotal = reviewTaskIds.length;
+  const canOpenPrevReviewTask = reviewTaskIndex > 0;
+  const canOpenNextReviewTask =
+    reviewTaskIndex >= 0 && reviewTaskIndex < reviewTaskTotal - 1;
+
+  const openAdjacentReviewTask = useCallback(
+    (direction: "prev" | "next") => {
+      if (reviewTaskIndex < 0) return;
+      const nextIndex = direction === "prev" ? reviewTaskIndex - 1 : reviewTaskIndex + 1;
+      const nextTaskId = reviewTaskIds[nextIndex];
+      if (!nextTaskId) return;
+      setReviewTaskId(nextTaskId);
+    },
+    [reviewTaskIds, reviewTaskIndex],
   );
 
   useEffect(() => {
@@ -805,7 +847,63 @@ export function ChatPanel({
         open={Boolean(reviewTaskId)}
         width={980}
         onClose={closeReviewDialog}
-        title={t("productImproveStage1.chatReviewDialogTitle")}
+        title={
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              width: "100%",
+            }}
+          >
+            <span>{t("productImproveStage1.chatReviewDialogTitle")}</span>
+            {reviewTaskTotal > 1 ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: pageColorTokens.textSecondary,
+                }}
+              >
+                {`${Math.max(reviewTaskIndex + 1, 1)} / ${reviewTaskTotal}`}
+              </span>
+            ) : null}
+          </div>
+        }
+        description={
+          reviewTaskTotal > 1 ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                width: "100%",
+              }}
+            >
+              <span>{t("workspace.taskProposal.taskRunCard.createdCount", { count: reviewTaskTotal })}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => openAdjacentReviewTask("prev")}
+                  disabled={!canOpenPrevReviewTask}
+                  style={reviewNavButtonStyle(!canOpenPrevReviewTask)}
+                >
+                  {t("common.previous")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAdjacentReviewTask("next")}
+                  disabled={!canOpenNextReviewTask}
+                  style={reviewNavButtonStyle(!canOpenNextReviewTask)}
+                >
+                  {t("common.next")}
+                </button>
+              </div>
+            </div>
+          ) : undefined
+        }
         destroyOnHidden
       >
         {reviewTask?.taskType === "product_improve" ? (
