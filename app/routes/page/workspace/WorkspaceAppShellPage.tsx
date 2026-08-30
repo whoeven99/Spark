@@ -1069,12 +1069,17 @@ export function WorkspaceAppShellPage({
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
-          const assistantText =
-            payload.httpStatus !== undefined
-              ? t("workspace.shell.chat.requestFailed", { status: payload.httpStatus })
-              : payload.aborted && !payload.reply.trim()
-                ? t("workspace.shell.chat.replyStopped")
-                : payload.reply.trim() || t("workspace.shell.chat.invalidReply");
+          const assistantText = (() => {
+            const reply = payload.reply.trim();
+            if (reply) return reply;
+            if (payload.httpStatus !== undefined) {
+              return t("workspace.shell.chat.requestFailed", {
+                status: payload.httpStatus,
+              });
+            }
+            if (payload.aborted) return t("workspace.shell.chat.replyStopped");
+            return t("workspace.shell.chat.invalidReply");
+          })();
           const managedAiContext = managedAiContextByConversation[conversationId] ?? null;
           const managedAiResult = tryParseManagedAiOutput(assistantText, managedAiContext);
 

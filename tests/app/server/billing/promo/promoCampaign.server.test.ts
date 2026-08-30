@@ -70,3 +70,19 @@ describe("isPromoCampaignActive / getVisiblePromoCampaign", () => {
     expect(visible?.tokenAmount).toBe(1_000_000);
   });
 });
+
+describe("ensureInstallPromoTokens", () => {
+  it("活动关闭时返回 null 且不抛错", async () => {
+    const { ensureInstallPromoTokens } = await import(
+      "../../../../../app/server/billing/promo/promoCampaign.server"
+    );
+    const prev = process.env.SPARK_PROMO_ENABLED;
+    process.env.SPARK_PROMO_ENABLED = "false";
+    try {
+      await expect(ensureInstallPromoTokens("demo.myshopify.com")).resolves.toBeNull();
+    } finally {
+      if (prev === undefined) delete process.env.SPARK_PROMO_ENABLED;
+      else process.env.SPARK_PROMO_ENABLED = prev;
+    }
+  });
+});

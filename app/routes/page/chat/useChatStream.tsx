@@ -289,9 +289,27 @@ export function useChatStream() {
         });
 
         if (!response.ok) {
+          let message = "";
+          try {
+            const contentType = response.headers.get("content-type") ?? "";
+            if (contentType.includes("application/json")) {
+              const json = (await response.json()) as {
+                error?: string;
+                errorMsg?: string;
+                message?: string;
+              };
+              message =
+                json.errorMsg?.trim() ||
+                json.error?.trim() ||
+                json.message?.trim() ||
+                "";
+            }
+          } catch {
+            // ignore parse failures; fall back to status-based copy in onFinish
+          }
           finalizeOnce({
             aborted: false,
-            reply: "",
+            reply: message,
             httpStatus: response.status,
           });
           return;

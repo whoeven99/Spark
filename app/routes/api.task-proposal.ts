@@ -170,13 +170,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (e instanceof TaskProposalBillingError) {
       return data<TaskProposalExecuteResponse>(
         { ok: false, error: t("billing.lowBalanceWarning") },
-        { status: 402 },
+        { status: 200 },
       );
     }
     console.error("[TaskProposal] execute failed:", e);
     return data<TaskProposalExecuteResponse>(
       { ok: false, error: e instanceof Error ? e.message : "执行失败" },
-      { status: 500 },
+      { status: 200 },
     );
   }
 };

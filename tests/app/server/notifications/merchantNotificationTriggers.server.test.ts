@@ -38,6 +38,7 @@ vi.mock("../../../../app/db.server", () => ({
       delete: vi.fn().mockResolvedValue({}),
     },
     accountPeriodUsage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    session: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     $transaction: vi.fn(),
   },
 }));
@@ -50,6 +51,13 @@ vi.mock("../../../../app/server/commonEventLog/handleAppUninstalled.server", () 
   handleAppUninstalled: vi.fn().mockResolvedValue(undefined),
   buildUninstallNotifyReferenceId: vi.fn((shop: string) => `uninstall:notify:${shop}`),
   buildUninstallEventReferenceId: vi.fn().mockReturnValue("uninstall:webhook:test"),
+}));
+
+vi.mock("../../../../app/server/shopDataLifecycle/archiveAndPurgeShop.server", () => ({
+  archiveAndPurgeShopData: vi.fn().mockResolvedValue({
+    archive: { ok: true },
+    purge: { deleted: {}, errors: [] },
+  }),
 }));
 
 vi.mock("../../../../app/server/commonEventLog/loadSessionSnapshotForUninstall.server", () => ({

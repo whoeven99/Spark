@@ -352,9 +352,6 @@ export function BillingPage() {
   const isCancelling =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "cancel_subscription";
-  const isClaimingPromo =
-    navigation.state !== "idle" &&
-    navigation.formData?.get("intent") === "claim_promo_tokens";
   const isDismissingPending =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "dismiss_pending_plan_change";
@@ -914,9 +911,7 @@ export function BillingPage() {
       ) : null}
       {promoCampaign ? (
         <div
-          className={`${styles.promoStrip} ${
-            promoCampaign.claimed ? styles.promoStripClaimed : ""
-          }`}
+          className={`${styles.promoStrip} ${styles.promoStripClaimed}`}
           role="status"
         >
           <p className={styles.promoStripText}>
@@ -936,20 +931,6 @@ export function BillingPage() {
                   })}
             </span>
           </p>
-          {!promoCampaign.claimed ? (
-            <Form method="post" className={styles.promoStripAction}>
-              <input type="hidden" name="intent" value="claim_promo_tokens" />
-              <s-button
-                type="submit"
-                variant="primary"
-                {...(isClaimingPromo ? { loading: true } : {})}
-              >
-                {isClaimingPromo
-                  ? t("billing.promoClaiming")
-                  : t("billing.promoClaim")}
-              </s-button>
-            </Form>
-          ) : null}
         </div>
       ) : null}
 

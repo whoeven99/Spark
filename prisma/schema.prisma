@@ -1003,3 +1003,16 @@ model ImageMapping {
   @@unique([shop, sourceUrl, targetCode])
   @@index([shop, targetCode])
 }
+
+/// 安装福利领取账本（防薅羊毛）：仅存 shop 域名哈希，卸载 / shop_redact 后仍保留。
+model PromoClaimLedger {
+  id          String   @id @default(cuid())
+  /// sha256(normalized shop domain)，不含明文店铺名
+  shopHash    String
+  campaignId  String
+  tokensDelta Int
+  claimedAt   DateTime @default(now())
+
+  @@unique([shopHash, campaignId])
+  @@index([claimedAt])
+}

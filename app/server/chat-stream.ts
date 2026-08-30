@@ -10,13 +10,17 @@ import {
   requireBillingAccess,
 } from "./billing/index.server";
 import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
+import {
+  merchantFriendlyJson,
+  merchantFriendlySseError,
+} from "./http/merchantFriendlyResponse.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
-    return Response.json(
-      { error: "Method not allowed, use POST." },
-      { status: 405 },
-    );
+    return merchantFriendlyJson({
+      ok: false,
+      error: "请使用 POST 发送聊天请求。",
+    });
   }
 
   const body = (await request.json().catch(() => ({}))) as {
@@ -30,13 +34,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (body.messages !== undefined && body.messages !== null) {
     const parsed = parseClientChatMessages(body.messages);
     if (!parsed) {
-      return Response.json(
-        {
-          error:
-            "无效的 messages：须为非空数组，元素为 { role: user|assistant, content }，且最后一条须为用户消息。",
-        },
-        { status: 400 },
-      );
+      return merchantFriendlyJson({
+        ok: false,
+        error:
+          "无效的 messages：须为非空数组，元素为 { role: user|assistant, content }，且最后一条须为用户消息。",
+      });
     }
     agentMessages = parsed;
   } else {
@@ -111,47 +113,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const billingResponse = billingErrorToResponse(error);
     if (billingResponse) {
       const body = (await billingResponse.json()) as { errorMsg?: string };
-      const encoder = new TextEncoder();
-      const errorStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "error",
-                message: body.errorMsg ?? "Token 余额不足或尚未订阅，请前往账户页开通",
-              })}\n\n`,
-            ),
-          );
-          controller.close();
-        },
-      });
-      return new Response(errorStream, {
-        status: 402,
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-        },
-      });
+      return merchantFriendlySseError(
+        body.errorMsg ?? "Token 余额不足或尚未订阅，请前往账户页开通",
+      );
     }
     const hint =
       error instanceof Error && error.message.includes("DEEPSEEK_API_KEY")
         ? "未配置 DEEPSEEK_API_KEY，请在环境变量中设置后再试。"
         : "AI 服务暂时不可用，请稍后重试。";
-    
-    const encoder = new TextEncoder();
-    const errorStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: hint })}\n\n`));
-        controller.close();
-      },
-    });
 
-    return new Response(errorStream, {
-      status: 500,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-      },
-    });
+    return merchantFriendlySseError(hint);
   }
 };

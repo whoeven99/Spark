@@ -1,10 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalizeComplianceTopic,
   handleComplianceWebhook,
   isComplianceTopic,
   summarizeCompliancePayload,
 } from "../../../../app/server/webhook/complianceWebhooks.server";
+
+vi.mock("../../../../app/db.server", () => ({
+  default: {
+    shopCustomerValue: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    shopCustomer: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    shopOrder: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+  },
+}));
+
+vi.mock("../../../../app/server/shopDataLifecycle/archiveAndPurgeShop.server", () => ({
+  archiveAndPurgeShopData: vi.fn().mockResolvedValue({
+    archive: { ok: true },
+    purge: { deleted: {}, errors: [] },
+  }),
+}));
 
 describe("canonicalizeComplianceTopic", () => {
   it("maps slash headers and GraphQL enums to the same topic", () => {
@@ -89,8 +104,15 @@ describe("summarizeCompliancePayload", () => {
 });
 
 describe("handleComplianceWebhook", () => {
-  it("acknowledges known topics without mutating", () => {
-    const result = handleComplianceWebhook({
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("runs shop/redact archive+purge", async () => {
+    const { archiveAndPurgeShopData } = await import(
+      "../../../../app/server/shopDataLifecycle/archiveAndPurgeShop.server"
+    );
+    const result = await handleComplianceWebhook({
       shop: "example.myshopify.com",
       topic: "shop/redact",
       payload: { shop_id: 1, shop_domain: "example.myshopify.com" },
@@ -98,10 +120,15 @@ describe("handleComplianceWebhook", () => {
     });
     expect(result.handled).toBe(true);
     expect(result.summary?.topic).toBe("shop/redact");
+    expect(archiveAndPurgeShopData).toHaveBeenCalledWith({
+      shop: "example.myshopify.com",
+      mode: "shop_redact",
+      reason: "shop/redact",
+    });
   });
 
-  it("rejects unrelated topics", () => {
-    const result = handleComplianceWebhook({
+  it("rejects unrelated topics", async () => {
+    const result = await handleComplianceWebhook({
       shop: "example.myshopify.com",
       topic: "app/uninstalled",
       payload: {},

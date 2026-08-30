@@ -1,7 +1,11 @@
+import { merchantFriendlyJson } from "../http/merchantFriendlyResponse.server";
 import { BillingAccessDeniedError, BILLING_ERROR_CODE } from "./errors.server";
 import { loadBillingContext, type BillingContext } from "./billingContext.server";
+import { ensureInstallPromoTokens } from "./promo/promoCampaign.server";
 
 export async function requireBillingAccess(shop: string): Promise<BillingContext> {
+  // 兜底：壳层未跑完或只打 API 时也能自动领安装福利
+  await ensureInstallPromoTokens(shop);
   const ctx = await loadBillingContext(shop);
 
   if (!ctx.hasAccess) {
@@ -31,15 +35,12 @@ export async function requireBillingAccess(shop: string): Promise<BillingContext
 
 export function billingErrorToResponse(error: unknown): Response | null {
   if (error instanceof BillingAccessDeniedError) {
-    return Response.json(
-      {
-        success: false,
-        errorCode: error.code,
-        errorMsg: error.message,
-        billing: error.details ?? {},
-      },
-      { status: error.status },
-    );
+    return merchantFriendlyJson({
+      success: false,
+      errorCode: error.code,
+      errorMsg: error.message,
+      billing: error.details ?? {},
+    });
   }
   return null;
 }

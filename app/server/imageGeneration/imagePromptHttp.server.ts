@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { billingErrorToResponse } from "../billing/index.server";
+import { MERCHANT_FRIENDLY_HTTP_STATUS } from "../http/merchantFriendlyResponse.server";
 import {
   buildImagePromptBillingItem,
   normalizeBillingModelKey,
@@ -49,7 +50,7 @@ export async function executeImagePromptRequest(params: {
     if (billingResponse) {
       const body = (await billingResponse.json()) as { errorMsg?: string };
       return {
-        status: 402,
+        status: MERCHANT_FRIENDLY_HTTP_STATUS,
         body: {
           success: false,
           errorCode: 40200,
@@ -70,7 +71,7 @@ export async function executeImagePromptRequest(params: {
     const isValidation =
       result.errorMsg.includes("至少") || result.errorMsg.includes("不能超过");
     return {
-      status: isValidation ? 400 : 502,
+      status: MERCHANT_FRIENDLY_HTTP_STATUS,
       body: {
         success: false,
         errorCode: isValidation ? 40000 : 50200,
