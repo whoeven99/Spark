@@ -283,6 +283,8 @@
     "delete": "Delete",
     "deleting": "Deleting...",
     "viewDetail": "View details",
+    "previous": "Previous",
+    "next": "Next",
     "durationUnknown": "Duration unknown",
     "durationSeconds": "About {{value}} sec",
     "durationMinutes": "About {{value}} min",

@@ -77,10 +77,14 @@ function resolveProductImproveReviewOptions(
   if (!isProductImprove) return undefined;
   const firstPending = matchedTasks.find((task) => task.status === "pending_review");
   if (!firstPending && matchedTasks.length !== 1) return undefined;
+  const reviewTaskIds = matchedTasks
+    .filter((task) => task.taskType === "product_improve")
+    .map((task) => task.id);
   return {
     skillId: run.skillId,
     taskType: "product_improve",
     taskId: firstPending?.id ?? matchedTasks[0]?.id,
+    ...(reviewTaskIds.length > 0 ? { taskIds: reviewTaskIds } : {}),
     intent: "review",
   };
 }

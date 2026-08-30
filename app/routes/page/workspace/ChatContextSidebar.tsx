@@ -265,9 +265,11 @@ function ConversationTasksCard({
                       reviewableTasks.find((task) => task.status === "pending_review") ??
                       reviewableTasks[0];
                     if (preferredTask) {
+                      const reviewTaskIds = reviewableTasks.map((task) => task.id);
                       onOpenTasks({
                         taskType: preferredTask.taskType,
                         taskId: preferredTask.id,
+                        ...(reviewTaskIds.length > 0 ? { taskIds: reviewTaskIds } : {}),
                         intent: "review",
                       });
                       return;

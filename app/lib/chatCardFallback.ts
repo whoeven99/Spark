@@ -37,3 +37,54 @@ export function detectPictureTranslateTargetLanguage(lastUserText: string): stri
   if (/韩文|韩语|韓語|korean|\bko\b/i.test(text)) return "ko";
   return null;
 }
+
+function detectCommonTargetLanguage(lastUserText: string): string | null {
+  const text = extractUserIntentText(lastUserText);
+  if (!text) return null;
+  if (/繁体|繁體|zh-tw|zh-hant|traditional\s*chinese/i.test(text)) return "zh-TW";
+  if (/简体|中文|汉语|漢語|zh-cn|zh-hans|\bzh\b|chinese/i.test(text)) return "zh-CN";
+  if (/英文|英语|英語|english|\ben\b/i.test(text)) return "en";
+  if (/日文|日语|日語|japanese|\bja\b/i.test(text)) return "ja";
+  if (/韩文|韩语|韓語|korean|\bko\b/i.test(text)) return "ko";
+  if (/德文|德语|德語|german|\bde\b/i.test(text)) return "de";
+  if (/法文|法语|法語|french|\bfr\b/i.test(text)) return "fr";
+  if (/西班牙文|西班牙语|西班牙語|spanish|\bes\b/i.test(text)) return "es";
+  if (/葡萄牙文|葡萄牙语|葡萄牙語|portuguese|\bpt\b/i.test(text)) return "pt";
+  return null;
+}
+
+function looksLikeEnglishUserInput(lastUserText: string): boolean {
+  const text = extractUserIntentText(lastUserText);
+  if (!text) return false;
+  if (/[\u3400-\u9fff]/.test(text)) return false;
+  const latinWords = text.match(/[A-Za-z]{2,}/g) ?? [];
+  return latinWords.length >= 2;
+}
+
+function isChineseLanguageCode(code: string): boolean {
+  const normalized = code.trim().toLowerCase().replace(/_/g, "-");
+  return (
+    normalized === "zh" ||
+    normalized === "zh-cn" ||
+    normalized === "zh-hans" ||
+    normalized === "zh-tw" ||
+    normalized === "zh-hant"
+  );
+}
+
+/**
+ * 批量商品文案任务的目标语言兜底：
+ * 1. 用户显式说了目标语言，则优先采用用户要求；
+ * 2. 若模型/旧逻辑给了中文，但用户本轮输入明显是英文，则纠偏回 en。
+ */
+export function detectProductImproveTargetLanguage(
+  lastUserText: string,
+  currentTargetLanguage?: string,
+): string | null {
+  const explicit = detectCommonTargetLanguage(lastUserText);
+  if (explicit) return explicit;
+  if (isChineseLanguageCode(currentTargetLanguage ?? "") && looksLikeEnglishUserInput(lastUserText)) {
+    return "en";
+  }
+  return null;
+}

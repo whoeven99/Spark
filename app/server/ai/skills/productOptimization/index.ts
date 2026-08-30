@@ -53,7 +53,7 @@ const productImproveSkillDef: ToolDefinition = {
   description: "在聊天内打开商品描述卡片，或由 AI 直接生成标题与描述",
   uiPayloadKey: "productImproveCardPayload",
   systemPromptExtension:
-    "当用户要生成、撰写或优化商品标题、描述或营销文案时，优先调用 open_product_improve_form 打开可编辑卡片，并从对话中尽量预填 productId、targetLanguage；调用后说明用户可在卡片内选商品、确认语言并点击生成，生成结果含标题与描述，需审核后才写回。禁止在未成功调用 open_product_improve_form 时声称「已打开卡片」。若用户已明确提供商品 ID 且要求立即生成（不需卡片确认），可调用 generate_product_description；成功时用简洁中文概括要点，不要编造工具未返回的内容。\n【重要】若上下文中已有「已选商品（共 N 个）」且 N ≥ 2，说明用户已预选了多个商品，此时【禁止】调用 open_product_improve_form（单商品工具）；应改用 open_batch_tasks_form 批量处理。\n【严禁混淆】本工具及 generate_product_description 只用于「商品描述/文案」，绝不用于「翻译图片中的文字」。用户要翻译商品图片时，改用 open_picture_translate_form（单图）或 open_batch_tasks_form 且 taskType=picture_translate。",
+    "当用户要生成、撰写或优化商品标题、描述或营销文案时，优先调用 open_product_improve_form 打开可编辑卡片，并从对话中尽量预填 productId、targetLanguage；调用后用与用户消息相同的语言说明用户可在卡片内选商品、确认语言并点击生成，生成结果含标题与描述，需审核后才写回。禁止在未成功调用 open_product_improve_form 时声称「已打开卡片」。若用户已明确提供商品 ID 且要求立即生成（不需卡片确认），可调用 generate_product_description；成功时用与用户消息相同的语言简洁概括要点，不要编造工具未返回的内容。\n【重要】若上下文中已有「已选商品（共 N 个）」且 N ≥ 2，说明用户已预选了多个商品，此时【禁止】调用 open_product_improve_form（单商品工具）；应改用 open_batch_tasks_form 批量处理。\n【严禁混淆】本工具及 generate_product_description 只用于「商品描述/文案」，绝不用于「翻译图片中的文字」。用户要翻译商品图片时，改用 open_picture_translate_form（单图）或 open_batch_tasks_form 且 taskType=picture_translate。",
   createTool: (context) => [
     productImproveFormTool,
     createGenerateProductDescriptionTool(context),
@@ -100,7 +100,7 @@ const productQualityScoreSkillDef: ToolDefinition = {
   visibility: "internal",
   uiPayloadKey: "productQualityCard",
   systemPromptExtension:
-    "当用户想评估、诊断或了解某个商品的页面质量，或要求对商品页内容进行评分时，优先调用 open_product_quality_form 打开可交互卡片，并从对话尽量预填 productId。调用后说明用户可在卡片内选择商品并点击开始评分；评分结果在同一张卡片展示，含各维度分数与本次积分消耗。禁止在未成功调用 open_product_quality_form 时声称「已打开卡片」。若用户已明确提供商品 ID 且要求立刻出分（不需卡片确认），可调用 score_product_quality；成功时用简洁中文概括低分项与改进优先级，不要编造工具未返回的内容。本能力不写回 Shopify、不创建异步任务。",
+    "当用户想评估、诊断或了解某个商品的页面质量，或要求对商品页内容进行评分时，优先调用 open_product_quality_form 打开可交互卡片，并从对话尽量预填 productId。调用后用与用户消息相同的语言说明用户可在卡片内选择商品并点击开始评分；评分结果在同一张卡片展示，含各维度分数与本次积分消耗。禁止在未成功调用 open_product_quality_form 时声称「已打开卡片」。若用户已明确提供商品 ID 且要求立刻出分（不需卡片确认），可调用 score_product_quality；成功时用与用户消息相同的语言简洁概括低分项与改进优先级，不要编造工具未返回的内容。本能力不写回 Shopify、不创建异步任务。",
   createTool: (context) => [productQualityFormTool, createScoreProductQualityTool(context)],
   onStreamEvent: (ev, enqueue, streamContext) => {
     if (ev.event === "on_tool_start" && ev.name === OPEN_PRODUCT_QUALITY_FORM_TOOL_NAME) {

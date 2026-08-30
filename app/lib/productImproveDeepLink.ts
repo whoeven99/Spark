@@ -8,6 +8,7 @@ export type OpenWorkspaceTasksOptions = {
   skillId?: string;
   taskType?: string;
   taskId?: string;
+  taskIds?: string[];
   intent?: "list" | "review";
 };
 
