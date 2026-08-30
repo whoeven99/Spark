@@ -2,6 +2,7 @@ import prisma from "../../../db.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import { BillingError } from "../errors.server";
 import { BILLING_LOG_EVENT } from "../types.server";
+import { sendPromoClaimFeishuNotify } from "../../feishu/scenarios/sendPromoClaimFeishuNotify.server";
 import {
   hasPromoClaimLedgerEntry,
   recordPromoClaimLedger,
@@ -191,6 +192,7 @@ export async function claimPromoTokens(shop: string): Promise<ClaimPromoTokensRe
 
 /**
  * 安装/进壳后自动领取当前活动 Token（幂等）。无活动或失败时返回 null，不抛给调用方。
+ * 首次真正发放时发飞书运营通知（与卸载同群）。
  */
 export async function ensureInstallPromoTokens(
   shop: string,
@@ -199,7 +201,19 @@ export async function ensureInstallPromoTokens(
   if (!campaign) return null;
 
   try {
-    return await claimPromoTokens(shop);
+    const result = await claimPromoTokens(shop);
+    if (!result.alreadyClaimed && result.tokensDelta > 0) {
+      void sendPromoClaimFeishuNotify({
+        shop,
+        appName: "Spark",
+        campaignId: result.campaignId,
+        tokensDelta: result.tokensDelta,
+        claimedAt: new Date(),
+      }).catch((error) => {
+        console.warn(`[Promo] feishu notify failed shop=${shop}:`, error);
+      });
+    }
+    return result;
   } catch (error) {
     console.warn(`[Promo] ensureInstallPromoTokens failed shop=${shop}:`, error);
     return null;
