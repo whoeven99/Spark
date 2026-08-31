@@ -76,9 +76,7 @@ export async function archiveAndPurgeShopData(params: {
     );
   }
 
-  const purge = await purgeShopDataFromTurso(shop, {
-    deleteCommonEventLog: params.mode === "shop_redact",
-  });
+  const purge = await purgeShopDataFromTurso(shop);
   console.info(
     `${LOG} done shop=${shop} mode=${params.mode} purgeDeleted=${Object.keys(purge.deleted).length} purgeErrors=${purge.errors.length}`,
   );

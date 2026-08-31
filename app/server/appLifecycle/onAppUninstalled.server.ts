@@ -150,9 +150,7 @@ async function sendAppUninstalledFeishuNotify(
 }
 
 /**
- * 卸载：先占通知幂等键 → 清库 → 再发飞书/邮件。
- *
- * CommonEventLog 在清库时保留，供 webhook 重试去重。
+ * 卸载：通知幂等占位 → 归档+清库（含 CommonEventLog，快照在 Blob）→ 飞书/邮件。
  */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
@@ -167,7 +165,7 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
   }
 
-  // 1. 先占 notify 幂等键（清库前），避免清库后无法去重或误伤通知
+  // 1. 清库前占 notify 幂等键（并发双投去重；清库后日志进 Blob 并删除）
   let shouldNotify = false;
   try {
     const skipOpsNotify = await shouldSkipUninstallOpsNotify(params.shop);
@@ -194,11 +192,10 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     }
   } catch (error) {
     console.error(`${LOG} ops-notify-dedup-failed shop=${params.shop}`, error);
-    // 去重失败时仍尝试通知一次，避免完全静默
     shouldNotify = true;
   }
 
-  // 2. 清库（Account / 订单 / Session 等）；不删 CommonEventLog
+  // 2. 归档到 Blob 后清库（含 Account / CommonEventLog / Session 等）
   await persistAppUninstalled(params);
 
   // 3. 通知（清库已完成；失败不影响合规删除）

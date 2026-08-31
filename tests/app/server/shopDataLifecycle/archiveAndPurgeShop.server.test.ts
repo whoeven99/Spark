@@ -31,7 +31,7 @@ describe("archiveAndPurgeShopData", () => {
     );
     purgeShopDataFromTurso.mockResolvedValue({
       shop: "demo.myshopify.com",
-      deleted: { Account: 1 },
+      deleted: { Account: 1, CommonEventLog: 2 },
       errors: [],
     });
 
@@ -46,25 +46,23 @@ describe("archiveAndPurgeShopData", () => {
     await vi.advanceTimersByTimeAsync(8_000);
     const result = await pending;
 
-    expect(purgeShopDataFromTurso).toHaveBeenCalledWith("demo.myshopify.com", {
-      deleteCommonEventLog: false,
-    });
+    expect(purgeShopDataFromTurso).toHaveBeenCalledWith("demo.myshopify.com");
     expect(result.archive.ok).toBe(false);
     expect(result.archive.error).toContain("archive_timeout");
     expect(result.purge.deleted.Account).toBe(1);
   });
 
-  it("deletes CommonEventLog on shop_redact", async () => {
+  it("purges after successful archive for uninstall and shop_redact", async () => {
     archiveShopSnapshot.mockResolvedValue({
       ok: true,
       shopHash: "hash",
       blobPath: "x",
-      tableCounts: {},
+      tableCounts: { CommonEventLog: 3 },
       truncatedTables: [],
     });
     purgeShopDataFromTurso.mockResolvedValue({
       shop: "demo.myshopify.com",
-      deleted: {},
+      deleted: { CommonEventLog: 3 },
       errors: [],
     });
 
@@ -74,11 +72,14 @@ describe("archiveAndPurgeShopData", () => {
 
     await archiveAndPurgeShopData({
       shop: "demo.myshopify.com",
+      mode: "uninstall",
+    });
+    await archiveAndPurgeShopData({
+      shop: "demo.myshopify.com",
       mode: "shop_redact",
     });
 
-    expect(purgeShopDataFromTurso).toHaveBeenCalledWith("demo.myshopify.com", {
-      deleteCommonEventLog: true,
-    });
+    expect(purgeShopDataFromTurso).toHaveBeenNthCalledWith(1, "demo.myshopify.com");
+    expect(purgeShopDataFromTurso).toHaveBeenNthCalledWith(2, "demo.myshopify.com");
   });
 });
