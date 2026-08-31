@@ -1,6 +1,7 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { extractMessageText } from "../ai/utils/langchainMessageText";
 import { getShopSummaryModel } from "../ai/core/shopChatGraph.server";
+import { loadBillingContext } from "../billing/billingContext.server";
 import { recordChatTokenUsage } from "../tokenUsage/index.server";
 
 /** 侧栏标题上限：中文偏短、英文略长，统一按字符截断。 */
@@ -59,7 +60,7 @@ function buildTitlePrompt(userText: string, assistantText?: string): string {
 
 /**
  * 用轻量 summary 模型为会话生成短标题（Cursor 风格）。
- * 失败或超时回退到截断首句；有 shop 时记入 chat token 用量。
+ * 无额度时不调 LLM、不记账，直接回退截断首句。
  */
 export async function generateConversationTitle(params: {
   shop?: string;
@@ -69,6 +70,25 @@ export async function generateConversationTitle(params: {
   const userText = params.userText.trim();
   const fallback = fallbackConversationTitle(userText);
   if (!userText) return fallback;
+
+  const shop = params.shop?.trim();
+  if (shop) {
+    try {
+      const billing = await loadBillingContext(shop);
+      if (billing.billingRequired && !billing.hasAccess) {
+        console.info(
+          `[ConversationTitle] skip LLM shop=${shop} reason=no_billing_access`,
+        );
+        return fallback;
+      }
+    } catch (error) {
+      console.warn(
+        `[ConversationTitle] billing check failed shop=${shop}, skip LLM`,
+        error,
+      );
+      return fallback;
+    }
+  }
 
   try {
     const summaryModel = getShopSummaryModel();
@@ -83,12 +103,12 @@ export async function generateConversationTitle(params: {
     ]);
     if (!result) return fallback;
 
-    if (params.shop?.trim()) {
+    if (shop) {
       const usageMeta =
         result && typeof result === "object" && "usage_metadata" in result
           ? (result as { usage_metadata?: unknown }).usage_metadata
           : undefined;
-      await recordChatTokenUsage({ shop: params.shop, usage: usageMeta });
+      await recordChatTokenUsage({ shop, usage: usageMeta });
     }
 
     return sanitizeConversationTitle(extractMessageText(result)) ?? fallback;

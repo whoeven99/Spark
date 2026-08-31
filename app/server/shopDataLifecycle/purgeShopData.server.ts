@@ -15,7 +15,8 @@ type DeleteStep = {
 
 /**
  * 从 Turso 删除店铺业务数据。
- * 不删除：PromoClaimLedger（防薅羊毛）、PlanCatalog / TokenBillingRule 等全局表。
+ * 不删除：PromoClaimLedger（防薅）、PlanCatalog / TokenBillingRule 等全局表。
+ * CommonEventLog 会删（已在 Blob 归档快照里）。
  */
 export async function purgeShopDataFromTurso(shop: string): Promise<ShopPurgeResult> {
   const normalized = shop.trim();

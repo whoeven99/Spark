@@ -69,7 +69,7 @@
 
 | feature | 能力 | 门禁 | 记账入口示例 |
 |---------|------|------|----------------|
-| `chat` | Ask 聊天主 Agent、卡片补全 LLM、fallback、上下文摘要 | `/chat-stream` → `requireBillingAccess` | `recordChatTokenUsage` |
+| `chat` | Ask 聊天主 Agent、卡片补全 LLM、fallback、上下文摘要 | `/chat-stream` → `requireBillingAccess`；会话标题 LLM 亦先查额度，不足则截断回退不调模型 | `recordChatTokenUsage` |
 | `product_copy` | 商品文案生成/润色 | Studio / HTTP / 批量 | `recordBilledTokenUsage` |
 | `product_quality` | 质量评分（文案 LLM + Vision） | `/api/product-quality-score` | `recordBilledTokenUsages` |
 | `image_prompt` | 画面提示词扩写 | 视觉工具门禁 | `recordVisualToolTokenUsage` |
@@ -110,7 +110,7 @@
 - 默认活动：`install-welcome-1m`，安装后自动发放 **1000000** Token（`ensureInstallPromoTokens`）；每店每活动一次。
 - 防薅：`PromoClaimLedger` 存 `sha256(shop)` + `campaignId`（卸载 / `shop/redact` **不删**）；店内仍写 `BillingLog`/`Account` 便于当期审计（卸载时随店清掉）。
 - 触发：`app/routes/app.tsx` 壳层 loader **await** 自动领取；`requireBillingAccess` 再兜底一次。账户页只展示「已自动发放」，不再需要手动领取按钮。
-- 卸载清理：`archiveAndPurgeShopData` → Blob `shop-archives`（分析快照）后 Turso 删店数据。
+- 卸载清理：`app/uninstalled` **await** `archiveAndPurgeShopData`（归档有超时，超时仍清库）→ 店数据进 Blob `shop-archives` 后删 Turso（含 `Account`/`CommonEventLog`/Session 等）；仅保留 `PromoClaimLedger`。
 - 环境变量：`SPARK_PROMO_ENABLED`（默认开，`false` 关闭）、`SPARK_PROMO_CAMPAIGN_ID`、`SPARK_PROMO_TOKEN_AMOUNT`、`SPARK_PROMO_STARTS_AT` / `SPARK_PROMO_ENDS_AT`（ISO；可选）。
 - 换活动：改 `SPARK_PROMO_CAMPAIGN_ID`（新 id 可再领一次）并按需改额度/文案（i18n `billing.promo*`）。
 - Admin：`/credits` 可查双池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览。

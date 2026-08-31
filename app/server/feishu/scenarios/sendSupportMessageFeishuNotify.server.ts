@@ -1,5 +1,8 @@
 import { sendFeishuTextMessage } from "../sendFeishuTextMessage.server";
-import { formatOpsNotifyTime } from "../feishuMessageFormat.server";
+import {
+  formatOpsNotifyTime,
+  formatOpsNotifyTitle,
+} from "../feishuMessageFormat.server";
 import type { SendFeishuResult } from "../feishuTypes.server";
 
 const LOG = "[Feishu][SupportMsg]";
@@ -51,7 +54,7 @@ export function buildSupportMessageNotify(
   const adminUrl = resolveAdminSupportUrl(meta.adminPath);
 
   const lines = [
-    "💬 收到新的客服消息",
+    formatOpsNotifyTitle("💬 收到新的客服消息"),
     "",
     `来源: ${meta.label}`,
     `店铺: ${params.shop}`,

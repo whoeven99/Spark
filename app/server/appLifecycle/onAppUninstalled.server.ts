@@ -10,6 +10,7 @@ import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeis
 import { notifyAppUninstalledEmail } from "../notifications/notifyMerchant.server";
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
 import { archiveAndPurgeShopData } from "../shopDataLifecycle/archiveAndPurgeShop.server";
+
 const LOG = "[AppLifecycle:uninstall]";
 const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
@@ -23,20 +24,26 @@ export type OnAppUninstalledParams = {
 };
 
 /**
- * 快速幂等检查（两层）：
- * 1. 店铺级通知幂等键 uninstall:notify:{shop}
- * 2. 10 分钟窗口内已有同店铺卸载事件
+ * 快速幂等检查：
+ * 1. 同一 webhookId 的通知键已写过 → 跳过（Shopify 重试）
+ * 2. 10 分钟内已有同店卸载事件 → 跳过（防双投）
+ * 不再使用永久的 uninstall:notify:{shop}，避免清库前遗留键导致再卸永不通知。
  */
-async function shouldSkipUninstallOpsNotify(shop: string): Promise<boolean> {
-  const notifyReferenceId = buildUninstallNotifyReferenceId(shop);
-  const byNotifyRef = await prisma.commonEventLog.findFirst({
-    where: {
-      shop,
-      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-      referenceId: notifyReferenceId,
-    },
-  });
-  if (byNotifyRef) return true;
+async function shouldSkipUninstallOpsNotify(
+  shop: string,
+  webhookId?: string,
+): Promise<boolean> {
+  if (webhookId?.trim()) {
+    const notifyReferenceId = buildUninstallNotifyReferenceId(shop, webhookId);
+    const byNotifyRef = await prisma.commonEventLog.findFirst({
+      where: {
+        shop,
+        eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+        referenceId: notifyReferenceId,
+      },
+    });
+    if (byNotifyRef) return true;
+  }
 
   const since = new Date(Date.now() - UNINSTALL_OPS_DEDUP_WINDOW_MS);
   const recent = await prisma.commonEventLog.findFirst({
@@ -49,13 +56,20 @@ async function shouldSkipUninstallOpsNotify(shop: string): Promise<boolean> {
   return Boolean(recent);
 }
 
+/** 清库失败时的最小兜底：积分账户 + 流水 + Session。 */
+async function purgeBillingAndSessionFallback(shop: string): Promise<void> {
+  await prisma.billingLog.deleteMany({ where: { shop } });
+  await prisma.appSubscription.deleteMany({ where: { shop } });
+  await prisma.account.deleteMany({ where: { shop } });
+  await prisma.session.deleteMany({ where: { shop } });
+}
+
 async function persistAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
   console.info(
     `${LOG} persistence-enter shop=${params.shop} topic=${params.topic} sessionId=${params.sessionId ?? "(none)"}`,
   );
 
-  // 先记卸载事件（归档快照会带走 CommonEventLog；失败也不阻断）
   try {
     await handleAppUninstalled({
       shop: params.shop,
@@ -68,20 +82,32 @@ async function persistAppUninstalled(params: OnAppUninstalledParams): Promise<vo
     console.error(`${LOG} handleAppUninstalled failed shop=${params.shop}:`, error);
   }
 
-  // 归档到 Blob 后从 Turso 删除全店业务数据（含 Session / 客服；保留 PromoClaimLedger）
   try {
-    await archiveAndPurgeShopData({
+    const result = await archiveAndPurgeShopData({
       shop: params.shop,
       mode: "uninstall",
       reason: "app/uninstalled",
     });
+    console.info(
+      `${LOG} purge-summary shop=${params.shop} accountDeleted=${result.purge.deleted.Account ?? 0} errors=${result.purge.errors.length}`,
+    );
+    if (result.purge.errors.length > 0) {
+      console.error(
+        `${LOG} purge had step errors shop=${params.shop}: ${result.purge.errors.join("; ")}`,
+      );
+      if ((result.purge.deleted.Account ?? 0) === 0) {
+        await purgeBillingAndSessionFallback(params.shop);
+      }
+    }
   } catch (error) {
     console.error(`${LOG} archiveAndPurge failed shop=${params.shop}:`, error);
-    // 兜底：至少删 Session，避免卸载后仍可鉴权
     try {
-      await prisma.session.deleteMany({ where: { shop: params.shop } });
-    } catch (sessionError) {
-      console.error(`${LOG} session fallback delete failed shop=${params.shop}:`, sessionError);
+      await purgeBillingAndSessionFallback(params.shop);
+    } catch (fallbackError) {
+      console.error(
+        `${LOG} billing/session fallback delete failed shop=${params.shop}`,
+        fallbackError,
+      );
     }
   }
 
@@ -130,13 +156,7 @@ async function sendAppUninstalledFeishuNotify(
 }
 
 /**
- * 卸载：两层幂等门禁，再归档并清 Turso。
- *
- * 执行顺序：
- * 1. 加载收件人快照（Session 删除前）
- * 2. shouldSkipUninstallOpsNotify（webhookId / 10min 窗口）→ 快速跳过
- * 3. appendCommonEventLog（referenceId 精确去重）→ created=true 则首次，发飞书+邮件
- * 4. persistAppUninstalled：记卸载事件 → archive(Blob) → purge Turso（含 Session/客服；保留 PromoClaimLedger）
+ * 卸载：通知幂等占位 → 归档+清库（含 CommonEventLog，快照在 Blob）→ 飞书/邮件。
  */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
@@ -144,7 +164,6 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     `${LOG} enter shop=${params.shop} webhookId=${params.webhookId ?? "(none)"}`,
   );
 
-  // 1. 在删除 Session 之前加载收件人快照
   let recipient: Awaited<ReturnType<typeof loadSessionSnapshotForUninstall>> = null;
   try {
     recipient = await loadSessionSnapshotForUninstall(params.shop, params.sessionId);
@@ -152,13 +171,20 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
   }
 
-  // 2–3. 通知与幂等查询失败时不能阻断删 Session：Shopify 已收到 200，不会再重试。
+  // 1. 清库前占 notify 幂等键（并发双投去重；清库后日志进 Blob 并删除）
+  let shouldNotify = false;
   try {
-    const skipOpsNotify = await shouldSkipUninstallOpsNotify(params.shop);
+    const skipOpsNotify = await shouldSkipUninstallOpsNotify(
+      params.shop,
+      params.webhookId,
+    );
     if (skipOpsNotify) {
       console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
     } else {
-      const referenceId = buildUninstallNotifyReferenceId(params.shop);
+      const referenceId = buildUninstallNotifyReferenceId(
+        params.shop,
+        params.webhookId,
+      );
       const { created } = await appendCommonEventLog({
         shop: params.shop,
         eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
@@ -169,27 +195,31 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
             ? (params.payload as Record<string, unknown>)
             : { raw: params.payload },
       });
-
-      if (created) {
-        await sendAppUninstalledFeishuNotify(params);
-        await notifyAppUninstalledEmail({
-          shop: params.shop,
-          appName: "spark",
-          uninstalledAt: params.uninstalledAt,
-          recipient,
-        });
-      } else {
+      shouldNotify = created;
+      if (!created) {
         console.info(
           `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
         );
       }
     }
   } catch (error) {
-    console.error(`${LOG} ops-notify-failed shop=${params.shop}`, error);
+    console.error(`${LOG} ops-notify-dedup-failed shop=${params.shop}`, error);
+    shouldNotify = true;
   }
 
-  // 4. 归档 + 清库
+  // 2. 归档到 Blob 后清库（含 Account / CommonEventLog / Session 等）
   await persistAppUninstalled(params);
+
+  // 3. 通知（清库已完成；失败不影响合规删除）
+  if (shouldNotify) {
+    await sendAppUninstalledFeishuNotify(params);
+    await notifyAppUninstalledEmail({
+      shop: params.shop,
+      appName: "spark",
+      uninstalledAt: params.uninstalledAt,
+      recipient,
+    });
+  }
 
   console.info(`${LOG} done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`);
 }

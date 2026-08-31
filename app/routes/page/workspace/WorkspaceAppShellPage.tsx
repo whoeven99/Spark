@@ -1123,7 +1123,12 @@ export function WorkspaceAppShellPage({
                   { role: "assistant", content: assistantText, payloads: assistantMessagePayloads },
                 ],
                 // 先用首句占位，服务端 generateTitle 成功后再回写 AI 短标题（Cursor 风格）
-                ...(isNewTitle ? { title: nextTitle, generateTitle: true } : {}),
+                // 额度不足等 streamError 时不触发生成标题 LLM
+                ...(isNewTitle && !payload.streamError && !payload.aborted
+                  ? { title: nextTitle, generateTitle: true }
+                  : isNewTitle
+                    ? { title: nextTitle }
+                    : {}),
                 preview: nextPreview,
               }),
             })

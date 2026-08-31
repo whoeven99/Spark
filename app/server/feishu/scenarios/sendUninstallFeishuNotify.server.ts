@@ -1,3 +1,4 @@
+import { formatOpsNotifyTitle } from "../feishuMessageFormat.server";
 import { sendFeishuTextMessage } from "../sendFeishuTextMessage.server";
 import type { SendFeishuResult } from "../feishuTypes.server";
 
@@ -26,7 +27,7 @@ export function formatUninstallNotifyField(
 
 export function buildUninstallMessage(params: SendUninstallFeishuNotifyParams): string {
   return [
-    "🚨 Shopify App 已卸载",
+    formatOpsNotifyTitle("🚨 Shopify App 已卸载"),
     "",
     `店铺: ${params.shop}`,
     `App: ${params.appName}`,
