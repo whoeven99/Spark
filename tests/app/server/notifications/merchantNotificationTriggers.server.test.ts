@@ -49,7 +49,12 @@ vi.mock("../../../../app/server/commonEventLog/appendCommonEventLog.server", () 
 
 vi.mock("../../../../app/server/commonEventLog/handleAppUninstalled.server", () => ({
   handleAppUninstalled: vi.fn().mockResolvedValue(undefined),
-  buildUninstallNotifyReferenceId: vi.fn((shop: string) => `uninstall:notify:${shop}`),
+  buildUninstallNotifyReferenceId: vi.fn(
+    (shop: string, webhookId?: string) =>
+      webhookId
+        ? `uninstall:notify:webhook:${webhookId}`
+        : `uninstall:notify:${shop}`,
+  ),
   buildUninstallEventReferenceId: vi.fn().mockReturnValue("uninstall:webhook:test"),
 }));
 

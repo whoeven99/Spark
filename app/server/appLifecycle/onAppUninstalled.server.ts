@@ -24,20 +24,26 @@ export type OnAppUninstalledParams = {
 };
 
 /**
- * 快速幂等检查（两层）：
- * 1. 店铺级通知幂等键 uninstall:notify:{shop}
- * 2. 10 分钟窗口内已有同店铺卸载事件
+ * 快速幂等检查：
+ * 1. 同一 webhookId 的通知键已写过 → 跳过（Shopify 重试）
+ * 2. 10 分钟内已有同店卸载事件 → 跳过（防双投）
+ * 不再使用永久的 uninstall:notify:{shop}，避免清库前遗留键导致再卸永不通知。
  */
-async function shouldSkipUninstallOpsNotify(shop: string): Promise<boolean> {
-  const notifyReferenceId = buildUninstallNotifyReferenceId(shop);
-  const byNotifyRef = await prisma.commonEventLog.findFirst({
-    where: {
-      shop,
-      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-      referenceId: notifyReferenceId,
-    },
-  });
-  if (byNotifyRef) return true;
+async function shouldSkipUninstallOpsNotify(
+  shop: string,
+  webhookId?: string,
+): Promise<boolean> {
+  if (webhookId?.trim()) {
+    const notifyReferenceId = buildUninstallNotifyReferenceId(shop, webhookId);
+    const byNotifyRef = await prisma.commonEventLog.findFirst({
+      where: {
+        shop,
+        eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+        referenceId: notifyReferenceId,
+      },
+    });
+    if (byNotifyRef) return true;
+  }
 
   const since = new Date(Date.now() - UNINSTALL_OPS_DEDUP_WINDOW_MS);
   const recent = await prisma.commonEventLog.findFirst({
@@ -168,11 +174,17 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
   // 1. 清库前占 notify 幂等键（并发双投去重；清库后日志进 Blob 并删除）
   let shouldNotify = false;
   try {
-    const skipOpsNotify = await shouldSkipUninstallOpsNotify(params.shop);
+    const skipOpsNotify = await shouldSkipUninstallOpsNotify(
+      params.shop,
+      params.webhookId,
+    );
     if (skipOpsNotify) {
       console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
     } else {
-      const referenceId = buildUninstallNotifyReferenceId(params.shop);
+      const referenceId = buildUninstallNotifyReferenceId(
+        params.shop,
+        params.webhookId,
+      );
       const { created } = await appendCommonEventLog({
         shop: params.shop,
         eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,

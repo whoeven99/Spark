@@ -1,9 +1,19 @@
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
 
-/** 卸载运营通知幂等键：同店只发一次，与 webhookId 无关。 */
-export function buildUninstallNotifyReferenceId(shop: string): string {
-  return `uninstall:notify:${shop.trim()}`;
+/**
+ * 卸载飞书/邮件通知幂等键。
+ * 优先绑 Shopify webhookId（同一次投递重试不重复通知）；
+ * 无 webhookId 时退化为短时戳，避免 `uninstall:notify:{shop}` 永久占坑导致再卸无通知。
+ */
+export function buildUninstallNotifyReferenceId(
+  shop: string,
+  webhookId?: string,
+): string {
+  const normalized = shop.trim();
+  const id = webhookId?.trim();
+  if (id) return `uninstall:notify:webhook:${id}`;
+  return `uninstall:notify:${normalized}:${Date.now()}`;
 }
 
 export function buildUninstallEventReferenceId(params: {
