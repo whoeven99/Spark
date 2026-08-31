@@ -55,16 +55,16 @@ describe("resolveOpsEnvLabel", () => {
 });
 
 describe("formatOpsNotifyTitle", () => {
-  it("prefixes title with env label", () => {
+  it("prefixes title with env label using fullwidth brackets", () => {
     expect(
       formatOpsNotifyTitle("🎁 安装福利 Token 已自动发放", {
         SHOPIFY_APP_URL: "https://aiassistant-wi7b.onrender.com",
       }),
-    ).toBe("[测试] 🎁 安装福利 Token 已自动发放");
+    ).toBe("【测试】🎁 安装福利 Token 已自动发放");
     expect(
       formatOpsNotifyTitle("🚨 Shopify App 已卸载", {
         SHOPIFY_APP_URL: "https://spark-prod.onrender.com",
       }),
-    ).toBe("[生产] 🚨 Shopify App 已卸载");
+    ).toBe("【生产】🚨 Shopify App 已卸载");
   });
 });

@@ -29,7 +29,7 @@ export async function sendFeishuTextMessage(params: {
     }
 
     console.info(
-      `${LOG} start send channel=${channel} messageLength=${message.length}`,
+      `${LOG} start send channel=${channel} messageLength=${message.length} title=${JSON.stringify(message.split("\n")[0] ?? "")}`,
     );
 
     const payload: FeishuTextPayload = {

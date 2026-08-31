@@ -79,10 +79,13 @@ export function resolveOpsEnvLabel(
   return "本地";
 }
 
-/** 标题加环境前缀，例如 `[测试] 🎁 安装福利 Token 已自动发放` */
+/**
+ * 标题加环境前缀，例如 `【测试】🎁 安装福利 Token 已自动发放`。
+ * 用全角【】，避免飞书把 `[测试]` 当成 Markdown 链接语法吞掉。
+ */
 export function formatOpsNotifyTitle(
   baseTitle: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  return `[${resolveOpsEnvLabel(env)}] ${baseTitle}`;
+  return `【${resolveOpsEnvLabel(env)}】${baseTitle}`;
 }
