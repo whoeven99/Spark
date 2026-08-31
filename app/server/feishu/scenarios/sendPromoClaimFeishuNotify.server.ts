@@ -1,4 +1,7 @@
-import { formatOpsNotifyTime } from "../feishuMessageFormat.server";
+import {
+  formatOpsNotifyTime,
+  formatOpsNotifyTitle,
+} from "../feishuMessageFormat.server";
 import { sendFeishuTextMessage } from "../sendFeishuTextMessage.server";
 import type { SendFeishuResult } from "../feishuTypes.server";
 
@@ -16,7 +19,7 @@ export function buildPromoClaimMessage(
   params: SendPromoClaimFeishuNotifyParams,
 ): string {
   return [
-    "🎁 安装福利 Token 已自动发放",
+    formatOpsNotifyTitle("🎁 安装福利 Token 已自动发放"),
     "",
     `店铺: ${params.shop}`,
     `App: ${params.appName}`,

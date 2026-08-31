@@ -11,6 +11,7 @@ describe("buildPromoClaimMessage", () => {
       claimedAt: new Date("2026-05-22T07:13:00.257Z"),
     });
 
+    expect(message).toMatch(/^\[(生产|测试|本地)\] 🎁 安装福利 Token 已自动发放/);
     expect(message).toContain("🎁 安装福利 Token 已自动发放");
     expect(message).toContain("店铺: demo.myshopify.com");
     expect(message).toContain("App: Spark");

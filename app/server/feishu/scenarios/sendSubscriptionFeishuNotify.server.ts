@@ -3,6 +3,7 @@ import { getPlanByKey } from "../../billing/plans/planCatalog.server";
 import {
   formatOpsNotifyPrice,
   formatOpsNotifyTime,
+  formatOpsNotifyTitle,
 } from "../feishuMessageFormat.server";
 import { sendFeishuTextMessage } from "../sendFeishuTextMessage.server";
 import type { SendFeishuResult } from "../feishuTypes.server";
@@ -23,7 +24,7 @@ export function buildSubscriptionMessage(
   },
 ): string {
   return [
-    "🎉 用户订阅成功",
+    formatOpsNotifyTitle("🎉 用户订阅成功"),
     "",
     `店铺: ${params.shop}`,
     `套餐: ${plan.displayName}`,
