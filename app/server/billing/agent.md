@@ -69,7 +69,7 @@
 
 | feature | 能力 | 门禁 | 记账入口示例 |
 |---------|------|------|----------------|
-| `chat` | Ask 聊天主 Agent、卡片补全 LLM、fallback、上下文摘要 | `/chat-stream` → `requireBillingAccess` | `recordChatTokenUsage` |
+| `chat` | Ask 聊天主 Agent、卡片补全 LLM、fallback、上下文摘要 | `/chat-stream` → `requireBillingAccess`；会话标题 LLM 亦先查额度，不足则截断回退不调模型 | `recordChatTokenUsage` |
 | `product_copy` | 商品文案生成/润色 | Studio / HTTP / 批量 | `recordBilledTokenUsage` |
 | `product_quality` | 质量评分（文案 LLM + Vision） | `/api/product-quality-score` | `recordBilledTokenUsages` |
 | `image_prompt` | 画面提示词扩写 | 视觉工具门禁 | `recordVisualToolTokenUsage` |

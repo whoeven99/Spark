@@ -86,6 +86,8 @@ function shouldPreferBatchOverProductImprove(workspaceProducts?: BatchTaskProduc
 
 export type ChatStreamFinishPayload = {
   aborted: boolean;
+  /** SSE `type:error`（如额度不足）时为 true，调用方勿再触发标题 LLM */
+  streamError?: boolean;
   reply: string;
   thinkingContent?: string;
   attachments?: ChatMessageAttachment[];
@@ -116,11 +118,13 @@ type Snapshot = {
   healthDiagnosisCard: boolean;
   healthDiagnosisCardPayload?: unknown;
   taskProposal?: TaskProposalPayload;
+  streamError?: boolean;
 };
 
 function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStreamFinishPayload {
   return {
     aborted,
+    streamError: snapshot.streamError === true,
     reply: snapshot.reply,
     thinkingContent: snapshot.thinkingContent || undefined,
     attachments: snapshot.attachments,
@@ -459,6 +463,7 @@ export function useChatStream() {
               } else if (chunk.type === "error") {
                 markFirstChunkSeen();
                 const msg = chunk.message;
+                snapshotRef.current.streamError = true;
                 setSkillSteps((prev) =>
                   prev.map((step) =>
                     step.status === "running" ? { ...step, status: "error" } : step,
