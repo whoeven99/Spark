@@ -15,9 +15,14 @@ type DeleteStep = {
 
 /**
  * 从 Turso 删除店铺业务数据。
- * 不删除：PromoClaimLedger（防薅羊毛）、PlanCatalog / TokenBillingRule 等全局表。
+ * 默认不删除：PromoClaimLedger（防薅）、CommonEventLog（卸载幂等/审计）、
+ * PlanCatalog / TokenBillingRule 等全局表。
+ * `shop/redact` 可传 deleteCommonEventLog 清审计日志。
  */
-export async function purgeShopDataFromTurso(shop: string): Promise<ShopPurgeResult> {
+export async function purgeShopDataFromTurso(
+  shop: string,
+  options?: { deleteCommonEventLog?: boolean },
+): Promise<ShopPurgeResult> {
   const normalized = shop.trim();
   const deleted: Record<string, number> = {};
   const errors: string[] = [];
@@ -177,14 +182,17 @@ export async function purgeShopDataFromTurso(shop: string): Promise<ShopPurgeRes
       run: () => prisma.account.deleteMany({ where: { shop: normalized } }),
     },
     {
-      label: "CommonEventLog",
-      run: () => prisma.commonEventLog.deleteMany({ where: { shop: normalized } }),
-    },
-    {
       label: "Session",
       run: () => prisma.session.deleteMany({ where: { shop: normalized } }),
     },
   ];
+
+  if (options?.deleteCommonEventLog) {
+    steps.splice(steps.length - 1, 0, {
+      label: "CommonEventLog",
+      run: () => prisma.commonEventLog.deleteMany({ where: { shop: normalized } }),
+    });
+  }
 
   for (const step of steps) {
     try {

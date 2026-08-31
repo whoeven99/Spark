@@ -211,7 +211,7 @@ describe("merchant notification triggers", () => {
       expect(handleAppUninstalled).toHaveBeenCalledOnce();
     });
 
-    it("sends uninstall email before session persistence", async () => {
+    it("persists shop purge before uninstall email", async () => {
       vi.mocked(appendCommonEventLog).mockResolvedValueOnce({ created: true });
       const callOrder: string[] = [];
       vi.mocked(notifyAppUninstalledEmail).mockImplementation(async () => {
@@ -225,7 +225,7 @@ describe("merchant notification triggers", () => {
 
       expect(notifyAppUninstalledEmail).toHaveBeenCalledOnce();
       expect(handleAppUninstalled).toHaveBeenCalledOnce();
-      expect(callOrder).toEqual(["email", "persist"]);
+      expect(callOrder).toEqual(["persist", "email"]);
     });
   });
 
