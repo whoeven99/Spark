@@ -124,6 +124,74 @@ export function buildShopParams(row: OpsEmailAudienceRow): Record<string, string
   };
 }
 
+function inClause(count: number): string {
+  return Array.from({ length: count }, () => "?").join(",");
+}
+
+export async function getOpsEmailAudienceByShops(
+  shops: string[],
+): Promise<Map<string, OpsEmailAudienceRow>> {
+  const map = new Map<string, OpsEmailAudienceRow>();
+  const normalized = [
+    ...new Set(shops.map((shop) => shop.trim().toLowerCase()).filter(Boolean)),
+  ];
+  if (normalized.length === 0) return map;
+  if (!isTsfDbConfigured()) {
+    throw new Error("TSF Turso 未配置");
+  }
+
+  const db = getTsfDb();
+  const placeholders = inClause(normalized.length);
+  const [accountResult, sessionMap, sparkShops, lastSends] = await Promise.all([
+    db.execute({
+      sql: `SELECT
+              a.shop,
+              a.deletedAt,
+              sub.planKey,
+              sub.status AS subStatus
+            FROM Account a
+            LEFT JOIN AppSubscription sub ON a.shop = sub.shop
+            WHERE lower(a.shop) IN (${placeholders})`,
+      args: normalized,
+    }),
+    loadSessionProfiles(),
+    loadSparkShops(),
+    latestSendByShop(),
+  ]);
+
+  const accounts = new Map<string, AccountRow>();
+  for (const row of accountResult.rows) {
+    const shop = String(row.shop ?? "").trim().toLowerCase();
+    if (!shop) continue;
+    accounts.set(shop, {
+      shop,
+      deletedAt: row.deletedAt != null ? String(row.deletedAt) : null,
+      planKey: row.planKey != null ? String(row.planKey) : null,
+      subStatus: row.subStatus != null ? String(row.subStatus) : null,
+    });
+  }
+
+  for (const shop of normalized) {
+    const account = accounts.get(shop);
+    const session = sessionMap.get(shop);
+    const last = lastSends.get(shop);
+    map.set(shop, {
+      shop,
+      email: session?.email ?? null,
+      emailMasked: maskEmail(session?.email),
+      recipientName: session?.recipientName ?? null,
+      locale: session?.locale ?? null,
+      planKey: account?.planKey ?? null,
+      subStatus: account?.subStatus ?? null,
+      installed: account ? account.deletedAt == null : true,
+      sparkInstalled: sparkShops.has(shop),
+      lastSentAt: last?.lastSentAt ?? null,
+      lastSentStatus: last?.lastSentStatus ?? null,
+    });
+  }
+  return map;
+}
+
 export async function listOpsEmailAudience(
   filters: AudienceFilters = {},
 ): Promise<{

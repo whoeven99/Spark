@@ -55,6 +55,70 @@ export function defaultGlobalParams(): Record<string, string> {
   };
 }
 
+export function collectTemplateKeys(subject: string, html: string): string[] {
+  return [...new Set([...extractTemplateKeys(subject), ...extractTemplateKeys(html)])];
+}
+
+export function catalogOperatorKeys(subject: string, html: string): string[] {
+  const keys = collectTemplateKeys(subject, html);
+  const hasCta =
+    html.includes(OPS_EMAIL_CTA_HREF) ||
+    html.includes("{{shop_id}}") ||
+    html.includes("{{path}}");
+  if (hasCta && !keys.includes("installUrl")) keys.push("installUrl");
+  return keys;
+}
+
+export function paramsForKeys(
+  keys: string[],
+  defaults: Record<string, string>,
+  prev: Record<string, string> = {},
+): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const key of keys) {
+    next[key] = prev[key] ?? defaults[key] ?? "";
+  }
+  return next;
+}
+
+export function fillEmptyParams(
+  params: Record<string, string>,
+  fallback: Record<string, string>,
+): Record<string, string> {
+  const next = { ...params };
+  for (const [key, value] of Object.entries(fallback)) {
+    if (!String(next[key] ?? "").trim()) next[key] = value;
+  }
+  return next;
+}
+
+export function renderCustomOpsEmail(input: {
+  subject: string;
+  html: string;
+  params: Record<string, string>;
+}): {
+  templateId: number;
+  label: string;
+  keys: string[];
+  subject: string;
+  html: string;
+} {
+  const subject = input.subject.trim();
+  const html = input.html.trim();
+  if (!subject) throw new Error("自定义模板需要填写主题");
+  if (!html) throw new Error("自定义模板需要填写 HTML");
+
+  const htmlWithCta = applyInstallUrl(html, input.params.installUrl);
+  const keys = collectTemplateKeys(subject, htmlWithCta);
+  return {
+    templateId: 0,
+    label: "自定义模板",
+    keys,
+    subject: renderPlaceholders(subject, input.params),
+    html: renderPlaceholders(htmlWithCta, input.params),
+  };
+}
+
 export function renderOpsEmailTemplate(input: {
   templateKey: string;
   params: Record<string, string>;
@@ -73,9 +137,7 @@ export function renderOpsEmailTemplate(input: {
 
   const rawHtml = loadTemplateHtml(template.htmlFile);
   const htmlWithCta = applyInstallUrl(rawHtml, input.params.installUrl);
-  const keys = [
-    ...new Set(["installUrl", ...extractTemplateKeys(template.subject), ...extractTemplateKeys(htmlWithCta)]),
-  ];
+  const keys = collectTemplateKeys(template.subject, htmlWithCta);
   const subjectSource = input.subjectOverride?.trim() || template.subject;
 
   return {

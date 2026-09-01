@@ -1,12 +1,18 @@
-import { listOpsEmailAudience, buildShopParams } from "./audience.js";
+import { buildShopParams, getOpsEmailAudienceByShops } from "./audience.js";
 import { formatUtcNow, maskEmail } from "./maskEmail.js";
-import { defaultGlobalParams, renderOpsEmailTemplate } from "./renderTemplate.js";
+import {
+  defaultGlobalParams,
+  fillEmptyParams,
+  renderCustomOpsEmail,
+  renderOpsEmailTemplate,
+} from "./renderTemplate.js";
 import { resolveTestRecipient, sendSimpleEmail } from "./sesSimple.js";
 import { insertSendLog } from "./store.js";
 import type { OpsEmailSendResult } from "./types.js";
 
 const SEND_GAP_MS = 350;
 const MAX_BATCH = 30;
+const MAX_CUSTOM_HTML = 200_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,8 +21,10 @@ function sleep(ms: number): Promise<void> {
 export async function sendOpsEmailCampaign(input: {
   templateKey: string;
   subjectOverride?: string;
+  customHtml?: string;
   params: Record<string, string>;
   shops: string[];
+  emailOverrides?: Record<string, string>;
   createdBy: string;
 }): Promise<{
   results: OpsEmailSendResult[];
@@ -32,20 +40,29 @@ export async function sendOpsEmailCampaign(input: {
     throw new Error(`单次最多发送 ${MAX_BATCH} 家，请分批`);
   }
 
-  const audience = await listOpsEmailAudience({});
-  const byShop = new Map(audience.shops.map((row) => [row.shop, row]));
+  const customHtml = input.customHtml?.trim() ?? "";
+  if (customHtml && customHtml.length > MAX_CUSTOM_HTML) {
+    throw new Error("自定义 HTML 过长");
+  }
+  if (customHtml && !input.subjectOverride?.trim()) {
+    throw new Error("自定义模板需要填写主题");
+  }
+
+  const byShop = await getOpsEmailAudienceByShops(shops);
   const globalParams = { ...defaultGlobalParams(), ...input.params };
   const testRecipient = resolveTestRecipient();
+  const templateKey = customHtml ? input.templateKey.trim() || "custom" : input.templateKey;
   const results: OpsEmailSendResult[] = [];
 
   for (const [index, shop] of shops.entries()) {
     if (index > 0) await sleep(SEND_GAP_MS);
     const row = byShop.get(shop);
     if (!row) {
-      results.push({ shop, emailMasked: null, status: "skipped", error: "不在翻译用户列表中" });
+      results.push({ shop, emailMasked: null, status: "skipped", error: "未找到商店资料" });
       continue;
     }
-    const to = testRecipient || row.email?.trim();
+    const override = input.emailOverrides?.[shop]?.trim();
+    const to = testRecipient || override || row.email?.trim();
     if (!to) {
       const skipped = {
         shop,
@@ -57,7 +74,7 @@ export async function sendOpsEmailCampaign(input: {
       await insertSendLog({
         shop,
         emailMasked: null,
-        templateKey: input.templateKey,
+        templateKey,
         templateId: 0,
         subject: "",
         status: "skipped",
@@ -68,17 +85,24 @@ export async function sendOpsEmailCampaign(input: {
       continue;
     }
 
-    const params = {
-      ...globalParams,
-      ...buildShopParams(row),
-      occurredAtUtc: globalParams.occurredAtUtc || formatUtcNow(),
-      installedAtUtc: globalParams.installedAtUtc || formatUtcNow(),
-    };
-    const rendered = renderOpsEmailTemplate({
-      templateKey: input.templateKey,
-      params,
-      subjectOverride: input.subjectOverride,
+    const shopParams = buildShopParams(row);
+    if (override) shopParams.email = override;
+    const params = fillEmptyParams(globalParams, {
+      ...shopParams,
+      occurredAtUtc: formatUtcNow(),
+      installedAtUtc: formatUtcNow(),
     });
+    const rendered = customHtml
+      ? renderCustomOpsEmail({
+          subject: input.subjectOverride ?? "",
+          html: customHtml,
+          params,
+        })
+      : renderOpsEmailTemplate({
+          templateKey,
+          params,
+          subjectOverride: input.subjectOverride,
+        });
     const sent = await sendSimpleEmail({
       to,
       subject: rendered.subject,
@@ -101,7 +125,7 @@ export async function sendOpsEmailCampaign(input: {
     await insertSendLog({
       shop,
       emailMasked: result.emailMasked,
-      templateKey: input.templateKey,
+      templateKey,
       templateId: rendered.templateId,
       subject: rendered.subject,
       status: result.status,

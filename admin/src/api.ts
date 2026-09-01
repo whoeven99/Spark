@@ -3238,6 +3238,7 @@ export function fetchOpsEmailTemplates(): Promise<{
 export function fetchOpsEmailTemplateDetail(key: string): Promise<{
   template: OpsEmailTemplate;
   keys: string[];
+  html: string;
   defaultParams: Record<string, string>;
 }> {
   return apiFetch(`/ops-email/templates/${encodeURIComponent(key)}`);
@@ -3246,6 +3247,7 @@ export function fetchOpsEmailTemplateDetail(key: string): Promise<{
 export function previewOpsEmail(body: {
   templateKey: string;
   subject?: string;
+  customHtml?: string;
   params: Record<string, string>;
   shop?: string;
 }): Promise<{
@@ -3257,6 +3259,31 @@ export function previewOpsEmail(body: {
   params: Record<string, string>;
 }> {
   return apiFetch("/ops-email/preview", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type OpsEmailBackfillResult = {
+  shop: string;
+  status: "updated" | "failed";
+  emailMasked: string | null;
+  error?: string;
+};
+
+export function backfillOpsEmailEmails(body: {
+  search?: string;
+  installedOnly?: boolean;
+  excludeSpark?: boolean;
+  planKey?: string;
+}): Promise<{
+  scanned: number;
+  updated: number;
+  failed: number;
+  remaining: number;
+  results: OpsEmailBackfillResult[];
+}> {
+  return apiFetch("/ops-email/backfill-emails", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -3294,8 +3321,10 @@ export function fetchOpsEmailSends(): Promise<{ sends: OpsEmailSendLog[] }> {
 export function sendOpsEmail(body: {
   templateKey: string;
   subject?: string;
+  customHtml?: string;
   params: Record<string, string>;
   shops: string[];
+  emailOverrides?: Record<string, string>;
 }): Promise<{
   results: OpsEmailSendResult[];
   testRecipient: string | null;
@@ -3303,5 +3332,20 @@ export function sendOpsEmail(body: {
   return apiFetch("/ops-email/send", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function setOpsEmailShopEmail(
+  shop: string,
+  email: string,
+): Promise<{
+  shop: string;
+  email: string | null;
+  emailMasked: string | null;
+  persisted: boolean;
+}> {
+  return apiFetch("/ops-email/shop-email", {
+    method: "POST",
+    body: JSON.stringify({ shop, email }),
   });
 }
