@@ -120,14 +120,7 @@ export default function App() {
             />
             <Route path="tsf/overview" element={<TsfOverview />} />
             <Route path="tsf/shops" element={<TsfShops />} />
-            <Route
-              path="tsf/ops-email"
-              element={
-                <RequireOwner>
-                  <OpsEmail />
-                </RequireOwner>
-              }
-            />
+            <Route path="tsf/ops-email" element={<OpsEmail />} />
             <Route path="tsf/usage" element={<TsfUsage />} />
             <Route path="tsf/subscriptions" element={<TsfSubscriptions />} />
             <Route path="tsf/packs" element={<TsfPacks />} />
