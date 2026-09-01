@@ -1,0 +1,145 @@
+import { useState } from "react";
+import { Button, Input, Radio, Select, Space, Typography } from "antd";
+import { MinusOutlined, PlusOutlined } from "@ant-design/icons";
+import type { OpsEmailTemplate } from "../../api";
+
+const { TextArea } = Input;
+
+export type OpsEmailTemplateMode = "catalog" | "custom";
+
+const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+
+export function extractPlaceholderKeys(source: string): string[] {
+  return [...source.matchAll(PLACEHOLDER_RE)].map((match) => match[1]);
+}
+
+type Props = {
+  mode: OpsEmailTemplateMode;
+  onModeChange: (mode: OpsEmailTemplateMode) => void;
+  templates: OpsEmailTemplate[];
+  templateKey: string;
+  onTemplateChange: (key: string) => void;
+  subject: string;
+  onSubjectChange: (value: string) => void;
+  paramKeys: string[];
+  params: Record<string, string>;
+  onParamChange: (key: string, value: string) => void;
+  onAddParam: (key: string) => void;
+  onRemoveParam: (key: string) => void;
+  customHtml: string;
+  onCustomHtmlChange: (value: string) => void;
+  customTemplateId: string;
+  onCustomTemplateIdChange: (value: string) => void;
+  onExtractFromHtml: () => void;
+};
+
+export default function OpsEmailTemplateCard({
+  mode,
+  onModeChange,
+  templates,
+  templateKey,
+  onTemplateChange,
+  subject,
+  onSubjectChange,
+  paramKeys,
+  params,
+  onParamChange,
+  onAddParam,
+  onRemoveParam,
+  customHtml,
+  onCustomHtmlChange,
+  customTemplateId,
+  onCustomTemplateIdChange,
+  onExtractFromHtml,
+}: Props) {
+  const [newParamKey, setNewParamKey] = useState("");
+
+  function submitNewParam() {
+    onAddParam(newParamKey);
+    setNewParamKey("");
+  }
+
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Radio.Group
+        value={mode}
+        onChange={(event) => onModeChange(event.target.value)}
+        optionType="button"
+        options={[
+          { value: "catalog", label: "内置模板" },
+          { value: "custom", label: "自定义模板" },
+        ]}
+      />
+      {mode === "catalog" ? (
+        <Select
+          value={templateKey}
+          onChange={onTemplateChange}
+          options={templates.map((item) => ({
+            value: item.key,
+            label: `${item.label}（${item.templateId}）`,
+          }))}
+          style={{ width: "100%" }}
+        />
+      ) : null}
+      {mode === "custom" ? (
+        <>
+          <Input
+            addonBefore="模板 ID"
+            value={customTemplateId}
+            onChange={(event) => onCustomTemplateIdChange(event.target.value)}
+            placeholder="腾讯云 SES 模板 ID，如 184217"
+          />
+          <Input
+            addonBefore="主题"
+            value={subject}
+            onChange={(event) => onSubjectChange(event.target.value)}
+          />
+          <TextArea
+            value={customHtml}
+            onChange={(event) => onCustomHtmlChange(event.target.value)}
+            placeholder="粘贴邮件 HTML，仅用于本地预览。使用 {{variable}} 作为占位符"
+            autoSize={{ minRows: 10, maxRows: 22 }}
+          />
+          <Button onClick={onExtractFromHtml}>从 HTML / 主题提取变量</Button>
+        </>
+      ) : (
+        <Input
+          addonBefore="主题"
+          value={subject}
+          onChange={(event) => onSubjectChange(event.target.value)}
+        />
+      )}
+      {paramKeys.map((key) => (
+        <Space.Compact key={key} style={{ width: "100%" }}>
+          <Input
+            addonBefore={key}
+            value={params[key] ?? ""}
+            onChange={(event) => onParamChange(key, event.target.value)}
+            placeholder={key === "installUrl" ? "Spark 安装链接，留空则用模板内链接" : "留空则发送时按店自动填"}
+          />
+          {mode === "custom" ? (
+            <Button icon={<MinusOutlined />} onClick={() => onRemoveParam(key)} />
+          ) : null}
+        </Space.Compact>
+      ))}
+      {mode === "custom" ? (
+        <Space.Compact style={{ width: "100%" }}>
+          <Input
+            placeholder="新变量名，如 taskName"
+            value={newParamKey}
+            onChange={(event) => setNewParamKey(event.target.value)}
+            onPressEnter={submitNewParam}
+          />
+          <Button icon={<PlusOutlined />} onClick={submitNewParam}>
+            添加变量
+          </Button>
+        </Space.Compact>
+      ) : null}
+      <Typography.Text type="secondary">
+        {mode === "catalog"
+          ? "发送走腾讯云模板 ID（下拉括号内数字），不走自定义 HTML。店级字段留空则发送时自动填。installUrl 只影响本地预览，不会改腾讯云模板里的按钮链接。"
+          : "发送走上方腾讯云模板 ID 和变量，不会把 HTML 发给 SES。HTML 仅本地预览；变量名需与腾讯云模板一致。"}
+      </Typography.Text>
+    </Space>
+  );
+}

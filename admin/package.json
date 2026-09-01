@@ -33,6 +33,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "recharts": "^2.15.3",
+    "tencentcloud-sdk-nodejs-ses": "^4.1.271",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

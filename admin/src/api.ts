@@ -3180,3 +3180,173 @@ export function postOpenRouterImages(body: {
     body: JSON.stringify(body),
   });
 }
+
+export type OpsEmailTemplate = {
+  key: string;
+  templateId: number;
+  event: string;
+  locale: "zh-CN" | "en";
+  label: string;
+  subject: string;
+  htmlFile: string;
+};
+
+export type OpsEmailAudienceRow = {
+  shop: string;
+  email: string | null;
+  emailMasked: string | null;
+  recipientName: string | null;
+  locale: string | null;
+  planKey: string | null;
+  subStatus: string | null;
+  installed: boolean;
+  sparkInstalled: boolean;
+  lastSentAt: string | null;
+  lastSentStatus: string | null;
+};
+
+export type OpsEmailSendResult = {
+  shop: string;
+  emailMasked: string | null;
+  status: "sent" | "failed" | "skipped";
+  error?: string;
+  requestId?: string;
+};
+
+export type OpsEmailSendLog = {
+  id: string;
+  shop: string;
+  emailMasked: string | null;
+  templateKey: string;
+  templateId: number;
+  subject: string;
+  status: "sent" | "failed" | "skipped";
+  error: string | null;
+  requestId: string | null;
+  createdBy: string;
+  createdAt: string;
+};
+
+export function fetchOpsEmailTemplates(): Promise<{
+  templates: OpsEmailTemplate[];
+  defaultParams: Record<string, string>;
+  sendReady: boolean;
+}> {
+  return apiFetch("/ops-email/templates");
+}
+
+export function fetchOpsEmailTemplateDetail(key: string): Promise<{
+  template: OpsEmailTemplate;
+  keys: string[];
+  html: string;
+  defaultParams: Record<string, string>;
+}> {
+  return apiFetch(`/ops-email/templates/${encodeURIComponent(key)}`);
+}
+
+export function previewOpsEmail(body: {
+  templateKey: string;
+  subject?: string;
+  customHtml?: string;
+  params: Record<string, string>;
+  shop?: string;
+}): Promise<{
+  templateId: number;
+  label: string;
+  keys: string[];
+  subject: string;
+  html: string;
+  params: Record<string, string>;
+}> {
+  return apiFetch("/ops-email/preview", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type OpsEmailBackfillResult = {
+  shop: string;
+  status: "updated" | "failed";
+  emailMasked: string | null;
+  error?: string;
+};
+
+export function backfillOpsEmailEmails(body: {
+  search?: string;
+  installedOnly?: boolean;
+  excludeSpark?: boolean;
+  planKey?: string;
+}): Promise<{
+  scanned: number;
+  updated: number;
+  failed: number;
+  remaining: number;
+  results: OpsEmailBackfillResult[];
+}> {
+  return apiFetch("/ops-email/backfill-emails", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchOpsEmailAudience(params: {
+  search?: string;
+  installedOnly?: boolean;
+  hasEmailOnly?: boolean;
+  excludeSpark?: boolean;
+  planKey?: string;
+}): Promise<{
+  shops: OpsEmailAudienceRow[];
+  summary: {
+    total: number;
+    withEmail: number;
+    missingEmail: number;
+    sparkInstalled: number;
+  };
+}> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.installedOnly != null) query.set("installedOnly", String(params.installedOnly));
+  if (params.hasEmailOnly != null) query.set("hasEmailOnly", String(params.hasEmailOnly));
+  if (params.excludeSpark != null) query.set("excludeSpark", String(params.excludeSpark));
+  if (params.planKey) query.set("planKey", params.planKey);
+  const qs = query.toString();
+  return apiFetch(`/ops-email/audience${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchOpsEmailSends(): Promise<{ sends: OpsEmailSendLog[] }> {
+  return apiFetch("/ops-email/sends");
+}
+
+export function sendOpsEmail(body: {
+  templateKey: string;
+  subject?: string;
+  customHtml?: string;
+  customTemplateId?: number;
+  params: Record<string, string>;
+  shops: string[];
+  emailOverrides?: Record<string, string>;
+}): Promise<{
+  results: OpsEmailSendResult[];
+  testRecipient: string | null;
+}> {
+  return apiFetch("/ops-email/send", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function setOpsEmailShopEmail(
+  shop: string,
+  email: string,
+): Promise<{
+  shop: string;
+  email: string | null;
+  emailMasked: string | null;
+  persisted: boolean;
+}> {
+  return apiFetch("/ops-email/shop-email", {
+    method: "POST",
+    body: JSON.stringify({ shop, email }),
+  });
+}

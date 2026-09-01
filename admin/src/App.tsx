@@ -36,6 +36,7 @@ import TsfSingleTranslateLogs from "./pages/tsf/TsfSingleTranslateLogs";
 import TranslationOps from "./pages/TranslationOps";
 import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
 import OpenRouterProbe from "./pages/OpenRouterProbe";
+import OpsEmail from "./pages/tsf/OpsEmail";
 import SparkCredits from "./pages/SparkCredits";
 import SparkBilling from "./pages/SparkBilling";
 import { useNavigate } from "react-router-dom";
@@ -119,6 +120,7 @@ export default function App() {
             />
             <Route path="tsf/overview" element={<TsfOverview />} />
             <Route path="tsf/shops" element={<TsfShops />} />
+            <Route path="tsf/ops-email" element={<OpsEmail />} />
             <Route path="tsf/usage" element={<TsfUsage />} />
             <Route path="tsf/subscriptions" element={<TsfSubscriptions />} />
             <Route path="tsf/packs" element={<TsfPacks />} />
