@@ -14,7 +14,7 @@ import {
   renderCustomOpsEmail,
   renderOpsEmailTemplate,
 } from "../lib/opsEmail/renderTemplate.js";
-import { sendOpsEmailCampaign } from "../lib/opsEmail/sendCampaign.js";
+import { sendOpsEmailCampaign, parseOpsEmailTemplateId } from "../lib/opsEmail/sendCampaign.js";
 import { isOpsEmailSendReady } from "../lib/opsEmail/sesSimple.js";
 import { listRecentSendLogs } from "../lib/opsEmail/store.js";
 import {
@@ -182,12 +182,14 @@ opsEmailRouter.post("/send", async (req, res) => {
       typeof req.body?.subject === "string" ? req.body.subject : undefined;
     const customHtml =
       typeof req.body?.customHtml === "string" ? req.body.customHtml : undefined;
+    const customTemplateId = parseOpsEmailTemplateId(req.body?.customTemplateId);
     const emailOverrides = parseStringRecord(req.body?.emailOverrides);
     const createdBy = String(res.locals.adminUserId ?? "unknown");
     const result = await sendOpsEmailCampaign({
       templateKey,
       subjectOverride,
       customHtml,
+      customTemplateId,
       params,
       shops,
       emailOverrides,

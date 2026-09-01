@@ -28,6 +28,8 @@ type Props = {
   onRemoveParam: (key: string) => void;
   customHtml: string;
   onCustomHtmlChange: (value: string) => void;
+  customTemplateId: string;
+  onCustomTemplateIdChange: (value: string) => void;
   onExtractFromHtml: () => void;
 };
 
@@ -46,6 +48,8 @@ export default function OpsEmailTemplateCard({
   onRemoveParam,
   customHtml,
   onCustomHtmlChange,
+  customTemplateId,
+  onCustomTemplateIdChange,
   onExtractFromHtml,
 }: Props) {
   const [newParamKey, setNewParamKey] = useState("");
@@ -77,22 +81,34 @@ export default function OpsEmailTemplateCard({
           style={{ width: "100%" }}
         />
       ) : null}
-      <Input
-        addonBefore="主题"
-        value={subject}
-        onChange={(event) => onSubjectChange(event.target.value)}
-      />
       {mode === "custom" ? (
         <>
+          <Input
+            addonBefore="模板 ID"
+            value={customTemplateId}
+            onChange={(event) => onCustomTemplateIdChange(event.target.value)}
+            placeholder="腾讯云 SES 模板 ID，如 184217"
+          />
+          <Input
+            addonBefore="主题"
+            value={subject}
+            onChange={(event) => onSubjectChange(event.target.value)}
+          />
           <TextArea
             value={customHtml}
             onChange={(event) => onCustomHtmlChange(event.target.value)}
-            placeholder="粘贴邮件 HTML，使用 {{variable}} 作为占位符"
+            placeholder="粘贴邮件 HTML，仅用于本地预览。使用 {{variable}} 作为占位符"
             autoSize={{ minRows: 10, maxRows: 22 }}
           />
           <Button onClick={onExtractFromHtml}>从 HTML / 主题提取变量</Button>
         </>
-      ) : null}
+      ) : (
+        <Input
+          addonBefore="主题"
+          value={subject}
+          onChange={(event) => onSubjectChange(event.target.value)}
+        />
+      )}
       {paramKeys.map((key) => (
         <Space.Compact key={key} style={{ width: "100%" }}>
           <Input
@@ -122,7 +138,7 @@ export default function OpsEmailTemplateCard({
       <Typography.Text type="secondary">
         {mode === "catalog"
           ? "发送走腾讯云模板 ID（下拉括号内数字），不走自定义 HTML。店级字段留空则发送时自动填。installUrl 只影响本地预览，不会改腾讯云模板里的按钮链接。"
-          : "自定义 HTML 走 SES Simple 发送；账号未开通自定义发送权限时会失败。刷新后丢弃，不走腾讯云模板 ID。"}
+          : "发送走上方腾讯云模板 ID 和变量，不会把 HTML 发给 SES。HTML 仅本地预览；变量名需与腾讯云模板一致。"}
       </Typography.Text>
     </Space>
   );

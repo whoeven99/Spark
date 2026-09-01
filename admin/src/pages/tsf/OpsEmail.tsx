@@ -70,6 +70,7 @@ export default function OpsEmail() {
   const [subject, setSubject] = useState("");
   const [catalogHtml, setCatalogHtml] = useState("");
   const [customHtml, setCustomHtml] = useState("");
+  const [customTemplateId, setCustomTemplateId] = useState("");
   const [sendReady, setSendReady] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -149,10 +150,21 @@ export default function OpsEmail() {
     setParams((prev) => paramsForKeys(detail.keys, detail.defaultParams, prev));
   }
 
+  function parseCustomTemplateId(raw: string): number | null {
+    const trimmed = raw.trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    const parsed = Number.parseInt(trimmed, 10);
+    return parsed > 0 ? parsed : null;
+  }
+
   function onModeChange(next: OpsEmailTemplateMode) {
     setMode(next);
-    if (next === "custom" && !customHtml.trim()) {
-      setCustomHtml(catalogHtml);
+    if (next === "custom") {
+      if (!customHtml.trim()) setCustomHtml(catalogHtml);
+      if (!customTemplateId.trim()) {
+        const current = templates.find((item) => item.key === templateKey);
+        if (current) setCustomTemplateId(String(current.templateId));
+      }
     }
   }
 
@@ -251,14 +263,22 @@ export default function OpsEmail() {
       message.warning("请先勾选商店");
       return;
     }
-    if (mode === "custom" && (!subject.trim() || !customHtml.trim())) {
-      message.warning("自定义模板需要主题和 HTML");
-      return;
+    if (mode === "custom") {
+      if (!subject.trim()) {
+        message.warning("自定义模板需要主题");
+        return;
+      }
+      if (!parseCustomTemplateId(customTemplateId)) {
+        message.warning("请填写有效的腾讯云模板 ID");
+        return;
+      }
     }
     Modal.confirm({
       title: `向已选 ${selected.length} 家发送？`,
       content: sendReady
-        ? "将使用当前模板和参数发送，不可撤销。"
+        ? mode === "custom"
+          ? `将使用腾讯云模板 ID ${customTemplateId.trim()} 和参数发送。粘贴的 HTML 仅预览，不会发给 SES。不可撤销。`
+          : "将使用当前内置模板和参数发送，不可撤销。"
         : "当前未检测到 SES 凭证，发送会失败。仍要继续？",
       okText: "发送",
       okButtonProps: { danger: true },
@@ -281,7 +301,8 @@ export default function OpsEmail() {
         const data = await sendOpsEmail({
           templateKey: mode === "custom" ? "custom" : templateKey,
           subject,
-          customHtml: mode === "custom" ? customHtml : undefined,
+          customTemplateId:
+            mode === "custom" ? parseCustomTemplateId(customTemplateId) ?? undefined : undefined,
           params,
           shops: chunk,
           emailOverrides,
@@ -486,6 +507,8 @@ export default function OpsEmail() {
               onRemoveParam={removeParam}
               customHtml={customHtml}
               onCustomHtmlChange={setCustomHtml}
+              customTemplateId={customTemplateId}
+              onCustomTemplateIdChange={setCustomTemplateId}
               onExtractFromHtml={extractCustomKeys}
             />
           </Card>

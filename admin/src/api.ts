@@ -3322,6 +3322,7 @@ export function sendOpsEmail(body: {
   templateKey: string;
   subject?: string;
   customHtml?: string;
+  customTemplateId?: number;
   params: Record<string, string>;
   shops: string[];
   emailOverrides?: Record<string, string>;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildOpsEmailSendPayload } from "../../../../../admin/server/lib/opsEmail/sendCampaign.js";
+import { buildOpsEmailSendPayload, parseOpsEmailTemplateId } from "../../../../../admin/server/lib/opsEmail/sendCampaign.js";
 import {
   describeSesError,
   formatSesFailureMessage,
@@ -72,6 +72,15 @@ describe("opsEmail SES template send helpers", () => {
     });
   });
 
+  it("parses positive integer template ids", () => {
+    expect(parseOpsEmailTemplateId(184217)).toBe(184217);
+    expect(parseOpsEmailTemplateId("184217")).toBe(184217);
+    expect(parseOpsEmailTemplateId(" 184217 ")).toBe(184217);
+    expect(parseOpsEmailTemplateId("184217abc")).toBeNull();
+    expect(parseOpsEmailTemplateId(0)).toBeNull();
+    expect(parseOpsEmailTemplateId("")).toBeNull();
+  });
+
   it("sends built-in catalog mail via Tencent template id, not local HTML", () => {
     const payload = buildOpsEmailSendPayload({
       templateKey: "appInstalled-en",
@@ -95,19 +104,32 @@ describe("opsEmail SES template send helpers", () => {
     expect(payload).not.toHaveProperty("html");
   });
 
-  it("keeps custom HTML on the simple send path", () => {
+  it("sends custom mail via a hand-entered Tencent template id", () => {
     const payload = buildOpsEmailSendPayload({
       templateKey: "custom",
       subjectOverride: "Hello {{shopName}}",
+      customTemplateId: 184217,
       customHtml: "<p>{{shopName}}</p>",
-      params: { shopName: "demo" },
+      params: { shopName: "demo", shop_id: "ciwishop" },
     });
-    expect(payload).toEqual({
-      mode: "simple",
-      templateId: 0,
+    expect(payload).toMatchObject({
+      mode: "template",
+      templateId: 184217,
       label: "自定义模板",
       subject: "Hello demo",
-      html: "<p>demo</p>",
     });
+    expect(payload.templateData.shopName).toBe("demo");
+    expect(payload).not.toHaveProperty("html");
+  });
+
+  it("rejects custom mail without a Tencent template id", () => {
+    expect(() =>
+      buildOpsEmailSendPayload({
+        templateKey: "custom",
+        subjectOverride: "Hello {{shopName}}",
+        customHtml: "<p>{{shopName}}</p>",
+        params: { shopName: "demo" },
+      }),
+    ).toThrow("自定义模板需要填写腾讯云模板 ID");
   });
 });

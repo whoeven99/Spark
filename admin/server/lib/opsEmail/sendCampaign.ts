@@ -3,14 +3,9 @@ import { formatUtcNow, maskEmail } from "./maskEmail.js";
 import {
   defaultGlobalParams,
   fillEmptyParams,
-  renderCustomOpsEmail,
   renderPlaceholders,
 } from "./renderTemplate.js";
-import {
-  sendSimpleEmail,
-  sendTemplateEmail,
-  resolveTestRecipient,
-} from "./sesSimple.js";
+import { sendTemplateEmail, resolveTestRecipient } from "./sesSimple.js";
 import { insertSendLog } from "./store.js";
 import { getOpsEmailTemplate } from "./templateCatalog.js";
 import type { OpsEmailSendResult } from "./types.js";
@@ -23,50 +18,54 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export type OpsEmailSesPayload =
-  | {
-      mode: "template";
-      templateId: number;
-      label: string;
-      subject: string;
-      templateData: Record<string, string>;
-    }
-  | {
-      mode: "simple";
-      templateId: 0;
-      label: string;
-      subject: string;
-      html: string;
-    };
+export type OpsEmailSesPayload = {
+  mode: "template";
+  templateId: number;
+  label: string;
+  subject: string;
+  templateData: Record<string, string>;
+};
+
+export function parseOpsEmailTemplateId(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) return raw;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return parsed > 0 ? parsed : null;
+}
 
 export function buildOpsEmailSendPayload(input: {
   templateKey: string;
   subjectOverride?: string;
   customHtml?: string;
+  customTemplateId?: number | null;
   params: Record<string, string>;
 }): OpsEmailSesPayload {
-  const customHtml = input.customHtml?.trim() ?? "";
-  if (customHtml) {
-    const rendered = renderCustomOpsEmail({
-      subject: input.subjectOverride ?? "",
-      html: customHtml,
-      params: input.params,
-    });
+  const customTemplateId = parseOpsEmailTemplateId(input.customTemplateId);
+  const params = { ...input.params };
+  if (!String(params.path ?? "").trim()) params.path = "app";
+
+  if (customTemplateId) {
+    const subjectSource = input.subjectOverride?.trim();
+    if (!subjectSource) throw new Error("自定义模板需要填写主题");
     return {
-      mode: "simple",
-      templateId: 0,
-      label: rendered.label,
-      subject: rendered.subject,
-      html: rendered.html,
+      mode: "template",
+      templateId: customTemplateId,
+      label: "自定义模板",
+      subject: renderPlaceholders(subjectSource, params),
+      templateData: params,
     };
+  }
+
+  if (input.customHtml?.trim() || input.templateKey === "custom") {
+    throw new Error("自定义模板需要填写腾讯云模板 ID");
   }
 
   const template = getOpsEmailTemplate(input.templateKey);
   if (!template) {
     throw new Error(`未知邮件模板：${input.templateKey}`);
   }
-  const params = { ...input.params };
-  if (!String(params.path ?? "").trim()) params.path = "app";
   const subjectSource = input.subjectOverride?.trim() || template.subject;
   return {
     mode: "template",
@@ -81,6 +80,7 @@ export async function sendOpsEmailCampaign(input: {
   templateKey: string;
   subjectOverride?: string;
   customHtml?: string;
+  customTemplateId?: number | null;
   params: Record<string, string>;
   shops: string[];
   emailOverrides?: Record<string, string>;
@@ -100,13 +100,20 @@ export async function sendOpsEmailCampaign(input: {
   }
 
   const customHtml = input.customHtml?.trim() ?? "";
+  const customTemplateId = parseOpsEmailTemplateId(input.customTemplateId);
   if (customHtml && customHtml.length > MAX_CUSTOM_HTML) {
     throw new Error("自定义 HTML 过长");
   }
-  if (customHtml && !input.subjectOverride?.trim()) {
-    throw new Error("自定义模板需要填写主题");
-  }
-  if (!customHtml) {
+  const isCustom =
+    Boolean(customTemplateId) || Boolean(customHtml) || input.templateKey.trim() === "custom";
+  if (isCustom) {
+    if (!customTemplateId) {
+      throw new Error("自定义模板需要填写腾讯云模板 ID");
+    }
+    if (!input.subjectOverride?.trim()) {
+      throw new Error("自定义模板需要填写主题");
+    }
+  } else {
     const template = getOpsEmailTemplate(input.templateKey);
     if (!template) {
       throw new Error(`未知邮件模板：${input.templateKey}`);
@@ -116,7 +123,7 @@ export async function sendOpsEmailCampaign(input: {
   const byShop = await getOpsEmailAudienceByShops(shops);
   const globalParams = { ...defaultGlobalParams(), ...input.params };
   const testRecipient = resolveTestRecipient();
-  const templateKey = customHtml ? input.templateKey.trim() || "custom" : input.templateKey;
+  const templateKey = isCustom ? input.templateKey.trim() || "custom" : input.templateKey;
   const results: OpsEmailSendResult[] = [];
 
   for (const [index, shop] of shops.entries()) {
@@ -140,7 +147,7 @@ export async function sendOpsEmailCampaign(input: {
         shop,
         emailMasked: null,
         templateKey,
-        templateId: customHtml ? 0 : (getOpsEmailTemplate(templateKey)?.templateId ?? 0),
+        templateId: customTemplateId ?? getOpsEmailTemplate(templateKey)?.templateId ?? 0,
         subject: "",
         status: "skipped",
         error: skipped.error,
@@ -160,31 +167,21 @@ export async function sendOpsEmailCampaign(input: {
     const payload = buildOpsEmailSendPayload({
       templateKey,
       subjectOverride: input.subjectOverride,
-      customHtml,
+      customTemplateId,
       params,
     });
-    const context = {
-      shop,
-      templateKey,
+    const sent = await sendTemplateEmail({
+      to,
+      subject: payload.subject,
       templateId: payload.templateId,
-      templateData: payload.mode === "template" ? payload.templateData : params,
-      htmlLength: payload.mode === "simple" ? payload.html.length : undefined,
-    };
-    const sent =
-      payload.mode === "template"
-        ? await sendTemplateEmail({
-            to,
-            subject: payload.subject,
-            templateId: payload.templateId,
-            templateData: payload.templateData,
-            context,
-          })
-        : await sendSimpleEmail({
-            to,
-            subject: payload.subject,
-            html: payload.html,
-            context,
-          });
+      templateData: payload.templateData,
+      context: {
+        shop,
+        templateKey,
+        templateId: payload.templateId,
+        templateData: payload.templateData,
+      },
+    });
     const result: OpsEmailSendResult = sent.ok
       ? {
           shop,
