@@ -51,7 +51,7 @@ export function defaultGlobalParams(): Record<string, string> {
     supportEmail:
       process.env.NOTIFICATION_SUPPORT_EMAIL?.trim() || "support@ciwi.ai",
     installUrl: process.env.SPARK_INSTALL_URL?.trim() || "",
-    path: "",
+    path: "app",
   };
 }
 

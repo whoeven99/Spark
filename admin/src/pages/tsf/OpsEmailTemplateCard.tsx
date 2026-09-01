@@ -121,8 +121,8 @@ export default function OpsEmailTemplateCard({
       ) : null}
       <Typography.Text type="secondary">
         {mode === "catalog"
-          ? "变量来自当前模板 HTML。店级字段（shopName、recipientName 等）留空则发送时自动填；填写 installUrl 会替换 App 按钮链接。"
-          : "自定义模板刷新后丢弃。预览和发送都使用上面的 HTML 与变量，不走腾讯云模板 ID。"}
+          ? "发送走腾讯云模板 ID（下拉括号内数字），不走自定义 HTML。店级字段留空则发送时自动填。installUrl 只影响本地预览，不会改腾讯云模板里的按钮链接。"
+          : "自定义 HTML 走 SES Simple 发送；账号未开通自定义发送权限时会失败。刷新后丢弃，不走腾讯云模板 ID。"}
       </Typography.Text>
     </Space>
   );
