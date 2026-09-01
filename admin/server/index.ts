@@ -42,6 +42,7 @@ import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
 import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
 import { sparkCreditsRouter } from "./routes/sparkCredits.js";
 import { sparkBillingRouter } from "./routes/sparkBilling.js";
+import { opsEmailRouter } from "./routes/opsEmail.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 import { logAdminEnvStatus } from "./lib/logEnvStatus.js";
 
@@ -116,6 +117,7 @@ app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);
 // 翻译 ROI / 商业闭环（含收入 KPI，仅 owner）
 app.use("/api/tsf/roi", authMiddleware, requireOwner, tsfRoiRouter);
 // 翻译运维（系统配置 + 增加额度）
+app.use("/api/ops-email", authMiddleware, requireOwner, opsEmailRouter);
 app.use("/api/translation-ops", authMiddleware, translationOpsRouter);
 // Shopify 翻译资源查询 / Query CSV 写回 / 单条写回删除
 app.use("/api/shopify-translation", authMiddleware, shopifyTranslationRouter);

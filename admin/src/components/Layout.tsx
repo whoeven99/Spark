@@ -31,6 +31,7 @@ import {
   ExperimentOutlined,
   WalletOutlined,
   UnorderedListOutlined,
+  MailOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getAdminUserLabel } from "../api";
 
@@ -105,6 +106,7 @@ const translationMenuItems: MenuItemDef[] = [
   },
   { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
   { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">翻译 新用户</Link>, ownerOnly: false },
+  { key: "/tsf/ops-email", icon: <MailOutlined />, label: <Link to="/tsf/ops-email">运营邮件</Link>, ownerOnly: true },
   { key: "/tsf/shop-profiles", icon: <IdcardOutlined />, label: <Link to="/tsf/shop-profiles">翻译 用户画像</Link>, ownerOnly: false },
   {
     key: "/tsf/language-coverage",

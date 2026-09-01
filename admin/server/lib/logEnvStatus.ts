@@ -64,5 +64,14 @@ export function logAdminEnvStatus(): void {
     field(u.envKey, getEnv(u.envKey) || undefined);
   }
 
+  const sesOk = Boolean(
+    (getEnv("TENCENT_CLOUD_KEY_ID") || getEnv("Tencent_Cloud_KEY_ID")) &&
+      (getEnv("TENCENT_CLOUD_KEY") || getEnv("Tencent_Cloud_KEY")),
+  );
+  line(sesOk, "Tencent SES (ops email)");
+  field("TENCENT_CLOUD_KEY_ID", getEnv("TENCENT_CLOUD_KEY_ID") || getEnv("Tencent_Cloud_KEY_ID") || undefined);
+  field("SPARK_INSTALL_URL", getEnv("SPARK_INSTALL_URL") || undefined);
+  field("EMAIL_TEST_RECIPIENT", getEnv("EMAIL_TEST_RECIPIENT") || undefined);
+
   console.info(`${LOG} =================`);
 }
