@@ -46,6 +46,7 @@ import {
   type ShopLocaleCoverageRow,
 } from "../api";
 import { TranslationContentViewer } from "../components/translation/TranslationContentViewer";
+import { jobModulesWithLiquid } from "../lib/jobModulesWithLiquid";
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const RECENT_SHOPS_KEY = "spark_admin_recent_shops";
@@ -389,11 +390,14 @@ export default function ShopTranslation() {
       title: "模块",
       dataIndex: "modules",
       key: "modules",
-      render: (mods: string[]) => (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {mods.length} 个
-        </Typography.Text>
-      ),
+      render: (_: unknown, r: TranslationJob) => {
+        const mods = jobModulesWithLiquid(r);
+        return (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {mods.length} 个
+          </Typography.Text>
+        );
+      },
     },
     {
       title: "Token 消耗",
@@ -765,7 +769,7 @@ export default function ShopTranslation() {
               <Descriptions.Item label="语言对">
                 {selected.source} → {selected.target}
               </Descriptions.Item>
-              <Descriptions.Item label="模块">{selected.modules.join(", ")}</Descriptions.Item>
+              <Descriptions.Item label="模块">{jobModulesWithLiquid(selected).join(", ") || "-"}</Descriptions.Item>
               <Descriptions.Item label="AI 模型">
                 <Tag>{selected.aiModel}</Tag>
               </Descriptions.Item>
