@@ -11,6 +11,12 @@ export const BILLING_LOG_EVENT = {
   PROMO_TOKEN_CLAIMED: "PROMO_TOKEN_CLAIMED",
   /** Admin 手动发放/调整按量 Token（系统奖励） */
   SYSTEM_REWARD: "SYSTEM_REWARD",
+  /** 从翻译 App 迁入加量池（referenceId = transferId） */
+  CREDIT_MIGRATION_IN: "CREDIT_MIGRATION_IN",
+  /** 翻译迁入被拒绝（有 Account；tokensDelta=0） */
+  CREDIT_MIGRATION_FAILED: "CREDIT_MIGRATION_FAILED",
+  /** 翻译迁入后扣费失败，冲正 purchasedTokens */
+  CREDIT_MIGRATION_ROLLBACK: "CREDIT_MIGRATION_ROLLBACK",
 } as const;
 
 export type BillingLogEventType =

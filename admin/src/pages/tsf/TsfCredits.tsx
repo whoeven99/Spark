@@ -66,6 +66,27 @@ function fmtAdjustDetail(metadata: TsfCreditsAdjustMetadata | null): string {
   return parts.length > 0 ? parts.join(" · ") : "-";
 }
 
+function eventLabel(eventType: string): string {
+  const map: Record<string, string> = {
+    TRIAL_GRANTED: "试用发放",
+    SUBSCRIPTION_ACTIVATED: "订阅开通",
+    SUBSCRIPTION_RENEWED: "订阅续费",
+    SUBSCRIPTION_CANCELLED: "订阅取消",
+    TOKEN_PACK_PURCHASED: "购包入账",
+    ADMIN_PURCHASED_CREDITS_ADJUSTED: "Admin 加量调整",
+    CREDITS_MIGRATED_OUT: "迁出到 Spark",
+    CREDITS_MIGRATION_FAILED: "迁出 Spark 失败",
+  };
+  return map[eventType] ?? eventType;
+}
+
+function eventTagColor(eventType: string): string | undefined {
+  if (eventType === "ADMIN_PURCHASED_CREDITS_ADJUSTED") return "purple";
+  if (eventType === "CREDITS_MIGRATED_OUT") return "green";
+  if (eventType === "CREDITS_MIGRATION_FAILED") return "red";
+  return undefined;
+}
+
 type AdjustMode = "add" | "set";
 
 export default function TsfCredits() {
@@ -293,7 +314,7 @@ export default function TsfCredits() {
       dataIndex: "eventType",
       key: "eventType",
       render: (v: string) => (
-        <Tag color={v === "ADMIN_PURCHASED_CREDITS_ADJUSTED" ? "purple" : undefined}>{v}</Tag>
+        <Tag color={eventTagColor(v)}>{eventLabel(v)}</Tag>
       ),
     },
     {
@@ -321,6 +342,10 @@ export default function TsfCredits() {
         r.eventType === "ADMIN_PURCHASED_CREDITS_ADJUSTED" ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {fmtAdjustDetail(metadata)}
+          </Typography.Text>
+        ) : r.referenceId ? (
+          <Typography.Text copyable type="secondary" style={{ fontSize: 12 }}>
+            {r.referenceId}
           </Typography.Text>
         ) : (
           "-"

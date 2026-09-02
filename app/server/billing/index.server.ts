@@ -41,3 +41,7 @@ export {
   loadPromoCampaignSnapshot,
   getVisiblePromoCampaign,
 } from "./promo/promoCampaign.server";
+export {
+  grantMigratedCredits,
+  rollbackMigratedCredits,
+} from "./creditMigration.server";
