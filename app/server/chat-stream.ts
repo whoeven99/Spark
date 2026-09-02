@@ -27,6 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     message?: string;
     messages?: unknown;
     fileIds?: unknown;
+    skillFocus?: unknown;
   };
 
   let agentMessages;
@@ -51,6 +52,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const fileIds: string[] = Array.isArray(body.fileIds)
     ? body.fileIds.filter((id): id is string => typeof id === "string")
     : [];
+  const skillFocus =
+    typeof body.skillFocus === "string" && body.skillFocus.trim()
+      ? body.skillFocus.trim()
+      : null;
 
   try {
     const { admin, session } = await authenticate.admin(request);
@@ -69,6 +74,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const locale = await resolveUiLocale(request, {
       admin,
+      shop,
       logContext: `chat-stream shop=${shop ?? ""}`,
     });
 
@@ -87,6 +93,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         locale,
       },
       config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
+      skillFocus,
     });
 
     const encoder = new TextEncoder();

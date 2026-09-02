@@ -156,7 +156,9 @@ export async function invokeChatAgent(
     (c): c is NonNullable<typeof c> => c != null,
   );
 
-  const graph = await buildShopChatGraph(context, extraTools, activeDefs);
+  const graph = await buildShopChatGraph(context, extraTools, activeDefs, [], undefined, {
+    userText: lastUserTextInput,
+  });
   let resultMessages: BaseMessage[] = [];
 
   try {

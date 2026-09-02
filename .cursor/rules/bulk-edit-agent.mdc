@@ -1,0 +1,17 @@
+---
+description: 批量编辑与表格导入任务前置阅读规则
+globs: app/lib/bulk*.ts,app/lib/sheetImport.ts,app/lib/seoAudit.ts,app/server/bulk*/**,app/server/sheetImport/**,app/server/ai/skills/bulk*/**,app/server/ai/skills/sheetImport/**,app/server/ai/skills/seoAudit/**,app/routes/api.bulk-*.ts,app/routes/component/bulk*/**,app/server/shopify/*Reader.server.ts,tests/app/lib/bulk*.test.ts,tests/app/server/bulk*/**
+alwaysApply: false
+---
+
+# 批量编辑与表格导入前置规则
+
+任务涉及批量调价 / 打标 / 上下架 / 调整合集 / 改 SEO / 改自定义字段、SEO 体检，或价目表 / 成本价 / 库存三个表格导入时，先读 `app/server/bulkEdit.agent.md`，再分析、实现或测试。那份文件里每条「不能退化的约束」都带了理由，动手前确认本次改动不会绕过它们。
+
+## 执行要求
+
+1. 先读 `app/server/bulkEdit.agent.md`。全局边界（唯一写回入口清单、对话内审核白名单、`TaskProposalField` 资源字段）以根 `AGENTS.md` 第 3、7 节为准。
+2. 保持读写分离四层：纯算 `app/lib/` → 只读 reader → 试算 dry-run（零 mutation）→ 写回 apply（该 mutation 的唯一调用处）。不要把 mutation 下沉到 Skill 或 dry-run。
+3. 写回路由继续校验 `confirm: true` 且任务处于 `pending_review`；Agent 回合内不触发写回。
+4. 若需求与该文件约定冲突，以用户明确指令为准，并在改动说明里指出偏离点。
+5. 最小改动；新增同类能力时按该文件第 3 节的检查清单逐项过。

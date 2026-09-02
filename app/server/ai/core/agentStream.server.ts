@@ -207,6 +207,8 @@ export type InvokeChatAgentStreamParams = {
   context: AgentContext;
   config?: RunnableConfig;
   sessionName?: string;
+  /** 推荐操作 key 或 Skill 名，用于按需注入 systemPromptExtension */
+  skillFocus?: string | null;
 };
 
 /**
@@ -221,7 +223,7 @@ export type InvokeChatAgentStreamParams = {
 export function invokeChatAgentStream(
   params: InvokeChatAgentStreamParams,
 ): ReadableStream<StreamChunk> {
-  const { messages: agentInputMessages, context, config, sessionName } = params;
+  const { messages: agentInputMessages, context, config, sessionName, skillFocus } = params;
 
   // ── 同步预计算（不阻塞响应） ──
   const runId = createAgentRunId();
@@ -260,6 +262,7 @@ export function invokeChatAgentStream(
         activeDefs,
         activePlaybookDefs,
         reflectionSummary,
+        { skillFocus, userText: lastUserTextInput },
       );
 
       // ── tracer / run collector ──

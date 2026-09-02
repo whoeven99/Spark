@@ -17,6 +17,8 @@ export const shopifyUi = {
   primarySurface: "#e9f7ef",
   primaryText: "#004c3f",
   link: "#005bd3",
+  linkSurface: "#eef4ff",
+  linkBorder: "rgba(0, 91, 211, 0.22)",
   radiusControl: 8,
   radiusCard: 12,
   shadowCard: "none",
@@ -673,15 +675,22 @@ export const recommendedTriggerStyle = (active: boolean): CSSProperties => ({
   gap: 6,
   height: 30,
   padding: "0 10px",
-  border: `1px solid ${active ? shopifyUi.borderStrong : shopifyUi.border}`,
+  border: `1px solid ${active ? shopifyUi.linkBorder : shopifyUi.border}`,
   borderRadius: shopifyUi.radiusControl,
-  background: active ? shopifyUi.surfaceSubtle : shopifyUi.surface,
-  color: shopifyUi.text,
+  background: active ? shopifyUi.linkSurface : shopifyUi.surface,
+  color: active ? shopifyUi.link : shopifyUi.text,
   cursor: "pointer",
   fontSize: 12,
   fontWeight: 650,
   whiteSpace: "nowrap",
 });
+/** 推荐入口的 ✦：与首页推荐区共用蓝色「可执行」强调 */
+export const recommendedTriggerGlyphStyle: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1,
+  flexShrink: 0,
+  color: shopifyUi.link,
+};
 /** ⌄ 字形基线偏低，单独上移以与文字/星标视觉居中 */
 export const recommendedChevronStyle: CSSProperties = {
   display: "inline-flex",
@@ -706,20 +715,29 @@ export const recommendedMenuStyle: CSSProperties = {
   zIndex: 8,
 };
 export const recommendedMenuTitleStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
   margin: "0 2px 8px",
-  color: shopifyUi.textSecondary,
-  fontSize: 12,
+  color: shopifyUi.text,
+  fontSize: 13,
   fontWeight: 700,
+};
+export const recommendedMenuTitleIconStyle: CSSProperties = {
+  fontSize: 10,
+  lineHeight: 1,
+  flexShrink: 0,
+  color: shopifyUi.link,
 };
 export const recommendedMenuGroupStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 4,
+  gap: 2,
 };
 export const recommendedMenuGroupLabelStyle: CSSProperties = {
-  margin: "6px 2px 2px",
-  color: shopifyUi.textSecondary,
-  fontSize: 11,
+  margin: "8px 2px 2px",
+  color: shopifyUi.textMuted,
+  fontSize: 12,
   fontWeight: 700,
   letterSpacing: 0.2,
 };
@@ -729,23 +747,35 @@ export const recommendedMenuItemStyle: CSSProperties = {
   justifyContent: "space-between",
   gap: 8,
   minWidth: 0,
-  padding: "8px 10px",
-  border: `1px solid ${shopifyUi.border}`,
+  padding: "6px 8px",
+  border: "1px solid transparent",
   borderRadius: shopifyUi.radiusControl,
-  background: shopifyUi.surface,
+  background: "transparent",
   color: shopifyUi.text,
-  fontSize: 12,
-  fontWeight: 600,
-  lineHeight: 1.35,
+  fontSize: 13,
+  fontWeight: 550,
+  lineHeight: 1.3,
   textAlign: "left",
   cursor: "pointer",
+};
+export const recommendedMenuItemLabelStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minWidth: 0,
+};
+export const recommendedMenuItemIconStyle: CSSProperties = {
+  fontSize: 10,
+  lineHeight: 1,
+  flexShrink: 0,
+  color: shopifyUi.link,
 };
 export const recommendedMenuItemBadgeStyle: CSSProperties = {
   flexShrink: 0,
   padding: "1px 6px",
   borderRadius: 999,
-  background: shopifyUi.surfaceSubtle,
-  color: shopifyUi.textSecondary,
+  background: shopifyUi.linkSurface,
+  color: shopifyUi.link,
   fontSize: 10,
   fontWeight: 700,
   whiteSpace: "nowrap",

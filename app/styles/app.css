@@ -203,9 +203,9 @@ code {
 }
 
 .workspace-home-quick-action:hover {
-  background: #fafafa !important;
-  border-color: #c9cdd2 !important;
-  color: #1f2124 !important;
+  background: #eef4ff !important;
+  border-color: rgba(0, 91, 211, 0.22) !important;
+  color: #005bd3 !important;
 }
 
 .workspace-home-quick-action:focus-visible {
@@ -217,12 +217,14 @@ code {
 .workspace-recommended-action {
   transition:
     background 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .workspace-recommended-action:hover {
-  background: #f6f6f7 !important;
-  border-color: #c9cdd2 !important;
+  background: #eef4ff !important;
+  border-color: rgba(0, 91, 211, 0.22) !important;
+  color: #005bd3 !important;
 }
 
 .workspace-recommended-action:focus-visible {
@@ -234,12 +236,14 @@ code {
 .workspace-recommended-trigger {
   transition:
     background 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .workspace-recommended-trigger:hover:not(:disabled) {
-  background: #f6f6f7 !important;
-  border-color: #c9cdd2 !important;
+  background: #eef4ff !important;
+  border-color: rgba(0, 91, 211, 0.22) !important;
+  color: #005bd3 !important;
 }
 
 .workspace-recommended-trigger:focus-visible {

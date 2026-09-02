@@ -223,6 +223,7 @@ export function useChatStream() {
       options?: {
         url?: string;
         fileIds?: string[];
+        skillFocus?: string | null;
         workspaceBatchProducts?: BatchTaskProduct[];
         /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
         workspaceProductQuery?: ObjectQuerySelection | null;
@@ -232,6 +233,7 @@ export function useChatStream() {
       const url = options?.url ?? "/chat-stream";
       const onFinish = options?.onFinish;
       const fileIds = options?.fileIds ?? [];
+      const skillFocus = options?.skillFocus?.trim() || null;
       const workspaceBatchProducts = options?.workspaceBatchProducts ?? [];
       const workspaceProductQuery = options?.workspaceProductQuery ?? null;
       const preferBatchCard = shouldPreferBatchOverProductImprove(workspaceBatchProducts);
@@ -288,7 +290,11 @@ export function useChatStream() {
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages, ...(fileIds.length ? { fileIds } : {}) }),
+          body: JSON.stringify({
+            messages,
+            ...(fileIds.length ? { fileIds } : {}),
+            ...(skillFocus ? { skillFocus } : {}),
+          }),
           signal: controller.signal,
         });
 

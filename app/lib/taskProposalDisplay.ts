@@ -2,7 +2,13 @@ import type { TFunction } from "i18next";
 import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
+  BULK_COLLECTION_EDIT_SKILL_ID,
+  BULK_INVENTORY_IMPORT_SKILL_ID,
+  BULK_METAFIELD_EDIT_SKILL_ID,
+  BULK_PRICE_EDIT_SKILL_ID,
+  BULK_STATUS_EDIT_SKILL_ID,
   IMAGE_GENERATION_SKILL_ID,
+  isResourceOptionField,
   PRODUCT_IMPROVE_LANGUAGE_OPTIONS,
   type TaskProposalField,
   type TaskProposalPayload,
@@ -16,12 +22,37 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [BATCH_PRODUCT_IMPROVE_SKILL_ID]: `${PREFIX}.skills.batchProductImprove.title`,
   [BATCH_PICTURE_TRANSLATE_SKILL_ID]: `${PREFIX}.skills.batchPictureTranslate.title`,
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.title`,
+  [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.title`,
+  [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.title`,
+  [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.title`,
+  [BULK_METAFIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkMetafieldEdit.title`,
+  [BULK_INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkInventoryImport.title`,
 };
+
+/**
+ * 一个提案只创建一个任务（而不是每个对象一个）的技能。
+ * 卡片据此把「将创建 N 个任务」改成「为 N 个对象创建 1 个任务」。
+ */
+const SINGLE_TASK_SKILL_IDS = new Set<string>([
+  BULK_PRICE_EDIT_SKILL_ID,
+  BULK_STATUS_EDIT_SKILL_ID,
+  BULK_COLLECTION_EDIT_SKILL_ID,
+  BULK_METAFIELD_EDIT_SKILL_ID,
+]);
+
+export function isSingleTaskProposalSkill(skillId: string): boolean {
+  return SINGLE_TASK_SKILL_IDS.has(skillId);
+}
 
 const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [BATCH_PRODUCT_IMPROVE_SKILL_ID]: `${PREFIX}.skills.batchProductImprove.summary`,
   [BATCH_PICTURE_TRANSLATE_SKILL_ID]: `${PREFIX}.skills.batchPictureTranslate.summary`,
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.summary`,
+  [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.summary`,
+  [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.summary`,
+  [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.summary`,
+  [BULK_METAFIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkMetafieldEdit.summary`,
+  [BULK_INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkInventoryImport.summary`,
 };
 
 /** 历史消息仅有 taskType 时映射到 skillId，便于侧栏标题 i18n */
@@ -39,6 +70,11 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   targetLanguage: `${PREFIX}.fields.targetLanguage`,
   sourceLanguage: `${PREFIX}.fields.sourceLanguage`,
   description: `${PREFIX}.fields.description`,
+  priceMode: `${PREFIX}.fields.priceMode`,
+  priceValue: `${PREFIX}.fields.priceValue`,
+  rounding: `${PREFIX}.fields.rounding`,
+  compareAtMode: `${PREFIX}.fields.compareAtMode`,
+  minPrice: `${PREFIX}.fields.minPrice`,
 };
 
 const TARGET_KIND_KEYS: Record<TaskProposalTargetKind, string> = {
@@ -105,12 +141,16 @@ function languageCatalogKeys(code: string): string[] {
 }
 
 export function resolveTaskProposalParamValueLabel(
-  _fieldKey: string,
+  fieldKey: string,
   value: string,
   t: TFunction,
 ): string {
   const trimmed = value.trim();
   if (!trimmed) return value;
+
+  // 枚举型参数（调价方式、取整方式等）：按 字段.取值 查表，没有条目时继续走语言/原值回退
+  const enumLabel = t(`${PREFIX}.paramValues.${fieldKey}.${trimmed}`, { defaultValue: "" });
+  if (enumLabel) return enumLabel;
 
   for (const languageKey of languageCatalogKeys(trimmed)) {
     const languageLabel = t(languageKey, { defaultValue: "" });
@@ -137,20 +177,28 @@ export function resolveTaskProposalTargetKind(kind: TaskProposalTargetKind, t: T
   return t(key);
 }
 
+/** 摘要行里的字段：资源类字段（合集等）需要 type + options 才能把 GID 换成人看得懂的名字。 */
+export type TaskProposalSummaryField = Pick<TaskProposalField, "key" | "label"> &
+  Partial<Pick<TaskProposalField, "type" | "options">>;
+
 export function formatTaskProposalParamSummary(
-  field: Pick<TaskProposalField, "key" | "label">,
+  field: TaskProposalSummaryField,
   value: string,
   t: TFunction,
 ): string {
+  // 枚举字段的 label 是中文硬编码，必须走 i18n；资源字段的 label 是店铺真实名称，直接用
+  const resourceLabel = isResourceOptionField(field.type ?? "text")
+    ? field.options?.find((option) => option.value === value)?.label
+    : undefined;
   return t(`${PREFIX}.paramSummary`, {
     label: resolveTaskProposalFieldLabel(field, t),
-    value: resolveTaskProposalParamValueLabel(field.key, value, t),
+    value: resourceLabel ?? resolveTaskProposalParamValueLabel(field.key, value, t),
   });
 }
 
 export function buildTaskRunParamsSummary(args: {
   skillId: string;
-  params: Array<Pick<TaskProposalField, "key" | "label">>;
+  params: TaskProposalSummaryField[];
   paramValues: Record<string, string>;
   t: TFunction;
 }): string[] {
@@ -168,7 +216,7 @@ export function resolveTaskRunParamsSummaryLines(
     params?: Record<string, string>;
   },
   t: TFunction,
-  fields?: Array<Pick<TaskProposalField, "key" | "label">>,
+  fields?: TaskProposalSummaryField[],
 ): string[] {
   if (run.params && fields && fields.length > 0) {
     return buildTaskRunParamsSummary({

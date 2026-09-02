@@ -10,12 +10,14 @@ import { useTranslation } from "react-i18next";
 import type {
   TaskProposalExecuteResponse,
   TaskProposalEstimateResponse,
+  TaskProposalField,
   TaskProposalPayload,
   TaskProposalTarget,
 } from "../../../lib/taskProposalPayload";
 import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   IMAGE_GENERATION_SKILL_ID,
+  isResourceOptionField,
   mergeTaskProposalTargets,
 } from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
@@ -24,6 +26,7 @@ import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { buildTaskRunPayload, type TaskRunPayload } from "../../../lib/taskRunPayload";
 import {
   buildTaskRunParamsSummary,
+  isSingleTaskProposalSkill,
   resolveTaskProposalDisabledReason,
   resolveTaskProposalFieldLabel,
   resolveTaskProposalParamValueLabel,
@@ -263,6 +266,26 @@ const pickProductButtonStyle = (disabled: boolean) =>
     flexShrink: 0,
   }) as const;
 
+const resourceSearchStyle = {
+  width: "100%",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 10,
+  padding: "7px 10px",
+  fontSize: 13,
+  background: "#fff",
+  color: pageColorTokens.textPrimary,
+  marginBottom: 6,
+} as const;
+
+const resourceEmptyStyle = {
+  fontSize: 12,
+  color: "#92400e",
+  background: "#fffbeb",
+  border: "1px solid #fde68a",
+  borderRadius: 10,
+  padding: "8px 10px",
+} as const;
+
 const setupSelectStyle = {
   maxWidth: 210,
   border: `1px solid ${pageColorTokens.borderSubtle}`,
@@ -394,6 +417,65 @@ function EstimateLine({
   );
 }
 
+// ─── Resource select（collection 等远端资源字段） ────────────────────────────
+
+/** 超过这个数量才值得给搜索框；少量选项直接下拉更快。 */
+const RESOURCE_SEARCH_THRESHOLD = 8;
+
+function ResourceSelectField({
+  field,
+  value,
+  onChange,
+}: {
+  field: TaskProposalField;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [keyword, setKeyword] = useState("");
+  const options = useMemo(() => field.options ?? [], [field.options]);
+
+  const filtered = useMemo(() => {
+    const needle = keyword.trim().toLowerCase();
+    if (!needle) return options;
+    // 已选项始终保留，否则筛掉它会让下拉看起来「自己清空了」
+    return options.filter(
+      (option) => option.value === value || option.label.toLowerCase().includes(needle),
+    );
+  }, [keyword, options, value]);
+
+  if (options.length === 0) {
+    return <div style={resourceEmptyStyle}>{t("workspace.taskProposal.card.resourceEmpty")}</div>;
+  }
+
+  return (
+    <>
+      {options.length > RESOURCE_SEARCH_THRESHOLD ? (
+        <input
+          style={resourceSearchStyle}
+          value={keyword}
+          placeholder={field.placeholder}
+          onChange={(e) => setKeyword(e.target.value)}
+          aria-label={t("workspace.taskProposal.card.resourceSearchLabel")}
+        />
+      ) : null}
+      <select style={inputStyle} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{t("workspace.taskProposal.card.resourcePlaceholder")}</option>
+        {filtered.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {filtered.length === 0 ? (
+        <div style={{ fontSize: 12, color: pageColorTokens.textFootnote, marginTop: 4 }}>
+          {t("workspace.taskProposal.card.resourceNoMatch")}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 // ─── Main card ────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -455,6 +537,8 @@ export function TaskProposalCard({
     targets.length === 0 &&
     !targetsQuery;
   const isPictureTranslate = resolved.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
+  /** 一个提案只创建一个任务（如批量调价）：文案按「1 个任务覆盖 N 个对象」表述 */
+  const singleTask = isSingleTaskProposalSkill(resolved.skillId);
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(targets.filter((t) => !t.disabledReason).map((t) => t.id)),
@@ -562,8 +646,15 @@ export function TaskProposalCard({
   const descriptionReady =
     resolved.skillId !== IMAGE_GENERATION_SKILL_ID ||
     (paramValues.description ?? "").trim().length >= 4;
+  /** 资源字段（如目标合集）没选就不能提交：执行端也会拒，不如在卡片里就挡住 */
+  const resourceFieldsReady = resolved.params.every(
+    (field) =>
+      !isResourceOptionField(field.type) ||
+      (paramValues[field.key] ?? field.value).trim().length > 0,
+  );
   const canSubmit =
     descriptionReady &&
+    resourceFieldsReady &&
     (targetless ||
       targetsOptional ||
       (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
@@ -675,11 +766,14 @@ export function TaskProposalCard({
               title: displayTitle,
               taskIds: json.taskIds,
               errors: json.errors.map((e) => ({ targetId: e.targetId, error: e.error })),
+              // 只用于对话卡展示：资源字段存人看得懂的名称，不存 GID
               params: Object.fromEntries(
-                resolved.params.map((field) => [
-                  field.key,
-                  paramValues[field.key] ?? field.value,
-                ]),
+                resolved.params.map((field) => {
+                  const value = paramValues[field.key] ?? field.value;
+                  if (!isResourceOptionField(field.type)) return [field.key, value];
+                  const label = field.options?.find((o) => o.value === value)?.label;
+                  return [field.key, label ?? value];
+                }),
               ),
               paramsSummary: buildTaskRunParamsSummary({
                 skillId: resolved.skillId,
@@ -742,7 +836,9 @@ export function TaskProposalCard({
   const prominentFields = resolved.params.filter(
     (field) => field.type === "select" && prominentFieldKeys.has(field.key),
   );
-  const plainFields = resolved.params.filter((field) => !prominentFields.includes(field));
+  const plainFields = resolved.params.filter(
+    (field) => field.type !== "hidden" && !prominentFields.includes(field),
+  );
   const hasTargetBlock = !targetless;
 
   return (
@@ -759,7 +855,7 @@ export function TaskProposalCard({
         <DoneState
           created={doneCreated}
           total={
-            targetsQuery || targetless || targetsOptional
+            targetsQuery || targetless || targetsOptional || singleTask
               ? doneCreated + doneErrors.length
               : selectedTargets.length
           }
@@ -1016,6 +1112,14 @@ export function TaskProposalCard({
                       </option>
                     ))}
                   </select>
+                ) : isResourceOptionField(field.type) ? (
+                  <ResourceSelectField
+                    field={field}
+                    value={paramValues[field.key] ?? field.value}
+                    onChange={(next) =>
+                      setParamValues((prev) => ({ ...prev, [field.key]: next }))
+                    }
+                  />
                 ) : field.type === "textarea" ? (
                   <textarea
                     style={textareaStyle}
@@ -1085,9 +1189,13 @@ export function TaskProposalCard({
                     })
                   : selectedTargets.length === 0
                     ? t("workspace.taskProposal.card.footerSelectOne")
-                    : t("workspace.taskProposal.card.footerCreateCount", {
-                        count: selectedTargets.length,
-                      })}
+                    : singleTask
+                      ? t("workspace.taskProposal.card.footerCreateOneForCount", {
+                          count: selectedTargets.length,
+                        })
+                      : t("workspace.taskProposal.card.footerCreateCount", {
+                          count: selectedTargets.length,
+                        })}
             </span>
             <button
               type="button"
@@ -1103,9 +1211,13 @@ export function TaskProposalCard({
                     ? t("workspace.taskProposal.card.confirmQuery")
                     : selectedTargets.length === 0
                       ? t("workspace.taskProposal.card.confirmNeedProduct")
-                      : t("workspace.taskProposal.card.confirmCreateCount", {
-                          count: selectedTargets.length,
-                        })}
+                      : singleTask
+                        ? t("workspace.taskProposal.card.confirmPreviewChanges", {
+                            count: selectedTargets.length,
+                          })
+                        : t("workspace.taskProposal.card.confirmCreateCount", {
+                            count: selectedTargets.length,
+                          })}
             </button>
           </div>
         </>

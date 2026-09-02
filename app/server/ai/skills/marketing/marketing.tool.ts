@@ -2,7 +2,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../productImprove/constants.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
-import { fetchShopLocalesPayload } from "../../../productImprove/shopLocalesFetcher.server";
+import { fetchShopLocalesPayload, fetchShopLocalesPayloadCached } from "../../../productImprove/shopLocalesFetcher.server";
 import { runProductDescriptionGeneration } from "../../../productImprove/services/generateDescriptionService";
 import type { AgentContext } from "../../core/toolRegistry.server";
 
@@ -13,7 +13,7 @@ export const GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME =
  * LangChain Tool：由 AI Assistant 调用，内部走商品上下文拉取 + Prompt + LLM，返回 JSON 字符串。
  */
 export function createGenerateProductDescriptionTool(context: AgentContext) {
-  const { admin } = context;
+  const { admin, shop } = context;
   return new DynamicStructuredTool({
     name: GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME,
     description:
@@ -40,10 +40,16 @@ export function createGenerateProductDescriptionTool(context: AgentContext) {
       try {
         let resolvedLang = (targetLanguage ?? "").trim();
         if (!resolvedLang) {
-          const locales = await fetchShopLocalesPayload(
-            admin,
-            `toolDefaultLang requestId=${requestId}`,
-          );
+          const locales = shop
+            ? await fetchShopLocalesPayloadCached(
+                admin,
+                shop,
+                `toolDefaultLang requestId=${requestId}`,
+              )
+            : await fetchShopLocalesPayload(
+                admin,
+                `toolDefaultLang requestId=${requestId}`,
+              );
           resolvedLang = locales.defaultTargetLanguage;
           console.info(
             `[GenerateDescription][Tool] requestId=${requestId} inferred targetLanguage=${resolvedLang} fallback=${locales.isFallback}`,

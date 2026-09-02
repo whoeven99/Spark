@@ -510,6 +510,10 @@ These patterns are exceptions and must not become the default visual language fo
 - Shared tokens and shared primitives should implement this file.
 - Page-specific styles should only exist when a shared primitive does not yet exist.
 - When a page introduces a repeated pattern, update this file before spreading the pattern.
+- Inline SVG icons must carry explicit `width`/`height` (attributes and/or inline style),
+  never sizing from a CSS module alone. Without intrinsic size an SVG fills its container
+  until the stylesheet arrives — common in Vite dev (CSS injected by JS) and Shopify
+  embedded loads. Prefer inline style for critical flex/size layout that must not flash.
 
 ## Relationship to Other Docs
 

@@ -5,10 +5,39 @@ import {
   DEFAULT_LOCALE,
   type SupportedLocale,
 } from "../../../i18n/config";
+import { resolvePromptSkillNames } from "../../../lib/promptSkillFocus";
 
 /** 回复语言：跟随用户提问，不跟 UI locale。 */
 const REPLY_LANGUAGE_RULE =
   "请使用与用户提问相同的语言回复（用户用中文就回中文，用英文就回英文）；不要擅自切换语言。";
+
+/**
+ * 全局写回安全边界（始终注入）。
+ * 各 bulk Skill 的长分步指令改为按需注入后，仍需保留这条底线。
+ */
+export function buildWriteSafetyPrompt(): string {
+  return [
+    "【写回与确认卡】",
+    "你不能在对话回合内直接修改 Shopify 商品价格、标签、上下架、合集、SEO、自定义字段、成本或库存。",
+    "需要改动时：调用对应的 open_*_form 打开确认卡；用户确认后才会进入试算与写回。",
+    "开卡不等于已改店；禁止声称「已写回 / 已改价 / 已上架」等。",
+  ].join("\n");
+}
+
+/**
+ * 工具结果后的行动规则（始终注入）。
+ * 减少「只总结、不开卡」：有明确下游就同一回合调用。
+ */
+export function buildPostToolNextStepPrompt(): string {
+  return [
+    "【工具结果后的下一步】",
+    "每次工具返回后：先判断结果是否足够回答用户。",
+    "若足够且存在明确下游工具（open_*_form 确认卡、诊断卡、或结果里的 suggestedNextActions），在同一回合立即调用，不要只口头总结或只问「要不要继续」。",
+    "确认卡 / 诊断卡本身是安全闸：开卡 ≠ 写回店铺。",
+    "若结果不足：再调只读工具补数；不要猜测缺失字段。",
+    "若下游需要用户先选方向（如上架还是下架）且话里没有：开卡并留空该字段，让用户在卡片里选，不要猜。",
+  ].join("\n");
+}
 
 /**
  * 基础店铺对话 Agent 系统提示。
@@ -110,20 +139,58 @@ export function buildMerchantCapabilityPrompt(
   return lines.join("\n");
 }
 
+export type PersonalizedSystemPromptOptions = {
+  reflectionSummary?: string;
+  activePlaybookDefs?: PlaybookDefinition[];
+  /**
+   * 前端传入的推荐操作 key 或 Skill 名（如 seoAudit / all）。
+   * 与 userText 一起决定本轮注入哪些 Skill 的 systemPromptExtension。
+   */
+  skillFocus?: string | null;
+  /** 本轮用户原文，用于无 skillFocus 时的启发式路由 */
+  userText?: string | null;
+};
+
+async function resolveSkillExtension(
+  def: ToolDefinition,
+  context: AgentContext,
+): Promise<string | null> {
+  if (!def.systemPromptExtension) return null;
+  if (typeof def.systemPromptExtension === "function") {
+    const ext = await def.systemPromptExtension(context);
+    return ext?.trim() ? ext : null;
+  }
+  return def.systemPromptExtension.trim() ? def.systemPromptExtension : null;
+}
+
 /**
  * 根据用户画像和注册的工具动态组装完整的 System Prompt。
+ * Skill 长指令按需注入：推荐操作点击 / 话术命中才带上对应 extension。
  */
 export async function getPersonalizedSystemPrompt(
   context: AgentContext,
   activeDefs: ToolDefinition[],
-  reflectionSummary?: string,
+  reflectionSummaryOrOptions?: string | PersonalizedSystemPromptOptions,
   activePlaybookDefs?: PlaybookDefinition[],
 ): Promise<string> {
-  const playbooks = activePlaybookDefs ?? [];
-  const locale = context.locale ?? DEFAULT_LOCALE;
-  const parts: string[] = [buildShopChatAgentSystemPrompt(locale)];
+  // 兼容旧签名：(*, *, reflectionSummary?, playbooks?)
+  const options: PersonalizedSystemPromptOptions =
+    typeof reflectionSummaryOrOptions === "object" && reflectionSummaryOrOptions !== null
+      ? reflectionSummaryOrOptions
+      : {
+          reflectionSummary: reflectionSummaryOrOptions,
+          activePlaybookDefs,
+        };
 
-  const reflectionPrompt = buildReflectionPrompt(reflectionSummary);
+  const playbooks = options.activePlaybookDefs ?? [];
+  const locale = context.locale ?? DEFAULT_LOCALE;
+  const parts: string[] = [
+    buildShopChatAgentSystemPrompt(locale),
+    buildWriteSafetyPrompt(),
+    buildPostToolNextStepPrompt(),
+  ];
+
+  const reflectionPrompt = buildReflectionPrompt(options.reflectionSummary);
   if (reflectionPrompt) {
     parts.push(reflectionPrompt);
   }
@@ -135,21 +202,22 @@ export async function getPersonalizedSystemPrompt(
     parts.push(skillsTierPrompt);
   }
 
-  // 拼接每个工具的特定 Prompt 指令
+  const focusNames = resolvePromptSkillNames({
+    skillFocus: options.skillFocus,
+    userText: options.userText,
+  });
+  const injectAll = focusNames === "all";
+  const focusSet = injectAll ? null : new Set(focusNames);
+
   for (const def of activeDefs) {
-    if (def.systemPromptExtension) {
-      if (typeof def.systemPromptExtension === "function") {
-        const ext = await def.systemPromptExtension(context);
-        if (ext) parts.push(ext);
-      } else {
-        parts.push(def.systemPromptExtension);
-      }
-    }
+    if (focusSet && !focusSet.has(def.name)) continue;
+    const ext = await resolveSkillExtension(def, context);
+    if (ext) parts.push(ext);
   }
 
-  // Playbook 专属 prompt 指令
   for (const def of playbooks) {
-    if (def.systemPromptExtension) {
+    if (focusSet && !focusSet.has(def.name)) continue;
+    if (def.systemPromptExtension?.trim()) {
       parts.push(def.systemPromptExtension);
     }
   }

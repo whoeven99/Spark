@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
 import type { ShopLocalesApiResponse } from "../../lib/productImproveLocales";
-import { fetchShopLocalesPayload } from "./shopLocalesFetcher.server";
+import { fetchShopLocalesPayloadCached } from "./shopLocalesFetcher.server";
 import { logDetailedError } from "./generateDescriptionLog.server";
 
 const LOG_PREFIX = "[ShopLocalesRoute]";
@@ -45,8 +45,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
 
-    const payload = await fetchShopLocalesPayload(
+    const payload = await fetchShopLocalesPayloadCached(
       admin,
+      session.shop,
       `requestId=${requestId} shop=${session.shop}`,
     );
 

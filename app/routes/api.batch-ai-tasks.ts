@@ -86,6 +86,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const shop = session.shop;
   const locale = await resolveUiLocale(request, {
     admin,
+    shop,
     logContext: `batch-ai-tasks shop=${shop}`,
   });
   const i18n = initI18n(locale);
