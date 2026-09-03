@@ -376,7 +376,7 @@ model AppVisitSource {
 model BillingLog {
   id          String   @id @default(cuid())
   shop        String
-  /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED
+  /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED | CREDIT_MIGRATION_*
   eventType   String
   planKey     String?
   referenceId String?

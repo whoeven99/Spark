@@ -133,6 +133,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。
+- `POST /api/internal/credit-migration`：翻译 App 迁入积分（HMAC，`CREDIT_MIGRATION_SECRET`；无 Shopify session）。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单（paid/cancelled）、退款、库存、履约、GDPR 合规（`/webhooks/compliance`：`customers/data_request` / `customers/redact` / `shop/redact`），以及 Google Merchant 商品状态与 Meta Catalog Webhook；公共执行/调试工具在 `app/server/webhook/`。
 - `meta.data-deletion.tsx`、`favicon[.]ico.ts`：Meta 数据删除合规回调与 favicon 204 兜底，不属于业务入口。
 
@@ -276,7 +277,7 @@ npm run build     # Vite client + tsc server
 - 前端入口：`admin/src/App.tsx`、`admin/src/pages/`、`admin/src/api.ts`。
 - 外部存储连接：`admin/server/lib/`。
 - 鉴权边界：`admin/server/middleware/auth.ts`；收入、Pixel logs、TSF billing/revenue/ROI、OpenRouter 探测等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。登录为三人身份（Yewen / Allen / Zhuangze）+ 各人密码（`ADMIN_SECRET_YEWEN` / `_ALLEN` / `_ZHUANGZE`）；Yewen、Allen 为 owner，Zhuangze 为 user。顶栏显示姓名，不展示 Owner/User 字样。
-- 主要 API 路由族：Spark 运营（overview/shops/usage/capabilities/subscriptions/revenue/agent-runs/billing-rules/pricing-workbench/todos/ops-checklist/visit-source/support/app-logs/pixel-logs/shop-profile、`spark-credits` 额度查询与系统奖励、`spark-billing` 账单总览）、TSF 观测（`/api/tsf/*`：overview/shops/usage/subscriptions/packs/billing/shop-profiles/language-coverage/revenue/roi/credits）、翻译运维只读/修复（`/api/translations`、`/api/translation-ops`、`/api/shopify-translation`）、Redis Explorer、OpenRouter 探测。`admin/server/routes/` 下所有路由文件都在 `admin/server/index.ts` 挂载，没有孤儿路由。
+- 主要 API 路由族：Spark 运营（overview/shops/usage/capabilities/subscriptions/revenue/agent-runs/billing-rules/pricing-workbench/todos/ops-checklist/visit-source/support/app-logs/pixel-logs/shop-profile、`spark-credits` 额度查询与系统奖励、`spark-billing` 账单总览）、TSF 观测（`/api/tsf/*`：overview/shops/usage/subscriptions/packs/billing/shop-profiles/language-coverage/revenue/roi/credits）、翻译运维只读/修复（`/api/translations`、`/api/translation-ops`、`/api/shopify-translation`）、Redis Explorer、OpenRouter 探测。`admin/server/routes/` 下所有路由文件都在 `admin/server/index.ts` 挂载，没有孤儿路由。翻译任务内容查看（`/translations/:id/content*`）用 `includeLiquid` 拼虚拟 module `CUSTOM_LIQUID`（`jobModulesWithLiquid`，与 TSF Worker 对齐），不要只读 Cosmos `job.modules`。
 - 前端页面路由见 `admin/src/App.tsx`；Spark 侧栏含「账单总览」`/billing`、「用户额度」`/credits`、「定价工作台」`/pricing-workbench`；除下文详述的几个页面外还有 `/translations`、`/shop-translation`、`/translation-ops`、`/shopify-translation`、`/translate-v4-support`、`/tsf/billing`、`/tsf/packs`、`/tsf/shop-profiles/:shop`、`/redis-explorer`。改 Admin 导航前先读该文件，不要凭本节清单推断。
 - Admin 没有配置测试框架；改动后必须在 `admin/` 中运行 `npm run build`。
 - 修改共享 Prisma schema 后，主应用和 Admin 的 Prisma 类型/构建都要考虑。
