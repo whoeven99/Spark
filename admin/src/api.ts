@@ -115,6 +115,8 @@ export type TranslationJob = {
   source: string;
   target: string;
   modules: string[];
+  /** Custom Liquid pipeline; virtual module CUSTOM_LIQUID is not in `modules`. */
+  includeLiquid?: boolean;
   aiModel: string;
   status: string;
   claimedBy: string | null;

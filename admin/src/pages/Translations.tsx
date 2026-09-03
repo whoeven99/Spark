@@ -48,6 +48,7 @@ import {
   type LLMKeyHistoryEntry,
 } from "../api";
 import { TranslationContentViewer } from "../components/translation/TranslationContentViewer";
+import { jobModulesWithLiquid } from "../lib/jobModulesWithLiquid";
 
 /* ──────────────────────────────────────────────────────────────────────────
    Design tokens
@@ -1483,13 +1484,13 @@ export default function Translations() {
                 <Tooltip
                   title={
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {j.modules.map((m) => (
+                      {jobModulesWithLiquid(j).map((m) => (
                         <span key={m} style={{ fontSize: 12 }}>{m}</span>
                       ))}
                     </div>
                   }
                 >
-                  <span style={{ fontSize: 12, color: C.sub, fontFamily: MONO, cursor: "default" }}>{j.modules.length} 个</span>
+                  <span style={{ fontSize: 12, color: C.sub, fontFamily: MONO, cursor: "default" }}>{jobModulesWithLiquid(j).length} 个</span>
                 </Tooltip>
                 <PipelineBar job={j} />
                 <span style={{ fontSize: 13, fontWeight: 600, textAlign: "right", fontFamily: MONO, color: j.metrics.translateFailed > 0 ? C.failed : "#aeb3ba" }}>
@@ -1537,7 +1538,7 @@ export default function Translations() {
               </Descriptions.Item>
               <Descriptions.Item label="商店">{selected.shopName}</Descriptions.Item>
               <Descriptions.Item label="语言对">{selected.source} → {selected.target}</Descriptions.Item>
-              <Descriptions.Item label="模块">{selected.modules.join(", ")}</Descriptions.Item>
+              <Descriptions.Item label="模块">{jobModulesWithLiquid(selected).join(", ") || "-"}</Descriptions.Item>
               <Descriptions.Item label="AI 模型"><Tag>{selected.aiModel}</Tag></Descriptions.Item>
               <Descriptions.Item label="状态"><StatusPill status={selected.status} /></Descriptions.Item>
               <Descriptions.Item label="Worker">{selected.claimedBy ?? "-"}</Descriptions.Item>

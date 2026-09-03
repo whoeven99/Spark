@@ -10,6 +10,7 @@ import {
   parseTranslationJobFiltersFromQuery,
   translationJobWhereClause,
 } from "../lib/translationJobFilters.js";
+import { jobModulesWithLiquid } from "../lib/jobModulesWithLiquid.js";
 import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
@@ -34,7 +35,7 @@ translationsRouter.get("/", async (req, res) => {
     const { conditions, params } = buildTranslationJobFilters(filters);
 
     let query =
-      "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.taskSource, c.isCover, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy, c.lastHeartbeat FROM c";
+      "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.includeLiquid, c.status, c.aiModel, c.metrics, c.taskSource, c.isCover, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy, c.lastHeartbeat FROM c";
     query += translationJobWhereClause(conditions);
     query += " ORDER BY c.createdAt DESC OFFSET @offset LIMIT @limit";
     params.push({ name: "@offset", value: offset });
@@ -510,7 +511,9 @@ translationsRouter.get("/:jobId/content/modules", async (req, res) => {
     const { jobId } = req.params;
     const shop = (req.query.shop as string | undefined)?.trim();
 
-    type JobLite = Pick<TranslationV4Job, "id" | "modules"> & { blobPrefix?: string };
+    type JobLite = Pick<TranslationV4Job, "id" | "modules" | "includeLiquid"> & {
+      blobPrefix?: string;
+    };
     let job: JobLite | null = null;
     if (shop) {
       const { resource } = await container.item(jobId, shop).read<JobLite>();
@@ -518,7 +521,8 @@ translationsRouter.get("/:jobId/content/modules", async (req, res) => {
     } else {
       const { resources } = await container.items
         .query<JobLite>({
-          query: "SELECT c.id, c.modules, c.blobPrefix FROM c WHERE c.id = @id",
+          query:
+            "SELECT c.id, c.modules, c.includeLiquid, c.blobPrefix FROM c WHERE c.id = @id",
           parameters: [{ name: "@id", value: jobId }],
         })
         .fetchAll();
@@ -530,7 +534,7 @@ translationsRouter.get("/:jobId/content/modules", async (req, res) => {
     }
 
     const blobPrefix = job.blobPrefix;
-    const modules = job.modules ?? [];
+    const modules = jobModulesWithLiquid(job);
     if (!blobPrefix) {
       res.json({ modules: [], note: "该任务无 blobPrefix（可能为旧任务）" });
       return;
@@ -573,7 +577,7 @@ translationsRouter.get("/:jobId/content", async (req, res) => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const pageSize = Math.min(Math.max(Number(req.query.pageSize ?? 10), 1), 50);
 
-    type JobLite = Pick<TranslationV4Job, "id" | "shopName" | "modules"> & {
+    type JobLite = Pick<TranslationV4Job, "id" | "shopName" | "modules" | "includeLiquid"> & {
       blobPrefix?: string;
     };
     let job: JobLite | null = null;
@@ -583,7 +587,8 @@ translationsRouter.get("/:jobId/content", async (req, res) => {
     } else {
       const { resources } = await container.items
         .query<JobLite>({
-          query: "SELECT c.id, c.shopName, c.modules, c.blobPrefix FROM c WHERE c.id = @id",
+          query:
+            "SELECT c.id, c.shopName, c.modules, c.includeLiquid, c.blobPrefix FROM c WHERE c.id = @id",
           parameters: [{ name: "@id", value: jobId }],
         })
         .fetchAll();
@@ -594,7 +599,7 @@ translationsRouter.get("/:jobId/content", async (req, res) => {
       return;
     }
 
-    const modules = job.modules ?? [];
+    const modules = jobModulesWithLiquid(job);
     const blobPrefix = job.blobPrefix;
     if (!blobPrefix) {
       res.json({ items: [], total: 0, modules, module: null, page, pageSize, note: "该任务无 blobPrefix（可能为旧任务）" });
