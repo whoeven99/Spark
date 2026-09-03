@@ -2,26 +2,11 @@
 
 本文件是编码 agent 在 `Spark` 仓库中的入口和长期维护的代码导航。它适用于仓库根目录及所有子目录；若某个子目录以后新增更具体的 `AGENTS.md`，则子目录文件在其作用域内优先。
 
-## 0. 每次任务先做
+## 0. 怎么用本文件
 
-按任务规模分三档，不要对所有任务都跑满全套流程。
+本文件是仓库地图与硬门禁，不是逐步执行的流程清单。默认：查代码 → 直接做 → 按风险自选验证。有产品/技术分叉或不可逆操作时再停下来对齐；复杂协作可按需参考 `.cursor/skills/deliberate-collab/SKILL.md`。
 
-**A 档 · 只读问答与定位**：解释既有代码、找某个符号在哪、回答架构问题，不产生任何 diff。直接查代码回答即可，不需要读本文件全文、不需要 `git status`、不需要写实现方案。唯一的硬要求是不推测没打开过的代码——用户引用了具体文件就先读再答。
-
-**B 档 · 单点改动**：明显 typo、单文件小修、补一个测试、调一句文案。跑下面第 1、3 步，按需读对应领域文档，然后直接改。不必走"先确认选型、再给方案、再动手"那一套。
-
-**C 档 · 跨文件 / 跨域 / 触及数据与外部系统的改动**：跑完以下六步。
-
-1. 确认已掌握本文件当前内容。若本文件已随上下文注入（Cursor 等把根 `AGENTS.md` 当作常驻规则的环境），注入的就是磁盘当前版本，不必再读一遍；只有在不确定或仅凭历史记忆时才重新完整读取。
-2. 读取并遵循 `.cursor/skills/deliberate-collab/SKILL.md`（先确认技术选型，再给实现方案与 UI 样例，再动手）。
-3. `git status --short`，识别并保护用户已有改动和未跟踪文件。
-4. 按第 6 节「必读文档路由」读取与任务直接相关的文档。
-5. 用 `rg` / `rg --files` 核对真实调用链和文件是否仍存在，再制定方案。
-6. 改完按第 11 节验证矩阵执行与风险匹配的检查，如实报告未执行或被环境阻塞的项目。这是全文唯一一处验证要求，不在别处重复。
-
-第 1、3、4、5 步彼此没有依赖，可以并行发起，不要串成四轮。
-
-拿不准属于哪一档时按更低一档起步，发现范围变大再补齐步骤。这比一上来就跑满全套更省时间，也不会漏掉真正的门禁。
+若本文件已随上下文注入，不必为「怕旧副本」再完整重读；只有不确定或仅凭历史记忆时再打开。不推测没打开过的代码。
 
 若本文件、旧文档和当前代码冲突，优先级为：**当前代码与配置 > `package.json` / Prisma schema > 本文件 > 领域文档 > README**。发现漂移时，应在本次改动范围内同步更新本文件或对应文档。
 
@@ -180,7 +165,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Agent 运行摘要 | `app/server/agentRunLog/` |
 | Playbook Case | `app/server/playbookCase/` |
 
-AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。修改工具时同时检查注册、schema、执行器、token 计费、任务卡片和测试，不要只改工具实现文件。
+AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。
 
 ## 5. 数据与外部系统边界
 
@@ -206,26 +191,26 @@ AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assista
 
 存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service，再考虑新增容器或表；涉及跨仓库整店翻译边界时同时核对 TSF 当前实现。
 
-## 6. 必读文档路由
+## 6. 文档索引（按需）
 
-只读取与当前任务相关的文档，但下列规则是强制的：
+需要时再打开，不要求改前先通读。路径规则（如计费 / 批量编辑）仍可能按文件路径单独触发领域文档。
 
-| 任务类型 | 修改前必须读取 |
+| 主题 | 文档 |
 |---|---|
-| 任意任务（协作风格，§0 强制） | `.cursor/skills/deliberate-collab/SKILL.md` |
-| 项目架构、跨域改动、环境变量、部署 | `docs/PROJECT_CONTEXT.md`，并以当前代码复核过时路径 |
+| 项目架构、跨域、环境变量、部署 | `docs/PROJECT_CONTEXT.md`（以当前代码复核过时路径） |
 | **发布新 Shopify App（CLI + Render + 密钥/URL）** | `docs/SHOPIFY_APP_PUBLISH.md` |
 | 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
-| 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节（分发选定后不可改；Custom 不能走 Shopify Billing） |
+| 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节 |
 | Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
-| 任意前端视觉、布局、组件样式 | `docs/DESIGN.md` |
+| 前端视觉、布局、组件样式 | `docs/DESIGN.md` |
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
-| 批量编辑（调价/打标/上下架/合集/SEO/自定义字段）、SEO 体检、表格导入 | `app/server/bulkEdit.agent.md` |
+| 批量编辑、SEO 体检、表格导入 | `app/server/bulkEdit.agent.md` |
 | Today 运营工作流 | `docs/DAILY_OPERATIONS_WORKFLOWS.md` |
-| Today 信息架构细节 | `docs/TODAY_INFORMATION_ARCHITECTURE.md` |
+| Today 信息架构 | `docs/TODAY_INFORMATION_ARCHITECTURE.md` |
 | Health Monitor AI 明细 | `docs/HEALTH_MONITOR_AI_DETAIL_SPEC.md` |
 | 信息架构和功能归属 | `docs/SPARK_FUNCTION_INVENTORY.md` |
-| 整店翻译兼容、运营排查或跨 TSF 边界 | 直接读取 TSF 根 `AGENTS.md` 和 `packages/translation-core/*`；Spark 只保留图片翻译、兼容清理与 Admin 只读观测 |
+| 整店翻译 / 跨 TSF | TSF 根 `AGENTS.md` 与 `packages/translation-core/*`（Spark 仅图片翻译、兼容清理、Admin 只读观测） |
+| 复杂协作节奏（有分叉时） | `.cursor/skills/deliberate-collab/SKILL.md` |
 
 文档名和路径区分大小写时以磁盘实际文件为准。不要引用不存在的旧文档（例如旧版说明中的 `docs/generateDescription.md` 或 `docs/agent-run-log.md`）。
 
@@ -347,7 +332,7 @@ Package-backed：
 
 运维 / Agent 入口（无 npm，按需手跑）：
 
-- `scripts/fetch-feishu-doc.mjs` — 拉取飞书 Wiki/Docx（§6 强制入口）
+- `scripts/fetch-feishu-doc.mjs` — 拉取飞书 Wiki/Docx（§6）
 - `scripts/query-turso.mjs` — 快速查 Turso 表（默认测环境）
 - `scripts/lib/loadEnv.mjs` — 上述脚本共用的 env 叠载与 Turso/Redis/Cosmos 解析
 - `scripts/generate-notification-html-templates.cjs` — 重生 SES 邮件 HTML（`app/server/notifications/tencent-cloud-html/`）
@@ -360,21 +345,9 @@ CI：
 
 不要恢复已删除的 Render 日志 digest 脚本（`render-daily-log-digest` 等）或缺失的 `turso-drop-schema-*` npm 入口。临时探针放仓库外，或用完即删；`scripts/tmp*` 未跟踪文件勿擅自纳入改动。
 
-## 11. 验证矩阵
+## 11. 验证参考（按需）
 
-根据改动范围先跑聚焦检查，再跑交付门禁：
-
-| 改动 | 最低验证 |
-|---|---|
-| 纯文档 | 检查链接、路径、命令与 `git diff --check` |
-| 纯工具函数/服务 | 对应 Vitest 文件 + `npm run typecheck` |
-| 路由/API/服务端业务 | 相关测试 + `npm run typecheck` + `npm run build` |
-| 前端组件/页面/i18n | `npm run typecheck` + `npm run build`，必要时浏览器验证 |
-| Prisma schema/计费/任务状态 | 相关测试 + `npx prisma generate` + `npm run typecheck` + `npm run build` |
-| Admin 任意代码 | `cd admin && npm run build` |
-| Web Pixel 扩展 | 根构建 + Shopify 扩展相关验证/部署前检查 |
-
-代码改动的默认完整门禁：
+按风险自选，非强制流程。常用命令：
 
 ```powershell
 npm run lint
@@ -383,7 +356,13 @@ npm run test
 npm run build
 ```
 
-若仓库存在与本次无关的既有失败，必须记录准确命令、错误摘要，并证明本次相关的聚焦验证已通过；不能笼统写“有旧错误”。文档改动无需为形式而运行整套构建。
+| 改动 | 常选 |
+|---|---|
+| 纯工具函数/服务 | 对应 Vitest + `typecheck` |
+| 路由/API/服务端 | 相关测试 + `typecheck` + `build` |
+| 前端/i18n | `typecheck` + `build` |
+| Prisma / 计费 / 任务状态 | 相关测试 + `prisma generate` + `typecheck` + `build` |
+| Admin | `cd admin && npm run build` |
 
 ## 12. 工作纪律
 
@@ -409,7 +388,6 @@ npm run build
 - 不猜接口。Shopify GraphQL、scope、版本或平台约束可能变化时，使用仓库配置的 Shopify 开发工具或官方文档核实。
 - 新增环境变量时同步更新相应配置校验和文档，只记录名称、用途、是否必需，不提交 secret。
 - 设计跨存储或跨仓库方案时，先画清所有权和调用路径；Telemetry、Agent 运行摘要和业务对象默认分开存储。
-- 完成后报告：修改了什么、关键文件、第 0 节第 6 步的验证结果、剩余风险或被阻塞项。
 
 ## 13. 维护本文件
 
@@ -419,8 +397,8 @@ npm run build
 - Ask 工作台上下文工具清单（商品/订单/文章/文件）增减；
 - 新增/删除可部署应用、worker、扩展或外部存储；
 - Partner 应用 toml、webhook 订阅、分发方式（Public / Custom）或发布姿态变化；
-- package scripts、Node 版本或验证门禁变化；
-- 新增强制设计/交互/计费/迁移约束；
+- package scripts、Node 版本或常用验证命令变化；
+- 新增设计/交互/计费/迁移硬约束；
 - 领域文档重命名或迁移。
 
 更新时以代码扫描结果为准，删除过时描述，不把一次性排错记录、机器路径、密钥值或长篇实现细节堆进本文件。
