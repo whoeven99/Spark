@@ -57,6 +57,9 @@ function eventLabel(eventType: string): string {
     TOKEN_PACK_PURCHASED: "购包入账",
     PROMO_TOKEN_CLAIMED: "限时福利领取",
     SYSTEM_REWARD: "系统奖励",
+    CREDIT_MIGRATION_IN: "从翻译迁入",
+    CREDIT_MIGRATION_FAILED: "翻译迁入失败",
+    CREDIT_MIGRATION_ROLLBACK: "翻译迁入回滚",
   };
   return map[eventType] ?? eventType;
 }
@@ -159,7 +162,21 @@ export default function SparkCredits() {
       dataIndex: "eventType",
       key: "eventType",
       render: (v: string) => (
-        <Tag color={v === "SYSTEM_REWARD" ? "purple" : "default"}>{eventLabel(v)}</Tag>
+        <Tag
+          color={
+            v === "SYSTEM_REWARD"
+              ? "purple"
+              : v === "CREDIT_MIGRATION_IN"
+                ? "green"
+                : v === "CREDIT_MIGRATION_FAILED"
+                  ? "red"
+                  : v === "CREDIT_MIGRATION_ROLLBACK"
+                    ? "orange"
+                    : "default"
+          }
+        >
+          {eventLabel(v)}
+        </Tag>
       ),
     },
     {

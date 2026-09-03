@@ -15,6 +15,7 @@
 | `subscription/` | 开通、续费、`app_subscriptions/update` webhook |
 | `purchase/` | 按量购包（售卖已下线，入账兼容保留）、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount` |
+| `creditMigration.server.ts` | 翻译 App 迁入 `purchasedTokens`（HMAC 路由 `/api/internal/credit-migration`） |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog`（含超额单价 / 默认封顶） |
 | `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage` 底层）；**业务扣费统一走** `recordBilledTokenUsage(s)` / `recordChatTokenUsage` / `recordVisualToolTokenUsage`；`recordBilled*` 之后会 `trackAndFlushOverage`；续费结算见 `tokenPools.server.ts`；含内余额见 `getAvailableTokens` / `hasTokenQuota` |
 | `../aiTask/concurrencyLimiter.server.ts` | 进程内信号量：全局文生图 / 图翻 + **按店** `SHOP_AI_TASK_CONCURRENCY`（默认 2）；异步任务经 `runQueuedShopAiTask` 排队，开跑前复核额度，不足则 fail 并停烧 |
@@ -25,6 +26,7 @@
 |------|------|
 | `BILLING_GATEWAY=noop` | 不调 Shopify Billing，本地直接生效（开发） |
 | `BILLING_TEST=true` | Shopify 测试计费（开发店）；Render 等 `NODE_ENV=prod` 时必须显式设置 |
+| `CREDIT_MIGRATION_SECRET` | 翻译 App 迁入积分内部接口 HMAC 密钥（与 TSF `SPARK_CREDIT_MIGRATION_SECRET` 相同） |
 
 ## Shopify returnUrl
 
@@ -103,6 +105,9 @@
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 | `PROMO_TOKEN_CLAIMED` | 营销活动领取 Token（`referenceId` = campaignId；入账 `purchasedTokens`） |
 | `SYSTEM_REWARD` | Admin 系统奖励 / 手动调整按量池（入账 `purchasedTokens`；metadata 含操作者与备注） |
+| `CREDIT_MIGRATION_IN` | 翻译 App 迁入加量池（`referenceId` = transferId；`purchasedTokens += amount`） |
+| `CREDIT_MIGRATION_FAILED` | 迁入拒绝（有 Account；`tokensDelta=0`；无 Account 不写） |
+| `CREDIT_MIGRATION_ROLLBACK` | 翻译扣费失败后冲正 `purchasedTokens` |
 
 ## 营销领 Token（账户页）
 
