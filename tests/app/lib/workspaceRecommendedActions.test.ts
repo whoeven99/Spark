@@ -15,12 +15,6 @@ const LABELS: Record<string, string> = {
   "workspace.shell.chat.recommend.bulkStatusEdit.label": "批量上下架",
   "workspace.shell.chat.recommend.bulkStatusEdit.prompt.shop": "status-shop",
   "workspace.shell.chat.recommend.bulkStatusEdit.prompt.selected": "status-selected",
-  "workspace.shell.chat.recommend.bulkCollectionEdit.label": "批量调整合集",
-  "workspace.shell.chat.recommend.bulkCollectionEdit.prompt.shop": "collection-shop",
-  "workspace.shell.chat.recommend.bulkCollectionEdit.prompt.selected": "collection-selected",
-  "workspace.shell.chat.recommend.bulkSeoEdit.label": "批量改 SEO",
-  "workspace.shell.chat.recommend.bulkSeoEdit.prompt.shop": "seo-shop",
-  "workspace.shell.chat.recommend.bulkSeoEdit.prompt.selected": "seo-selected",
   "workspace.shell.chat.recommend.bulkMetafieldEdit.label": "批量改自定义字段",
   "workspace.shell.chat.recommend.bulkMetafieldEdit.prompt.shop": "metafield-shop",
   "workspace.shell.chat.recommend.bulkMetafieldEdit.prompt.selected": "metafield-selected",
@@ -62,7 +56,7 @@ function t(key: string): string {
 }
 
 describe("buildWorkspaceRecommendedGroups", () => {
-  it("returns 18 shop-scoped actions in operations-first order", () => {
+  it("returns 16 shop-scoped actions in operations-first order", () => {
     const groups = buildWorkspaceRecommendedGroups(t, false);
     expect(groups.map((g) => g.key)).toEqual([
       "operations",
@@ -71,13 +65,13 @@ describe("buildWorkspaceRecommendedGroups", () => {
       "imageGeneration",
     ]);
     const items = groups.flatMap((g) => g.items);
-    expect(items).toHaveLength(18);
+    expect(items).toHaveLength(16);
     expect(items.find((i) => i.key === "optimizeCopy")?.prompt).toBe("copy-shop");
     expect(items.find((i) => i.key === "bulkPriceEdit")?.prompt).toBe("price-shop");
     expect(items.find((i) => i.key === "bulkTagEdit")?.prompt).toBe("tag-shop");
     expect(items.find((i) => i.key === "bulkStatusEdit")?.prompt).toBe("status-shop");
-    expect(items.find((i) => i.key === "bulkCollectionEdit")?.prompt).toBe("collection-shop");
-    expect(items.find((i) => i.key === "bulkSeoEdit")?.prompt).toBe("seo-shop");
+    expect(items.find((i) => i.key === "bulkCollectionEdit")).toBeUndefined();
+    expect(items.find((i) => i.key === "bulkSeoEdit")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkMetafieldEdit")?.prompt).toBe("metafield-shop");
     expect(items.find((i) => i.key === "bulkPriceImport")?.prompt).toBe("import-shop");
     expect(items.find((i) => i.key === "bulkCostImport")?.prompt).toBe("cost-import-shop");
@@ -86,7 +80,7 @@ describe("buildWorkspaceRecommendedGroups", () => {
     );
     // SEO 体检是只读诊断，不建任务
     expect(items.find((i) => i.key === "seoAudit")?.createsTask).toBeUndefined();
-    expect(items.filter((i) => i.createsTask)).toHaveLength(13);
+    expect(items.filter((i) => i.createsTask)).toHaveLength(11);
   });
 
   it("prioritizes product actions and switches to selected prompts", () => {

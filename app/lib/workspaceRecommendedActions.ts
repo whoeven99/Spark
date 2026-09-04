@@ -120,18 +120,6 @@ export function buildWorkspaceRecommendedGroups(
         createsTask: true,
       },
       {
-        key: "bulkCollectionEdit",
-        label: t("workspace.shell.chat.recommend.bulkCollectionEdit.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkCollectionEdit.prompt.${scope}`),
-        createsTask: true,
-      },
-      {
-        key: "bulkSeoEdit",
-        label: t("workspace.shell.chat.recommend.bulkSeoEdit.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkSeoEdit.prompt.${scope}`),
-        createsTask: true,
-      },
-      {
         key: "bulkMetafieldEdit",
         label: t("workspace.shell.chat.recommend.bulkMetafieldEdit.label"),
         prompt: t(`workspace.shell.chat.recommend.bulkMetafieldEdit.prompt.${scope}`),

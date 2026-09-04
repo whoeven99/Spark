@@ -18,8 +18,6 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   bulkPriceEdit: ["bulkPriceEdit"],
   bulkTagEdit: ["bulkTagEdit"],
   bulkStatusEdit: ["bulkStatusEdit"],
-  bulkCollectionEdit: ["bulkCollectionEdit"],
-  bulkSeoEdit: ["bulkSeoEdit"],
   bulkMetafieldEdit: ["bulkMetafieldEdit"],
   bulkPriceImport: ["bulkPriceImport", "sheetImport"],
   bulkCostImport: ["bulkCostImport", "sheetImport"],
@@ -87,14 +85,6 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkStatusEdit,
     patterns: [/批量上下架/, /批量.*上架/, /批量.*下架/, /bulk\s*status/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkCollectionEdit,
-    patterns: [/批量.*合集/, /加入合集/, /移出合集/, /bulk\s*collection/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkSeoEdit,
-    patterns: [/批量改\s*seo/i, /批量.*seo/i, /bulk\s*seo/i],
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkMetafieldEdit,
