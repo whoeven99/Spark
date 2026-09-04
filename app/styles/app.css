@@ -180,8 +180,20 @@ code {
 }
 
 .workspace-composer-input:focus {
-  border-color: #008060 !important;
-  box-shadow: 0 0 0 1px #008060;
+  outline: none;
+}
+
+/* 焦点提示放在整张输入卡上（与首页输入框一致的中性柔和环），
+   不再用饱和绿色只圈住输入行 —— 绿色按设计规范仅表示成功态。 */
+.workspace-chat-composer {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.workspace-chat-composer:focus-within {
+  border-color: #8a8d91 !important;
+  box-shadow: 0 0 0 3px rgba(31, 33, 36, 0.06) !important;
 }
 
 .workspace-home-composer {

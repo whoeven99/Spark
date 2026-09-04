@@ -603,7 +603,10 @@ export function ChatPanel({
   const mobileComposerOffset = isMobile ? mobileComposerHeight + 18 : 0;
 
   const composerContent = (
-    <div style={isMobile ? mobileFixedComposerCardStyle : composerSurfaceStyle}>
+    <div
+      className="workspace-chat-composer"
+      style={isMobile ? mobileFixedComposerCardStyle : composerSurfaceStyle}
+    >
       {selectedSummaryBubbles.length > 0 ? (
         <div style={selectionBubbleRowStyle}>
           {selectedSummaryBubbles.map((item) => (
