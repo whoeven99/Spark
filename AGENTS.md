@@ -25,7 +25,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
 - Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。`/app/studio/translate` 当前只重定向到 `/app/studio/copy`，不要把图片翻译、兼容 Blob 读取或 Admin 运维页误判为整店翻译运行时。
 - Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。安装后自动回补（`ensureInstallOrderBackfill`，默认近 `SPARK_ORDER_BACKFILL_DAYS` 天）与 toml 里的 webhook **订阅**是两回事：路由在仓库里，未 `shopify app deploy` 订阅则增量进不了库。
-- 工作树中可能出现 `tmp-*` / `scripts/tmp-probe-*` 等未跟踪的临时排查脚本；除非用户明确要求，禁止删除、覆盖或纳入改动。
+- 工作树中可能出现 `scripts/tmp/` 下临时排查脚本（该目录已 gitignore）；除非用户明确要求，禁止删除、覆盖或纳入改动。
 
 发布姿态与 Partner 应用（邀请制内测，不是 App Store 公开）：
 
