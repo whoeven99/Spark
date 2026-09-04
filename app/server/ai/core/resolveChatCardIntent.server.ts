@@ -32,12 +32,17 @@ import {
   defaultHealthDiagnosisFormPayload,
 } from "../../../lib/healthDiagnosisCardPayload";
 import {
+  buildBulkCollectionEditProposal,
+  buildBulkMetafieldEditProposal,
+  buildBulkPriceEditProposal,
+  buildBulkSeoEditProposal,
+  buildBulkStatusEditProposal,
+  buildBulkTagEditProposal,
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { skillNamesFromUserText } from "../../../lib/promptSkillFocus";
-import { extractMessageText } from "../utils/langchainMessageText";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
 
@@ -107,6 +112,80 @@ export function hasAnyChatCardInUiPayloads(uiPayloads: Record<string, unknown>):
   );
 }
 
+/** Skill onStreamEvent 已下发过卡片时写入的 flag（避免二次补卡重复推送）。 */
+const CHAT_CARD_EMITTED_FLAGS = [
+  "batchTasksForm",
+  "bulkStatusEditForm",
+  "bulkPriceEditForm",
+  "bulkTagEditForm",
+  "bulkCollectionEditForm",
+  "bulkSeoEditForm",
+  "bulkMetafieldEditForm",
+  "bulkPriceImportForm",
+  "bulkCostImportForm",
+  "bulkInventoryImportForm",
+  "productImproveForm",
+  "pictureTranslateForm",
+  "imageGenerationForm",
+  "productQualityForm",
+  "healthDiagnosisForm",
+] as const;
+
+export function hasEmittedChatCardFlag(emittedFlags: Set<string> | undefined): boolean {
+  if (!emittedFlags || emittedFlags.size === 0) return false;
+  return CHAT_CARD_EMITTED_FLAGS.some((flag) => emittedFlags.has(flag));
+}
+
+/**
+ * 可确定性补出的 TaskProposal 开卡 Skill（不依赖文件 ID / Shopify 预取也能出可用空卡）。
+ * 表格导入类缺 fileId 时不能补，只能走纠偏文案。
+ */
+const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
+  skill: string;
+  build: (
+    products: Array<{ id: string; title: string; imageUrl?: string | null }>,
+  ) => TaskProposalPayload;
+}> = [
+  {
+    skill: "bulkStatusEdit",
+    build: (products) => buildBulkStatusEditProposal({ products }),
+  },
+  {
+    skill: "bulkTagEdit",
+    build: (products) => buildBulkTagEditProposal({ products }),
+  },
+  {
+    skill: "bulkPriceEdit",
+    build: (products) => buildBulkPriceEditProposal({ products }),
+  },
+  {
+    skill: "bulkSeoEdit",
+    build: (products) => buildBulkSeoEditProposal({ products }),
+  },
+  {
+    skill: "bulkCollectionEdit",
+    build: (products) => buildBulkCollectionEditProposal({ products }),
+  },
+  {
+    skill: "bulkMetafieldEdit",
+    build: (products) => buildBulkMetafieldEditProposal({ products }),
+  },
+];
+
+export function tryDeterministicTaskProposalFromSkills(
+  skillNames: readonly string[],
+  lastUserText: string,
+): TaskProposalPayload | null {
+  if (skillNames.length === 0) return null;
+  const skillSet = new Set(skillNames);
+  const products = parseWorkspaceProductsFromText(lastUserText);
+  for (const entry of DETERMINISTIC_TASK_PROPOSAL_BY_SKILL) {
+    if (!skillSet.has(entry.skill)) continue;
+    return entry.build(products);
+  }
+  return null;
+}
+
 export function extractToolsCalledFromMessages(messages: BaseMessage[]): string[] {
   const names = new Set<string>();
   for (const msg of messages) {
@@ -132,6 +211,10 @@ function normalizeLlmIntent(intent: ChatCardIntent): ChatCardIntent {
   return intent;
 }
 
+/** 单行是否在「声称已开卡 / 请到卡片里操作」却没有实际卡片时需要剥掉。 */
+const MISLEADING_CARD_CLAIM_LINE_RE =
+  /(我来|我将|我会|让我|来为|为(您|你)|已经?为?(您|你)?)?.{0,6}(打开|展示|生成|准备|创建|调出|弹出).{0,16}(卡片|表单|面板)|(请(您|你)?在卡片中|卡片中(确认|选择|填写)|配置卡片|卡片已?(打开|展示|准备|生成|就绪))/;
+
 export function reconcileReplyWithChatCards(
   reply: string,
   uiPayloads: Record<string, unknown>,
@@ -142,9 +225,11 @@ export function reconcileReplyWithChatCards(
   const filtered = lines.filter((line) => {
     const trimmed = line.trim();
     if (!trimmed) return true;
-    return !/已(经)?为(您|你)打开|已打开|卡片已打开|配置卡片/.test(trimmed);
+    return !MISLEADING_CARD_CLAIM_LINE_RE.test(trimmed);
   });
-  return filtered.join("\n").trim() || reply;
+  const next = filtered.join("\n").trim();
+  // 若整段都被剥光，保留原文以免空白气泡；调用方应优先补卡而非依赖纠偏。
+  return next || reply;
 }
 
 export function buildChatCardPayloadFromIntent(
@@ -257,7 +342,7 @@ function streamChunksForUiPayloads(
       args: uiPayloads.healthDiagnosisCard,
     });
   }
-  if (uiPayloads.taskProposal && !emittedFlags.has("batchTasksForm")) {
+  if (uiPayloads.taskProposal && !hasEmittedChatCardFlag(emittedFlags)) {
     chunks.push({
       type: "task_proposal",
       payload: uiPayloads.taskProposal as TaskProposalPayload,
@@ -267,7 +352,7 @@ function streamChunksForUiPayloads(
   return chunks;
 }
 
-/** 命中即可能需要卡片的 Skill 名（与 CHAT_CARD_TYPES 对应，不含只读经营查询）。 */
+/** 命中即可能需要卡片的 Skill 名（与 CHAT_CARD_TYPES + 批量 TaskProposal 对应）。 */
 const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "imageGenerationForm",
   "imageGeneration",
@@ -276,11 +361,24 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "productImprove",
   "productQualityScore",
   "healthDiagnosisForm",
+  "bulkStatusEdit",
+  "bulkPriceEdit",
+  "bulkTagEdit",
+  "bulkCollectionEdit",
+  "bulkSeoEdit",
+  "bulkMetafieldEdit",
+  "bulkPriceImport",
+  "bulkCostImport",
+  "bulkInventoryImport",
 ]);
 
 /** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */
-const CARD_CLAIM_RE =
-  /(打开|展示|生成|准备|创建|调出|弹出|填写|确认).{0,10}(卡片|表单|面板|配置)|(卡片|表单|面板)已?(打开|展示|准备|生成|就绪)/;
+export const CARD_CLAIM_RE =
+  /(我来|我将|我会|让我|来为|为(您|你)|已经?为?(您|你)?)?.{0,8}(打开|展示|生成|准备|创建|调出|弹出|填写|确认).{0,16}(卡片|表单|面板|配置)|(卡片|表单|面板)已?(打开|展示|准备|生成|就绪)|请(您|你)?在卡片中/;
+
+export function assistantClaimsChatCard(reply: string): boolean {
+  return CARD_CLAIM_RE.test(reply ?? "");
+}
 
 /**
  * 二次补卡 LLM 的前置门：仅当本轮有卡片信号时才值得再调一次模型。
@@ -291,13 +389,99 @@ function chatCardResolutionMightBeNeeded(params: {
   lastUserText: string;
   assistantReply: string;
 }): boolean {
-  if (CARD_CLAIM_RE.test(params.assistantReply ?? "")) return true;
+  if (assistantClaimsChatCard(params.assistantReply ?? "")) return true;
   const intentText = extractUserIntentText(params.lastUserText);
   if (skillNamesFromUserText(intentText).some((name) => CARD_RELEVANT_SKILL_NAMES.has(name))) {
     return true;
   }
   if (parseWorkspaceProductsFromText(params.lastUserText).length >= 2) return true;
   return false;
+}
+
+function resolutionFromTaskProposal(
+  proposal: TaskProposalPayload,
+  emittedFlags: Set<string>,
+): LlmChatCardResolution {
+  const uiPayloads = { taskProposal: proposal };
+  return {
+    uiPayloads,
+    streamChunks: streamChunksForUiPayloads(uiPayloads, emittedFlags),
+  };
+}
+
+/**
+ * 文案声称开卡但工具未下发时的一致性兜底：
+ * 1) 按用户意图确定性补 TaskProposal（批量上下架等）；
+ * 2) 再走原有 LLM 补卡（图片生成等旧卡类型）；
+ * 3) 仍无卡则改掉误导开卡话术，禁止「说了有卡却没有」。
+ */
+export async function resolveMissingChatCardsWithLlm(params: {
+  messages: BaseMessage[];
+  lastUserText: string;
+  assistantReply: string;
+  existingUiPayloads: Record<string, unknown>;
+  emittedFlags?: Set<string>;
+  shop?: string;
+  signal?: AbortSignal;
+}): Promise<LlmChatCardResolution> {
+  const emittedFlags = params.emittedFlags ?? new Set<string>();
+
+  if (hasAnyChatCardInUiPayloads(params.existingUiPayloads) || hasEmittedChatCardFlag(emittedFlags)) {
+    return { uiPayloads: {}, streamChunks: [] };
+  }
+
+  const claimed = assistantClaimsChatCard(params.assistantReply);
+  const intentText = extractUserIntentText(params.lastUserText);
+  const skillNames = skillNamesFromUserText(intentText);
+
+  // 硬保证：声称开卡时，能识别出批量 TaskProposal Skill 就直接补卡，不依赖二次 LLM。
+  if (claimed) {
+    const proposal = tryDeterministicTaskProposalFromSkills(skillNames, params.lastUserText);
+    if (proposal) {
+      return resolutionFromTaskProposal(proposal, emittedFlags);
+    }
+  }
+
+  // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，
+  // 避免每轮结束都多打一次结构化模型调用，缩短尾延迟与 token 成本。
+  if (
+    !chatCardResolutionMightBeNeeded({
+      lastUserText: params.lastUserText,
+      assistantReply: params.assistantReply,
+    })
+  ) {
+    return { uiPayloads: {}, streamChunks: [] };
+  }
+
+  const intent = await resolveChatCardIntentWithLlm({
+    lastUserText: params.lastUserText,
+    assistantReply: params.assistantReply,
+    toolsCalled: extractToolsCalledFromMessages(params.messages),
+    shop: params.shop,
+    signal: params.signal,
+  });
+
+  const llmPayloads = buildChatCardPayloadFromIntent(intent, params.lastUserText);
+  if (Object.keys(llmPayloads).length > 0) {
+    return {
+      uiPayloads: llmPayloads,
+      streamChunks: streamChunksForUiPayloads(llmPayloads, emittedFlags),
+    };
+  }
+
+  // LLM 也补不出时：若文案仍声称开卡，剥掉误导句，保证文案与 UI 一致。
+  if (claimed || intent.assistantClaimsCardOpened) {
+    return {
+      uiPayloads: {},
+      streamChunks: [],
+      adjustedReply: reconcileReplyWithChatCards(
+        params.assistantReply,
+        params.existingUiPayloads,
+      ),
+    };
+  }
+
+  return { uiPayloads: {}, streamChunks: [] };
 }
 
 export async function resolveChatCardIntentWithLlm(params: {
@@ -358,57 +542,6 @@ ${params.assistantReply.trim() || "（空）"}
   }
 
   return normalizeLlmIntent(parsed as ChatCardIntent);
-}
-
-export async function resolveMissingChatCardsWithLlm(params: {
-  messages: BaseMessage[];
-  lastUserText: string;
-  assistantReply: string;
-  existingUiPayloads: Record<string, unknown>;
-  emittedFlags?: Set<string>;
-  shop?: string;
-  signal?: AbortSignal;
-}): Promise<LlmChatCardResolution> {
-  if (hasAnyChatCardInUiPayloads(params.existingUiPayloads)) {
-    return { uiPayloads: {}, streamChunks: [] };
-  }
-
-  // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，
-  // 避免每轮结束都多打一次结构化模型调用，缩短尾延迟与 token 成本。
-  if (
-    !chatCardResolutionMightBeNeeded({
-      lastUserText: params.lastUserText,
-      assistantReply: params.assistantReply,
-    })
-  ) {
-    return { uiPayloads: {}, streamChunks: [] };
-  }
-
-  const intent = await resolveChatCardIntentWithLlm({
-    lastUserText: params.lastUserText,
-    assistantReply: params.assistantReply,
-    toolsCalled: extractToolsCalledFromMessages(params.messages),
-    shop: params.shop,
-    signal: params.signal,
-  });
-
-  const llmPayloads = buildChatCardPayloadFromIntent(intent, params.lastUserText);
-  if (Object.keys(llmPayloads).length === 0) {
-    const adjustedReply = intent.assistantClaimsCardOpened
-      ? reconcileReplyWithChatCards(params.assistantReply, params.existingUiPayloads)
-      : undefined;
-    return { uiPayloads: {}, streamChunks: [], adjustedReply };
-  }
-
-  const streamChunks = streamChunksForUiPayloads(
-    llmPayloads,
-    params.emittedFlags ?? new Set(),
-  );
-
-  return {
-    uiPayloads: llmPayloads,
-    streamChunks,
-  };
 }
 
 /** 工具未返回载荷但 LLM 判定需要卡片时，填充各类型默认卡片。 */

@@ -47,6 +47,7 @@ import {
 } from "../skills/batchTasks/batchTasks.extract";
 import {
   hasAnyChatCardInUiPayloads,
+  hasEmittedChatCardFlag,
   reconcileReplyWithChatCards,
   resolveMissingChatCardsWithLlm,
 } from "./resolveChatCardIntent.server";
@@ -713,7 +714,10 @@ export function invokeChatAgentStream(
           }
         }
 
-        if (!hasAnyChatCardInUiPayloads(uiPayloads)) {
+        if (
+          !hasAnyChatCardInUiPayloads(uiPayloads) &&
+          !hasEmittedChatCardFlag(streamContext.emittedFlags)
+        ) {
           try {
             const llmResolution = await resolveMissingChatCardsWithLlm({
               messages: resultMessages,
