@@ -51,6 +51,7 @@ import {
   reconcileReplyWithChatCards,
   resolveMissingChatCardsWithLlm,
 } from "./resolveChatCardIntent.server";
+import { isCapabilityOverviewUserIntent } from "../../../lib/capabilityActionsIntent";
 import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
@@ -739,6 +740,11 @@ export function invokeChatAgentStream(
             console.error("[ChatStream] LLM chat card resolution failed:", err);
             finalReply = reconcileReplyWithChatCards(finalReply, uiPayloads);
           }
+        }
+
+        // 「有什么功能」类提问：在回复下方附上与工作台推荐同源的可点操作（不依赖模型工具调用）。
+        if (isCapabilityOverviewUserIntent(lastUserText)) {
+          uiPayloads.workspaceActions = true;
         }
 
         let agentUsage = extractTokenUsageFromMessages(resultMessages);

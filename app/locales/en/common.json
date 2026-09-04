@@ -3977,6 +3977,7 @@
         "clearSelectionAria": "Clear {{label}}",
         "recommended": "Recommended",
         "recommendedActions": "Recommended actions",
+        "capabilityActionsTitle": "Click to start",
         "recommend": {
           "titleWithProduct": "Recommended for the selected products",
           "createsTask": "Creates task",

@@ -51,6 +51,8 @@ export type WorkspaceConversationMessage = {
   productQualityCardPayload?: ProductQualityFormPayload;
   healthDiagnosisCard?: boolean;
   healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
+  /** 能力总览下方可点推荐操作（与底部推荐同源） */
+  workspaceActions?: boolean;
   taskProposal?: TaskProposalPayload;
   taskRun?: TaskRunPayload;
   aiTask?: AITaskItem;

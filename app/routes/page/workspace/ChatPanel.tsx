@@ -187,6 +187,7 @@ export function ChatPanel({
     streamingHealthDiagnosisCard,
     streamingHealthDiagnosisPayload,
     streamingTaskProposal,
+    streamingWorkspaceActions,
     skillSteps,
   } = stream;
 
@@ -811,6 +812,7 @@ export function ChatPanel({
                   streamingHealthDiagnosisCard={streamingHealthDiagnosisCard}
                   streamingHealthDiagnosisPayload={streamingHealthDiagnosisPayload}
                   streamingTaskProposal={streamingTaskProposal}
+                  streamingWorkspaceActions={streamingWorkspaceActions}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
                   onOpenProductPicker={handleOpenProductPicker}
@@ -820,6 +822,7 @@ export function ChatPanel({
                   onHealthDiagnosisRefreshed={(payload) =>
                     onHealthDiagnosisRefreshed(conversation.id, payload)
                   }
+                  onRecommendedPrompt={onRecommendedPrompt}
                 />
               }
               onAiTaskUpdated={(taskId, status, result) => {
@@ -827,6 +830,7 @@ export function ChatPanel({
                 onAiTaskUpdated(conversation.id, taskId, status, result);
               }}
               onOpenTasks={handleOpenTasks}
+              onRecommendedPrompt={onRecommendedPrompt}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
