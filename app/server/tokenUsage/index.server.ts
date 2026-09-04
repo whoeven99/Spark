@@ -10,6 +10,11 @@ export {
 } from "./parseUsageMetadata.server";
 export { extractTokenUsageFromMessages } from "./extractMessageTokenUsage.server";
 export {
+  estimateChatTokenUsage,
+  estimateTokensFromText,
+  isChatTokenEstimateFallbackEnabled,
+} from "./estimateTokenUsage.server";
+export {
   recordTokenUsage,
   type RecordTokenUsageParams,
 } from "./recordTokenUsage.server";

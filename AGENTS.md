@@ -165,7 +165,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Agent 运行摘要 | `app/server/agentRunLog/` |
 | Playbook Case | `app/server/playbookCase/` |
 
-AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。
+AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgentStream`（`app/server/ai/core/agentStream.server.ts`）/ LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。
 
 ## 5. 数据与外部系统边界
 

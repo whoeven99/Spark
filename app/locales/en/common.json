@@ -2767,7 +2767,8 @@
     "statusCancelled": "Cancelled",
     "statusPendingReview": "Pending Review",
     "statusApplied": "Applied",
-    "statusScored": "Scored"
+    "statusScored": "Scored",
+    "staleReclaimed": "This task did not finish in time (likely interrupted by a service restart) and was automatically marked as failed. Please retry."
   },
   "productImproveStage1": {
     "subtitle": "Configure first, then review and apply results from the task list.",

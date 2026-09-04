@@ -36,6 +36,7 @@ import {
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
+import { skillNamesFromUserText } from "../../../lib/promptSkillFocus";
 import { extractMessageText } from "../utils/langchainMessageText";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
@@ -266,11 +267,45 @@ function streamChunksForUiPayloads(
   return chunks;
 }
 
+/** 命中即可能需要卡片的 Skill 名（与 CHAT_CARD_TYPES 对应，不含只读经营查询）。 */
+const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
+  "imageGenerationForm",
+  "imageGeneration",
+  "pictureTranslateForm",
+  "pictureTranslate",
+  "productImprove",
+  "productQualityScore",
+  "healthDiagnosisForm",
+]);
+
+/** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */
+const CARD_CLAIM_RE =
+  /(打开|展示|生成|准备|创建|调出|弹出|填写|确认).{0,10}(卡片|表单|面板|配置)|(卡片|表单|面板)已?(打开|展示|准备|生成|就绪)/;
+
+/**
+ * 二次补卡 LLM 的前置门：仅当本轮有卡片信号时才值得再调一次模型。
+ * 高精度、偏向召回卡片：只有在「回复无开卡话术」且「用户话术未命中卡片类 Skill」
+ * 且「工作台未选 ≥2 商品」时才判定为普通问答、跳过 LLM。
+ */
+function chatCardResolutionMightBeNeeded(params: {
+  lastUserText: string;
+  assistantReply: string;
+}): boolean {
+  if (CARD_CLAIM_RE.test(params.assistantReply ?? "")) return true;
+  const intentText = extractUserIntentText(params.lastUserText);
+  if (skillNamesFromUserText(intentText).some((name) => CARD_RELEVANT_SKILL_NAMES.has(name))) {
+    return true;
+  }
+  if (parseWorkspaceProductsFromText(params.lastUserText).length >= 2) return true;
+  return false;
+}
+
 export async function resolveChatCardIntentWithLlm(params: {
   lastUserText: string;
   assistantReply: string;
   toolsCalled: string[];
   shop?: string;
+  signal?: AbortSignal;
 }): Promise<ChatCardIntent> {
   const userIntent = extractUserIntentText(params.lastUserText);
   const model = getShopChatModel().withStructuredOutput(ChatCardIntentSchema, {
@@ -278,7 +313,8 @@ export async function resolveChatCardIntentWithLlm(params: {
     includeRaw: true,
   });
 
-  const result = await model.invoke([
+  const result = await model.invoke(
+    [
     new SystemMessage(
       `你是 Spark 聊天 UI 协调器。根据用户意图、助手回复、实际工具调用，判断是否需要展示交互卡片，并保证文案与 UI 一致。
 
@@ -300,8 +336,10 @@ ${CARD_TYPE_GUIDE}`,
 ${params.assistantReply.trim() || "（空）"}
 
 实际工具调用：${params.toolsCalled.length ? params.toolsCalled.join(", ") : "（无）"}`,
-    ),
-  ]);
+      ),
+    ],
+    params.signal ? { signal: params.signal } : undefined,
+  );
 
   const raw =
     result && typeof result === "object" && "raw" in result
@@ -329,8 +367,20 @@ export async function resolveMissingChatCardsWithLlm(params: {
   existingUiPayloads: Record<string, unknown>;
   emittedFlags?: Set<string>;
   shop?: string;
+  signal?: AbortSignal;
 }): Promise<LlmChatCardResolution> {
   if (hasAnyChatCardInUiPayloads(params.existingUiPayloads)) {
+    return { uiPayloads: {}, streamChunks: [] };
+  }
+
+  // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，
+  // 避免每轮结束都多打一次结构化模型调用，缩短尾延迟与 token 成本。
+  if (
+    !chatCardResolutionMightBeNeeded({
+      lastUserText: params.lastUserText,
+      assistantReply: params.assistantReply,
+    })
+  ) {
     return { uiPayloads: {}, streamChunks: [] };
   }
 
@@ -339,6 +389,7 @@ export async function resolveMissingChatCardsWithLlm(params: {
     assistantReply: params.assistantReply,
     toolsCalled: extractToolsCalledFromMessages(params.messages),
     shop: params.shop,
+    signal: params.signal,
   });
 
   const llmPayloads = buildChatCardPayloadFromIntent(intent, params.lastUserText);

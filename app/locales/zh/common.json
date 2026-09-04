@@ -2767,7 +2767,8 @@
     "statusCancelled": "已取消",
     "statusPendingReview": "待审核",
     "statusApplied": "已应用",
-    "statusScored": "已评分"
+    "statusScored": "已评分",
+    "staleReclaimed": "任务长时间未完成（可能因服务重启中断），已自动标记为失败，请重试。"
   },
   "productImproveStage1": {
     "subtitle": "先配置任务，再到任务列表审核并应用结果。",
