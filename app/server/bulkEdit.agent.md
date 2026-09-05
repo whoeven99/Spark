@@ -71,7 +71,7 @@
 
 写回策略随 mutation 行为分叉：`metafieldsSet` 单批 ≤25 且**整批原子**，但 userErrors 带 `elementIndex`，所以失败时按下标剔掉坏行再重发剩下的，只有拿不到下标才退化成逐行隔离；`metafieldsDelete` 的 userErrors 是通用 `UserError`（**无 code 无下标**），整批失败只能逐行重试归因，另外它对本来就不存在的字段返回 null 而非报错，那对「清空」是成功、不计失败。
 
-scope 用现有 `read_products` / `write_products` 即可，不需要新增。Skill `app/server/ai/skills/bulkMetafieldEdit/` 只暴露只读 `list_product_metafields` 与开卡 `open_bulk_metafield_edit_form`（开卡预取定义下拉，标签里带类型说明，商户才知道这个字段只收整数）。
+scope 用现有 `read_products` / `write_products` 即可，不需要新增。Skill `app/server/ai/skills/bulkMetafieldEdit/` 只暴露只读 `list_product_metafields` 与开卡 `open_bulk_metafield_edit_form`（开卡预取定义下拉，标签里带类型说明，商户才知道这个字段只收整数）。**当前暂时下线**：不在首页推荐，也不注册到 Tool Registry；实现与写回入口仍保留，已有 `pending_review` 任务可继续审核。
 
 ## 2. 表格导入
 
@@ -89,7 +89,7 @@ scope 用现有 `read_products` / `write_products` 即可，不需要新增。Sk
 
 几条不能退化的约束：千分位分组必须是「首组 1-3 位 + 其余每组正好 3 位」，否则 `12.34.56.78` 会被静默拼成天价；解析不出金额一律标错不猜；一个 SKU 命中多个变体报冲突而不是挑一个；匹配率 < 50% 直接判为列映射选错并让任务失败；新价与现价相差 ≥ 50 倍时打备注。
 
-Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_import_form`（读表走公共层的 `preview_import_sheet`）；商品由表格决定，因此 `targets.kind` 为 `none`，`fileId` 走 `TaskProposalField` 的 `hidden` 类型随 params 传递。
+Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_import_form`（读表走公共层的 `preview_import_sheet`）；商品由表格决定，因此 `targets.kind` 为 `none`，`fileId` 走 `TaskProposalField` 的 `hidden` 类型随 params 传递。**当前暂时下线**：不在首页推荐，也不注册到 Tool Registry；实现与写回入口仍保留，已有 `pending_review` 任务可继续审核。
 
 ### 2.3 成本价导入（写 unitCost，不碰售价）
 
@@ -97,7 +97,7 @@ Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_i
 
 关键约束：`inventoryItemUpdate` **没有批量版**，1000 行就是 1000 次调用，因此写回内置并发 2 + 按 `throttleStatus` 主动限速 + 遇 `THROTTLED` 指数退避重试，不要改成无节制并发；新成本高于售价只打「负毛利」警告并放行（赔本清仓是合法场景），不静默拦截；变体没有 `inventoryItem` 的行标错不写。
 
-写回后调 `upsertSkuCosts` 直更 `ShopSkuCost`，利润/ROI 不必等 24 小时懒同步。Skill `app/server/ai/skills/bulkCostImport/` 只暴露开卡 `open_bulk_cost_import_form`。
+写回后调 `upsertSkuCosts` 直更 `ShopSkuCost`，利润/ROI 不必等 24 小时懒同步。Skill `app/server/ai/skills/bulkCostImport/` 只暴露开卡 `open_bulk_cost_import_form`。**当前暂时下线**：不在首页推荐，也不注册到 Tool Registry；实现与写回入口仍保留，已有 `pending_review` 任务可继续审核。
 
 ### 2.4 库存导入（写某个地点的可售量）
 
@@ -105,7 +105,7 @@ Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_i
 
 几条不能退化的约束：**数量必须是整数**，`50.0` 按 50 接受但 `50.5` 一律报错（四舍五入等于替商户做决定），负数同样报错；**变体在该地点没有 InventoryLevel 时报错跳过**，不调 `inventoryActivate`——那会静默改变商品的可发货地点配置；`tracked = false` 的变体跳过，不自动打开追踪；写回**每行带 `changeFromQuantity` 做 CAS**，试算到确认之间被卖掉几件的行会被 Shopify 拒（`CHANGE_FROM_QUANTITY_STALE`），这类行单独计入 `staleCount`、不重试也不当故障，绝不覆盖销量；`@idempotent` 自 2026-04 起必填，幂等键**每行一个且在重试间复用**，整批共用会让后面的行被当成同一次调整丢掉；`inventorySetQuantities` 的批量原子性无文档保证且 CAS 失败逐行发生，因此按行调用 + 并发 2 + `throttleStatus` 配速，与成本价导入同一套限流。
 
-写回要求试算结果里有 `locationId`，需要 `write_inventory`。只写单个地点的 `available`，不写 `on_hand`、不激活地点。Skill `app/server/ai/skills/bulkInventoryImport/` 只暴露开卡 `open_bulk_inventory_import_form`（开卡会预取活跃地点，单地点店自动选中）。
+写回要求试算结果里有 `locationId`，需要 `write_inventory`。只写单个地点的 `available`，不写 `on_hand`、不激活地点。Skill `app/server/ai/skills/bulkInventoryImport/` 只暴露开卡 `open_bulk_inventory_import_form`（开卡会预取活跃地点，单地点店自动选中）。**当前暂时下线**：不在首页推荐，也不注册到 Tool Registry；实现与写回入口仍保留，已有 `pending_review` 任务可继续审核。
 
 ## 3. 新增同类能力时的检查清单
 

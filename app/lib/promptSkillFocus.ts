@@ -18,10 +18,6 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   bulkPriceEdit: ["bulkPriceEdit"],
   bulkTagEdit: ["bulkTagEdit"],
   bulkStatusEdit: ["bulkStatusEdit"],
-  bulkMetafieldEdit: ["bulkMetafieldEdit"],
-  bulkPriceImport: ["bulkPriceImport", "sheetImport"],
-  bulkCostImport: ["bulkCostImport", "sheetImport"],
-  bulkInventoryImport: ["bulkInventoryImport", "sheetImport"],
 };
 
 /** 自由输入时的轻量关键词路由（中英）；命中则注入对应 Skill 组 */
@@ -63,18 +59,6 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
     patterns: [/生成.*主图/, /文生图/, /生成.*商品图/, /generate.*(image|主图)/i],
   },
   {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkPriceImport,
-    patterns: [/导入.*价/, /价目表/, /price\s*import/i, /price\s*list/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkCostImport,
-    patterns: [/导入.*成本/, /成本价/, /unit\s*cost/i, /cost\s*import/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkInventoryImport,
-    patterns: [/导入.*库存/, /库存表/, /inventory\s*import/i],
-  },
-  {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkPriceEdit,
     patterns: [/批量调价/, /批量.*改价/, /降价\s*\d/, /涨价\s*\d/, /bulk\s*price/i],
   },
@@ -85,10 +69,6 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkStatusEdit,
     patterns: [/批量上下架/, /批量.*上架/, /批量.*下架/, /bulk\s*status/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkMetafieldEdit,
-    patterns: [/批量.*自定义字段/, /批量.*metafield/i, /bulk\s*metafield/i],
   },
 ];
 

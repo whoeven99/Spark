@@ -14,7 +14,7 @@ import { resolvePromptSkillNames } from "./promptSkillFocus";
 
 /**
  * 「重型 / 专用」skill 名：仅在本轮命中意图时才绑定。
- * 覆盖批量编辑 / 表格导入族、图片生成 / 翻译、商品文案 / 质量评分。
+ * 覆盖批量编辑、图片生成 / 翻译、商品文案 / 质量评分。
  * 其余（店铺经营、店铺信息、时间天气、商品目录、任务 / 计费 / 邮件、健康诊断、批量任务开卡）始终绑定。
  */
 export const TURN_GATED_SKILL_NAMES: ReadonlySet<string> = new Set([
@@ -23,11 +23,6 @@ export const TURN_GATED_SKILL_NAMES: ReadonlySet<string> = new Set([
   "bulkStatusEdit",
   "bulkCollectionEdit",
   "bulkSeoEdit",
-  "bulkMetafieldEdit",
-  "bulkPriceImport",
-  "bulkCostImport",
-  "bulkInventoryImport",
-  "sheetImport",
   "seoAudit",
   "imageGenerationForm",
   "imageGeneration",

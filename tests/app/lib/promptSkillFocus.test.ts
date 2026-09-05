@@ -12,10 +12,7 @@ describe("promptSkillFocus", () => {
       "bulkSeoEdit",
       "productImprove",
     ]);
-    expect(skillNamesFromFocus("bulkPriceImport")).toEqual([
-      "bulkPriceImport",
-      "sheetImport",
-    ]);
+    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["bulkPriceEdit"]);
     expect(skillNamesFromFocus("all")).toBe("all");
   });
 
