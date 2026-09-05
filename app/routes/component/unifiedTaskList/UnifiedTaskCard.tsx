@@ -3,12 +3,6 @@ import { ProductImproveTaskCard } from "../productImprove/ProductImproveTaskCard
 import { BulkPriceEditTaskCard } from "../bulkPriceEdit/BulkPriceEditTaskCard";
 import { BulkTagEditTaskCard } from "../bulkTagEdit/BulkTagEditTaskCard";
 import { BulkStatusEditTaskCard } from "../bulkStatusEdit/BulkStatusEditTaskCard";
-import { BulkCollectionEditTaskCard } from "../bulkCollectionEdit/BulkCollectionEditTaskCard";
-import { BulkSeoEditTaskCard } from "../bulkSeoEdit/BulkSeoEditTaskCard";
-import { BulkMetafieldEditTaskCard } from "../bulkMetafieldEdit/BulkMetafieldEditTaskCard";
-import { BulkPriceImportTaskCard } from "../bulkPriceImport/BulkPriceImportTaskCard";
-import { BulkCostImportTaskCard } from "../bulkCostImport/BulkCostImportTaskCard";
-import { BulkInventoryImportTaskCard } from "../bulkInventoryImport/BulkInventoryImportTaskCard";
 import { TaskCard } from "../aiTask/TaskCard";
 import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
@@ -97,78 +91,6 @@ export function UnifiedTaskCard({
   if (task.taskType === "bulk_status_edit") {
     return (
       <BulkStatusEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_collection_edit") {
-    return (
-      <BulkCollectionEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_seo_edit") {
-    return (
-      <BulkSeoEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_metafield_edit") {
-    return (
-      <BulkMetafieldEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_price_import") {
-    return (
-      <BulkPriceImportTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_cost_import") {
-    return (
-      <BulkCostImportTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_inventory_import") {
-    return (
-      <BulkInventoryImportTaskCard
         task={task}
         locationSearch={locationSearch}
         onDelete={() => onAITaskDeleted(task.id)}

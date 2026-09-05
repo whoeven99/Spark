@@ -32,10 +32,7 @@ import {
   defaultHealthDiagnosisFormPayload,
 } from "../../../lib/healthDiagnosisCardPayload";
 import {
-  buildBulkCollectionEditProposal,
-  buildBulkMetafieldEditProposal,
   buildBulkPriceEditProposal,
-  buildBulkSeoEditProposal,
   buildBulkStatusEditProposal,
   buildBulkTagEditProposal,
   taskProposalFromBatchTasksPayload,
@@ -118,12 +115,6 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "bulkStatusEditForm",
   "bulkPriceEditForm",
   "bulkTagEditForm",
-  "bulkCollectionEditForm",
-  "bulkSeoEditForm",
-  "bulkMetafieldEditForm",
-  "bulkPriceImportForm",
-  "bulkCostImportForm",
-  "bulkInventoryImportForm",
   "productImproveForm",
   "pictureTranslateForm",
   "imageGenerationForm",
@@ -157,18 +148,6 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   {
     skill: "bulkPriceEdit",
     build: (products) => buildBulkPriceEditProposal({ products }),
-  },
-  {
-    skill: "bulkSeoEdit",
-    build: (products) => buildBulkSeoEditProposal({ products }),
-  },
-  {
-    skill: "bulkCollectionEdit",
-    build: (products) => buildBulkCollectionEditProposal({ products }),
-  },
-  {
-    skill: "bulkMetafieldEdit",
-    build: (products) => buildBulkMetafieldEditProposal({ products }),
   },
 ];
 
@@ -364,12 +343,6 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "bulkStatusEdit",
   "bulkPriceEdit",
   "bulkTagEdit",
-  "bulkCollectionEdit",
-  "bulkSeoEdit",
-  "bulkMetafieldEdit",
-  "bulkPriceImport",
-  "bulkCostImport",
-  "bulkInventoryImport",
 ]);
 
 /** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */

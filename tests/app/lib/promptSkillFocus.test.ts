@@ -6,10 +6,9 @@ import {
 } from "../../../app/lib/promptSkillFocus";
 
 describe("promptSkillFocus", () => {
-  it("maps recommend keys to skill groups including SEO downstream", () => {
+  it("maps recommend keys to skill groups including SEO audit", () => {
     expect(skillNamesFromFocus("seoAudit")).toEqual([
       "seoAudit",
-      "bulkSeoEdit",
       "productImprove",
     ]);
     expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["bulkPriceEdit"]);

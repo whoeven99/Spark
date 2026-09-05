@@ -9,8 +9,8 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   todayTodos: ["shopOperations", "healthDiagnosisForm"],
   inventoryHealth: ["shopOperations"],
   abandonRefund: ["shopOperations"],
-  // SEO 体检后要能直接开批量改 SEO / 文案卡
-  seoAudit: ["seoAudit", "bulkSeoEdit", "productImprove"],
+  // SEO 体检后正文过薄可开文案卡；搜索标题/描述需商户在 Shopify 后台改
+  seoAudit: ["seoAudit", "productImprove"],
   qualityScore: ["productQualityScore", "productImprove"],
   optimizeCopy: ["productImprove"],
   translateImage: ["pictureTranslateForm", "pictureTranslate"],

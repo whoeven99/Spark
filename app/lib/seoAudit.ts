@@ -5,16 +5,14 @@
  * 这一层同时是 Spark 的 SEO 知识库：判定阈值、为什么是问题、怎么改，
  * 全部在这里成文，避免把 SEO 经验散落进各处 prompt 字符串。
  *
- * 与「批量改 SEO」（`app/lib/bulkSeoEdit.ts`）的分工：
- * 那边是「商户已经想好怎么改，按模板批量落地」；
- * 这边是「商户不知道哪里有问题」，先给出问题和改法。
+ * 搜索标题/描述问题目前没有 Spark 内批量改写入口，fixability 记为 manual；
+ * 正文过薄走商品文案优化（product_content）。
  */
 
 /* ── 显示宽度 ───────────────────────────────────────────────
  * Google 按**像素宽度**截断搜索结果，不是按字符数。一个 CJK 字符的渲染宽度
  * 约等于两个半角字符，所以中文店按「60 个字符」判断会严重低估，
  * 30 个汉字的标题实际上已经到截断线了。这里统一折算成半角当量再比阈值。
- * （`bulkSeoEdit` 的截断仍按字符数，属于既有行为，本次不动。）
  */
 
 const FULL_WIDTH_RANGES: Array<[number, number]> = [
@@ -77,10 +75,8 @@ export type SeoAuditIssueCode = (typeof SEO_AUDIT_ISSUE_CODES)[number];
 
 export type SeoAuditSeverity = "high" | "medium" | "low";
 
-/** 这个问题能不能用 Spark 现有能力批量修。 */
+/** 这个问题能不能用 Spark 现有能力修。 */
 export type SeoAuditFixability =
-  /** 可以直接开「批量改 SEO」确认卡 */
-  | "bulk_seo_edit"
   /** 要改的是商品正文，走商品文案优化 */
   | "product_content"
   /** 没有安全的批量改法，只能人工逐个处理 */
@@ -240,14 +236,14 @@ const SEVERITY_BY_CODE: Record<SeoAuditIssueCode, SeoAuditSeverity> = {
 };
 
 const FIXABILITY_BY_CODE: Record<SeoAuditIssueCode, SeoAuditFixability> = {
-  title_duplicated: "bulk_seo_edit",
-  description_duplicated: "bulk_seo_edit",
-  title_missing: "bulk_seo_edit",
-  description_missing: "bulk_seo_edit",
-  title_too_long: "bulk_seo_edit",
-  description_too_long: "bulk_seo_edit",
-  title_too_short: "bulk_seo_edit",
-  description_too_short: "bulk_seo_edit",
+  title_duplicated: "manual",
+  description_duplicated: "manual",
+  title_missing: "manual",
+  description_missing: "manual",
+  title_too_long: "manual",
+  description_too_long: "manual",
+  title_too_short: "manual",
+  description_too_short: "manual",
   body_too_thin: "product_content",
   // 改 handle 会断链接、需要配 301，没有安全的批量改法
   handle_non_descriptive: "manual",

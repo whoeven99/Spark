@@ -12,9 +12,7 @@ import {
   type SeoAuditFixability,
   type SeoAuditIssue,
 } from "../../../../lib/seoAudit";
-import { OPEN_BULK_SEO_EDIT_FORM_TOOL_NAME } from "../bulkSeoEdit/bulkSeoEdit.form.tool";
 import { OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME } from "../marketing/marketing.form.tool";
-import { BULK_SEO_EDIT_MAX_PRODUCTS } from "../../../../lib/bulkSeoEdit";
 
 export const RUN_SEO_AUDIT_TOOL_NAME = "run_seo_audit";
 const LOG_PREFIX = "[RunSeoAudit]";
@@ -33,23 +31,16 @@ type SuggestedNextAction = {
 };
 
 /**
- * 把可批量修的问题样例收成下游开卡动作，减少「只总结不开卡」。
- * bulk_seo_edit 优先；product_content 次之；manual 不开卡。
+ * 把可修的问题样例收成下游开卡动作。
+ * product_content 开文案卡；manual 不开卡。
  */
 export function buildSeoAuditSuggestedNextActions(
   issues: SeoAuditIssue[],
 ): SuggestedNextAction[] {
-  const bulkById = new Map<string, string>();
   const contentById = new Map<string, string>();
 
   for (const issue of issues) {
-    if (issue.fixability === "bulk_seo_edit") {
-      for (const sample of issue.samples) {
-        if (!bulkById.has(sample.productId)) {
-          bulkById.set(sample.productId, sample.productTitle);
-        }
-      }
-    } else if (issue.fixability === "product_content") {
+    if (issue.fixability === "product_content") {
       for (const sample of issue.samples) {
         if (!contentById.has(sample.productId)) {
           contentById.set(sample.productId, sample.productTitle);
@@ -60,19 +51,6 @@ export function buildSeoAuditSuggestedNextActions(
 
   const actions: SuggestedNextAction[] = [];
 
-  if (bulkById.size > 0) {
-    const products = [...bulkById.entries()]
-      .slice(0, BULK_SEO_EDIT_MAX_PRODUCTS)
-      .map(([id, title]) => ({ id, title }));
-    actions.push({
-      fixability: "bulk_seo_edit",
-      tool: OPEN_BULK_SEO_EDIT_FORM_TOOL_NAME,
-      products,
-      instruction:
-        "解释完问题后立刻调用本工具打开批量改 SEO 确认卡，products 原样预填；开卡不等于写回。可按最常见问题预填 titleTemplate/descriptionTemplate（仅用 {title}/{vendor}/{productType}）。",
-    });
-  }
-
   if (contentById.size > 0) {
     const products = [...contentById.entries()]
       .slice(0, 5)
@@ -82,7 +60,7 @@ export function buildSeoAuditSuggestedNextActions(
       tool: OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME,
       products,
       instruction:
-        "正文过薄无法靠 SEO 模板修。解释后立刻调用本工具打开文案优化卡；多商品时优先用列表里的第一件预填 productId，并说明其余可在卡片或后续批量处理。",
+        "正文过薄无法靠搜索标题/描述模板修。解释后立刻调用本工具打开文案优化卡；多商品时优先用列表里的第一件预填 productId，并说明其余可在卡片或后续批量处理。",
     });
   }
 

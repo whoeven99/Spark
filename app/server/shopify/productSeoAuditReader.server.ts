@@ -1,10 +1,6 @@
 /**
  * 站内 SEO 体检的读侧。
  *
- * 和 `productSeoReader.server.ts` 刻意分开：那个是「批量改 SEO」的读侧，
- * 只取模板占位符需要的几个轻字段，一次要读 200 个商品做渲染，必须保持轻量。
- * 体检要的字段更多（handle、正文、上架状态），塞进去会白白拖慢批量改写。
- *
  * scope 只用 `read_products`。正文用 `description(truncateAt:)` 取纯文本并在
  * 服务端截断——体检只需要判断「够不够长」，不需要把整篇正文拉回来。
  * 图片 alt 的检查这一期不做：`featuredMedia` 会额外要求 `read_files` /

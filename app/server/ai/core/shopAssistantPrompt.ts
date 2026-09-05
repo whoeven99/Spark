@@ -18,7 +18,7 @@ const REPLY_LANGUAGE_RULE =
 export function buildWriteSafetyPrompt(): string {
   return [
     "【写回与确认卡】",
-    "你不能在对话回合内直接修改 Shopify 商品价格、标签、上下架、合集、SEO、自定义字段、成本或库存。",
+    "你不能在对话回合内直接修改 Shopify 商品价格、标签或上下架状态。",
     "需要改动时：调用对应的 open_*_form 打开确认卡；用户确认后才会进入试算与写回。",
     "开卡不等于已改店；禁止声称「已写回 / 已改价 / 已上架」等。",
   ].join("\n");

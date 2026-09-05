@@ -14,18 +14,12 @@ function issue(
 }
 
 describe("buildSeoAuditSuggestedNextActions", () => {
-  it("prefers bulk SEO card and dedupes sample products", () => {
+  it("opens copy card for thin content and ignores manual SEO issues", () => {
     const actions = buildSeoAuditSuggestedNextActions([
       issue({
         code: "description_missing",
-        fixability: "bulk_seo_edit",
+        fixability: "manual",
         samples: [
-          {
-            productId: "gid://shopify/Product/1",
-            productTitle: "A",
-            handle: "a",
-            currentValue: null,
-          },
           {
             productId: "gid://shopify/Product/1",
             productTitle: "A",
@@ -60,13 +54,9 @@ describe("buildSeoAuditSuggestedNextActions", () => {
       }),
     ]);
 
-    expect(actions).toHaveLength(2);
-    expect(actions[0]?.tool).toBe("open_bulk_seo_edit_form");
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.tool).toBe("open_product_improve_form");
     expect(actions[0]?.products).toEqual([
-      { id: "gid://shopify/Product/1", title: "A" },
-    ]);
-    expect(actions[1]?.tool).toBe("open_product_improve_form");
-    expect(actions[1]?.products).toEqual([
       { id: "gid://shopify/Product/2", title: "B" },
     ]);
   });

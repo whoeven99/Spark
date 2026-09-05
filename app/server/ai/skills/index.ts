@@ -15,8 +15,6 @@ import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skil
 import { bulkPriceEditSkillDefinition } from "./bulkPriceEdit";
 import { bulkTagEditSkillDefinition } from "./bulkTagEdit";
 import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
-import { bulkCollectionEditSkillDefinition } from "./bulkCollectionEdit";
-import { bulkSeoEditSkillDefinition } from "./bulkSeoEdit";
 import { seoAuditSkillDefinition } from "./seoAudit";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
@@ -119,13 +117,5 @@ globalToolRegistry.register(bulkTagEditSkillDefinition);
 // 批量上下架：同上，写回走 productUpdate 只改 status，不碰销售渠道发布
 globalToolRegistry.register(bulkStatusEditSkillDefinition);
 
-// 批量调整合集：同上，写回走 collectionAddProducts / collectionRemoveProducts，只动手动合集
-globalToolRegistry.register(bulkCollectionEditSkillDefinition);
-
-// 批量改 SEO：模板渲染是确定性的，不调模型；写回同样两次确认
-globalToolRegistry.register(bulkSeoEditSkillDefinition);
-
-// SEO 体检：纯规则只读诊断，是「批量改 SEO」的上游——先告诉商户问题在哪
+// SEO 体检：纯规则只读诊断，先告诉商户搜索标题/描述哪里有问题
 globalToolRegistry.register(seoAuditSkillDefinition);
-
-// 批量改自定义字段 / 三个表格导入（价目表、成本价、库存）：暂时下线，不注册 Skill（实现与写回入口仍保留，已有任务可审核）

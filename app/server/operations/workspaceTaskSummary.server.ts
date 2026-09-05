@@ -14,12 +14,6 @@ const AI_TASK_TYPE_LABELS: Record<AITaskType, string> = {
   bulk_price_edit: "批量调价",
   bulk_tag_edit: "批量打标",
   bulk_status_edit: "批量上下架",
-  bulk_collection_edit: "批量调整商品所属合集",
-  bulk_seo_edit: "批量改 SEO",
-  bulk_metafield_edit: "批量改自定义字段",
-  bulk_price_import: "价目表导入",
-  bulk_cost_import: "成本价导入",
-  bulk_inventory_import: "库存导入",
 };
 
 const AI_STATUS_LABELS: Record<AITaskStatus, string> = {

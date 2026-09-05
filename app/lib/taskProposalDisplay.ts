@@ -2,9 +2,6 @@ import type { TFunction } from "i18next";
 import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
-  BULK_COLLECTION_EDIT_SKILL_ID,
-  BULK_INVENTORY_IMPORT_SKILL_ID,
-  BULK_METAFIELD_EDIT_SKILL_ID,
   BULK_PRICE_EDIT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
   IMAGE_GENERATION_SKILL_ID,
@@ -24,9 +21,6 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.title`,
   [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.title`,
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.title`,
-  [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.title`,
-  [BULK_METAFIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkMetafieldEdit.title`,
-  [BULK_INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkInventoryImport.title`,
 };
 
 /**
@@ -36,8 +30,6 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
 const SINGLE_TASK_SKILL_IDS = new Set<string>([
   BULK_PRICE_EDIT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
-  BULK_COLLECTION_EDIT_SKILL_ID,
-  BULK_METAFIELD_EDIT_SKILL_ID,
 ]);
 
 export function isSingleTaskProposalSkill(skillId: string): boolean {
@@ -50,9 +42,6 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.summary`,
   [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.summary`,
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.summary`,
-  [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.summary`,
-  [BULK_METAFIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkMetafieldEdit.summary`,
-  [BULK_INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkInventoryImport.summary`,
 };
 
 /** 历史消息仅有 taskType 时映射到 skillId，便于侧栏标题 i18n */

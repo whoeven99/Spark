@@ -21,8 +21,6 @@ export const TURN_GATED_SKILL_NAMES: ReadonlySet<string> = new Set([
   "bulkPriceEdit",
   "bulkTagEdit",
   "bulkStatusEdit",
-  "bulkCollectionEdit",
-  "bulkSeoEdit",
   "seoAudit",
   "imageGenerationForm",
   "imageGeneration",
