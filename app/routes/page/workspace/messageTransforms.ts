@@ -423,7 +423,9 @@ export function buildWorkspaceContextBlock(params: {
         const displayNote = file.note === WORKSPACE_HISTORY_UPLOAD_NOTE ? "历史上传" : file.note;
         const notePart = displayNote ? `（${displayNote}）` : "";
         const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
-        lines.push(`    • ${file.name}${notePart}${sizePart}`);
+        const fileId = file.serverId ?? (file.uploading ? "" : file.id);
+        const idPart = fileId && !fileId.startsWith("file-") ? ` [文件ID: ${fileId}]` : "";
+        lines.push(`    • ${file.name}${notePart}${sizePart}${idPart}`);
       }
     }
   }

@@ -26,8 +26,11 @@ export const TASK_PROPOSAL_VERSION = 1;
 /**
  * schema 驱动的参数字段：value 内联在字段里，前端按 type 渲染控件。
  *
- * `hidden` 用于执行端需要、但用户不该看见也不该改的值（如上传文件的 fileId）：
+ * `hidden` 用于执行端需要、但用户不该看见也不该改的值（如文件名）：
  * 卡片不渲染它，提交时照常随 params 一起带上。
+ *
+ * `file` 是可见的上传控件：value 存服务端 fileId，没有文件时允许空着开卡，
+ * 确认执行前必须有值。表格导入用它，替代原先把 fileId 藏起来的做法。
  *
  * `collection` / `location` / `metafieldDefinition` 是「远端资源选择器」：
  * 取值是店铺侧的资源标识（前两个是 Shopify GID，metafieldDefinition 是 `namespace.key`
@@ -46,7 +49,8 @@ export type TaskProposalField = {
     | "metafieldDefinition"
     | "text"
     | "textarea"
-    | "hidden";
+    | "hidden"
+    | "file";
   value: string;
   /** type === "select" 或任一资源选择器时必填 */
   options?: Array<{ value: string; label: string }>;
@@ -130,6 +134,7 @@ const KNOWN_FIELD_TYPES = new Set<TaskProposalField["type"]>([
   "text",
   "textarea",
   "hidden",
+  "file",
 ]);
 
 function coerceField(raw: unknown): TaskProposalField | null {
@@ -838,30 +843,44 @@ export function buildBulkMetafieldEditProposal(args: {
 
 export const BULK_PRICE_IMPORT_SKILL_ID = "bulk_price_import";
 
+function importFileFields(fileId: string, fileName: string): TaskProposalField[] {
+  return [
+    {
+      key: "fileId",
+      label: "表格",
+      type: "file",
+      value: fileId,
+      placeholder: "上传 CSV 或 Excel",
+    },
+    { key: "fileName", label: "文件名", type: "hidden", value: fileName },
+  ];
+}
+
 /**
- * 由「已上传的表格 + 列映射」构造导入提案。
+ * 由「表格 + 列映射」构造导入提案。没有文件也可以先开卡，fileId 留空，
+ * 商户在卡片里上传；执行端仍会拒绝空 fileId。
  *
- * 与其它批量能力不同，这里的商品不是用户预选的，而是由表格里的 SKU 决定，
- * 所以 targets.kind 为 none；fileId 走 hidden 字段随 params 传给执行端。
+ * 商品由表格里的 SKU 决定，所以 targets.kind 为 none。
  */
 export function buildBulkPriceImportProposal(args: {
-  fileId: string;
+  fileId?: string;
   fileName?: string;
   skuColumn?: string;
   priceColumn?: string;
   compareAtColumn?: string;
 }): TaskProposalPayload {
-  const fileName = args.fileName?.trim() || "已上传的表格";
+  const fileId = args.fileId?.trim() ?? "";
+  const fileName = args.fileName?.trim() ?? "";
   return {
     version: TASK_PROPOSAL_VERSION,
     proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
     skillId: BULK_PRICE_IMPORT_SKILL_ID,
     title: "按表格批量导入价格",
-    summary: `读取「${fileName}」，按 SKU 匹配店铺商品并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。`,
+    summary:
+      "读取你上传的表格，按 SKU 匹配店铺商品并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
     targets: { kind: "none", items: [] },
     params: [
-      { key: "fileId", label: "文件", type: "hidden", value: args.fileId },
-      { key: "fileName", label: "文件名", type: "hidden", value: fileName },
+      ...importFileFields(fileId, fileName),
       {
         key: "skuColumn",
         label: "SKU 列",
@@ -896,22 +915,23 @@ export const BULK_COST_IMPORT_SKILL_ID = "bulk_cost_import";
  * 区别在于改的是只影响利润报表的单位成本，不动买家看到的售价。
  */
 export function buildBulkCostImportProposal(args: {
-  fileId: string;
+  fileId?: string;
   fileName?: string;
   skuColumn?: string;
   costColumn?: string;
 }): TaskProposalPayload {
-  const fileName = args.fileName?.trim() || "已上传的表格";
+  const fileId = args.fileId?.trim() ?? "";
+  const fileName = args.fileName?.trim() ?? "";
   return {
     version: TASK_PROPOSAL_VERSION,
     proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
     skillId: BULK_COST_IMPORT_SKILL_ID,
     title: "按表格批量导入成本价",
-    summary: `读取「${fileName}」，按 SKU 匹配店铺商品并试算毛利率变化（可导出 CSV），确认无误后才写回店铺。成本只影响利润报表，不改售价。本步骤不会修改任何商品。`,
+    summary:
+      "读取你上传的表格，按 SKU 匹配店铺商品并试算毛利率变化（可导出 CSV），确认无误后才写回店铺。成本只影响利润报表，不改售价。本步骤不会修改任何商品。",
     targets: { kind: "none", items: [] },
     params: [
-      { key: "fileId", label: "文件", type: "hidden", value: args.fileId },
-      { key: "fileName", label: "文件名", type: "hidden", value: fileName },
+      ...importFileFields(fileId, fileName),
       {
         key: "skuColumn",
         label: "SKU 列",
@@ -940,14 +960,15 @@ export const BULK_INVENTORY_IMPORT_SKILL_ID = "bulk_inventory_import";
  * 让商户在只有一个选项的下拉里点一下没有意义。
  */
 export function buildBulkInventoryImportProposal(args: {
-  fileId: string;
+  fileId?: string;
   fileName?: string;
   locationId?: string;
   locationOptions?: Array<{ value: string; label: string }>;
   skuColumn?: string;
   quantityColumn?: string;
 }): TaskProposalPayload {
-  const fileName = args.fileName?.trim() || "已上传的表格";
+  const fileId = args.fileId?.trim() ?? "";
+  const fileName = args.fileName?.trim() ?? "";
   const locationOptions = args.locationOptions ?? [];
   const requested =
     args.locationId && locationOptions.some((o) => o.value === args.locationId)
@@ -960,11 +981,11 @@ export function buildBulkInventoryImportProposal(args: {
     proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
     skillId: BULK_INVENTORY_IMPORT_SKILL_ID,
     title: "按表格批量导入库存",
-    summary: `读取「${fileName}」，按 SKU 匹配商品并把所选地点的可售库存设为表格里的数量（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何库存。`,
+    summary:
+      "读取你上传的表格，按 SKU 匹配商品并把所选地点的可售库存设为表格里的数量（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何库存。",
     targets: { kind: "none", items: [] },
     params: [
-      { key: "fileId", label: "文件", type: "hidden", value: args.fileId },
-      { key: "fileName", label: "文件名", type: "hidden", value: fileName },
+      ...importFileFields(fileId, fileName),
       {
         key: "locationId",
         label: "目标地点",

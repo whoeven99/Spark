@@ -5,7 +5,7 @@
  *   目标对象勾选 + schema 驱动的参数表单 + 执行估算（分桶 EWMA） + 确认执行。
  * 执行走 POST /api/task-proposal，按 skillId 路由到服务端注册表。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   TaskProposalExecuteResponse,
@@ -417,6 +417,105 @@ function EstimateLine({
   );
 }
 
+const SHEET_FILE_ACCEPT = ".csv,.xlsx,.xls";
+
+function FileUploadField({
+  fileId,
+  fileName,
+  onUploaded,
+}: {
+  fileId: string;
+  fileName: string;
+  onUploaded: (next: { fileId: string; fileName: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = useCallback(
+    async (file: File | undefined) => {
+      if (!file) return;
+      setUploading(true);
+      setError(null);
+      try {
+        const authQuery = typeof window !== "undefined" ? window.location.search : "";
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`/api/upload-file${authQuery}`, {
+          method: "POST",
+          body: formData,
+        });
+        const json = (await res.json()) as { id?: string; name?: string; error?: string };
+        if (!res.ok || !json.id) {
+          throw new Error(json.error || t("workspace.taskProposal.card.fileUploadFailed"));
+        }
+        onUploaded({ fileId: json.id, fileName: json.name || file.name });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t("workspace.taskProposal.card.fileUploadFailed"));
+      } finally {
+        setUploading(false);
+        if (inputRef.current) inputRef.current.value = "";
+      }
+    },
+    [onUploaded, t],
+  );
+
+  return (
+    <div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={SHEET_FILE_ACCEPT}
+        hidden
+        onChange={(e) => void handleFile(e.target.files?.[0])}
+      />
+      {fileId ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ color: pageColorTokens.textPrimary }}>
+            {t("workspace.taskProposal.card.fileSelected", {
+              fileName: fileName || fileId,
+            })}
+          </span>
+          <button
+            type="button"
+            style={{
+              ...inputStyle,
+              width: "auto",
+              padding: "6px 10px",
+              cursor: uploading ? "not-allowed" : "pointer",
+            }}
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading
+              ? t("workspace.taskProposal.card.fileUploading")
+              : t("workspace.taskProposal.card.fileReplace")}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          style={{
+            ...inputStyle,
+            cursor: uploading ? "not-allowed" : "pointer",
+            textAlign: "left",
+          }}
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading
+            ? t("workspace.taskProposal.card.fileUploading")
+            : t("workspace.taskProposal.card.fileEmpty")}
+        </button>
+      )}
+      {error ? (
+        <div style={{ fontSize: 12, color: pageColorTokens.critical, marginTop: 4 }}>{error}</div>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Resource select（collection 等远端资源字段） ────────────────────────────
 
 /** 超过这个数量才值得给搜索框；少量选项直接下拉更快。 */
@@ -652,9 +751,14 @@ export function TaskProposalCard({
       !isResourceOptionField(field.type) ||
       (paramValues[field.key] ?? field.value).trim().length > 0,
   );
+  const fileFieldsReady = resolved.params.every(
+    (field) =>
+      field.type !== "file" || (paramValues[field.key] ?? field.value).trim().length > 0,
+  );
   const canSubmit =
     descriptionReady &&
     resourceFieldsReady &&
+    fileFieldsReady &&
     (targetless ||
       targetsOptional ||
       (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
@@ -1118,6 +1222,18 @@ export function TaskProposalCard({
                     value={paramValues[field.key] ?? field.value}
                     onChange={(next) =>
                       setParamValues((prev) => ({ ...prev, [field.key]: next }))
+                    }
+                  />
+                ) : field.type === "file" ? (
+                  <FileUploadField
+                    fileId={paramValues[field.key] ?? field.value}
+                    fileName={paramValues.fileName ?? ""}
+                    onUploaded={({ fileId, fileName }) =>
+                      setParamValues((prev) => ({
+                        ...prev,
+                        [field.key]: fileId,
+                        fileName,
+                      }))
                     }
                   />
                 ) : field.type === "textarea" ? (

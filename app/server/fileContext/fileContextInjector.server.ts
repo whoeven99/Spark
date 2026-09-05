@@ -21,7 +21,7 @@ export async function buildFileContextBlock(
     if (remaining <= 0) break;
     const text = file.text.slice(0, remaining);
     totalChars += text.length;
-    sections.push(`=== 文件：${file.name} ===\n${text}`);
+    sections.push(`=== 文件：${file.name} ===\n文件 ID：${file.id}\n${text}`);
   }
 
   if (!sections.length) return null;

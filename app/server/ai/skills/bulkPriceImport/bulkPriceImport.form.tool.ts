@@ -4,7 +4,7 @@ import { z } from "zod";
 export const OPEN_BULK_PRICE_IMPORT_FORM_TOOL_NAME = "open_bulk_price_import_form";
 
 export type BulkPriceImportFormPayload = {
-  fileId: string;
+  fileId?: string;
   fileName?: string;
   skuColumn?: string;
   priceColumn?: string;
@@ -15,15 +15,19 @@ export type BulkPriceImportFormPayload = {
  * 打开「按表格导入价格」确认卡。工具本身不读文件也不碰 Shopify：
  * 它只把「用户上传的表格 + 猜出来的列映射」结构化后交给确认卡，
  * 真正的解析与匹配发生在用户确认之后的 dry-run 任务里。
+ * 没有文件也可以开卡，fileId 留空，让用户在卡片里上传。
  */
 export const bulkPriceImportFormTool = new DynamicStructuredTool({
   name: OPEN_BULK_PRICE_IMPORT_FORM_TOOL_NAME,
   description:
-    "打开「按表格批量导入价格」确认卡片。当用户上传了价目表 / 报价表 / 调价表，并希望按表格里的价格更新商品时调用（如「按这个表更新价格」「供应商发了新报价，帮我改」）。调用后不会修改任何商品。",
+    "打开「按表格批量导入价格」确认卡片。用户要按表格改价时立刻调用，即使还没有上传文件也要开卡（fileId 留空，用户会在卡片里上传）。调用后不会修改任何商品。",
   schema: z.object({
     fileId: z
       .string()
-      .describe("要导入的文件 ID，从[附加文件上下文]里取当前这张表对应的文件 ID"),
+      .optional()
+      .describe(
+        "要导入的文件 ID，从[工作台上下文]或[附加文件上下文]里取。还没有文件时不要编造，留空让用户在卡片里上传",
+      ),
     fileName: z.string().optional().describe("文件名，用于在卡片上让用户确认传对了表"),
     skuColumn: z
       .string()
@@ -46,7 +50,7 @@ export const bulkPriceImportFormTool = new DynamicStructuredTool({
   }),
   func: async ({ fileId, fileName, skuColumn, priceColumn, compareAtColumn }) => {
     const payload: BulkPriceImportFormPayload = {
-      fileId: fileId.trim(),
+      fileId: fileId?.trim() ?? "",
       ...(fileName?.trim() ? { fileName: fileName.trim() } : {}),
       ...(skuColumn?.trim() ? { skuColumn: skuColumn.trim() } : {}),
       ...(priceColumn?.trim() ? { priceColumn: priceColumn.trim() } : {}),

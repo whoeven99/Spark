@@ -6,7 +6,7 @@ import {
   reconcileReplyWithChatCards,
   tryDeterministicTaskProposalFromSkills,
 } from "../../../../../app/server/ai/core/resolveChatCardIntent.server";
-import { BULK_STATUS_EDIT_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
+import { BULK_STATUS_EDIT_SKILL_ID, BULK_PRICE_IMPORT_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
 
 describe("buildChatCardPayloadFromIntent", () => {
   it("injects image generation card for 图片生成 intent", () => {
@@ -130,6 +130,26 @@ describe("tryDeterministicTaskProposalFromSkills", () => {
 
   it("returns null when no deterministic skill matched", () => {
     expect(tryDeterministicTaskProposalFromSkills(["shopOperations"], "今日销售")).toBeNull();
+  });
+
+  it("opens an empty price-import card when no file is attached", () => {
+    const proposal = tryDeterministicTaskProposalFromSkills(
+      ["bulkPriceImport", "sheetImport"],
+      "帮我按表格导入商品价格，先打开确认卡让我上传价目表",
+    );
+    expect(proposal?.skillId).toBe(BULK_PRICE_IMPORT_SKILL_ID);
+    expect(proposal?.params.find((field) => field.key === "fileId")).toEqual(
+      expect.objectContaining({ type: "file", value: "" }),
+    );
+  });
+
+  it("prefills fileId from workspace context onto price-import card", () => {
+    const proposal = tryDeterministicTaskProposalFromSkills(
+      ["bulkPriceImport"],
+      "[工作台上下文]\n- 已选文件（共 1 个）：\n    • prices.csv [文件ID: abc123]\n\n[用户消息]\n按表格导入价格",
+    );
+    expect(proposal?.params.find((field) => field.key === "fileId")?.value).toBe("abc123");
+    expect(proposal?.params.find((field) => field.key === "fileName")?.value).toBe("prices.csv");
   });
 });
 

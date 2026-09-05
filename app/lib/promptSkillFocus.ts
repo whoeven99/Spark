@@ -3,6 +3,22 @@
  * systemPromptExtension 的 Skill 名，避免每轮灌入全部 Skill 长指令。
  */
 
+/** 首页「批量编辑」分组的 7 个推荐操作 key：点完后本轮必须出确认卡。 */
+export const BULK_EDIT_RECOMMEND_KEYS = [
+  "bulkPriceEdit",
+  "bulkTagEdit",
+  "bulkStatusEdit",
+  "bulkMetafieldEdit",
+  "bulkPriceImport",
+  "bulkCostImport",
+  "bulkInventoryImport",
+] as const;
+
+export function isBulkEditRecommendKey(skillFocus?: string | null): boolean {
+  const key = skillFocus?.trim() ?? "";
+  return (BULK_EDIT_RECOMMEND_KEYS as readonly string[]).includes(key);
+}
+
 /** 推荐操作 key → 需要注入的 SkillDefinition.name（可含下游协作 Skill） */
 export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   todayOverview: ["shopOperations"],

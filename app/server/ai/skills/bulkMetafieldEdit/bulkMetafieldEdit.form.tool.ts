@@ -39,6 +39,33 @@ function selectEditableDefinitions(
   );
 }
 
+export async function loadBulkMetafieldEditFieldOptions(
+  admin: AgentContext["admin"],
+  fieldKeyword?: string,
+): Promise<{
+  fieldOptions: Array<{ value: string; label: string }>;
+  fieldsTruncated?: boolean;
+  fieldKey?: string;
+}> {
+  const keyword = fieldKeyword?.trim() ?? "";
+  let listed = await listProductMetafieldDefinitions(admin, { keyword });
+  let usable = selectEditableDefinitions(listed.definitions);
+  if (keyword && usable.length === 0) {
+    listed = await listProductMetafieldDefinitions(admin);
+    usable = selectEditableDefinitions(listed.definitions);
+  }
+  const capped = usable.slice(0, MAX_FIELD_OPTIONS);
+  const fieldOptions = capped.map((definition) => ({
+    value: `${definition.namespace}.${definition.key}`,
+    label: `${definition.name}（${describeMetafieldType(definition.type)}）· ${definition.namespace}.${definition.key}`,
+  }));
+  return {
+    fieldOptions,
+    ...(listed.hasMore || usable.length > capped.length ? { fieldsTruncated: true } : {}),
+    ...(capped.length === 1 ? { fieldKey: fieldOptions[0].value } : {}),
+  };
+}
+
 /**
  * 打开批量改 Metafield 确认卡。
  *
@@ -95,31 +122,13 @@ export function createBulkMetafieldEditFormTool(context: AgentContext): DynamicS
         .describe("用户明确说「只补空的 / 不要覆盖已有内容」时传 true，否则不要传"),
     }),
     func: async ({ products, action, fieldKeyword, fieldKey, value, onlyFillEmpty }) => {
-      const keyword = fieldKeyword?.trim() ?? "";
-      let listed = await listProductMetafieldDefinitions(admin, { keyword });
-      let usable = selectEditableDefinitions(listed.definitions);
-
-      // 关键词没匹配到任何可批量改的字段时退回全量列表，避免下拉空着
-      if (keyword && usable.length === 0) {
-        listed = await listProductMetafieldDefinitions(admin);
-        usable = selectEditableDefinitions(listed.definitions);
-      }
-
-      const capped = usable.slice(0, MAX_FIELD_OPTIONS);
-      const fieldOptions = capped.map((definition) => ({
-        value: `${definition.namespace}.${definition.key}`,
-        // 类型要摆在标签里：商户得知道这个字段只收整数，才不会填一堆写不进去的值
-        label: `${definition.name}（${describeMetafieldType(definition.type)}）· ${definition.namespace}.${definition.key}`,
-      }));
-
+      const loaded = await loadBulkMetafieldEditFieldOptions(admin, fieldKeyword);
+      const fieldOptions = loaded.fieldOptions;
       const requestedKey = fieldKey?.trim() ?? "";
       const preselected =
         requestedKey && fieldOptions.some((option) => option.value === requestedKey)
           ? requestedKey
-          : // 关键词只命中唯一一个可用字段时替用户选好，其余情况留空让他自己确认
-            capped.length === 1
-            ? fieldOptions[0].value
-            : "";
+          : loaded.fieldKey ?? "";
 
       const payload: BulkMetafieldEditFormPayload = {
         products: ((products ?? []) as ToolProductArg[]).map((p) => ({
@@ -132,13 +141,9 @@ export function createBulkMetafieldEditFormTool(context: AgentContext): DynamicS
         ...(action === "clear" ? {} : { value: value?.trim() ?? "" }),
         ...(onlyFillEmpty ? { onlyFillEmpty: true } : {}),
         fieldOptions,
-        ...(listed.hasMore || usable.length > capped.length ? { fieldsTruncated: true } : {}),
+        ...(loaded.fieldsTruncated ? { fieldsTruncated: true } : {}),
       };
-      return JSON.stringify({
-        ...payload,
-        // 给模型的额外说明，不进卡片：被排除的不可批量改类型数量
-        excludedUnsupportedCount: listed.definitions.length - usable.length,
-      });
+      return JSON.stringify(payload);
     },
   });
 }

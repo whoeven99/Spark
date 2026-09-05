@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   IMAGE_GENERATION_SKILL_ID,
+  BULK_PRICE_IMPORT_SKILL_ID,
   buildImageGenerationProposal,
+  buildBulkPriceImportProposal,
   coerceTaskProposalPayload,
   mergeTaskProposalTargets,
 } from "../../../app/lib/taskProposalPayload";
@@ -81,5 +83,25 @@ describe("coerceTaskProposalPayload textarea", () => {
         value: "第一行\n第二行",
       }),
     );
+  });
+});
+
+describe("buildBulkPriceImportProposal", () => {
+  it("opens a file field even when fileId is missing", () => {
+    const proposal = buildBulkPriceImportProposal({});
+    expect(proposal.skillId).toBe(BULK_PRICE_IMPORT_SKILL_ID);
+    expect(proposal.params.find((field) => field.key === "fileId")).toEqual(
+      expect.objectContaining({ type: "file", value: "" }),
+    );
+  });
+
+  it("round-trips the file field type", () => {
+    const proposal = buildBulkPriceImportProposal({
+      fileId: "abc",
+      fileName: "prices.csv",
+    });
+    const roundTrip = coerceTaskProposalPayload(proposal);
+    expect(roundTrip?.params.find((field) => field.key === "fileId")?.type).toBe("file");
+    expect(roundTrip?.params.find((field) => field.key === "fileName")?.type).toBe("hidden");
   });
 });

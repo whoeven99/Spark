@@ -89,7 +89,7 @@ scope 用现有 `read_products` / `write_products` 即可，不需要新增。Sk
 
 几条不能退化的约束：千分位分组必须是「首组 1-3 位 + 其余每组正好 3 位」，否则 `12.34.56.78` 会被静默拼成天价；解析不出金额一律标错不猜；一个 SKU 命中多个变体报冲突而不是挑一个；匹配率 < 50% 直接判为列映射选错并让任务失败；新价与现价相差 ≥ 50 倍时打备注。
 
-Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_import_form`（读表走公共层的 `preview_import_sheet`）；商品由表格决定，因此 `targets.kind` 为 `none`，`fileId` 走 `TaskProposalField` 的 `hidden` 类型随 params 传递。
+Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_import_form`（读表走公共层的 `preview_import_sheet`）；商品由表格决定，因此 `targets.kind` 为 `none`，`fileId` 走 `TaskProposalField` 的 `file` 类型（允许空着开卡，商户在卡片里上传；执行端仍拒绝空 fileId）。
 
 ### 2.3 成本价导入（写 unitCost，不碰售价）
 

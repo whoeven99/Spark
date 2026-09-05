@@ -4064,29 +4064,29 @@
       "bulkMetafieldEdit": {
         "label": "Bulk edit custom fields",
         "prompt": {
-          "shop": "Help me bulk edit a product custom field (metafield): first show which fields I can edit, confirm the value with me, then show a change preview — do not write to the store yet.",
-          "selected": "Fill one custom field on the selected products: confirm the field and the value with me, show a change preview first, and only write back after I confirm."
+          "shop": "Help me bulk edit a product custom field (metafield): open the confirmation card so I can pick the field and value, then show a change preview — do not write to the store yet.",
+          "selected": "Fill one custom field on the selected products: open the confirmation card so I can pick the field and value, show a change preview first, and only write back after I confirm."
         }
       },
       "bulkPriceImport": {
         "label": "Import prices from file",
         "prompt": {
-          "shop": "I uploaded a price list. Update my product prices from it: confirm which column is the SKU and which is the price, then show me a change preview — do not write to the store yet.",
-          "selected": "I uploaded a price list. Update my product prices from it, show me a change preview first, and only write back after I confirm."
+          "shop": "Help me import product prices from a spreadsheet: open the confirmation card so I can upload the file and confirm column mapping, then show a change preview — do not write to the store yet.",
+          "selected": "Help me import product prices from a spreadsheet: open the confirmation card so I can upload the file and confirm column mapping, show a change preview first, and only write back after I confirm."
         }
       },
       "bulkCostImport": {
         "label": "Import costs from file",
         "prompt": {
-          "shop": "I uploaded a supplier cost sheet. Update my product unit costs from it: confirm which column is the SKU and which is the cost, then show me a change preview with the margin impact — do not write to the store yet.",
-          "selected": "I uploaded a supplier cost sheet. Update my product unit costs from it, show me a change preview with the margin impact first, and only write back after I confirm."
+          "shop": "Help me import product unit costs from a spreadsheet: open the confirmation card so I can upload the file and confirm column mapping, then show a change preview with the margin impact — do not write to the store yet.",
+          "selected": "Help me import product unit costs from a spreadsheet: open the confirmation card so I can upload the file and confirm column mapping, show a change preview with the margin impact first, and only write back after I confirm."
         }
       },
       "bulkInventoryImport": {
         "label": "Import stock from file",
         "prompt": {
-          "shop": "I uploaded a stock count sheet. Update my product stock from it: confirm which column is the SKU, which is the quantity, and which location to import into, then show me a change preview — do not write to the store yet.",
-          "selected": "I uploaded a stock count sheet. Update my product stock from it, show me a change preview first, and only write back after I confirm."
+          "shop": "Help me import product stock from a spreadsheet: open the confirmation card so I can upload the file, confirm columns and the location, then show a change preview — do not write to the store yet.",
+          "selected": "Help me import product stock from a spreadsheet: open the confirmation card so I can upload the file, confirm columns and the location, show a change preview first, and only write back after I confirm."
         }
       },
       "generateImage": {
@@ -4395,7 +4395,9 @@
         "compareAtColumn": "Compare-at column",
         "costColumn": "Cost column",
         "quantityColumn": "Quantity column",
-        "locationId": "Location"
+        "locationId": "Location",
+        "fileId": "Spreadsheet",
+        "fileName": "File name"
       },
       "paramValues": {
         "priceMode": {
@@ -4496,6 +4498,11 @@
         "resourcePlaceholder": "Select…",
         "resourceSearchLabel": "Filter options",
         "resourceNoMatch": "No matching options. Try a different keyword.",
+        "fileEmpty": "Upload CSV / Excel",
+        "fileUploading": "Uploading…",
+        "fileSelected": "Selected: {{fileName}}",
+        "fileReplace": "Replace file",
+        "fileUploadFailed": "Upload failed. Please try again.",
         "footerCreateOne": "Will create 1 task",
         "footerCreateQuery": "Will create tasks by filter{{approx}}",
         "footerCreateQueryApprox": " (~{{count}})",

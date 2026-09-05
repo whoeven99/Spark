@@ -33,8 +33,11 @@ import {
 } from "../../../lib/healthDiagnosisCardPayload";
 import {
   buildBulkCollectionEditProposal,
+  buildBulkCostImportProposal,
+  buildBulkInventoryImportProposal,
   buildBulkMetafieldEditProposal,
   buildBulkPriceEditProposal,
+  buildBulkPriceImportProposal,
   buildBulkSeoEditProposal,
   buildBulkStatusEditProposal,
   buildBulkTagEditProposal,
@@ -42,9 +45,17 @@ import {
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
-import { skillNamesFromUserText } from "../../../lib/promptSkillFocus";
+import { parseWorkspaceFilesFromText } from "../../../lib/workspaceContextFiles";
+import {
+  isBulkEditRecommendKey,
+  skillNamesFromFocus,
+  skillNamesFromUserText,
+} from "../../../lib/promptSkillFocus";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
+import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
+import { loadBulkMetafieldEditFieldOptions } from "../skills/bulkMetafieldEdit/bulkMetafieldEdit.form.tool";
+import { loadBulkInventoryLocationOptions } from "../skills/bulkInventoryImport/bulkInventoryImport.form.tool";
 
 type CardStreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
@@ -137,38 +148,63 @@ export function hasEmittedChatCardFlag(emittedFlags: Set<string> | undefined): b
 }
 
 /**
- * 可确定性补出的 TaskProposal 开卡 Skill（不依赖文件 ID / Shopify 预取也能出可用空卡）。
- * 表格导入类缺 fileId 时不能补，只能走纠偏文案。
+ * 可确定性补出的 TaskProposal 开卡 Skill。
+ * 表格导入允许空 fileId：确认卡内上传，执行端仍会拒绝空文件。
  */
 const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   skill: string;
-  build: (
-    products: Array<{ id: string; title: string; imageUrl?: string | null }>,
-  ) => TaskProposalPayload;
+  build: (ctx: {
+    products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+    files: Array<{ id: string; name: string }>;
+  }) => TaskProposalPayload;
 }> = [
   {
     skill: "bulkStatusEdit",
-    build: (products) => buildBulkStatusEditProposal({ products }),
+    build: ({ products }) => buildBulkStatusEditProposal({ products }),
   },
   {
     skill: "bulkTagEdit",
-    build: (products) => buildBulkTagEditProposal({ products }),
+    build: ({ products }) => buildBulkTagEditProposal({ products }),
   },
   {
     skill: "bulkPriceEdit",
-    build: (products) => buildBulkPriceEditProposal({ products }),
+    build: ({ products }) => buildBulkPriceEditProposal({ products }),
   },
   {
     skill: "bulkSeoEdit",
-    build: (products) => buildBulkSeoEditProposal({ products }),
+    build: ({ products }) => buildBulkSeoEditProposal({ products }),
   },
   {
     skill: "bulkCollectionEdit",
-    build: (products) => buildBulkCollectionEditProposal({ products }),
+    build: ({ products }) => buildBulkCollectionEditProposal({ products }),
   },
   {
     skill: "bulkMetafieldEdit",
-    build: (products) => buildBulkMetafieldEditProposal({ products }),
+    build: ({ products }) => buildBulkMetafieldEditProposal({ products }),
+  },
+  {
+    skill: "bulkPriceImport",
+    build: ({ files }) =>
+      buildBulkPriceImportProposal({
+        fileId: files[0]?.id,
+        fileName: files[0]?.name,
+      }),
+  },
+  {
+    skill: "bulkCostImport",
+    build: ({ files }) =>
+      buildBulkCostImportProposal({
+        fileId: files[0]?.id,
+        fileName: files[0]?.name,
+      }),
+  },
+  {
+    skill: "bulkInventoryImport",
+    build: ({ files }) =>
+      buildBulkInventoryImportProposal({
+        fileId: files[0]?.id,
+        fileName: files[0]?.name,
+      }),
   },
 ];
 
@@ -178,12 +214,66 @@ export function tryDeterministicTaskProposalFromSkills(
 ): TaskProposalPayload | null {
   if (skillNames.length === 0) return null;
   const skillSet = new Set(skillNames);
-  const products = parseWorkspaceProductsFromText(lastUserText);
+  const ctx = {
+    products: parseWorkspaceProductsFromText(lastUserText),
+    files: parseWorkspaceFilesFromText(lastUserText),
+  };
   for (const entry of DETERMINISTIC_TASK_PROPOSAL_BY_SKILL) {
     if (!skillSet.has(entry.skill)) continue;
-    return entry.build(products);
+    return entry.build(ctx);
   }
   return null;
+}
+
+async function enrichDeterministicBulkProposal(
+  proposal: TaskProposalPayload,
+  admin?: ShopifyAdminGraphqlClient,
+): Promise<TaskProposalPayload> {
+  if (!admin) return proposal;
+  if (proposal.skillId === "bulk_metafield_edit") {
+    const hasOptions = proposal.params.some(
+      (field) => field.key === "fieldKey" && (field.options?.length ?? 0) > 0,
+    );
+    if (hasOptions) return proposal;
+    try {
+      const loaded = await loadBulkMetafieldEditFieldOptions(admin);
+      const products = proposal.targets.items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        imageUrl: item.imageUrl,
+      }));
+      return buildBulkMetafieldEditProposal({
+        products,
+        fieldOptions: loaded.fieldOptions,
+        fieldKey: loaded.fieldKey,
+        fieldsTruncated: loaded.fieldsTruncated,
+      });
+    } catch (err) {
+      console.error("[ChatCard] prefetch metafield options failed:", err);
+      return proposal;
+    }
+  }
+  if (proposal.skillId === "bulk_inventory_import") {
+    const hasOptions = proposal.params.some(
+      (field) => field.key === "locationId" && (field.options?.length ?? 0) > 0,
+    );
+    if (hasOptions) return proposal;
+    try {
+      const loaded = await loadBulkInventoryLocationOptions(admin);
+      const fileId = proposal.params.find((field) => field.key === "fileId")?.value ?? "";
+      const fileName = proposal.params.find((field) => field.key === "fileName")?.value ?? "";
+      return buildBulkInventoryImportProposal({
+        fileId,
+        fileName,
+        locationId: loaded.locationId,
+        locationOptions: loaded.locationOptions,
+      });
+    } catch (err) {
+      console.error("[ChatCard] prefetch inventory locations failed:", err);
+      return proposal;
+    }
+  }
+  return proposal;
 }
 
 export function extractToolsCalledFromMessages(messages: BaseMessage[]): string[] {
@@ -422,6 +512,8 @@ export async function resolveMissingChatCardsWithLlm(params: {
   existingUiPayloads: Record<string, unknown>;
   emittedFlags?: Set<string>;
   shop?: string;
+  skillFocus?: string | null;
+  admin?: ShopifyAdminGraphqlClient;
   signal?: AbortSignal;
 }): Promise<LlmChatCardResolution> {
   const emittedFlags = params.emittedFlags ?? new Set<string>();
@@ -433,12 +525,27 @@ export async function resolveMissingChatCardsWithLlm(params: {
   const claimed = assistantClaimsChatCard(params.assistantReply);
   const intentText = extractUserIntentText(params.lastUserText);
   const skillNames = skillNamesFromUserText(intentText);
+  const focusNames = skillNamesFromFocus(params.skillFocus);
+  const focusSkillNames = focusNames === "all" ? [] : (focusNames ?? []);
+
+  // 点了批量编辑推荐按钮：本轮必须出卡，不依赖模型是否声称已开卡。
+  if (isBulkEditRecommendKey(params.skillFocus) && focusSkillNames.length > 0) {
+    const proposal = tryDeterministicTaskProposalFromSkills(
+      focusSkillNames,
+      params.lastUserText,
+    );
+    if (proposal) {
+      const enriched = await enrichDeterministicBulkProposal(proposal, params.admin);
+      return resolutionFromTaskProposal(enriched, emittedFlags);
+    }
+  }
 
   // 硬保证：声称开卡时，能识别出批量 TaskProposal Skill 就直接补卡，不依赖二次 LLM。
   if (claimed) {
     const proposal = tryDeterministicTaskProposalFromSkills(skillNames, params.lastUserText);
     if (proposal) {
-      return resolutionFromTaskProposal(proposal, emittedFlags);
+      const enriched = await enrichDeterministicBulkProposal(proposal, params.admin);
+      return resolutionFromTaskProposal(enriched, emittedFlags);
     }
   }
 

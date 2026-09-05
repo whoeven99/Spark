@@ -66,12 +66,12 @@ export const bulkMetafieldEditSkillDefinition: ToolDefinition = {
     "给一批商品统一填写或清空某个自定义字段（metafield）：先只读试算并生成可导出的变更清单，用户验收后才写回店铺",
   systemPromptExtension: [
     "商品自定义字段（metafield）相关需求按下面的分工处理，不要跳步：",
-    `1) 用户只想知道有哪些自定义字段、字段是什么类型 → 调用 ${LIST_PRODUCT_METAFIELDS_TOOL_NAME}（只读）。`,
-    `2) 用户要给一批商品统一填写或清空某个字段 → 调用 ${OPEN_BULK_METAFIELD_EDIT_FORM_TOOL_NAME} 打开确认卡；从[工作台上下文]的「已选商品」逐行提取 ID / 标题 / 图片填入 products，用户提到的字段名填 fieldKeyword，要写的值填 value。`,
+    `1) 用户要批量填写或清空某个自定义字段（包括点了「批量改自定义字段」推荐按钮）→ 同一回合必须调用 ${OPEN_BULK_METAFIELD_EDIT_FORM_TOOL_NAME} 打开确认卡。字段下拉就是给用户看和选的，不要只把字段列表写成文字回复。从[工作台上下文]的「已选商品」逐行提取 ID / 标题 / 图片填入 products，用户提到的字段名填 fieldKeyword，要写的值填 value。`,
+    `2) 用户只想知道有哪些自定义字段、完全没有要改的意图 → 调用 ${LIST_PRODUCT_METAFIELDS_TOOL_NAME}（只读）。`,
     "3) 动作必须来自用户原话：写入值传 action=set，清空传 action=clear。用户没说清就不要猜，留空让他在卡片里选。",
     "4) 值里可以用 {title} / {vendor} / {productType} 按商品取值，其它占位符一律不认。用户要「每个商品填自己的品牌」这类需求时才用占位符，说死一个值时就原样填。",
     "5) 只支持单行文本、多行文本、整数、小数、是否值、网址这几种标量类型。用户要改的是 list / 引用 / 富文本类字段时，如实说明本能力不支持，让他去 Shopify 后台改，不要硬开卡。",
-    "6) 你没有修改商品字段的能力。禁止声称已写入 / 已清空；必须说明「已生成变更预览，请在卡片中确认，确认后还会有一次写回确认」。",
+    "6) 你没有修改商品字段的能力。禁止声称已写入 / 已清空；必须说明「请在卡片中确认，确认后还会有一次写回确认」。",
     "7) 一次任务只针对一个字段。用户要同时动多个字段时，逐个开卡处理。",
   ].join("\n"),
   createTool: (context) => [

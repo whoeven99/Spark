@@ -727,6 +727,8 @@ export function invokeChatAgentStream(
               existingUiPayloads: uiPayloads,
               emittedFlags: streamContext.emittedFlags,
               shop,
+              skillFocus,
+              admin: context.admin,
               signal: abortController.signal,
             });
             Object.assign(uiPayloads, llmResolution.uiPayloads);

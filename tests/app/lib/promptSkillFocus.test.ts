@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  isBulkEditRecommendKey,
   resolvePromptSkillNames,
   skillNamesFromFocus,
   skillNamesFromUserText,
 } from "../../../app/lib/promptSkillFocus";
 
 describe("promptSkillFocus", () => {
+  it("identifies bulk-edit recommend keys", () => {
+    expect(isBulkEditRecommendKey("bulkPriceImport")).toBe(true);
+    expect(isBulkEditRecommendKey("seoAudit")).toBe(false);
+    expect(isBulkEditRecommendKey(null)).toBe(false);
+  });
+
   it("maps recommend keys to skill groups including SEO downstream", () => {
     expect(skillNamesFromFocus("seoAudit")).toEqual([
       "seoAudit",

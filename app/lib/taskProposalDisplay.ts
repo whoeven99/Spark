@@ -3,9 +3,11 @@ import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
   BULK_COLLECTION_EDIT_SKILL_ID,
+  BULK_COST_IMPORT_SKILL_ID,
   BULK_INVENTORY_IMPORT_SKILL_ID,
   BULK_METAFIELD_EDIT_SKILL_ID,
   BULK_PRICE_EDIT_SKILL_ID,
+  BULK_PRICE_IMPORT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
   IMAGE_GENERATION_SKILL_ID,
   isResourceOptionField,
@@ -26,6 +28,8 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.title`,
   [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.title`,
   [BULK_METAFIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkMetafieldEdit.title`,
+  [BULK_PRICE_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkPriceImport.title`,
+  [BULK_COST_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkCostImport.title`,
   [BULK_INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkInventoryImport.title`,
 };
 
@@ -52,6 +56,8 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.summary`,
   [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.summary`,
   [BULK_METAFIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkMetafieldEdit.summary`,
+  [BULK_PRICE_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkPriceImport.summary`,
+  [BULK_COST_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkCostImport.summary`,
   [BULK_INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.bulkInventoryImport.summary`,
 };
 
@@ -202,9 +208,16 @@ export function buildTaskRunParamsSummary(args: {
   paramValues: Record<string, string>;
   t: TFunction;
 }): string[] {
-  return args.params.map((field) =>
-    formatTaskProposalParamSummary(field, args.paramValues[field.key] ?? "", args.t),
-  );
+  return args.params
+    .filter((field) => field.type !== "hidden")
+    .map((field) => {
+      const raw = args.paramValues[field.key] ?? "";
+      const value =
+        field.type === "file"
+          ? args.paramValues.fileName?.trim() || raw
+          : raw;
+      return formatTaskProposalParamSummary(field, value, args.t);
+    });
 }
 
 export function resolveTaskRunTitle(run: Pick<TaskRunPayload, "skillId" | "title">, t: TFunction): string {

@@ -6,7 +6,7 @@ import { listActiveLocations } from "../../../shopify/locationReader.server";
 export const OPEN_BULK_INVENTORY_IMPORT_FORM_TOOL_NAME = "open_bulk_inventory_import_form";
 
 export type BulkInventoryImportFormPayload = {
-  fileId: string;
+  fileId?: string;
   fileName?: string;
   locationId?: string;
   locationOptions: Array<{ value: string; label: string }>;
@@ -16,6 +16,29 @@ export type BulkInventoryImportFormPayload = {
 
 function optionLabel(name: string, isPrimary: boolean): string {
   return isPrimary ? `${name} · 默认地点` : name;
+}
+
+export async function loadBulkInventoryLocationOptions(
+  admin: AgentContext["admin"],
+  locationKeyword?: string,
+): Promise<{
+  locationOptions: Array<{ value: string; label: string }>;
+  locationId?: string;
+}> {
+  const locations = await listActiveLocations(admin);
+  const locationOptions = locations.map((location) => ({
+    value: location.id,
+    label: optionLabel(location.name, location.isPrimary),
+  }));
+  const keyword = locationKeyword?.trim().toLowerCase() ?? "";
+  const matched = keyword
+    ? locations.filter((location) => location.name.toLowerCase().includes(keyword))
+    : [];
+  const preselected = matched.length === 1 ? matched[0].id : "";
+  return {
+    locationOptions,
+    ...(preselected ? { locationId: preselected } : {}),
+  };
 }
 
 /**
@@ -34,11 +57,14 @@ export function createBulkInventoryImportFormTool(
   return new DynamicStructuredTool({
     name: OPEN_BULK_INVENTORY_IMPORT_FORM_TOOL_NAME,
     description:
-      "打开「按表格批量导入库存」确认卡片。当用户上传了库存表 / 盘点表 / 到货表，并希望按表格把商品库存设成表里的数量时调用（如「按这个表更新库存」「盘点完了帮我改库存」）。改的是指定地点的可售库存，绝对值覆盖。调用后不会修改任何库存。",
+      "打开「按表格批量导入库存」确认卡片。用户要按表格改库存时立刻调用，即使还没有上传文件也要开卡（fileId 留空，用户会在卡片里上传）。改的是指定地点的可售库存，绝对值覆盖。调用后不会修改任何库存。",
     schema: z.object({
       fileId: z
         .string()
-        .describe("要导入的文件 ID，从[附加文件上下文]里取当前这张表对应的文件 ID"),
+        .optional()
+        .describe(
+          "要导入的文件 ID，从[工作台上下文]或[附加文件上下文]里取。还没有文件时不要编造，留空让用户在卡片里上传",
+        ),
       fileName: z.string().optional().describe("文件名，用于在卡片上让用户确认传对了表"),
       locationKeyword: z
         .string()
@@ -58,31 +84,18 @@ export function createBulkInventoryImportFormTool(
         ),
     }),
     func: async ({ fileId, fileName, locationKeyword, skuColumn, quantityColumn }) => {
-      const locations = await listActiveLocations(admin);
-      const locationOptions = locations.map((location) => ({
-        value: location.id,
-        label: optionLabel(location.name, location.isPrimary),
-      }));
-
-      // 关键词只是帮忙预选，匹配不上也不缩减下拉——地点数量少，全列出来更安全
-      const keyword = locationKeyword?.trim().toLowerCase() ?? "";
-      const matched = keyword
-        ? locations.filter((location) => location.name.toLowerCase().includes(keyword))
-        : [];
-      const preselected = matched.length === 1 ? matched[0].id : "";
-
+      const loaded = await loadBulkInventoryLocationOptions(admin, locationKeyword);
       const payload: BulkInventoryImportFormPayload = {
-        fileId: fileId.trim(),
+        fileId: fileId?.trim() ?? "",
         ...(fileName?.trim() ? { fileName: fileName.trim() } : {}),
-        ...(preselected ? { locationId: preselected } : {}),
-        locationOptions,
+        ...(loaded.locationId ? { locationId: loaded.locationId } : {}),
+        locationOptions: loaded.locationOptions,
         ...(skuColumn?.trim() ? { skuColumn: skuColumn.trim() } : {}),
         ...(quantityColumn?.trim() ? { quantityColumn: quantityColumn.trim() } : {}),
       };
       return JSON.stringify({
         ...payload,
-        // 给模型的额外说明，不进卡片
-        locationCount: locations.length,
+        locationCount: loaded.locationOptions.length,
       });
     },
   });
