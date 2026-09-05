@@ -144,6 +144,25 @@ export async function loadMultipleFilesText(
   return results.filter((r) => r.text.length > 0);
 }
 
+/**
+ * 读回上传时的原始字节。
+ *
+ * 表格导入必须走这里而不是 `loadParsedFileText`：parsed.txt 是给 AI 看的纯文本，
+ * 既被截断到 2 万字符，列结构也已经被拍平，不能用来做结构化解析。
+ */
+export async function loadOriginalFileBuffer(
+  shop: string,
+  fileId: string,
+): Promise<{ name: string; buffer: Buffer } | null> {
+  const record = await prisma.workspaceFile.findFirst({
+    where: { id: fileId, shop },
+    select: { originalBlobPath: true, name: true },
+  });
+  if (!record?.originalBlobPath) return null;
+  const buffer = await downloadBlobBuffer(record.originalBlobPath);
+  return buffer ? { name: record.name, buffer } : null;
+}
+
 /** 生成原始文件的临时可读 SAS URL（1 小时有效）。 */
 export async function getOriginalFileDownloadUrl(
   shop: string,
@@ -212,7 +231,7 @@ export async function deleteWorkspaceFile(
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-async function downloadBlobText(blobPath: string): Promise<string | null> {
+async function downloadBlobBuffer(blobPath: string): Promise<Buffer | null> {
   try {
     const container = await getContainer();
     const download = await container.getBlockBlobClient(blobPath).download(0);
@@ -220,8 +239,13 @@ async function downloadBlobText(blobPath: string): Promise<string | null> {
     for await (const chunk of download.readableStreamBody as AsyncIterable<Buffer>) {
       chunks.push(chunk);
     }
-    return Buffer.concat(chunks).toString("utf-8");
+    return Buffer.concat(chunks);
   } catch {
     return null;
   }
+}
+
+async function downloadBlobText(blobPath: string): Promise<string | null> {
+  const buffer = await downloadBlobBuffer(blobPath);
+  return buffer ? buffer.toString("utf-8") : null;
 }

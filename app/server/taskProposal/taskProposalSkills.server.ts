@@ -22,15 +22,55 @@ import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopify
 import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
+  BULK_PRICE_EDIT_SKILL_ID,
+  BULK_STATUS_EDIT_SKILL_ID,
+  BULK_TAG_EDIT_SKILL_ID,
   IMAGE_GENERATION_SKILL_ID,
   type TaskProposalExecuteError,
   type TaskProposalTarget,
 } from "../../lib/taskProposalPayload";
+import {
+  BULK_PRICE_EDIT_MAX_PRODUCTS,
+  BulkPriceEditRuleError,
+  parseBulkPriceEditRule,
+} from "../../lib/bulkPriceEdit";
+import {
+  BULK_TAG_EDIT_MAX_PRODUCTS,
+  BulkTagEditRuleError,
+  parseBulkTagEditRule,
+} from "../../lib/bulkTagEdit";
+import {
+  BULK_STATUS_EDIT_MAX_PRODUCTS,
+  BulkStatusEditRuleError,
+  parseBulkStatusEditRule,
+} from "../../lib/bulkStatusEdit";
+import { createBatchWithTask } from "../aiTask/aiTaskStore.server";
+import { enqueueBulkPriceEditDryRun } from "../bulkPriceEdit/bulkPriceEditDryRun.server";
+import { enqueueBulkTagEditDryRun } from "../bulkTagEdit/bulkTagEditDryRun.server";
+import { enqueueBulkStatusEditDryRun } from "../bulkStatusEdit/bulkStatusEditDryRun.server";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
 
+/**
+ * 单次执行的默认对象上限（逐对象建任务的技能沿用它）。
+ * 批量调价这类「一个任务覆盖一批对象」的技能用 handler.maxTargets 单独放宽。
+ */
 export const TASK_PROPOSAL_MAX_TARGETS = 20;
+
+/** 请求体的硬上限，取所有 handler 的最大值；具体限制仍按 handler 判定。 */
+export const TASK_PROPOSAL_TARGETS_HARD_CEILING = Math.max(
+  TASK_PROPOSAL_MAX_TARGETS,
+  BULK_PRICE_EDIT_MAX_PRODUCTS,
+  BULK_TAG_EDIT_MAX_PRODUCTS,
+  BULK_STATUS_EDIT_MAX_PRODUCTS,
+);
+
+export function resolveTaskProposalMaxTargets(
+  handler: Pick<TaskProposalSkillHandler, "maxTargets">,
+): number {
+  return handler.maxTargets ?? TASK_PROPOSAL_MAX_TARGETS;
+}
 
 /** 计费不通过：端点映射为 402 + 本地化文案。 */
 export class TaskProposalBillingError extends Error {
@@ -54,6 +94,8 @@ export type TaskProposalSkillHandler = {
   skillId: string;
   /** 无目标对象技能（targets.kind === "none"）：允许 targets 为空直接执行 */
   allowEmptyTargets?: boolean;
+  /** 覆盖默认对象上限（仅「一个任务覆盖多对象」的技能需要） */
+  maxTargets?: number;
   estimate: (args: { params: Record<string, string> }) => Promise<TaskProposalEstimateResult>;
   execute: (args: {
     admin: ShopifyAdminGraphqlClient;
@@ -207,10 +249,133 @@ const imageGenerationHandler: TaskProposalSkillHandler = {
   },
 };
 
+const bulkPriceEditHandler: TaskProposalSkillHandler = {
+  skillId: BULK_PRICE_EDIT_SKILL_ID,
+  maxTargets: BULK_PRICE_EDIT_MAX_PRODUCTS,
+  // dry-run 只读 Shopify、不调模型，没有积分成本；时长由 EWMA 校准后再展示
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+
+    let rule;
+    try {
+      rule = parseBulkPriceEditRule(params);
+    } catch (e) {
+      // 规则非法直接报错，不建任务：错的价格规则不值得留一条待审核记录
+      throw e instanceof BulkPriceEditRuleError ? new Error(e.message) : e;
+    }
+
+    const productIds = Array.from(
+      new Set(targets.map((target) => target.productId?.trim() || target.id.trim())),
+    ).filter(Boolean);
+    if (productIds.length === 0) {
+      throw new Error("请先选择要调价的商品");
+    }
+
+    const config = { ...rule, productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "bulk_price_edit",
+      batchConfig: { ...rule, totalProducts: productIds.length },
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueBulkPriceEditDryRun({ taskId, shop, locale, productIds, rule });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const bulkTagEditHandler: TaskProposalSkillHandler = {
+  skillId: BULK_TAG_EDIT_SKILL_ID,
+  maxTargets: BULK_TAG_EDIT_MAX_PRODUCTS,
+  // dry-run 只读 Shopify、不调模型，没有积分成本；时长由 EWMA 校准后再展示
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+
+    let rule;
+    try {
+      rule = parseBulkTagEditRule(params);
+    } catch (e) {
+      // 规则非法直接报错，不建任务：错的标签规则不值得留一条待审核记录
+      throw e instanceof BulkTagEditRuleError ? new Error(e.message) : e;
+    }
+
+    const productIds = Array.from(
+      new Set(targets.map((target) => target.productId?.trim() || target.id.trim())),
+    ).filter(Boolean);
+    if (productIds.length === 0) {
+      throw new Error("请先选择要修改标签的商品");
+    }
+
+    const config = { ...rule, productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "bulk_tag_edit",
+      batchConfig: { ...rule, totalProducts: productIds.length },
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueBulkTagEditDryRun({ taskId, shop, locale, productIds, rule });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const bulkStatusEditHandler: TaskProposalSkillHandler = {
+  skillId: BULK_STATUS_EDIT_SKILL_ID,
+  maxTargets: BULK_STATUS_EDIT_MAX_PRODUCTS,
+  // dry-run 只读 Shopify、不调模型，没有积分成本；时长由 EWMA 校准后再展示
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+
+    let rule;
+    try {
+      rule = parseBulkStatusEditRule(params);
+    } catch (e) {
+      // 没选上架 / 下架方向就直接报错，不建任务：方向猜错等于整批商品下线
+      throw e instanceof BulkStatusEditRuleError ? new Error(e.message) : e;
+    }
+
+    const productIds = Array.from(
+      new Set(targets.map((target) => target.productId?.trim() || target.id.trim())),
+    ).filter(Boolean);
+    if (productIds.length === 0) {
+      throw new Error("请先选择要上下架的商品");
+    }
+
+    const config = { ...rule, productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "bulk_status_edit",
+      batchConfig: { ...rule, totalProducts: productIds.length },
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueBulkStatusEditDryRun({ taskId, shop, locale, productIds, rule });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
   [imageGenerationHandler.skillId, imageGenerationHandler],
+  [bulkPriceEditHandler.skillId, bulkPriceEditHandler],
+  [bulkTagEditHandler.skillId, bulkTagEditHandler],
+  [bulkStatusEditHandler.skillId, bulkStatusEditHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

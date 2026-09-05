@@ -14,13 +14,13 @@ import {
 import type { TaskRunPayload, TaskRunTarget } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
 import { pageColorTokens } from "../../page/pageUiStyles";
-import { BATCH_PRODUCT_IMPROVE_SKILL_ID } from "../../../lib/taskProposalPayload";
 import {
   resolveTaskProposalParamValueLabel,
   resolveTaskRunParamsSummaryLines,
   resolveTaskRunTitle,
 } from "../../../lib/taskProposalDisplay";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import { resolveInlineReviewOptions } from "./chatInlineReviewTasks";
 import { useTranslation } from "react-i18next";
 import styles from "./TaskRunChatCard.module.css";
 
@@ -65,28 +65,6 @@ function resolveBadgeKind(agg: StatusAggregate): BadgeKind {
   if (agg.pendingReview > 0) return "pendingReview";
   if (agg.failed > 0) return "failed";
   return "succeeded";
-}
-
-function resolveProductImproveReviewOptions(
-  run: TaskRunPayload,
-  matchedTasks: AITaskItem[],
-): OpenWorkspaceTasksOptions | undefined {
-  const isProductImprove =
-    run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID ||
-    matchedTasks.some((task) => task.taskType === "product_improve");
-  if (!isProductImprove) return undefined;
-  const firstPending = matchedTasks.find((task) => task.status === "pending_review");
-  if (!firstPending && matchedTasks.length !== 1) return undefined;
-  const reviewTaskIds = matchedTasks
-    .filter((task) => task.taskType === "product_improve")
-    .map((task) => task.id);
-  return {
-    skillId: run.skillId,
-    taskType: "product_improve",
-    taskId: firstPending?.id ?? matchedTasks[0]?.id,
-    ...(reviewTaskIds.length > 0 ? { taskIds: reviewTaskIds } : {}),
-    intent: "review",
-  };
 }
 
 const metaChipStyle = {
@@ -194,10 +172,8 @@ export function TaskRunChatCard({
   const agg = aggregate(matchedTasks.map((task) => task.status));
   const inProgress = agg.known === 0 || agg.running > 0;
   const badgeKind = resolveBadgeKind(agg);
-  const isProductImprove =
-    run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID ||
-    matchedTasks.some((task) => task.taskType === "product_improve");
-  const showReviewButton = !inProgress && isProductImprove && agg.pendingReview > 0;
+  const reviewOptions = inProgress ? undefined : resolveInlineReviewOptions(run, matchedTasks);
+  const showReviewButton = Boolean(reviewOptions) && agg.pendingReview > 0;
   /** 少量图片类任务时内嵌逐任务详情卡（含图片预览/操作），其余保持聚合视角 */
   const embedTaskDetails =
     run.taskIds.length > 0 &&
@@ -500,8 +476,7 @@ export function TaskRunChatCard({
                 cursor: "pointer",
               }}
               onClick={() => {
-                const opts = resolveProductImproveReviewOptions(run, matchedTasks);
-                if (opts) onOpenTasks?.(opts);
+                if (reviewOptions) onOpenTasks?.(reviewOptions);
               }}
             >
               {t("productImproveStage1.chatGoReview")}

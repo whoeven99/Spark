@@ -124,6 +124,7 @@ export const action = async ({
   const { admin, session } = await authenticate.admin(request);
   const locale = await resolveUiLocale(request, {
     admin,
+    shop: session.shop,
     logContext: `ai-task shop=${session.shop}`,
   });
   const i18n = initI18n(locale);

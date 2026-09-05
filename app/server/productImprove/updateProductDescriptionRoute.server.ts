@@ -109,6 +109,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { admin, session } = await authenticate.admin(request);
     const locale = await resolveUiLocale(request, {
       admin,
+      shop: session.shop,
       logContext: `update-product-description shop=${session.shop}`,
     });
     const i18n = initI18n(locale);

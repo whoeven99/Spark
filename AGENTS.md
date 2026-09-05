@@ -1,17 +1,12 @@
 # AGENTS.md
 
-本文件是 Codex 在 `Spark` 仓库中的强制入口和长期维护的代码导航。它适用于仓库根目录及所有子目录；若某个子目录以后新增更具体的 `AGENTS.md`，则子目录文件在其作用域内优先。
+本文件是编码 agent 在 `Spark` 仓库中的入口和长期维护的代码导航。它适用于仓库根目录及所有子目录；若某个子目录以后新增更具体的 `AGENTS.md`，则子目录文件在其作用域内优先。
 
-## 0. 每次任务必须先做
+## 0. 怎么用本文件
 
-任何开发、排错、评审、规划、运行命令或文件定位开始前，必须：
+本文件是仓库地图与硬门禁，不是逐步执行的流程清单。默认：查代码 → 直接做 → 按风险自选验证。有产品/技术分叉或不可逆操作时再停下来对齐；复杂协作可按需参考 `.cursor/skills/deliberate-collab/SKILL.md`。
 
-1. 从头到尾完整读取当前 `AGENTS.md`，不能只依赖对话中附带的旧副本或历史记忆。
-2. 完整读取并遵循 `.cursor/skills/deliberate-collab/SKILL.md`（Claude 风格协作：先确认技术选型，再给实现方案与 UI 样例，再动手；详见该 skill）。
-3. 执行 `git status --short`，识别并保护用户已有改动和未跟踪文件。
-4. 根据“必读文档路由”读取与任务直接相关的文档。
-5. 用 `rg` / `rg --files` 核对真实调用链和文件是否仍存在，再制定方案或修改代码。
-6. 修改后按“验证矩阵”执行与风险匹配的检查，并如实报告未执行或被环境阻塞的项目。
+若本文件已随上下文注入，不必为「怕旧副本」再完整重读；只有不确定或仅凭历史记忆时再打开。不推测没打开过的代码。
 
 若本文件、旧文档和当前代码冲突，优先级为：**当前代码与配置 > `package.json` / Prisma schema > 本文件 > 领域文档 > README**。发现漂移时，应在本次改动范围内同步更新本文件或对应文档。
 
@@ -30,11 +25,12 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
 - Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。`/app/studio/translate` 当前只重定向到 `/app/studio/copy`，不要把图片翻译、兼容 Blob 读取或 Admin 运维页误判为整店翻译运行时。
 - Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。安装后自动回补（`ensureInstallOrderBackfill`，默认近 `SPARK_ORDER_BACKFILL_DAYS` 天）与 toml 里的 webhook **订阅**是两回事：路由在仓库里，未 `shopify app deploy` 订阅则增量进不了库。
-- 工作树中可能出现 `tmp-*` / `scripts/tmp-probe-*` 等未跟踪的临时排查脚本；除非用户明确要求，禁止删除、覆盖或纳入改动。
+- 工作树中可能出现 `scripts/tmp/` 下临时排查脚本（该目录已 gitignore）；除非用户明确要求，禁止删除、覆盖或纳入改动。
 
 发布姿态与 Partner 应用（邀请制内测，不是 App Store 公开）：
 
 - 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.prod.toml`（→ Render `Spark-Prod` / `spark-prod.onrender.com`）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）可手动勾选发布 Spark Test / Spark Prod / Admin / Admin Test。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
+- **改了 toml 的 `scopes` 必须对该配置 `shopify app deploy`，且已安装的店铺会走一次重新授权**（Shopify 在下次进应用时弹权限页，商户不点同意就用不了新能力）。prod 现有 scope 里 `read_inventory` 是为真实 COGS / 利润报表加的；不要为「以后可能用得上」提前申请用不到的 scope，审核时要逐条解释。
 - **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
 - Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
 - 卸载目前：通知 + **归档快照到 Blob** 后从 Turso **删除该店业务数据**（含 Session、订单镜像、对话、广告凭证、客服、`Account`、`CommonEventLog` 等）；`PromoClaimLedger`（shopHash）保留以防安装福利被薅。GDPR `shop/redact` 再跑一遍幂等清理；`customers/redact` 擦除客户镜像 PII。改 toml 后须对该配置 `shopify app deploy`。公开上架仍缺隐私政策页（需披露安装福利防滥用 hash 账本）。
@@ -110,6 +106,9 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源（`context-resources` 类型为 product / article / order）。
 - `/api/automation-overview`：Today/自动化概览。
 - `/api/task-proposal`：TaskProposal 确认卡的估算/执行入口（由聊天流里的 `task_proposal` 卡片触发，不是独立工具栏按钮）。
+- `POST /api/bulk-price-edit`：批量调价写回入口，是全仓库**唯一**会改 Shopify 商品价格的地方；必须带 `confirm: true` 且任务处于 `pending_review`。Agent 回合内（chat-stream / Skill / dry-run）禁止走到这里。
+- `POST /api/bulk-tag-edit`：批量打标写回入口，是全仓库**唯一**会改 Shopify 商品标签的地方；门禁与调价一致（`confirm: true` + `pending_review`）。
+- `POST /api/bulk-status-edit`：批量上下架写回入口，是全仓库**唯一**会改商品 `status` 的地方；门禁同上。只写 `ACTIVE` / `DRAFT`，不碰销售渠道发布。
 - `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。
@@ -129,6 +128,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Playbook 与能力目录 | `app/server/ai/playbooks/`、`app/server/ai/core/playbookRegistry.server.ts`、`skillManifest.server.ts` |
 | AI 任务执行与日志 | `app/server/aiTask/`（`aiTaskStore` 状态、`aiTaskLogger` 日志、`aiTaskEventBus` SSE、`concurrencyLimiter` 并发、`batchTaskCreate` 批量）、各 Skill service |
 | 商品文案与质量优化 | `app/server/productImprove/` |
+| 批量编辑（调价 / 打标 / 上下架 + 只读 SEO 体检） | 细则见 `app/server/bulkEdit.agent.md`，由 `.cursor/rules/bulk-edit-agent.mdc` 按路径触发加载。全族统一四层：纯算 `app/lib/` → 只读 reader → 试算 dry-run（零 mutation，落 `pending_review`）→ 写回 apply（该 mutation 的唯一调用处）；Skill 只暴露只读列表与开卡，不注册 mutation 工具。改这一族任何文件前先读那份文件，里面每条「不能退化的约束」都附了理由 |
 | 商品目录和对象查询 | `app/server/productSearch/`、`app/server/shopify/productSearch.server.ts`、`app/server/shopify/shopifyObjectList.server.ts` |
 | 图片生成 | `app/server/imageGeneration/` |
 | 图片翻译 | `app/server/pictureTranslate/`、`app/server/imageMapping/`（原图 → Blob 映射，供 Image Switcher 替换） |
@@ -159,7 +159,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Agent 运行摘要 | `app/server/agentRunLog/` |
 | Playbook Case | `app/server/playbookCase/` |
 
-AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgent` / LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。修改工具时同时检查注册、schema、执行器、token 计费、任务卡片和测试，不要只改工具实现文件。
+AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assistant`）`useChatStream` → `POST /chat-stream` → `app/server/chat-stream.ts` → `invokeChatAgentStream`（`app/server/ai/core/agentStream.server.ts`）/ LangGraph → 全局 Tool Registry → SSE 事件回传（可含 `task_proposal`）。
 
 ## 5. 数据与外部系统边界
 
@@ -185,25 +185,26 @@ AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assista
 
 存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service，再考虑新增容器或表；涉及跨仓库整店翻译边界时同时核对 TSF 当前实现。
 
-## 6. 必读文档路由
+## 6. 文档索引（按需）
 
-只读取与当前任务相关的文档，但下列规则是强制的：
+需要时再打开，不要求改前先通读。路径规则（如计费 / 批量编辑）仍可能按文件路径单独触发领域文档。
 
-| 任务类型 | 修改前必须读取 |
+| 主题 | 文档 |
 |---|---|
-| 任意任务（协作风格，§0 强制） | `.cursor/skills/deliberate-collab/SKILL.md` |
-| 项目架构、跨域改动、环境变量、部署 | `docs/PROJECT_CONTEXT.md`，并以当前代码复核过时路径 |
+| 项目架构、跨域、环境变量、部署 | `docs/PROJECT_CONTEXT.md`（以当前代码复核过时路径） |
 | **发布新 Shopify App（CLI + Render + 密钥/URL）** | `docs/SHOPIFY_APP_PUBLISH.md` |
 | 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
-| 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节（分发选定后不可改；Custom 不能走 Shopify Billing） |
+| 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节 |
 | Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
-| 任意前端视觉、布局、组件样式 | `docs/DESIGN.md` |
+| 前端视觉、布局、组件样式 | `docs/DESIGN.md` |
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
+| 批量编辑、SEO 体检 | `app/server/bulkEdit.agent.md` |
 | Today 运营工作流 | `docs/DAILY_OPERATIONS_WORKFLOWS.md` |
-| Today 信息架构细节 | `docs/TODAY_INFORMATION_ARCHITECTURE.md` |
+| Today 信息架构 | `docs/TODAY_INFORMATION_ARCHITECTURE.md` |
 | Health Monitor AI 明细 | `docs/HEALTH_MONITOR_AI_DETAIL_SPEC.md` |
 | 信息架构和功能归属 | `docs/SPARK_FUNCTION_INVENTORY.md` |
-| 整店翻译兼容、运营排查或跨 TSF 边界 | 直接读取 TSF 根 `AGENTS.md` 和 `packages/translation-core/*`；Spark 只保留图片翻译、兼容清理与 Admin 只读观测 |
+| 整店翻译 / 跨 TSF | TSF 根 `AGENTS.md` 与 `packages/translation-core/*`（Spark 仅图片翻译、兼容清理、Admin 只读观测） |
+| 复杂协作节奏（有分叉时） | `.cursor/skills/deliberate-collab/SKILL.md` |
 
 文档名和路径区分大小写时以磁盘实际文件为准。不要引用不存在的旧文档（例如旧版说明中的 `docs/generateDescription.md` 或 `docs/agent-run-log.md`）。
 
@@ -220,8 +221,11 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 - 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另仅展示「账户与订阅」；测/本地另展示助手 / 首页 v1 / Today / Health Monitor / Studio / Tasks / 账户 / Settings。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
+- 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前四组：经营诊断（只读；含 SEO 体检）/ 商品优化、图片生成（AI 生成内容）/ 批量编辑（试算→审核→写回；批量调价、批量打标、批量上下架）。新增能力要在这里登记才会出现在首页。首页刻意只保留一句行动号召，不要再往问候下方、卡头或推荐区加副标题、徽标与分组描述——那些描述会复述下面的行标题，是这一版专门删掉的。改这里时 `HomeV2SsrFallback` 要同步（占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后列数跳变）。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。
+- **prod 导航没有任务页，所以 `pending_review` 任务的验收入口必须在对话内闭环**：`TaskProposalCard` 确认 → `TaskRunChatCard` 轮询 `/api/ai-task` → 进度卡「去审核」在 `ChatPanel` 的 `DialogShell` 里开审核详情，不跳 `/app/tasks`。能否走对话内审核由 `app/routes/component/chat/chatInlineReviewTasks.ts` 的白名单决定（当前 `product_improve` / `picture_translate` / `image_generation` / `bulk_price_edit` / `bulk_tag_edit` / `bulk_status_edit`）。新增需要审核的任务类型时，白名单、`ChatPanel` 的渲染分支、以及一个签名为 `{ task, onBack, showBackButton?, onTaskUpdated? }` 的 `XxxTaskDetailPage` 三者要一起加；详情组件保持纯 props、不依赖任务页 loader，这样任务页弹窗与对话弹窗能共用同一份 UI。
+- `TaskProposalField` 里的 `collection`、`location` 与 `metafieldDefinition` 属于**远端资源字段**（`isResourceOptionField` 判定）：选项由 Skill 开卡时预取，卡片渲染成带关键词筛选的下拉，未选中就不允许提交。展示层一律用 `field.options` 里的 label 换成人看得懂的名称（`formatTaskProposalParamSummary` 与 `buildTaskRunPayload` 都已处理），不要把裸值丢进 i18n 查表或直接显示给商户。前两者的值是 GID，`metafieldDefinition` 的值是 `namespace.key`（definition GID 那条路已 deprecated）。以后接其它资源选择器沿用这个类型分支，不要每加一个资源就复制一套 UI。
 - 标准参考：`app/routes/component/productImprove/ProductImproveTaskCard.tsx`、`app/routes/component/imageStudio/ImageGenerationTaskCard.tsx`、`app/routes/component/imageStudio/PictureTranslateTaskCard.tsx`；广告同步卡参考 `app/routes/component/adsCatalog/AdsCatalogTaskCard.tsx`。
 - 用户可见文案必须同步维护 `app/locales/zh/common.json` 与 `app/locales/en/common.json`，不得在组件中新增只覆盖一种语言的硬编码文案。
 - 使用现有 Shopify Web Components、Ant Design 和样式体系；不要引入第二套设计系统。
@@ -322,7 +326,7 @@ Package-backed：
 
 运维 / Agent 入口（无 npm，按需手跑）：
 
-- `scripts/fetch-feishu-doc.mjs` — 拉取飞书 Wiki/Docx（§6 强制入口）
+- `scripts/fetch-feishu-doc.mjs` — 拉取飞书 Wiki/Docx（§6）
 - `scripts/query-turso.mjs` — 快速查 Turso 表（默认测环境）
 - `scripts/lib/loadEnv.mjs` — 上述脚本共用的 env 叠载与 Turso/Redis/Cosmos 解析
 - `scripts/generate-notification-html-templates.cjs` — 重生 SES 邮件 HTML（`app/server/notifications/tencent-cloud-html/`）
@@ -335,21 +339,9 @@ CI：
 
 不要恢复已删除的 Render 日志 digest 脚本（`render-daily-log-digest` 等）或缺失的 `turso-drop-schema-*` npm 入口。临时探针放仓库外，或用完即删；`scripts/tmp*` 未跟踪文件勿擅自纳入改动。
 
-## 11. 验证矩阵
+## 11. 验证参考（按需）
 
-根据改动范围先跑聚焦检查，再跑交付门禁：
-
-| 改动 | 最低验证 |
-|---|---|
-| 纯文档 | 检查链接、路径、命令与 `git diff --check` |
-| 纯工具函数/服务 | 对应 Vitest 文件 + `npm run typecheck` |
-| 路由/API/服务端业务 | 相关测试 + `npm run typecheck` + `npm run build` |
-| 前端组件/页面/i18n | `npm run typecheck` + `npm run build`，必要时浏览器验证 |
-| Prisma schema/计费/任务状态 | 相关测试 + `npx prisma generate` + `npm run typecheck` + `npm run build` |
-| Admin 任意代码 | `cd admin && npm run build` |
-| Web Pixel 扩展 | 根构建 + Shopify 扩展相关验证/部署前检查 |
-
-代码改动的默认完整门禁：
+按风险自选，非强制流程。常用命令：
 
 ```powershell
 npm run lint
@@ -358,18 +350,38 @@ npm run test
 npm run build
 ```
 
-若仓库存在与本次无关的既有失败，必须记录准确命令、错误摘要，并证明本次相关的聚焦验证已通过；不能笼统写“有旧错误”。文档改动无需为形式而运行整套构建。
+| 改动 | 常选 |
+|---|---|
+| 纯工具函数/服务 | 对应 Vitest + `typecheck` |
+| 路由/API/服务端 | 相关测试 + `typecheck` + `build` |
+| 前端/i18n | `typecheck` + `build` |
+| Prisma / 计费 / 任务状态 | 相关测试 + `prisma generate` + `typecheck` + `build` |
+| Admin | `cd admin && npm run build` |
 
 ## 12. 工作纪律
 
+### 思考与执行节奏
+
+- 深入思考会增加延迟，只在能实质提升结果质量时展开，典型是需要多步推理的问题；拿不准时直接回答。
+- 选定一个方案就执行到底。除非遇到与判断直接矛盾的新信息，不要反复推翻已定的做法；先走通一条路、失败了再修正，比在两个方案之间来回权衡更快。
+- 打算调用多个彼此无依赖的工具时一次全部并行发起。例如要读三个文件就同时发三次读取，不要串成三轮。只有参数依赖上一步结果的调用才串行，并且不要用占位值猜参数。
+- 不推测没打开过的代码。用户引用了具体文件就先读再答；对调用链、schema、组件行为下结论前先查，查不到就明确标成假设，不编造路径或 API。
+- 避免过度设计：只做被明确要求或确实必需的改动。修 bug 不必顺手清理周边代码，简单功能不必预留配置项；不为不可能发生的场景加防御分支，只在系统边界（用户输入、外部 API）做校验；不为一次性操作抽 helper。
+- 不给没改过的代码补注释、docstring 或类型标注；只在逻辑不自明处写注释。
+
+### 边界与纪律
+
 - 只改需求相关文件；不顺手格式化、重命名或清理无关代码。
-- 工作树可能不干净。用户改动优先，禁止使用 `git reset --hard`、`git checkout --` 或删除未跟踪文件来“清理”环境。
+- 工作树可能不干净。用户改动优先，禁止使用 `git reset --hard`、`git checkout --` 或删除未跟踪文件来“清理”环境。遇到阻碍时不要拿破坏性操作当捷径：不绕过校验（例如 `--no-verify`），不丢弃看不懂的在途文件。
+- 按可逆性分级决定是否先问用户。本地可逆操作（改文件、跑测试与 lint）可直接做；以下三类先确认再动手：
+  - **破坏性**：删文件或分支、drop 表、`rm -rf`
+  - **难以撤销**：`git push --force`、`git reset --hard`、修改已发布的 commit
+  - **他人可见**：推分支、创建 PR、评论 issue、发邮件或飞书消息、改共享基础设施、修改 Shopify 真实数据、生产迁移
+- 上一条里的部署、生产迁移、发送真实邮件/飞书消息、修改 Shopify 真实数据、推分支与创建 PR，只在用户明确要求时执行，不因「看起来该做」而主动发起。测/产环境的读写口径另见 `.cursor/rules/env-prod-safety.mdc`。
 - 搜索优先使用 `rg` / `rg --files`；先追真实调用方，再删除 wrapper、兼容层或旧 API。
 - 不猜接口。Shopify GraphQL、scope、版本或平台约束可能变化时，使用仓库配置的 Shopify 开发工具或官方文档核实。
-- 对外部写操作保持最小权限：部署、生产迁移、发送真实邮件/飞书消息、修改 Shopify 数据、推送分支或创建 PR，只有在用户明确要求时执行。
 - 新增环境变量时同步更新相应配置校验和文档，只记录名称、用途、是否必需，不提交 secret。
 - 设计跨存储或跨仓库方案时，先画清所有权和调用路径；Telemetry、Agent 运行摘要和业务对象默认分开存储。
-- 完成后报告：修改了什么、关键文件、验证结果、剩余风险或被阻塞项。
 
 ## 13. 维护本文件
 
@@ -379,8 +391,8 @@ npm run build
 - Ask 工作台上下文工具清单（商品/订单/文章/文件）增减；
 - 新增/删除可部署应用、worker、扩展或外部存储；
 - Partner 应用 toml、webhook 订阅、分发方式（Public / Custom）或发布姿态变化；
-- package scripts、Node 版本或验证门禁变化；
-- 新增强制设计/交互/计费/迁移约束；
+- package scripts、Node 版本或常用验证命令变化；
+- 新增设计/交互/计费/迁移硬约束；
 - 领域文档重命名或迁移。
 
 更新时以代码扫描结果为准，删除过时描述，不把一次性排错记录、机器路径、密钥值或长篇实现细节堆进本文件。

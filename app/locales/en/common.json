@@ -267,6 +267,580 @@
     "manualDisconnectFailed": "Failed to disconnect test authorization",
     "manualNotConnected": "Complete manual Meta authorization first."
   },
+  "bulkPriceEdit": {
+    "logReadingVariants": "Reading variant prices for {{count}} products…",
+    "logComputing": "Computing new prices for {{count}} variants…",
+    "logReadyForReview": "Change list ready: {{changed}} variants to update, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the change list. Please try again.",
+    "noVariantsFound": "The selected products have no variants to reprice",
+    "cardTitle": "Task: bulk edit variant prices",
+    "metaRule": "Rule: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "metaVariants": "{{count}} variants",
+    "metaMinPrice": "Minimum price {{value}}",
+    "cardPrimaryRunning": "Reading variant prices and computing changes…",
+    "cardPrimaryPendingReview": "Change list ready: {{changed}} variants to update, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open the change list to review, export CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Prices updated. The rollback CSV keeps the values from before the write-back.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never modify products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Change preview · #{{id}}",
+    "reviewTitleShort": "Price change preview",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "reviewDescription": "Per-variant changes computed from your rule. Nothing is written to the store until you confirm — you can also just download the CSV and change nothing.",
+    "summaryProducts": "Products",
+    "summaryVariants": "Variants",
+    "summaryChanged": "To update",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "This run hit the variant limit, so the list covers only the first batch of variants. Narrow the product selection and rebuild to avoid missing variants.",
+    "appliedBanner": "Written to store: {{succeeded}} variants succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download change CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write back to store ({{count}} variants)",
+    "applyConfirmHint": "This updates prices for {{count}} variants in your store and cannot be undone automatically.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colVariant": "Variant",
+    "colSku": "SKU",
+    "colPrice": "Price",
+    "colCompareAt": "Compare-at",
+    "colAction": "Action",
+    "actionChange": "Will update",
+    "cleared": "Cleared",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "no_change": "No change",
+      "below_min_price": "Below minimum price guard",
+      "invalid_price": "Computed price is invalid",
+      "missing_price": "Current price missing"
+    },
+    "note": {
+      "compare_at_not_greater": "Compare-at price not above the new price; left unchanged"
+    }
+  },
+  "bulkTagEdit": {
+    "logReadingProducts": "Reading tags for {{count}} products…",
+    "logComputing": "Computing tag changes for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: bulk edit product tags",
+    "metaRule": "Rule: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "metaTagOps": "+{{added}} · −{{removed}}",
+    "ruleAdd": "Add {{tags}}",
+    "ruleRemove": "Remove {{tags}}",
+    "rulePrefix": "Clear prefix {{prefixes}}",
+    "cardPrimaryRunning": "Reading product tags and computing changes…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open “Review changes” to check the list, download the CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Tags updated. The rollback CSV records the reverse operations.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never modify products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Tag change preview · #{{id}}",
+    "reviewTitleShort": "Tag change preview",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "reviewDescription": "Below are the per-product tag changes computed from your rule. Nothing is written to the store until you confirm; you can also just download the CSV and change nothing.",
+    "summaryProducts": "Products",
+    "summaryAdded": "To add",
+    "summaryRemoved": "To remove",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "The product count exceeds the per-run limit, so this list covers only the first batch. Narrow the product range and run again to avoid missing items.",
+    "removalWarning": "This run removes tags. If those tags are used by Smart Collections or other apps, the affected products may drop out of those collections.",
+    "appliedBanner": "Written to store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download changes CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write back to store ({{count}} products)",
+    "applyConfirmHint": "This will change tags on {{count}} products in your store. Use the rollback CSV to undo manually.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colBeforeTags": "Current tags",
+    "colChange": "Change",
+    "colAction": "Action",
+    "actionChange": "Will change",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "no_change": "No change",
+      "too_many_tags": "Exceeds tag limit"
+    }
+  },
+  "bulkStatusEdit": {
+    "logReadingProducts": "Reading the status of {{count}} products…",
+    "logComputing": "Computing status changes for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: bulk activate or unpublish products",
+    "metaRule": "Rule: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "metaStatusOps": "Activate {{toActive}} · Draft {{toDraft}}",
+    "ruleTarget": {
+      "active": "Set to Active",
+      "draft": "Set to Draft"
+    },
+    "ruleInventory": {
+      "out_of_stock_only": "Out of stock only",
+      "in_stock_only": "In stock only"
+    },
+    "cardPrimaryRunning": "Reading product status and computing changes…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open “Review changes” to check the list, download the CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Product status updated. The rollback CSV records each product's original status.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never modify products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Status change preview · #{{id}}",
+    "reviewTitleShort": "Status change preview",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "reviewDescription": "Below are the per-product status changes computed from your rule. Nothing is written to the store until you confirm; you can also just download the CSV and change nothing.",
+    "summaryProducts": "Products",
+    "summaryToActive": "To Active",
+    "summaryToDraft": "To Draft",
+    "summarySkipped": "Skipped",
+    "status": {
+      "ACTIVE": "Active",
+      "DRAFT": "Draft",
+      "ARCHIVED": "Archived",
+      "UNLISTED": "Unlisted"
+    },
+    "truncatedWarning": "The product count exceeds the per-run limit, so this list covers only the first batch. Narrow the product range and run again to avoid missing items.",
+    "draftWarning": "This run moves {{count}} products to Draft, so customers will no longer be able to buy them. Use the rollback CSV as a reference to set them back.",
+    "publishCheckWarning": "{{count}} of these products have never been published to the Online Store. Setting them to Active only lifts the selling restriction — it does not add them to a sales channel, so they may still be invisible on your storefront. Check their sales channels in the Shopify admin.",
+    "publishCheckCell": "Check channel",
+    "publishCheckCellTitle": "This product has no Online Store publication, so it may stay invisible on the storefront after going Active",
+    "inventoryValue": "Stock {{count}}",
+    "inventoryUntracked": "Not tracked",
+    "appliedBanner": "Written to store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download changes CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write back to store ({{count}} products)",
+    "applyConfirmHint": "This will change the status of {{count}} products in your store. Use the rollback CSV to undo manually.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colInventory": "Stock",
+    "colChange": "Status change",
+    "colAction": "Action",
+    "actionChange": "Will change",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "no_change": "Already in target status",
+      "archived_source": "Archived — handle in Shopify admin",
+      "inventory_condition": "Does not meet stock condition",
+      "inventory_untracked": "Inventory not tracked"
+    }
+  },
+  "bulkCollectionEdit": {
+    "logReadingCollection": "Reading the target collection…",
+    "logReadingProducts": "Checking collection membership for {{count}} products…",
+    "logComputing": "Computing membership changes for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "collectionNotFound": "This collection no longer exists. Please pick another one.",
+    "ruleDrivenCollection": "“{{collection}}” is a smart collection — its members are decided by conditions, so products cannot be added or removed manually. Use a manual collection instead, or edit the conditions in the Shopify admin.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: bulk update collection membership",
+    "metaRule": "Action: {{action}}",
+    "metaCollection": "Collection: {{collection}}",
+    "metaProducts": "{{count}} products",
+    "ruleAction": {
+      "add": "Add to collection",
+      "remove": "Remove from collection"
+    },
+    "cardPrimaryRunning": "Reading collection membership and computing changes…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open “Review changes” to check the list, download the CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Collection membership updated. The rollback CSV records each product's original membership.",
+    "cardSecondaryPendingJob": "Removals run asynchronously on Shopify and may take a little longer to show up in the admin.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never modify collections.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Collection change preview · #{{id}}",
+    "reviewTitleShort": "Collection change preview",
+    "reviewDescription": "Below are the per-product membership changes. Nothing is written to the store until you confirm; you can also just download the CSV and change nothing.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "targetCollection": "Target collection: {{collection}}",
+    "summaryProducts": "Products",
+    "summaryAdded": "To add",
+    "summaryRemoved": "To remove",
+    "summarySkipped": "Skipped",
+    "memberIn": "In collection",
+    "memberOut": "Not in collection",
+    "productStatus": {
+      "ACTIVE": "Active",
+      "DRAFT": "Draft",
+      "ARCHIVED": "Archived",
+      "UNLISTED": "Unlisted"
+    },
+    "truncatedWarning": "The product count exceeds the per-run limit, so this list covers only the first batch. Narrow the product range and run again to avoid missing items.",
+    "removeWarning": "This run removes {{count}} products from “{{collection}}”. If that collection powers navigation, a landing page, or an ad feed, those products disappear from there too.",
+    "appliedBanner": "Written to store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "pendingJobHint": "Removals run asynchronously on Shopify — confirm the final result in the admin shortly.",
+    "downloadChangeset": "Download changes CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write back to store ({{count}} products)",
+    "applyConfirmHint": "This will change membership of {{count}} products in “{{collection}}”. Use the rollback CSV to undo manually.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colStatus": "Status",
+    "colChange": "Membership",
+    "colAction": "Action",
+    "actionAdd": "Will add",
+    "actionRemove": "Will remove",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "already_in": "Already in collection",
+      "not_in": "Not in collection"
+    }
+  },
+  "bulkPriceImport": {
+    "logReadingFile": "Reading the uploaded spreadsheet…",
+    "logParsedRows": "Parsed {{count}} rows. Matching them to store products by SKU…",
+    "logMatching": "Matching {{count}} SKUs…",
+    "logReadyForReview": "Changeset ready: {{changed}} variants will change, {{issues}} rows will not be written",
+    "dryRunFailed": "Could not read the spreadsheet. Please check the file format and try again.",
+    "fileNotFound": "That file is no longer available. Please upload it again.",
+    "noUsableRows": "No usable rows found. Check that the SKU and price columns are correct.",
+    "matchRateTooLow": "Only {{matched}} of {{total}} rows matched a store product, so \"{{column}}\" is probably not the SKU column. Pick the right column and try again.",
+    "cardTitle": "Task: import prices from a spreadsheet",
+    "metaFile": "File: {{name}}",
+    "metaSkuColumn": "SKU column: {{column}}",
+    "metaPriceColumn": "Price column: {{column}}",
+    "metaMatched": "{{matched}}/{{total}} rows matched",
+    "cardPrimaryRunning": "Reading the spreadsheet and matching store products…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} variants will change, {{issues}} rows will not be written",
+    "cardPrimaryApplied": "Written to your store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open \"Review changes\" to check the list, export CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Prices updated. The rollback CSV holds the values from before the write-back.",
+    "cardSecondaryDefault": "Reading and matching are read-only and never modify your products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Price import preview · #{{id}}",
+    "reviewTitleShort": "Price import preview",
+    "reviewDescription": "Below is the row-by-row price change after matching your spreadsheet against store products. Nothing is written until you confirm — you can also just export the CSV and change nothing.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "sourceFile": "Source file:",
+    "summarySheetRows": "Rows in file",
+    "summaryMatched": "Matched",
+    "summaryChanged": "Will change",
+    "summaryUnchanged": "Unchanged",
+    "summaryIssues": "Not written",
+    "truncatedWarning": "The spreadsheet exceeds the per-run row limit, so only the first part was processed. Split the file and import in batches so nothing is missed.",
+    "issuesTitle": "{{count}} rows will not be written to your store:",
+    "issueReason": {
+      "missing_sku": "{{count}} rows have an empty SKU column",
+      "missing_price": "{{count}} rows have an empty price column",
+      "invalid_price": "{{count}} rows have a price that could not be read as an amount",
+      "invalid_compare_at": "{{count}} rows have a compare-at price that could not be read as an amount",
+      "duplicate_sku_in_file": "{{count}} rows repeat a SKU that appears elsewhere in the file, so there is no way to tell which row wins",
+      "sku_not_found": "{{count}} rows have a SKU that does not exist in your store",
+      "sku_matches_multiple": "{{count}} rows have a SKU that matches more than one variant"
+    },
+    "suspiciousWarning": "{{count}} rows have a new price more than 50× away from the current price. Double-check whether a decimal point or thousands separator was misread.",
+    "noteSuspicious": "Unusual price gap",
+    "appliedBanner": "Written to your store: {{succeeded}} variants succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download changeset CSV",
+    "downloadRollback": "Download rollback CSV",
+    "downloadIssues": "Download not-written CSV",
+    "applyButton": "Write to store ({{count}} variants)",
+    "applyConfirmHint": "This changes the price of {{count}} variants in your store. Use the rollback CSV to undo manually.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colSourceRow": "Row",
+    "colSku": "SKU",
+    "colProduct": "Product",
+    "colPrice": "Price",
+    "colCompareAt": "Compare-at",
+    "colAction": "Action",
+    "actionChange": "Will change",
+    "actionUnchanged": "Unchanged",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list."
+  },
+  "bulkCostImport": {
+    "logReadingFile": "Reading the uploaded spreadsheet…",
+    "logParsedRows": "Parsed {{count}} rows. Matching them to store products by SKU…",
+    "logMatching": "Matching {{count}} SKUs…",
+    "logReadyForReview": "Changeset ready: {{changed}} variants will change cost, {{issues}} rows will not be written",
+    "dryRunFailed": "Could not read the spreadsheet. Please check the file format and try again.",
+    "fileNotFound": "That file is no longer available. Please upload it again.",
+    "noUsableRows": "No usable rows found. Check that the SKU and cost columns are correct.",
+    "matchRateTooLow": "Only {{matched}} of {{total}} rows matched a store product, so \"{{column}}\" is probably not the SKU column. Pick the right column and try again.",
+    "cardTitle": "Task: import unit costs from a spreadsheet",
+    "metaFile": "File: {{name}}",
+    "metaSkuColumn": "SKU column: {{column}}",
+    "metaCostColumn": "Cost column: {{column}}",
+    "metaMatched": "{{matched}}/{{total}} rows matched",
+    "cardPrimaryRunning": "Reading the spreadsheet and matching store products…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} variants will change cost, {{issues}} rows will not be written",
+    "cardPrimaryApplied": "Written to your store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open \"Review changes\" to check the margin impact, export CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Costs updated — profit and ROI reports now use the real figures. The rollback CSV holds the values from before the write-back.",
+    "cardSecondaryDefault": "Reading and matching are read-only and never modify your products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Cost import preview · #{{id}}",
+    "reviewTitleShort": "Cost import preview",
+    "reviewDescription": "Below is the row-by-row cost change after matching your spreadsheet against store products, along with the resulting margin. Nothing is written until you confirm — you can also just export the CSV and change nothing.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "sourceFile": "Source file:",
+    "scopeHint": "Cost only affects your profit and ROI reports — the price buyers see is unchanged. Costs must be in your store's default currency.",
+    "summarySheetRows": "Rows in file",
+    "summaryMatched": "Matched",
+    "summaryChanged": "Will change",
+    "summaryUnchanged": "Unchanged",
+    "summaryIssues": "Not written",
+    "truncatedWarning": "The spreadsheet exceeds the per-run row limit, so only the first part was processed. Split the file and import in batches so nothing is missed.",
+    "issuesTitle": "{{count}} rows will not be written to your store:",
+    "issueReason": {
+      "missing_sku": "{{count}} rows have an empty SKU column",
+      "missing_cost": "{{count}} rows have an empty cost column",
+      "invalid_cost": "{{count}} rows have a cost that could not be read as an amount",
+      "duplicate_sku_in_file": "{{count}} rows repeat a SKU that appears elsewhere in the file, so there is no way to tell which row wins",
+      "sku_not_found": "{{count}} rows have a SKU that does not exist in your store",
+      "sku_matches_multiple": "{{count}} rows have a SKU that matches more than one variant",
+      "no_inventory_item": "{{count}} rows match a variant with no inventory item, so cost cannot be set"
+    },
+    "negativeMarginWarning": "{{count}} rows have a new cost above the selling price, which leaves those products at a negative margin. Unless you are deliberately selling at a loss, check whether the retail price column was picked instead of the cost column.",
+    "suspiciousWarning": "{{count}} rows have a new cost more than 50× away from the current cost. Double-check whether a decimal point or thousands separator was misread.",
+    "appliedBanner": "Written to your store: {{succeeded}} variants succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download changeset CSV",
+    "downloadRollback": "Download rollback CSV",
+    "downloadIssues": "Download not-written CSV",
+    "applyButton": "Write to store ({{count}} variants)",
+    "applyConfirmHint": "This changes the unit cost of {{count}} variants in your store. Use the rollback CSV to undo manually. Large batches take a few minutes.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colSourceRow": "Row",
+    "colSku": "SKU",
+    "colProduct": "Product",
+    "colCost": "Cost",
+    "colPrice": "Price",
+    "colMargin": "Margin",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list."
+  },
+  "bulkInventoryImport": {
+    "logReadingFile": "Reading the uploaded spreadsheet…",
+    "logParsedRows": "Parsed {{count}} rows. Matching them to store products by SKU…",
+    "logMatching": "Matching {{count}} SKUs against stock at \"{{location}}\"…",
+    "logReadyForReview": "Changeset ready: {{changed}} variants will change stock, {{issues}} rows will not be written",
+    "dryRunFailed": "Could not read the spreadsheet. Please check the file format and try again.",
+    "fileNotFound": "That file is no longer available. Please upload it again.",
+    "locationNotFound": "That location no longer exists or has been deactivated. Pick another location and try again.",
+    "noUsableRows": "No usable rows found. Check that the SKU and quantity columns are correct.",
+    "matchRateTooLow": "Only {{matched}} of {{total}} rows matched a store product, so \"{{column}}\" is probably not the SKU column. Pick the right column and try again.",
+    "cardTitle": "Task: import stock levels from a spreadsheet",
+    "metaLocation": "Location: {{name}}",
+    "metaFile": "File: {{name}}",
+    "metaQuantityColumn": "Quantity column: {{column}}",
+    "metaMatched": "{{matched}}/{{total}} rows matched",
+    "cardPrimaryRunning": "Reading the spreadsheet and matching current stock…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} variants will change stock, {{issues}} rows will not be written",
+    "cardPrimaryApplied": "Written to your store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open \"Review changes\" to check the list, export CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Stock updated. The rollback CSV holds the available quantities from before the write-back, but it does not account for sales since then — re-check before rolling back.",
+    "cardSecondaryDefault": "Reading and matching are read-only and never modify stock.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Stock import preview · #{{id}}",
+    "reviewTitleShort": "Stock import preview",
+    "reviewDescription": "Below is the row-by-row available-stock change at the selected location after matching your spreadsheet against store products. Nothing is written until you confirm — you can also just export the CSV and change nothing.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "targetLocation": "Location:",
+    "sourceFile": "Source file:",
+    "scopeHint": "This sets the \"available\" quantity at the selected location to the exact number in your file — it is an overwrite, not an adjustment. Stock at other locations is untouched.",
+    "summarySheetRows": "Rows in file",
+    "summaryMatched": "Matched",
+    "summaryChanged": "Will change",
+    "summaryUnchanged": "Unchanged",
+    "summaryIssues": "Not written",
+    "truncatedWarning": "The spreadsheet exceeds the per-run row limit, so only the first part was processed. Split the file and import in batches so nothing is missed.",
+    "issuesTitle": "{{count}} rows will not be written to your store:",
+    "issueReason": {
+      "missing_sku": "{{count}} rows have an empty SKU column",
+      "missing_quantity": "{{count}} rows have an empty quantity column",
+      "invalid_quantity": "{{count}} rows have a quantity that is not a whole non-negative number",
+      "duplicate_sku_in_file": "{{count}} rows repeat a SKU that appears elsewhere in the file, so there is no way to tell which row wins",
+      "sku_not_found": "{{count}} rows have a SKU that does not exist in your store",
+      "sku_matches_multiple": "{{count}} rows have a SKU that matches more than one variant",
+      "no_inventory_item": "{{count}} rows match a variant with no inventory item, so stock cannot be set",
+      "not_tracked": "{{count}} rows match a variant that does not track inventory. Turn tracking on in Shopify admin first.",
+      "not_stocked_at_location": "{{count}} rows match a variant that is not stocked at this location. Pick another location, or add the variant to this location in Shopify admin first."
+    },
+    "skipReason": {
+      "no_change": "Same quantity"
+    },
+    "largeDeltaWarning": "{{count}} rows change stock by more than 1,000 units. Double-check whether an amount column was picked instead of the quantity column.",
+    "appliedBanner": "Written to your store: {{succeeded}} variants succeeded, {{failed}} failed.",
+    "staleHint": "{{count}} of them were left untouched because stock changed after the preview was generated (so real sales in between are not wiped out). Run the import again to handle those rows.",
+    "downloadChangeset": "Download changeset CSV",
+    "downloadRollback": "Download rollback CSV",
+    "downloadIssues": "Download not-written CSV",
+    "applyButton": "Write to store ({{count}} variants)",
+    "applyConfirmHint": "This sets the available stock of {{count}} variants at this location. Rows whose stock changed after the preview are skipped automatically, so real sales in between are never overwritten. Large batches take a few minutes.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colSourceRow": "Row",
+    "colSku": "SKU",
+    "colProduct": "Product",
+    "colQuantity": "Available",
+    "colDelta": "Change",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list."
+  },
+  "bulkMetafieldEdit": {
+    "logReadingDefinition": "Reading the definition of custom field {{field}}…",
+    "logReadingProducts": "Reading the current value for {{count}} products…",
+    "logComputing": "Working out the target value for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "definitionNotFound": "Custom field {{field}} was not found. It may have been deleted in the Shopify admin.",
+    "planFailed": "{{reason}}",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: bulk edit a product custom field",
+    "metaRule": "Mode: {{action}}",
+    "metaField": "Field: {{field}}",
+    "metaProducts": "{{count}} products",
+    "ruleAction": {
+      "set": "Set to a value",
+      "clear": "Clear the field"
+    },
+    "cardPrimaryRunning": "Reading current values and working out the target value…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written to your store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open \"Review changes\" to check the list, export it, or confirm the write.",
+    "cardSecondaryApplied": "Custom field updated. The rollback CSV records the values from before the write.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never change your products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write result",
+    "reviewTitle": "Custom field change preview · #{{id}}",
+    "reviewTitleShort": "Custom field change preview",
+    "reviewDescription": "Below is the per-product change for this custom field. Nothing is written to your store until you confirm; you can also just export the CSV and change nothing.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "targetField": "Target field: {{field}} ({{fieldKey}})",
+    "summaryProducts": "Products",
+    "summarySet": "Will set",
+    "summaryCleared": "Will clear",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "There were more products than one run can handle, so this list only covers the first batch. Narrow the product range and run it again so nothing is missed.",
+    "invalidWarning": "{{count}} products produced a value that does not match this field's data type and were skipped. Check the value or placeholders and run it again.",
+    "clearWarning": "Confirming will clear this field on {{count}} products, and Shopify will not keep the old values. Download the rollback CSV first.",
+    "appliedBanner": "Written to your store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download changes CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write to store ({{count}} products)",
+    "applyConfirmHintSet": "This will change \"{{field}}\" on {{count}} products in your store. Use the rollback CSV to undo it manually.",
+    "applyConfirmHintClear": "This will clear the field on {{count}} products. Use the rollback CSV to restore it manually.",
+    "applyConfirmButton": "Confirm write",
+    "applying": "Writing…",
+    "applyFailed": "The write failed. Please try again.",
+    "colProduct": "Product",
+    "colBefore": "Current value",
+    "colAfter": "Target value",
+    "colAction": "Outcome",
+    "valueCleared": "(cleared)",
+    "actionSet": "Will set",
+    "actionClear": "Will clear",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows; download the CSV for the full list.",
+    "skipReason": {
+      "no_change": "No change",
+      "already_filled": "Already has a value, not overwritten",
+      "empty_result": "Computed value is empty",
+      "nothing_to_clear": "No value to clear",
+      "invalid_value": "Value does not match the field type"
+    }
+  },
+  "bulkSeoEdit": {
+    "logReadingProducts": "Reading SEO fields for {{count}} products…",
+    "logComputing": "Rendering SEO from your template for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: bulk rewrite product SEO",
+    "metaRule": "Scope: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "metaFieldChanges": "Titles {{titles}} · Descriptions {{descriptions}}",
+    "ruleTitle": "SEO title",
+    "ruleDescription": "SEO description",
+    "ruleOnlyFillEmpty": "fill empty only",
+    "cardPrimaryRunning": "Reading products and rendering SEO from the template…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open “Review changes” to check the list, download the CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "SEO updated. The rollback CSV records the values from before the write-back.",
+    "cardSecondaryDefault": "Reading and rendering are read-only and never modify products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "SEO change preview · #{{id}}",
+    "reviewTitleShort": "SEO change preview",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "reviewDescription": "Below are the per-product SEO changes rendered from your template. Nothing is written to the store until you confirm; you can also just download the CSV and change nothing.",
+    "summaryProducts": "Products",
+    "summaryTitleChanges": "Title edits",
+    "summaryDescriptionChanges": "Description edits",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "The product count exceeds the per-run limit, so this list covers only the first batch. Narrow the product range and run again to avoid missing items.",
+    "lengthWarning": "Some values exceeded the recommended length and were truncated (title {{titleMax}} characters, description {{descriptionMax}}). Check the table to make sure the truncated text still reads well.",
+    "appliedBanner": "Written to store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download changes CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write back to store ({{count}} products)",
+    "applyConfirmHint": "This will change SEO on {{count}} products in your store. Use the rollback CSV to undo manually.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colSeoTitle": "SEO title",
+    "colSeoDescription": "SEO description",
+    "colAction": "Action",
+    "actionChange": "Will change",
+    "emptyValue": "(empty)",
+    "charCount": "{{count}} / {{max}} characters",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "no_change": "No change",
+      "already_filled": "Already filled, not overwritten",
+      "empty_result": "Template rendered empty"
+    },
+    "note": {
+      "title_truncated": "Title truncated",
+      "description_truncated": "Description truncated",
+      "title_too_long": "Title too long, skipped",
+      "description_too_long": "Description too long, skipped"
+    }
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
@@ -2193,7 +2767,8 @@
     "statusCancelled": "Cancelled",
     "statusPendingReview": "Pending Review",
     "statusApplied": "Applied",
-    "statusScored": "Scored"
+    "statusScored": "Scored",
+    "staleReclaimed": "This task did not finish in time (likely interrupted by a service restart) and was automatically marked as failed. Please retry."
   },
   "productImproveStage1": {
     "subtitle": "Configure first, then review and apply results from the task list.",
@@ -3402,6 +3977,7 @@
         "clearSelectionAria": "Clear {{label}}",
         "recommended": "Recommended",
         "recommendedActions": "Recommended actions",
+        "capabilityActionsTitle": "Click to start",
         "recommend": {
           "titleWithProduct": "Recommended for the selected products",
           "createsTask": "Creates task",
@@ -3424,6 +4000,10 @@
             "label": "Abandonment and refunds",
             "prompt": "Review my abandoned checkout rate, refund rate and traffic source performance, point out anomalies and analyze likely causes."
           },
+          "seoAudit": {
+            "label": "SEO audit",
+            "prompt": "Run an SEO audit on my store. Find the problems with my product search titles and descriptions, explain the cause and the fix for each one, and show me examples of what they could be rewritten to."
+          },
           "qualityScore": {
             "label": "Product page quality score",
             "prompt": {
@@ -3445,8 +4025,72 @@
               "selected": "Translate the text inside the selected products' images while keeping the original layout and visual style."
             }
           },
-          "generateImage": {
-            "label": "Generate a product image",
+      "groupBulkEdit": "Bulk edits",
+      "bulkPriceEdit": {
+        "label": "Bulk price edit",
+        "prompt": {
+          "shop": "Help me bulk edit product prices: confirm the rule and which products first, then show me a change preview — do not write to the store yet.",
+          "selected": "Adjust the prices of the selected products, show me a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkTagEdit": {
+        "label": "Bulk tag edit",
+        "prompt": {
+          "shop": "Help me bulk edit product tags: confirm which tags to add or remove and which products first, then show me a change preview — do not write to the store yet.",
+          "selected": "Edit the tags on the selected products, show me a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkStatusEdit": {
+        "label": "Bulk activate / unpublish",
+        "prompt": {
+          "shop": "Help me bulk activate or unpublish products: confirm the direction, the product range and any stock condition first, then show me a change preview — do not write to the store yet.",
+          "selected": "Change the status of the selected products: confirm the direction with me, show a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkCollectionEdit": {
+        "label": "Bulk collection update",
+        "prompt": {
+          "shop": "Help me add a batch of products to a manual collection or remove them from one: confirm the direction, the target collection and the product range first, then show me a change preview — do not write to the store yet.",
+          "selected": "Add the selected products to a collection or remove them from one: confirm the direction and the target collection with me, show a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkSeoEdit": {
+        "label": "Bulk SEO edit",
+        "prompt": {
+          "shop": "Help me bulk rewrite product SEO titles and descriptions: first show which products are missing SEO, confirm the template with me, then show a change preview — do not write to the store yet.",
+          "selected": "Rewrite the SEO titles and descriptions of the selected products from one template, show me a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkMetafieldEdit": {
+        "label": "Bulk edit custom fields",
+        "prompt": {
+          "shop": "Help me bulk edit a product custom field (metafield): first show which fields I can edit, confirm the value with me, then show a change preview — do not write to the store yet.",
+          "selected": "Fill one custom field on the selected products: confirm the field and the value with me, show a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkPriceImport": {
+        "label": "Import prices from file",
+        "prompt": {
+          "shop": "I uploaded a price list. Update my product prices from it: confirm which column is the SKU and which is the price, then show me a change preview — do not write to the store yet.",
+          "selected": "I uploaded a price list. Update my product prices from it, show me a change preview first, and only write back after I confirm."
+        }
+      },
+      "bulkCostImport": {
+        "label": "Import costs from file",
+        "prompt": {
+          "shop": "I uploaded a supplier cost sheet. Update my product unit costs from it: confirm which column is the SKU and which is the cost, then show me a change preview with the margin impact — do not write to the store yet.",
+          "selected": "I uploaded a supplier cost sheet. Update my product unit costs from it, show me a change preview with the margin impact first, and only write back after I confirm."
+        }
+      },
+      "bulkInventoryImport": {
+        "label": "Import stock from file",
+        "prompt": {
+          "shop": "I uploaded a stock count sheet. Update my product stock from it: confirm which column is the SKU, which is the quantity, and which location to import into, then show me a change preview — do not write to the store yet.",
+          "selected": "I uploaded a stock count sheet. Update my product stock from it, show me a change preview first, and only write back after I confirm."
+        }
+      },
+      "generateImage": {
+        "label": "Generate a product image",
             "prompt": "Generate a product hero image suitable for a DTC store: clean, white background, product-focused."
           }
         },
@@ -3685,12 +4329,122 @@
           "title": "Generate product image with AI",
           "summary": "Generate one product image from your description. The result stays in this chat.",
           "placeholder": "Describe the image, e.g. minimal ceramic mug on a white background"
+        },
+        "bulkPriceEdit": {
+          "title": "Bulk edit variant prices",
+          "summary": "First compute the new price for every variant and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkTagEdit": {
+          "title": "Bulk edit product tags",
+          "summary": "First compute the tag changes for every product and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkStatusEdit": {
+          "title": "Bulk activate or unpublish products",
+          "summary": "First compute the status change for every product and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkCollectionEdit": {
+          "title": "Bulk update collection membership",
+          "summary": "First compute how each product enters or leaves the collection and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkSeoEdit": {
+          "title": "Bulk rewrite product SEO",
+          "summary": "Render the SEO title and description for every product from your template and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkMetafieldEdit": {
+          "title": "Bulk edit a product custom field",
+          "summary": "Work out the target value of the chosen custom field for every product and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkPriceImport": {
+          "title": "Import prices from a spreadsheet",
+          "summary": "Read your uploaded spreadsheet, match it to store products by SKU, and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "bulkCostImport": {
+          "title": "Import unit costs from a spreadsheet",
+          "summary": "Read your uploaded spreadsheet, match it to store products by SKU, and preview the margin impact as an exportable change list. Cost only affects profit reports, not the price buyers see. Nothing is written until you confirm."
+        },
+        "bulkInventoryImport": {
+          "title": "Import stock levels from a spreadsheet",
+          "summary": "Read your uploaded spreadsheet, match it to store products by SKU, and set the available stock at the location you pick to the exact quantities in the file (exportable as CSV). Nothing is written until you confirm."
         }
       },
       "fields": {
         "targetLanguage": "Target language",
         "sourceLanguage": "Source language",
-        "description": "Image description"
+        "description": "Image description",
+        "priceMode": "Price change",
+        "priceValue": "Amount",
+        "rounding": "Rounding",
+        "compareAtMode": "Compare-at price",
+        "minPrice": "Minimum price guard",
+        "addTags": "Tags to add",
+        "removeTags": "Tags to remove",
+        "removePrefixes": "Clear tags by prefix",
+        "targetStatus": "Target status",
+        "inventoryCondition": "Stock condition",
+        "collectionAction": "Action",
+        "collectionId": "Target collection",
+        "titleTemplate": "SEO title template",
+        "descriptionTemplate": "SEO description template",
+        "fieldKey": "Custom field",
+        "metafieldAction": "Mode",
+        "value": "Value to write",
+        "onlyFillEmpty": "Write scope",
+        "overflow": "When too long",
+        "skuColumn": "SKU column",
+        "priceColumn": "Price column",
+        "compareAtColumn": "Compare-at column",
+        "costColumn": "Cost column",
+        "quantityColumn": "Quantity column",
+        "locationId": "Location"
+      },
+      "paramValues": {
+        "priceMode": {
+          "percent_down": "Decrease by percentage",
+          "percent_up": "Increase by percentage",
+          "amount_down": "Decrease by fixed amount",
+          "amount_up": "Increase by fixed amount",
+          "set_fixed": "Set to a fixed price",
+          "unchanged": "Keep price unchanged"
+        },
+        "rounding": {
+          "none": "No rounding",
+          "end99": "Round to .99",
+          "end95": "Round to .95",
+          "integer": "Round to whole number"
+        },
+        "compareAtMode": {
+          "unchanged": "Keep compare-at price",
+          "original_price": "Set compare-at price to the old price",
+          "clear": "Clear compare-at price"
+        },
+        "targetStatus": {
+          "unset": "Choose: activate or unpublish",
+          "active": "Active",
+          "draft": "Draft (unpublished)"
+        },
+        "inventoryCondition": {
+          "none": "Any stock level",
+          "out_of_stock_only": "Only out-of-stock items",
+          "in_stock_only": "Only in-stock items"
+        },
+        "collectionAction": {
+          "unset": "Choose: add or remove",
+          "add": "Add to collection",
+          "remove": "Remove from collection"
+        },
+        "metafieldAction": {
+          "unset": "Choose: set a value or clear",
+          "set": "Set to a value",
+          "clear": "Clear the field"
+        },
+        "onlyFillEmpty": {
+          "true": "Only fill empty fields",
+          "false": "Overwrite existing content"
+        },
+        "overflow": {
+          "truncate": "Truncate automatically",
+          "skip": "Skip that field"
+        }
       },
       "targetKinds": {
         "products": "products",
@@ -3738,6 +4492,10 @@
         "estimateCredits": "~{{credits}} credits estimated",
         "estimateDuration": "~{{duration}} per item",
         "estimateCalibrated": "(calibrated from past runs)",
+        "resourceEmpty": "No options available. Tell me the name in chat and I'll look it up.",
+        "resourcePlaceholder": "Select…",
+        "resourceSearchLabel": "Filter options",
+        "resourceNoMatch": "No matching options. Try a different keyword.",
         "footerCreateOne": "Will create 1 task",
         "footerCreateQuery": "Will create tasks by filter{{approx}}",
         "footerCreateQueryApprox": " (~{{count}})",
@@ -3751,7 +4509,9 @@
         "doneSuccess": "✓ Created {{created}}/{{total}} tasks",
         "doneFailed": "Failed to create tasks",
         "doneHint": "Track progress and results in Tasks.",
-        "doneMoreErrors": "{{count}} more failures"
+        "doneMoreErrors": "{{count}} more failures",
+        "footerCreateOneForCount": "Will build one change preview for {{count}} products",
+        "confirmPreviewChanges": "Build change preview ({{count}} products)"
       },
       "taskRunCard": {
         "startedBadge": "Run started",
@@ -3933,16 +4693,9 @@
       }
     },
     "homeV2": {
-      "subtitle": "Spark AI can read your store data, improve product content, and generate product images — just describe the goal.",
-      "assistantTitle": "Describe your goal and Spark AI will inspect your store and help execute it",
-      "composerPlaceholder": "For example: review today’s business and tell me the top 3 things to handle…",
-      "recommendationsTitle": "What Spark can do for you",
-      "recommendationsHint": "Pick any item to start",
-      "capabilityDesc": {
-        "operations": "Check sales, conversion, inventory and refund anomalies, then get today’s priority list.",
-        "productOptimization": "Score product pages, rewrite titles and descriptions, translate text inside product images.",
-        "imageGeneration": "Generate product images from your description, ready for product pages and ads."
-      }
+      "assistantTitle": "Describe your goal — Spark AI inspects your store and acts",
+      "composerPlaceholder": "For example: the top 3 things to handle today",
+      "recommendationsTitle": "Recommended actions"
     }
   }
 }

@@ -1,4 +1,24 @@
 import type { AITaskMessageParams } from "./aiTaskMessage";
+import type {
+  BulkPriceEditApplyOutcome,
+  BulkPriceEditCompareAtMode,
+  BulkPriceEditPriceMode,
+  BulkPriceEditRounding,
+  BulkPriceEditRow,
+  BulkPriceEditSummary,
+} from "./bulkPriceEdit";
+import type {
+  BulkTagEditApplyOutcome,
+  BulkTagEditRow,
+  BulkTagEditSummary,
+} from "./bulkTagEdit";
+import type {
+  BulkStatusEditApplyOutcome,
+  BulkStatusEditInventoryCondition,
+  BulkStatusEditRow,
+  BulkStatusEditSummary,
+  BulkStatusEditTargetStatus,
+} from "./bulkStatusEdit";
 
 export type AITaskStatus =
   | "running"
@@ -13,7 +33,10 @@ export type AITaskType =
   | "image_generation"
   | "picture_translate"
   | "product_improve"
-  | "ads_catalog_sync";
+  | "ads_catalog_sync"
+  | "bulk_price_edit"
+  | "bulk_tag_edit"
+  | "bulk_status_edit";
 
 export type AITaskListView = "current" | "history";
 
@@ -228,6 +251,80 @@ export interface TiktokCatalogProductResult {
   status: TiktokCatalogProductResultStatus;
   reason?: string;
 }
+
+/**
+ * 变体批量调价（受控写回）：一个任务覆盖一批商品。
+ * dry-run 阶段只读 Shopify 并算出 changeset，写回要用户在审核弹窗二次确认。
+ */
+export type BulkPriceEditTaskConfig = {
+  priceMode: BulkPriceEditPriceMode;
+  priceValue: number;
+  rounding: BulkPriceEditRounding;
+  compareAtMode: BulkPriceEditCompareAtMode;
+  minPrice: number | null;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkPriceEditTaskResult = {
+  rows: BulkPriceEditRow[];
+  summary: BulkPriceEditSummary;
+  /** 变体数超出上限时被截断，行数少于店铺实际变体数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkPriceEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkPriceEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkTagEditTaskConfig = {
+  addTags: string[];
+  removeTags: string[];
+  removePrefixes: string[];
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkTagEditTaskResult = {
+  rows: BulkTagEditRow[];
+  summary: BulkTagEditSummary;
+  /** 商品数超出上限时被截断，行数少于所选商品数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkTagEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkTagEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkStatusEditTaskConfig = {
+  targetStatus: BulkStatusEditTargetStatus;
+  inventoryCondition: BulkStatusEditInventoryCondition;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkStatusEditTaskResult = {
+  rows: BulkStatusEditRow[];
+  summary: BulkStatusEditSummary;
+  /** 商品数超出上限时被截断，行数少于所选商品数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkStatusEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkStatusEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
 
 export type AITaskCreateResponse =
   | { success: true; taskId: string; batchId: string; status: "running" }

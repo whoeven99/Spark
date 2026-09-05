@@ -11,6 +11,7 @@ import type {
   AITaskType,
 } from "../../lib/aiTaskTypes";
 import {
+  buildAITaskMessage,
   parseAITaskMessage,
   serializeAITaskMessage,
   type AITaskMessageInput,
@@ -22,6 +23,57 @@ type PrismaJson = any;
 const TASK_LIST_LIMIT = 20;
 export const AI_TASK_VIEW_FETCH_LIMIT = 200;
 const TASK_PAGE_SIZE = 4;
+
+// ── 孤儿 running 任务回收 ──
+// 进程崩溃/重启后，DB 里的 running 行没人继续推进，会永远显示「运行中」。
+// 在店铺维度做一次 updateMany 把超期 running 置为 failed；进程内节流避免在读路径频繁写库。
+const RECLAIM_THROTTLE_MS = 60_000;
+const DEFAULT_STALE_RECLAIM_MS = 30 * 60 * 1000;
+const lastReclaimAtByShop = new Map<string, number>();
+
+function resolveStaleReclaimMs(): number {
+  const raw = Number(process.env.AI_TASK_STALE_RECLAIM_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_STALE_RECLAIM_MS;
+}
+
+/**
+ * 把该店 `running` 且 `startedAt` 超过阈值仍未收尾的任务标记为 `failed`。
+ * 返回被回收的数量；节流命中或出错时返回 0（不抛，避免打断读取）。
+ */
+export async function reclaimStaleRunningTasksForShop(shop: string): Promise<number> {
+  const s = shop.trim();
+  if (!s) return 0;
+  const now = Date.now();
+  const last = lastReclaimAtByShop.get(s) ?? 0;
+  if (now - last < RECLAIM_THROTTLE_MS) return 0;
+  lastReclaimAtByShop.set(s, now);
+
+  const cutoff = new Date(now - resolveStaleReclaimMs());
+  try {
+    const res = await prisma.aITask.updateMany({
+      where: { shop: s, status: "running", startedAt: { lt: cutoff } },
+      data: {
+        status: "failed",
+        errorMsg: serializeAITaskMessage(
+          buildAITaskMessage(
+            "aiTask.staleReclaimed",
+            "任务长时间未完成（可能因服务重启中断），已自动标记为失败，请重试。",
+          ),
+        ).slice(0, 2000),
+        completedAt: new Date(),
+      },
+    });
+    if (res.count > 0) {
+      console.warn(
+        `[AITask][reclaim] marked ${res.count} stale running task(s) failed shop=${s}`,
+      );
+    }
+    return res.count;
+  } catch (error) {
+    console.error(`[AITask][reclaim] failed shop=${s}:`, error);
+    return 0;
+  }
+}
 
 function normalizeTaskPage(page: number | undefined): number {
   if (!Number.isFinite(page) || !page || page < 1) return 1;
@@ -297,6 +349,7 @@ export async function getTaskForShop(params: {
   taskId: string;
   shop: string;
 }): Promise<AITaskItem | null> {
+  await reclaimStaleRunningTasksForShop(params.shop);
   const row = await prisma.aITask.findFirst({
     where: { id: params.taskId, shop: params.shop },
   });
@@ -325,6 +378,7 @@ export async function getTaskListMetricsForShop(params: {
   taskType?: AITaskType;
   taskTypes?: AITaskType[];
 }): Promise<AITaskListMetrics> {
+  await reclaimStaleRunningTasksForShop(params.shop);
   const baseWhere = buildTaskListWhere(params);
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [currentCount, historyCount, runningCount] = await Promise.all([
@@ -360,6 +414,7 @@ export async function listRecentAITasksForShop(
   shop: string,
   limit: number,
 ): Promise<AITaskItem[]> {
+  await reclaimStaleRunningTasksForShop(shop);
   const take = Math.min(Math.max(1, Math.floor(limit)), AI_TASK_VIEW_FETCH_LIMIT);
   const rows = await prisma.aITask.findMany({
     where: { shop },
