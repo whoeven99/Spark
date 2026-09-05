@@ -4,7 +4,10 @@ import {
   buildUninstallNotifyReferenceId,
   handleAppUninstalled,
 } from "../commonEventLog/handleAppUninstalled.server";
-import { loadSessionSnapshotForUninstall } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
+import {
+  loadSessionSnapshotForUninstall,
+  type UninstallSessionSnapshot,
+} from "../commonEventLog/loadSessionSnapshotForUninstall.server";
 import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
 import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeishuNotify.server";
 import { notifyAppUninstalledEmail } from "../notifications/notifyMerchant.server";
@@ -23,11 +26,17 @@ export type OnAppUninstalledParams = {
   uninstalledAt: Date;
 };
 
+export type AppUninstalledClaim = {
+  shouldNotify: boolean;
+  recipient: UninstallSessionSnapshot | null;
+};
+
 /**
  * 快速幂等检查：
  * 1. 同一 webhookId 的通知键已写过 → 跳过（Shopify 重试）
  * 2. 10 分钟内已有同店卸载事件 → 跳过（防双投）
  * 不再使用永久的 uninstall:notify:{shop}，避免清库前遗留键导致再卸永不通知。
+ * 卸载 purge 会保留 APP_UNINSTALLED 行，因此重试在清库后仍能命中。
  */
 async function shouldSkipUninstallOpsNotify(
   shop: string,
@@ -155,24 +164,31 @@ async function sendAppUninstalledFeishuNotify(
   }
 }
 
+async function loadUninstallRecipient(
+  shop: string,
+  sessionId?: string,
+): Promise<UninstallSessionSnapshot | null> {
+  try {
+    return await loadSessionSnapshotForUninstall(shop, sessionId);
+  } catch (error) {
+    console.warn(`${LOG} load-recipient-failed shop=${shop}`, error);
+    return null;
+  }
+}
+
 /**
- * 卸载：通知幂等占位 → 归档+清库（含 CommonEventLog，快照在 Blob）→ 飞书/邮件。
+ * 请求内短路径：读邮件收件人 + 写入 APP_UNINSTALLED 幂等键。
+ * 必须在 200 之前完成，这样 Shopify 重试能命中去重。
  */
-export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
-  const startedAt = Date.now();
+export async function claimAppUninstalled(
+  params: OnAppUninstalledParams,
+): Promise<AppUninstalledClaim> {
   console.info(
     `${LOG} enter shop=${params.shop} webhookId=${params.webhookId ?? "(none)"}`,
   );
 
-  let recipient: Awaited<ReturnType<typeof loadSessionSnapshotForUninstall>> = null;
-  try {
-    recipient = await loadSessionSnapshotForUninstall(params.shop, params.sessionId);
-  } catch (error) {
-    console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
-  }
+  const recipient = await loadUninstallRecipient(params.shop, params.sessionId);
 
-  // 1. 清库前占 notify 幂等键（并发双投去重；清库后日志进 Blob 并删除）
-  let shouldNotify = false;
   try {
     const skipOpsNotify = await shouldSkipUninstallOpsNotify(
       params.shop,
@@ -180,46 +196,62 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     );
     if (skipOpsNotify) {
       console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
-    } else {
-      const referenceId = buildUninstallNotifyReferenceId(
-        params.shop,
-        params.webhookId,
-      );
-      const { created } = await appendCommonEventLog({
-        shop: params.shop,
-        eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-        topic: params.topic,
-        referenceId,
-        payload:
-          params.payload && typeof params.payload === "object"
-            ? (params.payload as Record<string, unknown>)
-            : { raw: params.payload },
-      });
-      shouldNotify = created;
-      if (!created) {
-        console.info(
-          `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
-        );
-      }
+      return { shouldNotify: false, recipient };
     }
+
+    const referenceId = buildUninstallNotifyReferenceId(
+      params.shop,
+      params.webhookId,
+    );
+    const { created } = await appendCommonEventLog({
+      shop: params.shop,
+      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+      topic: params.topic,
+      referenceId,
+      payload:
+        params.payload && typeof params.payload === "object"
+          ? (params.payload as Record<string, unknown>)
+          : { raw: params.payload },
+    });
+    if (!created) {
+      console.info(
+        `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
+      );
+    }
+    return { shouldNotify: created, recipient };
   } catch (error) {
     console.error(`${LOG} ops-notify-dedup-failed shop=${params.shop}`, error);
-    shouldNotify = true;
+    return { shouldNotify: true, recipient };
   }
+}
 
-  // 2. 归档到 Blob 后清库（含 Account / CommonEventLog / Session 等）
+/** 后台长路径：归档+清库，再按 claim 决定是否飞书/邮件。 */
+export async function completeAppUninstalled(
+  params: OnAppUninstalledParams,
+  claim: AppUninstalledClaim,
+): Promise<void> {
+  const startedAt = Date.now();
+
   await persistAppUninstalled(params);
 
-  // 3. 通知（清库已完成；失败不影响合规删除）
-  if (shouldNotify) {
+  if (claim.shouldNotify) {
     await sendAppUninstalledFeishuNotify(params);
     await notifyAppUninstalledEmail({
       shop: params.shop,
       appName: "spark",
       uninstalledAt: params.uninstalledAt,
-      recipient,
+      recipient: claim.recipient,
     });
   }
 
   console.info(`${LOG} done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`);
+}
+
+/**
+ * 卸载：通知幂等占位 → 归档+清库（APP_UNINSTALLED 日志保留至 shop/redact）→ 飞书/邮件。
+ * Webhook 路由应先 claim 再后台 complete，以满足 Shopify 5s ack。
+ */
+export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
+  const claim = await claimAppUninstalled(params);
+  await completeAppUninstalled(params, claim);
 }

@@ -46,7 +46,9 @@ describe("archiveAndPurgeShopData", () => {
     await vi.advanceTimersByTimeAsync(8_000);
     const result = await pending;
 
-    expect(purgeShopDataFromTurso).toHaveBeenCalledWith("demo.myshopify.com");
+    expect(purgeShopDataFromTurso).toHaveBeenCalledWith("demo.myshopify.com", {
+      retainAppUninstalledLogs: true,
+    });
     expect(result.archive.ok).toBe(false);
     expect(result.archive.error).toContain("archive_timeout");
     expect(result.purge.deleted.Account).toBe(1);
@@ -79,7 +81,11 @@ describe("archiveAndPurgeShopData", () => {
       mode: "shop_redact",
     });
 
-    expect(purgeShopDataFromTurso).toHaveBeenNthCalledWith(1, "demo.myshopify.com");
-    expect(purgeShopDataFromTurso).toHaveBeenNthCalledWith(2, "demo.myshopify.com");
+    expect(purgeShopDataFromTurso).toHaveBeenNthCalledWith(1, "demo.myshopify.com", {
+      retainAppUninstalledLogs: true,
+    });
+    expect(purgeShopDataFromTurso).toHaveBeenNthCalledWith(2, "demo.myshopify.com", {
+      retainAppUninstalledLogs: false,
+    });
   });
 });

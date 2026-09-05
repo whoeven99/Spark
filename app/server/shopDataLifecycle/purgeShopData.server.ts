@@ -1,4 +1,5 @@
 import prisma from "../../db.server";
+import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
 
 const LOG = "[ShopPurge]";
 
@@ -8,6 +9,24 @@ export type ShopPurgeResult = {
   errors: string[];
 };
 
+export type PurgeShopDataOptions = {
+  /** 卸载时保留 APP_UNINSTALLED 行，供 Shopify 重试去重；shop/redact 必须关掉。 */
+  retainAppUninstalledLogs?: boolean;
+};
+
+export function buildCommonEventLogPurgeWhere(
+  shop: string,
+  retainAppUninstalledLogs: boolean,
+): { shop: string; eventType?: { not: string } } {
+  if (retainAppUninstalledLogs) {
+    return {
+      shop,
+      eventType: { not: COMMON_EVENT_TYPE.APP_UNINSTALLED },
+    };
+  }
+  return { shop };
+}
+
 type DeleteStep = {
   label: string;
   run: () => Promise<{ count: number }>;
@@ -16,10 +35,14 @@ type DeleteStep = {
 /**
  * 从 Turso 删除店铺业务数据。
  * 不删除：PromoClaimLedger（防薅）、PlanCatalog / TokenBillingRule 等全局表。
- * CommonEventLog 会删（已在 Blob 归档快照里）。
+ * CommonEventLog 默认全删；卸载可保留 APP_UNINSTALLED（已在 Blob 归档，行本身作重试去重）。
  */
-export async function purgeShopDataFromTurso(shop: string): Promise<ShopPurgeResult> {
+export async function purgeShopDataFromTurso(
+  shop: string,
+  options?: PurgeShopDataOptions,
+): Promise<ShopPurgeResult> {
   const normalized = shop.trim();
+  const retainAppUninstalledLogs = options?.retainAppUninstalledLogs === true;
   const deleted: Record<string, number> = {};
   const errors: string[] = [];
 
@@ -179,7 +202,10 @@ export async function purgeShopDataFromTurso(shop: string): Promise<ShopPurgeRes
     },
     {
       label: "CommonEventLog",
-      run: () => prisma.commonEventLog.deleteMany({ where: { shop: normalized } }),
+      run: () =>
+        prisma.commonEventLog.deleteMany({
+          where: buildCommonEventLogPurgeWhere(normalized, retainAppUninstalledLogs),
+        }),
     },
     {
       label: "Session",

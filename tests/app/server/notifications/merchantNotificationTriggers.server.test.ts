@@ -3,7 +3,12 @@ import prisma from "../../../../app/db.server";
 import { recordAppInstalled } from "../../../../app/server/commonEventLog/recordAppInstalled.server";
 import { handleAppUninstalled } from "../../../../app/server/commonEventLog/handleAppUninstalled.server";
 import { appendCommonEventLog } from "../../../../app/server/commonEventLog/appendCommonEventLog.server";
-import { onAppUninstalled } from "../../../../app/server/appLifecycle/onAppUninstalled.server";
+import {
+  claimAppUninstalled,
+  onAppUninstalled,
+} from "../../../../app/server/appLifecycle/onAppUninstalled.server";
+import { archiveAndPurgeShopData } from "../../../../app/server/shopDataLifecycle/archiveAndPurgeShop.server";
+import { sendUninstallFeishuNotify } from "../../../../app/server/feishu/scenarios/sendUninstallFeishuNotify.server";
 import { applyTokenPackPurchase } from "../../../../app/server/billing/purchase/applyTokenPack.server";
 import {
   applyActiveSubscription,
@@ -231,6 +236,33 @@ describe("merchant notification triggers", () => {
       expect(notifyAppUninstalledEmail).toHaveBeenCalledOnce();
       expect(handleAppUninstalled).toHaveBeenCalledOnce();
       expect(callOrder).toEqual(["persist", "email"]);
+    });
+
+    it("claim writes notify key without purging", async () => {
+      vi.mocked(appendCommonEventLog).mockResolvedValueOnce({ created: true });
+
+      const claim = await claimAppUninstalled(uninstallParams);
+
+      expect(claim.shouldNotify).toBe(true);
+      expect(appendCommonEventLog).toHaveBeenCalledOnce();
+      expect(archiveAndPurgeShopData).not.toHaveBeenCalled();
+      expect(handleAppUninstalled).not.toHaveBeenCalled();
+      expect(sendUninstallFeishuNotify).not.toHaveBeenCalled();
+      expect(notifyAppUninstalledEmail).not.toHaveBeenCalled();
+    });
+
+    it("skips notify when webhookId was already claimed", async () => {
+      vi.mocked(prisma.commonEventLog.findFirst).mockResolvedValue({
+        id: "existing",
+      } as never);
+
+      await onAppUninstalled({ ...uninstallParams, webhookId: "wh-1" });
+
+      expect(appendCommonEventLog).not.toHaveBeenCalled();
+      expect(sendUninstallFeishuNotify).not.toHaveBeenCalled();
+      expect(notifyAppUninstalledEmail).not.toHaveBeenCalled();
+      expect(handleAppUninstalled).toHaveBeenCalledOnce();
+      expect(archiveAndPurgeShopData).toHaveBeenCalledOnce();
     });
   });
 
