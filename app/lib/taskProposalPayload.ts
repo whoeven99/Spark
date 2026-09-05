@@ -23,16 +23,44 @@ import {
 
 export const TASK_PROPOSAL_VERSION = 1;
 
-/** schema 驱动的参数字段：value 内联在字段里，前端按 type 渲染控件。 */
+/**
+ * schema 驱动的参数字段：value 内联在字段里，前端按 type 渲染控件。
+ *
+ * `hidden` 用于执行端需要、但用户不该看见也不该改的值（如文件名）：
+ * 卡片不渲染它，提交时照常随 params 一起带上。
+ *
+ * `file` 是可见的上传控件：value 存服务端 fileId，没有文件时允许空着开卡，
+ * 确认执行前必须有值。表格导入用它，替代原先把 fileId 藏起来的做法。
+ *
+ * `collection` / `location` / `metafieldDefinition` 是「远端资源选择器」：
+ * 取值是店铺侧的资源标识（前两个是 Shopify GID，metafieldDefinition 是 `namespace.key`
+ * —— Shopify 自 2026-07 起把按 id 查定义标为 deprecated，改推 namespace + key），
+ * options 由服务端在开卡时预取。它们与 `select` 的区别有两点——卡片渲染成带搜索框的下拉
+ * （合集可能有上百个），且展示时直接用 option 自带的 label，
+ * 不去 i18n 表里查（资源标识查不到任何东西）。以后再接别的资源选择器沿用这个分支。
+ */
 export type TaskProposalField = {
   key: string;
   label: string;
-  type: "select" | "text" | "textarea";
+  type:
+    | "select"
+    | "collection"
+    | "location"
+    | "metafieldDefinition"
+    | "text"
+    | "textarea"
+    | "hidden"
+    | "file";
   value: string;
-  /** type === "select" 时必填 */
+  /** type === "select" 或任一资源选择器时必填 */
   options?: Array<{ value: string; label: string }>;
   placeholder?: string;
 };
+
+/** 取值来自 options 自带 label、而非 i18n 枚举表的字段类型。 */
+export function isResourceOptionField(type: TaskProposalField["type"]): boolean {
+  return type === "collection" || type === "location" || type === "metafieldDefinition";
+}
 
 export type TaskProposalTarget = {
   id: string;
@@ -98,13 +126,26 @@ function safeString(v: unknown, fallback = ""): string {
   return typeof v === "string" && v.trim() ? v.trim() : fallback;
 }
 
+const KNOWN_FIELD_TYPES = new Set<TaskProposalField["type"]>([
+  "select",
+  "collection",
+  "location",
+  "metafieldDefinition",
+  "text",
+  "textarea",
+  "hidden",
+  "file",
+]);
+
 function coerceField(raw: unknown): TaskProposalField | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const key = safeString(r.key);
   const label = safeString(r.label, key);
   if (!key) return null;
-  const type = r.type === "select" ? "select" : r.type === "textarea" ? "textarea" : "text";
+  const type = KNOWN_FIELD_TYPES.has(r.type as TaskProposalField["type"])
+    ? (r.type as TaskProposalField["type"])
+    : "text";
   const options = Array.isArray(r.options)
     ? r.options
         .filter((o): o is Record<string, unknown> => o !== null && typeof o === "object")
@@ -328,6 +369,485 @@ export function buildImageGenerationProposal(form: {
         type: "textarea",
         value: form.description?.trim() ?? "",
         placeholder: "描述想要的图片，如：白底极简风格的陶瓷马克杯",
+      },
+    ],
+  };
+}
+
+// ─── 变体批量调价（受控写回：dry-run 预览 + 二次确认才写 Shopify） ───────────
+
+export const BULK_PRICE_EDIT_SKILL_ID = "bulk_price_edit";
+
+export const BULK_PRICE_EDIT_PRICE_MODE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "percent_down", label: "按百分比降价" },
+  { value: "percent_up", label: "按百分比涨价" },
+  { value: "amount_down", label: "按固定金额降价" },
+  { value: "amount_up", label: "按固定金额涨价" },
+  { value: "set_fixed", label: "统一设为固定价" },
+  { value: "unchanged", label: "价格不变" },
+];
+
+export const BULK_PRICE_EDIT_ROUNDING_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "none", label: "不取整" },
+  { value: "end99", label: "取整到 .99" },
+  { value: "end95", label: "取整到 .95" },
+  { value: "integer", label: "取整到整数" },
+];
+
+export const BULK_PRICE_EDIT_COMPARE_AT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "unchanged", label: "划线价不变" },
+  { value: "original_price", label: "把调价前的原价写成划线价" },
+  { value: "clear", label: "清空划线价" },
+];
+
+function pickOption(
+  options: Array<{ value: string; label: string }>,
+  value: string | undefined,
+  fallback: string,
+): string {
+  return value && options.some((o) => o.value === value) ? value : fallback;
+}
+
+/**
+ * 由商品列表 + 规则构造「批量调价」提案。
+ * 确认后只创建一个 dry-run 任务（读 + 算），真正写 Shopify 要在审核弹窗再确认一次。
+ */
+export function buildBulkPriceEditProposal(args: {
+  products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+  priceMode?: string;
+  priceValue?: string | number;
+  rounding?: string;
+  compareAtMode?: string;
+  minPrice?: string | number;
+}): TaskProposalPayload {
+  const priceMode = pickOption(BULK_PRICE_EDIT_PRICE_MODE_OPTIONS, args.priceMode, "percent_down");
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_PRICE_EDIT_SKILL_ID,
+    title: "批量调整变体价格",
+    summary:
+      "先按规则算出每个变体的新价并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
+    targets: {
+      kind: "products",
+      items: args.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl ?? null,
+      })),
+    },
+    params: [
+      {
+        key: "priceMode",
+        label: "调价方式",
+        type: "select",
+        value: priceMode,
+        options: BULK_PRICE_EDIT_PRICE_MODE_OPTIONS,
+      },
+      {
+        key: "priceValue",
+        label: "调价数值",
+        type: "text",
+        value: args.priceValue != null ? String(args.priceValue) : "",
+        placeholder: "百分比填 10 表示 10%；金额填 5 表示 5 元/美元",
+      },
+      {
+        key: "rounding",
+        label: "取整方式",
+        type: "select",
+        value: pickOption(BULK_PRICE_EDIT_ROUNDING_OPTIONS, args.rounding, "none"),
+        options: BULK_PRICE_EDIT_ROUNDING_OPTIONS,
+      },
+      {
+        key: "compareAtMode",
+        label: "划线价处理",
+        type: "select",
+        value: pickOption(BULK_PRICE_EDIT_COMPARE_AT_OPTIONS, args.compareAtMode, "unchanged"),
+        options: BULK_PRICE_EDIT_COMPARE_AT_OPTIONS,
+      },
+      {
+        key: "minPrice",
+        label: "最低价保护",
+        type: "text",
+        value: args.minPrice != null ? String(args.minPrice) : "",
+        placeholder: "留空表示不设下限；填 9.9 表示新价低于 9.9 的变体跳过",
+      },
+    ],
+  };
+}
+
+// ─── 商品批量打标（受控写回：dry-run 预览 + 二次确认才写 Shopify） ───────────
+
+export const BULK_TAG_EDIT_SKILL_ID = "bulk_tag_edit";
+
+/**
+ * 由商品列表 + 规则构造「批量打标」提案。
+ * 确认后只创建一个 dry-run 任务（读 + 算），真正写 Shopify 要在审核弹窗再确认一次。
+ */
+export function buildBulkTagEditProposal(args: {
+  products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+  addTags?: string;
+  removeTags?: string;
+  removePrefixes?: string;
+}): TaskProposalPayload {
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_TAG_EDIT_SKILL_ID,
+    title: "批量修改商品标签",
+    summary:
+      "先算出每个商品的标签变化并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
+    targets: {
+      kind: "products",
+      items: args.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl ?? null,
+      })),
+    },
+    params: [
+      {
+        key: "addTags",
+        label: "要添加的标签",
+        type: "text",
+        value: args.addTags ?? "",
+        placeholder: "多个标签用逗号分隔，如：夏季清仓, 包邮",
+      },
+      {
+        key: "removeTags",
+        label: "要移除的标签",
+        type: "text",
+        value: args.removeTags ?? "",
+        placeholder: "多个标签用逗号分隔；留空表示不移除",
+      },
+      {
+        key: "removePrefixes",
+        label: "按前缀清理",
+        type: "text",
+        value: args.removePrefixes ?? "",
+        placeholder: "如填 sale- 会清掉 sale-2026、sale-summer；留空表示不清理",
+      },
+    ],
+  };
+}
+
+// ─── 商品批量上下架（受控写回：dry-run 预览 + 二次确认才写 Shopify） ─────────
+
+export const BULK_STATUS_EDIT_SKILL_ID = "bulk_status_edit";
+
+/**
+ * `unset` 是刻意保留的占位项：上架与下架方向相反，默认帮用户选一个的代价太大。
+ * 它不是合法规则值，`parseBulkStatusEditRule` 会拒绝并提示先选方向。
+ */
+export const BULK_STATUS_EDIT_TARGET_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "unset", label: "请选择：上架或下架" },
+  { value: "active", label: "上架（Active）" },
+  { value: "draft", label: "下架为草稿（Draft）" },
+];
+
+export const BULK_STATUS_EDIT_INVENTORY_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "none", label: "不限库存" },
+  { value: "out_of_stock_only", label: "只处理库存为 0 的" },
+  { value: "in_stock_only", label: "只处理有库存的" },
+];
+
+/**
+ * 由商品列表 + 规则构造「批量上下架」提案。
+ * 确认后只创建一个 dry-run 任务（读 + 算），真正写 Shopify 要在审核弹窗再确认一次。
+ *
+ * targetStatus 没有默认值：上架和下架方向相反，默认选一个等于替用户做了危险决定。
+ */
+export function buildBulkStatusEditProposal(args: {
+  products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+  targetStatus?: string;
+  inventoryCondition?: string;
+}): TaskProposalPayload {
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_STATUS_EDIT_SKILL_ID,
+    title: "批量上下架商品",
+    summary:
+      "先算出每个商品的状态变化并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
+    targets: {
+      kind: "products",
+      items: args.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl ?? null,
+      })),
+    },
+    params: [
+      {
+        key: "targetStatus",
+        label: "目标状态",
+        type: "select",
+        value: pickOption(BULK_STATUS_EDIT_TARGET_OPTIONS, args.targetStatus, "unset"),
+        options: BULK_STATUS_EDIT_TARGET_OPTIONS,
+      },
+      {
+        key: "inventoryCondition",
+        label: "库存条件",
+        type: "select",
+        value: pickOption(BULK_STATUS_EDIT_INVENTORY_OPTIONS, args.inventoryCondition, "none"),
+        options: BULK_STATUS_EDIT_INVENTORY_OPTIONS,
+      },
+    ],
+  };
+}
+
+// ─── 商品批量入 / 出 Collection（受控写回：dry-run 预览 + 二次确认才写 Shopify） ─
+
+export const BULK_COLLECTION_EDIT_SKILL_ID = "bulk_collection_edit";
+
+/**
+ * `unset` 与批量上下架同理：加入与移出方向相反，默认帮用户选一个的代价太大。
+ * 它不是合法规则值，`parseBulkCollectionEditRule` 会拒绝并提示先选方向。
+ */
+export const BULK_COLLECTION_EDIT_ACTION_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "unset", label: "请选择：加入或移出" },
+  { value: "add", label: "加入合集" },
+  { value: "remove", label: "移出合集" },
+];
+
+/**
+ * 由商品列表 + 合集构造「批量入 / 出 Collection」提案。
+ * 确认后只创建一个 dry-run 任务（读 + 算），真正写 Shopify 要在审核弹窗再确认一次。
+ *
+ * collectionOptions 由 Skill 在开卡时从 Shopify 预取，只含可手动增删成员的合集；
+ * 智能合集不进下拉，因为选了也写不了。
+ */
+export function buildBulkCollectionEditProposal(args: {
+  products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+  action?: string;
+  collectionId?: string;
+  collectionOptions?: Array<{ value: string; label: string }>;
+  /** 店铺合集多于本次预取数量：提示用户可以直接说合集名称来缩小范围 */
+  collectionsTruncated?: boolean;
+}): TaskProposalPayload {
+  const collectionOptions = args.collectionOptions ?? [];
+  const collectionId =
+    args.collectionId && collectionOptions.some((o) => o.value === args.collectionId)
+      ? args.collectionId
+      : "";
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_COLLECTION_EDIT_SKILL_ID,
+    title: "批量调整商品所属合集",
+    summary:
+      "先算出每个商品进出合集的变化并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
+    targets: {
+      kind: "products",
+      items: args.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl ?? null,
+      })),
+    },
+    params: [
+      {
+        key: "collectionAction",
+        label: "操作方向",
+        type: "select",
+        value: pickOption(BULK_COLLECTION_EDIT_ACTION_OPTIONS, args.action, "unset"),
+        options: BULK_COLLECTION_EDIT_ACTION_OPTIONS,
+      },
+      {
+        key: "collectionId",
+        label: "目标合集",
+        type: "collection",
+        value: collectionId,
+        options: collectionOptions,
+        placeholder: args.collectionsTruncated
+          ? "输入关键词筛选；合集较多时可直接在对话里说出合集名称"
+          : "输入关键词筛选合集",
+      },
+    ],
+  };
+}
+
+// ─── 商品 SEO 批量改写（受控写回：dry-run 预览 + 二次确认才写 Shopify） ──────
+
+export const BULK_SEO_EDIT_SKILL_ID = "bulk_seo_edit";
+
+export const BULK_SEO_EDIT_OVERFLOW_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "truncate", label: "超长自动截断" },
+  { value: "skip", label: "超长则跳过该字段" },
+];
+
+export const BULK_SEO_EDIT_FILL_MODE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "false", label: "覆盖已有 SEO" },
+  { value: "true", label: "只填当前为空的" },
+];
+
+/**
+ * 由商品列表 + 模板构造「批量 SEO 改写」提案。
+ * 确认后只创建一个 dry-run 任务（读 + 渲染），真正写 Shopify 要在审核弹窗再确认一次。
+ */
+export function buildBulkSeoEditProposal(args: {
+  products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+  titleTemplate?: string;
+  descriptionTemplate?: string;
+  onlyFillEmpty?: boolean | string;
+  overflow?: string;
+}): TaskProposalPayload {
+  const onlyFillEmpty =
+    args.onlyFillEmpty === true || args.onlyFillEmpty === "true" ? "true" : "false";
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_SEO_EDIT_SKILL_ID,
+    title: "批量改写商品 SEO",
+    summary:
+      "按模板逐个商品渲染 SEO 标题与描述并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
+    targets: {
+      kind: "products",
+      items: args.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl ?? null,
+      })),
+    },
+    params: [
+      {
+        key: "titleTemplate",
+        label: "SEO 标题模板",
+        type: "text",
+        value: args.titleTemplate ?? "",
+        placeholder: "可用 {title} {vendor} {productType}，如：{title} - {vendor}｜正品保障",
+      },
+      {
+        key: "descriptionTemplate",
+        label: "SEO 描述模板",
+        type: "text",
+        value: args.descriptionTemplate ?? "",
+        placeholder: "留空表示不改描述；如：{vendor} 出品的 {title}，{productType} 系列，全球直邮。",
+      },
+      {
+        key: "onlyFillEmpty",
+        label: "写入范围",
+        type: "select",
+        value: onlyFillEmpty,
+        options: BULK_SEO_EDIT_FILL_MODE_OPTIONS,
+      },
+      {
+        key: "overflow",
+        label: "超长处理",
+        type: "select",
+        value: pickOption(BULK_SEO_EDIT_OVERFLOW_OPTIONS, args.overflow, "truncate"),
+        options: BULK_SEO_EDIT_OVERFLOW_OPTIONS,
+      },
+    ],
+  };
+}
+
+// ─── 价目表导入（受控写回：dry-run 预览 + 二次确认才写 Shopify） ─────────────
+
+export const BULK_PRICE_IMPORT_SKILL_ID = "bulk_price_import";
+
+function importFileFields(fileId: string, fileName: string): TaskProposalField[] {
+  return [
+    {
+      key: "fileId",
+      label: "表格",
+      type: "file",
+      value: fileId,
+      placeholder: "上传 CSV 或 Excel",
+    },
+    { key: "fileName", label: "文件名", type: "hidden", value: fileName },
+  ];
+}
+
+/**
+ * 由「表格 + 列映射」构造导入提案。没有文件也可以先开卡，fileId 留空，
+ * 商户在卡片里上传；执行端仍会拒绝空 fileId。
+ *
+ * 商品由表格里的 SKU 决定，所以 targets.kind 为 none。
+ */
+export function buildBulkPriceImportProposal(args: {
+  fileId?: string;
+  fileName?: string;
+  skuColumn?: string;
+  priceColumn?: string;
+  compareAtColumn?: string;
+}): TaskProposalPayload {
+  const fileId = args.fileId?.trim() ?? "";
+  const fileName = args.fileName?.trim() ?? "";
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_PRICE_IMPORT_SKILL_ID,
+    title: "按表格批量导入价格",
+    summary:
+      "读取你上传的表格，按 SKU 匹配店铺商品并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。",
+    targets: { kind: "none", items: [] },
+    params: [
+      ...importFileFields(fileId, fileName),
+      {
+        key: "skuColumn",
+        label: "SKU 列",
+        type: "text",
+        value: args.skuColumn ?? "",
+        placeholder: "表格里存放商品货号的列名，如：SKU、货号",
+      },
+      {
+        key: "priceColumn",
+        label: "价格列",
+        type: "text",
+        value: args.priceColumn ?? "",
+        placeholder: "表格里存放新售价的列名，如：售价、Price",
+      },
+      {
+        key: "compareAtColumn",
+        label: "划线价列",
+        type: "text",
+        value: args.compareAtColumn ?? "",
+        placeholder: "留空表示不改划线价",
+      },
+    ],
+  };
+}
+
+export const BULK_COST_IMPORT_SKILL_ID = "bulk_cost_import";
+
+/**
+ * 由「已上传的表格 + 列映射」构造成本价导入提案。
+ *
+ * 与价目表导入同构（商品由表格里的 SKU 决定，targets.kind 为 none），
+ * 区别在于改的是只影响利润报表的单位成本，不动买家看到的售价。
+ */
+export function buildBulkCostImportProposal(args: {
+  fileId?: string;
+  fileName?: string;
+  skuColumn?: string;
+  costColumn?: string;
+}): TaskProposalPayload {
+  const fileId = args.fileId?.trim() ?? "";
+  const fileName = args.fileName?.trim() ?? "";
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BULK_COST_IMPORT_SKILL_ID,
+    title: "按表格批量导入成本价",
+    summary:
+      "读取你上传的表格，按 SKU 匹配店铺商品并试算毛利率变化（可导出 CSV），确认无误后才写回店铺。成本只影响利润报表，不改售价。本步骤不会修改任何商品。",
+    targets: { kind: "none", items: [] },
+    params: [
+      ...importFileFields(fileId, fileName),
+      {
+        key: "skuColumn",
+        label: "SKU 列",
+        type: "text",
+        value: args.skuColumn ?? "",
+        placeholder: "表格里存放商品货号的列名，如：SKU、货号",
+      },
+      {
+        key: "costColumn",
+        label: "成本价列",
+        type: "text",
+        value: args.costColumn ?? "",
+        placeholder: "表格里存放采购成本的列名，如：成本、采购价、Cost",
       },
     ],
   };

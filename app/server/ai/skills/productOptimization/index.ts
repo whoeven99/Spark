@@ -100,7 +100,7 @@ const productQualityScoreSkillDef: ToolDefinition = {
   visibility: "internal",
   uiPayloadKey: "productQualityCard",
   systemPromptExtension:
-    "当用户想评估、诊断或了解某个商品的页面质量，或要求对商品页内容进行评分时，优先调用 open_product_quality_form 打开可交互卡片，并从对话尽量预填 productId。调用后用与用户消息相同的语言说明用户可在卡片内选择商品并点击开始评分；评分结果在同一张卡片展示，含各维度分数与本次积分消耗。禁止在未成功调用 open_product_quality_form 时声称「已打开卡片」。若用户已明确提供商品 ID 且要求立刻出分（不需卡片确认），可调用 score_product_quality；成功时用与用户消息相同的语言简洁概括低分项与改进优先级，不要编造工具未返回的内容。本能力不写回 Shopify、不创建异步任务。",
+    "当用户想评估、诊断或了解某个商品的页面质量，或要求对商品页内容进行评分时，优先调用 open_product_quality_form 打开可交互卡片，并从对话尽量预填 productId。调用后用与用户消息相同的语言说明用户可在卡片内选择商品并点击开始评分；评分结果在同一张卡片展示，含各维度分数与本次积分消耗。禁止在未成功调用 open_product_quality_form 时声称「已打开卡片」。若用户已明确提供商品 ID 且要求立刻出分（不需卡片确认），可调用 score_product_quality；成功时用与用户消息相同的语言简洁概括低分项与改进优先级，不要编造工具未返回的内容。\n评分完成后的下一步（同一回合，不要只总结）：标题/描述等文案维度明显偏低 → 立刻调用 open_product_improve_form，预填同一 productId；说明开卡后用户确认才会生成，本能力本身不写回 Shopify、不创建异步任务。图片维度偏低可提示「翻译商品图文字」或「生成商品主图」，但不要与文案卡混淆。",
   createTool: (context) => [productQualityFormTool, createScoreProductQualityTool(context)],
   onStreamEvent: (ev, enqueue, streamContext) => {
     if (ev.event === "on_tool_start" && ev.name === OPEN_PRODUCT_QUALITY_FORM_TOOL_NAME) {

@@ -98,6 +98,7 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.healthDiagnosisCardPayload
       ? { healthDiagnosisCardPayload: message.healthDiagnosisCardPayload }
       : {}),
+    ...(message.workspaceActions ? { workspaceActions: true } : {}),
     ...(taskProposal ? { taskProposal } : {}),
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
@@ -154,6 +155,7 @@ export function buildAssistantWorkspaceMessage(
           ),
         }
       : {}),
+    ...(payload.workspaceActions ? { workspaceActions: true } : {}),
     ...(taskProposal ? { taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
     ...(options?.assistantLaunchContext ? { assistantLaunchContext: options.assistantLaunchContext } : {}),
@@ -221,6 +223,9 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
       );
     }
   }
+  if (payload.workspaceActions) {
+    result.workspaceActions = true;
+  }
   if (taskProposal) {
     result.taskProposal = taskProposal;
   }
@@ -255,6 +260,7 @@ export function serializeWorkspaceMessagePayloads(
       result.healthDiagnosisCardPayload = message.healthDiagnosisCardPayload;
     }
   }
+  if (message.workspaceActions) result.workspaceActions = true;
   if (taskProposal) result.taskProposal = taskProposal;
   if (message.taskRun) result.taskRun = message.taskRun;
   if (message.aiTask) result.aiTask = message.aiTask;
@@ -307,6 +313,7 @@ export function dbMessageToUiMessage(msg: {
           ) as HealthDiagnosisFormPayload,
         }
       : {}),
+    ...(extras.workspaceActions ? { workspaceActions: true } : {}),
     // taskProposal 优先；旧批量/单图翻译/文生图卡片（历史落库消息）统一转为通用提案卡
     ...(() => {
       if (extras.taskProposal) {
@@ -416,7 +423,9 @@ export function buildWorkspaceContextBlock(params: {
         const displayNote = file.note === WORKSPACE_HISTORY_UPLOAD_NOTE ? "历史上传" : file.note;
         const notePart = displayNote ? `（${displayNote}）` : "";
         const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
-        lines.push(`    • ${file.name}${notePart}${sizePart}`);
+        const fileId = file.serverId ?? (file.uploading ? "" : file.id);
+        const idPart = fileId && !fileId.startsWith("file-") ? ` [文件ID: ${fileId}]` : "";
+        lines.push(`    • ${file.name}${notePart}${sizePart}${idPart}`);
       }
     }
   }

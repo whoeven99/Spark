@@ -5,8 +5,6 @@ EXPOSE 3000
 
 WORKDIR /app
 
-ENV NODE_ENV=prod
-
 COPY package.json package-lock.json* ./
 
 RUN npm ci --omit=dev && npm cache clean --force

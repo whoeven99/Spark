@@ -50,6 +50,7 @@ export async function buildShopChatGraph(
   activeDefs: ToolDefinition[] = [],
   activePlaybookDefs: PlaybookDefinition[] = [],
   preFetchedReflectionSummary?: string,
+  promptOptions?: { skillFocus?: string | null; userText?: string | null },
 ) {
   const model = getShopChatModel();
   const wrappedBaseTools = context.shop?.trim()
@@ -62,12 +63,12 @@ export async function buildShopChatGraph(
     : context.shop?.trim()
       ? await fetchRecentReflectionSummary(context.shop)
       : undefined;
-  const dynamicPrompt = await getPersonalizedSystemPrompt(
-    context,
-    activeDefs,
+  const dynamicPrompt = await getPersonalizedSystemPrompt(context, activeDefs, {
     reflectionSummary,
     activePlaybookDefs,
-  );
+    skillFocus: promptOptions?.skillFocus,
+    userText: promptOptions?.userText,
+  });
 
   return createReactAgent({
     llm: model,

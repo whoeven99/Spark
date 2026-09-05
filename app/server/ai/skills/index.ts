@@ -9,8 +9,18 @@ import { productCatalogSkills } from "./productCatalog";
 import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
 import { createGetDailyOperationsTool } from "./dailyOperations/dailyOperations.tool";
 import { healthDiagnosisFormSkillDefinition } from "./dailyOperations/healthDiagnosis.form.tool";
+import { SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION } from "./dailyOperations/shopOperations.prompt";
 import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
 import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skill";
+import { bulkPriceEditSkillDefinition } from "./bulkPriceEdit";
+import { bulkTagEditSkillDefinition } from "./bulkTagEdit";
+import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
+import { bulkCollectionEditSkillDefinition } from "./bulkCollectionEdit";
+import { bulkSeoEditSkillDefinition } from "./bulkSeoEdit";
+import { seoAuditSkillDefinition } from "./seoAudit";
+import { bulkPriceImportSkillDefinition } from "./bulkPriceImport";
+import { bulkCostImportSkillDefinition } from "./bulkCostImport";
+import { sheetImportSkillDefinition } from "./sheetImport";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
 
@@ -28,12 +38,7 @@ globalToolRegistry.register({
   visibility: "public",
   description:
     "查询经营指标（销售/订单/转化/客单价/弃购/退款/流量/库存），并查看今日健康诊断与待办任务",
-  systemPromptExtension: [
-    "店铺经营相关需求按意图选工具，不要同时乱调：",
-    "1) 用户问具体数字/区间表现（销售额、订单数、转化率、客单价、弃购率、退款率、流量来源、库存健康等）→ 调用对应 get_shopify_today_* / get_shopify_inventory_health 工具。",
-    "2) 用户问「今天有什么要处理的」「店铺今天健康吗」「有哪些风险/待办」「今日健康诊断」→ 优先调用 open_health_diagnosis_form 打开聊天内诊断卡；仅当用户明确要求用文字解读/总结并引用数字时，再调用 get_daily_operations。",
-    "3) 用户同时要「今天概况 + 关键指标」时，可先 open_health_diagnosis_form（或 get_daily_operations），再按需补查单项指标。",
-  ].join("\n"),
+  systemPromptExtension: SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION,
   createTool: (context) => [
     ...createShopifyShopMetricsTools(context.admin),
     createGetDailyOperationsTool(context),
@@ -107,3 +112,30 @@ globalToolRegistry.register({
   ...batchTasksFormSkillDefinition,
   visibility: "internal",
 });
+
+// 批量调价：读可用领域 GraphQL，写必须走确认卡 + 任务审核两次确认
+globalToolRegistry.register(bulkPriceEditSkillDefinition);
+
+// 批量打标：同上，写回走 tagsAdd / tagsRemove 增量操作
+globalToolRegistry.register(bulkTagEditSkillDefinition);
+
+// 批量上下架：同上，写回走 productUpdate 只改 status，不碰销售渠道发布
+globalToolRegistry.register(bulkStatusEditSkillDefinition);
+
+// 批量调整合集：同上，写回走 collectionAddProducts / collectionRemoveProducts，只动手动合集
+globalToolRegistry.register(bulkCollectionEditSkillDefinition);
+
+// 批量改 SEO：模板渲染是确定性的，不调模型；写回同样两次确认
+globalToolRegistry.register(bulkSeoEditSkillDefinition);
+
+// SEO 体检：纯规则只读诊断，是「批量改 SEO」的上游——先告诉商户问题在哪
+globalToolRegistry.register(seoAuditSkillDefinition);
+
+// 表格读取：价目表 / 成本价导入共用的只读表头/样本工具，只注册一次
+globalToolRegistry.register(sheetImportSkillDefinition);
+
+// 价目表导入：价格来自商户上传的表格而不是规则；写回复用批量调价的执行器
+globalToolRegistry.register(bulkPriceImportSkillDefinition);
+
+// 成本价导入：改 InventoryItem.unitCost，只影响利润/ROI 报表，不动售价
+globalToolRegistry.register(bulkCostImportSkillDefinition);

@@ -180,8 +180,20 @@ code {
 }
 
 .workspace-composer-input:focus {
-  border-color: #008060 !important;
-  box-shadow: 0 0 0 1px #008060;
+  outline: none;
+}
+
+/* 焦点提示放在整张输入卡上（与首页输入框一致的中性柔和环），
+   不再用饱和绿色只圈住输入行 —— 绿色按设计规范仅表示成功态。 */
+.workspace-chat-composer {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.workspace-chat-composer:focus-within {
+  border-color: #8a8d91 !important;
+  box-shadow: 0 0 0 3px rgba(31, 33, 36, 0.06) !important;
 }
 
 .workspace-home-composer {
@@ -203,9 +215,9 @@ code {
 }
 
 .workspace-home-quick-action:hover {
-  background: #fafafa !important;
-  border-color: #c9cdd2 !important;
-  color: #1f2124 !important;
+  background: #eef4ff !important;
+  border-color: rgba(0, 91, 211, 0.22) !important;
+  color: #005bd3 !important;
 }
 
 .workspace-home-quick-action:focus-visible {
@@ -217,12 +229,14 @@ code {
 .workspace-recommended-action {
   transition:
     background 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .workspace-recommended-action:hover {
-  background: #f6f6f7 !important;
-  border-color: #c9cdd2 !important;
+  background: #eef4ff !important;
+  border-color: rgba(0, 91, 211, 0.22) !important;
+  color: #005bd3 !important;
 }
 
 .workspace-recommended-action:focus-visible {
@@ -234,12 +248,14 @@ code {
 .workspace-recommended-trigger {
   transition:
     background 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .workspace-recommended-trigger:hover:not(:disabled) {
-  background: #f6f6f7 !important;
-  border-color: #c9cdd2 !important;
+  background: #eef4ff !important;
+  border-color: rgba(0, 91, 211, 0.22) !important;
+  color: #005bd3 !important;
 }
 
 .workspace-recommended-trigger:focus-visible {

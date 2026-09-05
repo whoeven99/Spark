@@ -120,6 +120,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const locale = await resolveUiLocale(request, {
     admin,
+    shop: session.shop,
     logContext: `app-shell shop=${session.shop}`,
   });
   const { nav, home } = getAppEntryConfig();

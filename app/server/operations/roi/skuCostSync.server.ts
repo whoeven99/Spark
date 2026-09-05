@@ -143,6 +143,66 @@ export async function ensureSkuCostsFresh(
   }
 }
 
+export type SkuCostUpsertInput = {
+  /** 接受 gid 或纯数字 id */
+  inventoryItemId: string;
+  variantId?: string | null;
+  sku?: string | null;
+  unitCost: number;
+};
+
+/**
+ * 直接落地一批已知的单位成本，不回源 Shopify。
+ *
+ * 「成本价导入」写回成功后调用：我们刚把这些成本写进 Shopify，值是权威的，
+ * 没必要再拉一遍。不这么做的话，`ensureSkuCostsFresh` 是 24 小时懒同步，
+ * 商户导完成本要等到第二天 Today 的利润才会用上真实 COGS。
+ */
+export async function upsertSkuCosts(
+  shop: string,
+  entries: SkuCostUpsertInput[],
+): Promise<{ written: number }> {
+  const byInventoryItemId = new Map<string, Prisma.ShopSkuCostCreateManyInput>();
+  for (const entry of entries) {
+    const inventoryItemId = gidToId(entry.inventoryItemId);
+    if (!inventoryItemId || !Number.isFinite(entry.unitCost) || entry.unitCost < 0) continue;
+    byInventoryItemId.set(inventoryItemId, {
+      shop,
+      inventoryItemId,
+      variantId: gidToId(entry.variantId),
+      sku: entry.sku ?? null,
+      unitCost: entry.unitCost,
+      currency: null,
+      syncedAt: new Date(),
+    });
+  }
+
+  const rows = [...byInventoryItemId.values()];
+  if (rows.length === 0) return { written: 0 };
+
+  // 币种从表格里读不出来（成本必须是店铺默认货币），沿用已有记录的值而不是抹成 null
+  const existing = await prisma.shopSkuCost.findMany({
+    where: { shop, inventoryItemId: { in: rows.map((row) => row.inventoryItemId) } },
+    select: { inventoryItemId: true, currency: true },
+  });
+  const currencyByItem = new Map(existing.map((row) => [row.inventoryItemId, row.currency]));
+  for (const row of rows) {
+    row.currency = currencyByItem.get(row.inventoryItemId) ?? null;
+  }
+
+  const batches = chunk(rows, 200);
+  await prisma.$transaction([
+    ...batches.map((batch) =>
+      prisma.shopSkuCost.deleteMany({
+        where: { shop, inventoryItemId: { in: batch.map((row) => row.inventoryItemId) } },
+      }),
+    ),
+    ...batches.map((batch) => prisma.shopSkuCost.createMany({ data: batch })),
+  ]);
+
+  return { written: rows.length };
+}
+
 /** 读取 SKU 成本映射：inventoryItemId / sku → unitCost。 */
 export async function loadSkuCostMap(shop: string): Promise<Map<string, number>> {
   const rows = await prisma.shopSkuCost.findMany({ where: { shop } });

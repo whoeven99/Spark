@@ -17,10 +17,17 @@ import { polishFinalReply } from "../utils/polishFinalReply";
 import { DEFAULT_LOCALE, type SupportedLocale } from "../../../i18n/config";
 import { createLangsmithTracer, getTraceUrl } from "../utils/langsmith.server";
 import {
+  estimateChatTokenUsage,
   extractTokenUsageFromMessages,
+  isChatTokenEstimateFallbackEnabled,
   recordChatTokenUsage,
 } from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
+import {
+  isChatToolTrimEnabled,
+  selectActiveGatedSkills,
+  shouldBindSkillForTurn,
+} from "../../../lib/chatToolSelection";
 import { globalPlaybookRegistry } from "./playbookRegistry.server";
 import type { SkillProgressEvent } from "./skillTypes.server";
 import {
@@ -40,9 +47,11 @@ import {
 } from "../skills/batchTasks/batchTasks.extract";
 import {
   hasAnyChatCardInUiPayloads,
+  hasEmittedChatCardFlag,
   reconcileReplyWithChatCards,
   resolveMissingChatCardsWithLlm,
 } from "./resolveChatCardIntent.server";
+import { isCapabilityOverviewUserIntent } from "../../../lib/capabilityActionsIntent";
 import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
@@ -155,20 +164,40 @@ function lastHumanUtterance(messages: BaseMessage[]): string {
   return "";
 }
 
+/**
+ * 汇聚最近几轮用户话术，用于按需绑定工具子集。
+ * 跑在上下文窗口（而非仅最后一条）上，避免多轮追问时把上一轮激活的能力裁掉。
+ */
+function recentHumanText(messages: BaseMessage[], maxTurns = 5): string {
+  const texts: string[] = [];
+  for (let i = messages.length - 1; i >= 0 && texts.length < maxTurns; i -= 1) {
+    const msg = messages[i];
+    if (HumanMessage.isInstance(msg)) {
+      const text = extractMessageText(msg).trim();
+      if (text) texts.push(text);
+    }
+  }
+  return texts.join("\n");
+}
+
 async function generateFallbackReplyStream(
   input: string,
   contextText: string,
   shop?: string,
   locale: SupportedLocale = DEFAULT_LOCALE,
+  signal?: AbortSignal,
 ): Promise<ReadableStream<StreamChunk>> {
   const model = getShopChatModel();
 
-  const stream = await model.stream([
-    new SystemMessage(buildFallbackAssistantSystemPrompt(locale)),
-    new HumanMessage(
-      `用户问题：${input}\n\n已知上下文（可能包含工具执行结果）：\n${contextText || "（无）"}`,
-    ),
-  ]);
+  const stream = await model.stream(
+    [
+      new SystemMessage(buildFallbackAssistantSystemPrompt(locale)),
+      new HumanMessage(
+        `用户问题：${input}\n\n已知上下文（可能包含工具执行结果）：\n${contextText || "（无）"}`,
+      ),
+    ],
+    signal ? { signal } : undefined,
+  );
 
   return new ReadableStream({
     async start(controller) {
@@ -207,7 +236,19 @@ export type InvokeChatAgentStreamParams = {
   context: AgentContext;
   config?: RunnableConfig;
   sessionName?: string;
+  /** 推荐操作 key 或 Skill 名，用于按需注入 systemPromptExtension */
+  skillFocus?: string | null;
+  /** 客户端请求的 AbortSignal（HTTP 断开时透传，用于取消图执行与模型调用） */
+  signal?: AbortSignal;
 };
+
+const DEFAULT_CHAT_STREAM_TIMEOUT_MS = 120_000;
+
+/** 整轮聊天的 wall-clock 超时（含图执行与工具调用）；可用 CHAT_STREAM_TIMEOUT_MS 覆盖。 */
+function resolveChatStreamTimeoutMs(): number {
+  const raw = Number(process.env.CHAT_STREAM_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_CHAT_STREAM_TIMEOUT_MS;
+}
 
 /**
  * 使用 LangGraph `CompiledStateGraph.stream`，组合 streamMode：
@@ -221,7 +262,14 @@ export type InvokeChatAgentStreamParams = {
 export function invokeChatAgentStream(
   params: InvokeChatAgentStreamParams,
 ): ReadableStream<StreamChunk> {
-  const { messages: agentInputMessages, context, config, sessionName } = params;
+  const {
+    messages: agentInputMessages,
+    context,
+    config,
+    sessionName,
+    skillFocus,
+    signal: externalSignal,
+  } = params;
 
   // ── 同步预计算（不阻塞响应） ──
   const runId = createAgentRunId();
@@ -230,9 +278,50 @@ export function invokeChatAgentStream(
   const appName = "spark";
   const lastUserTextInput = lastHumanUtterance(agentInputMessages);
 
+  // ── 取消 / 超时装配 ──
+  // 内部 AbortController 汇聚两类中断：整轮 wall-clock 超时，以及客户端断开（externalSignal / 流被 cancel）。
+  // 该 signal 透传给 graph.stream → 节点 → 模型 HTTP 调用，使 LLM 请求随之取消。
+  const abortController = new AbortController();
+  let abortReason: "timeout" | "client" | null = null;
+  const triggerAbort = (reason: "timeout" | "client") => {
+    if (abortController.signal.aborted) return;
+    abortReason = reason;
+    abortController.abort();
+  };
+  const timeoutTimer = setTimeout(
+    () => triggerAbort("timeout"),
+    resolveChatStreamTimeoutMs(),
+  );
+  const onExternalAbort = () => triggerAbort("client");
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      triggerAbort("client");
+    } else {
+      externalSignal.addEventListener("abort", onExternalAbort);
+    }
+  }
+  const cleanupAbortWiring = () => {
+    clearTimeout(timeoutTimer);
+    externalSignal?.removeEventListener("abort", onExternalAbort);
+  };
+
   return new ReadableStream<StreamChunk>({
     async start(controller) {
       const wallStart = Date.now();
+      const safeEnqueue = (chunk: StreamChunk) => {
+        try {
+          controller.enqueue(chunk);
+        } catch {
+          // 流已被下游取消/关闭，忽略。
+        }
+      };
+      const safeClose = () => {
+        try {
+          controller.close();
+        } catch {
+          // 已关闭，忽略。
+        }
+      };
 
       // ── 立即发送思考状态（首字节延迟最小化） ──
       controller.enqueue({ type: "status", phase: "thinking" });
@@ -241,13 +330,23 @@ export function invokeChatAgentStream(
 
       // ── 并行异步 setup：工具、Playbook、反思摘要 ──
       const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
+      // 按 skillFocus / 最近几轮话术裁剪本轮真正 bind 给模型的重型工具（能力清单 prompt 仍用全量）。
+      const activeGated = isChatToolTrimEnabled()
+        ? selectActiveGatedSkills({
+            skillFocus,
+            recentUserText: recentHumanText(agentInputMessages),
+          })
+        : "all";
+      const boundDefs = activeDefs.filter((def) =>
+        shouldBindSkillForTurn(def.name, activeGated),
+      );
       const [
         atomicTools,
         activePlaybookDefs,
         playbookTools,
         reflectionSummary,
       ] = await Promise.all([
-        globalToolRegistry.getToolsForContext(context, activeDefs),
+        globalToolRegistry.getToolsForContext(context, boundDefs),
         globalPlaybookRegistry.getActiveDefinitions(context),
         globalPlaybookRegistry.getPlaybookTools(context),
         shop ? fetchReflectionWithTimeout(shop) : Promise.resolve(undefined),
@@ -260,6 +359,7 @@ export function invokeChatAgentStream(
         activeDefs,
         activePlaybookDefs,
         reflectionSummary,
+        { skillFocus, userText: lastUserTextInput },
       );
 
       // ── tracer / run collector ──
@@ -278,6 +378,7 @@ export function invokeChatAgentStream(
       const streamConfig: RunnableConfig = {
         ...config,
         callbacks: mergedCallbacks,
+        signal: abortController.signal,
         runName: `spark-chat-stream-${runId}`,
         metadata: {
           ...(typeof config?.metadata === "object" && config.metadata !== null
@@ -463,6 +564,7 @@ export function invokeChatAgentStream(
             extractMessagesContext(resultMessages),
             shop,
             context.locale ?? DEFAULT_LOCALE,
+            abortController.signal,
           );
           const reader = fb.getReader();
           // eslint-disable-next-line no-constant-condition
@@ -613,7 +715,10 @@ export function invokeChatAgentStream(
           }
         }
 
-        if (!hasAnyChatCardInUiPayloads(uiPayloads)) {
+        if (
+          !hasAnyChatCardInUiPayloads(uiPayloads) &&
+          !hasEmittedChatCardFlag(streamContext.emittedFlags)
+        ) {
           try {
             const llmResolution = await resolveMissingChatCardsWithLlm({
               messages: resultMessages,
@@ -622,6 +727,8 @@ export function invokeChatAgentStream(
               existingUiPayloads: uiPayloads,
               emittedFlags: streamContext.emittedFlags,
               shop,
+              skillFocus,
+              signal: abortController.signal,
             });
             Object.assign(uiPayloads, llmResolution.uiPayloads);
             for (const chunk of llmResolution.streamChunks) {
@@ -636,7 +743,26 @@ export function invokeChatAgentStream(
           }
         }
 
-        const agentUsage = extractTokenUsageFromMessages(resultMessages);
+        // 「有什么功能」类提问：在回复下方附上与工作台推荐同源的可点操作（不依赖模型工具调用）。
+        if (isCapabilityOverviewUserIntent(lastUserText)) {
+          uiPayloads.workspaceActions = true;
+        }
+
+        let agentUsage = extractTokenUsageFromMessages(resultMessages);
+        // provider 未返回 usage_metadata 但确有输出：记为漏计告警；仅在显式开启时按估算兜底计费。
+        if (agentUsage.totalTokens <= 0 && (finalReply || streamedTextAccum)) {
+          const estimated = estimateChatTokenUsage(
+            lastUserText,
+            finalReply || streamedTextAccum,
+          );
+          const fallbackOn = isChatTokenEstimateFallbackEnabled();
+          console.warn(
+            `[TokenUsage][missing] chat_stream had output but usage_metadata=0 shop=${shop ?? "-"} estInput=${estimated.inputTokens} estOutput=${estimated.outputTokens} fallback=${fallbackOn}`,
+          );
+          if (fallbackOn) {
+            agentUsage = estimated;
+          }
+        }
         const backgroundWrites: Promise<unknown>[] = [];
         if (shop && agentUsage.totalTokens > 0) {
           backgroundWrites.push(recordChatTokenUsage({ shop, usage: agentUsage }));
@@ -679,6 +805,34 @@ export function invokeChatAgentStream(
           }
         });
       } catch (error) {
+        // ── 取消 / 超时：图执行被 abort ──
+        if (abortController.signal.aborted) {
+          const timedOut = abortReason === "timeout";
+          void persistStreamRun({
+            status: "error",
+            resultMessages: [],
+            errorMessage: timedOut
+              ? "chat_stream timeout"
+              : "chat_stream aborted by client",
+          }).catch((err) => {
+            console.error("[AgentRunLog] async abort persist failed:", err);
+          });
+          if (timedOut) {
+            // 超时是服务端主动中断，客户端仍在监听，需给出可读提示并收尾。
+            safeEnqueue({
+              type: "error",
+              message: "本次回答处理超时，请稍后重试，或把问题拆得更聚焦一些。",
+            });
+            safeEnqueue({
+              type: "done",
+              metadata: { totalTokens: 0, model: modelName, ...traceMeta() },
+            });
+          }
+          // 客户端断开时下游已不再读取，直接静默收尾，不再 enqueue。
+          safeClose();
+          return;
+        }
+
         console.error("invokeChatAgentStream:", error);
         const hint =
           error instanceof Error && error.message.includes("DEEPSEEK_API_KEY")
@@ -693,13 +847,20 @@ export function invokeChatAgentStream(
         }).catch((err) => {
           console.error("[AgentRunLog] async error persist failed:", err);
         });
-        controller.enqueue({ type: "error", message: hint });
-        controller.enqueue({
+        safeEnqueue({ type: "error", message: hint });
+        safeEnqueue({
           type: "done",
           metadata: { totalTokens: 0, model: modelName, ...traceMeta() },
         });
-        controller.close();
+        safeClose();
+      } finally {
+        cleanupAbortWiring();
       }
+    },
+    cancel() {
+      // 下游（客户端）取消读取：中断图执行与模型调用，避免空跑计费。
+      triggerAbort("client");
+      cleanupAbortWiring();
     },
   });
 }

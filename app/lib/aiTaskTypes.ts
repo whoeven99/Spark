@@ -1,4 +1,47 @@
 import type { AITaskMessageParams } from "./aiTaskMessage";
+import type {
+  BulkPriceEditApplyOutcome,
+  BulkPriceEditCompareAtMode,
+  BulkPriceEditPriceMode,
+  BulkPriceEditRounding,
+  BulkPriceEditRow,
+  BulkPriceEditSummary,
+} from "./bulkPriceEdit";
+import type {
+  BulkTagEditApplyOutcome,
+  BulkTagEditRow,
+  BulkTagEditSummary,
+} from "./bulkTagEdit";
+import type {
+  BulkStatusEditApplyOutcome,
+  BulkStatusEditInventoryCondition,
+  BulkStatusEditRow,
+  BulkStatusEditSummary,
+  BulkStatusEditTargetStatus,
+} from "./bulkStatusEdit";
+import type {
+  BulkCollectionEditAction,
+  BulkCollectionEditApplyOutcome,
+  BulkCollectionEditRow,
+  BulkCollectionEditSummary,
+} from "./bulkCollectionEdit";
+import type {
+  BulkSeoEditApplyOutcome,
+  BulkSeoEditOverflow,
+  BulkSeoEditRow,
+  BulkSeoEditSummary,
+} from "./bulkSeoEdit";
+import type {
+  BulkPriceImportIssue,
+  BulkPriceImportRow,
+  BulkPriceImportSummary,
+} from "./bulkPriceImport";
+import type {
+  BulkCostImportApplyOutcome,
+  BulkCostImportIssue,
+  BulkCostImportRow,
+  BulkCostImportSummary,
+} from "./bulkCostImport";
 
 export type AITaskStatus =
   | "running"
@@ -13,7 +56,14 @@ export type AITaskType =
   | "image_generation"
   | "picture_translate"
   | "product_improve"
-  | "ads_catalog_sync";
+  | "ads_catalog_sync"
+  | "bulk_price_edit"
+  | "bulk_tag_edit"
+  | "bulk_status_edit"
+  | "bulk_collection_edit"
+  | "bulk_seo_edit"
+  | "bulk_price_import"
+  | "bulk_cost_import";
 
 export type AITaskListView = "current" | "history";
 
@@ -228,6 +278,177 @@ export interface TiktokCatalogProductResult {
   status: TiktokCatalogProductResultStatus;
   reason?: string;
 }
+
+/**
+ * 变体批量调价（受控写回）：一个任务覆盖一批商品。
+ * dry-run 阶段只读 Shopify 并算出 changeset，写回要用户在审核弹窗二次确认。
+ */
+export type BulkPriceEditTaskConfig = {
+  priceMode: BulkPriceEditPriceMode;
+  priceValue: number;
+  rounding: BulkPriceEditRounding;
+  compareAtMode: BulkPriceEditCompareAtMode;
+  minPrice: number | null;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkPriceEditTaskResult = {
+  rows: BulkPriceEditRow[];
+  summary: BulkPriceEditSummary;
+  /** 变体数超出上限时被截断，行数少于店铺实际变体数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkPriceEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkPriceEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkTagEditTaskConfig = {
+  addTags: string[];
+  removeTags: string[];
+  removePrefixes: string[];
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkTagEditTaskResult = {
+  rows: BulkTagEditRow[];
+  summary: BulkTagEditSummary;
+  /** 商品数超出上限时被截断，行数少于所选商品数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkTagEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkTagEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkStatusEditTaskConfig = {
+  targetStatus: BulkStatusEditTargetStatus;
+  inventoryCondition: BulkStatusEditInventoryCondition;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkStatusEditTaskResult = {
+  rows: BulkStatusEditRow[];
+  summary: BulkStatusEditSummary;
+  /** 商品数超出上限时被截断，行数少于所选商品数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkStatusEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkStatusEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkCollectionEditTaskConfig = {
+  action: BulkCollectionEditAction;
+  collectionId: string;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkCollectionEditTaskResult = {
+  rows: BulkCollectionEditRow[];
+  summary: BulkCollectionEditSummary;
+  /** 试算时从 Shopify 读到的权威合集信息，卡片与 CSV 都用它，不用卡片里的旧标题 */
+  collectionId: string;
+  collectionTitle: string;
+  action: BulkCollectionEditAction;
+  /** 商品数超出上限时被截断，行数少于所选商品数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkCollectionEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkCollectionEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number; pendingJob: boolean }
+  | { ok: false; error: string };
+
+export type BulkSeoEditTaskConfig = {
+  titleTemplate: string | null;
+  descriptionTemplate: string | null;
+  onlyFillEmpty: boolean;
+  overflow: BulkSeoEditOverflow;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkSeoEditTaskResult = {
+  rows: BulkSeoEditRow[];
+  summary: BulkSeoEditSummary;
+  /** 商品数超出上限时被截断，行数少于所选商品数 */
+  truncated?: boolean;
+  /** 写回后的结果；未写回时缺省 */
+  apply?: BulkSeoEditApplyOutcome;
+  /** 写回开始时间，用于拒绝重复提交 */
+  applyStartedAt?: string;
+};
+
+export type BulkSeoEditApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkPriceImportTaskConfig = {
+  fileId: string;
+  fileName: string;
+  skuColumn: string;
+  priceColumn: string;
+  compareAtColumn: string | null;
+};
+
+export type BulkPriceImportTaskResult = {
+  rows: BulkPriceImportRow[];
+  /** 未写入的行：未匹配、SKU 冲突、价格解析失败等 */
+  issues: BulkPriceImportIssue[];
+  summary: BulkPriceImportSummary;
+  fileName: string;
+  /** 表格行数超出上限时被截断 */
+  truncated?: boolean;
+  apply?: BulkPriceEditApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type BulkPriceImportApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkCostImportTaskConfig = {
+  fileId: string;
+  fileName: string;
+  skuColumn: string;
+  costColumn: string;
+};
+
+export type BulkCostImportTaskResult = {
+  rows: BulkCostImportRow[];
+  /** 未写入的行：未匹配、SKU 冲突、成本解析失败等 */
+  issues: BulkCostImportIssue[];
+  summary: BulkCostImportSummary;
+  fileName: string;
+  /** 表格行数超出上限时被截断 */
+  truncated?: boolean;
+  apply?: BulkCostImportApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type BulkCostImportApplyResponse =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
 
 export type AITaskCreateResponse =
   | { success: true; taskId: string; batchId: string; status: "running" }

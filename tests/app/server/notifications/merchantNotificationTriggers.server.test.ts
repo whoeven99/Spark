@@ -3,7 +3,7 @@ import prisma from "../../../../app/db.server";
 import { recordAppInstalled } from "../../../../app/server/commonEventLog/recordAppInstalled.server";
 import { handleAppUninstalled } from "../../../../app/server/commonEventLog/handleAppUninstalled.server";
 import { appendCommonEventLog } from "../../../../app/server/commonEventLog/appendCommonEventLog.server";
-import { onAppUninstalled } from "../../../../app/server/appLifecycle/onAppUninstalled.server";
+import { onAppUninstalled, resetUninstallOpsNotifyMemoryForTests } from "../../../../app/server/appLifecycle/onAppUninstalled.server";
 import { applyTokenPackPurchase } from "../../../../app/server/billing/purchase/applyTokenPack.server";
 import {
   applyActiveSubscription,
@@ -143,6 +143,7 @@ describe("merchant notification triggers", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetUninstallOpsNotifyMemoryForTests();
     vi.mocked(getPlanByKey).mockImplementation(async (key: string) => ({
       ...samplePlan,
       planKey: key,
@@ -208,6 +209,8 @@ describe("merchant notification triggers", () => {
     };
 
     it("skips email on dedup but still persists", async () => {
+      resetUninstallOpsNotifyMemoryForTests();
+      vi.mocked(prisma.commonEventLog.findFirst).mockResolvedValue(null);
       vi.mocked(appendCommonEventLog).mockResolvedValueOnce({ created: false });
 
       await onAppUninstalled(uninstallParams);
@@ -217,6 +220,8 @@ describe("merchant notification triggers", () => {
     });
 
     it("persists shop purge before uninstall email", async () => {
+      resetUninstallOpsNotifyMemoryForTests();
+      vi.mocked(prisma.commonEventLog.findFirst).mockResolvedValue(null);
       vi.mocked(appendCommonEventLog).mockResolvedValueOnce({ created: true });
       const callOrder: string[] = [];
       vi.mocked(notifyAppUninstalledEmail).mockImplementation(async () => {

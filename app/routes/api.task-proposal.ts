@@ -11,8 +11,9 @@ import { z } from "zod";
 import { authenticate } from "../shopify.server";
 import {
   getTaskProposalSkillHandler,
+  resolveTaskProposalMaxTargets,
   TaskProposalBillingError,
-  TASK_PROPOSAL_MAX_TARGETS,
+  TASK_PROPOSAL_TARGETS_HARD_CEILING,
 } from "../server/taskProposal/taskProposalSkills.server";
 import { resolveObjectQueryTargets } from "../server/shopify/shopifyObjectList.server";
 import type {
@@ -52,7 +53,11 @@ const executeSchema = z.object({
         productId: z.string().min(1).optional(),
       }),
     )
-    .max(TASK_PROPOSAL_MAX_TARGETS, `最多一次执行 ${TASK_PROPOSAL_MAX_TARGETS} 个对象`)
+    // schema 只挡住明显越界的请求；每个技能的真实上限在下面按 handler 判定
+    .max(
+      TASK_PROPOSAL_TARGETS_HARD_CEILING,
+      `最多一次执行 ${TASK_PROPOSAL_TARGETS_HARD_CEILING} 个对象`,
+    )
     .default([]),
   targetsQuery: targetsQuerySchema.optional(),
 });
@@ -106,13 +111,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const locale = await resolveUiLocale(request, {
     admin,
+    shop,
     logContext: `task-proposal shop=${shop}`,
   });
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);
 
+  const maxTargets = resolveTaskProposalMaxTargets(handler);
+
   // 显式 ID 优先；否则按圈定条件在执行期重新求值；无目标对象技能允许空 targets
   let targets = body.targets;
+  if (targets.length > maxTargets) {
+    return data<TaskProposalExecuteResponse>(
+      { ok: false, error: `最多一次执行 ${maxTargets} 个对象，请减少选择后重试` },
+      { status: 400 },
+    );
+  }
   if (targets.length === 0 && !handler.allowEmptyTargets) {
     if (!body.targetsQuery) {
       return data(
@@ -121,16 +135,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
     try {
-      const resolved = await resolveObjectQueryTargets(
-        admin,
-        body.targetsQuery,
-        TASK_PROPOSAL_MAX_TARGETS,
-      );
+      const resolved = await resolveObjectQueryTargets(admin, body.targetsQuery, maxTargets);
       if (resolved.overflow) {
         return data<TaskProposalExecuteResponse>(
           {
             ok: false,
-            error: `当前条件匹配数超过单次执行上限（${TASK_PROPOSAL_MAX_TARGETS} 个），请收紧条件后重试`,
+            error: `当前条件匹配数超过单次执行上限（${maxTargets} 个），请收紧条件后重试`,
           },
           { status: 400 },
         );

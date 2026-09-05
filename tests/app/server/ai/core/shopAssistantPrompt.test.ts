@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildMerchantCapabilityPrompt } from "../../../../../app/server/ai/core/shopAssistantPrompt";
+import {
+  buildMerchantCapabilityPrompt,
+  buildPostToolNextStepPrompt,
+  buildWriteSafetyPrompt,
+} from "../../../../../app/server/ai/core/shopAssistantPrompt";
 import type { ToolDefinition } from "../../../../../app/server/ai/core/toolRegistry.server";
 import type { PlaybookDefinition } from "../../../../../app/server/ai/core/playbookRegistry.server";
 
@@ -13,6 +17,22 @@ function stubTool(
     },
   };
 }
+
+describe("buildWriteSafetyPrompt", () => {
+  it("states confirm-card write boundary", () => {
+    const prompt = buildWriteSafetyPrompt();
+    expect(prompt).toContain("open_*_form");
+    expect(prompt).toContain("写回");
+  });
+});
+
+describe("buildPostToolNextStepPrompt", () => {
+  it("requires calling downstream tools instead of only summarizing", () => {
+    const prompt = buildPostToolNextStepPrompt();
+    expect(prompt).toContain("suggestedNextActions");
+    expect(prompt).toContain("同一回合立即调用");
+  });
+});
 
 describe("buildMerchantCapabilityPrompt", () => {
   it("lists only public skills and playbooks for merchant-facing capability intros", () => {

@@ -109,7 +109,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
-    const uiLocale = await resolveUiLocale(request, { admin, logContext: "health-diagnosis" });
+    const uiLocale = await resolveUiLocale(request, {
+      admin,
+      shop: session.shop,
+      logContext: "health-diagnosis",
+    });
     const locale = toOpsCopyLocale(uiLocale);
     const view = await loadCardView({
       shop: session.shop,
@@ -179,7 +183,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
-    const uiLocale = await resolveUiLocale(request, { admin, logContext: "health-diagnosis" });
+    const uiLocale = await resolveUiLocale(request, {
+      admin,
+      shop: session.shop,
+      logContext: "health-diagnosis",
+    });
     const locale = toOpsCopyLocale(uiLocale);
     const view = await loadCardView({
       shop: session.shop,
