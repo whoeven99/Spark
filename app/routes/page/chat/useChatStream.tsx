@@ -75,6 +75,7 @@ type StreamChunk =
           imageGenerationCard?: unknown;
           batchTasksCard?: unknown;
           taskProposal?: unknown;
+          workspaceActions?: unknown;
           attachments?: unknown;
         };
       };
@@ -99,6 +100,7 @@ export type ChatStreamFinishPayload = {
   productQualityCardPayload?: unknown;
   healthDiagnosisCard?: boolean;
   healthDiagnosisCardPayload?: unknown;
+  workspaceActions?: boolean;
   taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
@@ -117,6 +119,7 @@ type Snapshot = {
   productQualityCardPayload?: unknown;
   healthDiagnosisCard: boolean;
   healthDiagnosisCardPayload?: unknown;
+  workspaceActions: boolean;
   taskProposal?: TaskProposalPayload;
   streamError?: boolean;
 };
@@ -136,6 +139,7 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     productQualityCardPayload: snapshot.productQualityCardPayload,
     healthDiagnosisCard: snapshot.healthDiagnosisCard,
     healthDiagnosisCardPayload: snapshot.healthDiagnosisCardPayload,
+    workspaceActions: snapshot.workspaceActions,
     taskProposal: snapshot.taskProposal,
   };
 }
@@ -157,6 +161,7 @@ export function useChatStream() {
     useState<unknown>();
   const [streamingTaskProposal, setStreamingTaskProposal] =
     useState<TaskProposalPayload | undefined>();
+  const [streamingWorkspaceActions, setStreamingWorkspaceActions] = useState(false);
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -173,6 +178,7 @@ export function useChatStream() {
     productQualityCardPayload: undefined,
     healthDiagnosisCard: false,
     healthDiagnosisCardPayload: undefined,
+    workspaceActions: false,
     taskProposal: undefined,
   });
 
@@ -191,6 +197,7 @@ export function useChatStream() {
       productQualityCardPayload: undefined,
       healthDiagnosisCard: false,
       healthDiagnosisCardPayload: undefined,
+      workspaceActions: false,
       taskProposal: undefined,
     };
   };
@@ -205,6 +212,7 @@ export function useChatStream() {
     setStreamingHealthDiagnosisCard(false);
     setStreamingHealthDiagnosisPayload(undefined);
     setStreamingTaskProposal(undefined);
+    setStreamingWorkspaceActions(false);
     setSkillSteps([]);
   };
 
@@ -223,6 +231,7 @@ export function useChatStream() {
       options?: {
         url?: string;
         fileIds?: string[];
+        skillFocus?: string | null;
         workspaceBatchProducts?: BatchTaskProduct[];
         /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
         workspaceProductQuery?: ObjectQuerySelection | null;
@@ -232,6 +241,7 @@ export function useChatStream() {
       const url = options?.url ?? "/chat-stream";
       const onFinish = options?.onFinish;
       const fileIds = options?.fileIds ?? [];
+      const skillFocus = options?.skillFocus?.trim() || null;
       const workspaceBatchProducts = options?.workspaceBatchProducts ?? [];
       const workspaceProductQuery = options?.workspaceProductQuery ?? null;
       const preferBatchCard = shouldPreferBatchOverProductImprove(workspaceBatchProducts);
@@ -288,7 +298,11 @@ export function useChatStream() {
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages, ...(fileIds.length ? { fileIds } : {}) }),
+          body: JSON.stringify({
+            messages,
+            ...(fileIds.length ? { fileIds } : {}),
+            ...(skillFocus ? { skillFocus } : {}),
+          }),
           signal: controller.signal,
         });
 
@@ -505,6 +519,10 @@ export function useChatStream() {
                   setStreamingHealthDiagnosisCard(true);
                   setStreamingHealthDiagnosisPayload(healthPayload);
                 }
+                if (ui?.workspaceActions && !snapshotRef.current.workspaceActions) {
+                  snapshotRef.current.workspaceActions = true;
+                  setStreamingWorkspaceActions(true);
+                }
                 if (
                   ui?.productImproveCardPayload &&
                   !preferBatchCard &&
@@ -627,6 +645,7 @@ export function useChatStream() {
     streamingHealthDiagnosisCard,
     streamingHealthDiagnosisPayload,
     streamingTaskProposal,
+    streamingWorkspaceActions,
     skillSteps,
     streamingThinkingText,
     /** @deprecated 兼容旧名 */

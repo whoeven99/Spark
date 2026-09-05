@@ -4,7 +4,7 @@ const authenticateAdmin = vi.fn();
 const ensureDailySnapshot = vi.fn();
 const ensureDailySnapshotOverview = vi.fn();
 const loadHealthMonitorSignals = vi.fn();
-const fetchShopLocalesPayload = vi.fn();
+const fetchShopLocalesPayloadCached = vi.fn();
 const fetchShopBasicInfo = vi.fn();
 
 vi.mock("../../../app/shopify.server", () => ({
@@ -23,7 +23,7 @@ vi.mock("../../../app/server/operations/healthMonitorSignals.server", () => ({
 }));
 
 vi.mock("../../../app/server/productImprove/shopLocalesFetcher.server", () => ({
-  fetchShopLocalesPayload,
+  fetchShopLocalesPayloadCached,
 }));
 
 vi.mock("../../../app/server/shopify/fetchShopBasicInfo.server", () => ({
@@ -71,7 +71,7 @@ describe("health-monitor loader snapshot entry", () => {
     ensureDailySnapshot.mockReset();
     ensureDailySnapshotOverview.mockReset();
     loadHealthMonitorSignals.mockReset();
-    fetchShopLocalesPayload.mockReset();
+    fetchShopLocalesPayloadCached.mockReset();
     fetchShopBasicInfo.mockReset();
 
     authenticateAdmin.mockResolvedValue({
@@ -82,7 +82,7 @@ describe("health-monitor loader snapshot entry", () => {
       myshopifyDomain: SHOP,
       ianaTimezone: "UTC",
     });
-    fetchShopLocalesPayload.mockResolvedValue({
+    fetchShopLocalesPayloadCached.mockResolvedValue({
       defaultTargetLanguage: "en",
     });
     loadHealthMonitorSignals.mockResolvedValue({

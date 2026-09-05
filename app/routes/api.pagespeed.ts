@@ -62,6 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       : resolvePageSpeedLocale(
           await resolveUiLocale(request, {
             admin,
+            shop: session.shop,
             logContext: `pagespeed shop=${session.shop}`,
           }),
         );

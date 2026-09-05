@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isProductionNodeEnv } from "./nodeEnv.server";
 
 const ENV_LOG = "[spark:env]";
 
@@ -50,9 +49,23 @@ const PRESERVE_WHEN_SET_KEYS = new Set([
 ]);
 
 /**
- * 解析 KEY=VALUE 行。
- * @param overrideExisting 本地 .env 为 true：用文件值覆盖空字符串；Render 密钥文件为 false。
+ * Render 平台注入键：Secret File 不得覆盖（否则会弄坏端口/实例元数据）。
+ * `PORT`、`RENDER`、以及任意 `RENDER_*`。
  */
+export function isRenderPlatformEnvKey(key: string): boolean {
+  return key === "PORT" || key === "RENDER" || key.startsWith("RENDER_");
+}
+
+type ApplyEnvFileOptions = {
+  /** 本地仓库 `.env`：非 Render 时可覆盖已有值 */
+  overrideExisting: boolean;
+  /**
+   * Render Secret File：覆盖已有环境变量（含平台默认 `NODE_ENV=production`），
+   * 但跳过 PORT / RENDER*。
+   */
+  fromSecretFile?: boolean;
+};
+
 function maskValue(key: string, value: string): string {
   if (!value) return "(空)";
   if (/token|secret|key|password|auth/i.test(key)) {
@@ -61,12 +74,18 @@ function maskValue(key: string, value: string): string {
   return value.length > 40 ? `${value.slice(0, 40)}…` : value;
 }
 
-function applyEnvFileContent(
+/**
+ * 解析 KEY=VALUE 行并写入 process.env。
+ * 导出供单测；业务代码请走 ensureRuntimeEnv。
+ */
+export function applyEnvFileContent(
   content: string,
-  overrideExisting: boolean,
-): { appliedCount: number; skipped: string[] } {
+  options: ApplyEnvFileOptions,
+): { appliedCount: number; skipped: string[]; overridden: string[] } {
+  const { overrideExisting, fromSecretFile = false } = options;
   let appliedCount = 0;
   const skipped: string[] = [];
+  const overridden: string[] = [];
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -81,31 +100,51 @@ function applyEnvFileContent(
     ) {
       value = value.slice(1, -1);
     }
+
+    if (fromSecretFile && isRenderPlatformEnvKey(key)) {
+      skipped.push(key);
+      continue;
+    }
+
     const existing = process.env[key];
     const alreadySet = existing !== undefined && existing !== "";
-    const preserveCliValue = alreadySet && PRESERVE_WHEN_SET_KEYS.has(key);
+    // CLI 保护仅针对本地 .env；Secret File 是运维显式配置源，可覆盖同名键。
+    const preserveCliValue =
+      !fromSecretFile && alreadySet && PRESERVE_WHEN_SET_KEYS.has(key);
     const shouldApply =
       !preserveCliValue &&
       (existing === undefined ||
         existing === "" ||
+        fromSecretFile ||
         (overrideExisting && !process.env.RENDER));
     if (shouldApply) {
+      if (alreadySet && existing !== value) {
+        overridden.push(key);
+      }
       process.env[key] = value;
       appliedCount += 1;
     } else if (alreadySet) {
       skipped.push(key);
     }
   }
-  return { appliedCount, skipped };
+  return { appliedCount, skipped, overridden };
 }
 
-function tryLoadEnvFile(filePath: string, overrideExisting: boolean): number {
+function tryLoadEnvFile(filePath: string, options: ApplyEnvFileOptions): number {
   const exists = existsSync(filePath);
   console.info(`${ENV_LOG} 检查 ${filePath}: ${exists ? "存在" : "不存在"}`);
   if (!exists) return 0;
   try {
     const content = readFileSync(filePath, "utf8");
-    const { appliedCount, skipped } = applyEnvFileContent(content, overrideExisting);
+    const { appliedCount, skipped, overridden } = applyEnvFileContent(
+      content,
+      options,
+    );
+    if (overridden.length > 0) {
+      console.info(
+        `${ENV_LOG} 覆盖 ${overridden.length} 个已有键: ${overridden.join(", ")}`,
+      );
+    }
     if (skipped.length > 0) {
       console.info(`${ENV_LOG} 跳过 ${skipped.length} 个已有键: ${skipped.join(", ")}`);
     }
@@ -248,13 +287,20 @@ export function ensureRuntimeEnv(): void {
     const isProjectDotEnv =
       filePath === path.join(projectRoot, ".env") ||
       filePath === path.join(process.cwd(), ".env");
-    const applied = tryLoadEnvFile(filePath, isProjectDotEnv);
-    if (RENDER_SECRET_PATHS.has(filePath)) {
+    const fromSecretFile = RENDER_SECRET_PATHS.has(filePath);
+    const applied = tryLoadEnvFile(filePath, {
+      overrideExisting: isProjectDotEnv,
+      fromSecretFile,
+    });
+    if (fromSecretFile) {
       secretFileApplied += applied;
     }
   }
 
-  if (!isVitestRuntime()) logCriticalEnvStatus();
+  if (!isVitestRuntime()) {
+    console.info(`${ENV_LOG} 加载后 NODE_ENV=${process.env.NODE_ENV}`);
+    logCriticalEnvStatus();
+  }
 
   if (
     process.env.RENDER &&

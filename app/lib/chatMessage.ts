@@ -75,6 +75,11 @@ export type ChatMessage =
       /** 为 true 时在气泡内渲染「今日健康诊断与待办」卡。 */
       healthDiagnosisCard?: boolean;
       healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
+      /**
+       * 能力总览回复下方展示与工作台「推荐」同源的可点操作。
+       * 由服务端在用户问「有什么功能」时写入 uiPayloads.workspaceActions。
+       */
+      workspaceActions?: boolean;
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;

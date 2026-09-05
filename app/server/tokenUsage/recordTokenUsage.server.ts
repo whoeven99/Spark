@@ -32,6 +32,10 @@ export async function recordTokenUsage(
       },
     });
   } catch (error) {
-    console.error("[TokenUsage] recordTokenUsage failed:", error);
+    // 不向上抛：DB 抖动不应打断聊天回复；但必须留下可检索的漏计告警以便对账。
+    console.error(
+      `[TokenUsage][record-failed] usedTokens NOT incremented shop=${shop} tokens=${usage.totalTokens}:`,
+      error,
+    );
   }
 }

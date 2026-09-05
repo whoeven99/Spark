@@ -1,6 +1,7 @@
 .root {
   font-size: 0.9375rem;
-  line-height: 1.55;
+  line-height: 1.6;
+  color: #1f2124;
   word-break: break-word;
 }
 
@@ -13,7 +14,7 @@
 }
 
 .root p {
-  margin: 0.5em 0;
+  margin: 0.6em 0;
 }
 
 .root h1,
@@ -46,7 +47,7 @@
 }
 
 .root li {
-  margin: 0.35em 0;
+  margin: 0.4em 0;
 }
 
 .root li::marker {
@@ -59,6 +60,7 @@
 
 .root strong {
   font-weight: 600;
+  color: #1f2124;
 }
 
 .root hr {

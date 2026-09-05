@@ -10,7 +10,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { parseGenerateDescriptionBody } from "../server/productImprove/generateDescriptionHttp.server";
 import { logDetailedError } from "../server/productImprove/generateDescriptionLog.server";
-import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
+import { fetchShopLocalesPayloadCached } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchProductDescriptionContext } from "../server/productImprove/productContextFetcher.server";
 import { detectTextLanguage } from "../server/productImprove/detectTextLanguage.server";
 import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
@@ -66,8 +66,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
-  const shopLocales = await fetchShopLocalesPayload(
+  const shopLocales = await fetchShopLocalesPayloadCached(
     admin,
+    session.shop,
     `[PageLoader] shop=${session.shop}`,
   );
   const billing = toBillingAccessSnapshot(await loadBillingContext(session.shop));
@@ -141,6 +142,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { admin, session } = await authenticate.admin(request);
     const locale = await resolveUiLocale(request, {
       admin,
+      shop: session.shop,
       logContext: `studio-copy shop=${session.shop}`,
     });
     const i18n = initI18n(locale);

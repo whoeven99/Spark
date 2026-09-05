@@ -11,23 +11,20 @@ import {
 } from "../server/billing/buildBillingReturnUrl.server";
 import { listConversations } from "../server/conversation/conversationStore.server";
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
-import {
-  buildWorkspaceDashboardFromDailyOps,
-  emptyWorkspaceDashboardSnapshot,
-} from "../server/operations/workspaceDashboard.server";
-import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
-import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
 import { authenticate } from "../shopify.server";
 import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
-import { RoutePageFallback } from "./component/RoutePageFallback";
+import { WorkspaceShellSsrFallback } from "./page/workspace/WorkspaceShellSsrFallback";
 
-const DASHBOARD_RECENT_TASK_LIMIT = 5;
+const importWorkspaceAppShell = () => import("./page/workspace/WorkspaceAppShellPage");
 
 const WorkspaceAppShellPage = lazy(() =>
-  import("./page/workspace/WorkspaceAppShellPage").then((m) => ({
-    default: m.WorkspaceAppShellPage,
-  })),
+  importWorkspaceAppShell().then((m) => ({ default: m.WorkspaceAppShellPage })),
 );
+
+// 与首页一致：ClientMount 之后才挂壳，模块求值时并行预取 chunk。
+if (typeof window !== "undefined") {
+  void importWorkspaceAppShell();
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -37,21 +34,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const conversations = await listConversations(session.shop);
-  let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
-  try {
-    const [dailyOps, recentTaskEntries] = await Promise.all([
-      ensureDailySnapshotOverview(session.shop, { shopifyAdmin: admin }),
-      listMergedUnifiedTaskEntries(session.shop, {
-        limit: DASHBOARD_RECENT_TASK_LIMIT,
-      }),
-    ]);
-    dashboardSnapshot = {
-      ...buildWorkspaceDashboardFromDailyOps(dailyOps),
-      recentTaskSummaries: buildWorkspaceTaskSummaries(recentTaskEntries),
-    };
-  } catch (error) {
-    console.error("[app.assistant] dashboard snapshot failed:", error);
-  }
+
+  // 助手默认进 chat 面板（homeVariant=v2），不消费 dashboardSnapshot；诊断快照只做预热。
+  void ensureDailySnapshotOverview(session.shop, { shopifyAdmin: admin }).catch((error) => {
+    console.error("[app.assistant] daily snapshot warmup failed:", error);
+  });
 
   const associatedUser = (
     session as {
@@ -68,17 +55,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     conversations,
-    dashboardSnapshot,
     accountName,
     conversationTimeZone: resolveConversationDisplayTimeZone(request.headers),
   };
 };
 
-function ClientMount({ children }: { children: ReactNode }) {
+function ClientMount({
+  fallback,
+  children,
+}: {
+  fallback: ReactNode;
+  children: ReactNode;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) {
-    return <RoutePageFallback />;
+    return fallback;
   }
   return children;
 }
@@ -87,13 +79,14 @@ export default function AssistantRoute() {
   const data = useLoaderData<typeof loader>();
   useFeatureView("chat");
 
+  const firstPaint = <WorkspaceShellSsrFallback />;
+
   return (
-    <ClientMount>
+    <ClientMount fallback={firstPaint}>
       <TitleBar title="Spark AI" />
-      <Suspense fallback={<RoutePageFallback />}>
+      <Suspense fallback={firstPaint}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}
-          dashboardSnapshot={data?.dashboardSnapshot}
           accountName={data?.accountName}
           defaultPanel="chat"
           homeVariant="v2"

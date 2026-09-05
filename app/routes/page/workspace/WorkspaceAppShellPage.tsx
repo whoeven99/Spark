@@ -11,6 +11,10 @@ import { useTranslation } from "react-i18next";
 import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
+import {
+  nextStickySkillFocus,
+  resolveConversationSkillFocus,
+} from "../../../lib/conversationSkillFocus";
 import { SupportChatWidget, SupportChatIcon } from "../../component/SupportChatWidget";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { SparkMark } from "../../component/common/SparkMark";
@@ -374,6 +378,7 @@ export function WorkspaceAppShellPage({
       draft?: string;
       assistantText?: string;
       autoSend?: boolean;
+      skillFocus?: string | null;
       assistantLaunchContext?: ManagedAiLaunchContext | null;
     }) => void) | null
   >(null);
@@ -519,6 +524,9 @@ export function WorkspaceAppShellPage({
   const replyEpochRef = useRef(0);
   const pendingHomeContextToolRef = useRef<ContextTool | null>(null);
   const pendingAutoSendRef = useRef(false);
+  const pendingSkillFocusRef = useRef<string | null>(null);
+  /** 会话级 skillFocus：点推荐后同会话多轮沿用 */
+  const skillFocusByConversationRef = useRef<Map<string, string>>(new Map());
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
   /** 会话上下文内存缓存（含草稿）；落库后仍保留以便切换时即时恢复 */
   const contextCacheRef = useRef<Map<string, WorkspaceConversationContext>>(new Map());
@@ -565,6 +573,7 @@ export function WorkspaceAppShellPage({
       loadedConvIdsRef.current.delete(id);
       contextCacheRef.current.delete(id);
       contextReadyIdsRef.current.delete(id);
+      skillFocusByConversationRef.current.delete(id);
     }
     setConversationList((current) => current.filter((item) => !removeSet.has(item.id)));
     setMessagesByConversation((current) => {
@@ -598,6 +607,11 @@ export function WorkspaceAppShellPage({
   const renameConversationInState = (oldId: string, nextConversation: ConversationSummary) => {
     loadedConvIdsRef.current.delete(oldId);
     loadedConvIdsRef.current.add(nextConversation.id);
+    const stickyFocus = skillFocusByConversationRef.current.get(oldId);
+    if (stickyFocus) {
+      skillFocusByConversationRef.current.delete(oldId);
+      skillFocusByConversationRef.current.set(nextConversation.id, stickyFocus);
+    }
     const cachedContext = contextCacheRef.current.get(oldId);
     if (cachedContext) {
       contextCacheRef.current.delete(oldId);
@@ -782,6 +796,7 @@ export function WorkspaceAppShellPage({
   const openNewConversationHome = () => {
     pruneEmptyDraftConversations();
     pendingAutoSendRef.current = false;
+    pendingSkillFocusRef.current = null;
     pendingHomeContextToolRef.current = null;
     setActiveConversationId(null);
     switchPanel("home");
@@ -875,6 +890,7 @@ export function WorkspaceAppShellPage({
     draft?: string;
     assistantText?: string;
     autoSend?: boolean;
+    skillFocus?: string | null;
     assistantLaunchContext?: ManagedAiLaunchContext | null;
   }) => {
     const nextDraft = options?.draft ?? "";
@@ -882,6 +898,10 @@ export function WorkspaceAppShellPage({
       options?.assistantText ??
       t("workspace.shell.conversation.welcome");
     pendingAutoSendRef.current = Boolean(options?.autoSend && nextDraft.trim());
+    pendingSkillFocusRef.current =
+      options?.autoSend && nextDraft.trim() && options.skillFocus?.trim()
+        ? options.skillFocus.trim()
+        : null;
     // 已存在空会话（草稿或落库的"新对话"）时直接复用，避免列表里堆积重复空会话
     const existingEmpty = conversationList.find(
       (conversation) =>
@@ -983,7 +1003,10 @@ export function WorkspaceAppShellPage({
     createConversationRef.current?.();
   }, [activeConversationId, autoCreateConversation, searchParams]);
 
-  const sendMessage = async (contentOverride?: string) => {
+  const sendMessage = async (
+    contentOverride?: string,
+    options?: { skillFocus?: string | null },
+  ) => {
     if (!activeConversation) return;
     const content = (
       contentOverride ??
@@ -995,6 +1018,15 @@ export function WorkspaceAppShellPage({
     let conversationId = activeConversation.id;
     let conversationTitle = activeConversation.title;
     const priorMessages = messagesByConversation[conversationId] ?? [];
+
+    const stickyNext = nextStickySkillFocus({
+      explicit: options?.skillFocus,
+      previous: skillFocusByConversationRef.current.get(conversationId) ?? null,
+    });
+    if (stickyNext) {
+      skillFocusByConversationRef.current.set(conversationId, stickyNext);
+    }
+
     if (isDraftConversationId(conversationId)) {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
       try {
@@ -1017,6 +1049,11 @@ export function WorkspaceAppShellPage({
         return;
       }
     }
+
+    const skillFocus = resolveConversationSkillFocus({
+      explicit: options?.skillFocus,
+      sticky: skillFocusByConversationRef.current.get(conversationId) ?? null,
+    });
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
@@ -1064,6 +1101,7 @@ export function WorkspaceAppShellPage({
       await streamConversation(apiMessages, {
         url: `/chat-stream${authQuery}`,
         fileIds: workspaceContext.uploadedFileIds,
+        skillFocus,
         workspaceBatchProducts: workspaceContext.workspaceBatchProducts,
         workspaceProductQuery: workspaceContext.objectQuerySelectionByType.product,
         onFinish: (payload) => {
@@ -1173,7 +1211,9 @@ export function WorkspaceAppShellPage({
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
     if (!content || streamingConversationId === activeConversation.id) return;
     pendingAutoSendRef.current = false;
-    void sendMessage();
+    const skillFocus = pendingSkillFocusRef.current;
+    pendingSkillFocusRef.current = null;
+    void sendMessage(undefined, { skillFocus });
     // sendMessage 随渲染重建；只在会话/草稿就绪时触发一次自动发送。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversation, activePanel, draftByConversation, streamingConversationId]);
@@ -1831,7 +1871,9 @@ export function WorkspaceAppShellPage({
           <HomeV2Panel
             displayName={displayName}
             initialRenderTimeIso={homeRenderTimeIso}
-            onSubmitPrompt={(prompt) => createConversation({ draft: prompt, autoSend: true })}
+            onSubmitPrompt={(prompt, skillFocus) =>
+              createConversation({ draft: prompt, autoSend: true, skillFocus })
+            }
             onOpenContextTool={(tool) => {
               pendingHomeContextToolRef.current = tool;
               createConversation();
@@ -1871,7 +1913,7 @@ export function WorkspaceAppShellPage({
               }))
             }
             onSend={sendMessage}
-            onRecommendedPrompt={(prompt) => sendMessage(prompt)}
+            onRecommendedPrompt={(prompt, skillFocus) => sendMessage(prompt, { skillFocus })}
             onAbortStream={() => {
               replyEpochRef.current += 1;
               setStreamingConversationId(null);
