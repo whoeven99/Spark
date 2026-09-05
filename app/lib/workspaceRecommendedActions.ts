@@ -120,12 +120,6 @@ export function buildWorkspaceRecommendedGroups(
         createsTask: true,
       },
       {
-        key: "bulkMetafieldEdit",
-        label: t("workspace.shell.chat.recommend.bulkMetafieldEdit.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkMetafieldEdit.prompt.${scope}`),
-        createsTask: true,
-      },
-      {
         key: "bulkPriceImport",
         label: t("workspace.shell.chat.recommend.bulkPriceImport.label"),
         prompt: t(`workspace.shell.chat.recommend.bulkPriceImport.prompt.${scope}`),
@@ -135,12 +129,6 @@ export function buildWorkspaceRecommendedGroups(
         key: "bulkCostImport",
         label: t("workspace.shell.chat.recommend.bulkCostImport.label"),
         prompt: t(`workspace.shell.chat.recommend.bulkCostImport.prompt.${scope}`),
-        createsTask: true,
-      },
-      {
-        key: "bulkInventoryImport",
-        label: t("workspace.shell.chat.recommend.bulkInventoryImport.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkInventoryImport.prompt.${scope}`),
         createsTask: true,
       },
     ],

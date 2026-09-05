@@ -18,10 +18,8 @@ import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
 import { bulkCollectionEditSkillDefinition } from "./bulkCollectionEdit";
 import { bulkSeoEditSkillDefinition } from "./bulkSeoEdit";
 import { seoAuditSkillDefinition } from "./seoAudit";
-import { bulkMetafieldEditSkillDefinition } from "./bulkMetafieldEdit";
 import { bulkPriceImportSkillDefinition } from "./bulkPriceImport";
 import { bulkCostImportSkillDefinition } from "./bulkCostImport";
-import { bulkInventoryImportSkillDefinition } from "./bulkInventoryImport";
 import { sheetImportSkillDefinition } from "./sheetImport";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
@@ -133,10 +131,7 @@ globalToolRegistry.register(bulkSeoEditSkillDefinition);
 // SEO 体检：纯规则只读诊断，是「批量改 SEO」的上游——先告诉商户问题在哪
 globalToolRegistry.register(seoAuditSkillDefinition);
 
-// 批量改自定义字段：写回走 metafieldsSet / metafieldsDelete，只动有定义的标量类型 metafield
-globalToolRegistry.register(bulkMetafieldEditSkillDefinition);
-
-// 表格读取：三个表格导入能力共用的只读表头/样本工具，只注册一次
+// 表格读取：价目表 / 成本价导入共用的只读表头/样本工具，只注册一次
 globalToolRegistry.register(sheetImportSkillDefinition);
 
 // 价目表导入：价格来自商户上传的表格而不是规则；写回复用批量调价的执行器
@@ -144,6 +139,3 @@ globalToolRegistry.register(bulkPriceImportSkillDefinition);
 
 // 成本价导入：改 InventoryItem.unitCost，只影响利润/ROI 报表，不动售价
 globalToolRegistry.register(bulkCostImportSkillDefinition);
-
-// 库存导入：改指定地点的可售量，写回带 CAS 保护，不会抹掉试算之后发生的销量
-globalToolRegistry.register(bulkInventoryImportSkillDefinition);

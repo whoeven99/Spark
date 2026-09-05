@@ -23,10 +23,8 @@ import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
   BULK_COST_IMPORT_SKILL_ID,
-  BULK_INVENTORY_IMPORT_SKILL_ID,
   BULK_PRICE_EDIT_SKILL_ID,
   BULK_PRICE_IMPORT_SKILL_ID,
-  BULK_METAFIELD_EDIT_SKILL_ID,
   BULK_SEO_EDIT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
   BULK_COLLECTION_EDIT_SKILL_ID,
@@ -62,28 +60,15 @@ import {
   BulkSeoEditRuleError,
   parseBulkSeoEditRule,
 } from "../../lib/bulkSeoEdit";
-import {
-  BULK_METAFIELD_EDIT_MAX_PRODUCTS,
-  BulkMetafieldEditRuleError,
-  formatMetafieldFieldKey,
-  parseBulkMetafieldEditRule,
-} from "../../lib/bulkMetafieldEdit";
 import { parseBulkPriceImportMapping } from "../../lib/bulkPriceImport";
 import { parseBulkCostImportMapping } from "../../lib/bulkCostImport";
-import {
-  parseBulkInventoryImportLocationId,
-  parseBulkInventoryImportMapping,
-} from "../../lib/bulkInventoryImport";
-import { findLocationById } from "../shopify/locationReader.server";
 import { SheetImportMappingError } from "../../lib/sheetImport";
 import { enqueueBulkTagEditDryRun } from "../bulkTagEdit/bulkTagEditDryRun.server";
 import { enqueueBulkStatusEditDryRun } from "../bulkStatusEdit/bulkStatusEditDryRun.server";
 import { enqueueBulkCollectionEditDryRun } from "../bulkCollectionEdit/bulkCollectionEditDryRun.server";
 import { enqueueBulkSeoEditDryRun } from "../bulkSeoEdit/bulkSeoEditDryRun.server";
-import { enqueueBulkMetafieldEditDryRun } from "../bulkMetafieldEdit/bulkMetafieldEditDryRun.server";
 import { enqueueBulkPriceImportDryRun } from "../bulkPriceImport/bulkPriceImportDryRun.server";
 import { enqueueBulkCostImportDryRun } from "../bulkCostImport/bulkCostImportDryRun.server";
-import { enqueueBulkInventoryImportDryRun } from "../bulkInventoryImport/bulkInventoryImportDryRun.server";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
@@ -487,51 +472,6 @@ const bulkSeoEditHandler: TaskProposalSkillHandler = {
   },
 };
 
-const bulkMetafieldEditHandler: TaskProposalSkillHandler = {
-  skillId: BULK_METAFIELD_EDIT_SKILL_ID,
-  maxTargets: BULK_METAFIELD_EDIT_MAX_PRODUCTS,
-  // dry-run 只读 Shopify、值渲染是确定性的，没有积分成本
-  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
-  execute: async ({ shop, locale, params, targets }) => {
-    try {
-      await requireBillingAccess(shop);
-    } catch {
-      throw new TaskProposalBillingError();
-    }
-
-    let rule;
-    try {
-      rule = parseBulkMetafieldEditRule(params);
-    } catch (e) {
-      // 动作或目标字段没选就直接报错，不建任务：两者都猜不得
-      throw e instanceof BulkMetafieldEditRuleError ? new Error(e.message) : e;
-    }
-
-    const productIds = Array.from(
-      new Set(targets.map((target) => target.productId?.trim() || target.id.trim())),
-    ).filter(Boolean);
-    if (productIds.length === 0) {
-      throw new Error("请先选择要修改自定义字段的商品");
-    }
-
-    const config = {
-      ...rule,
-      fieldKey: formatMetafieldFieldKey(rule.namespace, rule.key),
-      productIds,
-      totalProducts: productIds.length,
-    };
-    const { taskId } = await createBatchWithTask({
-      shop,
-      taskType: "bulk_metafield_edit",
-      batchConfig: { ...rule, totalProducts: productIds.length },
-      taskConfig: config,
-      estimatedCredits: 0,
-    });
-    enqueueBulkMetafieldEditDryRun({ taskId, shop, locale, productIds, rule });
-    return { taskIds: [taskId], errors: [] };
-  },
-};
-
 const bulkPriceImportHandler: TaskProposalSkillHandler = {
   skillId: BULK_PRICE_IMPORT_SKILL_ID,
   // 商品来自上传的表格而不是用户预选，targets 恒为空
@@ -612,67 +552,6 @@ const bulkCostImportHandler: TaskProposalSkillHandler = {
   },
 };
 
-const bulkInventoryImportHandler: TaskProposalSkillHandler = {
-  skillId: BULK_INVENTORY_IMPORT_SKILL_ID,
-  // 商品来自上传的表格而不是用户预选，targets 恒为空
-  allowEmptyTargets: true,
-  // dry-run 只读 Shopify、不调模型，没有积分成本
-  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
-  execute: async ({ admin, shop, locale, params }) => {
-    try {
-      await requireBillingAccess(shop);
-    } catch {
-      throw new TaskProposalBillingError();
-    }
-
-    const fileId = (params.fileId ?? "").trim();
-    if (!fileId) {
-      throw new Error("请先上传要导入的库存表");
-    }
-
-    let mapping;
-    let locationId;
-    try {
-      mapping = parseBulkInventoryImportMapping(params);
-      locationId = parseBulkInventoryImportLocationId(params);
-    } catch (e) {
-      // 列映射或地点不完整直接报错，不建任务：缺任何一个都跑不出有意义的结果
-      throw e instanceof SheetImportMappingError ? new Error(e.message) : e;
-    }
-
-    // 地点名要落进任务配置给人看，顺带确认这个地点还在、还能备货
-    const location = await findLocationById(admin, locationId);
-    if (!location) {
-      throw new Error("所选地点不存在或已停用，请重新选择");
-    }
-
-    const fileName = (params.fileName ?? "").trim();
-    const config = {
-      fileId,
-      fileName,
-      locationId: location.id,
-      locationName: location.name,
-      ...mapping,
-    };
-    const { taskId } = await createBatchWithTask({
-      shop,
-      taskType: "bulk_inventory_import",
-      batchConfig: config,
-      taskConfig: config,
-      estimatedCredits: 0,
-    });
-    enqueueBulkInventoryImportDryRun({
-      taskId,
-      shop,
-      locale,
-      fileId,
-      locationId: location.id,
-      mapping,
-    });
-    return { taskIds: [taskId], errors: [] };
-  },
-};
-
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
@@ -682,10 +561,8 @@ const handlers = new Map<string, TaskProposalSkillHandler>([
   [bulkStatusEditHandler.skillId, bulkStatusEditHandler],
   [bulkCollectionEditHandler.skillId, bulkCollectionEditHandler],
   [bulkSeoEditHandler.skillId, bulkSeoEditHandler],
-  [bulkMetafieldEditHandler.skillId, bulkMetafieldEditHandler],
   [bulkPriceImportHandler.skillId, bulkPriceImportHandler],
   [bulkCostImportHandler.skillId, bulkCostImportHandler],
-  [bulkInventoryImportHandler.skillId, bulkInventoryImportHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

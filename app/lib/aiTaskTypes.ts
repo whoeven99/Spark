@@ -32,12 +32,6 @@ import type {
   BulkSeoEditSummary,
 } from "./bulkSeoEdit";
 import type {
-  BulkMetafieldEditAction,
-  BulkMetafieldEditApplyOutcome,
-  BulkMetafieldEditRow,
-  BulkMetafieldEditSummary,
-} from "./bulkMetafieldEdit";
-import type {
   BulkPriceImportIssue,
   BulkPriceImportRow,
   BulkPriceImportSummary,
@@ -48,12 +42,6 @@ import type {
   BulkCostImportRow,
   BulkCostImportSummary,
 } from "./bulkCostImport";
-import type {
-  BulkInventoryImportApplyOutcome,
-  BulkInventoryImportIssue,
-  BulkInventoryImportRow,
-  BulkInventoryImportSummary,
-} from "./bulkInventoryImport";
 
 export type AITaskStatus =
   | "running"
@@ -74,10 +62,8 @@ export type AITaskType =
   | "bulk_status_edit"
   | "bulk_collection_edit"
   | "bulk_seo_edit"
-  | "bulk_metafield_edit"
   | "bulk_price_import"
-  | "bulk_cost_import"
-  | "bulk_inventory_import";
+  | "bulk_cost_import";
 
 export type AITaskListView = "current" | "history";
 
@@ -417,39 +403,6 @@ export type BulkSeoEditApplyResponse =
   | { ok: true; succeeded: number; failed: number }
   | { ok: false; error: string };
 
-export type BulkMetafieldEditTaskConfig = {
-  action: BulkMetafieldEditAction;
-  namespace: string;
-  key: string;
-  /** 卡片选中的 `namespace.key`，卡片与任务列表展示用 */
-  fieldKey: string;
-  valueTemplate: string | null;
-  onlyFillEmpty: boolean;
-  productIds: string[];
-  totalProducts: number;
-};
-
-export type BulkMetafieldEditTaskResult = {
-  rows: BulkMetafieldEditRow[];
-  summary: BulkMetafieldEditSummary;
-  action: BulkMetafieldEditAction;
-  /** 试算时从 Shopify 读到的权威定义信息，卡片、CSV 与写回都用它，不用卡片里的旧值 */
-  namespace: string;
-  key: string;
-  fieldName: string;
-  fieldType: string;
-  /** 商品数超出上限时被截断，行数少于所选商品数 */
-  truncated?: boolean;
-  /** 写回后的结果；未写回时缺省 */
-  apply?: BulkMetafieldEditApplyOutcome;
-  /** 写回开始时间，用于拒绝重复提交 */
-  applyStartedAt?: string;
-};
-
-export type BulkMetafieldEditApplyResponse =
-  | { ok: true; succeeded: number; failed: number }
-  | { ok: false; error: string };
-
 export type BulkPriceImportTaskConfig = {
   fileId: string;
   fileName: string;
@@ -495,34 +448,6 @@ export type BulkCostImportTaskResult = {
 
 export type BulkCostImportApplyResponse =
   | { ok: true; succeeded: number; failed: number }
-  | { ok: false; error: string };
-
-export type BulkInventoryImportTaskConfig = {
-  fileId: string;
-  fileName: string;
-  /** 目标地点：库存量是「库存项 × 地点」的交叉数据，一次任务只针对一个地点 */
-  locationId: string;
-  locationName: string;
-  skuColumn: string;
-  quantityColumn: string;
-};
-
-export type BulkInventoryImportTaskResult = {
-  rows: BulkInventoryImportRow[];
-  /** 未写入的行：未匹配、SKU 冲突、数量解析失败、未在该地点备货等 */
-  issues: BulkInventoryImportIssue[];
-  summary: BulkInventoryImportSummary;
-  fileName: string;
-  locationId: string;
-  locationName: string;
-  /** 表格行数超出上限时被截断 */
-  truncated?: boolean;
-  apply?: BulkInventoryImportApplyOutcome;
-  applyStartedAt?: string;
-};
-
-export type BulkInventoryImportApplyResponse =
-  | { ok: true; succeeded: number; failed: number; staleCount: number }
   | { ok: false; error: string };
 
 export type AITaskCreateResponse =

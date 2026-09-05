@@ -728,7 +728,6 @@ export function invokeChatAgentStream(
               emittedFlags: streamContext.emittedFlags,
               shop,
               skillFocus,
-              admin: context.admin,
               signal: abortController.signal,
             });
             Object.assign(uiPayloads, llmResolution.uiPayloads);

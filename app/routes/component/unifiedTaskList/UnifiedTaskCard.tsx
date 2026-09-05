@@ -5,10 +5,8 @@ import { BulkTagEditTaskCard } from "../bulkTagEdit/BulkTagEditTaskCard";
 import { BulkStatusEditTaskCard } from "../bulkStatusEdit/BulkStatusEditTaskCard";
 import { BulkCollectionEditTaskCard } from "../bulkCollectionEdit/BulkCollectionEditTaskCard";
 import { BulkSeoEditTaskCard } from "../bulkSeoEdit/BulkSeoEditTaskCard";
-import { BulkMetafieldEditTaskCard } from "../bulkMetafieldEdit/BulkMetafieldEditTaskCard";
 import { BulkPriceImportTaskCard } from "../bulkPriceImport/BulkPriceImportTaskCard";
 import { BulkCostImportTaskCard } from "../bulkCostImport/BulkCostImportTaskCard";
-import { BulkInventoryImportTaskCard } from "../bulkInventoryImport/BulkInventoryImportTaskCard";
 import { TaskCard } from "../aiTask/TaskCard";
 import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
@@ -130,18 +128,6 @@ export function UnifiedTaskCard({
     );
   }
 
-  if (task.taskType === "bulk_metafield_edit") {
-    return (
-      <BulkMetafieldEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
   if (task.taskType === "bulk_price_import") {
     return (
       <BulkPriceImportTaskCard
@@ -157,18 +143,6 @@ export function UnifiedTaskCard({
   if (task.taskType === "bulk_cost_import") {
     return (
       <BulkCostImportTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_inventory_import") {
-    return (
-      <BulkInventoryImportTaskCard
         task={task}
         locationSearch={locationSearch}
         onDelete={() => onAITaskDeleted(task.id)}

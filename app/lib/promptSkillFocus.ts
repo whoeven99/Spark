@@ -3,15 +3,13 @@
  * systemPromptExtension 的 Skill 名，避免每轮灌入全部 Skill 长指令。
  */
 
-/** 首页「批量编辑」分组的 7 个推荐操作 key：点完后本轮必须出确认卡。 */
+/** 首页「批量编辑」分组的推荐操作 key：点完后本轮必须出确认卡。 */
 export const BULK_EDIT_RECOMMEND_KEYS = [
   "bulkPriceEdit",
   "bulkTagEdit",
   "bulkStatusEdit",
-  "bulkMetafieldEdit",
   "bulkPriceImport",
   "bulkCostImport",
-  "bulkInventoryImport",
 ] as const;
 
 export function isBulkEditRecommendKey(skillFocus?: string | null): boolean {
@@ -34,10 +32,8 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   bulkPriceEdit: ["bulkPriceEdit"],
   bulkTagEdit: ["bulkTagEdit"],
   bulkStatusEdit: ["bulkStatusEdit"],
-  bulkMetafieldEdit: ["bulkMetafieldEdit"],
   bulkPriceImport: ["bulkPriceImport", "sheetImport"],
   bulkCostImport: ["bulkCostImport", "sheetImport"],
-  bulkInventoryImport: ["bulkInventoryImport", "sheetImport"],
 };
 
 /** 自由输入时的轻量关键词路由（中英）；命中则注入对应 Skill 组 */
@@ -87,10 +83,6 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
     patterns: [/导入.*成本/, /成本价/, /unit\s*cost/i, /cost\s*import/i],
   },
   {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkInventoryImport,
-    patterns: [/导入.*库存/, /库存表/, /inventory\s*import/i],
-  },
-  {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkPriceEdit,
     patterns: [/批量调价/, /批量.*改价/, /降价\s*\d/, /涨价\s*\d/, /bulk\s*price/i],
   },
@@ -101,10 +93,6 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkStatusEdit,
     patterns: [/批量上下架/, /批量.*上架/, /批量.*下架/, /bulk\s*status/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkMetafieldEdit,
-    patterns: [/批量.*自定义字段/, /批量.*metafield/i, /bulk\s*metafield/i],
   },
 ];
 

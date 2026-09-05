@@ -645,141 +645,6 @@
     "colMargin": "毛利率",
     "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载 CSV。"
   },
-  "bulkInventoryImport": {
-    "logReadingFile": "正在读取上传的表格…",
-    "logParsedRows": "已解析 {{count}} 行数据，正在按 SKU 匹配店铺商品…",
-    "logMatching": "正在匹配 {{count}} 个 SKU 在「{{location}}」的库存…",
-    "logReadyForReview": "变更清单已就绪：{{changed}} 个变体将改库存，{{issues}} 行未写入",
-    "dryRunFailed": "读取表格失败，请确认文件格式后重试",
-    "fileNotFound": "找不到这个文件，请重新上传后再试",
-    "locationNotFound": "所选地点不存在或已停用，请重新选择地点后再试",
-    "noUsableRows": "表格里没有可用的数据行，请检查 SKU 列与库存数量列是否选对",
-    "matchRateTooLow": "只有 {{matched}}/{{total}} 行匹配到店铺商品，「{{column}}」很可能不是 SKU 列。请重新选择列后再试。",
-    "cardTitle": "任务目标：按表格批量导入库存",
-    "metaLocation": "地点：{{name}}",
-    "metaFile": "文件：{{name}}",
-    "metaQuantityColumn": "库存列：{{column}}",
-    "metaMatched": "匹配 {{matched}}/{{total}} 行",
-    "cardPrimaryRunning": "正在读取表格并匹配店铺库存…",
-    "cardPrimaryPendingReview": "变更清单已就绪：{{changed}} 个变体将改库存，{{issues}} 行未写入",
-    "cardPrimaryApplied": "已写回店铺：成功 {{succeeded}} 个，失败 {{failed}} 个",
-    "cardPrimaryFailed": "任务失败：{{reason}}",
-    "cardPrimaryCancelled": "任务已取消",
-    "cardSecondaryPendingReview": "本步骤没有修改任何库存；点「查看变更」核对后可下载 CSV 或确认写回。",
-    "cardSecondaryApplied": "库存已更新。回滚 CSV 里记录了写回前的可售量，但期间发生的销量不在其中，回滚前请重新核对。",
-    "cardSecondaryDefault": "读取与匹配全程只读，不会修改库存。",
-    "actionReview": "查看变更",
-    "actionViewApplied": "查看写回结果",
-    "reviewTitle": "库存导入预览 · #{{id}}",
-    "reviewTitleShort": "库存导入预览",
-    "reviewDescription": "下面是表格与店铺商品匹配后，所选地点上的逐行可售库存变化。确认无误后才会写回店铺；也可以只下载 CSV，不做任何修改。",
-    "noChangeset": "这个任务还没有生成变更清单。",
-    "targetLocation": "目标地点：",
-    "sourceFile": "来源文件：",
-    "scopeHint": "改的是所选地点的「可售量」，按表格里的数字绝对值覆盖，不是加减。其它地点的库存不受影响。",
-    "summarySheetRows": "表格行数",
-    "summaryMatched": "已匹配",
-    "summaryChanged": "将改库存",
-    "summaryUnchanged": "无变化",
-    "summaryIssues": "未写入",
-    "truncatedWarning": "表格行数超出单次上限，只处理了前一部分。请拆分文件后分批导入，避免漏改。",
-    "issuesTitle": "有 {{count}} 行不会被写入店铺：",
-    "issueReason": {
-      "missing_sku": "{{count}} 行的 SKU 列是空的",
-      "missing_quantity": "{{count}} 行的库存数量列是空的",
-      "invalid_quantity": "{{count}} 行的库存数量看不懂（需为非负整数）",
-      "duplicate_sku_in_file": "{{count}} 行的 SKU 在表格里重复出现，无法判断以哪行为准",
-      "sku_not_found": "{{count}} 行的 SKU 在店铺里找不到对应商品",
-      "sku_matches_multiple": "{{count}} 行的 SKU 对应多个变体，无法确定改哪一个",
-      "no_inventory_item": "{{count}} 行对应的变体没有库存项，无法设置库存",
-      "not_tracked": "{{count}} 行对应的变体没有开启库存追踪，设数量不会生效；需先在 Shopify 后台开启追踪",
-      "not_stocked_at_location": "{{count}} 行对应的变体没有在这个地点备货；请换一个地点，或先在 Shopify 后台把变体加到该地点"
-    },
-    "skipReason": {
-      "no_change": "数量相同"
-    },
-    "largeDeltaWarning": "有 {{count}} 行的库存变化超过 1000 件，请重点核对是不是把金额列当成了数量列。",
-    "appliedBanner": "已写回店铺：成功 {{succeeded}} 个变体，失败 {{failed}} 个。",
-    "staleHint": "其中 {{count}} 个变体因为试算之后库存又发生了变化而未被覆盖（避免抹掉期间的真实销量）。重新发起一次导入即可处理这些行。",
-    "downloadChangeset": "下载变更 CSV",
-    "downloadRollback": "下载回滚 CSV",
-    "downloadIssues": "下载未写入 CSV",
-    "applyButton": "确认写回店铺（{{count}} 个变体）",
-    "applyConfirmHint": "将直接修改店铺内 {{count}} 个变体在该地点的可售库存。试算之后库存已变化的行会被自动跳过，不会覆盖期间的真实销量。数量较多时写回需要几分钟。",
-    "applyConfirmButton": "确认写回",
-    "applying": "写回中…",
-    "applyFailed": "写回失败，请稍后重试",
-    "colSourceRow": "表格行",
-    "colSku": "SKU",
-    "colProduct": "商品",
-    "colQuantity": "可售库存",
-    "colDelta": "变化",
-    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载 CSV。"
-  },
-  "bulkMetafieldEdit": {
-    "logReadingDefinition": "正在读取自定义字段 {{field}} 的定义…",
-    "logReadingProducts": "正在读取 {{count}} 个商品的当前值…",
-    "logComputing": "正在计算 {{count}} 个商品的目标值…",
-    "logReadyForReview": "变更清单已就绪：{{changed}} 个商品将修改，{{skipped}} 个跳过",
-    "dryRunFailed": "生成变更清单失败，请稍后重试",
-    "definitionNotFound": "找不到自定义字段 {{field}}，它可能已在 Shopify 后台被删除",
-    "planFailed": "{{reason}}",
-    "noProductsFound": "没有读到所选商品",
-    "cardTitle": "任务目标：批量修改商品自定义字段",
-    "metaRule": "方式：{{action}}",
-    "metaField": "字段：{{field}}",
-    "metaProducts": "{{count}} 个商品",
-    "ruleAction": {
-      "set": "设置为指定值",
-      "clear": "清空该字段"
-    },
-    "cardPrimaryRunning": "正在读取商品当前值并计算目标值…",
-    "cardPrimaryPendingReview": "变更清单已就绪：{{changed}} 个商品将修改，{{skipped}} 个跳过",
-    "cardPrimaryApplied": "已写回店铺：成功 {{succeeded}} 个，失败 {{failed}} 个",
-    "cardPrimaryFailed": "任务失败：{{reason}}",
-    "cardPrimaryCancelled": "任务已取消",
-    "cardSecondaryPendingReview": "本步骤没有修改任何商品；点「查看变更」核对后可下载 CSV 或确认写回。",
-    "cardSecondaryApplied": "自定义字段已更新。回滚 CSV 里记录了写回前的原值。",
-    "cardSecondaryDefault": "读取与计算全程只读，不会修改商品。",
-    "actionReview": "查看变更",
-    "actionViewApplied": "查看写回结果",
-    "reviewTitle": "自定义字段变更预览 · #{{id}}",
-    "reviewTitleShort": "自定义字段变更预览",
-    "reviewDescription": "下面是逐商品的自定义字段变化。确认无误后才会写回店铺；也可以只下载 CSV，不做任何修改。",
-    "noChangeset": "这个任务还没有生成变更清单。",
-    "targetField": "目标字段：{{field}}（{{fieldKey}}）",
-    "summaryProducts": "商品",
-    "summarySet": "将写入",
-    "summaryCleared": "将清空",
-    "summarySkipped": "跳过",
-    "truncatedWarning": "商品数量超出单次上限，清单只包含前一部分商品。请收紧商品范围后重新生成，避免漏改。",
-    "invalidWarning": "{{count}} 个商品算出的值不符合该字段的数据类型，已跳过不写。请检查值或占位符后重新生成。",
-    "clearWarning": "确认后将清空 {{count}} 个商品的该字段，清空后原值不会保留在 Shopify。请先下载回滚 CSV。",
-    "appliedBanner": "已写回店铺：成功 {{succeeded}} 个商品，失败 {{failed}} 个。",
-    "downloadChangeset": "下载变更 CSV",
-    "downloadRollback": "下载回滚 CSV",
-    "applyButton": "确认写回店铺（{{count}} 个商品）",
-    "applyConfirmHintSet": "将直接修改店铺内 {{count}} 个商品的「{{field}}」，可用回滚 CSV 手动撤销。",
-    "applyConfirmHintClear": "将直接清空 {{count}} 个商品的该字段，可用回滚 CSV 手动恢复。",
-    "applyConfirmButton": "确认写回",
-    "applying": "写回中…",
-    "applyFailed": "写回失败，请稍后重试",
-    "colProduct": "商品",
-    "colBefore": "当前值",
-    "colAfter": "目标值",
-    "colAction": "处理",
-    "valueCleared": "（清空）",
-    "actionSet": "将写入",
-    "actionClear": "将清空",
-    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载 CSV。",
-    "skipReason": {
-      "no_change": "无变化",
-      "already_filled": "已有内容，未覆盖",
-      "empty_result": "算出的值为空",
-      "nothing_to_clear": "本来就没有值",
-      "invalid_value": "值不符合字段类型"
-    }
-  },
   "bulkSeoEdit": {
     "logReadingProducts": "正在读取 {{count}} 个商品的 SEO 信息…",
     "logComputing": "正在按模板渲染 {{count}} 个商品的 SEO…",
@@ -4061,13 +3926,6 @@
           "selected": "帮我按统一模板改写已选中商品的 SEO 标题和描述，先给我变更预览，我确认后再写回店铺。"
         }
       },
-      "bulkMetafieldEdit": {
-        "label": "批量改自定义字段",
-        "prompt": {
-          "shop": "帮我批量修改商品的自定义字段（metafield），先打开确认卡让我选择字段和填写的值，然后给我变更预览，不要直接写回。",
-          "selected": "帮我给已选中的商品统一填写某个自定义字段，先打开确认卡让我选择字段和值，再给我变更预览，我确认后再写回店铺。"
-        }
-      },
       "bulkPriceImport": {
         "label": "按表格导入价格",
         "prompt": {
@@ -4080,13 +3938,6 @@
         "prompt": {
           "shop": "帮我按表格导入商品成本价，先打开确认卡让我上传成本表并确认列映射，然后给我变更预览和毛利率影响，不要直接写回。",
           "selected": "帮我按表格导入商品成本价，先打开确认卡让我上传成本表并确认列映射，再给我变更预览和毛利率影响，我确认后再写回店铺。"
-        }
-      },
-      "bulkInventoryImport": {
-        "label": "按表格导入库存",
-        "prompt": {
-          "shop": "帮我按表格导入商品库存，先打开确认卡让我上传盘点表、确认列映射和地点，然后给我变更预览，不要直接写回。",
-          "selected": "帮我按表格导入商品库存，先打开确认卡让我上传盘点表、确认列映射和地点，再给我变更预览，我确认后再写回店铺。"
         }
       },
       "generateImage": {
@@ -4350,10 +4201,6 @@
           "title": "批量改写商品 SEO",
           "summary": "按模板逐个商品渲染 SEO 标题与描述并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。"
         },
-        "bulkMetafieldEdit": {
-          "title": "批量修改商品自定义字段",
-          "summary": "按所选自定义字段逐个商品算出目标值并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。"
-        },
         "bulkPriceImport": {
           "title": "按表格批量导入价格",
           "summary": "读取你上传的表格，按 SKU 匹配店铺商品并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。"
@@ -4361,10 +4208,6 @@
         "bulkCostImport": {
           "title": "按表格批量导入成本价",
           "summary": "读取你上传的表格，按 SKU 匹配店铺商品并试算毛利率变化（可导出 CSV），确认无误后才写回店铺。成本只影响利润报表，不改售价。本步骤不会修改任何商品。"
-        },
-        "bulkInventoryImport": {
-          "title": "按表格批量导入库存",
-          "summary": "读取你上传的表格，按 SKU 匹配商品并把所选地点的可售库存设为表格里的数量（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何库存。"
         }
       },
       "fields": {
@@ -4385,8 +4228,6 @@
         "collectionId": "目标合集",
         "titleTemplate": "SEO 标题模板",
         "descriptionTemplate": "SEO 描述模板",
-        "fieldKey": "自定义字段",
-        "metafieldAction": "操作方式",
         "value": "写入的值",
         "onlyFillEmpty": "写入范围",
         "overflow": "超长处理",
@@ -4394,8 +4235,6 @@
         "priceColumn": "价格列",
         "compareAtColumn": "划线价列",
         "costColumn": "成本价列",
-        "quantityColumn": "库存数量列",
-        "locationId": "目标地点",
         "fileId": "表格",
         "fileName": "文件名"
       },
@@ -4433,11 +4272,6 @@
           "unset": "请选择：加入或移出",
           "add": "加入合集",
           "remove": "移出合集"
-        },
-        "metafieldAction": {
-          "unset": "请选择：设置值或清空",
-          "set": "设置为指定值",
-          "clear": "清空该字段"
         },
         "onlyFillEmpty": {
           "true": "只填当前为空的",

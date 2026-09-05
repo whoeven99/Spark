@@ -63,16 +63,6 @@
 
 每条 issue 带 `fixability`（`bulk_seo_edit` / `product_content` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 恒为 `manual`（改 handle 会断链接、要配 301）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
 
-### 1.7 商品自定义字段批量改写
-
-纯算 `app/lib/bulkMetafieldEdit.ts`（按 metafield 类型规范化取值、模板渲染、changeset、变更/回滚 CSV）、只读 `app/server/shopify/productMetafieldReader.server.ts`（`metafieldDefinitions(ownerType: PRODUCT)` 定义列表 + `Product.metafield(namespace:key:)` 当前值）、试算 `app/server/bulkMetafieldEdit/bulkMetafieldEditDryRun.server.ts`、写回 `app/server/bulkMetafieldEdit/bulkMetafieldEditApply.server.ts`（唯一 `metafieldsSet` / `metafieldsDelete` 调用处）。
-
-几条不能退化的约束：字段标识用 **`namespace.key`** 而不是 definition GID（`metafieldDefinition(id:)` 已 deprecated，官方推荐按 identifier 查）；只支持 `single_line_text_field` / `multi_line_text_field` / `number_integer` / `number_decimal` / `boolean` / `url` 六种标量类型，其余（list.*、JSON、引用类型）在试算期直接判失败，不要为了「先支持上」把 JSON 当字符串写进去；每个值写回前必须过 `normalizeMetafieldValue` 按类型校验（单行文本不许含换行、整数走 `BigInt` 防精度丢失、URL 只收 http/https），渲染不做 SEO 那套空占位符分隔符清理——结构化字段要的是字面量。
-
-写回策略随 mutation 行为分叉：`metafieldsSet` 单批 ≤25 且**整批原子**，但 userErrors 带 `elementIndex`，所以失败时按下标剔掉坏行再重发剩下的，只有拿不到下标才退化成逐行隔离；`metafieldsDelete` 的 userErrors 是通用 `UserError`（**无 code 无下标**），整批失败只能逐行重试归因，另外它对本来就不存在的字段返回 null 而非报错，那对「清空」是成功、不计失败。
-
-scope 用现有 `read_products` / `write_products` 即可，不需要新增。Skill `app/server/ai/skills/bulkMetafieldEdit/` 只暴露只读 `list_product_metafields` 与开卡 `open_bulk_metafield_edit_form`（开卡预取定义下拉，标签里带类型说明，商户才知道这个字段只收整数）。
-
 ## 2. 表格导入
 
 与第 1 节的关键区别：目标值来自**商户上传的表格**而不是一句话能说清的规则，解决的是「导出 CSV → 手改 → 重新导入」里改动无规律的那一半。
@@ -81,7 +71,7 @@ scope 用现有 `read_products` / `write_products` 即可，不需要新增。Sk
 
 「按表格导入」类能力共用：纯算 `app/lib/sheetImport.ts`（行数上限 1000、匹配率下限 50%、数量级异常阈值 50 倍、金额解析、SKU 规范化、列名校验 `SheetImportMappingError`）、解析 `app/server/sheetImport/parseSheet.server.ts`（读 Blob **原始字节**重新解析，不能用 `parsed.txt`——那份文本被截断到 2 万字符且列结构已拍平）、内部 Skill `app/server/ai/skills/sheetImport/` 提供只读 `preview_import_sheet` 让模型看真实表头。
 
-价格导入、成本导入与库存导入都引用这一份，不要再各自复制一套金额/数量解析或行数上限（库存用的是同层里的 `parseImportQuantity`，只接受非负整数）。
+价格导入与成本导入都引用这一份，不要再各自复制一套金额解析或行数上限。
 
 ### 2.2 价目表导入（外部数据驱动，非规则驱动）
 
@@ -99,14 +89,6 @@ Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_i
 
 写回后调 `upsertSkuCosts` 直更 `ShopSkuCost`，利润/ROI 不必等 24 小时懒同步。Skill `app/server/ai/skills/bulkCostImport/` 只暴露开卡 `open_bulk_cost_import_form`。
 
-### 2.4 库存导入（写某个地点的可售量）
-
-第三个表格导入，同样复用公共层，但语义与前两个都不同：改的是**某一个地点的 `available` 可售量**，绝对值覆盖、不做加减、不写 `on_hand`。纯算 `app/lib/bulkInventoryImport.ts`、只读 `app/server/shopify/locationReader.server.ts`（活跃地点列表；`Location` 的 scope 是 `read_locations` / `read_inventory` / `read_markets_home` 三选一，现有 `read_inventory` 已覆盖，别为地点下拉去加 `read_locations` 触发全店重新授权）与 `variantInventoryReader.server.ts`（按 SKU 取 `inventoryItem.inventoryLevel(locationId:)` 的 available）、试算 `bulkInventoryImportDryRun.server.ts`、写回 `bulkInventoryImportApply.server.ts`（唯一 `inventorySetQuantities` 调用处）。
-
-几条不能退化的约束：**数量必须是整数**，`50.0` 按 50 接受但 `50.5` 一律报错（四舍五入等于替商户做决定），负数同样报错；**变体在该地点没有 InventoryLevel 时报错跳过**，不调 `inventoryActivate`——那会静默改变商品的可发货地点配置；`tracked = false` 的变体跳过，不自动打开追踪；写回**每行带 `changeFromQuantity` 做 CAS**，试算到确认之间被卖掉几件的行会被 Shopify 拒（`CHANGE_FROM_QUANTITY_STALE`），这类行单独计入 `staleCount`、不重试也不当故障，绝不覆盖销量；`@idempotent` 自 2026-04 起必填，幂等键**每行一个且在重试间复用**，整批共用会让后面的行被当成同一次调整丢掉；`inventorySetQuantities` 的批量原子性无文档保证且 CAS 失败逐行发生，因此按行调用 + 并发 2 + `throttleStatus` 配速，与成本价导入同一套限流。
-
-写回要求试算结果里有 `locationId`，需要 `write_inventory`。只写单个地点的 `available`，不写 `on_hand`、不激活地点。Skill `app/server/ai/skills/bulkInventoryImport/` 只暴露开卡 `open_bulk_inventory_import_form`（开卡会预取活跃地点，单地点店自动选中）。
-
 ## 3. 新增同类能力时的检查清单
 
 1. 四层齐备，mutation 只出现在 apply 一处。
@@ -114,5 +96,5 @@ Skill `app/server/ai/skills/bulkPriceImport/` 只暴露开卡 `open_bulk_price_i
 3. 任务类型加进 `app/routes/component/chat/chatInlineReviewTasks.ts` 白名单，并配 `ChatPanel` 渲染分支与签名为 `{ task, onBack, showBackButton?, onTaskUpdated? }` 的 `XxxTaskDetailPage`（prod 导航没有任务页，审核必须在对话内闭环）。
 4. 在 `app/lib/workspaceRecommendedActions.ts` 登记，否则首页推荐操作里不会出现。
 5. 商户可见文案同步 `app/locales/zh/common.json` 与 `app/locales/en/common.json`。
-6. 涉及远端资源下拉（collection / location / metafieldDefinition 一类）时走 `TaskProposalField` 的资源字段分支，开卡时预取选项，展示层用 `field.options` 的 label 而不是裸值。
+6. 涉及远端资源下拉（collection / location / metafieldDefinition 一类）时走 `TaskProposalField` 的资源字段分支，开卡时预取选项，展示层用 `field.options` 的 label 而不是裸值。当前在用的是合集；`location` / `metafieldDefinition` 仍走同一类型分支。
 7. 根 `AGENTS.md` 第 3 节的 `POST /api/bulk-*` 唯一写回入口清单补一行；本文件补一节细则。

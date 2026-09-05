@@ -30,6 +30,8 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromUserText("帮我给店铺做一次 SEO 体检")).toContain("seoAudit");
     expect(skillNamesFromUserText("检查库存健康情况")).toContain("shopOperations");
     expect(skillNamesFromUserText("今天天气怎么样")).toEqual([]);
+    expect(skillNamesFromUserText("帮我按表格导入库存")).not.toContain("bulkInventoryImport");
+    expect(skillNamesFromUserText("批量修改商品自定义字段")).not.toContain("bulkMetafieldEdit");
   });
 
   it("prefers explicit skillFocus over userText", () => {

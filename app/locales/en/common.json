@@ -645,141 +645,6 @@
     "colMargin": "Margin",
     "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list."
   },
-  "bulkInventoryImport": {
-    "logReadingFile": "Reading the uploaded spreadsheet…",
-    "logParsedRows": "Parsed {{count}} rows. Matching them to store products by SKU…",
-    "logMatching": "Matching {{count}} SKUs against stock at \"{{location}}\"…",
-    "logReadyForReview": "Changeset ready: {{changed}} variants will change stock, {{issues}} rows will not be written",
-    "dryRunFailed": "Could not read the spreadsheet. Please check the file format and try again.",
-    "fileNotFound": "That file is no longer available. Please upload it again.",
-    "locationNotFound": "That location no longer exists or has been deactivated. Pick another location and try again.",
-    "noUsableRows": "No usable rows found. Check that the SKU and quantity columns are correct.",
-    "matchRateTooLow": "Only {{matched}} of {{total}} rows matched a store product, so \"{{column}}\" is probably not the SKU column. Pick the right column and try again.",
-    "cardTitle": "Task: import stock levels from a spreadsheet",
-    "metaLocation": "Location: {{name}}",
-    "metaFile": "File: {{name}}",
-    "metaQuantityColumn": "Quantity column: {{column}}",
-    "metaMatched": "{{matched}}/{{total}} rows matched",
-    "cardPrimaryRunning": "Reading the spreadsheet and matching current stock…",
-    "cardPrimaryPendingReview": "Changeset ready: {{changed}} variants will change stock, {{issues}} rows will not be written",
-    "cardPrimaryApplied": "Written to your store: {{succeeded}} succeeded, {{failed}} failed",
-    "cardPrimaryFailed": "Task failed: {{reason}}",
-    "cardPrimaryCancelled": "Task cancelled",
-    "cardSecondaryPendingReview": "Nothing has been changed yet. Open \"Review changes\" to check the list, export CSV, or confirm the write-back.",
-    "cardSecondaryApplied": "Stock updated. The rollback CSV holds the available quantities from before the write-back, but it does not account for sales since then — re-check before rolling back.",
-    "cardSecondaryDefault": "Reading and matching are read-only and never modify stock.",
-    "actionReview": "Review changes",
-    "actionViewApplied": "View write-back result",
-    "reviewTitle": "Stock import preview · #{{id}}",
-    "reviewTitleShort": "Stock import preview",
-    "reviewDescription": "Below is the row-by-row available-stock change at the selected location after matching your spreadsheet against store products. Nothing is written until you confirm — you can also just export the CSV and change nothing.",
-    "noChangeset": "This task has not produced a changeset yet.",
-    "targetLocation": "Location:",
-    "sourceFile": "Source file:",
-    "scopeHint": "This sets the \"available\" quantity at the selected location to the exact number in your file — it is an overwrite, not an adjustment. Stock at other locations is untouched.",
-    "summarySheetRows": "Rows in file",
-    "summaryMatched": "Matched",
-    "summaryChanged": "Will change",
-    "summaryUnchanged": "Unchanged",
-    "summaryIssues": "Not written",
-    "truncatedWarning": "The spreadsheet exceeds the per-run row limit, so only the first part was processed. Split the file and import in batches so nothing is missed.",
-    "issuesTitle": "{{count}} rows will not be written to your store:",
-    "issueReason": {
-      "missing_sku": "{{count}} rows have an empty SKU column",
-      "missing_quantity": "{{count}} rows have an empty quantity column",
-      "invalid_quantity": "{{count}} rows have a quantity that is not a whole non-negative number",
-      "duplicate_sku_in_file": "{{count}} rows repeat a SKU that appears elsewhere in the file, so there is no way to tell which row wins",
-      "sku_not_found": "{{count}} rows have a SKU that does not exist in your store",
-      "sku_matches_multiple": "{{count}} rows have a SKU that matches more than one variant",
-      "no_inventory_item": "{{count}} rows match a variant with no inventory item, so stock cannot be set",
-      "not_tracked": "{{count}} rows match a variant that does not track inventory. Turn tracking on in Shopify admin first.",
-      "not_stocked_at_location": "{{count}} rows match a variant that is not stocked at this location. Pick another location, or add the variant to this location in Shopify admin first."
-    },
-    "skipReason": {
-      "no_change": "Same quantity"
-    },
-    "largeDeltaWarning": "{{count}} rows change stock by more than 1,000 units. Double-check whether an amount column was picked instead of the quantity column.",
-    "appliedBanner": "Written to your store: {{succeeded}} variants succeeded, {{failed}} failed.",
-    "staleHint": "{{count}} of them were left untouched because stock changed after the preview was generated (so real sales in between are not wiped out). Run the import again to handle those rows.",
-    "downloadChangeset": "Download changeset CSV",
-    "downloadRollback": "Download rollback CSV",
-    "downloadIssues": "Download not-written CSV",
-    "applyButton": "Write to store ({{count}} variants)",
-    "applyConfirmHint": "This sets the available stock of {{count}} variants at this location. Rows whose stock changed after the preview are skipped automatically, so real sales in between are never overwritten. Large batches take a few minutes.",
-    "applyConfirmButton": "Confirm write-back",
-    "applying": "Writing…",
-    "applyFailed": "Write-back failed. Please try again.",
-    "colSourceRow": "Row",
-    "colSku": "SKU",
-    "colProduct": "Product",
-    "colQuantity": "Available",
-    "colDelta": "Change",
-    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list."
-  },
-  "bulkMetafieldEdit": {
-    "logReadingDefinition": "Reading the definition of custom field {{field}}…",
-    "logReadingProducts": "Reading the current value for {{count}} products…",
-    "logComputing": "Working out the target value for {{count}} products…",
-    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
-    "dryRunFailed": "Could not build the changeset. Please try again.",
-    "definitionNotFound": "Custom field {{field}} was not found. It may have been deleted in the Shopify admin.",
-    "planFailed": "{{reason}}",
-    "noProductsFound": "None of the selected products could be read",
-    "cardTitle": "Task: bulk edit a product custom field",
-    "metaRule": "Mode: {{action}}",
-    "metaField": "Field: {{field}}",
-    "metaProducts": "{{count}} products",
-    "ruleAction": {
-      "set": "Set to a value",
-      "clear": "Clear the field"
-    },
-    "cardPrimaryRunning": "Reading current values and working out the target value…",
-    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
-    "cardPrimaryApplied": "Written to your store: {{succeeded}} succeeded, {{failed}} failed",
-    "cardPrimaryFailed": "Task failed: {{reason}}",
-    "cardPrimaryCancelled": "Task cancelled",
-    "cardSecondaryPendingReview": "Nothing has been changed yet. Open \"Review changes\" to check the list, export it, or confirm the write.",
-    "cardSecondaryApplied": "Custom field updated. The rollback CSV records the values from before the write.",
-    "cardSecondaryDefault": "Reading and computing are read-only and never change your products.",
-    "actionReview": "Review changes",
-    "actionViewApplied": "View write result",
-    "reviewTitle": "Custom field change preview · #{{id}}",
-    "reviewTitleShort": "Custom field change preview",
-    "reviewDescription": "Below is the per-product change for this custom field. Nothing is written to your store until you confirm; you can also just export the CSV and change nothing.",
-    "noChangeset": "This task has not produced a changeset yet.",
-    "targetField": "Target field: {{field}} ({{fieldKey}})",
-    "summaryProducts": "Products",
-    "summarySet": "Will set",
-    "summaryCleared": "Will clear",
-    "summarySkipped": "Skipped",
-    "truncatedWarning": "There were more products than one run can handle, so this list only covers the first batch. Narrow the product range and run it again so nothing is missed.",
-    "invalidWarning": "{{count}} products produced a value that does not match this field's data type and were skipped. Check the value or placeholders and run it again.",
-    "clearWarning": "Confirming will clear this field on {{count}} products, and Shopify will not keep the old values. Download the rollback CSV first.",
-    "appliedBanner": "Written to your store: {{succeeded}} products succeeded, {{failed}} failed.",
-    "downloadChangeset": "Download changes CSV",
-    "downloadRollback": "Download rollback CSV",
-    "applyButton": "Write to store ({{count}} products)",
-    "applyConfirmHintSet": "This will change \"{{field}}\" on {{count}} products in your store. Use the rollback CSV to undo it manually.",
-    "applyConfirmHintClear": "This will clear the field on {{count}} products. Use the rollback CSV to restore it manually.",
-    "applyConfirmButton": "Confirm write",
-    "applying": "Writing…",
-    "applyFailed": "The write failed. Please try again.",
-    "colProduct": "Product",
-    "colBefore": "Current value",
-    "colAfter": "Target value",
-    "colAction": "Outcome",
-    "valueCleared": "(cleared)",
-    "actionSet": "Will set",
-    "actionClear": "Will clear",
-    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows; download the CSV for the full list.",
-    "skipReason": {
-      "no_change": "No change",
-      "already_filled": "Already has a value, not overwritten",
-      "empty_result": "Computed value is empty",
-      "nothing_to_clear": "No value to clear",
-      "invalid_value": "Value does not match the field type"
-    }
-  },
   "bulkSeoEdit": {
     "logReadingProducts": "Reading SEO fields for {{count}} products…",
     "logComputing": "Rendering SEO from your template for {{count}} products…",
@@ -4061,13 +3926,6 @@
           "selected": "Rewrite the SEO titles and descriptions of the selected products from one template, show me a change preview first, and only write back after I confirm."
         }
       },
-      "bulkMetafieldEdit": {
-        "label": "Bulk edit custom fields",
-        "prompt": {
-          "shop": "Help me bulk edit a product custom field (metafield): open the confirmation card so I can pick the field and value, then show a change preview — do not write to the store yet.",
-          "selected": "Fill one custom field on the selected products: open the confirmation card so I can pick the field and value, show a change preview first, and only write back after I confirm."
-        }
-      },
       "bulkPriceImport": {
         "label": "Import prices from file",
         "prompt": {
@@ -4080,13 +3938,6 @@
         "prompt": {
           "shop": "Help me import product unit costs from a spreadsheet: open the confirmation card so I can upload the file and confirm column mapping, then show a change preview with the margin impact — do not write to the store yet.",
           "selected": "Help me import product unit costs from a spreadsheet: open the confirmation card so I can upload the file and confirm column mapping, show a change preview with the margin impact first, and only write back after I confirm."
-        }
-      },
-      "bulkInventoryImport": {
-        "label": "Import stock from file",
-        "prompt": {
-          "shop": "Help me import product stock from a spreadsheet: open the confirmation card so I can upload the file, confirm columns and the location, then show a change preview — do not write to the store yet.",
-          "selected": "Help me import product stock from a spreadsheet: open the confirmation card so I can upload the file, confirm columns and the location, show a change preview first, and only write back after I confirm."
         }
       },
       "generateImage": {
@@ -4350,10 +4201,6 @@
           "title": "Bulk rewrite product SEO",
           "summary": "Render the SEO title and description for every product from your template and build a change list you can export as CSV. Nothing is written to your store until you confirm."
         },
-        "bulkMetafieldEdit": {
-          "title": "Bulk edit a product custom field",
-          "summary": "Work out the target value of the chosen custom field for every product and build a change list you can export as CSV. Nothing is written to your store until you confirm."
-        },
         "bulkPriceImport": {
           "title": "Import prices from a spreadsheet",
           "summary": "Read your uploaded spreadsheet, match it to store products by SKU, and build a change list you can export as CSV. Nothing is written to your store until you confirm."
@@ -4361,10 +4208,6 @@
         "bulkCostImport": {
           "title": "Import unit costs from a spreadsheet",
           "summary": "Read your uploaded spreadsheet, match it to store products by SKU, and preview the margin impact as an exportable change list. Cost only affects profit reports, not the price buyers see. Nothing is written until you confirm."
-        },
-        "bulkInventoryImport": {
-          "title": "Import stock levels from a spreadsheet",
-          "summary": "Read your uploaded spreadsheet, match it to store products by SKU, and set the available stock at the location you pick to the exact quantities in the file (exportable as CSV). Nothing is written until you confirm."
         }
       },
       "fields": {
@@ -4385,8 +4228,6 @@
         "collectionId": "Target collection",
         "titleTemplate": "SEO title template",
         "descriptionTemplate": "SEO description template",
-        "fieldKey": "Custom field",
-        "metafieldAction": "Mode",
         "value": "Value to write",
         "onlyFillEmpty": "Write scope",
         "overflow": "When too long",
@@ -4394,8 +4235,6 @@
         "priceColumn": "Price column",
         "compareAtColumn": "Compare-at column",
         "costColumn": "Cost column",
-        "quantityColumn": "Quantity column",
-        "locationId": "Location",
         "fileId": "Spreadsheet",
         "fileName": "File name"
       },
@@ -4433,11 +4272,6 @@
           "unset": "Choose: add or remove",
           "add": "Add to collection",
           "remove": "Remove from collection"
-        },
-        "metafieldAction": {
-          "unset": "Choose: set a value or clear",
-          "set": "Set to a value",
-          "clear": "Clear the field"
         },
         "onlyFillEmpty": {
           "true": "Only fill empty fields",

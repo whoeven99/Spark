@@ -99,36 +99,6 @@ export function parseImportMoneyToCents(raw: string | null | undefined): number 
   return Math.round(value * 100);
 }
 
-// ─── 整数数量规范化 ───────────────────────────────────────────────────────────
-
-/** 库存数量的上限：够覆盖任何真实备货量，再大基本是把金额列当库存列选了。 */
-export const SHEET_IMPORT_MAX_QUANTITY = 1_000_000;
-
-/**
- * 商户表格里的数量文本 → 非负整数。
- *
- * 与金额解析的区别：库存是件数，不能有小数。Excel 常把整数导出成 `50.0` / `50.00`，
- * 这类纯零小数位按整数接受；`50.5` 这种真小数一律返回 null，
- * 因为四舍五入到 50 还是 51 都是替商户做决定，宁可报错让他改表。
- * 负数同样返回 null——Shopify 允许负库存（超卖后的状态），但从表格导入负数几乎必然是笔误。
- */
-export function parseImportQuantity(raw: string | null | undefined): number | null {
-  if (typeof raw !== "string") return null;
-  const cleaned = raw.replace(SPACE_LIKE, "").trim();
-  if (!cleaned) return null;
-  if (cleaned.startsWith("-")) return null;
-
-  const normalized = normalizeSeparators(cleaned);
-  if (normalized == null || !/^\d+(\.\d+)?$/.test(normalized)) return null;
-
-  const [intPart, fracPart] = normalized.split(".");
-  if (fracPart && /[1-9]/.test(fracPart)) return null;
-
-  const value = Number(intPart);
-  if (!Number.isFinite(value) || value < 0 || value > SHEET_IMPORT_MAX_QUANTITY) return null;
-  return value;
-}
-
 /** 数量级异常判定：两个非零金额相差达到 `SHEET_IMPORT_SUSPICIOUS_RATIO` 倍。 */
 export function isSuspiciousMagnitude(beforeCents: number, afterCents: number): boolean {
   if (beforeCents <= 0 || afterCents <= 0) return false;

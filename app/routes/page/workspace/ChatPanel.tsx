@@ -39,10 +39,8 @@ import { BulkTagEditTaskDetailPage } from "../../component/bulkTagEdit/BulkTagEd
 import { BulkStatusEditTaskDetailPage } from "../../component/bulkStatusEdit/BulkStatusEditTaskDetailPage";
 import { BulkCollectionEditTaskDetailPage } from "../../component/bulkCollectionEdit/BulkCollectionEditTaskDetailPage";
 import { BulkSeoEditTaskDetailPage } from "../../component/bulkSeoEdit/BulkSeoEditTaskDetailPage";
-import { BulkMetafieldEditTaskDetailPage } from "../../component/bulkMetafieldEdit/BulkMetafieldEditTaskDetailPage";
 import { BulkPriceImportTaskDetailPage } from "../../component/bulkPriceImport/BulkPriceImportTaskDetailPage";
 import { BulkCostImportTaskDetailPage } from "../../component/bulkCostImport/BulkCostImportTaskDetailPage";
-import { BulkInventoryImportTaskDetailPage } from "../../component/bulkInventoryImport/BulkInventoryImportTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
 
@@ -1052,21 +1050,6 @@ export function ChatPanel({
               onAiTaskUpdated(conversation.id, taskId, status, result);
             }}
           />
-        ) : reviewTask?.taskType === "bulk_metafield_edit" ? (
-          <BulkMetafieldEditTaskDetailPage
-            task={reviewTask}
-            onBack={closeReviewDialog}
-            showBackButton={false}
-            onTaskUpdated={(taskId, status, result) => {
-              upsertTaskStatus(taskId, status, result);
-              setReviewTask((prev) =>
-                prev && prev.id === taskId
-                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
-                  : prev,
-              );
-              onAiTaskUpdated(conversation.id, taskId, status, result);
-            }}
-          />
         ) : reviewTask?.taskType === "bulk_price_import" ? (
           <BulkPriceImportTaskDetailPage
             task={reviewTask}
@@ -1084,21 +1067,6 @@ export function ChatPanel({
           />
         ) : reviewTask?.taskType === "bulk_cost_import" ? (
           <BulkCostImportTaskDetailPage
-            task={reviewTask}
-            onBack={closeReviewDialog}
-            showBackButton={false}
-            onTaskUpdated={(taskId, status, result) => {
-              upsertTaskStatus(taskId, status, result);
-              setReviewTask((prev) =>
-                prev && prev.id === taskId
-                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
-                  : prev,
-              );
-              onAiTaskUpdated(conversation.id, taskId, status, result);
-            }}
-          />
-        ) : reviewTask?.taskType === "bulk_inventory_import" ? (
-          <BulkInventoryImportTaskDetailPage
             task={reviewTask}
             onBack={closeReviewDialog}
             showBackButton={false}
