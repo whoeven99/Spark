@@ -646,6 +646,103 @@ export function adjustSparkSystemReward(params: {
   });
 }
 
+// --- Spark 推荐码 ---
+
+export type ReferralCodeStatus =
+  | "active"
+  | "disabled"
+  | "full"
+  | "scheduled"
+  | "ended";
+
+export type ReferralCodeItem = {
+  id: string;
+  code: string;
+  note: string | null;
+  tokenAmount: number;
+  maxUses: number;
+  usedCount: number;
+  remaining: number | null;
+  unlimited?: boolean;
+  enabled: boolean;
+  status: ReferralCodeStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  installCount?: number;
+  installUrl?: string;
+};
+
+export type ReferralCodeListData = {
+  items: ReferralCodeItem[];
+  summary: {
+    activeCount: number;
+    totalRedeemed: number;
+    remainingSlots: number;
+    unlimitedActiveCount?: number;
+  };
+};
+
+export type ReferralClaimItem = {
+  shopHash: string;
+  shopHashShort: string;
+  shop: string | null;
+  tokensDelta: number;
+  claimedAt: string | null;
+};
+
+export type ReferralInstallItem = {
+  shopHash: string;
+  shopHashShort: string;
+  shop: string | null;
+  installedAt: string | null;
+};
+
+export function fetchReferralCodes(): Promise<ReferralCodeListData> {
+  return apiFetch("/referral-codes");
+}
+
+export function createReferralCode(params: {
+  code?: string;
+  note?: string;
+  tokenAmount?: number;
+  maxUses?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}): Promise<ReferralCodeItem> {
+  return apiFetch("/referral-codes", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function updateReferralCode(
+  id: string,
+  params: {
+    maxUses?: number | null;
+    enabled?: boolean;
+    note?: string;
+    tokenAmount?: number;
+  },
+): Promise<ReferralCodeItem> {
+  return apiFetch(`/referral-codes/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(params),
+  });
+}
+
+export function fetchReferralCodeClaims(id: string): Promise<{ items: ReferralClaimItem[] }> {
+  return apiFetch(`/referral-codes/${encodeURIComponent(id)}/claims`);
+}
+
+export function fetchReferralCodeInstalls(
+  id: string,
+): Promise<{ items: ReferralInstallItem[] }> {
+  return apiFetch(`/referral-codes/${encodeURIComponent(id)}/installs`);
+}
+
 // --- Spark 账单总览 ---
 
 export type SparkBillingOverviewEvent = SparkCreditsBillingLog;

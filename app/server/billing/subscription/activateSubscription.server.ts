@@ -12,6 +12,7 @@ import { notifySubscriptionEmail } from "../../notifications/notifyMerchant.serv
 import { buildCreditAccountChange } from "../../notifications/buildNotificationVariables.server";
 import { getAvailableTokens } from "../../tokenUsage/accountBalance.server";
 import { getPlanByKey } from "../plans/planCatalog.server";
+import { fulfillPendingReferralOnSubscription } from "../promo/referralCode.server";
 import {
   APP_SUBSCRIPTION_STATUS,
   BILLING_LOG_EVENT,
@@ -259,6 +260,19 @@ export async function applyActiveSubscription(params: {
     console.info(
       `${LOG} notify-email-skip shop=${shop} reason=not-started-nor-plan-change wasPending=${wasPending} previousPlanKey=${previousPlanKey ?? "(none)"} planKey=${planKey}`,
     );
+  }
+
+  if (wasPending) {
+    try {
+      const referral = await fulfillPendingReferralOnSubscription(shop);
+      if (referral && !referral.alreadyClaimed && referral.tokensDelta > 0) {
+        console.info(
+          `${LOG} referral-granted shop=${shop} code=${referral.code} tokens=${referral.tokensDelta}`,
+        );
+      }
+    } catch (error) {
+      console.error(`${LOG} referral-fulfill-failed shop=${shop}:`, error);
+    }
   }
 
   console.info(`${LOG} done shop=${shop} subscriptionId=${shopifySubscriptionId}`);

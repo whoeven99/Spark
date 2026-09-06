@@ -1,8 +1,16 @@
-/** Spark 系统头像（侧栏品牌 + 聊天气泡）。 */
+import { useRouteLoaderData } from "react-router";
+import { SPARK_AVATAR_SRC_PROD } from "../../../lib/sparkAvatar";
+
+/** Spark 系统头像（侧栏品牌 + 聊天气泡）。测环境用青绿标。 */
 export function SparkMark({ size = 20 }: { size?: number }) {
+  const appData = useRouteLoaderData("routes/app") as
+    | { sparkAvatarSrc?: string }
+    | undefined;
+  const src = appData?.sparkAvatarSrc || SPARK_AVATAR_SRC_PROD;
+
   return (
     <img
-      src="/spark-ai-avatar.svg"
+      src={src}
       width={size}
       height={size}
       alt=""

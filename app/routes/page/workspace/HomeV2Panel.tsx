@@ -52,7 +52,7 @@ const homeV2Styles = {
   },
   composerInput: {
     width: "100%",
-    minHeight: 130,
+    minHeight: 180,
     border: "none",
     outline: "none",
     resize: "none" as const,

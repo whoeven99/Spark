@@ -1,6 +1,7 @@
 /** 助手页 / 通用工作台 SSR 占位：侧栏骨架 + 空白主区，避免 "Loading…" 成为 LCP。 */
 import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useSparkBrandName } from "../../../hooks/useSparkBrandName";
 import {
   contentStyle,
   shellStyle,
@@ -48,12 +49,13 @@ export function WorkspaceShellSsrFallback({
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const brandName = useSparkBrandName();
 
   return (
     <div style={shellStyle} aria-busy="true" aria-live="polite">
       <aside style={sidebarStyle} aria-hidden="true">
         <div>
-          <div style={styles.brandTitle}>Spark AI</div>
+          <div style={styles.brandTitle}>{brandName}</div>
           <div style={styles.brandMeta}>{t("workspace.shell.account.workspaceLabel")}</div>
           <div style={styles.newChatStub} />
           <div style={styles.historyLabel}>{t("workspace.shell.recentConversations")}</div>

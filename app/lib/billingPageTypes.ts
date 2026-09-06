@@ -113,6 +113,13 @@ export type PromoCampaignSnapshot = {
   claimed: boolean;
 };
 
+export type ReferralRedeemSnapshot = {
+  claimed: boolean;
+  code: string | null;
+  tokenAmount: number | null;
+  pendingCode: string | null;
+};
+
 export type BillingPageLoaderData = {
   billing: BillingPageSnapshot;
   trialPlan: PlanRecord | null;
@@ -130,6 +137,10 @@ export type BillingPageLoaderData = {
   billingReturnFlash: BillingReturnFlash;
   /** 当前可展示的营销领 Token 活动 */
   promoCampaign: PromoCampaignSnapshot | null;
+  /** 推荐码兑换状态（始终返回，未兑过时 claimed=false） */
+  referralRedeem: ReferralRedeemSnapshot;
+  /** 广告落地预填，来自 ?referralCode= */
+  referralCodePrefill: string;
 };
 
 /** 其它页面仅需展示访问状态时使用。 */

@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "940b967eda872dd81f9ffc283e29a013"
-name = "AiAssistant-Test"
+name = "Spark-Test"
 application_url = "https://aiassistant-wi7b.onrender.com"
 embedded = true
 

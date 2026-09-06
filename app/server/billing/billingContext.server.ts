@@ -37,6 +37,7 @@ import {
   effectiveOverageCapAmount,
 } from "./overage/overageMath.server";
 import { loadPromoCampaignSnapshot } from "./promo/promoCampaign.server";
+import { loadReferralRedeemSnapshot } from "./promo/referralCode.server";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -173,6 +174,7 @@ export async function loadBillingPageData(
   options?: {
     reconcileResult?: ReconcileSubscriptionResult | null;
     isBillingReturn?: boolean;
+    referralCodePrefill?: string;
   },
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop);
@@ -182,6 +184,7 @@ export async function loadBillingPageData(
     toolUsageRows,
     overageRows,
     promoCampaign,
+    referralRedeem,
   ] = await Promise.all([
     prisma.accountPeriodUsage.findMany({
       where: { shop },
@@ -204,6 +207,7 @@ export async function loadBillingPageData(
       take: 20,
     }),
     loadPromoCampaignSnapshot(shop),
+    loadReferralRedeemSnapshot(shop),
   ]);
   const sub = ctx.subscription;
   const showDevCancelSubscription =
@@ -248,6 +252,8 @@ export async function loadBillingPageData(
     pendingPlanChange,
     billingReturnFlash,
     promoCampaign,
+    referralRedeem,
+    referralCodePrefill: options?.referralCodePrefill ?? "",
   };
 }
 

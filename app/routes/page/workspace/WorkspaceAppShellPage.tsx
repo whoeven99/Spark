@@ -18,6 +18,7 @@ import {
 import { SupportChatWidget, SupportChatIcon } from "../../component/SupportChatWidget";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { SparkMark } from "../../component/common/SparkMark";
+import { useSparkBrandName } from "../../../hooks/useSparkBrandName";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { normalizeWorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
@@ -321,6 +322,7 @@ export function WorkspaceAppShellPage({
 }) {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
+  const brandName = useSparkBrandName();
   const navigate = useEmbeddedNavigate();
   const location = useLocation();
   const locale = i18n.resolvedLanguage || i18n.language || "en";
@@ -1417,7 +1419,7 @@ export function WorkspaceAppShellPage({
               <SparkMark size={32} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={brandTitleStyle}>{t("workspace.shell.brand.name")}</div>
+              <div style={brandTitleStyle}>{brandName}</div>
               <div style={brandMetaStyle}>{t("workspace.shell.brand.subtitle")}</div>
             </div>
           </button>

@@ -2,7 +2,7 @@
  * Shopify App Store 强制合规 webhook。
  * - customers/data_request：记录请求（30 天内可人工导出；当前无独立出站通道）
  * - customers/redact：删除该客户在本应用的镜像 PII
- * - shop/redact：归档后清 Turso 全店数据（与卸载清理幂等；保留 PromoClaimLedger）
+ * - shop/redact：归档后清 Turso 全店数据（与卸载清理幂等；保留 PromoClaimLedger / ReferralClaim / ReferralInstall）
  * @see https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance
  */
 

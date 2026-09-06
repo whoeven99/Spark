@@ -13,6 +13,7 @@ import { listConversations } from "../server/conversation/conversationStore.serv
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
 import { authenticate } from "../shopify.server";
 import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
+import { useSparkBrandName } from "../hooks/useSparkBrandName";
 import { WorkspaceShellSsrFallback } from "./page/workspace/WorkspaceShellSsrFallback";
 
 const importWorkspaceAppShell = () => import("./page/workspace/WorkspaceAppShellPage");
@@ -77,13 +78,14 @@ function ClientMount({
 
 export default function AssistantRoute() {
   const data = useLoaderData<typeof loader>();
+  const brandName = useSparkBrandName();
   useFeatureView("chat");
 
   const firstPaint = <WorkspaceShellSsrFallback />;
 
   return (
     <ClientMount fallback={firstPaint}>
-      <TitleBar title="Spark AI" />
+      <TitleBar title={brandName} />
       <Suspense fallback={firstPaint}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}

@@ -23,6 +23,7 @@ import {
 import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import { captureReferralInstallFromRequest } from "../server/billing/promo/referralInstall.server";
 // 审核期临时关闭 5.1.5：不自动创建/更新 Web Pixel。过审后恢复 import 与下面的 ensureWebPixel 调用。
 // import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
 import { ensureInstallPromoTokens } from "../server/billing/index.server";
@@ -55,6 +56,7 @@ import {
   logClientRenderError,
   warnIfLegacySpringRequests,
 } from "../lib/clientDiagnostics.client";
+import { getSparkAvatarSrc, isTestSparkBrand } from "../lib/sparkAvatar.server";
 import { getSparkBuildInfo } from "../lib/sparkBuildInfo.server";
 
 const NAV_ITEMS: Record<
@@ -88,6 +90,10 @@ const NAV_ITEMS: Record<
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+
+  void captureReferralInstallFromRequest(session.shop, request).catch((error) => {
+    console.warn("[ReferralInstall] app-shell capture failed", error);
+  });
 
   // 安装福利：进壳即自动领取（await，避免首条聊天抢跑额度检查）
   await ensureInstallPromoTokens(session.shop);
@@ -125,6 +131,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   const { nav, home } = getAppEntryConfig();
   const buildInfo = getSparkBuildInfo();
+  const sparkAvatarSrc = getSparkAvatarSrc();
+  const isTestBrand = isTestSparkBrand();
   const safeNav = Array.isArray(nav) ? nav : [];
 
   if (!Array.isArray(nav)) {
@@ -142,6 +150,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     nav: safeNav,
     home,
     buildInfo,
+    sparkAvatarSrc,
+    isTestBrand,
   };
 };
 

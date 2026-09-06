@@ -56,6 +56,7 @@ function eventLabel(eventType: string): string {
     TOKEN_PACK_INITIATED: "购包待确认",
     TOKEN_PACK_PURCHASED: "购包入账",
     PROMO_TOKEN_CLAIMED: "限时福利领取",
+    REFERRAL_CODE_CLAIMED: "推荐码兑换",
     SYSTEM_REWARD: "系统奖励",
     CREDIT_MIGRATION_IN: "从翻译迁入",
     CREDIT_MIGRATION_FAILED: "翻译迁入失败",

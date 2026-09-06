@@ -9,6 +9,7 @@ import { getBillingGateway } from "./gateway/getBillingGateway.server";
 import { getPlanByKey } from "./plans/planCatalog.server";
 import { parseMoney } from "./overage/overageMath.server";
 import { PLAN_CATALOG_KIND } from "./types.server";
+import { savePendingReferralCode } from "./promo/referralCode.server";
 
 export async function startSubscriptionCheckout(params: {
   admin: ShopifyAdminGraphqlClient;
@@ -16,6 +17,7 @@ export async function startSubscriptionCheckout(params: {
   planKey: string;
   request: Request;
   trialDays?: number | null;
+  referralCode?: string | null;
 }): Promise<{ confirmationUrl: string | null }> {
   const plan = await getPlanByKey(params.planKey);
   if (plan.kind !== PLAN_CATALOG_KIND.SUBSCRIPTION) {
@@ -27,6 +29,8 @@ export async function startSubscriptionCheckout(params: {
     params.request,
     params.shop,
   );
+
+  await savePendingReferralCode(params.shop, params.referralCode ?? "");
 
   const gateway = getBillingGateway();
   console.info(

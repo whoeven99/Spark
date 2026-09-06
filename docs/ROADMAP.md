@@ -231,7 +231,7 @@ app/server/ai/playbooks/{name}/
 
 已知、AI self-review **未覆盖**、仍挡 Public / Unlisted（M3；审核员可能追问）：
 
-- [x] GDPR `customers/redact` / `shop/redact`：卸载与 redact 走归档+Turso 删除（`archiveAndPurgeShopData`）；`PromoClaimLedger` 防薅保留
+- [x] GDPR `customers/redact` / `shop/redact`：卸载与 redact 走归档+Turso 删除（`archiveAndPurgeShopData`）；`PromoClaimLedger` / `ReferralClaim` / `ReferralInstall` 防薅与安装归因保留
 - [ ] 无隐私政策 URL（Listing + 应用内链接；需披露安装福利防滥用的 shop 域名哈希账本）
 - [x] 卸载清理店铺业务数据（Session / 订单镜像 / 广告凭证 / 对话 / 客服等）
 - [ ] Partner Dashboard：分发方式、PCD、Listing 素材、测试说明与凭据

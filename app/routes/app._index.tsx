@@ -13,6 +13,7 @@ import { listConversations } from "../server/conversation/conversationStore.serv
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
 import { authenticate } from "../shopify.server";
 import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
+import { useSparkBrandName } from "../hooks/useSparkBrandName";
 import { HomeV2SsrFallback } from "./page/workspace/HomeV2SsrFallback";
 
 const importWorkspaceAppShell = () => import("./page/workspace/WorkspaceAppShellPage");
@@ -87,6 +88,7 @@ function ClientMount({
 /** 应用首页：原 home-v2 落地（问候 + 本页提问，发送后进 ChatPanel）。 */
 export default function Index() {
   const data = useLoaderData<typeof loader>();
+  const brandName = useSparkBrandName();
   useFeatureView("home-v2");
 
   const firstPaint = (
@@ -98,7 +100,7 @@ export default function Index() {
 
   return (
     <ClientMount fallback={firstPaint}>
-      <TitleBar title="Spark AI" />
+      <TitleBar title={brandName} />
       <Suspense fallback={firstPaint}>
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}
