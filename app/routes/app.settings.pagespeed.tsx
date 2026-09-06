@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { resolvePageSpeedLocale, type PageSpeedLocaleCode } from "../lib/pageSpeedLocales";
-import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
+import { fetchShopLocalesPayloadCached } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { PageSpeedInsightsPage } from "./page/PageSpeedInsightsPage";
 
@@ -17,7 +17,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const source = requestUrl.searchParams.get("source")?.trim();
   const [shopInfo, shopLocales] = await Promise.all([
     fetchShopBasicInfo(admin).catch(() => null),
-    fetchShopLocalesPayload(admin, `[PageSpeedSettings] shop=${session.shop}`),
+    fetchShopLocalesPayloadCached(admin, session.shop, `[PageSpeedSettings] shop=${session.shop}`),
   ]);
   const myshopifyDomain = shopInfo?.myshopifyDomain?.trim() || session.shop;
   const defaultMyshopifyUrl = `https://${myshopifyDomain}`;

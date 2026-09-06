@@ -4,6 +4,7 @@ import {
   type ShopLocalesPayload,
   SHOP_LOCALES_FALLBACK,
 } from "../../lib/productImproveLocales";
+import { createEnumerationCache } from "../adsCatalog/enumerationCache.server";
 import { logDetailedError } from "./generateDescriptionLog.server";
 
 const LOG_PREFIX = "[GenerateDescription][ShopLocales]";
@@ -125,4 +126,44 @@ export async function fetchShopLocalesPayload(
     logDetailedError(`${LOG_PREFIX} ${logContext}`, "shopLocales fetch failed", e);
     return { ...SHOP_LOCALES_FALLBACK, isFallback: true };
   }
+}
+
+/**
+ * 店铺语言是店铺级、以周月为单位变化的只读数据，但此前每条请求链路都要现打一次
+ * Admin GraphQL（`/app` 壳层首屏、chat-stream、ai-task 等都在路径上）。这里按 shop
+ * 收敛到通用 TTL 缓存，并发请求共享同一次回源。
+ *
+ * 注意缓存的是店铺主语言本身，与请求无关；调用方仍要按当前 request 解析最终 UI 语言。
+ */
+const shopLocalesCache = createEnumerationCache<ShopLocalesPayload>();
+
+export async function fetchShopLocalesPayloadCached(
+  admin: ShopifyAdminGraphqlClient,
+  shop: string,
+  logContext: string,
+  options?: { refresh?: boolean },
+): Promise<ShopLocalesPayload> {
+  const cacheKey = shop.trim();
+  if (!cacheKey) {
+    return fetchShopLocalesPayload(admin, logContext);
+  }
+
+  const payload = await shopLocalesCache.get(
+    cacheKey,
+    () => fetchShopLocalesPayload(admin, logContext),
+    options,
+  );
+
+  // 回退结果多半来自网络抖动或缺 read_locales 权限，缓存住会让商户在整个 TTL 内
+  // 都拿到错误的主语言，因此命中回退时立刻失效，下次请求重新回源。
+  if (payload.isFallback) {
+    shopLocalesCache.invalidate(cacheKey);
+  }
+
+  return payload;
+}
+
+/** 店铺语言设置变更后（如手动切换主语言）主动失效，避免等满 TTL。 */
+export function invalidateShopLocalesCache(shop: string): void {
+  shopLocalesCache.invalidate(shop.trim());
 }

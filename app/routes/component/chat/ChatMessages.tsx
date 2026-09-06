@@ -17,6 +17,7 @@ import { ManagedAiResultCard } from "./ManagedAiResultCard";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
 import { SparkMark } from "../common/SparkMark";
+import { WorkspaceActionsInMessage } from "./WorkspaceActionsInMessage";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -31,6 +32,8 @@ type ChatMessagesProps = {
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
   /** 健康诊断刷新成功（工作台追加诊断结果卡） */
   onHealthDiagnosisRefreshed?: (payload: HealthDiagnosisFormPayload) => void;
+  /** 能力介绍下方可点操作（与底部推荐同源） */
+  onRecommendedPrompt?: (prompt: string, skillFocus?: string) => void | Promise<void>;
   /** 工作台已选商品，供 TaskProposalCard 空目标时补全 */
   contextProducts?: BatchTaskProduct[];
   contextProductQuery?: ObjectQuerySelection | null;
@@ -47,6 +50,7 @@ export function ChatMessages({
   onOpenTasks,
   onTaskProposalExecuted,
   onHealthDiagnosisRefreshed,
+  onRecommendedPrompt,
   contextProducts = [],
   contextProductQuery = null,
   onOpenProductPicker,
@@ -91,6 +95,8 @@ export function ChatMessages({
         const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
         const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const hasManagedAiCard = item.role === "assistant" && Boolean(item.managedAiResult);
+        const hasWorkspaceActions =
+          item.role === "assistant" && Boolean(item.workspaceActions) && Boolean(onRecommendedPrompt);
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -104,6 +110,7 @@ export function ChatMessages({
           hasTaskRunCard ||
           hasAiTaskCard ||
           hasManagedAiCard ||
+          hasWorkspaceActions ||
           hasImageAttachments;
 
         const isAssistant = item.role === "assistant";
@@ -254,6 +261,15 @@ export function ChatMessages({
                         onExecuted={onTaskProposalExecuted}
                       />
                     </div>
+                  ) : null}
+
+                  {hasWorkspaceActions && item.role === "assistant" && onRecommendedPrompt ? (
+                    <WorkspaceActionsInMessage
+                      hasProductContext={contextProducts.length > 0}
+                      onAction={(prompt, skillFocus) => {
+                        void onRecommendedPrompt(prompt, skillFocus);
+                      }}
+                    />
                   ) : null}
 
                   {hasTaskRunCard && item.role === "assistant" && item.taskRun ? (

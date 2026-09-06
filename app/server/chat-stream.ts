@@ -3,7 +3,6 @@ import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
 import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.server";
 import { parseClientChatMessages, buildContextWindow } from "./chatPayload.server";
-import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
 import { injectFilesIntoMessages } from "./fileContext/fileContextInjector.server";
 import {
   billingErrorToResponse,
@@ -27,6 +26,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     message?: string;
     messages?: unknown;
     fileIds?: unknown;
+    skillFocus?: unknown;
   };
 
   let agentMessages;
@@ -51,6 +51,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const fileIds: string[] = Array.isArray(body.fileIds)
     ? body.fileIds.filter((id): id is string => typeof id === "string")
     : [];
+  const skillFocus =
+    typeof body.skillFocus === "string" && body.skillFocus.trim()
+      ? body.skillFocus.trim()
+      : null;
 
   try {
     const { admin, session } = await authenticate.admin(request);
@@ -59,16 +63,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await requireBillingAccess(shop);
     }
 
-    const langsmithTracer = isLangsmithAvailable()
-      ? await createLangsmithTracer(`chat-stream-${Date.now()}`)
-      : undefined;
-
-    if (langsmithTracer) {
-      console.log(`[LangSmith] Streaming chat tracing started: ${getTraceUrl() ?? "enabled"}`);
-    }
-
     const locale = await resolveUiLocale(request, {
       admin,
+      shop,
       logContext: `chat-stream shop=${shop ?? ""}`,
     });
 
@@ -86,7 +83,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop,
         locale,
       },
-      config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
+      // LangSmith tracer 与 runCollector 由 invokeChatAgentStream 内部统一挂载，避免重复注册。
+      skillFocus,
+      signal: request.signal,
     });
 
     const encoder = new TextEncoder();

@@ -4,27 +4,13 @@ import { useTranslation } from "react-i18next";
 import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
 import type { ContextTool } from "./types";
 import {
+  formatHomeDate,
+  greetingForHour,
+} from "./homeGreeting";
+import {
   panelStackStyle,
   shopifyUi,
 } from "./styles";
-
-function greetingForHour(
-  hour: number,
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  if (hour < 6) return t("workspace.home.greeting.lateNight");
-  if (hour < 12) return t("workspace.home.greeting.morning");
-  if (hour < 18) return t("workspace.home.greeting.afternoon");
-  return t("workspace.home.greeting.evening");
-}
-
-function formatHomeDate(now: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(now);
-}
 
 const homeV2Styles = {
   pageHeader: {
@@ -46,27 +32,11 @@ const homeV2Styles = {
     fontSize: 13,
     color: shopifyUi.textMuted,
   },
-  subtitle: {
-    margin: "4px 0 0",
-    fontSize: 14,
-    color: shopifyUi.textSecondary,
-    lineHeight: 1.45,
-  },
   assistantCard: {
-    padding: "16px",
+    padding: "20px",
     borderRadius: shopifyUi.radiusCard,
     border: `1px solid ${shopifyUi.border}`,
     background: shopifyUi.surface,
-  },
-  assistantBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    color: shopifyUi.primary,
-    marginBottom: 7,
   },
   assistantTitle: {
     margin: "0 0 14px",
@@ -78,11 +48,11 @@ const homeV2Styles = {
     border: `1px solid ${shopifyUi.border}`,
     borderRadius: 10,
     background: shopifyUi.surface,
-    padding: "12px 12px 10px",
+    padding: "14px 14px 12px",
   },
   composerInput: {
     width: "100%",
-    minHeight: 62,
+    minHeight: 130,
     border: "none",
     outline: "none",
     resize: "none" as const,
@@ -135,31 +105,32 @@ const homeV2Styles = {
     }) as const,
   capabilityGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 12,
+    // 176px 让四组在常见嵌入宽度下排成一行；放不下时 auto-fit 自行换行
+    gridTemplateColumns: "repeat(auto-fit, minmax(176px, 1fr))",
+    gap: 10,
   },
   capabilityCard: {
     display: "flex",
     flexDirection: "column" as const,
     border: `1px solid ${shopifyUi.border}`,
-    borderRadius: shopifyUi.radiusCard,
+    borderRadius: shopifyUi.radiusControl,
     background: shopifyUi.surface,
-    padding: "13px 14px 9px",
+    padding: "10px 12px 8px",
   },
   capabilityHeader: {
     display: "flex",
     alignItems: "center",
-    gap: 7,
-    marginBottom: 6,
+    gap: 6,
+    marginBottom: 8,
   },
   capabilityIcon: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 1,
     color: shopifyUi.textMuted,
   },
   capabilityTitle: {
     margin: 0,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 700,
     color: shopifyUi.text,
   },
@@ -167,28 +138,17 @@ const homeV2Styles = {
     marginLeft: "auto",
     padding: "1px 6px",
     borderRadius: 999,
-    border: `1px solid ${shopifyUi.border}`,
-    background: shopifyUi.surfaceSubtle,
-    color: shopifyUi.textMuted,
-    fontSize: 11,
-    fontWeight: 600,
+    border: `1px solid ${shopifyUi.linkBorder}`,
+    background: shopifyUi.linkSurface,
+    color: shopifyUi.link,
+    fontSize: 10,
+    fontWeight: 700,
     whiteSpace: "nowrap" as const,
-  },
-  capabilityDesc: {
-    margin: 0,
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: shopifyUi.textSecondary,
-  },
-  capabilityDivider: {
-    height: 1,
-    background: shopifyUi.border,
-    margin: "11px 0 5px",
   },
   capabilityActions: {
     display: "flex",
     flexDirection: "column" as const,
-    margin: "0 -7px",
+    margin: "0 -6px",
   },
   capabilityAction: {
     display: "flex",
@@ -196,13 +156,13 @@ const homeV2Styles = {
     justifyContent: "space-between",
     gap: 8,
     width: "100%",
-    padding: "7px",
+    padding: "5px 6px",
     borderRadius: shopifyUi.radiusControl,
     border: "1px solid transparent",
     background: "transparent",
     color: shopifyUi.text,
     fontSize: 13,
-    fontWeight: 500,
+    fontWeight: 550,
     fontFamily: "inherit",
     lineHeight: 1.3,
     textAlign: "left" as const,
@@ -210,29 +170,27 @@ const homeV2Styles = {
   },
   capabilityActionChevron: {
     flexShrink: 0,
-    fontSize: 13,
+    fontSize: 12,
     color: shopifyUi.textMuted,
   },
   recommendations: {
     borderTop: `1px solid ${shopifyUi.border}`,
-    marginTop: 14,
-    paddingTop: 11,
-  },
-  recommendationsHeader: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: 8,
-    marginBottom: 8,
+    marginTop: 18,
+    paddingTop: 13,
   },
   recommendationsTitle: {
-    margin: 0,
-    fontSize: 14,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    margin: "0 0 9px",
+    fontSize: 13,
     fontWeight: 700,
     color: shopifyUi.text,
   },
-  recommendationsHint: {
-    fontSize: 12,
-    color: shopifyUi.textMuted,
+  recommendationsTitleIcon: {
+    fontSize: 10,
+    lineHeight: 1,
+    color: shopifyUi.link,
   },
   capabilityActionLabel: {
     display: "inline-flex",
@@ -240,11 +198,17 @@ const homeV2Styles = {
     gap: 6,
     minWidth: 0,
   },
+  capabilityActionIcon: {
+    flexShrink: 0,
+    fontSize: 10,
+    lineHeight: 1,
+    color: shopifyUi.link,
+  },
   capabilityActionBadge: {
     padding: "0 5px",
     borderRadius: 999,
-    background: shopifyUi.surfaceSubtle,
-    color: shopifyUi.textMuted,
+    background: shopifyUi.linkSurface,
+    color: shopifyUi.link,
     fontSize: 10,
     fontWeight: 700,
     whiteSpace: "nowrap" as const,
@@ -255,6 +219,7 @@ const homeV2Styles = {
 const CAPABILITY_ICONS: Record<string, string> = {
   operations: "▤",
   productOptimization: "◫",
+  bulkEdit: "▥",
   imageGeneration: "▣",
 };
 
@@ -266,7 +231,7 @@ export function HomeV2Panel({
 }: {
   displayName: string;
   initialRenderTimeIso?: string;
-  onSubmitPrompt: (prompt: string) => void;
+  onSubmitPrompt: (prompt: string, skillFocus?: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -317,15 +282,10 @@ export function HomeV2Panel({
             })}
           </h1>
           <div style={homeV2Styles.greetingDate}>{formatHomeDate(now, locale)}</div>
-          <p style={homeV2Styles.subtitle}>{t("workspace.homeV2.subtitle")}</p>
         </div>
       </header>
 
       <section style={homeV2Styles.assistantCard}>
-        <div style={homeV2Styles.assistantBadge}>
-          <span aria-hidden="true">■</span>
-          <span>{t("workspace.home.askSpark")}</span>
-        </div>
         <h2 style={homeV2Styles.assistantTitle}>{t("workspace.homeV2.assistantTitle")}</h2>
         <div className="workspace-home-composer" style={homeV2Styles.composerShell}>
           <textarea
@@ -361,14 +321,12 @@ export function HomeV2Panel({
           </div>
         </div>
         <div style={homeV2Styles.recommendations}>
-          <div style={homeV2Styles.recommendationsHeader}>
-            <h3 style={homeV2Styles.recommendationsTitle}>
-              {t("workspace.homeV2.recommendationsTitle")}
-            </h3>
-            <span style={homeV2Styles.recommendationsHint}>
-              {t("workspace.homeV2.recommendationsHint")}
+          <h3 style={homeV2Styles.recommendationsTitle}>
+            <span style={homeV2Styles.recommendationsTitleIcon} aria-hidden="true">
+              ▶
             </span>
-          </div>
+            {t("workspace.homeV2.recommendationsTitle")}
+          </h3>
           <div style={homeV2Styles.capabilityGrid}>
             {recommendedGroups.map((group) => {
               // 整组都会建任务时徽标提到卡头，避免每行重复；混合分组回落到逐行标注
@@ -387,10 +345,6 @@ export function HomeV2Panel({
                       </span>
                     ) : null}
                   </div>
-                  <p style={homeV2Styles.capabilityDesc}>
-                    {t(`workspace.homeV2.capabilityDesc.${group.key}`)}
-                  </p>
-                  <div style={homeV2Styles.capabilityDivider} />
                   <div style={homeV2Styles.capabilityActions}>
                     {group.items.map((item) => (
                       <button
@@ -398,9 +352,12 @@ export function HomeV2Panel({
                         type="button"
                         className="workspace-home-quick-action"
                         style={homeV2Styles.capabilityAction}
-                        onClick={() => onSubmitPrompt(item.prompt)}
+                        onClick={() => onSubmitPrompt(item.prompt, item.key)}
                       >
                         <span style={homeV2Styles.capabilityActionLabel}>
+                          <span style={homeV2Styles.capabilityActionIcon} aria-hidden="true">
+                            ▶
+                          </span>
                           <span>{item.label}</span>
                           {!allCreateTasks && item.createsTask ? (
                             <span style={homeV2Styles.capabilityActionBadge}>

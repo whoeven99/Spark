@@ -16,6 +16,7 @@ import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { SparkMark } from "../common/SparkMark";
+import { WorkspaceActionsInMessage } from "./WorkspaceActionsInMessage";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -34,6 +35,7 @@ type StreamingAssistantReplyProps = {
   streamingHealthDiagnosisCard?: boolean;
   streamingHealthDiagnosisPayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
+  streamingWorkspaceActions?: boolean;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
@@ -43,6 +45,8 @@ type StreamingAssistantReplyProps = {
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
   /** 健康诊断刷新成功（向对话追加结果卡） */
   onHealthDiagnosisRefreshed?: (payload: HealthDiagnosisFormPayload) => void;
+  /** 能力介绍下方可点操作（与底部推荐同源） */
+  onRecommendedPrompt?: (prompt: string, skillFocus?: string) => void | Promise<void>;
 };
 
 const PLAYBOOK_RUN_META: Record<
@@ -283,11 +287,13 @@ export function StreamingAssistantReply({
   streamingHealthDiagnosisCard = false,
   streamingHealthDiagnosisPayload,
   streamingTaskProposal,
+  streamingWorkspaceActions = false,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
   onOpenProductPicker,
   onTaskProposalExecuted,
   onHealthDiagnosisRefreshed,
+  onRecommendedPrompt,
 }: StreamingAssistantReplyProps) {
   const { t } = useTranslation();
   if (!active) return null;
@@ -302,6 +308,7 @@ export function StreamingAssistantReply({
   const showQualityCard = streamingQualityCard;
   const healthPayload = coerceHealthDiagnosisFormPayload(streamingHealthDiagnosisPayload);
   const showHealthDiagnosisCard = streamingHealthDiagnosisCard;
+  const showWorkspaceActions = streamingWorkspaceActions && Boolean(onRecommendedPrompt);
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
@@ -311,7 +318,11 @@ export function StreamingAssistantReply({
     streamingTaskProposal,
   });
   const hasEmbeddedCard = Boolean(
-    showProductImproveCard || showQualityCard || showHealthDiagnosisCard || streamingTaskProposal,
+    showProductImproveCard ||
+      showQualityCard ||
+      showHealthDiagnosisCard ||
+      streamingTaskProposal ||
+      showWorkspaceActions,
   );
 
   return (
@@ -389,6 +400,16 @@ export function StreamingAssistantReply({
                     onExecuted={onTaskProposalExecuted}
                   />
                 </div>
+              ) : null}
+
+              {showWorkspaceActions && onRecommendedPrompt ? (
+                <WorkspaceActionsInMessage
+                  hasProductContext={workspaceBatchProducts.length > 0}
+                  disabled={isStreaming}
+                  onAction={(prompt, skillFocus) => {
+                    void onRecommendedPrompt(prompt, skillFocus);
+                  }}
+                />
               ) : null}
             </div>
           </s-box>

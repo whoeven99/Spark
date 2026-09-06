@@ -35,7 +35,7 @@ import {
   type DailyOperationsResult,
 } from "../server/operations/dailyInspection.server";
 import { loadHealthMonitorSignals } from "../server/operations/healthMonitorSignals.server";
-import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
+import { fetchShopLocalesPayloadCached } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { DestinationPage, type DestinationActionCard } from "./component/shared/DestinationPage";
 import { MetricHintLabel } from "./component/shared/MetricHintLabel";
@@ -56,7 +56,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const viewMode = resolveHealthMonitorView(new URL(request.url).searchParams.get("view"));
   const [shopInfo, shopLocales] = await Promise.all([
     fetchShopBasicInfo(admin).catch(() => null),
-    fetchShopLocalesPayload(admin, `[HealthMonitor] shop=${session.shop}`),
+    fetchShopLocalesPayloadCached(admin, session.shop, `[HealthMonitor] shop=${session.shop}`),
   ]);
   const myshopifyDomain = shopInfo?.myshopifyDomain?.trim() || session.shop;
   const pageSpeedDefaults = {

@@ -34,18 +34,16 @@ import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommend
 import { ProductImproveTaskDetailPage } from "../../component/productImprove/ProductImproveTaskDetailPage";
 import { PictureTranslateTaskDetailPage } from "../../component/imageStudio/PictureTranslateTaskDetailPage";
 import { ImageGenerationTaskDetailPage } from "../../component/imageStudio/ImageGenerationTaskDetailPage";
+import { BulkPriceEditTaskDetailPage } from "../../component/bulkPriceEdit/BulkPriceEditTaskDetailPage";
+import { BulkTagEditTaskDetailPage } from "../../component/bulkTagEdit/BulkTagEditTaskDetailPage";
+import { BulkStatusEditTaskDetailPage } from "../../component/bulkStatusEdit/BulkStatusEditTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
 
-const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
-  "product_improve",
-  "picture_translate",
-  "image_generation",
-]);
-
-function isChatInlineReviewTask(taskType?: string | null): boolean {
-  return Boolean(taskType && CHAT_INLINE_REVIEW_TASK_TYPES.has(taskType));
-}
+import {
+  isChatInlineReviewTask,
+  resolveChatReviewDialogTitleKey,
+} from "../../component/chat/chatInlineReviewTasks";
 import {
   chatLayoutStyle,
   composerBoxStyle,
@@ -68,9 +66,13 @@ import {
   recommendedMenuGroupLabelStyle,
   recommendedMenuGroupStyle,
   recommendedMenuItemBadgeStyle,
+  recommendedMenuItemIconStyle,
+  recommendedMenuItemLabelStyle,
   recommendedMenuItemStyle,
   recommendedMenuStyle,
+  recommendedMenuTitleIconStyle,
   recommendedMenuTitleStyle,
+  recommendedTriggerGlyphStyle,
   recommendedTriggerStyle,
   recommendedChevronStyle,
   scrollBottomButtonStyle,
@@ -136,7 +138,7 @@ export function ChatPanel({
   showStreamingReply: boolean;
   onDraftChange: (value: string) => void;
   onSend: () => void | Promise<void>;
-  onRecommendedPrompt: (prompt: string) => void | Promise<void>;
+  onRecommendedPrompt: (prompt: string, skillFocus?: string) => void | Promise<void>;
   onAbortStream: () => void;
   onAiTaskUpdated: (
     conversationId: string,
@@ -179,6 +181,7 @@ export function ChatPanel({
     streamingHealthDiagnosisCard,
     streamingHealthDiagnosisPayload,
     streamingTaskProposal,
+    streamingWorkspaceActions,
     skillSteps,
   } = stream;
 
@@ -595,7 +598,10 @@ export function ChatPanel({
   const mobileComposerOffset = isMobile ? mobileComposerHeight + 18 : 0;
 
   const composerContent = (
-    <div style={isMobile ? mobileFixedComposerCardStyle : composerSurfaceStyle}>
+    <div
+      className="workspace-chat-composer"
+      style={isMobile ? mobileFixedComposerCardStyle : composerSurfaceStyle}
+    >
       {selectedSummaryBubbles.length > 0 ? (
         <div style={selectionBubbleRowStyle}>
           {selectedSummaryBubbles.map((item) => (
@@ -650,7 +656,7 @@ export function ChatPanel({
                 aria-expanded={isRecommendedMenuOpen}
                 aria-haspopup="menu"
               >
-                <span style={toolbarIconGlyphStyle}>✦</span>
+                <span style={recommendedTriggerGlyphStyle}>✦</span>
                 <span>{t("workspace.shell.chat.recommended")}</span>
                 <span aria-hidden="true" style={recommendedChevronStyle}>
                   ⌄
@@ -659,6 +665,9 @@ export function ChatPanel({
               {isRecommendedMenuOpen ? (
                 <div style={recommendedMenuStyle} role="menu">
                   <div style={recommendedMenuTitleStyle}>
+                    <span style={recommendedMenuTitleIconStyle} aria-hidden="true">
+                      ▶
+                    </span>
                     {hasProductContext
                       ? t("workspace.shell.chat.recommend.titleWithProduct")
                       : t("workspace.shell.chat.recommendedActions")}
@@ -675,10 +684,15 @@ export function ChatPanel({
                           role="menuitem"
                           onClick={() => {
                             setIsRecommendedMenuOpen(false);
-                            void onRecommendedPrompt(action.prompt);
+                            void onRecommendedPrompt(action.prompt, action.key);
                           }}
                         >
-                          <span>{action.label}</span>
+                          <span style={recommendedMenuItemLabelStyle}>
+                            <span style={recommendedMenuItemIconStyle} aria-hidden="true">
+                              ▶
+                            </span>
+                            <span>{action.label}</span>
+                          </span>
                           {action.createsTask ? (
                             <span style={recommendedMenuItemBadgeStyle}>
                               {t("workspace.shell.chat.recommend.createsTask")}
@@ -792,6 +806,7 @@ export function ChatPanel({
                   streamingHealthDiagnosisCard={streamingHealthDiagnosisCard}
                   streamingHealthDiagnosisPayload={streamingHealthDiagnosisPayload}
                   streamingTaskProposal={streamingTaskProposal}
+                  streamingWorkspaceActions={streamingWorkspaceActions}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
                   onOpenProductPicker={handleOpenProductPicker}
@@ -801,6 +816,7 @@ export function ChatPanel({
                   onHealthDiagnosisRefreshed={(payload) =>
                     onHealthDiagnosisRefreshed(conversation.id, payload)
                   }
+                  onRecommendedPrompt={onRecommendedPrompt}
                 />
               }
               onAiTaskUpdated={(taskId, status, result) => {
@@ -808,6 +824,7 @@ export function ChatPanel({
                 onAiTaskUpdated(conversation.id, taskId, status, result);
               }}
               onOpenTasks={handleOpenTasks}
+              onRecommendedPrompt={onRecommendedPrompt}
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
@@ -857,7 +874,7 @@ export function ChatPanel({
               width: "100%",
             }}
           >
-            <span>{t("productImproveStage1.chatReviewDialogTitle")}</span>
+            <span>{t(resolveChatReviewDialogTitleKey(reviewTask?.taskType))}</span>
             {reviewTaskTotal > 1 ? (
               <span
                 style={{
@@ -942,6 +959,51 @@ export function ChatPanel({
           <ImageGenerationTaskDetailPage
             task={reviewTask}
             locationSearch={locationSearch}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "bulk_price_edit" ? (
+          <BulkPriceEditTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "bulk_tag_edit" ? (
+          <BulkTagEditTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "bulk_status_edit" ? (
+          <BulkStatusEditTaskDetailPage
+            task={reviewTask}
             onBack={closeReviewDialog}
             showBackButton={false}
             onTaskUpdated={(taskId, status, result) => {

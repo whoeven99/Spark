@@ -1,4 +1,9 @@
-/** 首页与对话输入区共用的推荐操作列表（经营诊断 / 商品优化 / 图片生成）。 */
+/**
+ * 首页与对话输入区共用的推荐操作列表。
+ *
+ * 分组按「做什么」切：经营诊断只读、商品优化与图片生成靠 AI 生成内容、
+ * 批量编辑按规则改店铺结构化字段（试算 → 审核 → 写回，Agent 回合内不写）。
+ */
 
 export type WorkspaceRecommendScope = "shop" | "selected";
 
@@ -49,6 +54,11 @@ export function buildWorkspaceRecommendedGroups(
         label: t("workspace.shell.chat.recommend.abandonRefund.label"),
         prompt: t("workspace.shell.chat.recommend.abandonRefund.prompt"),
       },
+      {
+        key: "seoAudit",
+        label: t("workspace.shell.chat.recommend.seoAudit.label"),
+        prompt: t("workspace.shell.chat.recommend.seoAudit.prompt"),
+      },
     ],
   };
   const productOptimization: WorkspaceRecommendedGroup = {
@@ -87,7 +97,31 @@ export function buildWorkspaceRecommendedGroups(
       },
     ],
   };
+  const bulkEdit: WorkspaceRecommendedGroup = {
+    key: "bulkEdit",
+    label: t("workspace.shell.chat.recommend.groupBulkEdit"),
+    items: [
+      {
+        key: "bulkPriceEdit",
+        label: t("workspace.shell.chat.recommend.bulkPriceEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkPriceEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkTagEdit",
+        label: t("workspace.shell.chat.recommend.bulkTagEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkTagEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkStatusEdit",
+        label: t("workspace.shell.chat.recommend.bulkStatusEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkStatusEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+    ],
+  };
   return hasProductContext
-    ? [productOptimization, imageGeneration, operations]
-    : [operations, productOptimization, imageGeneration];
+    ? [productOptimization, bulkEdit, imageGeneration, operations]
+    : [operations, productOptimization, bulkEdit, imageGeneration];
 }

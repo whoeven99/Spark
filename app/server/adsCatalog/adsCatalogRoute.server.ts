@@ -91,6 +91,7 @@ async function handleAdsCatalogSyncActionInner(
   const { admin, session } = await authenticate.admin(request);
   const locale = await resolveUiLocale(request, {
     admin,
+    shop: session.shop,
     logContext: `ads-catalog-sync shop=${session.shop}`,
   });
   initI18n(locale);

@@ -14,6 +14,40 @@ import { archiveAndPurgeShopData } from "../shopDataLifecycle/archiveAndPurgeSho
 const LOG = "[AppLifecycle:uninstall]";
 const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
+/**
+ * 进程内卸载通知去重：CommonEventLog 会在同一次流程里被清库删掉，
+ * 仅靠库内「10 分钟内已有事件」挡不住 Shopify 重试 / 并发双投。
+ * 同实例内用此 Map 兜底；立刻 200 后 Shopify 通常不再重试，跨实例双投概率很低。
+ */
+const recentUninstallOpsNotifyAtByShop = new Map<string, number>();
+
+function pruneUninstallOpsNotifyMemory(now: number): void {
+  for (const [shop, at] of recentUninstallOpsNotifyAtByShop) {
+    if (now - at > UNINSTALL_OPS_DEDUP_WINDOW_MS) {
+      recentUninstallOpsNotifyAtByShop.delete(shop);
+    }
+  }
+}
+
+/** @returns true 表示本进程已占到通知名额；false 表示窗口内已通知过，应跳过。 */
+function claimUninstallOpsNotifyMemorySlot(shop: string): boolean {
+  const key = shop.trim().toLowerCase();
+  if (!key) return false;
+  const now = Date.now();
+  pruneUninstallOpsNotifyMemory(now);
+  const previous = recentUninstallOpsNotifyAtByShop.get(key);
+  if (previous != null && now - previous < UNINSTALL_OPS_DEDUP_WINDOW_MS) {
+    return false;
+  }
+  recentUninstallOpsNotifyAtByShop.set(key, now);
+  return true;
+}
+
+/** 测试用：清空进程内卸载通知去重状态。 */
+export function resetUninstallOpsNotifyMemoryForTests(): void {
+  recentUninstallOpsNotifyAtByShop.clear();
+}
+
 export type OnAppUninstalledParams = {
   shop: string;
   topic: string;
@@ -25,9 +59,9 @@ export type OnAppUninstalledParams = {
 
 /**
  * 快速幂等检查：
- * 1. 同一 webhookId 的通知键已写过 → 跳过（Shopify 重试）
- * 2. 10 分钟内已有同店卸载事件 → 跳过（防双投）
- * 不再使用永久的 uninstall:notify:{shop}，避免清库前遗留键导致再卸永不通知。
+ * 1. 同一 webhookId 的通知键已写过 → 跳过（Shopify 重试，清库前仍有效）
+ * 2. 10 分钟内已有同店卸载事件 → 跳过（清库前仍有效）
+ * 3. 另见 claimUninstallOpsNotifyMemorySlot（清库后仍有效，同进程）
  */
 async function shouldSkipUninstallOpsNotify(
   shop: string,
@@ -157,6 +191,8 @@ async function sendAppUninstalledFeishuNotify(
 
 /**
  * 卸载：通知幂等占位 → 归档+清库（含 CommonEventLog，快照在 Blob）→ 飞书/邮件。
+ *
+ * Webhook 路由侧应立刻 200 再异步调用本函数，避免超过 Shopify 5s 响应上限触发重试。
  */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
@@ -172,7 +208,9 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
   }
 
   // 1. 清库前占 notify 幂等键（并发双投去重；清库后日志进 Blob 并删除）
+  //    进程内 Map 必须在库检查之后、发通知之前占坑，且清库后仍有效。
   let shouldNotify = false;
+  let memoryClaimed = false;
   try {
     const skipOpsNotify = await shouldSkipUninstallOpsNotify(
       params.shop,
@@ -180,7 +218,12 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     );
     if (skipOpsNotify) {
       console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
+    } else if (!claimUninstallOpsNotifyMemorySlot(params.shop)) {
+      console.info(
+        `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate_memory`,
+      );
     } else {
+      memoryClaimed = true;
       const referenceId = buildUninstallNotifyReferenceId(
         params.shop,
         params.webhookId,
@@ -197,6 +240,8 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
       });
       shouldNotify = created;
       if (!created) {
+        // 未真正发出通知：释放内存坑，避免「库内重复」占死窗口导致同测后续用例误伤
+        recentUninstallOpsNotifyAtByShop.delete(params.shop.trim().toLowerCase());
         console.info(
           `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate referenceId=${referenceId}`,
         );
@@ -204,7 +249,13 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     }
   } catch (error) {
     console.error(`${LOG} ops-notify-dedup-failed shop=${params.shop}`, error);
-    shouldNotify = true;
+    // 已占内存坑：本轮应继续通知。未占坑：补占一次；占不到说明窗口内已有其它投递。
+    shouldNotify = memoryClaimed || claimUninstallOpsNotifyMemorySlot(params.shop);
+    if (!shouldNotify) {
+      console.info(
+        `${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate_memory_after_error`,
+      );
+    }
   }
 
   // 2. 归档到 Blob 后清库（含 Account / CommonEventLog / Session 等）
