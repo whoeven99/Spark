@@ -18,6 +18,11 @@ const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
   "bulk_price_edit",
   "bulk_tag_edit",
   "bulk_status_edit",
+  "bulk_product_field_edit",
+  "bulk_collection_edit",
+  "product_duplicate",
+  "bulk_archive",
+  "product_export",
 ]);
 
 export function isChatInlineReviewTask(taskType?: string | null): boolean {
@@ -28,6 +33,11 @@ const REVIEW_DIALOG_TITLE_KEYS: Record<string, string> = {
   bulk_price_edit: "bulkPriceEdit.reviewTitleShort",
   bulk_tag_edit: "bulkTagEdit.reviewTitleShort",
   bulk_status_edit: "bulkStatusEdit.reviewTitleShort",
+  bulk_product_field_edit: "bulkProductFieldEdit.reviewTitleShort",
+  bulk_collection_edit: "bulkCollectionEdit.reviewTitleShort",
+  product_duplicate: "productDuplicate.reviewTitleShort",
+  bulk_archive: "bulkArchive.reviewTitleShort",
+  product_export: "productExport.reviewTitleShort",
 };
 
 /** 审核弹窗标题：默认沿用商品文案那套「审核结果」，特殊类型可覆盖。 */

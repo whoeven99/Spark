@@ -456,7 +456,7 @@
     "ruleDrivenCollection": "“{{collection}}” is a smart collection — its members are decided by conditions, so products cannot be added or removed manually. Use a manual collection instead, or edit the conditions in the Shopify admin.",
     "noProductsFound": "None of the selected products could be read",
     "cardTitle": "Task: bulk update collection membership",
-    "metaRule": "Action: {{action}}",
+    "metaRule": "Action: {{rule}}",
     "metaCollection": "Collection: {{collection}}",
     "metaProducts": "{{count}} products",
     "ruleAction": {
@@ -512,6 +512,202 @@
     "skipReason": {
       "already_in": "Already in collection",
       "not_in": "Not in collection"
+    }
+  },
+  "bulkProductFieldEdit": {
+    "logReadingProducts": "Reading fields for {{count}} products…",
+    "logComputing": "Computing field changes for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: bulk edit product fields",
+    "metaRule": "Rule: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "cardPrimaryRunning": "Reading product fields and computing changes…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
+    "cardPrimarySucceeded": "Exported {{exported}} products, skipped {{skipped}}",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open “Review changes” to check the list, download the CSV, or confirm the write-back.",
+    "cardSecondaryApplied": "Fields updated. The rollback CSV keeps the values from before the write-back.",
+    "cardSecondarySucceeded": "Export complete. You can download the CSV.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never modify products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Field change preview · #{{id}}",
+    "reviewTitleShort": "Field change preview",
+    "reviewDescription": "Per-product changes for the selected field. Nothing is written to the store until you confirm; you can also just download the CSV.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "summaryProducts": "Products",
+    "summaryChanged": "To update",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "This run hit the product limit, so the list covers only the first batch. Narrow the selection and rebuild to avoid missing products.",
+    "appliedBanner": "Written to store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download change CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write back to store ({{count}} products)",
+    "applyConfirmHint": "This updates fields for {{count}} products in your store. You can use the rollback CSV to reverse the change manually.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colField": "Field",
+    "colChange": "Change",
+    "colAction": "Action",
+    "actionChange": "Will update",
+    "emptyValue": "(empty)",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "field": {
+      "vendor": "Vendor",
+      "productType": "Product type",
+      "seoTitle": "SEO title",
+      "seoDescription": "SEO description"
+    },
+    "mode": {
+      "set": "Set to a value",
+      "clear": "Clear"
+    },
+    "skipReason": {
+      "no_change": "No change",
+      "empty_value": "Target value is empty",
+      "too_long": "Exceeds search-result display width"
+    }
+  },
+  "productDuplicate": {
+    "logReadingProducts": "Reading {{count}} products…",
+    "logComputing": "Computing copy titles for {{count}} products…",
+    "logReadyForReview": "Duplicate list ready: {{changed}} will be copied, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the duplicate list. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: duplicate products",
+    "metaRule": "Rule: {{rule}}",
+    "metaSuffix": "Suffix {{suffix}}",
+    "metaProducts": "{{count}} products",
+    "cardPrimaryRunning": "Reading products and computing copy titles…",
+    "cardPrimaryPendingReview": "Duplicate list ready: {{changed}} will be copied, {{skipped}} skipped",
+    "cardPrimarySucceeded": "Duplicated {{exported}} products, skipped {{skipped}}",
+    "cardPrimaryApplied": "Copies created: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Original products are unchanged. Open “Review changes” before copies are created in the store.",
+    "cardSecondaryApplied": "Copies created. Original products were not modified.",
+    "cardSecondarySucceeded": "Duplication complete.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never create copies.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Duplicate preview · #{{id}}",
+    "reviewTitleShort": "Duplicate preview",
+    "reviewDescription": "New titles and statuses for each copy. Nothing is created until you confirm; you can also just download the CSV.",
+    "noChangeset": "This task has not produced a duplicate list yet.",
+    "summaryProducts": "Products",
+    "summaryChanged": "To duplicate",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "This run hit the 50-product limit, so the list covers only the first batch. Narrow the selection and rebuild.",
+    "appliedBanner": "Copies created: {{succeeded}} succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download duplicate CSV",
+    "applyButton": "Create copies ({{count}} products)",
+    "applyConfirmHint": "This creates {{count}} product copies in your store. Original products are not modified.",
+    "applyConfirmButton": "Confirm duplication",
+    "applying": "Duplicating…",
+    "applyFailed": "Duplication failed. Please try again.",
+    "colProduct": "Original",
+    "colNewTitle": "New title",
+    "colStatus": "Copy status",
+    "colAction": "Action",
+    "actionChange": "Will duplicate",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "empty_title": "Title is empty; cannot duplicate"
+    }
+  },
+  "bulkArchive": {
+    "logReadingProducts": "Reading status for {{count}} products…",
+    "logComputing": "Computing archive changes for {{count}} products…",
+    "logReadyForReview": "Changeset ready: {{changed}} products will be archived, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the changeset. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: archive products",
+    "metaRule": "Rule: {{rule}}",
+    "ruleLabel": "Archive as ARCHIVED",
+    "metaProducts": "{{count}} products",
+    "cardPrimaryRunning": "Reading product status and computing the archive list…",
+    "cardPrimaryPendingReview": "Changeset ready: {{changed}} products will be archived, {{skipped}} skipped",
+    "cardPrimarySucceeded": "Archived {{exported}} products, skipped {{skipped}}",
+    "cardPrimaryApplied": "Written to store: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing has been changed yet. Open “Review changes” before products are archived.",
+    "cardSecondaryApplied": "Products archived. The rollback CSV records the previous status; restore them in the Shopify admin.",
+    "cardSecondarySucceeded": "Archive complete.",
+    "cardSecondaryDefault": "Reading and computing are read-only and never modify products.",
+    "actionReview": "Review changes",
+    "actionViewApplied": "View write-back result",
+    "reviewTitle": "Archive preview · #{{id}}",
+    "reviewTitleShort": "Archive preview",
+    "reviewDescription": "Products that will be archived. Nothing is written until you confirm; you can also just download the CSV. Already archived products are skipped.",
+    "noChangeset": "This task has not produced a changeset yet.",
+    "summaryProducts": "Products",
+    "summaryChanged": "To archive",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "This run hit the product limit, so the list covers only the first batch. Narrow the selection and rebuild.",
+    "archiveWarning": "This will archive {{count}} products. They will not be for sale on the storefront; restoring them must be done in the Shopify admin.",
+    "appliedBanner": "Written to store: {{succeeded}} products succeeded, {{failed}} failed.",
+    "downloadChangeset": "Download change CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Archive ({{count}} products)",
+    "applyConfirmHint": "This archives {{count}} products as ARCHIVED. Use the rollback CSV as a reference to restore them in the admin.",
+    "applyConfirmButton": "Confirm archive",
+    "applying": "Archiving…",
+    "applyFailed": "Archive failed. Please try again.",
+    "colProduct": "Product",
+    "colChange": "Status change",
+    "colAction": "Action",
+    "actionChange": "Will archive",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list.",
+    "skipReason": {
+      "no_change": "Already archived"
+    }
+  },
+  "productExport": {
+    "logReadingProducts": "Reading {{count}} products…",
+    "logBuildingCsv": "Building the export file…",
+    "logReadyForReview": "Export complete: {{exported}} products, {{skipped}} skipped",
+    "logReady": "Export complete: {{exported}} products, {{skipped}} skipped",
+    "dryRunFailed": "Export failed. Please try again.",
+    "noProductsFound": "None of the selected products could be read",
+    "cardTitle": "Task: export products",
+    "metaRule": "Rule: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "cardPrimaryRunning": "Reading products and building the CSV…",
+    "cardPrimaryPendingReview": "Export complete: {{exported}} products, {{skipped}} skipped",
+    "cardPrimarySucceeded": "Exported {{exported}} products, skipped {{skipped}}",
+    "cardPrimaryApplied": "Exported {{succeeded}} products",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Open “View result” to download the CSV. This run does not modify store data.",
+    "cardSecondaryApplied": "Export complete.",
+    "cardSecondarySucceeded": "Export complete. Download the CSV. Nothing was written to the store.",
+    "cardSecondaryDefault": "Reading is read-only and never modifies products.",
+    "actionReview": "View result",
+    "actionViewApplied": "View export result",
+    "reviewTitle": "Export result · #{{id}}",
+    "reviewTitleShort": "Product export",
+    "reviewDescription": "Download the CSV. Phase 1 only exports selected products (up to 200) and never writes to the store.",
+    "noChangeset": "This task has not produced an export file yet.",
+    "summaryProducts": "Products",
+    "summaryExported": "Exported",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "This run hit the 200-product limit, so only the first batch was exported. Narrow the selection and export again.",
+    "downloadChangeset": "Download CSV",
+    "allExported": "All selected products were written to the CSV. Nothing was skipped.",
+    "colProduct": "Product",
+    "colReason": "Skip reason",
+    "colStatus": "Status",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows.",
+    "format": {
+      "shopify_csv": "Shopify CSV",
+      "tiktok_csv": "TikTok Catalog Feed CSV"
     }
   },
   "bulkPriceImport": {
@@ -4050,6 +4246,7 @@
             }
           },
       "groupBulkEdit": "Bulk edits",
+      "groupProductManage": "Product management",
       "bulkPriceEdit": {
         "label": "Bulk price edit",
         "prompt": {
@@ -4069,6 +4266,34 @@
         "prompt": {
           "shop": "Help me bulk activate or unpublish products: confirm the direction, the product range and any stock condition first, then show me a change preview — do not write to the store yet.",
           "selected": "Change the status of the selected products: confirm the direction with me, show a change preview first, and only write back after I confirm."
+        }
+      },
+      "productExport": {
+        "label": "Export products",
+        "prompt": {
+          "shop": "Export the selected products as CSV (Shopify or TikTok Catalog Feed). Confirm the format first — do not change store data.",
+          "selected": "Export the selected products as CSV. Confirm whether you want Shopify format or a TikTok Feed first."
+        }
+      },
+      "bulkProductFieldEdit": {
+        "label": "Bulk edit fields / SEO",
+        "prompt": {
+          "shop": "Help me bulk edit vendor, product type, or SEO title/description: confirm the field and the new value first, then show me a change preview — do not write to the store yet.",
+          "selected": "Bulk edit vendor, product type, or SEO title/description on the selected products. Show me a change preview first, and only write back after I confirm."
+        }
+      },
+      "productDuplicate": {
+        "label": "Duplicate products",
+        "prompt": {
+          "shop": "Duplicate a batch of products as drafts with images. Show me the copy list first, and only create them after I confirm.",
+          "selected": "Duplicate the selected products as drafts with images. Show me the copy list first, and only create them after I confirm."
+        }
+      },
+      "bulkArchive": {
+        "label": "Archive products",
+        "prompt": {
+          "shop": "Archive a batch of products. Show me a change preview first, and only write back after I confirm. Already archived products are skipped.",
+          "selected": "Archive the selected products. Show me a change preview first, and only write back after I confirm."
         }
       },
       "bulkCollectionEdit": {
@@ -4366,6 +4591,22 @@
           "title": "Bulk activate or unpublish products",
           "summary": "First compute the status change for every product and build a change list you can export as CSV. Nothing is written to your store until you confirm."
         },
+        "bulkProductFieldEdit": {
+          "title": "Bulk edit product fields",
+          "summary": "First compute the new value for the chosen field on every product and build a change list you can export as CSV. Nothing is written to your store until you confirm."
+        },
+        "productDuplicate": {
+          "title": "Duplicate products",
+          "summary": "First compute the new title and status for each copy. Original products are not modified until you confirm and copies are created."
+        },
+        "bulkArchive": {
+          "title": "Archive products",
+          "summary": "First compute which products will be archived and build a change list you can export as CSV. Already archived products are skipped. Nothing is written until you confirm."
+        },
+        "productExport": {
+          "title": "Export products",
+          "summary": "Export a CSV of the selected products. Phase 1 only supports the selected range (up to 200) and never writes to the store. Rows missing required columns go into a validation report."
+        },
         "bulkCollectionEdit": {
           "title": "Bulk update collection membership",
           "summary": "First compute how each product enters or leaves the collection and build a change list you can export as CSV. Nothing is written to your store until you confirm."
@@ -4405,6 +4646,12 @@
         "removePrefixes": "Clear tags by prefix",
         "targetStatus": "Target status",
         "inventoryCondition": "Stock condition",
+        "field": "Field to edit",
+        "mode": "Mode",
+        "includeImages": "Copy images",
+        "titleSuffix": "New title suffix",
+        "newStatus": "Copy status",
+        "exportFormat": "Export format",
         "collectionAction": "Action",
         "collectionId": "Target collection",
         "titleTemplate": "SEO title template",
@@ -4450,6 +4697,29 @@
           "none": "Any stock level",
           "out_of_stock_only": "Only out-of-stock items",
           "in_stock_only": "Only in-stock items"
+        },
+        "field": {
+          "unset": "Choose a field",
+          "vendor": "Vendor",
+          "productType": "Product type",
+          "seoTitle": "SEO title",
+          "seoDescription": "SEO description"
+        },
+        "mode": {
+          "set": "Set to a value",
+          "clear": "Clear"
+        },
+        "includeImages": {
+          "true": "Copy images",
+          "false": "Do not copy images"
+        },
+        "newStatus": {
+          "DRAFT": "Draft",
+          "ACTIVE": "Active"
+        },
+        "exportFormat": {
+          "shopify_csv": "Shopify CSV",
+          "tiktok_csv": "TikTok Catalog Feed CSV"
         },
         "collectionAction": {
           "unset": "Choose: add or remove",

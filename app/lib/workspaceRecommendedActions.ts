@@ -2,7 +2,8 @@
  * 首页与对话输入区共用的推荐操作列表。
  *
  * 分组按「做什么」切：经营诊断只读、商品优化与图片生成靠 AI 生成内容、
- * 批量编辑按规则改店铺结构化字段（试算 → 审核 → 写回，Agent 回合内不写）。
+ * 批量编辑按规则改价格/标签/上下架，商品管理覆盖导出、字段/SEO、合集、复制、归档
+ *（试算 → 审核 → 写回，Agent 回合内不写；导出只读无 apply）。
  */
 
 export type WorkspaceRecommendScope = "shop" | "selected";
@@ -121,7 +122,43 @@ export function buildWorkspaceRecommendedGroups(
       },
     ],
   };
+  const productManage: WorkspaceRecommendedGroup = {
+    key: "productManage",
+    label: t("workspace.shell.chat.recommend.groupProductManage"),
+    items: [
+      {
+        key: "productExport",
+        label: t("workspace.shell.chat.recommend.productExport.label"),
+        prompt: t(`workspace.shell.chat.recommend.productExport.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkProductFieldEdit",
+        label: t("workspace.shell.chat.recommend.bulkProductFieldEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkProductFieldEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkCollectionEdit",
+        label: t("workspace.shell.chat.recommend.bulkCollectionEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkCollectionEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "productDuplicate",
+        label: t("workspace.shell.chat.recommend.productDuplicate.label"),
+        prompt: t(`workspace.shell.chat.recommend.productDuplicate.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkArchive",
+        label: t("workspace.shell.chat.recommend.bulkArchive.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkArchive.prompt.${scope}`),
+        createsTask: true,
+      },
+    ],
+  };
   return hasProductContext
-    ? [productOptimization, bulkEdit, imageGeneration, operations]
-    : [operations, productOptimization, bulkEdit, imageGeneration];
+    ? [productOptimization, bulkEdit, productManage, imageGeneration, operations]
+    : [operations, productOptimization, bulkEdit, productManage, imageGeneration];
 }

@@ -161,6 +161,11 @@ describe("runSeoAudit", () => {
     expect(thin?.fixability).toBe("product_content");
   });
 
+  it("marks missing SEO titles as batch-fixable via field edit", () => {
+    const result = runSeoAudit([product({ seoTitle: null })]);
+    expect(issue(result, "title_missing")?.fixability).toBe("bulk_seo");
+  });
+
   it("marks handle problems as not batch-fixable", () => {
     const result = runSeoAudit([product({ handle: "copy-of-untitled-product" })]);
     expect(issue(result, "handle_non_descriptive")?.fixability).toBe("manual");

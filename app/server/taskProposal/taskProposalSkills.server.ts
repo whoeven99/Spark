@@ -30,6 +30,13 @@ import {
   type TaskProposalTarget,
 } from "../../lib/taskProposalPayload";
 import {
+  BULK_ARCHIVE_SKILL_ID,
+  BULK_COLLECTION_EDIT_SKILL_ID,
+  BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
+  PRODUCT_DUPLICATE_SKILL_ID,
+  PRODUCT_EXPORT_SKILL_ID,
+} from "../../lib/productManageTaskProposals";
+import {
   BULK_PRICE_EDIT_MAX_PRODUCTS,
   BulkPriceEditRuleError,
   parseBulkPriceEditRule,
@@ -48,6 +55,31 @@ import { createBatchWithTask } from "../aiTask/aiTaskStore.server";
 import { enqueueBulkPriceEditDryRun } from "../bulkPriceEdit/bulkPriceEditDryRun.server";
 import { enqueueBulkTagEditDryRun } from "../bulkTagEdit/bulkTagEditDryRun.server";
 import { enqueueBulkStatusEditDryRun } from "../bulkStatusEdit/bulkStatusEditDryRun.server";
+import {
+  BULK_PRODUCT_FIELD_EDIT_MAX_PRODUCTS,
+  BulkProductFieldEditRuleError,
+  parseBulkProductFieldEditRule,
+} from "../../lib/bulkProductFieldEdit";
+import {
+  BULK_COLLECTION_EDIT_MAX_PRODUCTS,
+  BulkCollectionEditRuleError,
+  parseBulkCollectionEditRule,
+} from "../../lib/bulkCollectionEdit";
+import {
+  PRODUCT_DUPLICATE_MAX_PRODUCTS,
+  parseProductDuplicateRule,
+} from "../../lib/productDuplicate";
+import { BULK_ARCHIVE_MAX_PRODUCTS } from "../../lib/bulkArchive";
+import {
+  PRODUCT_EXPORT_MAX_PRODUCTS,
+  ProductExportRuleError,
+  parseProductExportRule,
+} from "../../lib/productExport";
+import { enqueueBulkProductFieldEditDryRun } from "../bulkProductFieldEdit/bulkProductFieldEditDryRun.server";
+import { enqueueBulkCollectionEditDryRun } from "../bulkCollectionEdit/bulkCollectionEditDryRun.server";
+import { enqueueProductDuplicateDryRun } from "../productDuplicate/productDuplicateDryRun.server";
+import { enqueueBulkArchiveDryRun } from "../bulkArchive/bulkArchiveDryRun.server";
+import { enqueueProductExport } from "../productExport/productExportRun.server";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
@@ -64,6 +96,11 @@ export const TASK_PROPOSAL_TARGETS_HARD_CEILING = Math.max(
   BULK_PRICE_EDIT_MAX_PRODUCTS,
   BULK_TAG_EDIT_MAX_PRODUCTS,
   BULK_STATUS_EDIT_MAX_PRODUCTS,
+  BULK_PRODUCT_FIELD_EDIT_MAX_PRODUCTS,
+  BULK_COLLECTION_EDIT_MAX_PRODUCTS,
+  PRODUCT_DUPLICATE_MAX_PRODUCTS,
+  BULK_ARCHIVE_MAX_PRODUCTS,
+  PRODUCT_EXPORT_MAX_PRODUCTS,
 );
 
 export function resolveTaskProposalMaxTargets(
@@ -369,6 +406,168 @@ const bulkStatusEditHandler: TaskProposalSkillHandler = {
   },
 };
 
+function uniqueProductIds(targets: TaskProposalTarget[]): string[] {
+  return Array.from(
+    new Set(targets.map((target) => target.productId?.trim() || target.id.trim())),
+  ).filter(Boolean);
+}
+
+const bulkProductFieldEditHandler: TaskProposalSkillHandler = {
+  skillId: BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
+  maxTargets: BULK_PRODUCT_FIELD_EDIT_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    let rule;
+    try {
+      rule = parseBulkProductFieldEditRule(params);
+    } catch (error) {
+      throw error instanceof BulkProductFieldEditRuleError ? new Error(error.message) : error;
+    }
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先选择要修改的商品");
+    const config = { ...rule, productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "bulk_product_field_edit",
+      batchConfig: { ...rule, totalProducts: productIds.length },
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueBulkProductFieldEditDryRun({ taskId, shop, locale, productIds, rule });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const bulkCollectionEditHandler: TaskProposalSkillHandler = {
+  skillId: BULK_COLLECTION_EDIT_SKILL_ID,
+  maxTargets: BULK_COLLECTION_EDIT_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    let parsed;
+    try {
+      parsed = parseBulkCollectionEditRule(params);
+    } catch (error) {
+      throw error instanceof BulkCollectionEditRuleError ? new Error(error.message) : error;
+    }
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先选择要调整合集的商品");
+    const config = {
+      action: parsed.action,
+      collectionId: parsed.collectionId,
+      productIds,
+      totalProducts: productIds.length,
+    };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "bulk_collection_edit",
+      batchConfig: { ...config },
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueBulkCollectionEditDryRun({
+      taskId,
+      shop,
+      locale,
+      productIds,
+      action: parsed.action,
+      collectionId: parsed.collectionId,
+    });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const productDuplicateHandler: TaskProposalSkillHandler = {
+  skillId: PRODUCT_DUPLICATE_SKILL_ID,
+  maxTargets: PRODUCT_DUPLICATE_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const rule = parseProductDuplicateRule(params);
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先选择要复制的商品");
+    const config = { ...rule, productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "product_duplicate",
+      batchConfig: { ...rule, totalProducts: productIds.length },
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueProductDuplicateDryRun({ taskId, shop, locale, productIds, rule });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const bulkArchiveHandler: TaskProposalSkillHandler = {
+  skillId: BULK_ARCHIVE_SKILL_ID,
+  maxTargets: BULK_ARCHIVE_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先选择要归档的商品");
+    const config = { productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "bulk_archive",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueBulkArchiveDryRun({ taskId, shop, locale, productIds });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const productExportHandler: TaskProposalSkillHandler = {
+  skillId: PRODUCT_EXPORT_SKILL_ID,
+  maxTargets: PRODUCT_EXPORT_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    let rule;
+    try {
+      rule = parseProductExportRule(params);
+    } catch (error) {
+      throw error instanceof ProductExportRuleError ? new Error(error.message) : error;
+    }
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先在工作台选择要导出的商品（一期最多 200 个）");
+    const config = { format: rule.format, productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "product_export",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueProductExport({ taskId, shop, locale, productIds, format: rule.format });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
@@ -376,6 +575,11 @@ const handlers = new Map<string, TaskProposalSkillHandler>([
   [bulkPriceEditHandler.skillId, bulkPriceEditHandler],
   [bulkTagEditHandler.skillId, bulkTagEditHandler],
   [bulkStatusEditHandler.skillId, bulkStatusEditHandler],
+  [bulkProductFieldEditHandler.skillId, bulkProductFieldEditHandler],
+  [bulkCollectionEditHandler.skillId, bulkCollectionEditHandler],
+  [productDuplicateHandler.skillId, productDuplicateHandler],
+  [bulkArchiveHandler.skillId, bulkArchiveHandler],
+  [productExportHandler.skillId, productExportHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

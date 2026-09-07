@@ -10,13 +10,16 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromFocus("seoAudit")).toEqual([
       "seoAudit",
       "productImprove",
+      "bulkProductFieldEdit",
     ]);
     expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromFocus("productExport")).toEqual(["productExport"]);
     expect(skillNamesFromFocus("all")).toBe("all");
   });
 
   it("routes freeform SEO / inventory phrases", () => {
     expect(skillNamesFromUserText("帮我给店铺做一次 SEO 体检")).toContain("seoAudit");
+    expect(skillNamesFromUserText("帮我批量改 SEO 标题")).toContain("bulkProductFieldEdit");
     expect(skillNamesFromUserText("检查库存健康情况")).toContain("shopOperations");
     expect(skillNamesFromUserText("今天天气怎么样")).toEqual([]);
   });

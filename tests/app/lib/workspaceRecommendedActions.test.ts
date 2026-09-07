@@ -6,6 +6,7 @@ const LABELS: Record<string, string> = {
   "workspace.shell.chat.recommend.groupProduct": "商品优化",
   "workspace.shell.chat.recommend.groupImage": "图片生成",
   "workspace.shell.chat.recommend.groupBulkEdit": "批量编辑",
+  "workspace.shell.chat.recommend.groupProductManage": "商品管理",
   "workspace.shell.chat.recommend.bulkPriceEdit.label": "批量调价",
   "workspace.shell.chat.recommend.bulkPriceEdit.prompt.shop": "price-shop",
   "workspace.shell.chat.recommend.bulkPriceEdit.prompt.selected": "price-selected",
@@ -15,6 +16,21 @@ const LABELS: Record<string, string> = {
   "workspace.shell.chat.recommend.bulkStatusEdit.label": "批量上下架",
   "workspace.shell.chat.recommend.bulkStatusEdit.prompt.shop": "status-shop",
   "workspace.shell.chat.recommend.bulkStatusEdit.prompt.selected": "status-selected",
+  "workspace.shell.chat.recommend.productExport.label": "导出商品",
+  "workspace.shell.chat.recommend.productExport.prompt.shop": "export-shop",
+  "workspace.shell.chat.recommend.productExport.prompt.selected": "export-selected",
+  "workspace.shell.chat.recommend.bulkProductFieldEdit.label": "批量改字段 / SEO",
+  "workspace.shell.chat.recommend.bulkProductFieldEdit.prompt.shop": "field-shop",
+  "workspace.shell.chat.recommend.bulkProductFieldEdit.prompt.selected": "field-selected",
+  "workspace.shell.chat.recommend.bulkCollectionEdit.label": "批量调整合集",
+  "workspace.shell.chat.recommend.bulkCollectionEdit.prompt.shop": "collection-shop",
+  "workspace.shell.chat.recommend.bulkCollectionEdit.prompt.selected": "collection-selected",
+  "workspace.shell.chat.recommend.productDuplicate.label": "复制商品",
+  "workspace.shell.chat.recommend.productDuplicate.prompt.shop": "dup-shop",
+  "workspace.shell.chat.recommend.productDuplicate.prompt.selected": "dup-selected",
+  "workspace.shell.chat.recommend.bulkArchive.label": "归档商品",
+  "workspace.shell.chat.recommend.bulkArchive.prompt.shop": "archive-shop",
+  "workspace.shell.chat.recommend.bulkArchive.prompt.selected": "archive-selected",
   "workspace.shell.chat.recommend.todayOverview.label": "今日经营概况",
   "workspace.shell.chat.recommend.todayOverview.prompt": "overview-prompt",
   "workspace.shell.chat.recommend.todayTodos.label": "今日待办与风险",
@@ -43,21 +59,26 @@ function t(key: string): string {
 }
 
 describe("buildWorkspaceRecommendedGroups", () => {
-  it("returns 12 shop-scoped actions in operations-first order", () => {
+  it("returns 17 shop-scoped actions in operations-first order", () => {
     const groups = buildWorkspaceRecommendedGroups(t, false);
     expect(groups.map((g) => g.key)).toEqual([
       "operations",
       "productOptimization",
       "bulkEdit",
+      "productManage",
       "imageGeneration",
     ]);
     const items = groups.flatMap((g) => g.items);
-    expect(items).toHaveLength(12);
+    expect(items).toHaveLength(17);
     expect(items.find((i) => i.key === "optimizeCopy")?.prompt).toBe("copy-shop");
     expect(items.find((i) => i.key === "bulkPriceEdit")?.prompt).toBe("price-shop");
     expect(items.find((i) => i.key === "bulkTagEdit")?.prompt).toBe("tag-shop");
     expect(items.find((i) => i.key === "bulkStatusEdit")?.prompt).toBe("status-shop");
-    expect(items.find((i) => i.key === "bulkCollectionEdit")).toBeUndefined();
+    expect(items.find((i) => i.key === "bulkCollectionEdit")?.prompt).toBe("collection-shop");
+    expect(items.find((i) => i.key === "bulkProductFieldEdit")?.prompt).toBe("field-shop");
+    expect(items.find((i) => i.key === "productExport")?.prompt).toBe("export-shop");
+    expect(items.find((i) => i.key === "productDuplicate")?.prompt).toBe("dup-shop");
+    expect(items.find((i) => i.key === "bulkArchive")?.prompt).toBe("archive-shop");
     expect(items.find((i) => i.key === "bulkSeoEdit")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkMetafieldEdit")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkPriceImport")).toBeUndefined();
@@ -65,7 +86,7 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(items.find((i) => i.key === "bulkInventoryImport")).toBeUndefined();
     // SEO 体检是只读诊断，不建任务
     expect(items.find((i) => i.key === "seoAudit")?.createsTask).toBeUndefined();
-    expect(items.filter((i) => i.createsTask)).toHaveLength(7);
+    expect(items.filter((i) => i.createsTask)).toHaveLength(12);
   });
 
   it("prioritizes product actions and switches to selected prompts", () => {
@@ -73,6 +94,7 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(groups.map((g) => g.key)).toEqual([
       "productOptimization",
       "bulkEdit",
+      "productManage",
       "imageGeneration",
       "operations",
     ]);
@@ -80,5 +102,8 @@ describe("buildWorkspaceRecommendedGroups", () => {
       "copy-selected",
     );
     expect(groups[1].items[0]?.prompt).toBe("price-selected");
+    expect(groups[2].items.find((i) => i.key === "bulkCollectionEdit")?.prompt).toBe(
+      "collection-selected",
+    );
   });
 });

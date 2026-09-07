@@ -4,7 +4,7 @@
 
 改动本族任何文件前先读本文件。全局边界（哪些 `POST /api/bulk-*` 是唯一写回入口、对话内审核白名单、`TaskProposalField` 远端资源字段约定）仍以根 `AGENTS.md` 第 3、7 节为准。
 
-当前在线能力：批量调价 / 打标 / 上下架，以及只读的站内 SEO 体检。批量改 SEO、调整合集、改自定义字段，以及价目表 / 成本价 / 库存三个表格导入已删除，不要再加回入口或写回路由。
+当前在线能力：批量调价 / 打标 / 上下架，商品管理一期（Vendor / 类型 / SEO 字段、手动合集进出、复制、归档、已选导出），以及只读的站内 SEO 体检。Metafield 与价目表 / 成本价 / 库存三个表格导入已删除，不要再加回入口或写回路由。
 
 ## 0. 共享架构
 
@@ -43,13 +43,33 @@
 
 ### 1.4 站内 SEO 体检（只读诊断）
 
-纯算 `app/lib/seoAudit.ts`（阈值 + 问题检测 + 重复检测 + **SEO 知识库**）、只读 `app/server/shopify/productSeoAuditReader.server.ts`、Skill `app/server/ai/skills/seoAudit/` 只暴露 `run_seo_audit`。解决的是「商户还不知道自己 SEO 哪里有问题」。搜索标题/描述没有 Spark 内批量改写入口，`fixability` 为 `manual`；正文过薄走商品文案优化。
+纯算 `app/lib/seoAudit.ts`（阈值 + 问题检测 + 重复检测 + **SEO 知识库**）、只读 `app/server/shopify/productSeoAuditReader.server.ts`、Skill `app/server/ai/skills/seoAudit/` 只暴露 `run_seo_audit`。解决的是「商户还不知道自己 SEO 哪里有问题」。搜索标题/描述的缺失与超宽 `fixability` 为 `bulk_seo`，引导批量字段编辑；重复标题/描述与 handle 仍为 `manual`；正文过薄走商品文案优化。
 
 几条不能退化的约束：长度判定一律用 **`seoDisplayWidth` 半角当量**（CJK 记 2）而不是字符数——Google 按像素截断，中文标题 30 个字就到线了，按字符数判断会让中文店永远报不出超长；**只判定已上架商品**（`publishedAt != null`），未上架页面不会被收录，算进覆盖率只会让结论失真；重复检测的两个口径**故意不同**——标题带商品名回落一起比（空标题时 Shopify 会回落，实际渲染出来的才会打架），描述只比商户明确填过的值（空描述输出什么由主题决定，全比会把一堆空值报成重复）；每类问题最多带 5 个样例，`affectedCount` 仍是真实总数，上下文不随店铺规模膨胀。
 
 **图片 alt 检查刻意不做**：`featuredMedia` 会额外要求 `read_files` / `read_images`，加 scope 会让所有已安装店铺弹一次重新授权，不值得；现有 `read_products` 已覆盖全部检查项。
 
-每条 issue 带 `fixability`（`product_content` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 恒为 `manual`（改 handle 会断链接、要配 301）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
+每条 issue 带 `fixability`（`product_content` / `bulk_seo` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 与重复标题/描述恒为 `manual`（改 handle 会断链接、要配 301；互不相同的 SEO 不能用同一条 set 规则批量写）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
+
+### 1.5 批量改 Vendor / 类型 / SEO 字段
+
+与调价同构：纯算 `app/lib/bulkProductFieldEdit.ts`（`set`/`clear`，SEO 超 `seoDisplayWidth` 跳过）、只读 `app/server/shopify/productFieldReader.server.ts`、试算 `app/server/bulkProductFieldEdit/bulkProductFieldEditDryRun.server.ts`、写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 vendor / productType / seo 的调用处，并发 2）。SEO 只传变化的那一侧（`seo.title` 或 `seo.description`）。Skill 只暴露 `list_product_fields` 与 `open_bulk_product_field_edit_form`。不要用这个能力改 handle。
+
+### 1.6 批量加入 / 移出手动合集
+
+纯算 `app/lib/bulkCollectionEdit.ts`、只读 `app/server/shopify/collectionMembershipReader.server.ts`、试算 `app/server/bulkCollectionEdit/bulkCollectionEditDryRun.server.ts`、写回 `app/server/bulkCollectionEdit/bulkCollectionEditApply.server.ts`（唯一 `collectionAddProducts` / `collectionRemoveProducts` 调用处，每批 ≤50）。智能合集在 dry-run 整单失败，不要静默跳过。移出可能返回 Shopify 异步 job，结果里带 `pendingJob`。Skill 只暴露只读合集列表与开卡。
+
+### 1.7 复制商品
+
+纯算 `app/lib/productDuplicate.ts`（默认后缀 ` (Copy)`、草稿、带图，上限 50）、只读 `app/server/shopify/productDuplicateReader.server.ts`、试算 `app/server/productDuplicate/productDuplicateDryRun.server.ts`、写回 `app/server/productDuplicate/productDuplicateApply.server.ts`（唯一 `productDuplicate` 调用处，`synchronous: true`；过大商品若只返回 job 记失败）。Skill 只开卡。
+
+### 1.8 归档商品
+
+与上下架分开，避免破坏 ACTIVE/DRAFT 白名单。纯算 `app/lib/bulkArchive.ts`、读侧复用 `productStatusReader`、试算 `app/server/bulkArchive/bulkArchiveDryRun.server.ts`、写回 `app/server/bulkArchive/bulkArchiveApply.server.ts`（只写 `status: ARCHIVED`）。已归档跳过。Skill 只开卡。
+
+### 1.9 导出商品（只读）
+
+纯算 `app/lib/productExport.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200），格式为 Shopify CSV 或 TikTok Catalog Feed CSV（复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告）。
 
 ## 2. 新增同类能力时的检查清单
 

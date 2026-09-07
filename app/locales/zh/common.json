@@ -456,7 +456,7 @@
     "ruleDrivenCollection": "「{{collection}}」是智能合集，成员由条件自动决定，不能手动加减商品。请改用手动合集，或去 Shopify 后台调整合集条件。",
     "noProductsFound": "没有读到所选商品",
     "cardTitle": "任务目标：批量调整商品所属合集",
-    "metaRule": "操作：{{action}}",
+    "metaRule": "操作：{{rule}}",
     "metaCollection": "合集：{{collection}}",
     "metaProducts": "{{count}} 个商品",
     "ruleAction": {
@@ -512,6 +512,202 @@
     "skipReason": {
       "already_in": "已在合集内",
       "not_in": "不在合集内"
+    }
+  },
+  "bulkProductFieldEdit": {
+    "logReadingProducts": "正在读取 {{count}} 个商品的字段…",
+    "logComputing": "正在计算 {{count}} 个商品的字段变化…",
+    "logReadyForReview": "变更清单已就绪：{{changed}} 个商品将修改，{{skipped}} 个跳过",
+    "dryRunFailed": "生成变更清单失败，请稍后重试",
+    "noProductsFound": "没有读到所选商品",
+    "cardTitle": "任务目标：批量修改商品字段",
+    "metaRule": "规则：{{rule}}",
+    "metaProducts": "{{count}} 个商品",
+    "cardPrimaryRunning": "正在读取商品字段并计算变更…",
+    "cardPrimaryPendingReview": "变更清单已就绪：{{changed}} 个商品将修改，{{skipped}} 个跳过",
+    "cardPrimarySucceeded": "已导出 {{exported}} 个商品，跳过 {{skipped}} 个",
+    "cardPrimaryApplied": "已写回店铺：成功 {{succeeded}} 个，失败 {{failed}} 个",
+    "cardPrimaryFailed": "任务失败：{{reason}}",
+    "cardPrimaryCancelled": "任务已取消",
+    "cardSecondaryPendingReview": "本步骤没有修改任何商品；点「查看变更」核对后可下载 CSV 或确认写回。",
+    "cardSecondaryApplied": "字段已更新。回滚 CSV 里记录了写回前的原值。",
+    "cardSecondarySucceeded": "导出已完成，可下载 CSV。",
+    "cardSecondaryDefault": "读取与计算全程只读，不会修改商品。",
+    "actionReview": "查看变更",
+    "actionViewApplied": "查看写回结果",
+    "reviewTitle": "字段变更预览 · #{{id}}",
+    "reviewTitleShort": "字段变更预览",
+    "reviewDescription": "下面是按所选字段算出的逐个商品变化。确认无误后才会写回店铺；也可以只下载 CSV，不做任何修改。",
+    "noChangeset": "这个任务还没有生成变更清单。",
+    "summaryProducts": "商品",
+    "summaryChanged": "将修改",
+    "summarySkipped": "跳过",
+    "truncatedWarning": "商品数量超出单次上限，清单只包含前一部分商品。请收紧商品范围后重新生成，避免漏改。",
+    "appliedBanner": "已写回店铺：成功 {{succeeded}} 个商品，失败 {{failed}} 个。",
+    "downloadChangeset": "下载变更 CSV",
+    "downloadRollback": "下载回滚 CSV",
+    "applyButton": "确认写回店铺（{{count}} 个商品）",
+    "applyConfirmHint": "将直接修改店铺内 {{count}} 个商品的字段，可用回滚 CSV 手动撤销。",
+    "applyConfirmButton": "确认写回",
+    "applying": "写回中…",
+    "applyFailed": "写回失败，请稍后重试",
+    "colProduct": "商品",
+    "colField": "字段",
+    "colChange": "变更",
+    "colAction": "处理",
+    "actionChange": "将修改",
+    "emptyValue": "（空）",
+    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载 CSV。",
+    "field": {
+      "vendor": "Vendor（品牌）",
+      "productType": "商品类型",
+      "seoTitle": "SEO 标题",
+      "seoDescription": "SEO 描述"
+    },
+    "mode": {
+      "set": "设为指定值",
+      "clear": "清空"
+    },
+    "skipReason": {
+      "no_change": "无变化",
+      "empty_value": "目标值为空",
+      "too_long": "超出搜索结果展示宽度"
+    }
+  },
+  "productDuplicate": {
+    "logReadingProducts": "正在读取 {{count}} 个商品…",
+    "logComputing": "正在计算 {{count}} 个商品的副本标题…",
+    "logReadyForReview": "复制清单已就绪：{{changed}} 个将复制，{{skipped}} 个跳过",
+    "dryRunFailed": "生成复制清单失败，请稍后重试",
+    "noProductsFound": "没有读到所选商品",
+    "cardTitle": "任务目标：复制商品",
+    "metaRule": "规则：{{rule}}",
+    "metaSuffix": "后缀 {{suffix}}",
+    "metaProducts": "{{count}} 个商品",
+    "cardPrimaryRunning": "正在读取商品并计算副本标题…",
+    "cardPrimaryPendingReview": "复制清单已就绪：{{changed}} 个将复制，{{skipped}} 个跳过",
+    "cardPrimarySucceeded": "已复制 {{exported}} 个商品，跳过 {{skipped}} 个",
+    "cardPrimaryApplied": "已创建副本：成功 {{succeeded}} 个，失败 {{failed}} 个",
+    "cardPrimaryFailed": "任务失败：{{reason}}",
+    "cardPrimaryCancelled": "任务已取消",
+    "cardSecondaryPendingReview": "本步骤不会修改原商品；点「查看变更」核对后才会在店铺里创建副本。",
+    "cardSecondaryApplied": "副本已创建。原商品未被修改。",
+    "cardSecondarySucceeded": "复制已完成。",
+    "cardSecondaryDefault": "读取与计算全程只读，不会创建副本。",
+    "actionReview": "查看变更",
+    "actionViewApplied": "查看写回结果",
+    "reviewTitle": "复制预览 · #{{id}}",
+    "reviewTitleShort": "复制商品预览",
+    "reviewDescription": "下面是每个商品复制后的新标题与状态。确认无误后才会创建副本；也可以只下载 CSV。",
+    "noChangeset": "这个任务还没有生成复制清单。",
+    "summaryProducts": "商品",
+    "summaryChanged": "将复制",
+    "summarySkipped": "跳过",
+    "truncatedWarning": "商品数量超出单次上限（50 个），清单只包含前一部分。请收紧范围后重新生成。",
+    "appliedBanner": "已创建副本：成功 {{succeeded}} 个，失败 {{failed}} 个。",
+    "downloadChangeset": "下载复制 CSV",
+    "applyButton": "确认复制（{{count}} 个商品）",
+    "applyConfirmHint": "将在店铺里创建 {{count}} 个商品副本，原商品不会被修改。",
+    "applyConfirmButton": "确认复制",
+    "applying": "复制中…",
+    "applyFailed": "复制失败，请稍后重试",
+    "colProduct": "原商品",
+    "colNewTitle": "新标题",
+    "colStatus": "副本状态",
+    "colAction": "处理",
+    "actionChange": "将复制",
+    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载 CSV。",
+    "skipReason": {
+      "empty_title": "标题为空，无法复制"
+    }
+  },
+  "bulkArchive": {
+    "logReadingProducts": "正在读取 {{count}} 个商品的状态…",
+    "logComputing": "正在计算 {{count}} 个商品的归档变化…",
+    "logReadyForReview": "变更清单已就绪：{{changed}} 个商品将归档，{{skipped}} 个跳过",
+    "dryRunFailed": "生成变更清单失败，请稍后重试",
+    "noProductsFound": "没有读到所选商品",
+    "cardTitle": "任务目标：归档商品",
+    "metaRule": "规则：{{rule}}",
+    "ruleLabel": "归档为 ARCHIVED",
+    "metaProducts": "{{count}} 个商品",
+    "cardPrimaryRunning": "正在读取商品状态并计算归档清单…",
+    "cardPrimaryPendingReview": "变更清单已就绪：{{changed}} 个商品将归档，{{skipped}} 个跳过",
+    "cardPrimarySucceeded": "已归档 {{exported}} 个商品，跳过 {{skipped}} 个",
+    "cardPrimaryApplied": "已写回店铺：成功 {{succeeded}} 个，失败 {{failed}} 个",
+    "cardPrimaryFailed": "任务失败：{{reason}}",
+    "cardPrimaryCancelled": "任务已取消",
+    "cardSecondaryPendingReview": "本步骤没有修改任何商品；点「查看变更」核对后才会归档。",
+    "cardSecondaryApplied": "商品已归档。回滚 CSV 记录了归档前的状态，需在后台手动恢复。",
+    "cardSecondarySucceeded": "归档已完成。",
+    "cardSecondaryDefault": "读取与计算全程只读，不会修改商品。",
+    "actionReview": "查看变更",
+    "actionViewApplied": "查看写回结果",
+    "reviewTitle": "归档预览 · #{{id}}",
+    "reviewTitleShort": "归档预览",
+    "reviewDescription": "下面是将被归档的商品。确认无误后才会写回店铺；也可以只下载 CSV。已归档的会跳过。",
+    "noChangeset": "这个任务还没有生成变更清单。",
+    "summaryProducts": "商品",
+    "summaryChanged": "将归档",
+    "summarySkipped": "跳过",
+    "truncatedWarning": "商品数量超出单次上限，清单只包含前一部分商品。请收紧范围后重新生成。",
+    "archiveWarning": "本次会把 {{count}} 个商品归档。归档后店面不可售，恢复需在 Shopify 后台手动处理。",
+    "appliedBanner": "已写回店铺：成功 {{succeeded}} 个商品，失败 {{failed}} 个。",
+    "downloadChangeset": "下载变更 CSV",
+    "downloadRollback": "下载回滚 CSV",
+    "applyButton": "确认归档（{{count}} 个商品）",
+    "applyConfirmHint": "将把 {{count}} 个商品归档为 ARCHIVED，可用回滚 CSV 对照后在后台手动恢复。",
+    "applyConfirmButton": "确认归档",
+    "applying": "归档中…",
+    "applyFailed": "归档失败，请稍后重试",
+    "colProduct": "商品",
+    "colChange": "状态变更",
+    "colAction": "处理",
+    "actionChange": "将归档",
+    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载 CSV。",
+    "skipReason": {
+      "no_change": "已经是归档状态"
+    }
+  },
+  "productExport": {
+    "logReadingProducts": "正在读取 {{count}} 个商品…",
+    "logBuildingCsv": "正在生成导出文件…",
+    "logReadyForReview": "导出已完成：{{exported}} 个商品，{{skipped}} 个跳过",
+    "logReady": "导出已完成：{{exported}} 个商品，{{skipped}} 个跳过",
+    "dryRunFailed": "导出失败，请稍后重试",
+    "noProductsFound": "没有读到所选商品",
+    "cardTitle": "任务目标：导出商品",
+    "metaRule": "规则：{{rule}}",
+    "metaProducts": "{{count}} 个商品",
+    "cardPrimaryRunning": "正在读取商品并生成 CSV…",
+    "cardPrimaryPendingReview": "导出已完成：{{exported}} 个商品，{{skipped}} 个跳过",
+    "cardPrimarySucceeded": "已导出 {{exported}} 个商品，跳过 {{skipped}} 个",
+    "cardPrimaryApplied": "已导出 {{succeeded}} 个商品",
+    "cardPrimaryFailed": "任务失败：{{reason}}",
+    "cardPrimaryCancelled": "任务已取消",
+    "cardSecondaryPendingReview": "点「查看结果」下载 CSV。本次不会修改店铺数据。",
+    "cardSecondaryApplied": "导出已完成。",
+    "cardSecondarySucceeded": "导出已完成，可下载 CSV。本次没有修改店铺。",
+    "cardSecondaryDefault": "读取全程只读，不会修改商品。",
+    "actionReview": "查看结果",
+    "actionViewApplied": "查看导出结果",
+    "reviewTitle": "导出结果 · #{{id}}",
+    "reviewTitleShort": "商品导出",
+    "reviewDescription": "下载 CSV。一期只支持已选商品（最多 200 个），不会改店铺数据。",
+    "noChangeset": "这个任务还没有生成导出文件。",
+    "summaryProducts": "商品",
+    "summaryExported": "已导出",
+    "summarySkipped": "跳过",
+    "truncatedWarning": "商品数量超出单次上限（200 个），只导出了前一部分。请收紧范围后重新导出。",
+    "downloadChangeset": "下载 CSV",
+    "allExported": "所选商品均已写入 CSV，没有跳过行。",
+    "colProduct": "商品",
+    "colReason": "跳过原因",
+    "colStatus": "状态",
+    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行。",
+    "format": {
+      "shopify_csv": "Shopify CSV",
+      "tiktok_csv": "TikTok Catalog Feed CSV"
     }
   },
   "bulkPriceImport": {
@@ -4050,6 +4246,7 @@
             }
           },
       "groupBulkEdit": "批量编辑",
+      "groupProductManage": "商品管理",
       "bulkPriceEdit": {
         "label": "批量调价",
         "prompt": {
@@ -4069,6 +4266,34 @@
         "prompt": {
           "shop": "帮我批量上下架商品，先确认是要上架还是下架、以及商品范围和库存条件，再给我变更预览，不要直接写回。",
           "selected": "帮我修改已选中商品的上下架状态，先确认方向再给我变更预览，我确认后再写回店铺。"
+        }
+      },
+      "productExport": {
+        "label": "导出商品",
+        "prompt": {
+          "shop": "帮我导出已选商品的 CSV，可选 Shopify 格式或 TikTok Catalog Feed。先确认格式，不要改店铺数据。",
+          "selected": "帮我把已选中的商品导出为 CSV，先确认是 Shopify 格式还是 TikTok Feed。"
+        }
+      },
+      "bulkProductFieldEdit": {
+        "label": "批量改字段 / SEO",
+        "prompt": {
+          "shop": "帮我批量改商品的品牌、类型或 SEO 标题/描述，先确认要改哪个字段和写入的值，再给我变更预览，不要直接写回。",
+          "selected": "帮我批量改已选中商品的品牌、类型或 SEO 标题/描述，先给我变更预览，我确认后再写回店铺。"
+        }
+      },
+      "productDuplicate": {
+        "label": "复制商品",
+        "prompt": {
+          "shop": "帮我复制一批商品，默认做成草稿并带图，先给我副本清单，我确认后再创建。",
+          "selected": "帮我复制已选中的商品，默认做成草稿并带图，先给我副本清单，我确认后再创建。"
+        }
+      },
+      "bulkArchive": {
+        "label": "归档商品",
+        "prompt": {
+          "shop": "帮我把一批商品归档，先给我变更预览，我确认后再写回。已归档的会跳过。",
+          "selected": "帮我把已选中的商品归档，先给我变更预览，我确认后再写回。"
         }
       },
       "bulkCollectionEdit": {
@@ -4366,6 +4591,22 @@
           "title": "批量上下架商品",
           "summary": "先算出每个商品的状态变化并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。"
         },
+        "bulkProductFieldEdit": {
+          "title": "批量修改商品字段",
+          "summary": "先按所选字段算出每个商品的新值并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。"
+        },
+        "productDuplicate": {
+          "title": "复制商品",
+          "summary": "先算出每个商品复制后的标题与状态并生成清单，确认无误后才在店铺里创建副本。本步骤不会修改原商品。"
+        },
+        "bulkArchive": {
+          "title": "归档商品",
+          "summary": "先算出哪些商品将被归档并生成变更清单（可导出 CSV），确认无误后才写回店铺。已归档的商品会跳过。本步骤不会修改任何商品。"
+        },
+        "productExport": {
+          "title": "导出商品",
+          "summary": "导出已选商品的 CSV。一期只支持已选范围（最多 200 个），不会改店铺数据。缺必填列的行会进校验报告。"
+        },
         "bulkCollectionEdit": {
           "title": "批量调整商品所属合集",
           "summary": "先算出每个商品进出合集的变化并生成变更清单（可导出 CSV），确认无误后才写回店铺。本步骤不会修改任何商品。"
@@ -4405,6 +4646,12 @@
         "removePrefixes": "按前缀清理",
         "targetStatus": "目标状态",
         "inventoryCondition": "库存条件",
+        "field": "要改的字段",
+        "mode": "操作方式",
+        "includeImages": "是否复制图片",
+        "titleSuffix": "新标题后缀",
+        "newStatus": "副本状态",
+        "exportFormat": "导出格式",
         "collectionAction": "操作方向",
         "collectionId": "目标合集",
         "titleTemplate": "SEO 标题模板",
@@ -4450,6 +4697,29 @@
           "none": "不限库存",
           "out_of_stock_only": "只处理库存为 0 的",
           "in_stock_only": "只处理有库存的"
+        },
+        "field": {
+          "unset": "请选择要改的字段",
+          "vendor": "Vendor（品牌）",
+          "productType": "Product Type（商品类型）",
+          "seoTitle": "SEO 标题",
+          "seoDescription": "SEO 描述"
+        },
+        "mode": {
+          "set": "设为指定值",
+          "clear": "清空"
+        },
+        "includeImages": {
+          "true": "复制图片",
+          "false": "不复制图片"
+        },
+        "newStatus": {
+          "DRAFT": "草稿（Draft）",
+          "ACTIVE": "上架（Active）"
+        },
+        "exportFormat": {
+          "shopify_csv": "Shopify CSV",
+          "tiktok_csv": "TikTok Catalog Feed CSV"
         },
         "collectionAction": {
           "unset": "请选择：加入或移出",

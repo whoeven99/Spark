@@ -37,11 +37,16 @@ const task = (
   }) as unknown as AITaskItem;
 
 describe("isChatInlineReviewTask", () => {
-  it("covers the four task types reviewable inside the chat", () => {
+  it("covers the task types reviewable inside the chat", () => {
     expect(isChatInlineReviewTask("product_improve")).toBe(true);
     expect(isChatInlineReviewTask("picture_translate")).toBe(true);
     expect(isChatInlineReviewTask("image_generation")).toBe(true);
     expect(isChatInlineReviewTask("bulk_price_edit")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_product_field_edit")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_collection_edit")).toBe(true);
+    expect(isChatInlineReviewTask("product_duplicate")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_archive")).toBe(true);
+    expect(isChatInlineReviewTask("product_export")).toBe(true);
   });
 
   it("rejects unknown and empty task types", () => {

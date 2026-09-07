@@ -1,12 +1,12 @@
 ---
 description: 批量编辑任务前置阅读规则
-globs: app/lib/bulk*.ts,app/lib/seoAudit.ts,app/server/bulk*/**,app/server/ai/skills/bulk*/**,app/server/ai/skills/seoAudit/**,app/routes/api.bulk-*.ts,app/routes/component/bulk*/**,app/server/shopify/*Reader.server.ts,tests/app/lib/bulk*.test.ts,tests/app/server/bulk*/**
+globs: app/lib/bulk*.ts,app/lib/seoAudit.ts,app/lib/productDuplicate.ts,app/lib/productExport.ts,app/lib/productManageTaskProposals.ts,app/server/bulk*/**,app/server/productDuplicate/**,app/server/productExport/**,app/server/ai/skills/bulk*/**,app/server/ai/skills/seoAudit/**,app/server/ai/skills/productDuplicate/**,app/server/ai/skills/productExport/**,app/routes/api.bulk-*.ts,app/routes/api.product-duplicate.ts,app/routes/component/bulk*/**,app/routes/component/productDuplicate/**,app/routes/component/productExport/**,app/routes/component/catalogManage/**,app/server/shopify/*Reader.server.ts,tests/app/lib/bulk*.test.ts,tests/app/lib/productManage*.test.ts,tests/app/server/bulk*/**,tests/app/server/productManage/**
 alwaysApply: false
 ---
 
 # 批量编辑前置规则
 
-任务涉及批量调价 / 打标 / 上下架或 SEO 体检时，先读 `app/server/bulkEdit.agent.md`，再分析、实现或测试。那份文件里每条「不能退化的约束」都带了理由，动手前确认本次改动不会绕过它们。
+任务涉及批量调价 / 打标 / 上下架、商品管理一期（字段/SEO、合集、复制、归档、导出）或 SEO 体检时，先读 `app/server/bulkEdit.agent.md`，再分析、实现或测试。那份文件里每条「不能退化的约束」都带了理由，动手前确认本次改动不会绕过它们。
 
 ## 执行要求
 

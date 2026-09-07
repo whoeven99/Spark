@@ -38,6 +38,13 @@ import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
+import {
+  buildBulkArchiveProposal,
+  buildBulkCollectionEditProposal,
+  buildBulkProductFieldEditProposal,
+  buildProductDuplicateProposal,
+  buildProductExportProposal,
+} from "../../../lib/productManageTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { skillNamesFromUserText } from "../../../lib/promptSkillFocus";
 import { getShopChatModel } from "./shopChatGraph.server";
@@ -115,6 +122,11 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "bulkStatusEditForm",
   "bulkPriceEditForm",
   "bulkTagEditForm",
+  "bulkProductFieldEditForm",
+  "bulkCollectionEditForm",
+  "productDuplicateForm",
+  "bulkArchiveForm",
+  "productExportForm",
   "productImproveForm",
   "pictureTranslateForm",
   "imageGenerationForm",
@@ -148,6 +160,26 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   {
     skill: "bulkPriceEdit",
     build: (products) => buildBulkPriceEditProposal({ products }),
+  },
+  {
+    skill: "bulkProductFieldEdit",
+    build: (products) => buildBulkProductFieldEditProposal({ products }),
+  },
+  {
+    skill: "bulkCollectionEdit",
+    build: (products) => buildBulkCollectionEditProposal({ products }),
+  },
+  {
+    skill: "productDuplicate",
+    build: (products) => buildProductDuplicateProposal({ products }),
+  },
+  {
+    skill: "bulkArchive",
+    build: (products) => buildBulkArchiveProposal({ products }),
+  },
+  {
+    skill: "productExport",
+    build: (products) => buildProductExportProposal({ products }),
   },
 ];
 
@@ -343,6 +375,11 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "bulkStatusEdit",
   "bulkPriceEdit",
   "bulkTagEdit",
+  "bulkProductFieldEdit",
+  "bulkCollectionEdit",
+  "productDuplicate",
+  "bulkArchive",
+  "productExport",
 ]);
 
 /** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */

@@ -9,8 +9,8 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   todayTodos: ["shopOperations", "healthDiagnosisForm"],
   inventoryHealth: ["shopOperations"],
   abandonRefund: ["shopOperations"],
-  // SEO 体检后正文过薄可开文案卡；搜索标题/描述需商户在 Shopify 后台改
-  seoAudit: ["seoAudit", "productImprove"],
+  // SEO 体检后正文过薄可开文案卡；搜索标题/描述缺失或超宽可开批量字段卡
+  seoAudit: ["seoAudit", "productImprove", "bulkProductFieldEdit"],
   qualityScore: ["productQualityScore", "productImprove"],
   optimizeCopy: ["productImprove"],
   translateImage: ["pictureTranslateForm", "pictureTranslate"],
@@ -18,6 +18,11 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   bulkPriceEdit: ["bulkPriceEdit"],
   bulkTagEdit: ["bulkTagEdit"],
   bulkStatusEdit: ["bulkStatusEdit"],
+  bulkProductFieldEdit: ["bulkProductFieldEdit"],
+  bulkCollectionEdit: ["bulkCollectionEdit"],
+  productDuplicate: ["productDuplicate"],
+  bulkArchive: ["bulkArchive"],
+  productExport: ["productExport"],
 };
 
 /** 自由输入时的轻量关键词路由（中英）；命中则注入对应 Skill 组 */
@@ -69,6 +74,33 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkStatusEdit,
     patterns: [/批量上下架/, /批量.*上架/, /批量.*下架/, /bulk\s*status/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkProductFieldEdit,
+    patterns: [
+      /批量.*vendor/i,
+      /批量.*品牌/,
+      /批量.*商品类型/,
+      /批量.*seo/i,
+      /改.*seo\s*标题/i,
+      /bulk\s*(vendor|seo|product\s*type)/i,
+    ],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkCollectionEdit,
+    patterns: [/批量.*合集/, /加入合集/, /移出合集/, /bulk\s*collection/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.productDuplicate,
+    patterns: [/复制商品/, /拷贝商品/, /duplicate\s*product/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkArchive,
+    patterns: [/归档商品/, /批量归档/, /archive\s*product/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.productExport,
+    patterns: [/导出商品/, /导出.*csv/i, /export\s*product/i],
   },
 ];
 

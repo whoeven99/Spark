@@ -13,6 +13,7 @@ import {
   type SeoAuditIssue,
 } from "../../../../lib/seoAudit";
 import { OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME } from "../marketing/marketing.form.tool";
+import { OPEN_BULK_PRODUCT_FIELD_EDIT_FORM_TOOL_NAME } from "../bulkProductFieldEdit/bulkProductFieldEdit.form.tool";
 
 export const RUN_SEO_AUDIT_TOOL_NAME = "run_seo_audit";
 const LOG_PREFIX = "[RunSeoAudit]";
@@ -28,23 +29,30 @@ type SuggestedNextAction = {
   tool: string;
   products: Array<{ id: string; title: string }>;
   instruction: string;
+  field?: "seoTitle" | "seoDescription";
 };
 
 /**
  * 把可修的问题样例收成下游开卡动作。
- * product_content 开文案卡；manual 不开卡。
+ * product_content 开文案卡；bulk_seo 开批量字段卡；manual 不开卡。
  */
 export function buildSeoAuditSuggestedNextActions(
   issues: SeoAuditIssue[],
 ): SuggestedNextAction[] {
   const contentById = new Map<string, string>();
+  const seoTitleById = new Map<string, string>();
+  const seoDescriptionById = new Map<string, string>();
 
   for (const issue of issues) {
-    if (issue.fixability === "product_content") {
-      for (const sample of issue.samples) {
-        if (!contentById.has(sample.productId)) {
-          contentById.set(sample.productId, sample.productTitle);
-        }
+    let target: Map<string, string> | null = null;
+    if (issue.fixability === "product_content") target = contentById;
+    else if (issue.fixability === "bulk_seo") {
+      target = issue.code.startsWith("title_") ? seoTitleById : seoDescriptionById;
+    }
+    if (!target) continue;
+    for (const sample of issue.samples) {
+      if (!target.has(sample.productId)) {
+        target.set(sample.productId, sample.productTitle);
       }
     }
   }
@@ -61,6 +69,34 @@ export function buildSeoAuditSuggestedNextActions(
       products,
       instruction:
         "正文过薄无法靠搜索标题/描述模板修。解释后立刻调用本工具打开文案优化卡；多商品时优先用列表里的第一件预填 productId，并说明其余可在卡片或后续批量处理。",
+    });
+  }
+
+  if (seoTitleById.size > 0) {
+    const products = [...seoTitleById.entries()]
+      .slice(0, 5)
+      .map(([id, title]) => ({ id, title }));
+    actions.push({
+      fixability: "bulk_seo",
+      tool: OPEN_BULK_PRODUCT_FIELD_EDIT_FORM_TOOL_NAME,
+      products,
+      field: "seoTitle",
+      instruction:
+        "搜索标题缺失或超展示宽度。解释后立刻调用本工具打开批量改字段卡，传入 field=seoTitle 与 products；mode/value 留给商户填，不要猜一套统一文案。",
+    });
+  }
+
+  if (seoDescriptionById.size > 0) {
+    const products = [...seoDescriptionById.entries()]
+      .slice(0, 5)
+      .map(([id, title]) => ({ id, title }));
+    actions.push({
+      fixability: "bulk_seo",
+      tool: OPEN_BULK_PRODUCT_FIELD_EDIT_FORM_TOOL_NAME,
+      products,
+      field: "seoDescription",
+      instruction:
+        "搜索描述缺失或超展示宽度。解释后立刻调用本工具打开批量改字段卡，传入 field=seoDescription 与 products；mode/value 留给商户填。",
     });
   }
 
