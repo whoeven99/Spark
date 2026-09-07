@@ -198,6 +198,8 @@ model Account {
   purchasedTokens    Int      @default(0)
   /// 本周期累计已用 token（续费清零；续费时用于结算按量包剩余）
   usedTokens         Int      @default(0)
+  /// 订阅结账待用推荐码；开通确认成功后才入账，卸载会清
+  pendingReferralCode String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -376,7 +378,7 @@ model AppVisitSource {
 model BillingLog {
   id          String   @id @default(cuid())
   shop        String
-  /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED | CREDIT_MIGRATION_*
+  /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED | PROMO_TOKEN_CLAIMED | REFERRAL_CODE_CLAIMED | CREDIT_MIGRATION_*
   eventType   String
   planKey     String?
   referenceId String?
@@ -1015,4 +1017,56 @@ model PromoClaimLedger {
 
   @@unique([shopHash, campaignId])
   @@index([claimedAt])
+}
+
+/// 广告投放推荐码（Admin 配置，账户页兑换）。
+model ReferralCode {
+  id          String    @id @default(cuid())
+  /// 规范化后的码（大写、去空格），全局唯一
+  code        String    @unique
+  note        String?
+  tokenAmount Int
+  /// 使用上限；默认 100 万。0 / -1 等非正数仍按不限处理，避免比较时被当成已满
+  maxUses     Int       @default(1000000)
+  /// 仅在兑换事务里用条件 UPDATE 递增，Admin 列表只读
+  usedCount   Int       @default(0)
+  enabled     Boolean   @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  claims      ReferralClaim[]
+  installs    ReferralInstall[]
+
+  @@index([enabled, createdAt])
+}
+
+/// 推荐码兑换账本：仅存 shopHash，卸载 / shop_redact 后仍保留。一店一行。
+model ReferralClaim {
+  id          String       @id @default(cuid())
+  codeId      String
+  /// sha256(normalized shop domain)，不含明文店铺名
+  shopHash    String       @unique
+  tokensDelta Int
+  claimedAt   DateTime     @default(now())
+  code        ReferralCode @relation(fields: [codeId], references: [id])
+
+  @@index([codeId])
+  @@index([claimedAt])
+}
+
+/// 推荐码安装归因：点带码安装链接后首次进应用记一条。shopHash 全局唯一（先到先得），卸载只擦明文店名。
+model ReferralInstall {
+  id          String       @id @default(cuid())
+  codeId      String
+  /// sha256(normalized shop domain)
+  shopHash    String       @unique
+  /// 明文店名，供 Admin 查看；卸载 / shop_redact 后置空
+  shop        String?
+  installedAt DateTime     @default(now())
+  code        ReferralCode @relation(fields: [codeId], references: [id])
+
+  @@index([codeId])
+  @@index([installedAt])
 }

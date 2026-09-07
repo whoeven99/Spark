@@ -4,6 +4,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { buildEmbeddedAppPath } from "../config/appEntry.server";
 import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
+import { useSparkBrandName } from "../hooks/useSparkBrandName";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useFeatureView } from "../lib/featureTrack";
 import { buildWorkspaceAssistantPath } from "../lib/workspaceChatPrefill";
@@ -67,13 +68,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function HomeV1Route() {
   const data = useLoaderData<typeof loader>();
+  const brandName = useSparkBrandName();
   const navigate = useEmbeddedNavigate();
   const { isMobile } = useResponsiveLayout();
   useFeatureView("home-v1");
 
   return (
     <>
-      <TitleBar title="Spark AI" />
+      <TitleBar title={brandName} />
       <main style={isMobile ? mobileContentStyle : contentStyle}>
         <HomePanel
           displayName={data.accountName}

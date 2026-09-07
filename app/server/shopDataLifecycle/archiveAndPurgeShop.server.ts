@@ -35,7 +35,7 @@ function delay(ms: number): Promise<"timeout"> {
 
 /**
  * 尽力归档到 Blob，再从 Turso 删除店铺业务数据。
- * PromoClaimLedger 保留。归档失败/超时不阻断删除（合规优先）。
+ * PromoClaimLedger / ReferralClaim / ReferralInstall 保留。归档失败/超时不阻断删除（合规优先）。
  */
 export async function archiveAndPurgeShopData(params: {
   shop: string;

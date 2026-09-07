@@ -31,6 +31,7 @@ import {
   ExperimentOutlined,
   WalletOutlined,
   UnorderedListOutlined,
+  GiftOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getAdminUserLabel } from "../api";
 
@@ -72,6 +73,7 @@ const sparkMenuItems: MenuItemDef[] = [
   { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: false },
   { key: "/billing", icon: <FileTextOutlined />, label: <Link to="/billing">账单总览</Link>, ownerOnly: false },
   { key: "/credits", icon: <WalletOutlined />, label: <Link to="/credits">用户额度</Link>, ownerOnly: false },
+  { key: "/referral-codes", icon: <GiftOutlined />, label: <Link to="/referral-codes">推荐码</Link>, ownerOnly: false },
   { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
   { key: "/pricing-workbench", icon: <CalculatorOutlined />, label: <Link to="/pricing-workbench">定价工作台</Link>, ownerOnly: true },
   { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },

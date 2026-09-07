@@ -15,6 +15,7 @@ import {
   shouldRecoverEmbeddedHome,
 } from "../../server/shopify/embeddedEntry.server";
 import { authenticate } from "../../shopify.server";
+import { captureReferralInstallFromRequest } from "../../server/billing/promo/referralInstall.server";
 import { buildEmbeddedHomeRedirectPath } from "../../lib/embeddedLocationSearch";
 import { AppI18nProvider } from "../../i18n/provider";
 import { detectRequestLocale } from "../../i18n/detector.server";
@@ -37,6 +38,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (isEmbeddedAdminEntry(request)) {
     const { session } = await authenticate.admin(request);
+    void captureReferralInstallFromRequest(session.shop, request).catch((error) => {
+      console.warn("[ReferralInstall] index capture failed", error);
+    });
     const targetUrl = new URL(request.url);
     if (!targetUrl.searchParams.get("shop") && session.shop) {
       targetUrl.searchParams.set("shop", session.shop);

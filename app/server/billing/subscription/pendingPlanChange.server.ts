@@ -1,5 +1,6 @@
 import prisma from "../../../db.server";
 import { APP_SUBSCRIPTION_STATUS } from "../types.server";
+import { clearPendingReferralCode } from "../promo/referralCode.server";
 
 export const PENDING_PLAN_CHANGE_CLEAR = {
   pendingShopifySubscriptionId: null,
@@ -16,6 +17,7 @@ export async function clearPendingPlanChange(shop: string): Promise<boolean> {
     where: { id: sub.id },
     data: { ...PENDING_PLAN_CHANGE_CLEAR },
   });
+  await clearPendingReferralCode(shop);
   return true;
 }
 
@@ -36,6 +38,7 @@ export async function handleDeclinedSubscriptionCheckout(params: {
       where: { id: sub.id },
       data: { ...PENDING_PLAN_CHANGE_CLEAR },
     });
+    await clearPendingReferralCode(params.shop);
     return "cleared_pending";
   }
 
@@ -49,6 +52,7 @@ export async function handleDeclinedSubscriptionCheckout(params: {
       where: { appSubscriptionId: sub.id },
     });
     await prisma.appSubscription.delete({ where: { id: sub.id } });
+    await clearPendingReferralCode(params.shop);
     return "cleared_first";
   }
 

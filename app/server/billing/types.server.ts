@@ -9,6 +9,8 @@ export const BILLING_LOG_EVENT = {
   TOKEN_PACK_PURCHASED: "TOKEN_PACK_PURCHASED",
   /** 营销活动领取 Token（referenceId = campaignId） */
   PROMO_TOKEN_CLAIMED: "PROMO_TOKEN_CLAIMED",
+  /** 推荐码兑换 Token（referenceId = 规范化后的码） */
+  REFERRAL_CODE_CLAIMED: "REFERRAL_CODE_CLAIMED",
   /** Admin 手动发放/调整按量 Token（系统奖励） */
   SYSTEM_REWARD: "SYSTEM_REWARD",
   /** 从翻译 App 迁入加量池（referenceId = transferId） */

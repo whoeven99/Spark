@@ -29,6 +29,7 @@ import styles from "../component/billing/billingPage.module.css";
 import { PageHeaderNav, mobilePageContentStyle, pageContentStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
+const DEFAULT_REFERRAL_REWARD_TOKENS = 1_000_000;
 const PLAN_TIER_ORDER: Record<PlanTier, number> = {
   base: 0,
   pro: 1,
@@ -117,6 +118,8 @@ function resolveBillingEventLabel(
       return t("billing.eventTokenPackPurchased");
     case "PROMO_TOKEN_CLAIMED":
       return t("billing.eventPromoTokenClaimed");
+    case "REFERRAL_CODE_CLAIMED":
+      return t("billing.eventReferralCodeClaimed");
     case "SYSTEM_REWARD":
       return t("billing.eventSystemReward");
     default:
@@ -138,6 +141,7 @@ function resolveBillingEventToneClass(
     case "SUBSCRIPTION_RENEWED":
     case "TOKEN_PACK_PURCHASED":
     case "PROMO_TOKEN_CLAIMED":
+    case "REFERRAL_CODE_CLAIMED":
     case "SYSTEM_REWARD":
       return stylesMap.historyTonePositive;
     default:
@@ -243,6 +247,11 @@ function PaidPlanCard({
   locale,
   t,
   paidFeatures,
+  canEnterReferral,
+  referralCode,
+  referralOpen,
+  onReferralCodeChange,
+  onToggleReferral,
 }: {
   plan: PlanRecord;
   interval: BillingIntervalView;
@@ -254,6 +263,11 @@ function PaidPlanCard({
   locale: string;
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => PlanFeatureItem[];
+  canEnterReferral: boolean;
+  referralCode: string;
+  referralOpen: boolean;
+  onReferralCodeChange: (value: string) => void;
+  onToggleReferral: () => void;
 }) {
   const periodSuffix = interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
   const monthlyEquivalent =
@@ -310,11 +324,36 @@ function PaidPlanCard({
             {t("billing.pendingConfirmation")}
           </div>
         ) : (
-          <div className={styles.planCtaGroup}>
-            <Form method="post" className={styles.planActionForm}>
-              <input type="hidden" name="intent" value="subscribe" />
-              <input type="hidden" name="planKey" value={plan.planKey} />
-              <input type="hidden" name="trialMode" value="paid" />
+          <Form method="post" className={styles.planActionForm}>
+            <input type="hidden" name="intent" value="subscribe" />
+            <input type="hidden" name="planKey" value={plan.planKey} />
+            <input type="hidden" name="trialMode" value="paid" />
+            {canEnterReferral ? (
+              <input type="hidden" name="referralCode" value={referralCode} />
+            ) : null}
+            {canEnterReferral && referralOpen ? (
+              <div className={styles.planReferralField}>
+                <s-text-field
+                  label={t("billing.referralCodePlaceholder")}
+                  labelAccessibilityVisibility="exclusive"
+                  value={referralCode}
+                  placeholder={t("billing.referralCodePlaceholder")}
+                  autocomplete="off"
+                  {...(isSubmitting ? { disabled: true } : {})}
+                  onChange={(event) => {
+                    onReferralCodeChange(
+                      event.currentTarget.value.toUpperCase().replace(/\s+/g, ""),
+                    );
+                  }}
+                />
+                <p className={styles.planReferralReward}>
+                  {t("billing.referralReward", {
+                    count: DEFAULT_REFERRAL_REWARD_TOKENS.toLocaleString(locale),
+                  })}
+                </p>
+              </div>
+            ) : null}
+            <div className={styles.planCtaRow}>
               <button
                 type="submit"
                 className={styles.planPrimaryCta}
@@ -324,8 +363,19 @@ function PaidPlanCard({
                   ? t("billing.redirectingToCheckout")
                   : t("billing.subscribeNow")}
               </button>
-            </Form>
-          </div>
+              {canEnterReferral ? (
+                <button
+                  type="button"
+                  className={styles.planReferralAsk}
+                  onClick={onToggleReferral}
+                >
+                  {referralOpen
+                    ? t("billing.referralAskCollapse")
+                    : t("billing.referralAsk")}
+                </button>
+              ) : null}
+            </div>
+          </Form>
         )}
       </div>
     </article>
@@ -345,6 +395,8 @@ export function BillingPage() {
     pendingPlanChange,
     billingReturnFlash,
     promoCampaign,
+    referralRedeem,
+    referralCodePrefill,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -369,6 +421,12 @@ export function BillingPage() {
     navigation.state !== "idle" && navigation.formData?.get("intent") === "buy_pack"
       ? String(navigation.formData.get("planKey") ?? "")
       : "";
+  const seedReferralCode =
+    referralCodePrefill || referralRedeem.pendingCode || "";
+  const [referralCode, setReferralCode] = useState(seedReferralCode);
+  const [referralOpenPlanKey, setReferralOpenPlanKey] = useState<string | null>(
+    seedReferralCode && !referralRedeem.claimed ? "*" : null,
+  );
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const locale = i18n.language;
@@ -475,6 +533,21 @@ export function BillingPage() {
   const recommendedTier = resolveRecommendedTier(currentSubscriptionTier);
   const emphasizedTier = currentSubscriptionTier ?? recommendedTier;
   const usageLow = usagePercent >= 85;
+  const defaultReferralOpenKey =
+    paidPlansToShow.find((plan) => {
+      const tier = planTierFromPlanKey(plan.planKey);
+      return (
+        tier === recommendedTier &&
+        !isActiveSubscriptionPlan(plan.planKey, sub) &&
+        !isPendingSubscriptionPlan(plan.planKey, sub)
+      );
+    })?.planKey ??
+    paidPlansToShow.find(
+      (plan) =>
+        !isActiveSubscriptionPlan(plan.planKey, sub) &&
+        !isPendingSubscriptionPlan(plan.planKey, sub),
+    )?.planKey ??
+    null;
 
   if (actionData?.ok && "raisedCap" in actionData && actionData.raisedCap) {
     shopify.toast.show(t("billing.overageRaiseCapDone"));
@@ -495,7 +568,17 @@ export function BillingPage() {
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
     shopify.toast.show(t("billing.cancelSubscriptionSuccess"));
   } else if (actionData && !actionData.ok) {
-    shopify.toast.show(actionData.error);
+    const errorCode =
+      "errorCode" in actionData ? actionData.errorCode : undefined;
+    if (errorCode === "REFERRAL_CODE_EXHAUSTED") {
+      shopify.toast.show(t("billing.referralExhaustedToast"));
+    } else if (errorCode === "REFERRAL_CODE_INVALID") {
+      shopify.toast.show(t("billing.referralInvalidToast"));
+    } else if (errorCode === "REFERRAL_CODE_ALREADY_CLAIMED") {
+      shopify.toast.show(t("billing.referralAlreadyClaimedToast"));
+    } else {
+      shopify.toast.show(actionData.error);
+    }
   }
 
   useEffect(() => {
@@ -909,30 +992,49 @@ export function BillingPage() {
           </div>
         </s-banner>
       ) : null}
-      {promoCampaign ? (
-        <div
-          className={`${styles.promoStrip} ${styles.promoStripClaimed}`}
-          role="status"
-        >
+      <div
+        className={`${styles.promoStrip} ${
+          referralRedeem.claimed ? styles.promoStripClaimed : ""
+        }`}
+        role="status"
+      >
           <p className={styles.promoStripText}>
             <strong className={styles.promoStripTitle}>
-              {t("billing.promoTitle")}
+              {t("billing.benefitsTitle")}
             </strong>
+            {promoCampaign ? (
+              <>
+                <span className={styles.promoStripSep} aria-hidden>
+                  ·
+                </span>
+                <span>
+                  {promoCampaign.claimed
+                    ? t("billing.benefitsInstallClaimed", {
+                        count: promoCampaign.tokenAmount.toLocaleString(locale),
+                      })
+                    : t("billing.benefitsInstallPending", {
+                        count: promoCampaign.tokenAmount.toLocaleString(locale),
+                      })}
+                </span>
+              </>
+            ) : null}
             <span className={styles.promoStripSep} aria-hidden>
               ·
             </span>
             <span>
-              {promoCampaign.claimed
-                ? t("billing.promoClaimedBody", {
-                    count: promoCampaign.tokenAmount.toLocaleString(locale),
+              {referralRedeem.claimed
+                ? t("billing.benefitsReferralClaimed", {
+                    code: referralRedeem.code ?? "",
+                    count: (referralRedeem.tokenAmount ?? 0).toLocaleString(
+                      locale,
+                    ),
                   })
-                : t("billing.promoBody", {
-                    count: promoCampaign.tokenAmount.toLocaleString(locale),
+                : t("billing.benefitsReferralUnclaimed", {
+                    count: DEFAULT_REFERRAL_REWARD_TOKENS.toLocaleString(locale),
                   })}
             </span>
           </p>
         </div>
-      ) : null}
 
       <section className={styles.quotaSection}>
         {quotaMetaDescription ? (
@@ -1249,6 +1351,14 @@ export function BillingPage() {
             ) : null}
           </div>
 
+          {referralRedeem.claimed ? (
+            <p className={styles.plansReferralBound}>
+              {t("billing.referralSubscribeBound", {
+                code: referralRedeem.code ?? "",
+              })}
+            </p>
+          ) : null}
+
           <div className={styles.planGrid}>
             {paidPlansToShow.map((plan) => {
               const tier = planTierFromPlanKey(plan.planKey);
@@ -1266,6 +1376,21 @@ export function BillingPage() {
                   locale={locale}
                   t={t}
                   paidFeatures={paidFeatures}
+                  canEnterReferral={!referralRedeem.claimed}
+                  referralCode={referralCode}
+                  referralOpen={
+                    referralOpenPlanKey === plan.planKey ||
+                    (referralOpenPlanKey === "*" &&
+                      plan.planKey === defaultReferralOpenKey)
+                  }
+                  onReferralCodeChange={setReferralCode}
+                  onToggleReferral={() => {
+                    const isOpen =
+                      referralOpenPlanKey === plan.planKey ||
+                      (referralOpenPlanKey === "*" &&
+                        plan.planKey === defaultReferralOpenKey);
+                    setReferralOpenPlanKey(isOpen ? null : plan.planKey);
+                  }}
                 />
               );
             })}

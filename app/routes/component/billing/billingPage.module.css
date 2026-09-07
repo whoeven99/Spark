@@ -28,8 +28,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 0.75rem;
-  padding: 0.75rem 0.9rem;
+  margin: 0 0 0.5rem;
+  padding: 0.55rem 0.8rem;
   border-radius: 14px;
   border: 1px solid var(--billing-border);
   background: var(--billing-surface);
@@ -541,6 +541,13 @@
   margin-bottom: 0.8rem;
 }
 
+.plansReferralBound {
+  margin: 0 0 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--billing-text-footnote);
+}
+
 .plansTitle {
   position: relative;
   margin: 0;
@@ -789,6 +796,49 @@
 
 .planActionForm {
   margin: 0;
+}
+
+.planReferralField {
+  margin: 0 0 0.55rem;
+}
+
+.planReferralReward {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--billing-text);
+}
+
+.planCtaRow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.planCtaRow .planPrimaryCta {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.planReferralAsk {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.2rem 0.1rem;
+  border: none;
+  background: none;
+  color: var(--billing-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.planReferralAsk:hover {
+  text-decoration: underline;
 }
 
 .planPrimaryCta {

@@ -42,6 +42,17 @@ export {
   getVisiblePromoCampaign,
 } from "./promo/promoCampaign.server";
 export {
+  redeemReferralCode,
+  savePendingReferralCode,
+  fulfillPendingReferralOnSubscription,
+  loadReferralRedeemSnapshot,
+  REFERRAL_ERROR_CODE,
+} from "./promo/referralCode.server";
+export type {
+  ReferralRedeemSnapshot,
+  RedeemReferralCodeResult,
+} from "./promo/referralCode.server";
+export {
   grantMigratedCredits,
   rollbackMigratedCredits,
 } from "./creditMigration.server";

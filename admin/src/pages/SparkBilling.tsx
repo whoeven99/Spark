@@ -33,6 +33,7 @@ const EVENT_OPTIONS = [
   { value: "CREDIT_MIGRATION_FAILED", label: "翻译迁入失败" },
   { value: "CREDIT_MIGRATION_ROLLBACK", label: "翻译迁入回滚" },
   { value: "PROMO_TOKEN_CLAIMED", label: "限时福利" },
+  { value: "REFERRAL_CODE_CLAIMED", label: "推荐码兑换" },
   { value: "TOKEN_PACK_PURCHASED", label: "购包入账" },
   { value: "SUBSCRIPTION_ACTIVATED", label: "订阅开通" },
   { value: "SUBSCRIPTION_RENEWED", label: "订阅续费" },
@@ -134,7 +135,7 @@ export default function SparkBilling() {
       dataIndex: "eventType",
       key: "eventType",
       render: (v: string) => (
-        <Tag color={v === "SYSTEM_REWARD" ? "purple" : v === "PROMO_TOKEN_CLAIMED" ? "blue" : v === "CREDIT_MIGRATION_IN" ? "green" : v === "CREDIT_MIGRATION_FAILED" ? "red" : v === "CREDIT_MIGRATION_ROLLBACK" ? "orange" : "default"}>
+        <Tag color={v === "SYSTEM_REWARD" ? "purple" : v === "PROMO_TOKEN_CLAIMED" ? "blue" : v === "REFERRAL_CODE_CLAIMED" ? "cyan" : v === "CREDIT_MIGRATION_IN" ? "green" : v === "CREDIT_MIGRATION_FAILED" ? "red" : v === "CREDIT_MIGRATION_ROLLBACK" ? "orange" : "default"}>
           {eventLabel(v)}
         </Tag>
       ),

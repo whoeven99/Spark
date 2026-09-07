@@ -67,6 +67,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return loadBillingPageData(session.shop, {
     isBillingReturn,
     reconcileResult,
+    referralCodePrefill: url.searchParams.get("referralCode")?.trim() ?? "",
   });
 };
 
@@ -150,6 +151,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planKey,
         request,
         trialDays: null,
+        referralCode: form.get("referralCode")?.toString() ?? "",
       });
       if (confirmationUrl) {
         throw shopifyRedirect(confirmationUrl, { target: "_top" });
@@ -179,7 +181,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         : error instanceof Error
           ? error.message
           : "计费操作失败";
-    return { ok: false as const, error: message };
+    return {
+      ok: false as const,
+      error: message,
+      errorCode: error instanceof BillingError ? error.code : undefined,
+    };
   }
 };
 
