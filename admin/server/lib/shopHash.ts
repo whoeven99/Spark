@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 const MYSHOPIFY_DOMAIN = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
-/** 规范化店铺域名后再哈希，卸载后仍可防重复领取且不落明文。 */
+/** 与主应用 `app/server/billing/promo/shopHash.server.ts` 保持同一算法。 */
 export function normalizeShopDomain(shop: string): string {
   return shop.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
 }

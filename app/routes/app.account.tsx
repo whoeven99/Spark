@@ -65,6 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   return loadBillingPageData(session.shop, {
+    admin,
     isBillingReturn,
     reconcileResult,
     referralCodePrefill: url.searchParams.get("referralCode")?.trim() ?? "",

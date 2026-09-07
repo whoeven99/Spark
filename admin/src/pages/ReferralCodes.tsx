@@ -14,6 +14,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -33,6 +34,7 @@ import {
   type ReferralCodeListData,
   type ReferralCodeStatus,
 } from "../api";
+import { DevStoreAllowlistCard } from "./DevStoreAllowlistCard";
 
 function fmtDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -493,7 +495,29 @@ export default function ReferralCodes() {
             {
               title: "店铺",
               key: "shop",
-              render: (_: unknown, row) => row.shop || `${row.shopHashShort}…`,
+              render: (_: unknown, row) => {
+                if (row.shop) {
+                  return (
+                    <Typography.Text
+                      copyable={{ text: row.shop }}
+                      ellipsis={{ tooltip: row.shop }}
+                    >
+                      {row.shop}
+                    </Typography.Text>
+                  );
+                }
+                const short = row.shopHashShort || row.shopHash.slice(0, 8);
+                return (
+                  <Tooltip title={row.shopHash}>
+                    <Typography.Text
+                      type="secondary"
+                      copyable={{ text: row.shopHash }}
+                    >
+                      已卸载 · {short}
+                    </Typography.Text>
+                  </Tooltip>
+                );
+              },
             },
             {
               title: "Token",
@@ -510,6 +534,8 @@ export default function ReferralCodes() {
           ]}
         />
       </Drawer>
+
+      <DevStoreAllowlistCard />
     </div>
   );
 }

@@ -397,6 +397,7 @@ export function BillingPage() {
     promoCampaign,
     referralRedeem,
     referralCodePrefill,
+    devStoreReferralBlocked,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -576,6 +577,8 @@ export function BillingPage() {
       shopify.toast.show(t("billing.referralInvalidToast"));
     } else if (errorCode === "REFERRAL_CODE_ALREADY_CLAIMED") {
       shopify.toast.show(t("billing.referralAlreadyClaimedToast"));
+    } else if (errorCode === "DEV_STORE_REFERRAL_BLOCKED") {
+      shopify.toast.show(t("billing.devStoreReferralBlocked"));
     } else {
       shopify.toast.show(actionData.error);
     }
@@ -1376,7 +1379,7 @@ export function BillingPage() {
                   locale={locale}
                   t={t}
                   paidFeatures={paidFeatures}
-                  canEnterReferral={!referralRedeem.claimed}
+                  canEnterReferral={!referralRedeem.claimed && !devStoreReferralBlocked}
                   referralCode={referralCode}
                   referralOpen={
                     referralOpenPlanKey === plan.planKey ||

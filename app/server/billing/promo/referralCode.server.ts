@@ -2,6 +2,8 @@ import prisma from "../../../db.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import { BillingError } from "../errors.server";
 import { BILLING_LOG_EVENT } from "../types.server";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
+import { isDevStoreReferralBlocked } from "./devStoreSubscribeGate.server";
 import { hashShopDomain } from "./shopHash.server";
 import {
   isValidReferralCodeFormat,
@@ -150,6 +152,7 @@ export async function savePendingReferralCode(
  */
 export async function fulfillPendingReferralOnSubscription(
   shop: string,
+  options?: { admin?: ShopifyAdminGraphqlClient },
 ): Promise<RedeemReferralCodeResult | null> {
   const account = await prisma.account.findUnique({
     where: { shop },
@@ -157,6 +160,20 @@ export async function fulfillPendingReferralOnSubscription(
   });
   const pending = account?.pendingReferralCode?.trim() ?? "";
   if (!pending) return null;
+
+  if (options?.admin) {
+    const blocked = await isDevStoreReferralBlocked({
+      admin: options.admin,
+      shop,
+    });
+    if (blocked) {
+      await clearPendingReferralCode(shop);
+      console.warn(
+        `[Referral] fulfill skipped shop=${shop} reason=dev-store-referral-blocked`,
+      );
+      return null;
+    }
+  }
 
   try {
     const result = await redeemReferralCode(shop, pending);

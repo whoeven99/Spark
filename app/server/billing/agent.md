@@ -116,18 +116,19 @@
 - 默认活动：`install-welcome-1m`，安装后自动发放 **1000000** Token（`ensureInstallPromoTokens`）；每店每活动一次。
 - 防薅：`PromoClaimLedger` 存 `sha256(shop)` + `campaignId`（卸载 / `shop/redact` **不删**）；店内仍写 `BillingLog`/`Account` 便于当期审计（卸载时随店清掉）。
 - 触发：`app/routes/app.tsx` 壳层 loader **await** 自动领取；`requireBillingAccess` 再兜底一次。账户页只展示「已自动发放」，不再需要手动领取按钮。
-- 卸载清理：`app/uninstalled` **await** `archiveAndPurgeShopData`（归档有超时，超时仍清库）→ 店数据进 Blob `shop-archives` 后删 Turso（含 `Account`/`CommonEventLog`/Session 等）；仅保留 `PromoClaimLedger` / `ReferralCode` / `ReferralClaim` / `ReferralInstall`。
+- 卸载清理：`app/uninstalled` **await** `archiveAndPurgeShopData`（归档有超时，超时仍清库）→ 店数据进 Blob `shop-archives` 后删 Turso（含 `Account`/`CommonEventLog`/Session 等）；仅保留 `PromoClaimLedger` / `ReferralCode` / `ReferralClaim` / `ReferralInstall` / `DevStoreSubscribeAllowlist`。
 - 环境变量：`SPARK_PROMO_ENABLED`（默认开，`false` 关闭）、`SPARK_PROMO_CAMPAIGN_ID`、`SPARK_PROMO_TOKEN_AMOUNT`、`SPARK_PROMO_STARTS_AT` / `SPARK_PROMO_ENDS_AT`（ISO；可选）。
 - 换活动：改 `SPARK_PROMO_CAMPAIGN_ID`（新 id 可再领一次）并按需改额度/文案（i18n `billing.promo*`）。
-- Admin：`/credits` 可查双池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览；`/referral-codes` 管理广告推荐码（限次、启停）。
+- Admin：`/credits` 可查双池并手动调整 `purchasedTokens`（同样写 `SYSTEM_REWARD`）；`/billing` 为 BillingLog 总览；`/referral-codes` 管理广告推荐码（限次、启停）与开发店推荐码白名单。
 
 ## 推荐码（订阅确认后入账）
 
-- 表：`ReferralCode`（码 / 奖励 / `maxUses` / `usedCount`）+ `ReferralClaim`（`shopHash` 全局唯一，卸载不删）+ `ReferralInstall`（安装来源，`shopHash` 先到先得，卸载只擦明文店名）+ `Account.pendingReferralCode`（待用码，卸载随 Account 清）。
+- 表：`ReferralCode`（码 / 奖励 / `maxUses` / `usedCount`）+ `ReferralClaim`（`shopHash` 全局唯一，卸载不删）+ `ReferralInstall`（安装来源，`shopHash` 先到先得，卸载只擦明文店名）+ `Account.pendingReferralCode`（待用码，卸载随 Account 清）+ `DevStoreSubscribeAllowlist`（允许使用推荐码的开发店，卸载不删）。
+- 开发店：`shop.plan.partnerDevelopment` 为 true 的店铺**可以普通订阅**，但不能使用推荐码（账户页不展示填码 UI；带码结账抛 `DEV_STORE_REFERRAL_BLOCKED`），除非 `shop` 在 `DevStoreSubscribeAllowlist`。不按 `NODE_ENV` 放行；测 / 本地 / 正式环境同一套规则。Shopify 店铺信息查询失败则放行。Admin `/referral-codes` 页维护白名单。
 - 安装链接（Shopify 托管安装）：测 `https://admin.shopify.com/oauth/install?client_id=` + test toml `client_id`，产同结构用 prod `client_id`。指定店可用 `https://admin.shopify.com/store/{store}/oauth/install?client_id=`。`/r/{CODE}` 仍可作为带码落地再 302 到上述安装页。以后换短链改 `SPARK_REFERRAL_LINK_BASE`。
 - 与安装福利叠加：安装自动发一份，推荐码再兑一份；**一店只能兑一个推荐码**。
 - 挂钩：**第一次带码且订阅确认成功**（首次开通或换套餐确认均可；续费 / 旧订阅 webhook 回放不发）。只填码未在 Shopify 确认：**不发奖、不占名额、Admin 不记成功归因**。
-- 结账：`startSubscriptionCheckout` 先 `savePendingReferralCode`（校验失败拦住结账；空码清掉旧待用），`applyActiveSubscription` 在 `wasPending` 时 `fulfillPendingReferralOnSubscription`。拒绝 / 放弃换套餐清待用码。
+- 结账：`startSubscriptionCheckout` 先 `resolveReferralCodeForCheckout`（被禁开发店带码则拦住；无码清 pending 后继续订），再 `savePendingReferralCode`，`applyActiveSubscription` 在 `wasPending` 时 `fulfillPendingReferralOnSubscription`（有 admin 时再拦一次被禁开发店）。拒绝 / 放弃换套餐清待用码。
 - 入账事务：先 `INSERT ReferralClaim` → 条件 `UPDATE usedCount` → `purchasedTokens` + `REFERRAL_CODE_CLAIMED`。并发靠 unique / 条件更新。入账失败（无效/已满）只清待用，不阻断订阅；意外 DB 错误保留 pending 以便重试。
 - 账户页：可订阅套餐卡「直接订阅」旁「有推荐码？」展开填码（可跳过），无单独兑换 intent。Admin 已用次数 = 订阅成功转化数。
 - Admin 可改 `maxUses`（默认 1,000,000，对齐粉丝量封顶；填了不得低于已兑）和启停，不改已兑次数。不用 `0` / `-1` 当不限（比较时容易已满）；库里若仍是非正数，入账与 Admin 展示按不限处理。
