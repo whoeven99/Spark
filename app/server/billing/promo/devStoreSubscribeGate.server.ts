@@ -1,5 +1,4 @@
 import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
-import { isProductionNodeEnv } from "../../../config/nodeEnv.server";
 import prisma from "../../../db.server";
 import { fetchShopBasicInfo } from "../../shopify/fetchShopBasicInfo.server";
 import { BillingError } from "../errors.server";
@@ -14,13 +13,11 @@ export const DEV_STORE_REFERRAL_BLOCKED_MESSAGE =
   "开发商店不能使用推荐码";
 
 export function shouldBlockDevStoreReferral(input: {
-  isProduction: boolean;
   shopInfoOk: boolean;
   partnerDevelopment: boolean | null | undefined;
   allowlisted: boolean;
   shopDomainOk: boolean;
 }): boolean {
-  if (!input.isProduction) return false;
   if (!input.shopInfoOk) return false;
   if (!input.partnerDevelopment) return false;
   if (!input.shopDomainOk) return true;
@@ -39,8 +36,6 @@ export async function isDevStoreReferralBlocked(params: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
 }): Promise<boolean> {
-  if (!isProductionNodeEnv()) return false;
-
   let shopInfoOk = false;
   let partnerDevelopment: boolean | null | undefined;
   try {
@@ -65,7 +60,6 @@ export async function isDevStoreReferralBlocked(params: {
   const parsedShop = parseMyshopifyShopDomain(params.shop);
   const allowlisted = parsedShop ? await isShopAllowlisted(parsedShop) : false;
   const blocked = shouldBlockDevStoreReferral({
-    isProduction: true,
     shopInfoOk: true,
     partnerDevelopment,
     allowlisted,

@@ -34,7 +34,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
 - Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
 - 卸载目前：通知 + **归档快照到 Blob** 后从 Turso **删除该店业务数据**（含 Session、订单镜像、对话、广告凭证、客服、`Account`、`CommonEventLog` 等）；`PromoClaimLedger` / `ReferralClaim` / `ReferralInstall`（shopHash）以及 `DevStoreSubscribeAllowlist` 保留。GDPR `shop/redact` 再跑一遍幂等清理；`customers/redact` 擦除客户镜像 PII。改 toml 后须对该配置 `shopify app deploy`。公开上架仍缺隐私政策页（需披露安装福利防滥用 hash 账本）。
-- 新装默认经 `ensureInstallPromoTokens` 自动发放安装福利 Token（账户页营销活动，默认 1,000,000；每店每活动一次，账本按 shopHash），无需手动领取。**推荐码**在订阅时填写，第一次带码且订阅确认成功后再入账一份 Token（一店一码，Admin `/referral-codes` 可配上限，默认 1,000,000）。正式环境（`NODE_ENV=prod|production`）开发店可直接订阅，但不能使用推荐码；Admin `/referral-codes` 白名单除外。Admin 可复制安装链接 `{SHOPIFY_APP_URL}/r/{CODE}`，点开后经 Shopify 安装；OAuth / 进应用时记 `ReferralInstall`（先到先得），卸载只擦明文店名。
+- 新装默认经 `ensureInstallPromoTokens` 自动发放安装福利 Token（账户页营销活动，默认 1,000,000；每店每活动一次，账本按 shopHash），无需手动领取。**推荐码**在订阅时填写，第一次带码且订阅确认成功后再入账一份 Token（一店一码，Admin `/referral-codes` 可配上限，默认 1,000,000）。开发店可直接订阅，但不能使用推荐码（测 / 本地 / 正式环境同一规则）；Admin `/referral-codes` 白名单除外。Admin 可复制安装链接 `{SHOPIFY_APP_URL}/r/{CODE}`，点开后经 Shopify 安装；OAuth / 进应用时记 `ReferralInstall`（先到先得），卸载只擦明文店名。
 - 邀请制内测**不展示**风控链路、回收期/长期 ROI，以及 Health Monitor「ROI 情况（短期和长期）」；短期 ROI 仍在经营页，等产品公式再改计算。详情见 `docs/ROADMAP.md` 第七节。
 
 ## 2. 仓库地图
@@ -164,7 +164,7 @@ AI 主链路应从真实代码确认，通常为：Ask 工作台（`/app/assista
 
 ## 5. 数据与外部系统边界
 
-- **Turso / libSQL + Prisma**：业务主数据。模型在 `prisma/schema.prisma`，包括 Session、Account/订阅/计费、AITask、订单/退款/客户/库存/履约镜像、WorkspaceFile、Conversation/Message、运营诊断、成本/ROI、支持会话、广告平台凭证（AdPlatformCredential）、广告实体与日指标（AdEntity / AdMetricDaily / AdInsightsSync）、商品审核状态（GmcProductStatus / MetaProductStatus）、推荐码（ReferralCode / ReferralClaim / ReferralInstall，卸载后 claim 与安装归因按 shopHash 保留）、正式环境开发店推荐码白名单（DevStoreSubscribeAllowlist，卸载不删）等。广告与审核状态相关的约定：
+- **Turso / libSQL + Prisma**：业务主数据。模型在 `prisma/schema.prisma`，包括 Session、Account/订阅/计费、AITask、订单/退款/客户/库存/履约镜像、WorkspaceFile、Conversation/Message、运营诊断、成本/ROI、支持会话、广告平台凭证（AdPlatformCredential）、广告实体与日指标（AdEntity / AdMetricDaily / AdInsightsSync）、商品审核状态（GmcProductStatus / MetaProductStatus）、推荐码（ReferralCode / ReferralClaim / ReferralInstall，卸载后 claim 与安装归因按 shopHash 保留）、开发店推荐码白名单（DevStoreSubscribeAllowlist，卸载不删）等。广告与审核状态相关的约定：
   - `AdPlatformCredential.externalAccountId` 是索引列，由 `credentialStore.server.ts` 按平台从凭证 JSON 派生（GMC merchantId、Meta/TikTok catalogId、广告账户 ID），webhook 靠它反查店铺；不要再用 `json_extract` 扫全表。
   - `AdMetricDaily` 只存广告级可加指标。更高层级和更长区间一律 SUM 上卷，CTR / CPC / ROAS 等派生指标查询时算，不落库。`reach` / `frequency` 是去重指标，跨天无法还原，因此不入库、上卷后返回 null；新增指标前先判断它是否可加。
   - 审核状态与广告实体都是「全量重建」写法：`$transaction` 里 `deleteMany` + 分批 `createMany`，不要退回逐条 upsert。因此拉取必须翻完分页，截断会把没拉到的商品当成已下架。

@@ -87,7 +87,7 @@ export function DevStoreAllowlistCard() {
       }
     >
       <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-        正式环境默认禁止 Partner 开发店使用推荐码（仍可直接订阅）。把你自己的开发店加进来后可以填码并兑奖。
+        默认禁止 Partner 开发店使用推荐码（仍可直接订阅）。把需要测推荐码的开发店加进来后可以填码并兑奖。
       </Typography.Paragraph>
 
       {error ? (

@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const isProductionNodeEnv = vi.hoisted(() => vi.fn(() => false));
 const fetchShopBasicInfo = vi.hoisted(() => vi.fn());
 const findUnique = vi.hoisted(() => vi.fn());
 
-vi.mock("../../../../../app/config/nodeEnv.server", () => ({
-  isProductionNodeEnv,
-}));
 vi.mock("../../../../../app/server/shopify/fetchShopBasicInfo.server", () => ({
   fetchShopBasicInfo,
 }));
@@ -27,22 +23,9 @@ const ADMIN = { graphql: vi.fn() };
 const SHOP = "demo-store.myshopify.com";
 
 describe("shouldBlockDevStoreReferral", () => {
-  it("非 prod 放行", () => {
-    expect(
-      shouldBlockDevStoreReferral({
-        isProduction: false,
-        shopInfoOk: true,
-        partnerDevelopment: true,
-        allowlisted: false,
-        shopDomainOk: true,
-      }),
-    ).toBe(false);
-  });
-
   it("真店放行", () => {
     expect(
       shouldBlockDevStoreReferral({
-        isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: false,
         allowlisted: false,
@@ -54,7 +37,6 @@ describe("shouldBlockDevStoreReferral", () => {
   it("店铺信息失败时放行", () => {
     expect(
       shouldBlockDevStoreReferral({
-        isProduction: true,
         shopInfoOk: false,
         partnerDevelopment: true,
         allowlisted: false,
@@ -66,7 +48,6 @@ describe("shouldBlockDevStoreReferral", () => {
   it("开发店拦截推荐码", () => {
     expect(
       shouldBlockDevStoreReferral({
-        isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: true,
         allowlisted: false,
@@ -78,7 +59,6 @@ describe("shouldBlockDevStoreReferral", () => {
   it("白名单开发店放行", () => {
     expect(
       shouldBlockDevStoreReferral({
-        isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: true,
         allowlisted: true,
@@ -90,7 +70,6 @@ describe("shouldBlockDevStoreReferral", () => {
   it("开发店域名无法规范化则拦截推荐码", () => {
     expect(
       shouldBlockDevStoreReferral({
-        isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: true,
         allowlisted: false,
@@ -102,19 +81,9 @@ describe("shouldBlockDevStoreReferral", () => {
 
 describe("isDevStoreReferralBlocked", () => {
   beforeEach(() => {
-    isProductionNodeEnv.mockReset();
-    isProductionNodeEnv.mockReturnValue(true);
     fetchShopBasicInfo.mockReset();
     findUnique.mockReset();
     findUnique.mockResolvedValue(null);
-  });
-
-  it("非正式环境直接放行且不查 Shopify", async () => {
-    isProductionNodeEnv.mockReturnValue(false);
-    await expect(
-      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
-    ).resolves.toBe(false);
-    expect(fetchShopBasicInfo).not.toHaveBeenCalled();
   });
 
   it("真店放行", async () => {
@@ -130,6 +99,7 @@ describe("isDevStoreReferralBlocked", () => {
     await expect(
       isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(true);
+    expect(fetchShopBasicInfo).toHaveBeenCalledWith(ADMIN);
     expect(findUnique).toHaveBeenCalledWith({
       where: { shop: SHOP },
       select: { id: true },
@@ -161,8 +131,6 @@ describe("isDevStoreReferralBlocked", () => {
 
 describe("resolveReferralCodeForCheckout", () => {
   beforeEach(() => {
-    isProductionNodeEnv.mockReset();
-    isProductionNodeEnv.mockReturnValue(true);
     fetchShopBasicInfo.mockReset();
     findUnique.mockReset();
     findUnique.mockResolvedValue(null);

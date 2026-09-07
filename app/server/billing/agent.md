@@ -123,8 +123,8 @@
 
 ## 推荐码（订阅确认后入账）
 
-- 表：`ReferralCode`（码 / 奖励 / `maxUses` / `usedCount`）+ `ReferralClaim`（`shopHash` 全局唯一，卸载不删）+ `ReferralInstall`（安装来源，`shopHash` 先到先得，卸载只擦明文店名）+ `Account.pendingReferralCode`（待用码，卸载随 Account 清）+ `DevStoreSubscribeAllowlist`（正式环境允许使用推荐码的开发店，卸载不删）。
-- 正式环境开发店：`NODE_ENV=prod|production` 时，`shop.plan.partnerDevelopment` 为 true 的店铺**可以普通订阅**，但不能使用推荐码（账户页不展示填码 UI；带码结账抛 `DEV_STORE_REFERRAL_BLOCKED`），除非 `shop` 在 `DevStoreSubscribeAllowlist`。Shopify 店铺信息查询失败则放行。本地非 prod 不拦。Admin `/referral-codes` 页维护白名单。
+- 表：`ReferralCode`（码 / 奖励 / `maxUses` / `usedCount`）+ `ReferralClaim`（`shopHash` 全局唯一，卸载不删）+ `ReferralInstall`（安装来源，`shopHash` 先到先得，卸载只擦明文店名）+ `Account.pendingReferralCode`（待用码，卸载随 Account 清）+ `DevStoreSubscribeAllowlist`（允许使用推荐码的开发店，卸载不删）。
+- 开发店：`shop.plan.partnerDevelopment` 为 true 的店铺**可以普通订阅**，但不能使用推荐码（账户页不展示填码 UI；带码结账抛 `DEV_STORE_REFERRAL_BLOCKED`），除非 `shop` 在 `DevStoreSubscribeAllowlist`。不按 `NODE_ENV` 放行；测 / 本地 / 正式环境同一套规则。Shopify 店铺信息查询失败则放行。Admin `/referral-codes` 页维护白名单。
 - 安装链接（Shopify 托管安装）：测 `https://admin.shopify.com/oauth/install?client_id=` + test toml `client_id`，产同结构用 prod `client_id`。指定店可用 `https://admin.shopify.com/store/{store}/oauth/install?client_id=`。`/r/{CODE}` 仍可作为带码落地再 302 到上述安装页。以后换短链改 `SPARK_REFERRAL_LINK_BASE`。
 - 与安装福利叠加：安装自动发一份，推荐码再兑一份；**一店只能兑一个推荐码**。
 - 挂钩：**第一次带码且订阅确认成功**（首次开通或换套餐确认均可；续费 / 旧订阅 webhook 回放不发）。只填码未在 Shopify 确认：**不发奖、不占名额、Admin 不记成功归因**。
