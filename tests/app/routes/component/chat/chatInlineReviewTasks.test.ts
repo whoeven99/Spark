@@ -3,6 +3,7 @@ import {
   isChatInlineReviewTask,
   resolveChatReviewDialogTitleKey,
   resolveInlineReviewOptions,
+  resolveSucceededProductExportTask,
 } from "../../../../../app/routes/component/chat/chatInlineReviewTasks";
 import { TASK_RUN_VERSION, type TaskRunPayload } from "../../../../../app/lib/taskRunPayload";
 import { BATCH_PRODUCT_IMPROVE_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
@@ -115,6 +116,28 @@ describe("resolveInlineReviewOptions", () => {
     ).toBeUndefined();
   });
 
+  it("offers a result entry when product export succeeded", () => {
+    const opts = resolveInlineReviewOptions(
+      run({ skillId: "product_export", title: "导出商品" }),
+      [task("t1", "product_export", "succeeded")],
+    );
+    expect(opts).toEqual({
+      skillId: "product_export",
+      taskType: "product_export",
+      taskId: "t1",
+      taskIds: ["t1"],
+      intent: "review",
+    });
+  });
+
+  it("does not offer an export entry while the task is still running", () => {
+    expect(
+      resolveInlineReviewOptions(run({ skillId: "product_export" }), [
+        task("t1", "product_export", "running"),
+      ]),
+    ).toBeUndefined();
+  });
+
   it("gives no entry for task types that cannot be reviewed in the chat", () => {
     expect(
       resolveInlineReviewOptions(run({ skillId: "ads_catalog_sync" }), [
@@ -125,5 +148,21 @@ describe("resolveInlineReviewOptions", () => {
 
   it("gives no entry when no task snapshot is available at all", () => {
     expect(resolveInlineReviewOptions(run(), [])).toBeUndefined();
+  });
+});
+
+describe("resolveSucceededProductExportTask", () => {
+  it("returns the succeeded export task", () => {
+    const exportTask = task("t1", "product_export", "succeeded");
+    expect(resolveSucceededProductExportTask([exportTask])?.id).toBe("t1");
+  });
+
+  it("ignores running or failed export tasks", () => {
+    expect(
+      resolveSucceededProductExportTask([
+        task("t1", "product_export", "running"),
+        task("t2", "bulk_price_edit", "succeeded"),
+      ]),
+    ).toBeUndefined();
   });
 });

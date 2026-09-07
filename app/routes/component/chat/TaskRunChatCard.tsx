@@ -20,7 +20,8 @@ import {
   resolveTaskRunTitle,
 } from "../../../lib/taskProposalDisplay";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
-import { resolveInlineReviewOptions } from "./chatInlineReviewTasks";
+import { resolveInlineReviewOptions, resolveSucceededProductExportTask } from "./chatInlineReviewTasks";
+import { downloadProductExportCsv } from "../productExport/ProductExportTaskDetailPage";
 import { useTranslation } from "react-i18next";
 import styles from "./TaskRunChatCard.module.css";
 
@@ -173,7 +174,9 @@ export function TaskRunChatCard({
   const inProgress = agg.known === 0 || agg.running > 0;
   const badgeKind = resolveBadgeKind(agg);
   const reviewOptions = inProgress ? undefined : resolveInlineReviewOptions(run, matchedTasks);
-  const showReviewButton = Boolean(reviewOptions) && agg.pendingReview > 0;
+  const exportTask = inProgress ? undefined : resolveSucceededProductExportTask(matchedTasks);
+  const showExportDownload = Boolean(exportTask);
+  const showReviewButton = Boolean(reviewOptions) && agg.pendingReview > 0 && !showExportDownload;
   /** 少量图片类任务时内嵌逐任务详情卡（含图片预览/操作），其余保持聚合视角 */
   const embedTaskDetails =
     run.taskIds.length > 0 &&
@@ -449,7 +452,7 @@ export function TaskRunChatCard({
           </div>
         ) : null}
 
-        {showReviewButton ? (
+        {showExportDownload || showReviewButton ? (
           <div
             style={{
               display: "flex",
@@ -476,10 +479,16 @@ export function TaskRunChatCard({
                 cursor: "pointer",
               }}
               onClick={() => {
+                if (exportTask) {
+                  void downloadProductExportCsv(exportTask, locationSearch);
+                  return;
+                }
                 if (reviewOptions) onOpenTasks?.(reviewOptions);
               }}
             >
-              {t("productImproveStage1.chatGoReview")}
+              {showExportDownload
+                ? t("productExport.downloadChangeset")
+                : t("productImproveStage1.chatGoReview")}
             </button>
           </div>
         ) : null}

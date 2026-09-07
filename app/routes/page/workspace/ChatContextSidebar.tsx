@@ -254,12 +254,13 @@ function ConversationTasksCard({
                   key={run.runId}
                   type="button"
                   onClick={() => {
-                    // 文案优化 / 图片翻译 / 生图：优先待审核，否则打开详情弹窗查看结果
+                    // 文案优化 / 图片翻译 / 生图 / 导出：优先待审核，否则打开详情弹窗查看结果
                     const reviewableTasks = runTasks.filter(
                       (task) =>
                         task.taskType === "product_improve" ||
                         task.taskType === "picture_translate" ||
-                        task.taskType === "image_generation",
+                        task.taskType === "image_generation" ||
+                        task.taskType === "product_export",
                     );
                     const preferredTask =
                       reviewableTasks.find((task) => task.status === "pending_review") ??

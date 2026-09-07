@@ -48,11 +48,21 @@ export function resolveChatReviewDialogTitleKey(taskType?: string | null): strin
   return "productImproveStage1.chatReviewDialogTitle";
 }
 
+/** 导出没有 pending_review，完成后要在对话里给下载入口。 */
+export function resolveSucceededProductExportTask(
+  matchedTasks: AITaskItem[],
+): AITaskItem | undefined {
+  return matchedTasks.find(
+    (task) => task.taskType === "product_export" && task.status === "succeeded",
+  );
+}
+
 /**
  * 找出这一轮里可以在对话内审核的任务类型。
  *
  * 只要任务类型支持对话内审核就给入口，不再只认商品文案。
  * 同一轮任务类型是同质的，取第一个待审核项的类型即可。
+ * 商品导出直接 succeeded，也走同一套入口参数，供侧栏打开结果弹窗。
  */
 function resolveInlineReviewTaskType(
   run: TaskRunPayload,
@@ -64,6 +74,7 @@ function resolveInlineReviewTaskType(
   if (pending?.taskType) return pending.taskType;
   // 批量商品文案在任务快照还没到位时也要给入口
   if (run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID) return "product_improve";
+  if (resolveSucceededProductExportTask(matchedTasks)) return "product_export";
   return undefined;
 }
 
