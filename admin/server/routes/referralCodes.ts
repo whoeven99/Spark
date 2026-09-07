@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { getDb, isSparkDbConfigured } from "../lib/db.js";
+import {
+  resolveReferralClaimShops,
+  type ReferralClaimRow,
+} from "../lib/referralClaimShop.js";
 import { buildReferralInstallUrl } from "../lib/sparkAppUrl.js";
 import {
   isUnlimitedReferralCap,
@@ -52,6 +56,89 @@ function isoOrNull(value: unknown): string | null {
   if (value == null) return null;
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function stringOrNull(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+function mapClaimRows(rows: unknown[]): ReferralClaimRow[] {
+  return rows.map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      shopHash: String(record.shopHash ?? ""),
+      tokensDelta: Number(record.tokensDelta ?? 0),
+      claimedAt: isoOrNull(record.claimedAt),
+    };
+  });
+}
+
+function mapInstallShopsByHash(rows: unknown[]): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const row of rows) {
+    const record = row as Record<string, unknown>;
+    const shopHash = String(record.shopHash ?? "");
+    if (!shopHash) continue;
+    map.set(shopHash, stringOrNull(record.shop));
+  }
+  return map;
+}
+
+async function loadReferralClaimItems(
+  db: ReturnType<typeof getDb>,
+  codeId: string,
+  code: string,
+) {
+  const claimsResult = await db.execute({
+    sql: `
+      SELECT shopHash, tokensDelta, claimedAt
+      FROM ReferralClaim
+      WHERE codeId = ?
+      ORDER BY claimedAt DESC
+    `,
+    args: [codeId],
+  });
+  const claims = mapClaimRows(claimsResult.rows);
+  if (claims.length === 0) return [];
+
+  const logs = await db.execute({
+    sql: `
+      SELECT shop FROM BillingLog
+      WHERE eventType = 'REFERRAL_CODE_CLAIMED' AND referenceId = ?
+    `,
+    args: [code],
+  });
+  const billingLogShops = logs.rows.map((row) =>
+    stringOrNull((row as Record<string, unknown>).shop),
+  );
+  const hashes = claims.map((claim) => claim.shopHash).filter(Boolean);
+  const installShopsByHash = await loadInstallShopsByHash(db, hashes);
+  const sources = { claims, billingLogShops, installShopsByHash, accountShops: [] as Array<string | null> };
+  const items = resolveReferralClaimShops(sources);
+  if (!items.some((item) => !item.shop)) return items;
+
+  const accounts = await db.execute({ sql: `SELECT shop FROM Account`, args: [] });
+  return resolveReferralClaimShops({
+    ...sources,
+    accountShops: accounts.rows.map((row) =>
+      stringOrNull((row as Record<string, unknown>).shop),
+    ),
+  });
+}
+
+async function loadInstallShopsByHash(
+  db: ReturnType<typeof getDb>,
+  hashes: string[],
+) {
+  if (hashes.length === 0) return new Map<string, string | null>();
+  const placeholders = hashes.map(() => "?").join(",");
+  const installs = await db.execute({
+    sql: `SELECT shopHash, shop FROM ReferralInstall WHERE shopHash IN (${placeholders})`,
+    args: hashes,
+  });
+  return mapInstallShopsByHash(installs.rows);
 }
 
 type ReferralCodeRow = {
@@ -407,32 +494,11 @@ referralCodesRouter.get("/:id/claims", async (req, res) => {
       return;
     }
 
-    const claims = await db.execute({
-      sql: `
-        SELECT c.shopHash, c.tokensDelta, c.claimedAt, bl.shop AS shop
-        FROM ReferralClaim c
-        LEFT JOIN BillingLog bl
-          ON bl.eventType = 'REFERRAL_CODE_CLAIMED'
-         AND json_extract(bl.metadata, '$.shopHash') = c.shopHash
-        WHERE c.codeId = ?
-        ORDER BY c.claimedAt DESC
-      `,
-      args: [id],
-    });
-
-    res.json({
-      items: claims.rows.map((row) => {
-        const record = row as Record<string, unknown>;
-        const shopHash = String(record.shopHash ?? "");
-        return {
-          shopHash,
-          shopHashShort: shopHash.slice(0, 8),
-          shop: record.shop == null ? null : String(record.shop),
-          tokensDelta: Number(record.tokensDelta ?? 0),
-          claimedAt: isoOrNull(record.claimedAt),
-        };
-      }),
-    });
+    const code = String(
+      (codeResult.rows[0] as Record<string, unknown>).code ?? "",
+    ).trim();
+    const items = await loadReferralClaimItems(db, id, code);
+    res.json({ items });
   } catch (error) {
     console.error("[referral-codes] claims", error);
     res.status(500).json({ error: String(error) });
