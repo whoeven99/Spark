@@ -743,6 +743,34 @@ export function fetchReferralCodeInstalls(
   return apiFetch(`/referral-codes/${encodeURIComponent(id)}/installs`);
 }
 
+export type DevStoreAllowlistItem = {
+  id: string;
+  shop: string;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
+export function fetchDevStoreAllowlist(): Promise<{ items: DevStoreAllowlistItem[] }> {
+  return apiFetch("/dev-store-allowlist");
+}
+
+export function addDevStoreAllowlist(params: {
+  shop: string;
+  note?: string;
+}): Promise<DevStoreAllowlistItem> {
+  return apiFetch("/dev-store-allowlist", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function deleteDevStoreAllowlist(id: string): Promise<{ ok: true }> {
+  return apiFetch(`/dev-store-allowlist/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 // --- Spark 账单总览 ---
 
 export type SparkBillingOverviewEvent = SparkCreditsBillingLog;

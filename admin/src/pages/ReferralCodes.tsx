@@ -34,6 +34,7 @@ import {
   type ReferralCodeListData,
   type ReferralCodeStatus,
 } from "../api";
+import { DevStoreAllowlistCard } from "./DevStoreAllowlistCard";
 
 function fmtDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -533,6 +534,8 @@ export default function ReferralCodes() {
           ]}
         />
       </Drawer>
+
+      <DevStoreAllowlistCard />
     </div>
   );
 }

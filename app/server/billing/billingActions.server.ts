@@ -9,6 +9,7 @@ import { getBillingGateway } from "./gateway/getBillingGateway.server";
 import { getPlanByKey } from "./plans/planCatalog.server";
 import { parseMoney } from "./overage/overageMath.server";
 import { PLAN_CATALOG_KIND } from "./types.server";
+import { assertDevStoreCanSubscribe } from "./promo/devStoreSubscribeGate.server";
 import { savePendingReferralCode } from "./promo/referralCode.server";
 
 export async function startSubscriptionCheckout(params: {
@@ -23,6 +24,11 @@ export async function startSubscriptionCheckout(params: {
   if (plan.kind !== PLAN_CATALOG_KIND.SUBSCRIPTION) {
     throw new BillingError("该套餐不是订阅类型", BILLING_ERROR_CODE.INVALID_PLAN_KIND, 400);
   }
+
+  await assertDevStoreCanSubscribe({
+    admin: params.admin,
+    shop: params.shop,
+  });
 
   const returnUrl = buildBillingReturnUrl(
     BILLING_PAGE_PATH,

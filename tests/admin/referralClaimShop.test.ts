@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveReferralClaimShops } from "../../admin/server/lib/referralClaimShop";
-import { hashShopDomain, normalizeShopDomain } from "../../admin/server/lib/shopHash";
+import { hashShopDomain, normalizeShopDomain, parseMyshopifyShopDomain } from "../../admin/server/lib/shopHash";
 
 const LIVE_SHOP = "demo-store.myshopify.com";
 const LIVE_HASH = hashShopDomain(LIVE_SHOP);
@@ -10,6 +10,10 @@ describe("shopHash", () => {
     expect(normalizeShopDomain("https://Demo-Store.myshopify.com/")).toBe(LIVE_SHOP);
     expect(hashShopDomain("https://Demo-Store.myshopify.com/")).toBe(LIVE_HASH);
     expect(LIVE_HASH).toHaveLength(64);
+    expect(parseMyshopifyShopDomain("https://Demo-Store.myshopify.com/")).toBe(
+      LIVE_SHOP,
+    );
+    expect(parseMyshopifyShopDomain("not-a-shop")).toBeNull();
   });
 });
 

@@ -1070,3 +1070,15 @@ model ReferralInstall {
   @@index([codeId])
   @@index([installedAt])
 }
+
+/// 正式环境允许订阅的开发店白名单。卸载 / shop_redact 不删（运营配置，不是店铺业务数据）。
+model DevStoreSubscribeAllowlist {
+  id        String   @id @default(cuid())
+  /// 规范化后的 *.myshopify.com
+  shop      String   @unique
+  note      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

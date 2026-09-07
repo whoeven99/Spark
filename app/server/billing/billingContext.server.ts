@@ -37,7 +37,9 @@ import {
   effectiveOverageCapAmount,
 } from "./overage/overageMath.server";
 import { loadPromoCampaignSnapshot } from "./promo/promoCampaign.server";
+import { isDevStoreSubscribeBlocked } from "./promo/devStoreSubscribeGate.server";
 import { loadReferralRedeemSnapshot } from "./promo/referralCode.server";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -172,6 +174,7 @@ export function toBillingAccessSnapshot(ctx: BillingContext): BillingAccessSnaps
 export async function loadBillingPageData(
   shop: string,
   options?: {
+    admin?: ShopifyAdminGraphqlClient;
     reconcileResult?: ReconcileSubscriptionResult | null;
     isBillingReturn?: boolean;
     referralCodePrefill?: string;
@@ -185,6 +188,7 @@ export async function loadBillingPageData(
     overageRows,
     promoCampaign,
     referralRedeem,
+    devStoreSubscribeBlocked,
   ] = await Promise.all([
     prisma.accountPeriodUsage.findMany({
       where: { shop },
@@ -208,6 +212,9 @@ export async function loadBillingPageData(
     }),
     loadPromoCampaignSnapshot(shop),
     loadReferralRedeemSnapshot(shop),
+    options?.admin
+      ? isDevStoreSubscribeBlocked({ admin: options.admin, shop })
+      : Promise.resolve(false),
   ]);
   const sub = ctx.subscription;
   const showDevCancelSubscription =
@@ -254,6 +261,7 @@ export async function loadBillingPageData(
     promoCampaign,
     referralRedeem,
     referralCodePrefill: options?.referralCodePrefill ?? "",
+    devStoreSubscribeBlocked,
   };
 }
 

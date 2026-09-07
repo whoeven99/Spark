@@ -48,6 +48,11 @@ export {
   loadReferralRedeemSnapshot,
   REFERRAL_ERROR_CODE,
 } from "./promo/referralCode.server";
+export {
+  assertDevStoreCanSubscribe,
+  isDevStoreSubscribeBlocked,
+  DEV_STORE_SUBSCRIBE_ERROR,
+} from "./promo/devStoreSubscribeGate.server";
 export type {
   ReferralRedeemSnapshot,
   RedeemReferralCodeResult,
