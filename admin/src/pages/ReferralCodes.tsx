@@ -26,14 +26,12 @@ import {
 import {
   createReferralCode,
   fetchReferralCodeClaims,
-  fetchReferralCodeInstalls,
   fetchReferralCodes,
   updateReferralCode,
   type ReferralClaimItem,
   type ReferralCodeItem,
   type ReferralCodeListData,
   type ReferralCodeStatus,
-  type ReferralInstallItem,
 } from "../api";
 
 function fmtDate(value: string | null | undefined): string {
@@ -120,7 +118,6 @@ export default function ReferralCodes() {
 
   const [detailRow, setDetailRow] = useState<ReferralCodeItem | null>(null);
   const [claims, setClaims] = useState<ReferralClaimItem[]>([]);
-  const [installs, setInstalls] = useState<ReferralInstallItem[]>([]);
   const [claimsLoading, setClaimsLoading] = useState(false);
 
   const load = useCallback(() => {
@@ -216,15 +213,10 @@ export default function ReferralCodes() {
     setDetailRow(row);
     setClaimsLoading(true);
     try {
-      const [claimResult, installResult] = await Promise.all([
-        fetchReferralCodeClaims(row.id),
-        fetchReferralCodeInstalls(row.id),
-      ]);
+      const claimResult = await fetchReferralCodeClaims(row.id);
       setClaims(claimResult.items);
-      setInstalls(installResult.items);
     } catch (err) {
       setClaims([]);
-      setInstalls([]);
       message.error(String(err));
     } finally {
       setClaimsLoading(false);
@@ -320,12 +312,6 @@ export default function ReferralCodes() {
               dataIndex: "tokenAmount",
               key: "tokenAmount",
               render: (value: number) => value.toLocaleString(),
-            },
-            {
-              title: "安装",
-              dataIndex: "installCount",
-              key: "installCount",
-              render: (value: number | undefined) => (value ?? 0).toLocaleString(),
             },
             {
               title: "已兑 / 上限",
@@ -485,41 +471,17 @@ export default function ReferralCodes() {
       </Modal>
 
       <Drawer
-        title={detailRow ? `来源明细 · ${detailRow.code}` : "来源明细"}
+        title={detailRow ? `兑换明细 · ${detailRow.code}` : "兑换明细"}
         open={Boolean(detailRow)}
         onClose={() => {
           setDetailRow(null);
           setClaims([]);
-          setInstalls([]);
         }}
         width={520}
       >
         <Typography.Title level={5} style={{ marginTop: 0 }}>
-          安装来源
+          订阅兑换
         </Typography.Title>
-        <Table<ReferralInstallItem>
-          dataSource={installs}
-          loading={claimsLoading}
-          rowKey={(row) => `${row.shopHash}-${row.installedAt ?? ""}`}
-          size="small"
-          pagination={{ pageSize: 8 }}
-          locale={{ emptyText: "还没有人通过此链接安装" }}
-          style={{ marginBottom: 24 }}
-          columns={[
-            {
-              title: "店铺",
-              key: "shop",
-              render: (_: unknown, row) => row.shop || `${row.shopHashShort}…`,
-            },
-            {
-              title: "安装时间",
-              dataIndex: "installedAt",
-              key: "installedAt",
-              render: (value: string | null) => fmtDate(value),
-            },
-          ]}
-        />
-        <Typography.Title level={5}>订阅兑换</Typography.Title>
         <Table<ReferralClaimItem>
           dataSource={claims}
           loading={claimsLoading}
