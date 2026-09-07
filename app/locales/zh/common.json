@@ -1978,7 +1978,7 @@
     "referralAlreadyClaimedToast": "该店已使用过推荐码",
     "referralInvalidToast": "推荐码无效或已过期",
     "referralExhaustedToast": "该推荐码已达使用上限",
-    "devStoreSubscribeBlocked": "开发商店无法在此环境订阅。如需测试请联系我们把店铺加入白名单。",
+    "devStoreReferralBlocked": "开发商店不能使用推荐码",
     "toolFeatureChat": "Ask 聊天",
     "toolFeatureProductCopy": "商品文案",
     "toolFeatureProductQuality": "商品质量评分",

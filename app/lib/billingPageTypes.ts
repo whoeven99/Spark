@@ -141,8 +141,8 @@ export type BillingPageLoaderData = {
   referralRedeem: ReferralRedeemSnapshot;
   /** 广告落地预填，来自 ?referralCode= */
   referralCodePrefill: string;
-  /** 正式环境开发店且不在白名单：禁止订阅 / 换套餐 */
-  devStoreSubscribeBlocked: boolean;
+  /** 正式环境开发店且不在白名单：隐藏推荐码 UI，仍可直接订阅 */
+  devStoreReferralBlocked: boolean;
 };
 
 /** 其它页面仅需展示访问状态时使用。 */

@@ -49,9 +49,9 @@ export {
   REFERRAL_ERROR_CODE,
 } from "./promo/referralCode.server";
 export {
-  assertDevStoreCanSubscribe,
-  isDevStoreSubscribeBlocked,
-  DEV_STORE_SUBSCRIBE_ERROR,
+  isDevStoreReferralBlocked,
+  resolveReferralCodeForCheckout,
+  DEV_STORE_REFERRAL_ERROR,
 } from "./promo/devStoreSubscribeGate.server";
 export type {
   ReferralRedeemSnapshot,

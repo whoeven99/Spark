@@ -3,16 +3,17 @@ import { isProductionNodeEnv } from "../../../config/nodeEnv.server";
 import prisma from "../../../db.server";
 import { fetchShopBasicInfo } from "../../shopify/fetchShopBasicInfo.server";
 import { BillingError } from "../errors.server";
+import { normalizeReferralCode } from "./referralCodeFormat";
 import { parseMyshopifyShopDomain } from "./shopHash.server";
 
-export const DEV_STORE_SUBSCRIBE_ERROR = {
-  BLOCKED: "DEV_STORE_SUBSCRIBE_BLOCKED",
+export const DEV_STORE_REFERRAL_ERROR = {
+  BLOCKED: "DEV_STORE_REFERRAL_BLOCKED",
 } as const;
 
-export const DEV_STORE_SUBSCRIBE_BLOCKED_MESSAGE =
-  "开发商店无法在此环境订阅。如需测试请联系我们把店铺加入白名单。";
+export const DEV_STORE_REFERRAL_BLOCKED_MESSAGE =
+  "开发商店不能使用推荐码";
 
-export function shouldBlockDevStoreSubscribe(input: {
+export function shouldBlockDevStoreReferral(input: {
   isProduction: boolean;
   shopInfoOk: boolean;
   partnerDevelopment: boolean | null | undefined;
@@ -34,7 +35,7 @@ async function isShopAllowlisted(shop: string): Promise<boolean> {
   return Boolean(row);
 }
 
-export async function isDevStoreSubscribeBlocked(params: {
+export async function isDevStoreReferralBlocked(params: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
 }): Promise<boolean> {
@@ -63,7 +64,7 @@ export async function isDevStoreSubscribeBlocked(params: {
 
   const parsedShop = parseMyshopifyShopDomain(params.shop);
   const allowlisted = parsedShop ? await isShopAllowlisted(parsedShop) : false;
-  const blocked = shouldBlockDevStoreSubscribe({
+  const blocked = shouldBlockDevStoreReferral({
     isProduction: true,
     shopInfoOk: true,
     partnerDevelopment,
@@ -72,21 +73,29 @@ export async function isDevStoreSubscribeBlocked(params: {
   });
   if (blocked) {
     console.info(
-      `[Billing][DevStoreGate] blocked shop=${params.shop} allowlisted=${allowlisted}`,
+      `[Billing][DevStoreGate] referral-blocked shop=${params.shop} allowlisted=${allowlisted}`,
     );
   }
   return blocked;
 }
 
-export async function assertDevStoreCanSubscribe(params: {
+/** 被禁开发店带码则抛错；无码返回空字符串以便清 pending 后继续普通订阅。 */
+export async function resolveReferralCodeForCheckout(params: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
-}): Promise<void> {
-  const blocked = await isDevStoreSubscribeBlocked(params);
-  if (!blocked) return;
-  throw new BillingError(
-    DEV_STORE_SUBSCRIBE_BLOCKED_MESSAGE,
-    DEV_STORE_SUBSCRIBE_ERROR.BLOCKED,
-    400,
-  );
+  rawCode: string;
+}): Promise<string> {
+  const blocked = await isDevStoreReferralBlocked({
+    admin: params.admin,
+    shop: params.shop,
+  });
+  const code = normalizeReferralCode(params.rawCode);
+  if (blocked && code) {
+    throw new BillingError(
+      DEV_STORE_REFERRAL_BLOCKED_MESSAGE,
+      DEV_STORE_REFERRAL_ERROR.BLOCKED,
+      400,
+    );
+  }
+  return blocked ? "" : params.rawCode;
 }

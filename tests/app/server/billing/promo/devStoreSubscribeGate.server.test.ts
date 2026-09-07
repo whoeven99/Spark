@@ -17,19 +17,19 @@ vi.mock("../../../../../app/db.server", () => ({
 }));
 
 import {
-  assertDevStoreCanSubscribe,
-  DEV_STORE_SUBSCRIBE_ERROR,
-  isDevStoreSubscribeBlocked,
-  shouldBlockDevStoreSubscribe,
+  DEV_STORE_REFERRAL_ERROR,
+  isDevStoreReferralBlocked,
+  resolveReferralCodeForCheckout,
+  shouldBlockDevStoreReferral,
 } from "../../../../../app/server/billing/promo/devStoreSubscribeGate.server";
 
 const ADMIN = { graphql: vi.fn() };
 const SHOP = "demo-store.myshopify.com";
 
-describe("shouldBlockDevStoreSubscribe", () => {
+describe("shouldBlockDevStoreReferral", () => {
   it("非 prod 放行", () => {
     expect(
-      shouldBlockDevStoreSubscribe({
+      shouldBlockDevStoreReferral({
         isProduction: false,
         shopInfoOk: true,
         partnerDevelopment: true,
@@ -41,7 +41,7 @@ describe("shouldBlockDevStoreSubscribe", () => {
 
   it("真店放行", () => {
     expect(
-      shouldBlockDevStoreSubscribe({
+      shouldBlockDevStoreReferral({
         isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: false,
@@ -53,7 +53,7 @@ describe("shouldBlockDevStoreSubscribe", () => {
 
   it("店铺信息失败时放行", () => {
     expect(
-      shouldBlockDevStoreSubscribe({
+      shouldBlockDevStoreReferral({
         isProduction: true,
         shopInfoOk: false,
         partnerDevelopment: true,
@@ -63,9 +63,9 @@ describe("shouldBlockDevStoreSubscribe", () => {
     ).toBe(false);
   });
 
-  it("开发店拦截", () => {
+  it("开发店拦截推荐码", () => {
     expect(
-      shouldBlockDevStoreSubscribe({
+      shouldBlockDevStoreReferral({
         isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: true,
@@ -77,7 +77,7 @@ describe("shouldBlockDevStoreSubscribe", () => {
 
   it("白名单开发店放行", () => {
     expect(
-      shouldBlockDevStoreSubscribe({
+      shouldBlockDevStoreReferral({
         isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: true,
@@ -87,9 +87,9 @@ describe("shouldBlockDevStoreSubscribe", () => {
     ).toBe(false);
   });
 
-  it("开发店域名无法规范化则拦截", () => {
+  it("开发店域名无法规范化则拦截推荐码", () => {
     expect(
-      shouldBlockDevStoreSubscribe({
+      shouldBlockDevStoreReferral({
         isProduction: true,
         shopInfoOk: true,
         partnerDevelopment: true,
@@ -100,7 +100,7 @@ describe("shouldBlockDevStoreSubscribe", () => {
   });
 });
 
-describe("isDevStoreSubscribeBlocked", () => {
+describe("isDevStoreReferralBlocked", () => {
   beforeEach(() => {
     isProductionNodeEnv.mockReset();
     isProductionNodeEnv.mockReturnValue(true);
@@ -112,7 +112,7 @@ describe("isDevStoreSubscribeBlocked", () => {
   it("非正式环境直接放行且不查 Shopify", async () => {
     isProductionNodeEnv.mockReturnValue(false);
     await expect(
-      isDevStoreSubscribeBlocked({ admin: ADMIN, shop: SHOP }),
+      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(false);
     expect(fetchShopBasicInfo).not.toHaveBeenCalled();
   });
@@ -120,15 +120,15 @@ describe("isDevStoreSubscribeBlocked", () => {
   it("真店放行", async () => {
     fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: false });
     await expect(
-      isDevStoreSubscribeBlocked({ admin: ADMIN, shop: SHOP }),
+      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(false);
     expect(findUnique).not.toHaveBeenCalled();
   });
 
-  it("开发店拦截", async () => {
+  it("开发店拦截推荐码", async () => {
     fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: true });
     await expect(
-      isDevStoreSubscribeBlocked({ admin: ADMIN, shop: SHOP }),
+      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(true);
     expect(findUnique).toHaveBeenCalledWith({
       where: { shop: SHOP },
@@ -140,26 +140,26 @@ describe("isDevStoreSubscribeBlocked", () => {
     fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: true });
     findUnique.mockResolvedValue({ id: "allow-1" });
     await expect(
-      isDevStoreSubscribeBlocked({ admin: ADMIN, shop: SHOP }),
+      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(false);
   });
 
   it("Shopify 查询失败放行", async () => {
     fetchShopBasicInfo.mockRejectedValue(new Error("graphql down"));
     await expect(
-      isDevStoreSubscribeBlocked({ admin: ADMIN, shop: SHOP }),
+      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(false);
   });
 
   it("Shopify 无 shop 放行", async () => {
     fetchShopBasicInfo.mockResolvedValue(null);
     await expect(
-      isDevStoreSubscribeBlocked({ admin: ADMIN, shop: SHOP }),
+      isDevStoreReferralBlocked({ admin: ADMIN, shop: SHOP }),
     ).resolves.toBe(false);
   });
 });
 
-describe("assertDevStoreCanSubscribe", () => {
+describe("resolveReferralCodeForCheckout", () => {
   beforeEach(() => {
     isProductionNodeEnv.mockReset();
     isProductionNodeEnv.mockReturnValue(true);
@@ -168,20 +168,51 @@ describe("assertDevStoreCanSubscribe", () => {
     findUnique.mockResolvedValue(null);
   });
 
-  it("拦截时抛 DEV_STORE_SUBSCRIBE_BLOCKED", async () => {
+  it("开发店带码则抛 DEV_STORE_REFERRAL_BLOCKED", async () => {
     fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: true });
     await expect(
-      assertDevStoreCanSubscribe({ admin: ADMIN, shop: SHOP }),
+      resolveReferralCodeForCheckout({
+        admin: ADMIN,
+        shop: SHOP,
+        rawCode: "SPARK-ABC123",
+      }),
     ).rejects.toMatchObject({
       name: "BillingError",
-      code: DEV_STORE_SUBSCRIBE_ERROR.BLOCKED,
+      code: DEV_STORE_REFERRAL_ERROR.BLOCKED,
     });
   });
 
-  it("放行时不抛", async () => {
+  it("开发店无码则返回空串，允许普通订阅", async () => {
+    fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: true });
+    await expect(
+      resolveReferralCodeForCheckout({
+        admin: ADMIN,
+        shop: SHOP,
+        rawCode: "  ",
+      }),
+    ).resolves.toBe("");
+  });
+
+  it("真店带码原样返回", async () => {
     fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: false });
     await expect(
-      assertDevStoreCanSubscribe({ admin: ADMIN, shop: SHOP }),
-    ).resolves.toBeUndefined();
+      resolveReferralCodeForCheckout({
+        admin: ADMIN,
+        shop: SHOP,
+        rawCode: " SPARK-ABC123 ",
+      }),
+    ).resolves.toBe(" SPARK-ABC123 ");
+  });
+
+  it("白名单开发店带码原样返回", async () => {
+    fetchShopBasicInfo.mockResolvedValue({ partnerDevelopment: true });
+    findUnique.mockResolvedValue({ id: "allow-1" });
+    await expect(
+      resolveReferralCodeForCheckout({
+        admin: ADMIN,
+        shop: SHOP,
+        rawCode: "SPARK-ABC123",
+      }),
+    ).resolves.toBe("SPARK-ABC123");
   });
 });

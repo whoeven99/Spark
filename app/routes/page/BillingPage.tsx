@@ -248,7 +248,6 @@ function PaidPlanCard({
   t,
   paidFeatures,
   canEnterReferral,
-  subscribeBlocked,
   referralCode,
   referralOpen,
   onReferralCodeChange,
@@ -265,7 +264,6 @@ function PaidPlanCard({
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => PlanFeatureItem[];
   canEnterReferral: boolean;
-  subscribeBlocked: boolean;
   referralCode: string;
   referralOpen: boolean;
   onReferralCodeChange: (value: string) => void;
@@ -325,10 +323,6 @@ function PaidPlanCard({
           <div className={styles.planPendingCta} role="status">
             {t("billing.pendingConfirmation")}
           </div>
-        ) : subscribeBlocked ? (
-          <button type="button" className={styles.planPrimaryCta} disabled>
-            {t("billing.subscribeNow")}
-          </button>
         ) : (
           <Form method="post" className={styles.planActionForm}>
             <input type="hidden" name="intent" value="subscribe" />
@@ -403,7 +397,7 @@ export function BillingPage() {
     promoCampaign,
     referralRedeem,
     referralCodePrefill,
-    devStoreSubscribeBlocked,
+    devStoreReferralBlocked,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -583,8 +577,8 @@ export function BillingPage() {
       shopify.toast.show(t("billing.referralInvalidToast"));
     } else if (errorCode === "REFERRAL_CODE_ALREADY_CLAIMED") {
       shopify.toast.show(t("billing.referralAlreadyClaimedToast"));
-    } else if (errorCode === "DEV_STORE_SUBSCRIBE_BLOCKED") {
-      shopify.toast.show(t("billing.devStoreSubscribeBlocked"));
+    } else if (errorCode === "DEV_STORE_REFERRAL_BLOCKED") {
+      shopify.toast.show(t("billing.devStoreReferralBlocked"));
     } else {
       shopify.toast.show(actionData.error);
     }
@@ -956,9 +950,6 @@ export function BillingPage() {
       ) : null}
       {billing.overage?.approaching && billing.hasAccess ? (
         <s-banner tone="warning">{t("billing.overageApproachingWarning")}</s-banner>
-      ) : null}
-      {devStoreSubscribeBlocked ? (
-        <s-banner tone="warning">{t("billing.devStoreSubscribeBlocked")}</s-banner>
       ) : null}
       {pendingPlanChange ? (
         <s-banner tone="info">
@@ -1388,8 +1379,7 @@ export function BillingPage() {
                   locale={locale}
                   t={t}
                   paidFeatures={paidFeatures}
-                  canEnterReferral={!referralRedeem.claimed && !devStoreSubscribeBlocked}
-                  subscribeBlocked={devStoreSubscribeBlocked}
+                  canEnterReferral={!referralRedeem.claimed && !devStoreReferralBlocked}
                   referralCode={referralCode}
                   referralOpen={
                     referralOpenPlanKey === plan.planKey ||

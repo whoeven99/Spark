@@ -1978,7 +1978,7 @@
     "referralAlreadyClaimedToast": "This store has already used a referral code",
     "referralInvalidToast": "This referral code is invalid or expired",
     "referralExhaustedToast": "This referral code has reached its limit",
-    "devStoreSubscribeBlocked": "Development stores can't subscribe in this environment. Contact us to whitelist your store for testing.",
+    "devStoreReferralBlocked": "Development stores can't use a referral code",
     "toolFeatureChat": "Ask chat",
     "toolFeatureProductCopy": "Product copy",
     "toolFeatureProductQuality": "Product quality score",

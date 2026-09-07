@@ -1,3 +1,4 @@
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import type { Prisma } from "../../../generated/prisma";
 import prisma from "../../../db.server";
 import { appendBillingLog } from "../billingLog.server";
@@ -35,6 +36,7 @@ export async function applyActiveSubscription(params: {
     overageEnabled?: boolean;
   };
   rawPayload?: Record<string, unknown>;
+  admin?: ShopifyAdminGraphqlClient;
 }): Promise<void> {
   const {
     shop,
@@ -45,6 +47,7 @@ export async function applyActiveSubscription(params: {
     period,
     overage,
     rawPayload,
+    admin,
   } = params;
 
   console.info(
@@ -264,7 +267,9 @@ export async function applyActiveSubscription(params: {
 
   if (wasPending) {
     try {
-      const referral = await fulfillPendingReferralOnSubscription(shop);
+      const referral = await fulfillPendingReferralOnSubscription(shop, {
+        admin,
+      });
       if (referral && !referral.alreadyClaimed && referral.tokensDelta > 0) {
         console.info(
           `${LOG} referral-granted shop=${shop} code=${referral.code} tokens=${referral.tokensDelta}`,

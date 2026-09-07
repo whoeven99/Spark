@@ -37,7 +37,7 @@ import {
   effectiveOverageCapAmount,
 } from "./overage/overageMath.server";
 import { loadPromoCampaignSnapshot } from "./promo/promoCampaign.server";
-import { isDevStoreSubscribeBlocked } from "./promo/devStoreSubscribeGate.server";
+import { isDevStoreReferralBlocked } from "./promo/devStoreSubscribeGate.server";
 import { loadReferralRedeemSnapshot } from "./promo/referralCode.server";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 
@@ -188,7 +188,7 @@ export async function loadBillingPageData(
     overageRows,
     promoCampaign,
     referralRedeem,
-    devStoreSubscribeBlocked,
+    devStoreReferralBlocked,
   ] = await Promise.all([
     prisma.accountPeriodUsage.findMany({
       where: { shop },
@@ -213,7 +213,7 @@ export async function loadBillingPageData(
     loadPromoCampaignSnapshot(shop),
     loadReferralRedeemSnapshot(shop),
     options?.admin
-      ? isDevStoreSubscribeBlocked({ admin: options.admin, shop })
+      ? isDevStoreReferralBlocked({ admin: options.admin, shop })
       : Promise.resolve(false),
   ]);
   const sub = ctx.subscription;
@@ -260,8 +260,10 @@ export async function loadBillingPageData(
     billingReturnFlash,
     promoCampaign,
     referralRedeem,
-    referralCodePrefill: options?.referralCodePrefill ?? "",
-    devStoreSubscribeBlocked,
+    referralCodePrefill: devStoreReferralBlocked
+      ? ""
+      : (options?.referralCodePrefill ?? ""),
+    devStoreReferralBlocked,
   };
 }
 

@@ -15,7 +15,7 @@ type DeleteStep = {
 
 /**
  * 从 Turso 删除店铺业务数据。
- * 不删除：PromoClaimLedger / ReferralCode / ReferralClaim / ReferralInstall（防薅与安装归因）、DevStoreSubscribeAllowlist（开发店订阅白名单）、PlanCatalog / TokenBillingRule 等全局表。
+ * 不删除：PromoClaimLedger / ReferralCode / ReferralClaim / ReferralInstall（防薅与安装归因）、DevStoreSubscribeAllowlist（开发店推荐码白名单）、PlanCatalog / TokenBillingRule 等全局表。
  * CommonEventLog 会删（已在 Blob 归档快照里）。
  */
 export async function purgeShopDataFromTurso(shop: string): Promise<ShopPurgeResult> {

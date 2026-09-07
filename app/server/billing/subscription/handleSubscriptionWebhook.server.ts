@@ -186,6 +186,7 @@ export async function handleAppSubscriptionWebhook(params: {
               }
             : undefined,
       rawPayload,
+      admin: params.admin,
     });
     console.info(`${LOG} done-active shop=${params.shop} subscriptionId=${shopifySubscriptionId}`);
     return;

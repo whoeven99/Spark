@@ -78,7 +78,7 @@ export function DevStoreAllowlistCard() {
 
   return (
     <Card
-      title="开发店订阅白名单"
+      title="开发店推荐码白名单"
       style={{ marginTop: 24 }}
       extra={
         <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
@@ -87,7 +87,7 @@ export function DevStoreAllowlistCard() {
       }
     >
       <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-        正式环境（NODE_ENV=prod）默认禁止 Partner 开发店订阅套餐，避免用测试计费刷推荐码。把你自己的开发店加进来后可以照常订阅。
+        正式环境默认禁止 Partner 开发店使用推荐码（仍可直接订阅）。把你自己的开发店加进来后可以填码并兑奖。
       </Typography.Paragraph>
 
       {error ? (
