@@ -3,7 +3,7 @@ import type { XhsCoverSlots, XhsDirection } from "./xhsPlaybooks.js";
 import { renderTemplateSvg, svgToImagePayload } from "./xhsTemplateCover.js";
 
 export type CoverModelInfo = {
-  provider: "volc-ark" | "volc-visual" | "template";
+  provider: "openai" | "template";
   model: string;
 };
 
@@ -13,16 +13,10 @@ export type CoverImage = {
 };
 
 export function resolveCoverModel(): CoverModelInfo {
-  if (readArkKey()) {
+  if (resolveImageApiKey()) {
     return {
-      provider: "volc-ark",
-      model: getEnv("VOLC_ARK_IMAGE_MODEL", "doubao-seedream-4-5-251128"),
-    };
-  }
-  if (readVisualKeys()) {
-    return {
-      provider: "volc-visual",
-      model: getEnv("IMAGE_GEN_VOLC_REQ_KEY", "high_aes_general_v20"),
+      provider: "openai",
+      model: resolveImageModel(),
     };
   }
   return { provider: "template", model: "html-template" };
@@ -32,58 +26,74 @@ export async function generateXhsCover(params: {
   direction: XhsDirection;
   topic: string;
   cover: XhsCoverSlots;
-}): Promise<{ image: CoverImage | null; model: CoverModelInfo; error?: string }> {
+}): Promise<{ image: CoverImage; model: CoverModelInfo; error?: string }> {
   const planned = resolveCoverModel();
   const prompt = buildImagePrompt(params);
-
   const templateImage = svgToImagePayload(renderTemplateSvg(params));
 
-  if (planned.provider === "volc-ark") {
-    try {
-      const image = await generateViaArk(prompt, planned.model);
-      return { image, model: planned };
-    } catch (error) {
-      return {
-        image: templateImage,
-        model: { provider: "template", model: "html-template" },
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+  if (planned.provider !== "openai") {
+    return {
+      image: templateImage,
+      model: planned,
+      error: "未配置 GPT 文生图（OPENAI_IMAGE_API_KEY 或 OPENAI_API_KEY），已用模板封面",
+    };
   }
 
-  if (planned.provider === "volc-visual") {
-    try {
-      const image = await generateViaVisual(prompt, planned.model);
-      return { image, model: planned };
-    } catch (error) {
-      return {
-        image: templateImage,
-        model: { provider: "template", model: "html-template" },
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+  try {
+    const image = await generateViaOpenAi(prompt, planned.model);
+    return { image, model: planned };
+  } catch (error) {
+    return {
+      image: templateImage,
+      model: { provider: "template", model: "html-template" },
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-
-  return {
-    image: templateImage,
-    model: planned,
-    error: "未配置火山文生图密钥（VOLC_ARK_API_KEY 或 HUOSHAN_API_KEY / VOLC_ACCESSKEY），已用模板封面",
-  };
 }
 
-function readArkKey(): string {
-  return (
-    getEnv("VOLC_ARK_API_KEY") ||
-    getEnv("ARK_API_KEY") ||
-    getEnv("VOLCENGINE_ARK_API_KEY")
-  );
+function resolveImageApiKey(): string {
+  return getEnv("OPENAI_IMAGE_API_KEY") || getEnv("OPENAI_API_KEY");
 }
 
-function readVisualKeys(): { accessKeyId: string; secretKey: string } | null {
-  const accessKeyId = getEnv("HUOSHAN_API_KEY") || getEnv("VOLC_ACCESSKEY");
-  const secretKey = getEnv("HUOSHAN_API_SECRET") || getEnv("VOLC_SECRETKEY");
-  if (!accessKeyId || !secretKey) return null;
-  return { accessKeyId, secretKey };
+function resolveImageModel(): string {
+  return getEnv("OPENAI_IMAGE_MODEL") || getEnv("OPENAI_DALLE_MODEL") || "gpt-image-2";
+}
+
+function resolveBaseUrl(): string {
+  const raw =
+    getEnv("OPENAI_IMAGE_BASE_URL") ||
+    getEnv("OPENAI_BASE_URL") ||
+    getEnv("OPENAI_API_BASE") ||
+    "https://api.openai.com/v1";
+  let base = raw.replace(/\/+$/, "");
+  if (!base.startsWith("http://") && !base.startsWith("https://")) {
+    base = `https://${base}`;
+  }
+  return base;
+}
+
+function resolveImagesPostUrl(): string {
+  const base = resolveBaseUrl();
+  if (base.includes("/images/generations")) {
+    return base;
+  }
+  let url = `${base}/images/generations`;
+  const apiVersion = getEnv("OPENAI_IMAGE_API_VERSION");
+  if (apiVersion) {
+    url += `${url.includes("?") ? "&" : "?"}api-version=${encodeURIComponent(apiVersion)}`;
+  }
+  return url;
+}
+
+function isGptImageModel(model: string): boolean {
+  return model.toLowerCase().startsWith("gpt-image");
+}
+
+function resolveImageSize(model: string): string {
+  const explicit = getEnv("IMAGE_GEN_SIZE");
+  if (explicit) return explicit;
+  if (isGptImageModel(model)) return "1024x1536";
+  return "1024x1792";
 }
 
 function buildImagePrompt(params: {
@@ -93,32 +103,32 @@ function buildImagePrompt(params: {
 }): string {
   const { direction, topic, cover } = params;
   const lines = [
-    "小红书竖版封面 3:4，信息流缩略图也能看清。",
-    "大字少字，高对比，不要段落，不要英文乱码，不要水印。",
-    `选题：${topic}`,
-    `主标题：${cover.headline || topic}`,
+    "Xiaohongshu vertical cover 3:4, readable as a small thumbnail.",
+    "Big short Chinese text, high contrast, no paragraphs, no watermark, no garbled English.",
+    `Topic: ${topic}`,
+    `Headline: ${cover.headline || topic}`,
   ];
-  if (cover.subhead) lines.push(`副标题：${cover.subhead}`);
+  if (cover.subhead) lines.push(`Subhead: ${cover.subhead}`);
 
   switch (direction) {
     case "howto":
       lines.push(
-        "风格：白底知识卡片，左上小标签，中间超大黑字标题，底部一块黑底放短提示词。",
-        cover.promptBox ? `黑底文字：${cover.promptBox}` : "",
+        "Style: white knowledge card, small label top-left, huge black title, black box at bottom for a short prompt.",
+        cover.promptBox ? `Black box text: ${cover.promptBox}` : "",
       );
       break;
     case "compare":
       lines.push(
-        "风格：左右对照撕纸卡，左红右青。",
-        cover.left.length ? `左侧：${cover.left.join(" / ")}` : "",
-        cover.right.length ? `右侧：${cover.right.join(" / ")}` : "",
+        "Style: left-right comparison card, red left and teal right.",
+        cover.left.length ? `Left: ${cover.left.join(" / ")}` : "",
+        cover.right.length ? `Right: ${cover.right.join(" / ")}` : "",
       );
       break;
     case "data":
       lines.push(
-        "风格：黑底，中间一个超大荧光绿数字。",
-        cover.metric ? `主数字：${cover.metric}` : "",
-        cover.metricNote ? `口径：${cover.metricNote}` : "",
+        "Style: black background, one huge lime-green number in the center.",
+        cover.metric ? `Metric: ${cover.metric}` : "",
+        cover.metricNote ? `Caption: ${cover.metricNote}` : "",
       );
       break;
     default: {
@@ -130,32 +140,42 @@ function buildImagePrompt(params: {
   return lines.filter(Boolean).join("\n");
 }
 
-async function generateViaArk(prompt: string, model: string): Promise<CoverImage> {
-  const base = getEnv("VOLC_ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3").replace(
-    /\/$/,
-    "",
-  );
-  const res = await fetch(`${base}/images/generations`, {
+async function generateViaOpenAi(prompt: string, model: string): Promise<CoverImage> {
+  const apiKey = resolveImageApiKey();
+  const postUrl = resolveImagesPostUrl();
+  const size = resolveImageSize(model);
+  const body: Record<string, unknown> = {
+    model,
+    prompt,
+    n: 1,
+    size,
+  };
+  if (!isGptImageModel(model)) {
+    body.response_format = "b64_json";
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (postUrl.includes(".openai.azure.com") || postUrl.includes("cognitiveservices.azure.com")) {
+    headers["api-key"] = apiKey;
+  } else {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const res = await fetch(postUrl, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${readArkKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      prompt,
-      size: "768x1024",
-      response_format: "b64_json",
-      watermark: false,
-    }),
+    headers,
+    body: JSON.stringify(body),
   });
   const raw = (await res.json()) as {
     error?: { message?: string };
     data?: Array<{ b64_json?: string; url?: string }>;
   };
   if (!res.ok) {
-    throw new Error(raw.error?.message || `火山方舟 HTTP ${res.status}`);
+    throw new Error(raw.error?.message || `GPT 文生图 HTTP ${res.status}`);
   }
+
   const b64 = raw.data?.[0]?.b64_json?.trim();
   if (b64) {
     return { mimeType: "image/png", base64: stripDataUrl(b64) };
@@ -164,50 +184,7 @@ async function generateViaArk(prompt: string, model: string): Promise<CoverImage
   if (url) {
     return fetchRemoteImage(url);
   }
-  throw new Error("火山方舟没有返回图片");
-}
-
-async function generateViaVisual(prompt: string, reqKey: string): Promise<CoverImage> {
-  const keys = readVisualKeys();
-  if (!keys) {
-    throw new Error("缺少火山视觉密钥");
-  }
-
-  const { Service } = await import("@volcengine/openapi");
-  const service = new Service({
-    host: "visual.volcengineapi.com",
-    serviceName: "cv",
-    region: "cn-north-1",
-    accessKeyId: keys.accessKeyId,
-    secretKey: keys.secretKey,
-  });
-  const cvProcess = service.createJSONAPI("CVProcess", { Version: "2022-08-31" });
-  const raw = (await cvProcess({
-    req_key: reqKey,
-    prompt,
-    width: 768,
-    height: 1024,
-    return_url: true,
-  })) as unknown as Record<string, unknown>;
-
-  const code = raw.code;
-  if (typeof code === "number" && code !== 10000) {
-    throw new Error(`${code}: ${String(raw.message ?? "火山视觉失败")}`);
-  }
-
-  const data =
-    raw.data && typeof raw.data === "object" ? (raw.data as Record<string, unknown>) : raw;
-  const urls = asStringList(data.image_urls ?? data.ImageUrls ?? data.image_url ?? data.url);
-  if (urls[0]) {
-    return fetchRemoteImage(urls[0]);
-  }
-  const b64List = asStringList(
-    data.binary_data_base64 ?? data.BinaryDataBase64 ?? data.binary_data ?? data.image,
-  );
-  if (b64List[0]) {
-    return { mimeType: "image/png", base64: stripDataUrl(b64List[0]) };
-  }
-  throw new Error("火山视觉没有返回图片");
+  throw new Error("GPT 文生图没有返回图片");
 }
 
 async function fetchRemoteImage(url: string): Promise<CoverImage> {
@@ -217,20 +194,11 @@ async function fetchRemoteImage(url: string): Promise<CoverImage> {
   }
   const bytes = Buffer.from(await res.arrayBuffer());
   const mime = (res.headers.get("content-type") || "image/png").split(";")[0];
-  const mimeType =
-    mime === "image/jpeg" || mime === "image/webp" ? mime : "image/png";
+  const mimeType = mime === "image/jpeg" || mime === "image/webp" ? mime : "image/png";
   return { mimeType, base64: bytes.toString("base64") };
 }
 
 function stripDataUrl(value: string): string {
   const idx = value.indexOf("base64,");
   return idx >= 0 ? value.slice(idx + 7) : value;
-}
-
-function asStringList(value: unknown): string[] {
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    .map((item) => item.trim());
 }
