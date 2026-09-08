@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { generateXhsCopy, listCopyModels, resolveCopyModel } from "../promo/xhsCopyClient.js";
+import {
+  arkCopyHint,
+  generateXhsCopy,
+  listCopyModels,
+  resolveCopyModel,
+} from "../promo/xhsCopyClient.js";
 import { generateXhsCover, resolveCoverModel } from "../promo/xhsCoverClient.js";
 import { isXhsDirection } from "../promo/xhsPlaybooks.js";
 
@@ -11,8 +16,8 @@ xhsPromoRouter.get("/status", (_req, res) => {
   const cover = resolveCoverModel();
   res.json({
     copy: copy
-      ? { configured: true, provider: copy.provider, model: copy.model, options }
-      : { configured: false, provider: null, model: null, options: [] },
+      ? { configured: true, provider: copy.provider, model: copy.model, options, hint: arkCopyHint() }
+      : { configured: false, provider: null, model: null, options: [], hint: arkCopyHint() },
     cover: {
       configured: cover.provider !== "template",
       provider: cover.provider,

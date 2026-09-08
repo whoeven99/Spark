@@ -20,16 +20,31 @@ function isCopyProvider(value: string): value is CopyProvider {
   return COPY_PROVIDERS.includes(value as CopyProvider);
 }
 
+const KNOWN_UNAVAILABLE_ARK_TEXT_MODELS = new Set(["doubao-seed-1-6-251015"]);
+
 function resolveArkApiKey(): string {
   return getEnv("VOLC_ARK_API_KEY") || getEnv("ARK_API_KEY");
 }
 
+export function configuredArkTextModel(): string {
+  const raw = getEnv("VOLC_ARK_TEXT_MODEL");
+  if (!raw || KNOWN_UNAVAILABLE_ARK_TEXT_MODELS.has(raw)) return "";
+  return raw;
+}
+
+export function arkCopyHint(): string {
+  if (!resolveArkApiKey()) return "";
+  if (configuredArkTextModel()) return "";
+  return "封面密钥已通，但还没有可用的豆包对话模型。请在方舟开通对话模型，把 Model ID 或 ep- 写入 VOLC_ARK_TEXT_MODEL，不要用 doubao-seed-1-6-251015。";
+}
+
 export function listCopyModels(): CopyModelInfo[] {
   const options: CopyModelInfo[] = [];
-  if (resolveArkApiKey()) {
+  const arkTextModel = configuredArkTextModel();
+  if (resolveArkApiKey() && arkTextModel) {
     options.push({
       provider: "volc-ark",
-      model: getEnv("VOLC_ARK_TEXT_MODEL", "doubao-seed-1-6-251015"),
+      model: arkTextModel,
     });
   }
   if (getEnv("DEEPSEEK_API_KEY")) {
@@ -65,7 +80,9 @@ export async function generateXhsCopy(params: {
 }): Promise<{ draft: XhsCopyDraft; model: CopyModelInfo }> {
   const resolved = resolveCopyModel(params.provider);
   if (!resolved) {
-    throw new Error("未配置 VOLC_ARK_API_KEY、DEEPSEEK_API_KEY 或 OPENAI_API_KEY");
+    throw new Error(
+      arkCopyHint() || "未配置可用的文案模型。豆包需要 VOLC_ARK_TEXT_MODEL（对话 Model ID 或 ep-），或配置 DEEPSEEK_API_KEY / OPENAI_API_KEY。",
+    );
   }
 
   const content = await invokeChat(resolved, buildSystemPrompt(), buildUserPrompt(params));

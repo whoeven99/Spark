@@ -3299,6 +3299,7 @@ export type XhsPromoStatus = {
     provider: string | null;
     model: string | null;
     options: XhsPromoCopyOption[];
+    hint?: string;
   };
   cover: { configured: boolean; provider: string; model: string };
 };

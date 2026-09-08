@@ -225,12 +225,15 @@ export default function XhsPromo() {
         <Tag color="green">封面模型 {modelLabel(usedCover)}</Tag>
       </Space>
 
-      {!status?.copy.configured ? (
+      {status?.copy.hint ? (
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={status.copy.hint} />
+      ) : null}
+      {!status?.copy.configured && !status?.copy.hint ? (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="未配置文案模型。请写入 VOLC_ARK_API_KEY（豆包，与封面共用），或 DEEPSEEK_API_KEY / OPENAI_API_KEY。"
+          message="未配置文案模型。豆包需要 VOLC_ARK_TEXT_MODEL（对话 Model ID 或 ep-），或配置 DEEPSEEK_API_KEY / OPENAI_API_KEY。"
         />
       ) : null}
 
