@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 function applyEnvFile(filePath: string): void {
   if (!existsSync(filePath)) return;
@@ -24,15 +25,22 @@ function applyEnvFile(filePath: string): void {
 }
 
 export function loadEnv(): void {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const adminRoot = path.resolve(here, "../..");
+  const repoRoot = path.resolve(here, "../../..");
   const cwd = process.cwd();
+  // 先写先胜，且不覆盖进程里已有的值（Render secrets 优先）。
+  // 本地 DeepSeek / 火山在 .env.test，主应用会叠读，Admin 以前只读 .env。
   const candidates = [
-    path.join(cwd, ".env"),          // admin/.env (local override)
-    path.join(cwd, "../.env"),       // repo root .env (run from admin/)
-    path.join(cwd, "../../.env"),    // two levels up
-    "/etc/secrets/.env",             // Render secret file
+    path.join(cwd, ".env"),
+    path.join(adminRoot, ".env"),
+    path.join(repoRoot, ".env"),
+    path.join(repoRoot, ".env.admin.test"),
+    path.join(repoRoot, ".env.test"),
+    "/etc/secrets/.env",
     "/etc/secrets/env",
   ];
-  for (const p of candidates) applyEnvFile(p);
+  for (const filePath of candidates) applyEnvFile(filePath);
 }
 
 export function requireEnv(name: string): string {

@@ -30,6 +30,77 @@ const DIRECTION_OPTIONS: Array<{ label: string; value: XhsPromoDirection }> = [
   { label: "数据", value: "data" },
 ];
 
+type TopicPreset = {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes: string;
+};
+
+const TOPIC_PRESETS: TopicPreset[] = [
+  {
+    direction: "howto",
+    topic: "早上先看异常，别先翻报表",
+    notes: "功能：经营诊断\n只读，不改店铺\n对比近 7 天均值，只列最多 5 个异常",
+  },
+  {
+    direction: "howto",
+    topic: "商品页哪里差，一句话看完",
+    notes: "功能：商品质量评分 / 商品诊断\n看标题、主图、描述缺什么\n先出问题清单，再决定改哪几项",
+  },
+  {
+    direction: "howto",
+    topic: "主图翻译成英语，不用重做设计",
+    notes: "功能：图片翻译\n保留原版式，只换文案语言\n适合跨境店出英语 / 多语种主图",
+  },
+  {
+    direction: "howto",
+    topic: "50 个 SKU 调价，先看试算再写回",
+    notes: "功能：批量调价\n先试算、待审核，确认后才写回 Shopify\nAgent 回合内不改价格",
+  },
+  {
+    direction: "compare",
+    topic: "Sidekick 能问，Spark 能改完再给你看",
+    notes: "对比：Shopify Sidekick vs Spark\nSidekick：能问店里的事\nSpark：能看店、改文案/图、批量改，审核后再写回",
+  },
+  {
+    direction: "compare",
+    topic: "别把 ChatGPT 当运营",
+    notes: "对比：ChatGPT 复制粘贴 vs Spark\nChatGPT 看不到店铺数据，也写不回商品\nSpark 嵌在 Shopify 后台，问完能开任务",
+  },
+  {
+    direction: "compare",
+    topic: "Claude Code 会写代码，店主要的是改商品页",
+    notes: "对比：Claude Code / Codex vs Spark\n前者给开发写代码\n店主要的是诊断、改文案、译主图、批量调价",
+  },
+  {
+    direction: "compare",
+    topic: "外包美工等三天 vs 主图翻译当晚出",
+    notes: "对比：等外包 vs 图片翻译\n外包：改字、排期、对稿\nSpark：保留版式，当晚出多语种主图",
+  },
+  {
+    direction: "data",
+    topic: "用了之后，改商品页不用通宵",
+    notes: "数据向：先讲省下的时间，不要编百分比\n场景：商品诊断 + 文案优化 + 审核写回\n有真实工时再补数字",
+  },
+  {
+    direction: "data",
+    topic: "某店 14 天，转化率从 x% 到 y%",
+    notes: "必须填真实前后数字，禁止模型编造\n口径：接入前 14 天 vs 接入后 14 天\n动作：先改标题和主图，其它先不动",
+  },
+  {
+    direction: "data",
+    topic: "图片翻译，一晚出齐 3 个语种主图",
+    notes: "数据向：用件数/语种，不编转化率\n场景：图片翻译\n补充具体 SKU 数或语种再生成",
+  },
+  {
+    direction: "data",
+    topic: "改商品页不用通宵",
+    notes: "备选数据向：没有转化率就先用这个\n讲流程变短，不承诺百分比",
+  },
+];
+
+const FIRST_PRESET = TOPIC_PRESETS[0];
+
 function imageSrc(result: XhsPromoGenerateResult | null): string {
   if (!result?.image?.base64) return "";
   return `data:${result.image.mimeType};base64,${result.image.base64}`;
@@ -41,11 +112,9 @@ function modelLabel(raw: string | null | undefined): string {
 }
 
 export default function XhsPromo() {
-  const [direction, setDirection] = useState<XhsPromoDirection>("compare");
-  const [topic, setTopic] = useState("为什么不在后台一页页查？");
-  const [notes, setNotes] = useState(
-    "对比：逐页人工检查 vs API 全量导出\n痛点：漏项、标准不一致、没法批量复核\n结论：先把数据放到一张表里",
-  );
+  const [direction, setDirection] = useState<XhsPromoDirection>(FIRST_PRESET.direction);
+  const [topic, setTopic] = useState(FIRST_PRESET.topic);
+  const [notes, setNotes] = useState(FIRST_PRESET.notes);
   const [status, setStatus] = useState<XhsPromoStatus | null>(null);
   const [result, setResult] = useState<XhsPromoGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -100,6 +169,12 @@ export default function XhsPromo() {
     message.success(`已复制${label}`);
   }
 
+  function applyPreset(preset: TopicPreset) {
+    setDirection(preset.direction);
+    setTopic(preset.topic);
+    setNotes(preset.notes);
+  }
+
   function downloadCover() {
     if (!previewSrc || !result) return;
     const ext = result.image?.mimeType.includes("svg") ? "svg" : "png";
@@ -145,6 +220,30 @@ export default function XhsPromo() {
 
       <Card size="small" title="选题" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <div>
+            <Text type="secondary">参考选题，点击填入</Text>
+            <div style={{ marginTop: 8 }}>
+              {DIRECTION_OPTIONS.map((group) => (
+                <div key={group.value} style={{ marginBottom: 8 }}>
+                  <Text type="secondary" style={{ marginRight: 8 }}>
+                    {group.label}
+                  </Text>
+                  <Space wrap size={[8, 8]}>
+                    {TOPIC_PRESETS.filter((item) => item.direction === group.value).map((item) => (
+                      <Button
+                        key={item.topic}
+                        size="small"
+                        type={topic === item.topic ? "primary" : "default"}
+                        onClick={() => applyPreset(item)}
+                      >
+                        {item.topic}
+                      </Button>
+                    ))}
+                  </Space>
+                </div>
+              ))}
+            </div>
+          </div>
           <div>
             <Text type="secondary">方向</Text>
             <div style={{ marginTop: 6 }}>
