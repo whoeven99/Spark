@@ -78,6 +78,8 @@ export async function generateXhsCopy(params: {
   topic: string;
   notes: string;
   provider?: string | null;
+  systemPrompt?: string | null;
+  userPrompt?: string | null;
 }): Promise<{ draft: XhsCopyDraft; model: CopyModelInfo }> {
   const resolved = resolveCopyModel(params.provider);
   if (!resolved) {
@@ -86,7 +88,9 @@ export async function generateXhsCopy(params: {
     );
   }
 
-  const content = await invokeChat(resolved, buildSystemPrompt(), buildUserPrompt(params));
+  const system = params.systemPrompt?.trim() || buildCopySystemPrompt();
+  const user = params.userPrompt?.trim() || buildCopyUserPrompt(params);
+  const content = await invokeChat(resolved, system, user);
   const draft = normalizeDraft(parseJsonObject(content), params.topic);
   const bannedSource = [
     draft.title,
@@ -106,7 +110,7 @@ export async function generateXhsCopy(params: {
   return { draft, model: resolved };
 }
 
-function buildSystemPrompt(): string {
+export function buildCopySystemPrompt(): string {
   return [
     "你是小红书图文编辑，给 Shopify AI 插件 Spark 写推广笔记。",
     "只输出一个 JSON 对象，不要 Markdown、不要解释。",
@@ -114,12 +118,14 @@ function buildSystemPrompt(): string {
     "cards 是 2-4 张滑页卡片，只给图片排版，不要把笔记正文原样塞进去。",
     "每张 card：headline ≤10 字，lines 2-4 条、每条≤16 字。",
     "语气像真人店主，短句换行。禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
-    "title ≤14 字。body 200-400 字，前 80 字必须是钩子。细节放 cards，不要把正文写成说明书。",
-    "cover.headline 3-10 字。tags 3-5 个，不要 #。",
+    "title ≤14 字，必须有钩子，禁止只写两个品牌名对打。body 200-400 字，前 80 字必须是钩子。细节放 cards。",
+    "没有补充里的真实数字，禁止编造转化率、CTR、百分比。",
+    "对比向：cover.leftTitle 是对照对象，cover.rightTitle 固定写 Spark；left 是对照短板，right 是 Spark 能力。禁止对调。",
+    "cover.headline 可两行、不超过 18 字；Spark、Sidekick 等品牌名必须写全，禁止出现 Spark vs S。tags 3-5 个，不要 #。",
   ].join("\n");
 }
 
-function buildUserPrompt(params: {
+export function buildCopyUserPrompt(params: {
   direction: XhsDirection;
   topic: string;
   notes: string;

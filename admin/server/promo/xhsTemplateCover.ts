@@ -52,8 +52,8 @@ export function renderTemplateSvg(params: {
   <text x="384" y="96" text-anchor="middle" font-size="32" font-weight="700" fill="#111">${headline}</text>
   <rect x="40" y="160" width="328" height="700" fill="#f8e6e4"/>
   <rect x="400" y="160" width="328" height="700" fill="#e5eef0"/>
-  <text x="204" y="220" text-anchor="middle" font-size="28" font-weight="700" fill="#a8071a">旧方法</text>
-  <text x="564" y="220" text-anchor="middle" font-size="28" font-weight="700" fill="#237804">新方法</text>
+  <text x="204" y="220" text-anchor="middle" font-size="28" font-weight="700" fill="#a8071a">${esc(params.cover.leftTitle || "对照")}</text>
+  <text x="564" y="220" text-anchor="middle" font-size="28" font-weight="700" fill="#237804">${esc(params.cover.rightTitle || "Spark")}</text>
   ${listItems(params.cover.left, "#a8071a")}
   ${listItems(params.cover.right, "#237804").replaceAll('x="70"', 'x="430"')}
   <rect x="40" y="890" width="688" height="90" fill="#efe6d6"/>
