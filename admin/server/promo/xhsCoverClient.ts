@@ -125,33 +125,46 @@ function buildImagePrompt(params: {
   cover: XhsCoverSlots;
 }): string {
   const { direction, topic, cover } = params;
+  const headline = cover.headline || topic;
   const lines = [
-    "Xiaohongshu vertical cover 3:4, readable as a small thumbnail.",
-    "Big short Chinese text, high contrast, no paragraphs, no watermark, no garbled English.",
-    `Topic: ${topic}`,
-    `Headline: ${cover.headline || topic}`,
+    "生成一张小红书爆款图文封面，不是海报、不是PPT、不是知识付费课件、不是企业宣传图。",
+    "画幅竖版 3:4（1080x1440 观感），缩略图也能一眼看清主标题。",
+    "气质像真人店主随手做的笔记封面：生活感、手账感、高信息密度但字很少。",
+    "常见爆款元素可少量使用：便签纸、高光马克笔、手写批注、贴纸、胶带、手机截图碎片、对比色色块。",
+    "中文大字为主，印刷体或手写标题均可，必须清晰、不连笔糊、不乱码、不发明英文段落。",
+    "主标题只放下面指定的那几个字，字要巨大，占画面上半或视觉中心。",
+    "高对比、干净背景或轻度纸纹理，避免灰雾、避免复杂长文、避免水印、避免小红书 Logo、避免二维码。",
+    "不要真人正脸特写，不要网红摆拍，不要科技蓝发光背景，不要仪表盘数据大屏。",
+    `选题：${topic}`,
+    `封面主标题（必须完整、清晰地写在图上）：${headline}`,
   ];
-  if (cover.subhead) lines.push(`Subhead: ${cover.subhead}`);
+  if (cover.subhead) {
+    lines.push(`副标题（小一号，一句痛点）：${cover.subhead}`);
+  }
 
   switch (direction) {
     case "howto":
       lines.push(
-        "Style: white knowledge card, small label top-left, huge black title, black box at bottom for a short prompt.",
-        cover.promptBox ? `Black box text: ${cover.promptBox}` : "",
+        "构图：教程/干货卡。左上角小标签如「保姆级」或「3步」，中间超大标题，下方一块深色提示词框。",
+        "像「收藏了就会用」的小红书教学封面，有步骤感，但画面上最多 3 个短词，不要写成说明书。",
+        cover.promptBox ? `底部提示词框里的字：${cover.promptBox}` : "",
       );
       break;
     case "compare":
       lines.push(
-        "Style: left-right comparison card, red left and teal right.",
-        cover.left.length ? `Left: ${cover.left.join(" / ")}` : "",
-        cover.right.length ? `Right: ${cover.right.join(" / ")}` : "",
+        "构图：左右对照爆款封面。左边旧方法偏红/叉，右边新方法偏绿/对勾，中间或顶部超大标题。",
+        "像小红书常见的「别再用A，改用B」封面，生活化色块，不要商务信息图。",
+        cover.left.length ? `左边短词：${cover.left.join(" / ")}` : "",
+        cover.right.length ? `右边短词：${cover.right.join(" / ")}` : "",
       );
       break;
     case "data":
       lines.push(
-        "Style: black background, one huge lime-green number in the center.",
-        cover.metric ? `Metric: ${cover.metric}` : "",
-        cover.metricNote ? `Caption: ${cover.metricNote}` : "",
+        "构图：结果卡。画面只强调一个巨大数字，其余都是衬托。",
+        "像小红书「用了之后」封面：数字最大、口径一行小字，可用圆圈、高光笔、便签把数字圈出来。",
+        "不要柱状图、折线图、Excel、后台截图表格。",
+        cover.metric ? `必须醒目写出的数字：${cover.metric}` : "",
+        cover.metricNote ? `数字下方小字口径：${cover.metricNote}` : "",
       );
       break;
     default: {
