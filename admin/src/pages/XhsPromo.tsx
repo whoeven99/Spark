@@ -442,7 +442,7 @@ export default function XhsPromo() {
             items={[
               {
                 key: "copy",
-                label: copyDirty ? "文案提示词（已改，点开可编辑）" : "文案提示词（点开后可看、可改）",
+                label: copyDirty ? "文案提示词（已改，点开后可查看编辑）" : "文案提示词（点开后可查看编辑）",
                 children: (
                   <Space direction="vertical" style={{ width: "100%" }} size={10}>
                     <div>
@@ -479,7 +479,7 @@ export default function XhsPromo() {
               },
               {
                 key: "image",
-                label: imageDirty ? "封面提示词（已改，点开可编辑）" : "封面提示词（点开后可看、可改）",
+                label: imageDirty ? "封面提示词（已改，点开后可查看编辑）" : "封面提示词（点开后可查看编辑）",
                 children: (
                   <Space direction="vertical" style={{ width: "100%" }} size={10}>
                     <TextArea
