@@ -114,7 +114,8 @@ function buildSystemPrompt(): string {
     "cards 是 2-4 张滑页卡片，只给图片排版，不要把笔记正文原样塞进去。",
     "每张 card：headline ≤10 字，lines 2-4 条、每条≤16 字。",
     "语气像真人店主，短句换行。禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
-    "title ≤14 字。cover.headline 3-10 字。tags 3-5 个，不要 #。",
+    "title ≤14 字。body 200-400 字，前 80 字必须是钩子。细节放 cards，不要把正文写成说明书。",
+    "cover.headline 3-10 字。tags 3-5 个，不要 #。",
   ].join("\n");
 }
 
