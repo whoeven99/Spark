@@ -3,7 +3,7 @@ import type { XhsCoverSlots, XhsDirection } from "./xhsPlaybooks.js";
 import { renderTemplateSvg, svgToImagePayload } from "./xhsTemplateCover.js";
 
 export type CoverModelInfo = {
-  provider: "openai" | "template";
+  provider: "volc-ark" | "openai" | "template";
   model: string;
 };
 
@@ -13,6 +13,12 @@ export type CoverImage = {
 };
 
 export function resolveCoverModel(): CoverModelInfo {
+  if (resolveArkApiKey()) {
+    return {
+      provider: "volc-ark",
+      model: getEnv("VOLC_ARK_IMAGE_MODEL", "doubao-seedream-5-0-pro-260628"),
+    };
+  }
   if (resolveImageApiKey()) {
     return {
       provider: "openai",
@@ -31,24 +37,41 @@ export async function generateXhsCover(params: {
   const prompt = buildImagePrompt(params);
   const templateImage = svgToImagePayload(renderTemplateSvg(params));
 
-  if (planned.provider !== "openai") {
-    return {
-      image: templateImage,
-      model: planned,
-      error: "未配置 GPT 文生图（OPENAI_IMAGE_API_KEY 或 OPENAI_API_KEY），已用模板封面",
-    };
+  if (planned.provider === "volc-ark") {
+    try {
+      const image = await generateViaArk(prompt, planned.model);
+      return { image, model: planned };
+    } catch (error) {
+      return {
+        image: templateImage,
+        model: { provider: "template", model: "html-template" },
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
-  try {
-    const image = await generateViaOpenAi(prompt, planned.model);
-    return { image, model: planned };
-  } catch (error) {
-    return {
-      image: templateImage,
-      model: { provider: "template", model: "html-template" },
-      error: error instanceof Error ? error.message : String(error),
-    };
+  if (planned.provider === "openai") {
+    try {
+      const image = await generateViaOpenAi(prompt, planned.model);
+      return { image, model: planned };
+    } catch (error) {
+      return {
+        image: templateImage,
+        model: { provider: "template", model: "html-template" },
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
+
+  return {
+    image: templateImage,
+    model: planned,
+    error: "未配置 VOLC_ARK_API_KEY，已用模板封面",
+  };
+}
+
+function resolveArkApiKey(): string {
+  return getEnv("VOLC_ARK_API_KEY") || getEnv("ARK_API_KEY");
 }
 
 function resolveImageApiKey(): string {
@@ -138,6 +161,45 @@ function buildImagePrompt(params: {
   }
 
   return lines.filter(Boolean).join("\n");
+}
+
+async function generateViaArk(prompt: string, model: string): Promise<CoverImage> {
+  const base = getEnv("VOLC_ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3").replace(
+    /\/$/,
+    "",
+  );
+  const size = getEnv("VOLC_ARK_IMAGE_SIZE", "2K");
+  const res = await fetch(`${base}/images/generations`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resolveArkApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      response_format: "url",
+      size,
+      stream: false,
+      watermark: false,
+    }),
+  });
+  const raw = (await res.json()) as {
+    error?: { message?: string };
+    data?: Array<{ url?: string; b64_json?: string }>;
+  };
+  if (!res.ok) {
+    throw new Error(raw.error?.message || `方舟文生图 HTTP ${res.status}`);
+  }
+  const url = raw.data?.[0]?.url?.trim();
+  if (url) {
+    return fetchRemoteImage(url);
+  }
+  const b64 = raw.data?.[0]?.b64_json?.trim();
+  if (b64) {
+    return { mimeType: "image/png", base64: stripDataUrl(b64) };
+  }
+  throw new Error("方舟文生图没有返回图片");
 }
 
 async function generateViaOpenAi(prompt: string, model: string): Promise<CoverImage> {

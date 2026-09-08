@@ -16,6 +16,7 @@ import { CopyOutlined, DownloadOutlined, PictureOutlined } from "@ant-design/ico
 import {
   fetchXhsPromoStatus,
   generateXhsPromo,
+  type XhsPromoCopyProvider,
   type XhsPromoDirection,
   type XhsPromoGenerateResult,
   type XhsPromoStatus,
@@ -111,24 +112,49 @@ function modelLabel(raw: string | null | undefined): string {
   return raw;
 }
 
+function copyProviderLabel(provider: XhsPromoCopyProvider): string {
+  switch (provider) {
+    case "volc-ark":
+      return "豆包";
+    case "deepseek":
+      return "DeepSeek";
+    case "openai":
+      return "GPT";
+    default: {
+      const _never: never = provider;
+      return _never;
+    }
+  }
+}
+
 export default function XhsPromo() {
   const [direction, setDirection] = useState<XhsPromoDirection>(FIRST_PRESET.direction);
   const [topic, setTopic] = useState(FIRST_PRESET.topic);
   const [notes, setNotes] = useState(FIRST_PRESET.notes);
   const [status, setStatus] = useState<XhsPromoStatus | null>(null);
+  const [copyProvider, setCopyProvider] = useState<XhsPromoCopyProvider | null>(null);
   const [result, setResult] = useState<XhsPromoGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     fetchXhsPromoStatus()
-      .then(setStatus)
+      .then((next) => {
+        setStatus(next);
+        const options = next.copy.options ?? [];
+        const first = options[0]?.provider ?? (next.copy.provider as XhsPromoCopyProvider | null);
+        setCopyProvider(first);
+      })
       .catch((e) => setError(String(e)));
   }, []);
 
-  const plannedCopy = status?.copy.configured
-    ? `${status.copy.provider}:${status.copy.model}`
-    : "未配置 DEEPSEEK / OPENAI";
+  const copyOptions = status?.copy.options ?? [];
+  const selectedCopy = copyOptions.find((item) => item.provider === copyProvider)
+    ?? copyOptions[0]
+    ?? null;
+  const plannedCopy = selectedCopy
+    ? `${selectedCopy.provider}:${selectedCopy.model}`
+    : "未配置豆包 / DeepSeek / GPT";
   const plannedCover = status
     ? `${status.cover.provider}:${status.cover.model}`
     : "检测中";
@@ -150,6 +176,7 @@ export default function XhsPromo() {
         direction,
         topic: topic.trim(),
         notes: notes.trim(),
+        copyProvider: copyProvider ?? undefined,
       });
       setResult(next);
       if (next.coverError) {
@@ -203,7 +230,7 @@ export default function XhsPromo() {
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="未配置文案模型。请在环境变量写入 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。"
+          message="未配置文案模型。请写入 VOLC_ARK_API_KEY（豆包，与封面共用），或 DEEPSEEK_API_KEY / OPENAI_API_KEY。"
         />
       ) : null}
 
@@ -244,6 +271,21 @@ export default function XhsPromo() {
               ))}
             </div>
           </div>
+          {copyOptions.length > 1 ? (
+            <div>
+              <Text type="secondary">文案模型</Text>
+              <div style={{ marginTop: 6 }}>
+                <Segmented
+                  options={copyOptions.map((item) => ({
+                    label: `${copyProviderLabel(item.provider)} · ${item.model}`,
+                    value: item.provider,
+                  }))}
+                  value={copyProvider ?? copyOptions[0]?.provider}
+                  onChange={(v) => setCopyProvider(v as XhsPromoCopyProvider)}
+                />
+              </div>
+            </div>
+          ) : null}
           <div>
             <Text type="secondary">方向</Text>
             <div style={{ marginTop: 6 }}>

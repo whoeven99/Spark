@@ -7,37 +7,65 @@ import {
   type XhsDirection,
 } from "./xhsPlaybooks.js";
 
+export type CopyProvider = "volc-ark" | "deepseek" | "openai";
+
 export type CopyModelInfo = {
-  provider: "deepseek" | "openai";
+  provider: CopyProvider;
   model: string;
 };
 
-export function resolveCopyModel(): CopyModelInfo | null {
-  const deepseekKey = getEnv("DEEPSEEK_API_KEY");
-  if (deepseekKey) {
-    return {
+const COPY_PROVIDERS: readonly CopyProvider[] = ["volc-ark", "deepseek", "openai"];
+
+function isCopyProvider(value: string): value is CopyProvider {
+  return COPY_PROVIDERS.includes(value as CopyProvider);
+}
+
+function resolveArkApiKey(): string {
+  return getEnv("VOLC_ARK_API_KEY") || getEnv("ARK_API_KEY");
+}
+
+export function listCopyModels(): CopyModelInfo[] {
+  const options: CopyModelInfo[] = [];
+  if (resolveArkApiKey()) {
+    options.push({
+      provider: "volc-ark",
+      model: getEnv("VOLC_ARK_TEXT_MODEL", "doubao-seed-1-6-251015"),
+    });
+  }
+  if (getEnv("DEEPSEEK_API_KEY")) {
+    options.push({
       provider: "deepseek",
       model: getEnv("DEEPSEEK_MODEL", "deepseek-chat"),
-    };
+    });
   }
-  const openaiKey = getEnv("OPENAI_API_KEY");
-  if (openaiKey) {
-    return {
+  if (getEnv("OPENAI_API_KEY")) {
+    options.push({
       provider: "openai",
       model: getEnv("OPENAI_MODEL", "gpt-4o-mini"),
-    };
+    });
   }
-  return null;
+  return options;
+}
+
+export function resolveCopyModel(preferred?: string | null): CopyModelInfo | null {
+  const options = listCopyModels();
+  if (options.length === 0) return null;
+  if (preferred && isCopyProvider(preferred)) {
+    const hit = options.find((item) => item.provider === preferred);
+    if (hit) return hit;
+  }
+  return options[0] ?? null;
 }
 
 export async function generateXhsCopy(params: {
   direction: XhsDirection;
   topic: string;
   notes: string;
+  provider?: string | null;
 }): Promise<{ draft: XhsCopyDraft; model: CopyModelInfo }> {
-  const resolved = resolveCopyModel();
+  const resolved = resolveCopyModel(params.provider);
   if (!resolved) {
-    throw new Error("未配置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY");
+    throw new Error("未配置 VOLC_ARK_API_KEY、DEEPSEEK_API_KEY 或 OPENAI_API_KEY");
   }
 
   const content = await invokeChat(resolved, buildSystemPrompt(), buildUserPrompt(params));
@@ -107,16 +135,30 @@ async function invokeChat(model: CopyModelInfo, system: string, user: string): P
 }
 
 function resolveEndpoint(model: CopyModelInfo): { baseUrl: string; apiKey: string } {
-  if (model.provider === "deepseek") {
-    return {
-      baseUrl: getEnv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").replace(/\/$/, ""),
-      apiKey: getEnv("DEEPSEEK_API_KEY"),
-    };
+  switch (model.provider) {
+    case "volc-ark":
+      return {
+        baseUrl: getEnv("VOLC_ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3").replace(
+          /\/$/,
+          "",
+        ),
+        apiKey: resolveArkApiKey(),
+      };
+    case "deepseek":
+      return {
+        baseUrl: getEnv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").replace(/\/$/, ""),
+        apiKey: getEnv("DEEPSEEK_API_KEY"),
+      };
+    case "openai":
+      return {
+        baseUrl: getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, ""),
+        apiKey: getEnv("OPENAI_API_KEY"),
+      };
+    default: {
+      const _never: never = model.provider;
+      throw new Error(`未知文案模型 ${_never}`);
+    }
   }
-  return {
-    baseUrl: getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, ""),
-    apiKey: getEnv("OPENAI_API_KEY"),
-  };
 }
 
 function parseJsonObject(text: string): unknown {

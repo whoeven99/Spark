@@ -1,17 +1,18 @@
 import { Router } from "express";
-import { generateXhsCopy, resolveCopyModel } from "../promo/xhsCopyClient.js";
+import { generateXhsCopy, listCopyModels, resolveCopyModel } from "../promo/xhsCopyClient.js";
 import { generateXhsCover, resolveCoverModel } from "../promo/xhsCoverClient.js";
 import { isXhsDirection } from "../promo/xhsPlaybooks.js";
 
 export const xhsPromoRouter = Router();
 
 xhsPromoRouter.get("/status", (_req, res) => {
+  const options = listCopyModels();
   const copy = resolveCopyModel();
   const cover = resolveCoverModel();
   res.json({
     copy: copy
-      ? { configured: true, provider: copy.provider, model: copy.model }
-      : { configured: false, provider: null, model: null },
+      ? { configured: true, provider: copy.provider, model: copy.model, options }
+      : { configured: false, provider: null, model: null, options: [] },
     cover: {
       configured: cover.provider !== "template",
       provider: cover.provider,
@@ -24,6 +25,7 @@ xhsPromoRouter.post("/generate", async (req, res) => {
   const direction = String(req.body?.direction ?? "").trim();
   const topic = String(req.body?.topic ?? "").trim();
   const notes = String(req.body?.notes ?? "").trim().slice(0, 2000);
+  const copyProvider = String(req.body?.copyProvider ?? "").trim() || null;
 
   if (!isXhsDirection(direction)) {
     res.status(400).json({ error: "方向必须是 howto / compare / data" });
@@ -35,7 +37,7 @@ xhsPromoRouter.post("/generate", async (req, res) => {
   }
 
   try {
-    const copy = await generateXhsCopy({ direction, topic, notes });
+    const copy = await generateXhsCopy({ direction, topic, notes, provider: copyProvider });
     const cover = await generateXhsCover({
       direction,
       topic,
