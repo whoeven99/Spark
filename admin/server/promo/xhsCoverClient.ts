@@ -153,6 +153,30 @@ const XHS_COVER_UI = [
   "不要水印、不要小红书 Logo、不要二维码、不要柱状图折线图。",
 ].join("\n");
 
+function compareHeadlineLock(
+  direction: XhsDirection,
+  cover: XhsCoverSlots,
+  headline: string,
+): string {
+  if (direction !== "compare") {
+    return `封面主标题必须完整写在图上，可折两行，不要改写、不要截断：${headline}`;
+  }
+  const left = `${cover.leftTitle || "对照"} ${cover.leftHook || ""}`.trim();
+  const right = `${cover.rightTitle || "Spark"} ${cover.rightHook || ""}`.trim();
+  if (cover.leftHook && cover.rightHook) {
+    return [
+      "对比主标题必须写成对称两行，字号一样大，每行都是「名字+动作」：",
+      `第一行：${left}`,
+      `第二行：${right}`,
+      "禁止第二行只剩品牌名。禁止一边有动词、一边没有。",
+    ].join("\n");
+  }
+  return [
+    `对比主标题必须是成对区别句，两边都有动作：${headline}`,
+    "不要写成「Sidekick只动嘴」下面只跟一个 Spark。",
+  ].join("\n");
+}
+
 export function previewImagePrompt(direction: XhsDirection, topic: string): string {
   return buildImagePrompt({
     direction,
@@ -172,7 +196,8 @@ export function buildImagePrompt(params: {
     "生成一张可直接发小红书的竖版封面。",
     XHS_COVER_UI,
     `选题：${topic}`,
-    `封面主标题（必须完整写在图上，可折两行，不要改写、不要截断）：${headline}`,
+    `封面主标题原文：${headline}`,
+    compareHeadlineLock(direction, cover, headline),
   ];
   if (cover.subhead) {
     lines.push(`引用句（标题下，左侧一条荧光绿竖条）：${cover.subhead}`);

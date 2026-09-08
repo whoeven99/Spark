@@ -120,8 +120,8 @@ export function buildCopySystemPrompt(): string {
     "语气像真人店主，短句换行。禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
     "title ≤14 字，必须有钩子，禁止只写两个品牌名对打。body 200-400 字，前 80 字必须是钩子。细节放 cards。",
     "没有补充里的真实数字，禁止编造转化率、CTR、百分比。",
-    "对比向：cover.leftTitle 是对照对象，cover.rightTitle 固定写 Spark；left 是对照短板，right 是 Spark 能力。禁止对调。",
-    "cover.headline 可两行、不超过 18 字；Spark、Sidekick 等品牌名必须写全，禁止出现 Spark vs S。tags 3-5 个，不要 #。",
+    "对比向：cover.leftTitle 是对照对象，cover.rightTitle 固定写 Spark；leftHook/rightHook 各一个动作，如只动嘴/能改店。禁止第二行只写品牌名。",
+    "cover.headline 写成「只动嘴 vs 能改店」这种成对句，不要「Sidekick只动嘴」后只跟 Spark。tags 3-5 个，不要 #。",
   ].join("\n");
 }
 

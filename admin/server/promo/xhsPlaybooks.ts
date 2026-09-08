@@ -7,6 +7,8 @@ export type XhsCoverSlots = {
   subhead: string;
   leftTitle: string;
   rightTitle: string;
+  leftHook: string;
+  rightHook: string;
   left: string[];
   right: string[];
   metric: string;
@@ -59,9 +61,9 @@ export function playbookHint(direction: XhsDirection): string {
       ].join("\n");
     case "compare":
       return [
-        "标题禁止只写「Spark vs Sidekick」或两个品牌名。要写区别点，如「能问店 vs 能改店」「问得了改不了」。14 字内，前 8 字是钩子。",
+        "笔记标题用问句或成对区别，如「问得了改不了？」「只动嘴 vs 能改店」。14 字内。禁止只写两个品牌名。",
         "正文 200-400 字：先抛对照对象的坑，再讲 Spark 怎么做，最后一句结论。没有补充里的真实数字，禁止编造转化率/CTR。",
-        "封面槽：headline 可两行写全，不超过 18 字，品牌名不要截断。leftTitle=对照对象（如 Sidekick 写全），rightTitle=Spark。left 只写对照短板，right 只写 Spark。禁止把 Spark 放左边。",
+        "封面标题必须成对：leftHook=对照动作（如只动嘴），rightHook=Spark动作（如能改店）。图上两行是「Sidekick 只动嘴 / Spark 能改店」，禁止第二行只剩 Spark。leftTitle=对照对象写全，rightTitle=Spark。",
         "滑页卡片 cards：2-4 张。对比向按「对照对象坑 / Spark 做法 / 结论」切页。",
       ].join("\n");
     case "data":
@@ -84,6 +86,8 @@ export function emptyCoverSlots(): XhsCoverSlots {
     subhead: "",
     leftTitle: "",
     rightTitle: "",
+    leftHook: "",
+    rightHook: "",
     left: [],
     right: [],
     metric: "",
@@ -112,8 +116,10 @@ export function normalizeDraft(raw: unknown, fallbackTopic: string): XhsCopyDraf
     cover: {
       headline: clip(asString(coverRaw.headline) || title, 18),
       subhead: clip(asString(coverRaw.subhead), 22),
-      leftTitle: clip(asString(coverRaw.leftTitle) || "对照", 8),
+      leftTitle: clip(asString(coverRaw.leftTitle) || "对照", 10),
       rightTitle: clip(asString(coverRaw.rightTitle) || "Spark", 8),
+      leftHook: clip(asString(coverRaw.leftHook), 6),
+      rightHook: clip(asString(coverRaw.rightHook), 6),
       left,
       right,
       metric: clip(asString(coverRaw.metric), 12),

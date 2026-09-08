@@ -3320,6 +3320,8 @@ export type XhsPromoCoverSlots = {
   subhead: string;
   leftTitle: string;
   rightTitle: string;
+  leftHook: string;
+  rightHook: string;
   left: string[];
   right: string[];
   metric: string;
