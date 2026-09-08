@@ -3318,6 +3318,10 @@ export type XhsPromoStatus = {
 export type XhsPromoCoverSlots = {
   headline: string;
   subhead: string;
+  leftTitle: string;
+  rightTitle: string;
+  leftHook: string;
+  rightHook: string;
   left: string[];
   right: string[];
   metric: string;
@@ -3343,8 +3347,27 @@ export type XhsPromoGenerateResult = {
   coverError: string | null;
 };
 
+export type XhsPromoPrompts = {
+  copySystem: string;
+  copyUser: string;
+  image: string;
+};
+
 export function fetchXhsPromoStatus(): Promise<XhsPromoStatus> {
   return apiFetch("/promo/xhs/status");
+}
+
+export function fetchXhsPromoPrompts(params: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+}): Promise<XhsPromoPrompts> {
+  const query = new URLSearchParams({
+    direction: params.direction,
+    topic: params.topic,
+    notes: params.notes ?? "",
+  });
+  return apiFetch(`/promo/xhs/prompts?${query.toString()}`);
 }
 
 export function generateXhsPromo(body: {
@@ -3353,6 +3376,9 @@ export function generateXhsPromo(body: {
   notes?: string;
   copyProvider?: XhsPromoCopyProvider;
   coverProvider?: XhsPromoCoverProvider;
+  copySystemPrompt?: string;
+  copyUserPrompt?: string;
+  imagePrompt?: string;
 }): Promise<XhsPromoGenerateResult> {
   return apiFetch("/promo/xhs/generate", {
     method: "POST",

@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Input,
   Row,
   Segmented,
@@ -14,6 +15,7 @@ import {
 } from "antd";
 import { CopyOutlined, DownloadOutlined, PictureOutlined } from "@ant-design/icons";
 import {
+  fetchXhsPromoPrompts,
   fetchXhsPromoStatus,
   generateXhsPromo,
   type XhsPromoCopyProvider,
@@ -61,8 +63,8 @@ const TOPIC_PRESETS: TopicPreset[] = [
   },
   {
     direction: "compare",
-    topic: "Sidekick 能问，Spark 能改完再给你看",
-    notes: "对比：Shopify Sidekick vs Spark\nSidekick：能问店里的事\nSpark：能看店、改文案/图、批量改，审核后再写回",
+    topic: "Spark 和 Sidekick，到底有什么区别？",
+    notes: "对比：Shopify Sidekick vs Spark\nSidekick：官方助手，能问店里的事，不改店铺\nSpark：能看店、改文案/图、批量改，审核后再写回\n标题不要写成 Spark vs Sidekick\n左边封面写 Sidekick 短板，右边写 Spark\n没有真实数字就不要编转化率",
   },
   {
     direction: "compare",
@@ -169,6 +171,11 @@ export default function XhsPromo() {
   const [status, setStatus] = useState<XhsPromoStatus | null>(null);
   const [copyProvider, setCopyProvider] = useState<XhsPromoCopyProvider | null>(null);
   const [coverProvider, setCoverProvider] = useState<XhsPromoCoverProvider>("volc-ark");
+  const [copySystem, setCopySystem] = useState("");
+  const [copyUser, setCopyUser] = useState("");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [copyDirty, setCopyDirty] = useState(false);
+  const [imageDirty, setImageDirty] = useState(false);
   const [result, setResult] = useState<XhsPromoGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -182,6 +189,27 @@ export default function XhsPromo() {
       })
       .catch((e) => setError(String(e)));
   }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      fetchXhsPromoPrompts({
+        direction,
+        topic: topic.trim() || "（选题）",
+        notes: notes.trim(),
+      })
+        .then((next) => {
+          if (!copyDirty) {
+            setCopySystem(next.copySystem);
+            setCopyUser(next.copyUser);
+          }
+          if (!imageDirty) {
+            setImagePrompt(next.image);
+          }
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [direction, topic, notes, copyDirty, imageDirty]);
 
   const copyOptions = status?.copy.options ?? [];
   const coverOptions = status?.cover.options ?? [];
@@ -218,6 +246,9 @@ export default function XhsPromo() {
         notes: notes.trim(),
         copyProvider: copyProvider ?? undefined,
         coverProvider,
+        copySystemPrompt: copyDirty ? copySystem : undefined,
+        copyUserPrompt: copyDirty ? copyUser : undefined,
+        imagePrompt: imageDirty ? imagePrompt : undefined,
       });
       setResult(next);
       if (next.coverError) {
@@ -406,6 +437,68 @@ export default function XhsPromo() {
               maxLength={2000}
             />
           </div>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: "copy",
+                label: copyDirty ? "文案提示词（已改，点开后可查看编辑）" : "文案提示词（点开后可查看编辑）",
+                children: (
+                  <Space direction="vertical" style={{ width: "100%" }} size={10}>
+                    <div>
+                      <Text type="secondary">系统规则</Text>
+                      <TextArea
+                        style={{ marginTop: 6 }}
+                        value={copySystem}
+                        onChange={(e) => {
+                          setCopyDirty(true);
+                          setCopySystem(e.target.value);
+                        }}
+                        rows={8}
+                        maxLength={12000}
+                      />
+                    </div>
+                    <div>
+                      <Text type="secondary">本次选题</Text>
+                      <TextArea
+                        style={{ marginTop: 6 }}
+                        value={copyUser}
+                        onChange={(e) => {
+                          setCopyDirty(true);
+                          setCopyUser(e.target.value);
+                        }}
+                        rows={8}
+                        maxLength={12000}
+                      />
+                    </div>
+                    <Button type="link" style={{ paddingLeft: 0 }} onClick={() => setCopyDirty(false)}>
+                      恢复默认
+                    </Button>
+                  </Space>
+                ),
+              },
+              {
+                key: "image",
+                label: imageDirty ? "封面提示词（已改，点开后可查看编辑）" : "封面提示词（点开后可查看编辑）",
+                children: (
+                  <Space direction="vertical" style={{ width: "100%" }} size={10}>
+                    <TextArea
+                      value={imagePrompt}
+                      onChange={(e) => {
+                        setImageDirty(true);
+                        setImagePrompt(e.target.value);
+                      }}
+                      rows={12}
+                      maxLength={12000}
+                    />
+                    <Button type="link" style={{ paddingLeft: 0 }} onClick={() => setImageDirty(false)}>
+                      恢复默认
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
           <Button type="primary" loading={loading} onClick={onGenerate}>
             生成文案和图片
           </Button>

@@ -5,6 +5,10 @@ export type XhsDirection = (typeof XHS_DIRECTIONS)[number];
 export type XhsCoverSlots = {
   headline: string;
   subhead: string;
+  leftTitle: string;
+  rightTitle: string;
+  leftHook: string;
+  rightHook: string;
   left: string[];
   right: string[];
   metric: string;
@@ -52,21 +56,21 @@ export function playbookHint(direction: XhsDirection): string {
       return [
         "标题公式：数字+动作，或「别再…」。14 字内，前 8 字能看懂。",
         "正文 200-400 字：钩子（1-2 句）→ 共鸣 → 3 步干货 → 一句收尾。短句换行，别写说明书。",
-        "封面槽：headline 3-10 字；subhead 一句痛点；promptBox 放可复制的短提示词。",
+        "封面槽：headline 可两行写全，不超过 18 字，英文品牌名不要截断；subhead 一句痛点；promptBox 放可复制的短提示词。",
         "滑页卡片 cards：2-4 张，给图片用，不是笔记正文。每张 headline ≤10 字，lines 2-4 条、每条≤16 字。功能向按「痛点 / 步骤 / 收尾」切页。",
       ].join("\n");
     case "compare":
       return [
-        "标题公式：A vs B，或「为什么不…」。14 字内。",
-        "正文 200-400 字：先抛旧方法的坑，再给新方法 4 条，最后一句结论。",
-        "封面槽：headline 3-10 字；left 旧方法 4 条（每条≤8字）；right 新方法 4 条。",
-        "滑页卡片 cards：2-4 张。对比向按「旧方法坑 / 新方法 / 结论」切页。headline ≤10 字，lines 每条≤16 字。",
+        "笔记标题用问句或成对区别，如「问得了改不了？」「只动嘴 vs 能改店」。14 字内。禁止只写两个品牌名。",
+        "正文 200-400 字：先抛对照对象的坑，再讲 Spark 怎么做，最后一句结论。没有补充里的真实数字，禁止编造转化率/CTR。",
+        "封面标题必须成对：leftHook=对照动作（如只动嘴），rightHook=Spark动作（如能改店）。图上两行是「Sidekick 只动嘴 / Spark 能改店」，禁止第二行只剩 Spark。leftTitle=对照对象写全，rightTitle=Spark。",
+        "滑页卡片 cards：2-4 张。对比向按「对照对象坑 / Spark 做法 / 结论」切页。",
       ].join("\n");
     case "data":
       return [
         "标题公式：结果数字前置，如「转化率 +32%」。没有真实数字就写「某店对照」，禁止编造精确值。",
         "正文 200-400 字：数字从哪来、改了什么、别的先不动。",
-        "封面槽：headline 3-10 字；metric 只放一个数字；metricNote 写口径。",
+        "封面槽：headline 可两行写全，不超过 18 字；metric 只放一个数字；metricNote 写口径。",
         "滑页卡片 cards：2-4 张。数据向按「数字从哪来 / 改了什么 / 别的先不动」切页。禁止编造精确值。",
       ].join("\n");
     default: {
@@ -80,6 +84,10 @@ export function emptyCoverSlots(): XhsCoverSlots {
   return {
     headline: "",
     subhead: "",
+    leftTitle: "",
+    rightTitle: "",
+    leftHook: "",
+    rightHook: "",
     left: [],
     right: [],
     metric: "",
@@ -106,8 +114,12 @@ export function normalizeDraft(raw: unknown, fallbackTopic: string): XhsCopyDraf
     body,
     tags: tags.length > 0 ? tags : ["独立站", "Shopify", "AI运营"],
     cover: {
-      headline: clip(asString(coverRaw.headline) || title, 10),
+      headline: clip(asString(coverRaw.headline) || title, 18),
       subhead: clip(asString(coverRaw.subhead), 22),
+      leftTitle: clip(asString(coverRaw.leftTitle) || "对照", 10),
+      rightTitle: clip(asString(coverRaw.rightTitle) || "Spark", 8),
+      leftHook: clip(asString(coverRaw.leftHook), 6),
+      rightHook: clip(asString(coverRaw.rightHook), 6),
       left,
       right,
       metric: clip(asString(coverRaw.metric), 12),

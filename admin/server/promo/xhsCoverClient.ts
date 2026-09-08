@@ -1,5 +1,5 @@
 import { getEnv } from "../lib/env.js";
-import type { XhsCoverSlots, XhsDirection } from "./xhsPlaybooks.js";
+import { emptyCoverSlots, type XhsCoverSlots, type XhsDirection } from "./xhsPlaybooks.js";
 import { renderTemplateSvg, svgToImagePayload } from "./xhsTemplateCover.js";
 
 export type CoverProvider = "volc-ark" | "openai" | "template";
@@ -55,9 +55,10 @@ export async function generateXhsCover(params: {
   topic: string;
   cover: XhsCoverSlots;
   provider?: string | null;
+  imagePrompt?: string | null;
 }): Promise<{ image: CoverImage; model: CoverModelInfo; error?: string }> {
   const planned = resolveCoverModel(params.provider);
-  const prompt = buildImagePrompt(params);
+  const prompt = params.imagePrompt?.trim() || buildImagePrompt(params);
   const templateImage = svgToImagePayload(renderTemplateSvg(params));
 
   switch (planned.provider) {
@@ -146,13 +147,45 @@ const XHS_COVER_UI = [
   "不是手账、不是贴纸拼贴、不是马克笔涂鸦、不是真人自拍、不是海报、不是科技蓝发光。",
   "竖版 3:4。只准三色：纯黑、白或浅灰底、荧光黄绿 #C8FF00。无阴影、无渐变、无照片底图。",
   "细横线分割页眉、标题、模块、页脚。左上角小灰字系列名，右上角页码 01 / 09。",
-  "主标题：超大加粗无衬线中文，2-3 行，黑字，占画面上三分之一，缩略图也要能读。",
+  "主标题：超大加粗无衬线，可折成 2 行，必须写全指定原文，禁止截断单词或品牌名（不要出现 Spark vs S）。",
   "点缀只用荧光绿：小标签（PROMPT / TOOL / PAIN）、左侧竖条引用、页码旁的强调字。",
   "中文必须印刷体、锐利、不连笔、不糊、不乱码；不要发明大段英文。",
   "不要水印、不要小红书 Logo、不要二维码、不要柱状图折线图。",
 ].join("\n");
 
-function buildImagePrompt(params: {
+function compareHeadlineLock(
+  direction: XhsDirection,
+  cover: XhsCoverSlots,
+  headline: string,
+): string {
+  if (direction !== "compare") {
+    return `封面主标题必须完整写在图上，可折两行，不要改写、不要截断：${headline}`;
+  }
+  const left = `${cover.leftTitle || "对照"} ${cover.leftHook || ""}`.trim();
+  const right = `${cover.rightTitle || "Spark"} ${cover.rightHook || ""}`.trim();
+  if (cover.leftHook && cover.rightHook) {
+    return [
+      "对比主标题必须写成对称两行，字号一样大，每行都是「名字+动作」：",
+      `第一行：${left}`,
+      `第二行：${right}`,
+      "禁止第二行只剩品牌名。禁止一边有动词、一边没有。",
+    ].join("\n");
+  }
+  return [
+    `对比主标题必须是成对区别句，两边都有动作：${headline}`,
+    "不要写成「Sidekick只动嘴」下面只跟一个 Spark。",
+  ].join("\n");
+}
+
+export function previewImagePrompt(direction: XhsDirection, topic: string): string {
+  return buildImagePrompt({
+    direction,
+    topic,
+    cover: emptyCoverSlots(),
+  });
+}
+
+export function buildImagePrompt(params: {
   direction: XhsDirection;
   topic: string;
   cover: XhsCoverSlots;
@@ -163,7 +196,8 @@ function buildImagePrompt(params: {
     "生成一张可直接发小红书的竖版封面。",
     XHS_COVER_UI,
     `选题：${topic}`,
-    `封面主标题（必须完整、清晰地写在图上，不要改写）：${headline}`,
+    `封面主标题原文：${headline}`,
+    compareHeadlineLock(direction, cover, headline),
   ];
   if (cover.subhead) {
     lines.push(`引用句（标题下，左侧一条荧光绿竖条）：${cover.subhead}`);
@@ -181,12 +215,13 @@ function buildImagePrompt(params: {
       break;
     case "compare":
       lines.push(
-        "构图：浅灰白底清单卡，或荧光绿底 + 黑色 2x2 四宫格。",
-        "上半：超大黑标题。下半：2x2 黑块白字，或 4 行横条清单。",
-        "每行/每格：左侧英文小标签 + 中间短中文 + 不要长句。行间细线。",
-        "对照感来自左右两列短词，不要红绿商务对比图，不要叉和对勾插画。",
-        cover.left.length ? `左列/旧方法短词：${cover.left.join(" / ")}` : "",
-        cover.right.length ? `右列/新方法短词：${cover.right.join(" / ")}` : "",
+        "构图：左右两栏信息卡。左边对照对象，右边 Spark。栏目标题必须原样写上。",
+        `左边栏标题（对照/旧方法，不要写 Spark）：${cover.leftTitle || "对照"}`,
+        `右边栏标题（必须是推荐方）：${cover.rightTitle || "Spark"}`,
+        cover.left.length ? `左边短词必须原样、一条都不要改：${cover.left.join(" / ")}` : "",
+        cover.right.length ? `右边短词必须原样、一条都不要改：${cover.right.join(" / ")}` : "",
+        "禁止左右对调品牌。禁止把 Spark 放左边或打叉。禁止把对照对象画成赢家。",
+        "不要红叉绿勾，不要手机截图，不要自己编优缺点，不要截断英文品牌名。",
       );
       break;
     case "data":
