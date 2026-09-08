@@ -6,23 +6,25 @@ import {
   resolveCopyModel,
 } from "../promo/xhsCopyClient.js";
 import { renderContentCards } from "../promo/xhsContentCards.js";
-import { generateXhsCover, resolveCoverModel } from "../promo/xhsCoverClient.js";
+import { generateXhsCover, listCoverModels, resolveCoverModel } from "../promo/xhsCoverClient.js";
 import { isXhsDirection } from "../promo/xhsPlaybooks.js";
 
 export const xhsPromoRouter = Router();
 
 xhsPromoRouter.get("/status", (_req, res) => {
-  const options = listCopyModels();
+  const copyOptions = listCopyModels();
   const copy = resolveCopyModel();
+  const coverOptions = listCoverModels();
   const cover = resolveCoverModel();
   res.json({
     copy: copy
-      ? { configured: true, provider: copy.provider, model: copy.model, options, hint: arkCopyHint() }
+      ? { configured: true, provider: copy.provider, model: copy.model, options: copyOptions, hint: arkCopyHint() }
       : { configured: false, provider: null, model: null, options: [], hint: arkCopyHint() },
     cover: {
       configured: cover.provider !== "template",
       provider: cover.provider,
       model: cover.model,
+      options: coverOptions,
     },
   });
 });
@@ -32,6 +34,7 @@ xhsPromoRouter.post("/generate", async (req, res) => {
   const topic = String(req.body?.topic ?? "").trim();
   const notes = String(req.body?.notes ?? "").trim().slice(0, 2000);
   const copyProvider = String(req.body?.copyProvider ?? "").trim() || null;
+  const coverProvider = String(req.body?.coverProvider ?? "").trim() || null;
 
   if (!isXhsDirection(direction)) {
     res.status(400).json({ error: "方向必须是 howto / compare / data" });
@@ -48,6 +51,7 @@ xhsPromoRouter.post("/generate", async (req, res) => {
       direction,
       topic,
       cover: copy.draft.cover,
+      provider: coverProvider,
     });
     res.json({
       direction,

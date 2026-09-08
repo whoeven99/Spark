@@ -2,72 +2,94 @@ import { getEnv } from "../lib/env.js";
 import type { XhsCoverSlots, XhsDirection } from "./xhsPlaybooks.js";
 import { renderTemplateSvg, svgToImagePayload } from "./xhsTemplateCover.js";
 
+export type CoverProvider = "volc-ark" | "openai" | "template";
+
 export type CoverModelInfo = {
-  provider: "volc-ark" | "openai" | "template";
+  provider: CoverProvider;
   model: string;
 };
+
+const COVER_PROVIDERS: readonly CoverProvider[] = ["volc-ark", "openai", "template"];
+
+function isCoverProvider(value: string): value is CoverProvider {
+  return COVER_PROVIDERS.includes(value as CoverProvider);
+}
 
 export type CoverImage = {
   mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/svg+xml";
   base64: string;
 };
 
-export function resolveCoverModel(): CoverModelInfo {
+export function listCoverModels(): CoverModelInfo[] {
+  const options: CoverModelInfo[] = [];
   if (resolveArkApiKey()) {
-    return {
+    options.push({
       provider: "volc-ark",
       model: getEnv("VOLC_ARK_IMAGE_MODEL", "doubao-seedream-5-0-pro-260628"),
-    };
+    });
   }
   if (resolveImageApiKey()) {
-    return {
+    options.push({
       provider: "openai",
       model: resolveImageModel(),
-    };
+    });
   }
-  return { provider: "template", model: "html-template" };
+  options.push({ provider: "template", model: "html-template" });
+  return options;
+}
+
+export function resolveCoverModel(preferred?: string | null): CoverModelInfo {
+  const options = listCoverModels();
+  if (preferred && isCoverProvider(preferred)) {
+    const hit = options.find((item) => item.provider === preferred);
+    if (hit) return hit;
+  }
+  return options.find((item) => item.provider === "volc-ark") ?? options[0] ?? {
+    provider: "template",
+    model: "html-template",
+  };
 }
 
 export async function generateXhsCover(params: {
   direction: XhsDirection;
   topic: string;
   cover: XhsCoverSlots;
+  provider?: string | null;
 }): Promise<{ image: CoverImage; model: CoverModelInfo; error?: string }> {
-  const planned = resolveCoverModel();
+  const planned = resolveCoverModel(params.provider);
   const prompt = buildImagePrompt(params);
   const templateImage = svgToImagePayload(renderTemplateSvg(params));
 
-  if (planned.provider === "volc-ark") {
-    try {
-      const image = await generateViaArk(prompt, planned.model);
-      return { image, model: planned };
-    } catch (error) {
-      return {
-        image: templateImage,
-        model: { provider: "template", model: "html-template" },
-        error: error instanceof Error ? error.message : String(error),
-      };
+  switch (planned.provider) {
+    case "volc-ark":
+      try {
+        const image = await generateViaArk(prompt, planned.model);
+        return { image, model: planned };
+      } catch (error) {
+        return {
+          image: templateImage,
+          model: { provider: "template", model: "html-template" },
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    case "openai":
+      try {
+        const image = await generateViaOpenAi(prompt, planned.model);
+        return { image, model: planned };
+      } catch (error) {
+        return {
+          image: templateImage,
+          model: { provider: "template", model: "html-template" },
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    case "template":
+      return { image: templateImage, model: planned };
+    default: {
+      const _never: never = planned.provider;
+      return { image: templateImage, model: planned, error: `未知封面模型 ${_never}` };
     }
   }
-
-  if (planned.provider === "openai") {
-    try {
-      const image = await generateViaOpenAi(prompt, planned.model);
-      return { image, model: planned };
-    } catch (error) {
-      return {
-        image: templateImage,
-        model: { provider: "template", model: "html-template" },
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  return {
-    image: templateImage,
-    model: planned,
-    error: "未配置 VOLC_ARK_API_KEY，已用模板封面",
-  };
 }
 
 function resolveArkApiKey(): string {
