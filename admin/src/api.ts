@@ -3,7 +3,7 @@ const ROLE_KEY = "spark_admin_role";
 const USER_ID_KEY = "spark_admin_user_id";
 
 export type AdminRole = "owner" | "user";
-export type AdminUserId = "yewen" | "allen" | "zhuangze";
+export type AdminUserId = "yewen" | "allen" | "zhuangze" | "joel" | "sun";
 
 export const ADMIN_USER_OPTIONS: ReadonlyArray<{
   id: AdminUserId;
@@ -12,6 +12,8 @@ export const ADMIN_USER_OPTIONS: ReadonlyArray<{
   { id: "yewen", label: "Yewen" },
   { id: "allen", label: "Allen" },
   { id: "zhuangze", label: "Zhuangze" },
+  { id: "joel", label: "Joel" },
+  { id: "sun", label: "Sun" },
 ];
 
 export function getToken(): string {
@@ -43,7 +45,9 @@ export function isOwner(): boolean {
 
 export function getAdminUserId(): AdminUserId | null {
   const v = localStorage.getItem(USER_ID_KEY);
-  if (v === "yewen" || v === "allen" || v === "zhuangze") return v;
+  if (v === "yewen" || v === "allen" || v === "zhuangze" || v === "joel" || v === "sun") {
+    return v;
+  }
   return null;
 }
 
@@ -1216,7 +1220,7 @@ export function deleteMonthlyFixedCost(id: string): Promise<{ ok: boolean }> {
 
 export type TodoStatus = "todo" | "doing" | "done";
 export type TodoPriority = "low" | "medium" | "high";
-export type TodoAssignee = "yewen" | "allen" | "zhuangze";
+export type TodoAssignee = "yewen" | "allen" | "zhuangze" | "joel" | "sun";
 
 export type TodoRow = {
   id: string;
@@ -3275,6 +3279,63 @@ export function postOpenRouterImages(body: {
   aspect_ratio?: string;
 }): Promise<OpenRouterImageResult> {
   return apiFetch("/openrouter-probe/images", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type XhsPromoDirection = "howto" | "compare" | "data";
+
+export type XhsPromoCopyProvider = "volc-ark" | "deepseek" | "openai";
+
+export type XhsPromoCopyOption = {
+  provider: XhsPromoCopyProvider;
+  model: string;
+};
+
+export type XhsPromoStatus = {
+  copy: {
+    configured: boolean;
+    provider: string | null;
+    model: string | null;
+    options: XhsPromoCopyOption[];
+    hint?: string;
+  };
+  cover: { configured: boolean; provider: string; model: string };
+};
+
+export type XhsPromoCoverSlots = {
+  headline: string;
+  subhead: string;
+  left: string[];
+  right: string[];
+  metric: string;
+  metricNote: string;
+  promptBox: string;
+};
+
+export type XhsPromoGenerateResult = {
+  direction: XhsPromoDirection;
+  title: string;
+  body: string;
+  tags: string[];
+  coverSlots: XhsPromoCoverSlots;
+  image: { mimeType: string; base64: string } | null;
+  models: { copy: string; cover: string };
+  coverError: string | null;
+};
+
+export function fetchXhsPromoStatus(): Promise<XhsPromoStatus> {
+  return apiFetch("/promo/xhs/status");
+}
+
+export function generateXhsPromo(body: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+  copyProvider?: XhsPromoCopyProvider;
+}): Promise<XhsPromoGenerateResult> {
+  return apiFetch("/promo/xhs/generate", {
     method: "POST",
     body: JSON.stringify(body),
   });

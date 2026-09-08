@@ -4,7 +4,7 @@ import { getAdminOpsDb } from "../lib/adminOpsDb.js";
 
 export const todosRouter = Router();
 
-const VALID_ASSIGNEES = new Set(["yewen", "allen", "zhuangze"]);
+const VALID_ASSIGNEES = new Set(["yewen", "allen", "zhuangze", "joel", "sun"]);
 
 function parseFollowers(raw: unknown): string[] {
   if (raw == null || raw === "") return [];
