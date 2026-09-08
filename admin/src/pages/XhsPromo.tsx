@@ -102,9 +102,16 @@ const TOPIC_PRESETS: TopicPreset[] = [
 
 const FIRST_PRESET = TOPIC_PRESETS[0];
 
-function imageSrc(result: XhsPromoGenerateResult | null): string {
-  if (!result?.image?.base64) return "";
-  return `data:${result.image.mimeType};base64,${result.image.base64}`;
+function imageSrc(image: { mimeType: string; base64: string } | null | undefined): string {
+  if (!image?.base64) return "";
+  return `data:${image.mimeType};base64,${image.base64}`;
+}
+
+function downloadHref(href: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.click();
 }
 
 function modelLabel(raw: string | null | undefined): string {
@@ -162,7 +169,8 @@ export default function XhsPromo() {
   const usedCopy = result?.models.copy ?? plannedCopy;
   const usedCover = result?.models.cover ?? plannedCover;
 
-  const previewSrc = useMemo(() => imageSrc(result), [result]);
+  const previewSrc = useMemo(() => imageSrc(result?.image), [result]);
+  const cards = result?.cards ?? [];
 
   async function onGenerate() {
     if (topic.trim().length < 2) {
@@ -205,10 +213,19 @@ export default function XhsPromo() {
   function downloadCover() {
     if (!previewSrc || !result) return;
     const ext = result.image?.mimeType.includes("svg") ? "svg" : "png";
-    const a = document.createElement("a");
-    a.href = previewSrc;
-    a.download = `xhs-cover-${result.direction}.${ext}`;
-    a.click();
+    downloadHref(previewSrc, `xhs-cover-${result.direction}.${ext}`);
+  }
+
+  function downloadCard(index: number) {
+    const card = cards[index];
+    if (!card || !result) return;
+    const src = imageSrc(card.image);
+    if (!src) return;
+    downloadHref(src, `xhs-card-${index + 1}-${result.direction}.svg`);
+  }
+
+  function downloadAllCards() {
+    cards.forEach((_, index) => downloadCard(index));
   }
 
   return (
@@ -217,7 +234,7 @@ export default function XhsPromo() {
         <PictureOutlined /> 生成小红书图文
       </Title>
       <Paragraph type="secondary">
-        填选题，生成文案和封面，复制/下载后去小红书发。不自动发布。
+        填选题，生成文案、封面和滑页卡片，复制/下载后去小红书发。不自动发布。
       </Paragraph>
 
       <Space wrap style={{ marginBottom: 16 }}>
@@ -427,6 +444,53 @@ export default function XhsPromo() {
           </Card>
         </Col>
       </Row>
+
+      <Card
+        size="small"
+        title="正文卡片"
+        style={{ marginTop: 16 }}
+        extra={
+          cards.length > 0 ? (
+            <Button type="link" icon={<DownloadOutlined />} onClick={downloadAllCards}>
+              全部下载
+            </Button>
+          ) : null
+        }
+      >
+        {cards.length > 0 ? (
+          <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+            {cards.map((card, index) => {
+              const src = imageSrc(card.image);
+              return (
+                <div key={`${card.headline}-${index}`} style={{ flex: "0 0 220px" }}>
+                  {src ? (
+                    <img
+                      src={src}
+                      alt={card.headline || `正文卡片 ${index + 1}`}
+                      style={{
+                        width: "100%",
+                        borderRadius: 8,
+                        border: "1px solid #f0f0f0",
+                        display: "block",
+                      }}
+                    />
+                  ) : null}
+                  <Button
+                    type="link"
+                    icon={<DownloadOutlined />}
+                    onClick={() => downloadCard(index)}
+                    style={{ paddingLeft: 0 }}
+                  >
+                    卡片 {index + 1}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Text type="secondary">生成后显示 2–4 张滑页卡片，和封面同一套风格，字由模板排出。</Text>
+        )}
+      </Card>
     </div>
   );
 }

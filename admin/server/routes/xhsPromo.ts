@@ -5,6 +5,7 @@ import {
   listCopyModels,
   resolveCopyModel,
 } from "../promo/xhsCopyClient.js";
+import { renderContentCards } from "../promo/xhsContentCards.js";
 import { generateXhsCover, resolveCoverModel } from "../promo/xhsCoverClient.js";
 import { isXhsDirection } from "../promo/xhsPlaybooks.js";
 
@@ -54,6 +55,10 @@ xhsPromoRouter.post("/generate", async (req, res) => {
       body: copy.draft.body,
       tags: copy.draft.tags,
       coverSlots: copy.draft.cover,
+      cards: renderContentCards({
+        direction,
+        cards: copy.draft.cards,
+      }),
       image: cover.image,
       models: {
         copy: `${copy.model.provider}:${copy.model.model}`,

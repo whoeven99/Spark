@@ -3314,12 +3314,19 @@ export type XhsPromoCoverSlots = {
   promptBox: string;
 };
 
+export type XhsPromoContentCard = {
+  headline: string;
+  lines: string[];
+  image: { mimeType: string; base64: string };
+};
+
 export type XhsPromoGenerateResult = {
   direction: XhsPromoDirection;
   title: string;
   body: string;
   tags: string[];
   coverSlots: XhsPromoCoverSlots;
+  cards: XhsPromoContentCard[];
   image: { mimeType: string; base64: string } | null;
   models: { copy: string; cover: string };
   coverError: string | null;
