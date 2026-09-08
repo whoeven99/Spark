@@ -3,6 +3,7 @@ import {
   findBannedHit,
   normalizeDraft,
   playbookHint,
+  scrubBanned,
   type XhsCopyDraft,
   type XhsDirection,
 } from "./xhsPlaybooks.js";
@@ -87,11 +88,20 @@ export async function generateXhsCopy(params: {
 
   const content = await invokeChat(resolved, buildSystemPrompt(), buildUserPrompt(params));
   const draft = normalizeDraft(parseJsonObject(content), params.topic);
-  const banned = findBannedHit(`${draft.title}\n${draft.body}\n${draft.cover.headline}`);
-  if (banned) {
-    draft.title = draft.title.replaceAll(banned, "");
-    draft.body = draft.body.replaceAll(banned, "");
-    draft.cover.headline = draft.cover.headline.replaceAll(banned, "");
+  const bannedSource = [
+    draft.title,
+    draft.body,
+    draft.cover.headline,
+    ...draft.cards.flatMap((card) => [card.headline, ...card.lines]),
+  ].join("\n");
+  if (findBannedHit(bannedSource)) {
+    draft.title = scrubBanned(draft.title);
+    draft.body = scrubBanned(draft.body);
+    draft.cover.headline = scrubBanned(draft.cover.headline);
+    draft.cards = draft.cards.map((card) => ({
+      headline: scrubBanned(card.headline),
+      lines: card.lines.map((line) => scrubBanned(line)),
+    }));
   }
   return { draft, model: resolved };
 }
@@ -100,7 +110,9 @@ function buildSystemPrompt(): string {
   return [
     "你是小红书图文编辑，给 Shopify AI 插件 Spark 写推广笔记。",
     "只输出一个 JSON 对象，不要 Markdown、不要解释。",
-    "字段：title, body, tags, cover.headline, cover.subhead, cover.left, cover.right, cover.metric, cover.metricNote, cover.promptBox。",
+    "字段：title, body, tags, cover.*, cards。",
+    "cards 是 2-4 张滑页卡片，只给图片排版，不要把笔记正文原样塞进去。",
+    "每张 card：headline ≤10 字，lines 2-4 条、每条≤16 字。",
     "语气像真人店主，短句换行。禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
     "title ≤14 字。cover.headline 3-10 字。tags 3-5 个，不要 #。",
   ].join("\n");
