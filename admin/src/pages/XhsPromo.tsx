@@ -231,15 +231,38 @@ export default function XhsPromo() {
   return (
     <div>
       <Title level={3} style={{ marginTop: 0 }}>
-        <PictureOutlined /> 生成小红书图文
+        <PictureOutlined /> 小红书图文
       </Title>
-      <Paragraph type="secondary">
-        填选题，生成文案、封面和滑页卡片，复制/下载后去小红书发。不自动发布。
+      <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+        选题后一次生成，复制正文、下载封面和滑页，去创作者后台发。每天 12:00 / 17:00 人发，不自动发布。
       </Paragraph>
+      <Row gutter={12} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={8}>
+          <Card size="small">
+            <Text type="secondary">1 文案</Text>
+            <div style={{ fontWeight: 650 }}>200–400 字</div>
+            <Text type="secondary">标题 + 正文 + 话题，前 80 字是钩子</Text>
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card size="small">
+            <Text type="secondary">2 封面</Text>
+            <div style={{ fontWeight: 650 }}>黑白 + 荧光绿</div>
+            <Text type="secondary">3:4 瑞士信息卡，Seedream 出图</Text>
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card size="small">
+            <Text type="secondary">3 滑页</Text>
+            <div style={{ fontWeight: 650 }}>2–4 张卡片</div>
+            <Text type="secondary">模板排字，细节不塞进正文</Text>
+          </Card>
+        </Col>
+      </Row>
 
       <Space wrap style={{ marginBottom: 16 }}>
-        <Tag color="blue">文案模型 {modelLabel(usedCopy)}</Tag>
-        <Tag color="green">封面模型 {modelLabel(usedCover)}</Tag>
+        <Tag color="blue">文案 {modelLabel(usedCopy)}</Tag>
+        <Tag color="green">封面 {modelLabel(usedCover)}</Tag>
       </Space>
 
       {status?.copy.hint ? (
@@ -336,7 +359,7 @@ export default function XhsPromo() {
             />
           </div>
           <Button type="primary" loading={loading} onClick={onGenerate}>
-            生成图文
+            生成文案和图片
           </Button>
         </Space>
       </Card>
