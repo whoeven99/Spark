@@ -43,6 +43,7 @@ import { openrouterProbeRouter } from "./routes/openrouterProbe.js";
 import { sparkCreditsRouter } from "./routes/sparkCredits.js";
 import { sparkBillingRouter } from "./routes/sparkBilling.js";
 import { referralCodesRouter } from "./routes/referralCodes.js";
+import { xhsPromoRouter } from "./routes/xhsPromo.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 import { logAdminEnvStatus } from "./lib/logEnvStatus.js";
 
@@ -90,6 +91,8 @@ app.use("/api/support", authMiddleware, supportRouter);
 app.use("/api/spark-credits", authMiddleware, sparkCreditsRouter);
 // Spark 推荐码（所有登录用户）
 app.use("/api/referral-codes", authMiddleware, referralCodesRouter);
+// 小红书图文生成（所有登录用户）
+app.use("/api/promo/xhs", authMiddleware, xhsPromoRouter);
 // Spark 账单总览与流水（所有登录用户）
 app.use("/api/spark-billing", authMiddleware, sparkBillingRouter);
 // 翻译 V4 任务列表 / 内容 / LLM key 统计（Cosmos + Redis + Blob）

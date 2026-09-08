@@ -3279,3 +3279,46 @@ export function postOpenRouterImages(body: {
     body: JSON.stringify(body),
   });
 }
+
+export type XhsPromoDirection = "howto" | "compare" | "data";
+
+export type XhsPromoStatus = {
+  copy: { configured: boolean; provider: string | null; model: string | null };
+  cover: { configured: boolean; provider: string; model: string };
+};
+
+export type XhsPromoCoverSlots = {
+  headline: string;
+  subhead: string;
+  left: string[];
+  right: string[];
+  metric: string;
+  metricNote: string;
+  promptBox: string;
+};
+
+export type XhsPromoGenerateResult = {
+  direction: XhsPromoDirection;
+  title: string;
+  body: string;
+  tags: string[];
+  coverSlots: XhsPromoCoverSlots;
+  image: { mimeType: string; base64: string } | null;
+  models: { copy: string; cover: string };
+  coverError: string | null;
+};
+
+export function fetchXhsPromoStatus(): Promise<XhsPromoStatus> {
+  return apiFetch("/promo/xhs/status");
+}
+
+export function generateXhsPromo(body: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+}): Promise<XhsPromoGenerateResult> {
+  return apiFetch("/promo/xhs/generate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

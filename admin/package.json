@@ -22,6 +22,7 @@
     "@libsql/client": "^0.17.3",
     "@prisma/adapter-libsql": "^6.19.3",
     "@prisma/client": "^6.16.3",
+    "@volcengine/openapi": "^1.36.2",
     "antd": "^5.22.7",
     "cors": "^2.8.5",
     "express": "^4.21.2",
