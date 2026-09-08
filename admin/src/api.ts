@@ -3287,9 +3287,15 @@ export function postOpenRouterImages(body: {
 export type XhsPromoDirection = "howto" | "compare" | "data";
 
 export type XhsPromoCopyProvider = "volc-ark" | "deepseek" | "openai";
+export type XhsPromoCoverProvider = "volc-ark" | "openai" | "template";
 
 export type XhsPromoCopyOption = {
   provider: XhsPromoCopyProvider;
+  model: string;
+};
+
+export type XhsPromoCoverOption = {
+  provider: XhsPromoCoverProvider;
   model: string;
 };
 
@@ -3301,7 +3307,12 @@ export type XhsPromoStatus = {
     options: XhsPromoCopyOption[];
     hint?: string;
   };
-  cover: { configured: boolean; provider: string; model: string };
+  cover: {
+    configured: boolean;
+    provider: string;
+    model: string;
+    options: XhsPromoCoverOption[];
+  };
 };
 
 export type XhsPromoCoverSlots = {
@@ -3341,6 +3352,7 @@ export function generateXhsPromo(body: {
   topic: string;
   notes?: string;
   copyProvider?: XhsPromoCopyProvider;
+  coverProvider?: XhsPromoCoverProvider;
 }): Promise<XhsPromoGenerateResult> {
   return apiFetch("/promo/xhs/generate", {
     method: "POST",

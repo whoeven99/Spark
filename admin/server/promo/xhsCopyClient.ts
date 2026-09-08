@@ -41,17 +41,17 @@ export function arkCopyHint(): string {
 
 export function listCopyModels(): CopyModelInfo[] {
   const options: CopyModelInfo[] = [];
+  if (getEnv("DEEPSEEK_API_KEY")) {
+    options.push({
+      provider: "deepseek",
+      model: getEnv("DEEPSEEK_MODEL", "deepseek-chat"),
+    });
+  }
   const arkTextModel = configuredArkTextModel();
   if (resolveArkApiKey() && arkTextModel) {
     options.push({
       provider: "volc-ark",
       model: arkTextModel,
-    });
-  }
-  if (getEnv("DEEPSEEK_API_KEY")) {
-    options.push({
-      provider: "deepseek",
-      model: getEnv("DEEPSEEK_MODEL", "deepseek-chat"),
     });
   }
   if (getEnv("OPENAI_API_KEY")) {
@@ -70,7 +70,7 @@ export function resolveCopyModel(preferred?: string | null): CopyModelInfo | nul
     const hit = options.find((item) => item.provider === preferred);
     if (hit) return hit;
   }
-  return options[0] ?? null;
+  return options.find((item) => item.provider === "deepseek") ?? options[0] ?? null;
 }
 
 export async function generateXhsCopy(params: {

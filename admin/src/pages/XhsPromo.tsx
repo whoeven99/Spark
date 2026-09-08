@@ -17,6 +17,7 @@ import {
   fetchXhsPromoStatus,
   generateXhsPromo,
   type XhsPromoCopyProvider,
+  type XhsPromoCoverProvider,
   type XhsPromoDirection,
   type XhsPromoGenerateResult,
   type XhsPromoStatus,
@@ -134,12 +135,40 @@ function copyProviderLabel(provider: XhsPromoCopyProvider): string {
   }
 }
 
+function coverProviderLabel(provider: XhsPromoCoverProvider): string {
+  switch (provider) {
+    case "volc-ark":
+      return "Seedream";
+    case "openai":
+      return "GPT";
+    case "template":
+      return "模板";
+    default: {
+      const _never: never = provider;
+      return _never;
+    }
+  }
+}
+
+function defaultCopyProvider(status: XhsPromoStatus): XhsPromoCopyProvider | null {
+  const options = status.copy.options ?? [];
+  const deepseek = options.find((item) => item.provider === "deepseek");
+  return deepseek?.provider ?? options[0]?.provider ?? (status.copy.provider as XhsPromoCopyProvider | null);
+}
+
+function defaultCoverProvider(status: XhsPromoStatus): XhsPromoCoverProvider {
+  const options = status.cover.options ?? [];
+  const seedream = options.find((item) => item.provider === "volc-ark");
+  return seedream?.provider ?? (options[0]?.provider as XhsPromoCoverProvider | undefined) ?? "template";
+}
+
 export default function XhsPromo() {
   const [direction, setDirection] = useState<XhsPromoDirection>(FIRST_PRESET.direction);
   const [topic, setTopic] = useState(FIRST_PRESET.topic);
   const [notes, setNotes] = useState(FIRST_PRESET.notes);
   const [status, setStatus] = useState<XhsPromoStatus | null>(null);
   const [copyProvider, setCopyProvider] = useState<XhsPromoCopyProvider | null>(null);
+  const [coverProvider, setCoverProvider] = useState<XhsPromoCoverProvider>("volc-ark");
   const [result, setResult] = useState<XhsPromoGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -148,22 +177,25 @@ export default function XhsPromo() {
     fetchXhsPromoStatus()
       .then((next) => {
         setStatus(next);
-        const options = next.copy.options ?? [];
-        const first = options[0]?.provider ?? (next.copy.provider as XhsPromoCopyProvider | null);
-        setCopyProvider(first);
+        setCopyProvider(defaultCopyProvider(next));
+        setCoverProvider(defaultCoverProvider(next));
       })
       .catch((e) => setError(String(e)));
   }, []);
 
   const copyOptions = status?.copy.options ?? [];
+  const coverOptions = status?.cover.options ?? [];
   const selectedCopy = copyOptions.find((item) => item.provider === copyProvider)
     ?? copyOptions[0]
     ?? null;
+  const selectedCover = coverOptions.find((item) => item.provider === coverProvider)
+    ?? coverOptions[0]
+    ?? null;
   const plannedCopy = selectedCopy
     ? `${selectedCopy.provider}:${selectedCopy.model}`
-    : "未配置豆包 / DeepSeek / GPT";
-  const plannedCover = status
-    ? `${status.cover.provider}:${status.cover.model}`
+    : "未配置 DeepSeek / 豆包 / GPT";
+  const plannedCover = selectedCover
+    ? `${selectedCover.provider}:${selectedCover.model}`
     : "检测中";
 
   const usedCopy = result?.models.copy ?? plannedCopy;
@@ -185,6 +217,7 @@ export default function XhsPromo() {
         topic: topic.trim(),
         notes: notes.trim(),
         copyProvider: copyProvider ?? undefined,
+        coverProvider,
       });
       setResult(next);
       if (next.coverError) {
@@ -314,7 +347,7 @@ export default function XhsPromo() {
               ))}
             </div>
           </div>
-          {copyOptions.length > 1 ? (
+          {copyOptions.length > 0 ? (
             <div>
               <Text type="secondary">文案模型</Text>
               <div style={{ marginTop: 6 }}>
@@ -325,6 +358,21 @@ export default function XhsPromo() {
                   }))}
                   value={copyProvider ?? copyOptions[0]?.provider}
                   onChange={(v) => setCopyProvider(v as XhsPromoCopyProvider)}
+                />
+              </div>
+            </div>
+          ) : null}
+          {coverOptions.length > 0 ? (
+            <div>
+              <Text type="secondary">封面模型</Text>
+              <div style={{ marginTop: 6 }}>
+                <Segmented
+                  options={coverOptions.map((item) => ({
+                    label: `${coverProviderLabel(item.provider)} · ${item.model}`,
+                    value: item.provider,
+                  }))}
+                  value={coverProvider}
+                  onChange={(v) => setCoverProvider(v as XhsPromoCoverProvider)}
                 />
               </div>
             </div>
