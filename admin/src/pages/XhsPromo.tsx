@@ -233,21 +233,17 @@ function defaultCoverProvider(status: XhsPromoStatus): XhsPromoCoverProvider {
   return seedream?.provider ?? (options[0]?.provider as XhsPromoCoverProvider | undefined) ?? "template";
 }
 
-function topicFromAnalyze(next: {
-  suggestedTopic?: string;
-  titleUser?: string;
-  styleSummary?: string;
-}, refTitle: string): string {
+const NOTE_PATH_TOPIC = "按这篇笔记的气质写 Spark";
+
+function topicFromAnalyze(
+  next: { suggestedTopic?: string; titleUser?: string },
+  refTitle: string,
+): string {
   const direct = next.suggestedTopic?.trim() ?? "";
-  if (direct.length >= 2 && direct !== refTitle.trim()) return direct.slice(0, 40);
-  const fromUser = next.titleUser?.match(/(?:选题|Spark选题)[：:]\s*([^\n]+)/);
-  if (fromUser?.[1]) {
-    const cleaned = fromUser[1].replace(/[\[\]「」【】]/g, "").replace(/已定标题/g, "").trim();
-    if (cleaned.length >= 2) return cleaned.slice(0, 40);
+  if (direct.length >= 2 && direct.length <= 22 && direct !== refTitle.trim() && !/学到了|提示词|结构|风格/.test(direct)) {
+    return direct;
   }
-  const fromSummary = next.styleSummary?.split(/[。！？\n]/)[0]?.trim() ?? "";
-  if (fromSummary.length >= 2) return fromSummary.slice(0, 40);
-  return "按这篇笔记的气质写 Spark";
+  return NOTE_PATH_TOPIC;
 }
 
 function topicKey(
@@ -690,7 +686,13 @@ export default function XhsPromo() {
       setAnalyzeSawImages(next.sawImages);
       const sparkTopic = topicFromAnalyze(next, refTitle);
       setTopic(sparkTopic);
-      message.success("已分析这篇笔记，可以生成标题");
+      setNotes("");
+      message.success("已按这篇笔记的规则出标题");
+      await runGenerateTitles({
+        topic: sparkTopic,
+        titleSystemPrompt: next.titleSystem,
+        titleUserPrompt: next.titleUser,
+      });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -860,20 +862,19 @@ export default function XhsPromo() {
     }
   }
 
-  async function onGenerateTitles() {
-    if (sourceMode === "note" && !styleSummary.trim()) {
-      message.warning("先分析这篇参考笔记，再出标题");
+  async function runGenerateTitles(overrides?: {
+    topic?: string;
+    titleSystemPrompt?: string;
+    titleUserPrompt?: string;
+  }) {
+    const nextTopic = (overrides?.topic ?? topic).trim() || (sourceMode === "note" ? NOTE_PATH_TOPIC : "");
+    if (sourceMode === "note" && !styleSummary.trim() && !overrides?.titleSystemPrompt) {
+      message.warning("先分析这篇参考笔记");
       return;
     }
-    let nextTopic = topic.trim();
     if (nextTopic.length < 2) {
-      if (sourceMode === "note" && styleSummary.trim()) {
-        nextTopic = "按这篇笔记的气质写 Spark";
-        setTopic(nextTopic);
-      } else {
-        message.warning(sourceMode === "note" ? "先分析这篇笔记" : "请填写选题");
-        return;
-      }
+      message.warning("请填写选题");
+      return;
     }
     goTo("titles");
     setTitlesLoading(true);
@@ -884,8 +885,8 @@ export default function XhsPromo() {
         topic: nextTopic,
         notes: generationNotes(),
         copyProvider: copyProvider ?? undefined,
-        titleSystemPrompt: titleSystem.trim() || undefined,
-        titleUserPrompt: titleUser.trim() || undefined,
+        titleSystemPrompt: (overrides?.titleSystemPrompt ?? titleSystem).trim() || undefined,
+        titleUserPrompt: (overrides?.titleUserPrompt ?? titleUser).trim() || undefined,
       });
       setTitles(next.titles);
       setLockedTopic(currentTopicKey);
@@ -898,6 +899,10 @@ export default function XhsPromo() {
     } finally {
       setTitlesLoading(false);
     }
+  }
+
+  async function onGenerateTitles() {
+    await runGenerateTitles();
   }
 
   async function onGenerateCopy() {
@@ -1153,7 +1158,7 @@ export default function XhsPromo() {
           title="选题"
           detail={
             sourceMode === "note"
-              ? `参考笔记 · ${clipPreview(refTitle || "未读链接")} · ${topic || "待定选题"}`
+              ? `参考笔记 · ${clipPreview(refTitle || "未读链接")}`
               : `${directionLabel(direction)} · ${topic}`
           }
           onEdit={() => goTo("topic")}
@@ -1264,7 +1269,7 @@ export default function XhsPromo() {
                   }}
                 >
                   <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-                    只分析这篇笔记的标题和正文，不会用上面的预设选题。分析完再写 Spark 发什么。
+                    只分析这篇笔记。分析完按拆出来的规则直接出选题和标题，不用再填。
                   </Text>
                   <Space direction="vertical" style={{ width: "100%" }} size={8}>
                     <Space.Compact style={{ width: "100%" }}>
@@ -1347,13 +1352,13 @@ export default function XhsPromo() {
                         ) : (
                           <Text type="secondary">链接没读到图，在这里上传或粘贴。</Text>
                         )}
-                        <Button type="primary" loading={analyzeLoading} onClick={() => void onAnalyzeReference()}>
-                          分析这篇笔记
+                        <Button type="primary" loading={analyzeLoading || titlesLoading} onClick={() => void onAnalyzeReference()}>
+                          {styleSummary ? "按这篇笔记再出标题" : "分析并生成标题"}
                         </Button>
                         <Text type="secondary">
                           {copyProviderSeesImages(copyProvider) && refImages.length > 0
                             ? `只拆这篇笔记，会看文字和 ${refImages.length} 张图，所以会慢一些。`
-                            : "只拆这篇笔记的标题和正文，不看图，也不看预设选题。"}
+                            : "只拆这篇笔记的标题和正文，然后直接出标题。"}
                         </Text>
                         {styleSummary ? (
                           <Alert
@@ -1363,25 +1368,6 @@ export default function XhsPromo() {
                             description={styleSummary}
                           />
                         ) : null}
-                      </>
-                    ) : null}
-                    {styleSummary ? (
-                      <>
-                        <Text type="secondary">这篇 Spark 发什么（分析给出，可改）</Text>
-                        <Input
-                          value={topic}
-                          onChange={(e) => setTopic(e.target.value)}
-                          maxLength={40}
-                          placeholder="不要照抄参考笔记标题"
-                          showCount
-                        />
-                        <TextArea
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          rows={3}
-                          maxLength={2000}
-                          placeholder="补充：真实数字、不要写什么（可选）"
-                        />
                       </>
                     ) : null}
                   </Space>
@@ -1420,23 +1406,21 @@ export default function XhsPromo() {
                   },
                 ]}
               />
-              <PanelFooter
-                hint={
-                  sourceMode === "note" && !styleSummary
-                    ? "先分析这篇笔记，再出标题"
-                    : "下一步只出标题，还不出图"
-                }
-              >
-                <Button
-                  type="primary"
-                  size="large"
-                  loading={titlesLoading}
-                  disabled={sourceMode === "note" && !styleSummary}
-                  onClick={onGenerateTitles}
-                >
-                  {titles.length > 0 ? "按这个选题换一批标题" : "生成标题"}
-                </Button>
-              </PanelFooter>
+              {sourceMode === "topic" ? (
+                <PanelFooter hint="下一步只出标题，还不出图">
+                  <Button type="primary" size="large" loading={titlesLoading} onClick={onGenerateTitles}>
+                    {titles.length > 0 ? "按这个选题换一批标题" : "生成标题"}
+                  </Button>
+                </PanelFooter>
+              ) : (
+                <PanelFooter hint="分析完会直接出标题，不用再填选题">
+                  {styleSummary ? (
+                    <Button loading={analyzeLoading || titlesLoading} onClick={onGenerateTitles}>
+                      按规则再出一批标题
+                    </Button>
+                  ) : null}
+                </PanelFooter>
+              )}
             </Space>
           </Card>
         </div>

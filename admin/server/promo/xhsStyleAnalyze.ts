@@ -204,23 +204,29 @@ function readAnalyzePayload(raw: unknown): Omit<StyleAnalyzeResult, "source" | "
   };
 }
 
+function isUsableSparkTopic(text: string, refTitle = ""): boolean {
+  const t = text.trim();
+  if (t.length < 2 || t.length > 22) return false;
+  if (t === refTitle.trim()) return false;
+  if (/学到了|提示词|结构|风格|误区|Markdown|JSON|字段/.test(t)) return false;
+  return true;
+}
+
 export function resolveSuggestedTopic(
   prompts: Pick<StyleAnalyzeResult, "suggestedTopic" | "titleUser" | "styleSummary">,
   refTitle = "",
 ): string {
-  const direct = prompts.suggestedTopic.trim();
-  if (direct.length >= 2 && direct !== refTitle.trim()) return direct.slice(0, 40);
+  if (isUsableSparkTopic(prompts.suggestedTopic, refTitle)) {
+    return prompts.suggestedTopic.trim().slice(0, 22);
+  }
   const fromUser = prompts.titleUser.match(/(?:选题|Spark选题)[：:]\s*([^\n]+)/);
   if (fromUser?.[1]) {
     const cleaned = fromUser[1]
       .replace(/[\[\]「」【】]/g, "")
       .replace(/已定标题/g, "")
-      .replace(/^Spark\s*/i, "Spark ")
       .trim();
-    if (cleaned.length >= 2 && cleaned !== refTitle.trim()) return cleaned.slice(0, 40);
+    if (isUsableSparkTopic(cleaned, refTitle)) return cleaned.slice(0, 22);
   }
-  const fromSummary = prompts.styleSummary.split(/[。！？\n]/)[0]?.trim() ?? "";
-  if (fromSummary.length >= 2) return fromSummary.slice(0, 40);
   return "按这篇笔记的气质写 Spark";
 }
 
