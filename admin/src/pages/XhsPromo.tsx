@@ -5,8 +5,10 @@ import {
   Card,
   Col,
   Collapse,
+  Drawer,
   Empty,
   Input,
+  Modal,
   Row,
   Segmented,
   Select,
@@ -15,6 +17,7 @@ import {
   Steps,
   Tag,
   Typography,
+  Upload,
   message,
 } from "antd";
 import {
@@ -22,22 +25,35 @@ import {
   CopyOutlined,
   DownloadOutlined,
   EditOutlined,
+  HistoryOutlined,
   PictureOutlined,
   ReloadOutlined,
+  SaveOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import {
+  ADMIN_USER_OPTIONS,
+  analyzeXhsPromoReference,
+  previewXhsPromoReference,
+  deleteXhsPromoPromptVersion,
+  fetchXhsPromoPromptLatest,
+  fetchXhsPromoPromptVersions,
   fetchXhsPromoPrompts,
   fetchXhsPromoStatus,
   generateXhsPromoCards,
   generateXhsPromoCopy,
   generateXhsPromoCover,
   generateXhsPromoTitles,
+  saveXhsPromoPromptVersion,
   type XhsPromoContentCard,
   type XhsPromoContentCardSlot,
   type XhsPromoCopyProvider,
   type XhsPromoCoverProvider,
   type XhsPromoCoverSlots,
   type XhsPromoDirection,
+  type XhsPromoPromptLatest,
+  type XhsPromoPromptSlot,
+  type XhsPromoPromptVersion,
   type XhsPromoStatus,
 } from "../api";
 
@@ -136,6 +152,33 @@ function downloadHref(href: string, filename: string) {
   a.click();
 }
 
+function rasterizeToPng(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || 768;
+      canvas.height = img.naturalHeight || 1024;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("无法导出 PNG"));
+        return;
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("读图失败"));
+    img.src = src;
+  });
+}
+
+async function downloadPng(src: string, filename: string) {
+  const href = src.includes("image/svg") ? await rasterizeToPng(src) : src;
+  downloadHref(href, filename);
+}
+
 function copyProviderLabel(provider: XhsPromoCopyProvider): string {
   switch (provider) {
     case "volc-ark":
@@ -192,18 +235,96 @@ function clipPreview(text: string, max = 28): string {
   return `${value.slice(0, max)}…`;
 }
 
+function slotLabel(slot: XhsPromoPromptSlot): string {
+  switch (slot) {
+    case "title":
+      return "标题提示词";
+    case "copy":
+      return "文案提示词";
+    case "cover":
+      return "封面提示词";
+    case "cards":
+      return "滑页提示词";
+    default: {
+      const _never: never = slot;
+      return _never;
+    }
+  }
+}
+
+function adminName(userId: string): string {
+  return ADMIN_USER_OPTIONS.find((item) => item.id === userId)?.label ?? userId;
+}
+
+function versionPreview(payload: Record<string, string>): string {
+  return Object.values(payload).filter(Boolean).join("\n").slice(0, 120);
+}
+
+const EMPTY_LATEST: XhsPromoPromptLatest = {
+  title: null,
+  copy: null,
+  cover: null,
+  cards: null,
+};
+
+type RefImage = {
+  mimeType: string;
+  base64: string;
+  preview: string;
+};
+
+function resizeImageFile(file: File, max = 1024): Promise<RefImage> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("无法读取图片"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(objectUrl);
+      const preview = canvas.toDataURL("image/jpeg", 0.85);
+      resolve({
+        mimeType: "image/jpeg",
+        base64: preview.slice(preview.indexOf(",") + 1),
+        preview,
+      });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("读图失败"));
+    };
+    img.src = objectUrl;
+  });
+}
+
 function PromptEditor(props: {
   dirty: boolean;
+  saved: boolean;
   fields: Array<{ label: string; value: string; rows: number; onChange: (value: string) => void }>;
   onReset: () => void;
+  onSave: () => void;
+  onHistory: () => void;
 }) {
+  const label = props.dirty
+    ? "调提示词（已改）"
+    : props.saved
+      ? "调提示词（已套保存版）"
+      : "调提示词";
   return (
     <Collapse
       ghost
       items={[
         {
           key: "prompt",
-          label: props.dirty ? "调提示词（已改）" : "调提示词",
+          label,
           children: (
             <Space direction="vertical" style={{ width: "100%" }} size={10}>
               {props.fields.map((field) => (
@@ -218,9 +339,17 @@ function PromptEditor(props: {
                   />
                 </div>
               ))}
-              <Button type="link" style={{ paddingLeft: 0 }} onClick={props.onReset}>
-                恢复默认
-              </Button>
+              <Space wrap>
+                <Button icon={<SaveOutlined />} onClick={props.onSave}>
+                  保存此版
+                </Button>
+                <Button icon={<HistoryOutlined />} onClick={props.onHistory}>
+                  历史
+                </Button>
+                <Button type="link" style={{ paddingLeft: 0 }} onClick={props.onReset}>
+                  恢复默认
+                </Button>
+              </Space>
             </Space>
           ),
         },
@@ -332,6 +461,7 @@ export default function XhsPromo() {
   const [cardSlots, setCardSlots] = useState<XhsPromoContentCardSlot[]>([]);
   const [cardImages, setCardImages] = useState<XhsPromoContentCard[]>([]);
   const [cardModel, setCardModel] = useState("");
+  const [cardError, setCardError] = useState("");
   const [cardsTextDirty, setCardsTextDirty] = useState(false);
 
   const [titlesLoading, setTitlesLoading] = useState(false);
@@ -340,6 +470,28 @@ export default function XhsPromo() {
   const [cardsLoading, setCardsLoading] = useState(false);
   const [error, setError] = useState("");
   const [activePanel, setActivePanel] = useState<PanelId>("topic");
+  const [latestBySlot, setLatestBySlot] = useState<XhsPromoPromptLatest>(EMPTY_LATEST);
+  const [savedSlots, setSavedSlots] = useState<Record<XhsPromoPromptSlot, boolean>>({
+    title: false,
+    copy: false,
+    cover: false,
+    cards: false,
+  });
+  const [historySlot, setHistorySlot] = useState<XhsPromoPromptSlot | null>(null);
+  const [historyList, setHistoryList] = useState<XhsPromoPromptVersion[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [saveSlot, setSaveSlot] = useState<XhsPromoPromptSlot | null>(null);
+  const [saveNote, setSaveNote] = useState("");
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [refLink, setRefLink] = useState("");
+  const [refTitle, setRefTitle] = useState("");
+  const [refBody, setRefBody] = useState("");
+  const [refImages, setRefImages] = useState<RefImage[]>([]);
+  const [refWarning, setRefWarning] = useState("");
+  const [refOpened, setRefOpened] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
+  const [styleSummary, setStyleSummary] = useState("");
 
   const panelRef = useRef<HTMLDivElement>(null);
   const shouldScroll = useRef(false);
@@ -354,6 +506,189 @@ export default function XhsPromo() {
       .catch((e) => setError(String(e)));
   }, []);
 
+  function applyVersion(slot: XhsPromoPromptSlot, version: XhsPromoPromptVersion | null) {
+    const payload = version?.payload ?? {};
+    switch (slot) {
+      case "title":
+        if (version) {
+          setTitleSystem(payload.titleSystem ?? "");
+          setTitleUser(payload.titleUser ?? "");
+          setTitleDirty(true);
+        } else {
+          setTitleDirty(false);
+        }
+        break;
+      case "copy":
+        if (version) {
+          setCopySystem(payload.copySystem ?? "");
+          setCopyUser(payload.copyUser ?? "");
+          setCopyDirty(true);
+        } else {
+          setCopyDirty(false);
+        }
+        break;
+      case "cover":
+        if (version) {
+          setImagePrompt(payload.imagePrompt ?? "");
+          setDefaultImagePrompt(payload.imagePrompt ?? "");
+          setImageDirty(true);
+        } else {
+          setImageDirty(false);
+          setDefaultImagePrompt("");
+        }
+        break;
+      case "cards":
+        if (version) {
+          setCardSystem(payload.cardSystem ?? "");
+          setCardUser(payload.cardUser ?? "");
+          setDefaultCardSystem(payload.cardSystem ?? "");
+          setDefaultCardUser(payload.cardUser ?? "");
+          setCardDirty(true);
+        } else {
+          setCardDirty(false);
+        }
+        break;
+      default: {
+        const _never: never = slot;
+        return _never;
+      }
+    }
+    setSavedSlots((prev) => ({ ...prev, [slot]: Boolean(version) }));
+  }
+
+  function currentPayload(slot: XhsPromoPromptSlot): Record<string, string> {
+    switch (slot) {
+      case "title":
+        return { titleSystem, titleUser };
+      case "copy":
+        return { copySystem, copyUser };
+      case "cover":
+        return { imagePrompt };
+      case "cards":
+        return { cardSystem, cardUser };
+      default: {
+        const _never: never = slot;
+        return _never;
+      }
+    }
+  }
+
+  async function addRefFiles(files: File[]) {
+    const images = files.filter((file) => file.type.startsWith("image/")).slice(0, 4);
+    if (images.length === 0) return;
+    try {
+      const next = await Promise.all(images.map((file) => resizeImageFile(file)));
+      setRefImages((prev) => [...prev, ...next].slice(0, 4));
+      setRefOpened(true);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  function toPreviewImage(image: { mimeType: string; base64: string }): RefImage {
+    return {
+      mimeType: image.mimeType,
+      base64: image.base64,
+      preview: `data:${image.mimeType};base64,${image.base64}`,
+    };
+  }
+
+  async function onPreviewReference() {
+    if (!refLink.trim()) {
+      message.warning("先贴小红书链接");
+      return;
+    }
+    setPreviewLoading(true);
+    setError("");
+    try {
+      const next = await previewXhsPromoReference({ link: refLink.trim() });
+      setRefTitle(next.title);
+      setRefBody(next.description);
+      setRefImages(next.images.map(toPreviewImage).slice(0, 4));
+      setRefWarning(next.warning ?? "");
+      setRefOpened(true);
+      setStyleSummary("");
+      if (next.warning) {
+        message.warning(next.warning);
+      } else {
+        message.success("已读到公开内容，缺的再自己补");
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  async function onAnalyzeReference() {
+    if (!refTitle.trim() && !refBody.trim() && refImages.length === 0) {
+      message.warning("先读取链接，或贴上标题、正文、图片");
+      return;
+    }
+    setAnalyzeLoading(true);
+    setError("");
+    try {
+      const next = await analyzeXhsPromoReference({
+        direction,
+        topic: topic.trim(),
+        title: refTitle.trim() || undefined,
+        body: refBody.trim() || undefined,
+        images: refImages.map((image) => ({ mimeType: image.mimeType, base64: image.base64 })),
+        copyProvider: copyProvider ?? undefined,
+      });
+      setTitleSystem(next.titleSystem);
+      setTitleUser(next.titleUser);
+      setTitleDirty(true);
+      setCopySystem(next.copySystem);
+      setCopyUser(next.copyUser);
+      setCopyDirty(true);
+      setImagePrompt(next.imagePrompt);
+      setDefaultImagePrompt(next.imagePrompt);
+      setImageDirty(true);
+      setCardSystem(next.cardSystem);
+      setCardUser(next.cardUser);
+      setDefaultCardSystem(next.cardSystem);
+      setDefaultCardUser(next.cardUser);
+      setCardDirty(true);
+      setSavedSlots({ title: false, copy: false, cover: false, cards: false });
+      setStyleSummary(next.styleSummary);
+      message.success(next.sawImages ? "已按文字和图片填入提示词" : "已按文字填入提示词");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAnalyzeLoading(false);
+    }
+  }
+
+  async function refreshHistory(slot: XhsPromoPromptSlot) {
+    setHistoryLoading(true);
+    try {
+      const next = await fetchXhsPromoPromptVersions({ direction, slot });
+      setHistoryList(next.versions);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchXhsPromoPromptLatest(direction)
+      .then((latest) => {
+        if (cancelled) return;
+        setLatestBySlot(latest);
+        applyVersion("title", latest.title);
+        applyVersion("copy", latest.copy);
+        applyVersion("cover", latest.cover);
+        applyVersion("cards", latest.cards);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [direction]);
+
   useEffect(() => {
     const handle = window.setTimeout(() => {
       fetchXhsPromoPrompts({
@@ -364,18 +699,18 @@ export default function XhsPromo() {
         body: body.trim(),
       })
         .then((next) => {
-          if (!titleDirty) {
+          if (!titleDirty && !savedSlots.title) {
             setTitleSystem(next.titleSystem);
             setTitleUser(next.titleUser);
           }
-          if (!copyDirty) {
+          if (!copyDirty && !savedSlots.copy) {
             setCopySystem(next.copySystem);
             setCopyUser(next.copyUser);
           }
-          if (!imageDirty && !defaultImagePrompt) {
+          if (!imageDirty && !savedSlots.cover && !defaultImagePrompt) {
             setImagePrompt(next.image);
           }
-          if (!cardDirty) {
+          if (!cardDirty && !savedSlots.cards) {
             setCardSystem(next.cardSystem);
             setCardUser(next.cardUser);
             setDefaultCardSystem(next.cardSystem);
@@ -385,7 +720,7 @@ export default function XhsPromo() {
         .catch(() => undefined);
     }, 300);
     return () => window.clearTimeout(handle);
-  }, [direction, topic, notes, title, body, titleDirty, copyDirty, imageDirty, cardDirty, defaultImagePrompt]);
+  }, [direction, topic, notes, title, body, titleDirty, copyDirty, imageDirty, cardDirty, savedSlots, defaultImagePrompt]);
 
   useEffect(() => {
     if (!shouldScroll.current) return;
@@ -479,7 +814,7 @@ export default function XhsPromo() {
       setTags(next.tags);
       setCoverSlots(next.coverSlots);
       setLockedTitle(next.title);
-      if (!imageDirty) {
+      if (!imageDirty && !savedSlots.cover) {
         setImagePrompt(next.imagePrompt);
         setDefaultImagePrompt(next.imagePrompt);
       }
@@ -541,6 +876,7 @@ export default function XhsPromo() {
     }
     setCardsLoading(true);
     setError("");
+    setCardError("");
     try {
       const next = await generateXhsPromoCards({
         direction,
@@ -549,15 +885,21 @@ export default function XhsPromo() {
         title: title.trim(),
         bodyText: body.trim(),
         copyProvider: copyProvider ?? undefined,
-        cardSystemPrompt: mode === "model" ? cardSystem.trim() || undefined : undefined,
-        cardUserPrompt: mode === "model" ? cardUser.trim() || undefined : undefined,
+        coverProvider,
+        cardSystemPrompt: cardSystem.trim() || undefined,
+        cardUserPrompt: cardUser.trim() || undefined,
         cards: mode === "layout" ? cardSlots : undefined,
       });
       setCardImages(next.cards);
       setCardSlots(next.cards.map((card) => ({ headline: card.headline, lines: card.lines })));
       setCardModel(next.model ?? cardModel);
       setCardsTextDirty(false);
-      message.success(mode === "layout" ? "已按当前文字重新排版" : "滑页已更新，封面没动");
+      if (next.cardError) {
+        setCardError(next.cardError);
+        message.warning(`滑页已回退模板：${next.cardError}`);
+      } else {
+        message.success(mode === "layout" ? "已按当前文字和提示词重出滑页" : "滑页已更新，封面没动");
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -576,22 +918,31 @@ export default function XhsPromo() {
     setNotes(preset.notes);
   }
 
-  function downloadCover() {
+  async function downloadCover() {
     if (!previewSrc || !coverImage) return;
-    const ext = coverImage.mimeType.includes("svg") ? "svg" : "png";
-    downloadHref(previewSrc, `xhs-cover-${direction}.${ext}`);
+    try {
+      await downloadPng(previewSrc, `xhs-cover-${direction}.png`);
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
-  function downloadCard(index: number) {
+  async function downloadCard(index: number) {
     const card = cardImages[index];
     if (!card) return;
     const src = imageSrc(card.image);
     if (!src) return;
-    downloadHref(src, `xhs-card-${index + 1}-${direction}.svg`);
+    try {
+      await downloadPng(src, `xhs-card-${index + 1}-${direction}.png`);
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
-  function downloadAllCards() {
-    cardImages.forEach((_, index) => downloadCard(index));
+  async function downloadAllCards() {
+    for (let index = 0; index < cardImages.length; index += 1) {
+      await downloadCard(index);
+    }
   }
 
   function updateCardSlot(index: number, patch: Partial<XhsPromoContentCardSlot>) {
@@ -733,9 +1084,119 @@ export default function XhsPromo() {
                 maxLength={2000}
                 placeholder="补充：真实数字、对比对象、不要写什么"
               />
+              <div
+                onPaste={(event) => {
+                  const files = Array.from(event.clipboardData.files);
+                  if (files.some((file) => file.type.startsWith("image/"))) {
+                    event.preventDefault();
+                    void addRefFiles(files);
+                  }
+                }}
+              >
+                <Text type="secondary">参考一篇笔记（可选）</Text>
+                <Text type="secondary" style={{ display: "block", margin: "4px 0 8px", fontSize: 12 }}>
+                  先贴链接读公开内容。读到的会填进来，缺的文字和图片再自己补，然后分析。
+                </Text>
+                <Space direction="vertical" style={{ width: "100%" }} size={8}>
+                  <Space.Compact style={{ width: "100%" }}>
+                    <Input
+                      value={refLink}
+                      onChange={(e) => setRefLink(e.target.value)}
+                      placeholder="小红书链接，或整段分享文案"
+                      allowClear
+                      onPressEnter={() => void onPreviewReference()}
+                    />
+                    <Button type="primary" loading={previewLoading} onClick={() => void onPreviewReference()}>
+                      读取链接
+                    </Button>
+                  </Space.Compact>
+                  {!refOpened ? (
+                    <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setRefOpened(true)}>
+                      没有链接，自己贴文字和图片
+                    </Button>
+                  ) : null}
+                  {refOpened ? (
+                    <>
+                      {refWarning ? <Alert type="warning" showIcon message={refWarning} /> : null}
+                      <Input
+                        value={refTitle}
+                        onChange={(e) => setRefTitle(e.target.value)}
+                        placeholder="读到的标题，不对就改，没有就手贴"
+                        maxLength={80}
+                        showCount
+                      />
+                      <TextArea
+                        value={refBody}
+                        onChange={(e) => setRefBody(e.target.value)}
+                        rows={6}
+                        maxLength={4000}
+                        showCount
+                        placeholder="读到的简介。正文通常读不到，在这里补全。"
+                      />
+                      <Upload
+                        accept="image/*"
+                        multiple
+                        showUploadList={false}
+                        beforeUpload={(file) => {
+                          void addRefFiles([file]);
+                          return false;
+                        }}
+                        disabled={refImages.length >= 4}
+                      >
+                        <Button icon={<UploadOutlined />} disabled={refImages.length >= 4}>
+                          补图或粘贴图片（最多 4 张）
+                        </Button>
+                      </Upload>
+                      {refImages.length > 0 ? (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {refImages.map((image, index) => (
+                            <div key={`${index}-${image.base64.slice(0, 16)}`} style={{ position: "relative" }}>
+                              <img
+                                src={image.preview}
+                                alt=""
+                                style={{
+                                  width: 88,
+                                  height: 88,
+                                  objectFit: "cover",
+                                  borderRadius: 6,
+                                  display: "block",
+                                }}
+                              />
+                              <Button
+                                size="small"
+                                type="text"
+                                danger
+                                style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22 }}
+                                onClick={() => setRefImages((prev) => prev.filter((_, i) => i !== index))}
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Text type="secondary">链接没读到图，在这里上传或粘贴。</Text>
+                      )}
+                      <Button type="primary" loading={analyzeLoading} onClick={() => void onAnalyzeReference()}>
+                        分析并填入提示词
+                      </Button>
+                      {styleSummary ? <Alert type="info" showIcon message={styleSummary} /> : null}
+                    </>
+                  ) : null}
+                </Space>
+              </div>
               <PromptEditor
                 dirty={titleDirty}
-                onReset={() => setTitleDirty(false)}
+                saved={savedSlots.title}
+                onSave={() => {
+                  setSaveSlot("title");
+                  setSaveNote("");
+                }}
+                onHistory={() => {
+                  setHistorySlot("title");
+                  void refreshHistory("title");
+                }}
+                onReset={() => applyVersion("title", latestBySlot.title)}
                 fields={[
                   {
                     label: "系统规则",
@@ -902,7 +1363,16 @@ export default function XhsPromo() {
                 </div>
                 <PromptEditor
                   dirty={copyDirty}
-                  onReset={() => setCopyDirty(false)}
+                  saved={savedSlots.copy}
+                  onSave={() => {
+                    setSaveSlot("copy");
+                    setSaveNote("");
+                  }}
+                  onHistory={() => {
+                    setHistorySlot("copy");
+                    void refreshHistory("copy");
+                  }}
+                  onReset={() => applyVersion("copy", latestBySlot.copy)}
                   fields={[
                     {
                       label: "系统规则",
@@ -956,16 +1426,27 @@ export default function XhsPromo() {
             >
               <div>
                 <div style={{ fontWeight: 650, fontSize: 16 }}>{title}</div>
-                <Text type="secondary">封面和滑页分开出，互不影响</Text>
+                <Text type="secondary">封面和滑页分开出，互不影响。下载都是 PNG。</Text>
               </div>
               <Space wrap>
+                {coverOptions.length > 0 ? (
+                  <Segmented
+                    size="small"
+                    options={coverOptions.map((item) => ({
+                      label: coverProviderLabel(item.provider),
+                      value: item.provider,
+                    }))}
+                    value={coverProvider}
+                    onChange={(v) => setCoverProvider(v as XhsPromoCoverProvider)}
+                  />
+                ) : null}
                 <Button icon={<CopyOutlined />} onClick={() => copyText("全文", fullPost)}>
                   复制全文
                 </Button>
-                <Button icon={<DownloadOutlined />} disabled={!previewSrc} onClick={downloadCover}>
+                <Button icon={<DownloadOutlined />} disabled={!previewSrc} onClick={() => void downloadCover()}>
                   下载封面
                 </Button>
-                <Button icon={<DownloadOutlined />} disabled={cardImages.length === 0} onClick={downloadAllCards}>
+                <Button icon={<DownloadOutlined />} disabled={cardImages.length === 0} onClick={() => void downloadAllCards()}>
                   下载滑页
                 </Button>
               </Space>
@@ -1003,23 +1484,18 @@ export default function XhsPromo() {
                     )}
                   </div>
                   {coverError ? <Alert type="warning" showIcon message={coverError} /> : null}
-                  {coverOptions.length > 0 ? (
-                    <Segmented
-                      size="small"
-                      options={coverOptions.map((item) => ({
-                        label: coverProviderLabel(item.provider),
-                        value: item.provider,
-                      }))}
-                      value={coverProvider}
-                      onChange={(v) => setCoverProvider(v as XhsPromoCoverProvider)}
-                    />
-                  ) : null}
                   <PromptEditor
                     dirty={imageDirty}
-                    onReset={() => {
-                      setImageDirty(false);
-                      if (defaultImagePrompt) setImagePrompt(defaultImagePrompt);
+                    saved={savedSlots.cover}
+                    onSave={() => {
+                      setSaveSlot("cover");
+                      setSaveNote("");
                     }}
+                    onHistory={() => {
+                      setHistorySlot("cover");
+                      void refreshHistory("cover");
+                    }}
+                    onReset={() => applyVersion("cover", latestBySlot.cover)}
                     fields={[
                       {
                         label: "封面提示词",
@@ -1042,8 +1518,9 @@ export default function XhsPromo() {
               <Card size="small" title="滑页" style={{ borderRadius: 10, marginBottom: 16 }}>
                 <Space direction="vertical" style={{ width: "100%" }} size={12}>
                   {cardsTextDirty ? (
-                    <Alert type="info" showIcon message="字改过了，点「按文字重排」才会更新图。" />
+                    <Alert type="info" showIcon message="字改过了，点「按文字重排」会按当前提示词重出 PNG。" />
                   ) : null}
+                  {cardError ? <Alert type="warning" showIcon message={cardError} /> : null}
                   <Spin spinning={cardsLoading}>
                     {cardSlots.length > 0 ? (
                       <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
@@ -1101,7 +1578,7 @@ export default function XhsPromo() {
                                 type="link"
                                 size="small"
                                 icon={<DownloadOutlined />}
-                                onClick={() => downloadCard(index)}
+                                onClick={() => void downloadCard(index)}
                                 disabled={!src}
                                 style={{ paddingLeft: 0 }}
                               >
@@ -1117,14 +1594,19 @@ export default function XhsPromo() {
                   </Spin>
                   <PromptEditor
                     dirty={cardDirty}
-                    onReset={() => {
-                      setCardDirty(false);
-                      setCardSystem(defaultCardSystem);
-                      setCardUser(defaultCardUser);
+                    saved={savedSlots.cards}
+                    onSave={() => {
+                      setSaveSlot("cards");
+                      setSaveNote("");
                     }}
+                    onHistory={() => {
+                      setHistorySlot("cards");
+                      void refreshHistory("cards");
+                    }}
+                    onReset={() => applyVersion("cards", latestBySlot.cards)}
                     fields={[
                       {
-                        label: "系统规则",
+                        label: "滑页画面",
                         value: cardSystem,
                         rows: 6,
                         onChange: (value) => {
@@ -1133,7 +1615,7 @@ export default function XhsPromo() {
                         },
                       },
                       {
-                        label: "本次文案",
+                        label: "本次滑页",
                         value: cardUser,
                         rows: 6,
                         onChange: (value) => {
@@ -1145,7 +1627,7 @@ export default function XhsPromo() {
                   />
                   <Space wrap>
                     <Button type="primary" loading={cardsLoading} onClick={() => onGenerateCards("model")}>
-                      {cardImages.length > 0 ? "按提示词重写滑页" : "生成滑页"}
+                      {cardImages.length > 0 ? "按提示词重出滑页" : "生成滑页"}
                     </Button>
                     <Button
                       loading={cardsLoading}
@@ -1161,6 +1643,130 @@ export default function XhsPromo() {
           </Row>
         </div>
       ) : null}
+
+      <Modal
+        title={saveSlot ? `保存${slotLabel(saveSlot)}` : "保存此版"}
+        open={saveSlot != null}
+        confirmLoading={saveLoading}
+        okText="保存"
+        onCancel={() => setSaveSlot(null)}
+        onOk={async () => {
+          if (!saveSlot) return;
+          setSaveLoading(true);
+          try {
+            const result = await saveXhsPromoPromptVersion({
+              direction,
+              slot: saveSlot,
+              note: saveNote.trim() || undefined,
+              payload: currentPayload(saveSlot),
+            });
+            setLatestBySlot((prev) => ({ ...prev, [saveSlot]: result.version }));
+            setSavedSlots((prev) => ({ ...prev, [saveSlot]: true }));
+            if (historySlot === saveSlot) {
+              void refreshHistory(saveSlot);
+            }
+            setSaveSlot(null);
+            if (result.duplicate) {
+              message.info("和最新一版相同，没有重复存");
+            } else {
+              message.success("已保存，进页会套这一版");
+            }
+          } catch (e) {
+            setError(String(e));
+          } finally {
+            setSaveLoading(false);
+          }
+        }}
+      >
+        <Input
+          value={saveNote}
+          onChange={(e) => setSaveNote(e.target.value)}
+          maxLength={80}
+          placeholder="备注，比如：对比封面左右对仗"
+        />
+      </Modal>
+
+      <Drawer
+        title={historySlot ? `${slotLabel(historySlot)}历史` : "历史"}
+        open={historySlot != null}
+        width={420}
+        onClose={() => setHistorySlot(null)}
+      >
+        <Spin spinning={historyLoading}>
+          {historyList.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有保存过" />
+          ) : (
+            <Space direction="vertical" style={{ width: "100%" }} size={12}>
+              {historyList.map((item, index) => (
+                <Card
+                  key={item.id}
+                  size="small"
+                  title={
+                    <Space size={8}>
+                      <Text>{new Date(item.createdAt).toLocaleString("zh-CN")}</Text>
+                      {index === 0 ? <Tag color="blue">最新</Tag> : null}
+                    </Space>
+                  }
+                  extra={<Text type="secondary">{adminName(item.createdBy)}</Text>}
+                >
+                  {item.note ? <div style={{ marginBottom: 8 }}>{item.note}</div> : null}
+                  <pre
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      margin: 0,
+                      maxHeight: 96,
+                      overflow: "hidden",
+                      fontSize: 12,
+                      color: "#595959",
+                      background: "#fafafa",
+                      padding: 8,
+                      borderRadius: 6,
+                    }}
+                  >
+                    {versionPreview(item.payload)}
+                  </pre>
+                  <Space style={{ marginTop: 8 }}>
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={() => {
+                        if (!historySlot) return;
+                        applyVersion(historySlot, item);
+                        message.success("已载入这一版");
+                      }}
+                    >
+                      载入
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      onClick={() => {
+                        Modal.confirm({
+                          title: "删除这一版？",
+                          content: "编辑器里的字不会马上变。下次进页会套当时剩下的最新版。",
+                          okText: "删除",
+                          okButtonProps: { danger: true },
+                          onOk: async () => {
+                            await deleteXhsPromoPromptVersion(item.id);
+                            const latest = await fetchXhsPromoPromptLatest(direction);
+                            setLatestBySlot(latest);
+                            if (historySlot) {
+                              await refreshHistory(historySlot);
+                            }
+                            message.success("已删除");
+                          },
+                        });
+                      }}
+                    >
+                      删除
+                    </Button>
+                  </Space>
+                </Card>
+              ))}
+            </Space>
+          )}
+        </Spin>
+      </Drawer>
     </div>
   );
 }

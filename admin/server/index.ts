@@ -54,7 +54,7 @@ const IS_PROD = isProductionNodeEnv();
 logAdminEnvStatus();
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
 app.use(
   cors({
     origin: IS_PROD ? false : "http://localhost:5174",
