@@ -3470,6 +3470,7 @@ export type XhsPromoAnalyzeResult = {
   cardSystem: string;
   cardUser: string;
   styleSummary: string;
+  suggestedTopic: string;
   source: {
     title: string;
     description: string;

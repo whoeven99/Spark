@@ -195,7 +195,6 @@ xhsPromoRouter.post("/preview", async (req, res) => {
 
 xhsPromoRouter.post("/analyze", async (req, res) => {
   const direction = readDirection(req.body?.direction);
-  const topic = readTopic(req.body?.topic);
   const title = String(req.body?.title ?? "").trim().slice(0, 80);
   const body = String(req.body?.body ?? "").trim().slice(0, 4000);
   const images = readReferenceImages(req.body?.images);
@@ -210,7 +209,6 @@ xhsPromoRouter.post("/analyze", async (req, res) => {
   try {
     const analyzed = await analyzeReferenceStyle({
       direction,
-      topic,
       title,
       body,
       images,

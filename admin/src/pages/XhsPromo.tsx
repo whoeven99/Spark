@@ -62,6 +62,7 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 type PanelId = "topic" | "titles" | "copy" | "visuals";
+type SourceMode = "topic" | "note";
 
 const DIRECTION_OPTIONS: Array<{ label: string; value: XhsPromoDirection }> = [
   { label: "功能", value: "howto" },
@@ -230,8 +231,14 @@ function defaultCoverProvider(status: XhsPromoStatus): XhsPromoCoverProvider {
   return seedream?.provider ?? (options[0]?.provider as XhsPromoCoverProvider | undefined) ?? "template";
 }
 
-function topicKey(direction: XhsPromoDirection, topic: string, notes: string): string {
-  return `${direction}\n${topic.trim()}\n${notes.trim()}`;
+function topicKey(
+  direction: XhsPromoDirection,
+  topic: string,
+  notes: string,
+  sourceMode: SourceMode,
+  refTitle: string,
+): string {
+  return [sourceMode, direction, topic.trim(), notes.trim(), sourceMode === "note" ? refTitle.trim() : ""].join("\n");
 }
 
 function clipPreview(text: string, max = 28): string {
@@ -498,6 +505,7 @@ export default function XhsPromo() {
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [styleSummary, setStyleSummary] = useState("");
   const [analyzeSawImages, setAnalyzeSawImages] = useState(false);
+  const [sourceMode, setSourceMode] = useState<SourceMode>("topic");
 
   const panelRef = useRef<HTMLDivElement>(null);
   const shouldScroll = useRef(false);
@@ -637,7 +645,6 @@ export default function XhsPromo() {
     try {
       const next = await analyzeXhsPromoReference({
         direction,
-        topic: topic.trim(),
         title: refTitle.trim() || undefined,
         body: refBody.trim() || undefined,
         images: copyProviderSeesImages(copyProvider)
@@ -662,7 +669,14 @@ export default function XhsPromo() {
       setSavedSlots({ title: false, copy: false, cover: false, cards: false });
       setStyleSummary(next.styleSummary);
       setAnalyzeSawImages(next.sawImages);
-      message.success(next.sawImages ? "已按文字和图片填入提示词" : "已按文字填入提示词，没有看图");
+      if (next.suggestedTopic?.trim()) {
+        setTopic(next.suggestedTopic.trim());
+      }
+      message.success(
+        next.sawImages
+          ? "已按这篇笔记的文字和图片填入气质"
+          : "已按这篇笔记的文字填入气质，没有看图",
+      );
     } catch (e) {
       setError(String(e));
     } finally {
@@ -741,7 +755,69 @@ export default function XhsPromo() {
   const copyOptions = status?.copy.options ?? [];
   const coverOptions = status?.cover.options ?? [];
   const previewSrc = useMemo(() => imageSrc(coverImage), [coverImage]);
-  const currentTopicKey = topicKey(direction, topic, notes);
+  const currentTopicKey = topicKey(direction, topic, notes, sourceMode, refTitle);
+
+  function generationNotes(): string {
+    if (sourceMode !== "note") return notes.trim();
+    const parts = [notes.trim()];
+    if (refTitle.trim()) parts.push(`气质来自参考笔记：${refTitle.trim()}`);
+    return parts.filter(Boolean).join("\n");
+  }
+
+  function resetDownstreamFromTopic() {
+    setTitles([]);
+    setTitle("");
+    setLockedTopic("");
+    setBody("");
+    setTags([]);
+    setCoverSlots(null);
+    setLockedTitle("");
+    setCopyConfirmed(false);
+    setCoverImage(null);
+    setCoverError("");
+    setCardSlots([]);
+    setCardImages([]);
+    setCardError("");
+    setCardsTextDirty(false);
+  }
+
+  function clearNoteSource() {
+    setRefLink("");
+    setRefTitle("");
+    setRefBody("");
+    setRefImages([]);
+    setRefWarning("");
+    setRefOpened(false);
+    setStyleSummary("");
+    setAnalyzeSawImages(false);
+  }
+
+  function restoreDefaultPrompts() {
+    applyVersion("title", latestBySlot.title);
+    applyVersion("copy", latestBySlot.copy);
+    applyVersion("cover", latestBySlot.cover);
+    applyVersion("cards", latestBySlot.cards);
+    setTitleDirty(false);
+    setCopyDirty(false);
+    setImageDirty(false);
+    setCardDirty(false);
+  }
+
+  function switchSource(mode: SourceMode) {
+    if (mode === sourceMode) return;
+    setSourceMode(mode);
+    resetDownstreamFromTopic();
+    setError("");
+    if (mode === "topic") {
+      clearNoteSource();
+      restoreDefaultPrompts();
+      applyPreset(presets[0] ?? FIRST_PRESET);
+    } else {
+      setTopic("");
+      setNotes("");
+      restoreDefaultPrompts();
+    }
+  }
   const topicChanged = Boolean(lockedTopic) && lockedTopic !== currentTopicKey;
   const titleChanged = Boolean(lockedTitle) && lockedTitle !== title.trim();
   const bodyLen = body.trim().length;
@@ -771,8 +847,12 @@ export default function XhsPromo() {
   }
 
   async function onGenerateTitles() {
+    if (sourceMode === "note" && !styleSummary.trim()) {
+      message.warning("先分析这篇参考笔记，再出标题");
+      return;
+    }
     if (topic.trim().length < 2) {
-      message.warning("请填写选题");
+      message.warning(sourceMode === "note" ? "先写这篇 Spark 发什么" : "请填写选题");
       return;
     }
     goTo("titles");
@@ -782,7 +862,7 @@ export default function XhsPromo() {
       const next = await generateXhsPromoTitles({
         direction,
         topic: topic.trim(),
-        notes: notes.trim(),
+        notes: generationNotes(),
         copyProvider: copyProvider ?? undefined,
         titleSystemPrompt: titleSystem.trim() || undefined,
         titleUserPrompt: titleUser.trim() || undefined,
@@ -812,7 +892,7 @@ export default function XhsPromo() {
       const next = await generateXhsPromoCopy({
         direction,
         topic: topic.trim(),
-        notes: notes.trim(),
+        notes: generationNotes(),
         title: title.trim(),
         copyProvider: copyProvider ?? undefined,
         copySystemPrompt: copySystem.trim() || undefined,
@@ -891,7 +971,7 @@ export default function XhsPromo() {
       const next = await generateXhsPromoCards({
         direction,
         topic: topic.trim(),
-        notes: notes.trim(),
+        notes: generationNotes(),
         title: title.trim(),
         bodyText: body.trim(),
         copyProvider: copyProvider ?? undefined,
@@ -1051,7 +1131,11 @@ export default function XhsPromo() {
       {canOpen("titles") && activePanel !== "topic" ? (
         <DoneRow
           title="选题"
-          detail={`${directionLabel(direction)} · ${topic}`}
+          detail={
+            sourceMode === "note"
+              ? `参考笔记 · ${clipPreview(refTitle || "未读链接")} · ${topic || "待定选题"}`
+              : `${directionLabel(direction)} · ${topic}`
+          }
           onEdit={() => goTo("topic")}
         />
       ) : null}
@@ -1061,153 +1145,185 @@ export default function XhsPromo() {
           <Card size="small" title="今天发哪条" style={{ marginBottom: 12, borderRadius: 10 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={14}>
               <Segmented
+                block
+                options={[
+                  { label: "选选题", value: "topic" },
+                  { label: "参考笔记", value: "note" },
+                ]}
+                value={sourceMode}
+                onChange={(v) => switchSource(v as SourceMode)}
+              />
+              <Segmented
                 options={DIRECTION_OPTIONS}
                 value={direction}
                 onChange={(v) => setDirection(v as XhsPromoDirection)}
               />
-              <div>
-                <Text type="secondary">点一条填入，也可自己写</Text>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                  {presets.map((item) => (
-                    <Button
-                      key={item.topic}
-                      size="small"
-                      type={topic === item.topic ? "primary" : "default"}
-                      onClick={() => applyPreset(item)}
-                    >
-                      {item.topic}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <Input
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                maxLength={40}
-                placeholder="选题"
-                showCount
-              />
-              <TextArea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                maxLength={2000}
-                placeholder="补充：真实数字、对比对象、不要写什么"
-              />
-              <div
-                onPaste={(event) => {
-                  const files = Array.from(event.clipboardData.files);
-                  if (files.some((file) => file.type.startsWith("image/"))) {
-                    event.preventDefault();
-                    void addRefFiles(files);
-                  }
-                }}
-              >
-                <Text type="secondary">参考一篇笔记（可选）</Text>
-                <Text type="secondary" style={{ display: "block", margin: "4px 0 8px", fontSize: 12 }}>
-                  先贴链接读公开内容。读到的会填进来，缺的文字和图片再自己补，然后分析。
-                </Text>
-                <Space direction="vertical" style={{ width: "100%" }} size={8}>
-                  <Space.Compact style={{ width: "100%" }}>
-                    <Input
-                      value={refLink}
-                      onChange={(e) => setRefLink(e.target.value)}
-                      placeholder="小红书链接，或整段分享文案"
-                      allowClear
-                      onPressEnter={() => void onPreviewReference()}
-                    />
-                    <Button type="primary" loading={previewLoading} onClick={() => void onPreviewReference()}>
-                      读取链接
-                    </Button>
-                  </Space.Compact>
-                  {!refOpened ? (
-                    <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setRefOpened(true)}>
-                      没有链接，自己贴文字和图片
-                    </Button>
-                  ) : null}
-                  {refOpened ? (
-                    <>
-                      {refWarning ? <Alert type="warning" showIcon message={refWarning} /> : null}
-                      <Input
-                        value={refTitle}
-                        onChange={(e) => setRefTitle(e.target.value)}
-                        placeholder="读到的标题，不对就改，没有就手贴"
-                        maxLength={80}
-                        showCount
-                      />
-                      <TextArea
-                        value={refBody}
-                        onChange={(e) => setRefBody(e.target.value)}
-                        rows={6}
-                        maxLength={4000}
-                        showCount
-                        placeholder="读到的简介。正文通常读不到，在这里补全。"
-                      />
-                      <Upload
-                        accept="image/*"
-                        multiple
-                        showUploadList={false}
-                        beforeUpload={(file) => {
-                          void addRefFiles([file]);
-                          return false;
-                        }}
-                        disabled={refImages.length >= 4}
-                      >
-                        <Button icon={<UploadOutlined />} disabled={refImages.length >= 4}>
-                          补图或粘贴图片（最多 4 张）
+              {sourceMode === "topic" ? (
+                <>
+                  <div>
+                    <Text type="secondary">点一条填入，也可自己写。这条路不分析小红书链接。</Text>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                      {presets.map((item) => (
+                        <Button
+                          key={item.topic}
+                          size="small"
+                          type={topic === item.topic ? "primary" : "default"}
+                          onClick={() => applyPreset(item)}
+                        >
+                          {item.topic}
                         </Button>
-                      </Upload>
-                      {refImages.length > 0 ? (
-                        <AntdImage.PreviewGroup items={refImages.map((image) => image.preview)}>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            {refImages.map((image, index) => (
-                              <div key={`${index}-${image.base64.slice(0, 16)}`} style={{ position: "relative" }}>
-                                <AntdImage
-                                  src={image.preview}
-                                  alt={`参考图 ${index + 1}`}
-                                  width={88}
-                                  height={88}
-                                  style={{ objectFit: "cover", borderRadius: 6 }}
-                                />
-                                <Button
-                                  size="small"
-                                  type="text"
-                                  danger
-                                  style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, zIndex: 2 }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRefImages((prev) => prev.filter((_, i) => i !== index));
-                                  }}
-                                >
-                                  ×
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </AntdImage.PreviewGroup>
-                      ) : (
-                        <Text type="secondary">链接没读到图，在这里上传或粘贴。</Text>
-                      )}
-                      <Button type="primary" loading={analyzeLoading} onClick={() => void onAnalyzeReference()}>
-                        分析并填入提示词
+                      ))}
+                    </div>
+                  </div>
+                  <Input
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    maxLength={40}
+                    placeholder="选题"
+                    showCount
+                  />
+                  <TextArea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="补充：真实数字、对比对象、不要写什么"
+                  />
+                </>
+              ) : (
+                <div
+                  onPaste={(event) => {
+                    const files = Array.from(event.clipboardData.files);
+                    if (files.some((file) => file.type.startsWith("image/"))) {
+                      event.preventDefault();
+                      void addRefFiles(files);
+                    }
+                  }}
+                >
+                  <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                    只分析这篇笔记的标题和正文，不会用上面的预设选题。分析完再写 Spark 发什么。
+                  </Text>
+                  <Space direction="vertical" style={{ width: "100%" }} size={8}>
+                    <Space.Compact style={{ width: "100%" }}>
+                      <Input
+                        value={refLink}
+                        onChange={(e) => setRefLink(e.target.value)}
+                        placeholder="小红书链接，或整段分享文案"
+                        allowClear
+                        onPressEnter={() => void onPreviewReference()}
+                      />
+                      <Button type="primary" loading={previewLoading} onClick={() => void onPreviewReference()}>
+                        读取链接
                       </Button>
-                      <Text type="secondary">
-                        {copyProviderSeesImages(copyProvider) && refImages.length > 0
-                          ? `会看标题、正文和 ${refImages.length} 张图，所以会慢一些。`
-                          : "只分析标题和正文，不看图。DeepSeek 看不到图片；要看图请改成 GPT 或豆包。"}
-                      </Text>
-                      {styleSummary ? (
-                        <Alert
-                          type="info"
-                          showIcon
-                          message={analyzeSawImages ? "已按文字和图片填入提示词" : "已按文字填入提示词，没有看图"}
-                          description={styleSummary}
+                    </Space.Compact>
+                    {!refOpened ? (
+                      <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setRefOpened(true)}>
+                        没有链接，自己贴文字和图片
+                      </Button>
+                    ) : null}
+                    {refOpened ? (
+                      <>
+                        {refWarning ? <Alert type="warning" showIcon message={refWarning} /> : null}
+                        <Input
+                          value={refTitle}
+                          onChange={(e) => setRefTitle(e.target.value)}
+                          placeholder="读到的笔记标题，不对就改"
+                          maxLength={80}
+                          showCount
                         />
-                      ) : null}
-                    </>
-                  ) : null}
-                </Space>
-              </div>
+                        <TextArea
+                          value={refBody}
+                          onChange={(e) => setRefBody(e.target.value)}
+                          rows={6}
+                          maxLength={4000}
+                          showCount
+                          placeholder="读到的笔记正文。通常读不到，在这里补全。"
+                        />
+                        <Upload
+                          accept="image/*"
+                          multiple
+                          showUploadList={false}
+                          beforeUpload={(file) => {
+                            void addRefFiles([file]);
+                            return false;
+                          }}
+                          disabled={refImages.length >= 4}
+                        >
+                          <Button icon={<UploadOutlined />} disabled={refImages.length >= 4}>
+                            补图或粘贴图片（最多 4 张）
+                          </Button>
+                        </Upload>
+                        {refImages.length > 0 ? (
+                          <AntdImage.PreviewGroup items={refImages.map((image) => image.preview)}>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {refImages.map((image, index) => (
+                                <div key={`${index}-${image.base64.slice(0, 16)}`} style={{ position: "relative" }}>
+                                  <AntdImage
+                                    src={image.preview}
+                                    alt={`参考图 ${index + 1}`}
+                                    width={88}
+                                    height={88}
+                                    style={{ objectFit: "cover", borderRadius: 6 }}
+                                  />
+                                  <Button
+                                    size="small"
+                                    type="text"
+                                    danger
+                                    style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, zIndex: 2 }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRefImages((prev) => prev.filter((_, i) => i !== index));
+                                    }}
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </AntdImage.PreviewGroup>
+                        ) : (
+                          <Text type="secondary">链接没读到图，在这里上传或粘贴。</Text>
+                        )}
+                        <Button type="primary" loading={analyzeLoading} onClick={() => void onAnalyzeReference()}>
+                          分析这篇笔记
+                        </Button>
+                        <Text type="secondary">
+                          {copyProviderSeesImages(copyProvider) && refImages.length > 0
+                            ? `只拆这篇笔记，会看文字和 ${refImages.length} 张图，所以会慢一些。`
+                            : "只拆这篇笔记的标题和正文，不看图，也不看预设选题。"}
+                        </Text>
+                        {styleSummary ? (
+                          <Alert
+                            type="info"
+                            showIcon
+                            message={analyzeSawImages ? "已按这篇笔记的文字和图片拆气质" : "已按这篇笔记的文字拆气质，没有看图"}
+                            description={styleSummary}
+                          />
+                        ) : null}
+                      </>
+                    ) : null}
+                    {styleSummary ? (
+                      <>
+                        <Text type="secondary">这篇 Spark 发什么（可改分析给出的选题）</Text>
+                        <Input
+                          value={topic}
+                          onChange={(e) => setTopic(e.target.value)}
+                          maxLength={40}
+                          placeholder="不要照抄参考笔记标题"
+                          showCount
+                        />
+                        <TextArea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          rows={3}
+                          maxLength={2000}
+                          placeholder="补充：真实数字、不要写什么（可选）"
+                        />
+                      </>
+                    ) : null}
+                  </Space>
+                </div>
+              )}
               <PromptEditor
                 dirty={titleDirty}
                 saved={savedSlots.title}
@@ -1241,8 +1357,20 @@ export default function XhsPromo() {
                   },
                 ]}
               />
-              <PanelFooter hint="下一步只出标题，还不出图">
-                <Button type="primary" size="large" loading={titlesLoading} onClick={onGenerateTitles}>
+              <PanelFooter
+                hint={
+                  sourceMode === "note" && !styleSummary
+                    ? "先分析这篇笔记，再出标题"
+                    : "下一步只出标题，还不出图"
+                }
+              >
+                <Button
+                  type="primary"
+                  size="large"
+                  loading={titlesLoading}
+                  disabled={sourceMode === "note" && (!styleSummary || topic.trim().length < 2)}
+                  onClick={onGenerateTitles}
+                >
                   {titles.length > 0 ? "按这个选题换一批标题" : "生成标题"}
                 </Button>
               </PanelFooter>
