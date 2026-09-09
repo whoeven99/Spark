@@ -248,7 +248,67 @@ export function buildCardUserPrompt(params: {
   ].join("\n\n");
 }
 
-async function invokeChat(model: CopyModelInfo, system: string, user: string): Promise<string> {
+export function buildCardVisualSystemPrompt(): string {
+  return [
+    "你是小红书滑页画面导演，写可复用的竖版 3:4 信息卡视觉规则。",
+    "写构图、配色、字体气质、模块和页码，不要要求真人脸、小红书水印或制作说明。",
+    "文字内容另说，这里只管画面怎么画。",
+  ].join("\n");
+}
+
+export function buildCardVisualUserPrompt(params: {
+  direction: XhsDirection;
+  topic: string;
+  notes: string;
+  title: string;
+}): string {
+  const notes = params.notes.trim() || "（无补充）";
+  return [
+    `方向：${params.direction}`,
+    cardPlaybookHint(params.direction),
+    `选题：${params.topic}`,
+    `已确定标题：${params.title}`,
+    `补充：${notes}`,
+    "按这个选题写滑页画面。不要输出 JSON，不要写制作说明。",
+  ].join("\n\n");
+}
+
+export function isCardCopyPrompt(text: string | null | undefined): boolean {
+  const value = String(text ?? "");
+  return value.includes("字段：cards") || value.includes("只输出一个 JSON");
+}
+
+export type ChatUserContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    >;
+
+export async function invokeCopyChat(
+  provider: string | null | undefined,
+  system: string,
+  user: ChatUserContent,
+): Promise<{ content: string; model: CopyModelInfo }> {
+  const resolved = requireCopyModel(provider);
+  const content = await invokeChat(resolved, system, user);
+  return { content, model: resolved };
+}
+
+export function parseCopyJson(text: string): unknown {
+  return parseJsonObject(text);
+}
+
+export function resolveVisionCopyModel(preferred?: string | null): CopyModelInfo | null {
+  const options = listCopyModels();
+  const openai = options.find((item) => item.provider === "openai");
+  if (openai) return openai;
+  const ark = options.find((item) => item.provider === "volc-ark");
+  if (ark) return ark;
+  return resolveCopyModel(preferred);
+}
+
+async function invokeChat(model: CopyModelInfo, system: string, user: ChatUserContent): Promise<string> {
   const { baseUrl, apiKey } = resolveEndpoint(model);
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",

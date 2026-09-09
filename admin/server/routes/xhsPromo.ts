@@ -1,8 +1,12 @@
 import { Router, type Response } from "express";
+import { isAdminOpsDbConfigured } from "../lib/adminOpsDb.js";
 import {
   arkCopyHint,
   buildCardSystemPrompt,
   buildCardUserPrompt,
+  buildCardVisualSystemPrompt,
+  buildCardVisualUserPrompt,
+  isCardCopyPrompt,
   buildCopySystemPrompt,
   buildCopyUserPrompt,
   buildTitleSystemPrompt,
@@ -13,6 +17,14 @@ import {
   listCopyModels,
   resolveCopyModel,
 } from "../promo/xhsCopyClient.js";
+import {
+  deletePromptVersion,
+  isPromptSlot,
+  latestPromptVersions,
+  listPromptVersions,
+  normalizePayload,
+  savePromptVersion,
+} from "../promo/xhsPromptVersions.js";
 import { renderContentCards } from "../promo/xhsContentCards.js";
 import {
   generateXhsCover,
@@ -28,6 +40,11 @@ import {
   type XhsCoverSlots,
   type XhsDirection,
 } from "../promo/xhsPlaybooks.js";
+import {
+  analyzeReferenceStyle,
+  readPublicNote,
+  type ReferenceImage,
+} from "../promo/xhsStyleAnalyze.js";
 
 function clipPrompt(raw: unknown): string | null {
   const text = String(raw ?? "").trim();
@@ -127,15 +144,197 @@ xhsPromoRouter.get("/prompts", (req, res) => {
       title,
     }),
     image: previewImagePrompt(direction, title || topicText),
-    cardSystem: buildCardSystemPrompt(),
-    cardUser: buildCardUserPrompt({
+    cardSystem: buildCardVisualSystemPrompt(),
+    cardUser: buildCardVisualUserPrompt({
       direction,
       topic: topicText,
       notes,
       title,
-      body,
     }),
   });
+});
+
+function readReferenceImages(raw: unknown): ReferenceImage[] {
+  if (!Array.isArray(raw)) return [];
+  const images: ReferenceImage[] = [];
+  for (const item of raw.slice(0, 4)) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const base64 = String(rec.base64 ?? "").replace(/^data:image\/[a-z0-9.+-]+;base64,/i, "").trim();
+    if (!base64) continue;
+    const mime = String(rec.mimeType ?? "image/jpeg").split(";")[0];
+    const mimeType =
+      mime === "image/png" || mime === "image/webp" || mime === "image/gif" ? mime : "image/jpeg";
+    images.push({ mimeType, base64: base64.slice(0, 2_400_000) });
+  }
+  return images;
+}
+
+xhsPromoRouter.post("/preview", async (req, res) => {
+  const link = String(req.body?.link ?? "").trim();
+  if (!link) {
+    fail(res, 400, "请贴小红书笔记链接");
+    return;
+  }
+  try {
+    const note = await readPublicNote(link);
+    res.json({
+      title: note.meta.title,
+      description: note.meta.description,
+      images: note.images,
+      finalUrl: note.meta.finalUrl,
+      warning: note.meta.warning,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[xhs-promo] preview failed", message);
+    fail(res, 500, message);
+  }
+});
+
+xhsPromoRouter.post("/analyze", async (req, res) => {
+  const direction = readDirection(req.body?.direction);
+  const topic = readTopic(req.body?.topic);
+  const title = String(req.body?.title ?? "").trim().slice(0, 80);
+  const body = String(req.body?.body ?? "").trim().slice(0, 4000);
+  const images = readReferenceImages(req.body?.images);
+  if (!direction) {
+    fail(res, 400, "方向必须是 howto / compare / data");
+    return;
+  }
+  if (!title && !body && images.length === 0) {
+    fail(res, 400, "先读取链接，或贴上标题、正文、图片");
+    return;
+  }
+  try {
+    const analyzed = await analyzeReferenceStyle({
+      direction,
+      topic,
+      title,
+      body,
+      images,
+      copyProvider: String(req.body?.copyProvider ?? "").trim() || null,
+    });
+    res.json({
+      ...analyzed.prompts,
+      source: null,
+      model: `${analyzed.model.provider}:${analyzed.model.model}`,
+      sawImages: analyzed.sawImages,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[xhs-promo] analyze failed", message);
+    fail(res, 500, message);
+  }
+});
+
+xhsPromoRouter.get("/prompt-versions/latest", async (req, res) => {
+  const direction = readDirection(req.query.direction);
+  if (!direction) {
+    fail(res, 400, "方向必须是 howto / compare / data");
+    return;
+  }
+  if (!isAdminOpsDbConfigured()) {
+    res.json({ title: null, copy: null, cover: null, cards: null });
+    return;
+  }
+  try {
+    res.json(await latestPromptVersions(direction));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[xhs-promo] prompt latest failed", message);
+    fail(res, 500, message);
+  }
+});
+
+xhsPromoRouter.get("/prompt-versions", async (req, res) => {
+  const direction = readDirection(req.query.direction);
+  const slot = String(req.query.slot ?? "").trim();
+  if (!direction) {
+    fail(res, 400, "方向必须是 howto / compare / data");
+    return;
+  }
+  if (!isPromptSlot(slot)) {
+    fail(res, 400, "槽位必须是 title / copy / cover / cards");
+    return;
+  }
+  if (!isAdminOpsDbConfigured()) {
+    res.json({ versions: [] });
+    return;
+  }
+  try {
+    res.json({ versions: await listPromptVersions(slot, direction) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[xhs-promo] prompt list failed", message);
+    fail(res, 500, message);
+  }
+});
+
+xhsPromoRouter.post("/prompt-versions", async (req, res) => {
+  const direction = readDirection(req.body?.direction);
+  const slot = String(req.body?.slot ?? "").trim();
+  const note = String(req.body?.note ?? "").trim().slice(0, 80) || null;
+  const createdBy = String(res.locals.adminUserId ?? "").trim();
+  if (!direction) {
+    fail(res, 400, "方向必须是 howto / compare / data");
+    return;
+  }
+  if (!isPromptSlot(slot)) {
+    fail(res, 400, "槽位必须是 title / copy / cover / cards");
+    return;
+  }
+  if (!createdBy) {
+    fail(res, 401, "未登录");
+    return;
+  }
+  const payload = normalizePayload(slot, req.body?.payload);
+  if (!payload) {
+    fail(res, 400, "提示词是空的");
+    return;
+  }
+  if (!isAdminOpsDbConfigured()) {
+    fail(res, 503, "未配置 ADMIN_DATABASE_URL / ADMIN_DATABASE_AUTH_TOKEN");
+    return;
+  }
+  try {
+    const result = await savePromptVersion({
+      slot,
+      direction,
+      note,
+      payload,
+      createdBy,
+    });
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[xhs-promo] prompt save failed", message);
+    fail(res, 500, message);
+  }
+});
+
+xhsPromoRouter.delete("/prompt-versions/:id", async (req, res) => {
+  const id = String(req.params.id ?? "").trim();
+  if (!id) {
+    fail(res, 400, "缺少版本 id");
+    return;
+  }
+  if (!isAdminOpsDbConfigured()) {
+    fail(res, 503, "未配置 ADMIN_DATABASE_URL / ADMIN_DATABASE_AUTH_TOKEN");
+    return;
+  }
+  try {
+    const deleted = await deletePromptVersion(id);
+    if (!deleted) {
+      fail(res, 404, "这一版已经不在了");
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[xhs-promo] prompt delete failed", message);
+    fail(res, 500, message);
+  }
 });
 
 xhsPromoRouter.post("/titles", async (req, res) => {
@@ -262,10 +461,21 @@ xhsPromoRouter.post("/cards", async (req, res) => {
   }
   try {
     const provided = readCardSlots(req.body?.cards, title, body);
+    const customSystem = clipPrompt(req.body?.cardSystemPrompt);
+    const customUser = clipPrompt(req.body?.cardUserPrompt);
+    const stylePrompt = [customSystem, customUser].filter(Boolean).join("\n\n") || null;
+    const coverProvider = String(req.body?.coverProvider ?? "").trim() || null;
     if (provided) {
+      const rendered = await renderContentCards({
+        direction,
+        cards: provided,
+        provider: coverProvider,
+        stylePrompt,
+      });
       res.json({
-        cards: renderContentCards({ direction, cards: provided }),
+        cards: rendered.cards,
         model: null,
+        cardError: rendered.error ?? null,
       });
       return;
     }
@@ -276,12 +486,25 @@ xhsPromoRouter.post("/cards", async (req, res) => {
       title,
       body,
       provider: String(req.body?.copyProvider ?? "").trim() || null,
-      systemPrompt: clipPrompt(req.body?.cardSystemPrompt),
-      userPrompt: clipPrompt(req.body?.cardUserPrompt),
+      systemPrompt: isCardCopyPrompt(customSystem) ? customSystem : buildCardSystemPrompt(),
+      userPrompt: isCardCopyPrompt(customUser) ? customUser : buildCardUserPrompt({
+        direction,
+        topic: topic || title,
+        notes,
+        title,
+        body,
+      }),
+    });
+    const rendered = await renderContentCards({
+      direction,
+      cards: result.cards,
+      provider: coverProvider,
+      stylePrompt,
     });
     res.json({
-      cards: renderContentCards({ direction, cards: result.cards }),
+      cards: rendered.cards,
       model: `${result.model.provider}:${result.model.model}`,
+      cardError: rendered.error ?? null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

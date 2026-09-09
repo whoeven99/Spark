@@ -3372,7 +3372,22 @@ export type XhsPromoCoverResult = {
 export type XhsPromoCardsResult = {
   cards: XhsPromoContentCard[];
   model: string | null;
+  cardError: string | null;
 };
+
+export type XhsPromoPromptSlot = "title" | "copy" | "cover" | "cards";
+
+export type XhsPromoPromptVersion = {
+  id: string;
+  slot: XhsPromoPromptSlot;
+  direction: XhsPromoDirection;
+  note: string | null;
+  payload: Record<string, string>;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type XhsPromoPromptLatest = Record<XhsPromoPromptSlot, XhsPromoPromptVersion | null>;
 
 export function fetchXhsPromoStatus(): Promise<XhsPromoStatus> {
   return apiFetch("/promo/xhs/status");
@@ -3438,6 +3453,93 @@ export function generateXhsPromoCover(body: {
   });
 }
 
+export type XhsPromoPreviewResult = {
+  title: string;
+  description: string;
+  images: Array<{ mimeType: string; base64: string }>;
+  finalUrl: string;
+  warning: string | null;
+};
+
+export type XhsPromoAnalyzeResult = {
+  titleSystem: string;
+  titleUser: string;
+  copySystem: string;
+  copyUser: string;
+  imagePrompt: string;
+  cardSystem: string;
+  cardUser: string;
+  styleSummary: string;
+  source: {
+    title: string;
+    description: string;
+    imageCount: number;
+    finalUrl: string;
+    warning: string | null;
+  } | null;
+  model: string;
+  sawImages: boolean;
+};
+
+export function previewXhsPromoReference(body: {
+  link: string;
+}): Promise<XhsPromoPreviewResult> {
+  return apiFetch("/promo/xhs/preview", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function analyzeXhsPromoReference(body: {
+  direction: XhsPromoDirection;
+  topic?: string;
+  title?: string;
+  body?: string;
+  images?: Array<{ mimeType: string; base64: string }>;
+  copyProvider?: XhsPromoCopyProvider;
+}): Promise<XhsPromoAnalyzeResult> {
+  return apiFetch("/promo/xhs/analyze", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchXhsPromoPromptLatest(
+  direction: XhsPromoDirection,
+): Promise<XhsPromoPromptLatest> {
+  const query = new URLSearchParams({ direction });
+  return apiFetch(`/promo/xhs/prompt-versions/latest?${query.toString()}`);
+}
+
+export function fetchXhsPromoPromptVersions(params: {
+  direction: XhsPromoDirection;
+  slot: XhsPromoPromptSlot;
+}): Promise<{ versions: XhsPromoPromptVersion[] }> {
+  const query = new URLSearchParams({
+    direction: params.direction,
+    slot: params.slot,
+  });
+  return apiFetch(`/promo/xhs/prompt-versions?${query.toString()}`);
+}
+
+export function saveXhsPromoPromptVersion(body: {
+  direction: XhsPromoDirection;
+  slot: XhsPromoPromptSlot;
+  note?: string;
+  payload: Record<string, string>;
+}): Promise<{ version: XhsPromoPromptVersion; duplicate: boolean }> {
+  return apiFetch("/promo/xhs/prompt-versions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteXhsPromoPromptVersion(id: string): Promise<{ ok: true }> {
+  return apiFetch(`/promo/xhs/prompt-versions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export function generateXhsPromoCards(body: {
   direction: XhsPromoDirection;
   topic: string;
@@ -3445,6 +3547,7 @@ export function generateXhsPromoCards(body: {
   title: string;
   bodyText?: string;
   copyProvider?: XhsPromoCopyProvider;
+  coverProvider?: XhsPromoCoverProvider;
   cardSystemPrompt?: string;
   cardUserPrompt?: string;
   cards?: XhsPromoContentCardSlot[];
@@ -3458,6 +3561,7 @@ export function generateXhsPromoCards(body: {
       title: body.title,
       body: body.bodyText,
       copyProvider: body.copyProvider,
+      coverProvider: body.coverProvider,
       cardSystemPrompt: body.cardSystemPrompt,
       cardUserPrompt: body.cardUserPrompt,
       cards: body.cards,

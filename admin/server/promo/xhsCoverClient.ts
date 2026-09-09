@@ -142,7 +142,7 @@ function resolveImageSize(model: string): string {
   return "1024x1792";
 }
 
-const XHS_COVER_UI = [
+export const XHS_VISUAL_SYSTEM = [
   "视觉系统：瑞士国际主义信息卡 / 知识卡片，扁平、网格、高留白。",
   "不是手账、不是贴纸拼贴、不是马克笔涂鸦、不是真人自拍、不是海报、不是科技蓝发光。",
   "竖版 3:4。只准三色：纯黑、白或浅灰底、荧光黄绿 #C8FF00。无阴影、无渐变、无照片底图。",
@@ -152,6 +152,25 @@ const XHS_COVER_UI = [
   "中文必须印刷体、锐利、不连笔、不糊、不乱码；不要发明大段英文。",
   "不要水印、不要小红书 Logo、不要二维码、不要柱状图折线图。",
 ].join("\n");
+
+export async function generatePromoImage(params: {
+  prompt: string;
+  provider?: string | null;
+}): Promise<{ image: CoverImage; model: CoverModelInfo } | null> {
+  const planned = resolveCoverModel(params.provider);
+  switch (planned.provider) {
+    case "volc-ark":
+      return { image: await generateViaArk(params.prompt, planned.model), model: planned };
+    case "openai":
+      return { image: await generateViaOpenAi(params.prompt, planned.model), model: planned };
+    case "template":
+      return null;
+    default: {
+      const _never: never = planned.provider;
+      throw new Error(`未知出图模型 ${_never}`);
+    }
+  }
+}
 
 function compareHeadlineLock(
   direction: XhsDirection,
@@ -201,7 +220,7 @@ export function buildImagePrompt(params: {
   const headline = cover.headline || topic;
   const lines = [
     "生成一张可直接发小红书的竖版封面。",
-    XHS_COVER_UI,
+    XHS_VISUAL_SYSTEM,
     `选题：${topic}`,
     `封面主标题原文：${headline}`,
     compareHeadlineLock(direction, cover, headline),
