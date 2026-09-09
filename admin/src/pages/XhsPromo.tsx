@@ -1498,10 +1498,13 @@ export default function XhsPromo() {
                     {coverLoading ? (
                       <Spin tip="封面生成中" />
                     ) : previewSrc ? (
-                      <img
+                      <AntdImage
                         src={previewSrc}
                         alt="小红书封面"
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        preview={{ mask: "看大图" }}
+                        width="100%"
+                        style={{ height: "100%", objectFit: "cover" }}
+                        wrapperStyle={{ width: "100%", height: "100%" }}
                       />
                     ) : (
                       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没出封面" />
@@ -1547,6 +1550,7 @@ export default function XhsPromo() {
                   {cardError ? <Alert type="warning" showIcon message={cardError} /> : null}
                   <Spin spinning={cardsLoading}>
                     {cardSlots.length > 0 ? (
+                      <AntdImage.PreviewGroup>
                       <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
                         {cardSlots.map((card, index) => {
                           const src = imageSrc(cardImages[index]?.image);
@@ -1574,10 +1578,13 @@ export default function XhsPromo() {
                                 }}
                               >
                                 {src ? (
-                                  <img
+                                  <AntdImage
                                     src={src}
                                     alt={card.headline || `滑页 ${index + 1}`}
-                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    preview={{ mask: "看大图" }}
+                                    width="100%"
+                                    style={{ height: "100%", objectFit: "cover" }}
+                                    wrapperStyle={{ width: "100%", height: "100%" }}
                                   />
                                 ) : (
                                   <Text type="secondary">{index + 1}</Text>
@@ -1612,6 +1619,7 @@ export default function XhsPromo() {
                           );
                         })}
                       </div>
+                      </AntdImage.PreviewGroup>
                     ) : (
                       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没出滑页" />
                     )}
