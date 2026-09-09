@@ -210,7 +210,7 @@ function buildAnalyzeSystem(): string {
     "拆的是风格和结构，不要抄参考笔记的原句、品牌名、具体数字。",
     "titleSystem / copySystem 写可复用文案规则。titleUser / copyUser 写这次怎么套到 Spark 选题上，用占位写「选题 / 已定标题 / 已定正文」。",
     "cardSystem / cardUser 写滑页画面怎么画：构图、配色、字体气质、模块，不要抄参考图上的字。",
-    "imagePrompt 写竖版 3:4 封面怎么画：构图、配色、字体气质、模块，不要要求出现参考图里的真人脸或小红书水印。",
+    "imagePrompt 只写构图、配色、字体气质、模块，不要写封面上的具体句子，不要编系统名。标题字会在出图时另行锁定。",
     "参考是对比向就用左右栏；功能向用提示词卡；数据向放大数字。没有图就按文字推断。",
     "styleSummary 用两句中文说明学到了什么。",
   ].join("\n");

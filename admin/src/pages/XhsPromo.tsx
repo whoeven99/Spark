@@ -823,9 +823,11 @@ export default function XhsPromo() {
       setTags(next.tags);
       setCoverSlots(next.coverSlots);
       setLockedTitle(next.title);
-      if (!imageDirty && !savedSlots.cover) {
+      if (!savedSlots.cover) {
         setImagePrompt(next.imagePrompt);
-        setDefaultImagePrompt(next.imagePrompt);
+        if (!imageDirty) {
+          setDefaultImagePrompt(next.imagePrompt);
+        }
       }
       message.success("改完正文再确定，不会出图");
     } catch (e) {

@@ -53,13 +53,30 @@ export function resolveCoverModel(preferred?: string | null): CoverModelInfo {
 export async function generateXhsCover(params: {
   direction: XhsDirection;
   topic: string;
+  title?: string;
   cover: XhsCoverSlots;
   provider?: string | null;
   imagePrompt?: string | null;
 }): Promise<{ image: CoverImage; model: CoverModelInfo; error?: string }> {
   const planned = resolveCoverModel(params.provider);
-  const prompt = params.imagePrompt?.trim() || buildImagePrompt(params);
-  const templateImage = svgToImagePayload(renderTemplateSvg(params));
+  const noteTitle = (params.title || params.topic).trim();
+  const cover = lockCoverSlotsToTitle(params.direction, params.cover, noteTitle);
+  const prompt = lockImagePromptToTitle(params.imagePrompt?.trim() || buildImagePrompt({
+    direction: params.direction,
+    topic: params.topic,
+    title: noteTitle,
+    cover,
+  }), {
+    direction: params.direction,
+    topic: params.topic,
+    title: noteTitle,
+    cover,
+  });
+  const templateImage = svgToImagePayload(renderTemplateSvg({
+    direction: params.direction,
+    topic: noteTitle,
+    cover,
+  }));
 
   switch (planned.provider) {
     case "volc-ark":
@@ -200,28 +217,79 @@ export function previewImagePrompt(
   direction: XhsDirection,
   topic: string,
   cover?: XhsCoverSlots,
+  title?: string,
 ): string {
-  return buildImagePrompt({
+  const noteTitle = (title || topic).trim();
+  const slots = lockCoverSlotsToTitle(
     direction,
-    topic,
-    cover: cover ?? {
-      ...emptyCoverSlots(),
-      headline: topic,
-    },
-  });
+    cover ?? { ...emptyCoverSlots(), headline: noteTitle },
+    noteTitle,
+  );
+  return lockImagePromptToTitle(
+    buildImagePrompt({
+      direction,
+      topic,
+      title: noteTitle,
+      cover: slots,
+    }),
+    { direction, topic, title: noteTitle, cover: slots },
+  );
+}
+
+export function lockCoverSlotsToTitle(
+  direction: XhsDirection,
+  cover: XhsCoverSlots,
+  title: string,
+): XhsCoverSlots {
+  if (direction === "compare") return cover;
+  return {
+    ...cover,
+    headline: title.slice(0, 18),
+  };
+}
+
+export function lockImagePromptToTitle(
+  prompt: string,
+  params: {
+    direction: XhsDirection;
+    topic: string;
+    title: string;
+    cover: XhsCoverSlots;
+  },
+): string {
+  const { topic, title, cover } = params;
+  const lock = [
+    "—— 内容锁定，优先级高于上面的风格 ——",
+    `笔记标题必须原样写在封面上，可折两行，禁止截断、禁止改写成别的产品名：${title}`,
+    `选题：${topic}`,
+    `封面主文案只用：${cover.headline || title}`,
+    "画面必须让人 3 秒对上这条标题。禁止画成通用 AI 监测/预警/科幻仪表盘/机械眼，除非标题里就有这些词。",
+    "不要另写「智能监测系统」「异常预警已触发」这类和标题无关的字。",
+  ].join("\n");
+  const parts: string[] = [];
+  if (!prompt.includes("瑞士国际主义") && !prompt.includes("荧光黄绿")) {
+    parts.push(XHS_VISUAL_SYSTEM);
+  }
+  parts.push(prompt.trim());
+  if (!prompt.includes("—— 内容锁定")) {
+    parts.push(lock);
+  }
+  return parts.filter(Boolean).join("\n\n");
 }
 
 export function buildImagePrompt(params: {
   direction: XhsDirection;
   topic: string;
+  title?: string;
   cover: XhsCoverSlots;
 }): string {
   const { direction, topic, cover } = params;
-  const headline = cover.headline || topic;
+  const headline = cover.headline || params.title || topic;
   const lines = [
     "生成一张可直接发小红书的竖版封面。",
     XHS_VISUAL_SYSTEM,
     `选题：${topic}`,
+    `笔记标题：${params.title || topic}`,
     `封面主标题原文：${headline}`,
     compareHeadlineLock(direction, cover, headline),
   ];
