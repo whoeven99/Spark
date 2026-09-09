@@ -177,11 +177,18 @@ function compareHeadlineLock(
   ].join("\n");
 }
 
-export function previewImagePrompt(direction: XhsDirection, topic: string): string {
+export function previewImagePrompt(
+  direction: XhsDirection,
+  topic: string,
+  cover?: XhsCoverSlots,
+): string {
   return buildImagePrompt({
     direction,
     topic,
-    cover: emptyCoverSlots(),
+    cover: cover ?? {
+      ...emptyCoverSlots(),
+      headline: topic,
+    },
   });
 }
 
