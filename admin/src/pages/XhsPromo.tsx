@@ -1,32 +1,50 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
   Card,
   Col,
   Collapse,
+  Empty,
   Input,
   Row,
   Segmented,
+  Select,
   Space,
+  Spin,
+  Steps,
   Tag,
   Typography,
   message,
 } from "antd";
-import { CopyOutlined, DownloadOutlined, PictureOutlined } from "@ant-design/icons";
+import {
+  CheckCircleFilled,
+  CopyOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  PictureOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import {
   fetchXhsPromoPrompts,
   fetchXhsPromoStatus,
-  generateXhsPromo,
+  generateXhsPromoCards,
+  generateXhsPromoCopy,
+  generateXhsPromoCover,
+  generateXhsPromoTitles,
+  type XhsPromoContentCard,
+  type XhsPromoContentCardSlot,
   type XhsPromoCopyProvider,
   type XhsPromoCoverProvider,
+  type XhsPromoCoverSlots,
   type XhsPromoDirection,
-  type XhsPromoGenerateResult,
   type XhsPromoStatus,
 } from "../api";
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+type PanelId = "topic" | "titles" | "copy" | "visuals";
 
 const DIRECTION_OPTIONS: Array<{ label: string; value: XhsPromoDirection }> = [
   { label: "功能", value: "howto" },
@@ -104,6 +122,7 @@ const TOPIC_PRESETS: TopicPreset[] = [
 ];
 
 const FIRST_PRESET = TOPIC_PRESETS[0];
+const PANELS: PanelId[] = ["topic", "titles", "copy", "visuals"];
 
 function imageSrc(image: { mimeType: string; base64: string } | null | undefined): string {
   if (!image?.base64) return "";
@@ -115,11 +134,6 @@ function downloadHref(href: string, filename: string) {
   a.href = href;
   a.download = filename;
   a.click();
-}
-
-function modelLabel(raw: string | null | undefined): string {
-  if (!raw) return "未配置";
-  return raw;
 }
 
 function copyProviderLabel(provider: XhsPromoCopyProvider): string {
@@ -152,6 +166,10 @@ function coverProviderLabel(provider: XhsPromoCoverProvider): string {
   }
 }
 
+function directionLabel(direction: XhsPromoDirection): string {
+  return DIRECTION_OPTIONS.find((item) => item.value === direction)?.label ?? direction;
+}
+
 function defaultCopyProvider(status: XhsPromoStatus): XhsPromoCopyProvider | null {
   const options = status.copy.options ?? [];
   const deepseek = options.find((item) => item.provider === "deepseek");
@@ -164,6 +182,117 @@ function defaultCoverProvider(status: XhsPromoStatus): XhsPromoCoverProvider {
   return seedream?.provider ?? (options[0]?.provider as XhsPromoCoverProvider | undefined) ?? "template";
 }
 
+function topicKey(direction: XhsPromoDirection, topic: string, notes: string): string {
+  return `${direction}\n${topic.trim()}\n${notes.trim()}`;
+}
+
+function clipPreview(text: string, max = 28): string {
+  const value = text.trim();
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}…`;
+}
+
+function PromptEditor(props: {
+  dirty: boolean;
+  fields: Array<{ label: string; value: string; rows: number; onChange: (value: string) => void }>;
+  onReset: () => void;
+}) {
+  return (
+    <Collapse
+      ghost
+      items={[
+        {
+          key: "prompt",
+          label: props.dirty ? "调提示词（已改）" : "调提示词",
+          children: (
+            <Space direction="vertical" style={{ width: "100%" }} size={10}>
+              {props.fields.map((field) => (
+                <div key={field.label}>
+                  <Text type="secondary">{field.label}</Text>
+                  <TextArea
+                    style={{ marginTop: 6 }}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    rows={field.rows}
+                    maxLength={12000}
+                  />
+                </div>
+              ))}
+              <Button type="link" style={{ paddingLeft: 0 }} onClick={props.onReset}>
+                恢复默认
+              </Button>
+            </Space>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
+function DoneRow(props: {
+  title: string;
+  detail: string;
+  onEdit: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onEdit}
+      style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 12,
+        padding: "12px 16px",
+        border: "1px solid #f0f0f0",
+        borderRadius: 10,
+        background: "#fafafa",
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+    >
+      <CheckCircleFilled style={{ color: "#52c41a", fontSize: 16 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 650 }}>{props.title}</div>
+        <Text type="secondary" ellipsis style={{ display: "block" }}>
+          {props.detail}
+        </Text>
+      </div>
+      <span style={{ color: "#1677ff", whiteSpace: "nowrap" }}>
+        <EditOutlined /> 修改
+      </span>
+    </button>
+  );
+}
+
+function PanelFooter(props: {
+  hint: string;
+  extra?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+        flexWrap: "wrap",
+        marginTop: 16,
+        paddingTop: 14,
+        borderTop: "1px solid #f0f0f0",
+      }}
+    >
+      <Text type="secondary">{props.hint}</Text>
+      <Space wrap>
+        {props.extra}
+        {props.children}
+      </Space>
+    </div>
+  );
+}
+
 export default function XhsPromo() {
   const [direction, setDirection] = useState<XhsPromoDirection>(FIRST_PRESET.direction);
   const [topic, setTopic] = useState(FIRST_PRESET.topic);
@@ -171,14 +300,49 @@ export default function XhsPromo() {
   const [status, setStatus] = useState<XhsPromoStatus | null>(null);
   const [copyProvider, setCopyProvider] = useState<XhsPromoCopyProvider | null>(null);
   const [coverProvider, setCoverProvider] = useState<XhsPromoCoverProvider>("volc-ark");
+
+  const [titleSystem, setTitleSystem] = useState("");
+  const [titleUser, setTitleUser] = useState("");
   const [copySystem, setCopySystem] = useState("");
   const [copyUser, setCopyUser] = useState("");
   const [imagePrompt, setImagePrompt] = useState("");
+  const [cardSystem, setCardSystem] = useState("");
+  const [cardUser, setCardUser] = useState("");
+  const [titleDirty, setTitleDirty] = useState(false);
   const [copyDirty, setCopyDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);
-  const [result, setResult] = useState<XhsPromoGenerateResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [cardDirty, setCardDirty] = useState(false);
+  const [defaultImagePrompt, setDefaultImagePrompt] = useState("");
+  const [defaultCardSystem, setDefaultCardSystem] = useState("");
+  const [defaultCardUser, setDefaultCardUser] = useState("");
+
+  const [titles, setTitles] = useState<string[]>([]);
+  const [title, setTitle] = useState("");
+  const [lockedTopic, setLockedTopic] = useState("");
+
+  const [body, setBody] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [coverSlots, setCoverSlots] = useState<XhsPromoCoverSlots | null>(null);
+  const [lockedTitle, setLockedTitle] = useState("");
+  const [copyConfirmed, setCopyConfirmed] = useState(false);
+
+  const [coverImage, setCoverImage] = useState<{ mimeType: string; base64: string } | null>(null);
+  const [coverError, setCoverError] = useState("");
+
+  const [cardSlots, setCardSlots] = useState<XhsPromoContentCardSlot[]>([]);
+  const [cardImages, setCardImages] = useState<XhsPromoContentCard[]>([]);
+  const [cardModel, setCardModel] = useState("");
+  const [cardsTextDirty, setCardsTextDirty] = useState(false);
+
+  const [titlesLoading, setTitlesLoading] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [cardsLoading, setCardsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activePanel, setActivePanel] = useState<PanelId>("topic");
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const shouldScroll = useRef(false);
 
   useEffect(() => {
     fetchXhsPromoStatus()
@@ -196,70 +360,208 @@ export default function XhsPromo() {
         direction,
         topic: topic.trim() || "（选题）",
         notes: notes.trim(),
+        title: title.trim(),
+        body: body.trim(),
       })
         .then((next) => {
+          if (!titleDirty) {
+            setTitleSystem(next.titleSystem);
+            setTitleUser(next.titleUser);
+          }
           if (!copyDirty) {
             setCopySystem(next.copySystem);
             setCopyUser(next.copyUser);
           }
-          if (!imageDirty) {
+          if (!imageDirty && !defaultImagePrompt) {
             setImagePrompt(next.image);
+          }
+          if (!cardDirty) {
+            setCardSystem(next.cardSystem);
+            setCardUser(next.cardUser);
+            setDefaultCardSystem(next.cardSystem);
+            setDefaultCardUser(next.cardUser);
           }
         })
         .catch(() => undefined);
     }, 300);
     return () => window.clearTimeout(handle);
-  }, [direction, topic, notes, copyDirty, imageDirty]);
+  }, [direction, topic, notes, title, body, titleDirty, copyDirty, imageDirty, cardDirty, defaultImagePrompt]);
+
+  useEffect(() => {
+    if (!shouldScroll.current) return;
+    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    shouldScroll.current = false;
+  }, [activePanel]);
 
   const copyOptions = status?.copy.options ?? [];
   const coverOptions = status?.cover.options ?? [];
-  const selectedCopy = copyOptions.find((item) => item.provider === copyProvider)
-    ?? copyOptions[0]
-    ?? null;
-  const selectedCover = coverOptions.find((item) => item.provider === coverProvider)
-    ?? coverOptions[0]
-    ?? null;
-  const plannedCopy = selectedCopy
-    ? `${selectedCopy.provider}:${selectedCopy.model}`
-    : "未配置 DeepSeek / 豆包 / GPT";
-  const plannedCover = selectedCover
-    ? `${selectedCover.provider}:${selectedCover.model}`
-    : "检测中";
+  const previewSrc = useMemo(() => imageSrc(coverImage), [coverImage]);
+  const currentTopicKey = topicKey(direction, topic, notes);
+  const topicChanged = Boolean(lockedTopic) && lockedTopic !== currentTopicKey;
+  const titleChanged = Boolean(lockedTitle) && lockedTitle !== title.trim();
+  const bodyLen = body.trim().length;
+  const bodyTone = bodyLen > 0 && (bodyLen < 200 || bodyLen > 400) ? "#d48806" : "#8c8c8c";
+  const presets = TOPIC_PRESETS.filter((item) => item.direction === direction);
 
-  const usedCopy = result?.models.copy ?? plannedCopy;
-  const usedCover = result?.models.cover ?? plannedCover;
+  function goTo(panel: PanelId) {
+    shouldScroll.current = true;
+    setActivePanel(panel);
+  }
 
-  const previewSrc = useMemo(() => imageSrc(result?.image), [result]);
-  const cards = result?.cards ?? [];
+  function canOpen(panel: PanelId): boolean {
+    switch (panel) {
+      case "topic":
+        return true;
+      case "titles":
+        return titles.length > 0 || titlesLoading;
+      case "copy":
+        return Boolean(body) || copyLoading;
+      case "visuals":
+        return copyConfirmed;
+      default: {
+        const _never: never = panel;
+        return _never;
+      }
+    }
+  }
 
-  async function onGenerate() {
+  async function onGenerateTitles() {
     if (topic.trim().length < 2) {
       message.warning("请填写选题");
       return;
     }
-    setLoading(true);
+    goTo("titles");
+    setTitlesLoading(true);
     setError("");
     try {
-      const next = await generateXhsPromo({
+      const next = await generateXhsPromoTitles({
         direction,
         topic: topic.trim(),
         notes: notes.trim(),
         copyProvider: copyProvider ?? undefined,
-        coverProvider,
-        copySystemPrompt: copyDirty ? copySystem : undefined,
-        copyUserPrompt: copyDirty ? copyUser : undefined,
-        imagePrompt: imageDirty ? imagePrompt : undefined,
+        titleSystemPrompt: titleSystem.trim() || undefined,
+        titleUserPrompt: titleUser.trim() || undefined,
       });
-      setResult(next);
+      setTitles(next.titles);
+      setLockedTopic(currentTopicKey);
+      if (!title.trim() || !next.titles.includes(title.trim())) {
+        setTitle(next.titles[0] ?? "");
+      }
+      message.success("选出一个标题，或直接改");
+    } catch (e) {
+      setError(String(e));
+      goTo("topic");
+    } finally {
+      setTitlesLoading(false);
+    }
+  }
+
+  async function onGenerateCopy() {
+    if (title.trim().length < 2) {
+      message.warning("请先选定或填写标题");
+      return;
+    }
+    goTo("copy");
+    setCopyLoading(true);
+    setError("");
+    try {
+      const next = await generateXhsPromoCopy({
+        direction,
+        topic: topic.trim(),
+        notes: notes.trim(),
+        title: title.trim(),
+        copyProvider: copyProvider ?? undefined,
+        copySystemPrompt: copySystem.trim() || undefined,
+        copyUserPrompt: copyUser.trim() || undefined,
+      });
+      setTitle(next.title);
+      setBody(next.body);
+      setTags(next.tags);
+      setCoverSlots(next.coverSlots);
+      setLockedTitle(next.title);
+      if (!imageDirty) {
+        setImagePrompt(next.imagePrompt);
+        setDefaultImagePrompt(next.imagePrompt);
+      }
+      message.success("改完正文再确定，不会出图");
+    } catch (e) {
+      setError(String(e));
+      goTo("titles");
+    } finally {
+      setCopyLoading(false);
+    }
+  }
+
+  function onConfirmCopy() {
+    if (body.trim().length < 20) {
+      message.warning("请先生成或填写文案");
+      return;
+    }
+    setCopyConfirmed(true);
+    goTo("visuals");
+    message.success("可以分别出封面和滑页");
+  }
+
+  async function onGenerateCover() {
+    if (title.trim().length < 2) {
+      message.warning("请先确定标题");
+      return;
+    }
+    setCoverLoading(true);
+    setError("");
+    setCoverError("");
+    try {
+      const next = await generateXhsPromoCover({
+        direction,
+        topic: topic.trim(),
+        title: title.trim(),
+        coverProvider,
+        coverSlots: coverSlots ?? undefined,
+        imagePrompt: imagePrompt.trim() || undefined,
+      });
+      setCoverImage(next.image);
+      setCoverSlots(next.coverSlots);
       if (next.coverError) {
-        message.warning(`文案已生成，封面已回退模板：${next.coverError}`);
+        setCoverError(next.coverError);
+        message.warning(`封面已回退模板：${next.coverError}`);
       } else {
-        message.success("已生成");
+        message.success("封面已更新，文案和滑页没动");
       }
     } catch (e) {
       setError(String(e));
     } finally {
-      setLoading(false);
+      setCoverLoading(false);
+    }
+  }
+
+  async function onGenerateCards(mode: "model" | "layout") {
+    if (title.trim().length < 2) {
+      message.warning("请先确定标题");
+      return;
+    }
+    setCardsLoading(true);
+    setError("");
+    try {
+      const next = await generateXhsPromoCards({
+        direction,
+        topic: topic.trim(),
+        notes: notes.trim(),
+        title: title.trim(),
+        bodyText: body.trim(),
+        copyProvider: copyProvider ?? undefined,
+        cardSystemPrompt: mode === "model" ? cardSystem.trim() || undefined : undefined,
+        cardUserPrompt: mode === "model" ? cardUser.trim() || undefined : undefined,
+        cards: mode === "layout" ? cardSlots : undefined,
+      });
+      setCardImages(next.cards);
+      setCardSlots(next.cards.map((card) => ({ headline: card.headline, lines: card.lines })));
+      setCardModel(next.model ?? cardModel);
+      setCardsTextDirty(false);
+      message.success(mode === "layout" ? "已按当前文字重新排版" : "滑页已更新，封面没动");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCardsLoading(false);
     }
   }
 
@@ -275,386 +577,590 @@ export default function XhsPromo() {
   }
 
   function downloadCover() {
-    if (!previewSrc || !result) return;
-    const ext = result.image?.mimeType.includes("svg") ? "svg" : "png";
-    downloadHref(previewSrc, `xhs-cover-${result.direction}.${ext}`);
+    if (!previewSrc || !coverImage) return;
+    const ext = coverImage.mimeType.includes("svg") ? "svg" : "png";
+    downloadHref(previewSrc, `xhs-cover-${direction}.${ext}`);
   }
 
   function downloadCard(index: number) {
-    const card = cards[index];
-    if (!card || !result) return;
+    const card = cardImages[index];
+    if (!card) return;
     const src = imageSrc(card.image);
     if (!src) return;
-    downloadHref(src, `xhs-card-${index + 1}-${result.direction}.svg`);
+    downloadHref(src, `xhs-card-${index + 1}-${direction}.svg`);
   }
 
   function downloadAllCards() {
-    cards.forEach((_, index) => downloadCard(index));
+    cardImages.forEach((_, index) => downloadCard(index));
   }
 
-  return (
-    <div>
-      <Title level={3} style={{ marginTop: 0 }}>
-        <PictureOutlined /> 小红书图文
-      </Title>
-      <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-        选题后一次生成，复制正文、下载封面和滑页，去创作者后台发。每天 12:00 / 17:00 人发，不自动发布。
-      </Paragraph>
-      <Row gutter={12} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={8}>
-          <Card size="small">
-            <Text type="secondary">1 文案</Text>
-            <div style={{ fontWeight: 650 }}>200–400 字</div>
-            <Text type="secondary">标题 + 正文 + 话题，前 80 字是钩子</Text>
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card size="small">
-            <Text type="secondary">2 封面</Text>
-            <div style={{ fontWeight: 650 }}>黑白 + 荧光绿</div>
-            <Text type="secondary">3:4 瑞士信息卡，Seedream 出图</Text>
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card size="small">
-            <Text type="secondary">3 滑页</Text>
-            <div style={{ fontWeight: 650 }}>2–4 张卡片</div>
-            <Text type="secondary">模板排字，细节不塞进正文</Text>
-          </Card>
-        </Col>
-      </Row>
+  function updateCardSlot(index: number, patch: Partial<XhsPromoContentCardSlot>) {
+    setCardSlots((prev) =>
+      prev.map((card, i) => (i === index ? { ...card, ...patch } : card)),
+    );
+    setCardsTextDirty(true);
+  }
 
-      <Space wrap style={{ marginBottom: 16 }}>
-        <Tag color="blue">文案 {modelLabel(usedCopy)}</Tag>
-        <Tag color="green">封面 {modelLabel(usedCover)}</Tag>
-      </Space>
+  function updateCardLine(index: number, lineIndex: number, value: string) {
+    setCardSlots((prev) =>
+      prev.map((card, i) => {
+        if (i !== index) return card;
+        return { ...card, lines: card.lines.map((line, j) => (j === lineIndex ? value : line)) };
+      }),
+    );
+    setCardsTextDirty(true);
+  }
+
+  const fullPost = `${title}\n\n${body}\n\n${tags.map((tag) => `#${tag}`).join(" ")}`;
+
+  return (
+    <div style={{ maxWidth: 1080 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 16,
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <Title level={3} style={{ margin: 0 }}>
+            <PictureOutlined /> 小红书图文
+          </Title>
+          <Text type="secondary">每天 12:00 / 17:00 人发。改哪一步，只重跑哪一步。</Text>
+        </div>
+        {copyOptions.length > 0 ? (
+          <div>
+            <Text type="secondary" style={{ display: "block", marginBottom: 6 }}>
+              写文案用
+            </Text>
+            <Segmented
+              size="small"
+              options={copyOptions.map((item) => ({
+                label: copyProviderLabel(item.provider),
+                value: item.provider,
+              }))}
+              value={copyProvider ?? copyOptions[0]?.provider}
+              onChange={(v) => setCopyProvider(v as XhsPromoCopyProvider)}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <Steps
+        size="small"
+        current={PANELS.indexOf(activePanel)}
+        style={{ marginBottom: 20 }}
+        onChange={(index) => {
+          const panel = PANELS[index];
+          if (panel && canOpen(panel)) goTo(panel);
+        }}
+        items={[
+          { title: "选题", disabled: false },
+          { title: "标题", disabled: !canOpen("titles") },
+          { title: "文案", disabled: !canOpen("copy") },
+          { title: "出图", disabled: !canOpen("visuals") },
+        ]}
+      />
 
       {status?.copy.hint ? (
-        <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={status.copy.hint} />
+        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={status.copy.hint} />
       ) : null}
       {!status?.copy.configured && !status?.copy.hint ? (
         <Alert
           type="warning"
           showIcon
-          style={{ marginBottom: 16 }}
-          message="未配置文案模型。豆包需要 VOLC_ARK_TEXT_MODEL（对话 Model ID 或 ep-），或配置 DEEPSEEK_API_KEY / OPENAI_API_KEY。"
+          style={{ marginBottom: 12 }}
+          message="还没配文案模型。需要 DEEPSEEK_API_KEY，或给豆包配 VOLC_ARK_TEXT_MODEL。"
         />
       ) : null}
-
       {error ? (
         <Alert
           type="error"
           showIcon
           closable
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 12 }}
           message={error}
           onClose={() => setError("")}
         />
       ) : null}
 
-      <Card size="small" title="选题" style={{ marginBottom: 16 }}>
-        <Space direction="vertical" style={{ width: "100%" }} size={12}>
-          <div>
-            <Text type="secondary">参考选题，点击填入</Text>
-            <div style={{ marginTop: 8 }}>
-              {DIRECTION_OPTIONS.map((group) => (
-                <div key={group.value} style={{ marginBottom: 8 }}>
-                  <Text type="secondary" style={{ marginRight: 8 }}>
-                    {group.label}
-                  </Text>
-                  <Space wrap size={[8, 8]}>
-                    {TOPIC_PRESETS.filter((item) => item.direction === group.value).map((item) => (
-                      <Button
-                        key={item.topic}
-                        size="small"
-                        type={topic === item.topic ? "primary" : "default"}
-                        onClick={() => applyPreset(item)}
-                      >
-                        {item.topic}
-                      </Button>
-                    ))}
-                  </Space>
-                </div>
-              ))}
-            </div>
-          </div>
-          {copyOptions.length > 0 ? (
-            <div>
-              <Text type="secondary">文案模型</Text>
-              <div style={{ marginTop: 6 }}>
-                <Segmented
-                  options={copyOptions.map((item) => ({
-                    label: `${copyProviderLabel(item.provider)} · ${item.model}`,
-                    value: item.provider,
-                  }))}
-                  value={copyProvider ?? copyOptions[0]?.provider}
-                  onChange={(v) => setCopyProvider(v as XhsPromoCopyProvider)}
-                />
-              </div>
-            </div>
-          ) : null}
-          {coverOptions.length > 0 ? (
-            <div>
-              <Text type="secondary">封面模型</Text>
-              <div style={{ marginTop: 6 }}>
-                <Segmented
-                  options={coverOptions.map((item) => ({
-                    label: `${coverProviderLabel(item.provider)} · ${item.model}`,
-                    value: item.provider,
-                  }))}
-                  value={coverProvider}
-                  onChange={(v) => setCoverProvider(v as XhsPromoCoverProvider)}
-                />
-              </div>
-            </div>
-          ) : null}
-          <div>
-            <Text type="secondary">方向</Text>
-            <div style={{ marginTop: 6 }}>
+      {canOpen("titles") && activePanel !== "topic" ? (
+        <DoneRow
+          title="选题"
+          detail={`${directionLabel(direction)} · ${topic}`}
+          onEdit={() => goTo("topic")}
+        />
+      ) : null}
+
+      {activePanel === "topic" ? (
+        <div ref={panelRef}>
+          <Card size="small" title="今天发哪条" style={{ marginBottom: 12, borderRadius: 10 }}>
+            <Space direction="vertical" style={{ width: "100%" }} size={14}>
               <Segmented
                 options={DIRECTION_OPTIONS}
                 value={direction}
                 onChange={(v) => setDirection(v as XhsPromoDirection)}
               />
-            </div>
-          </div>
-          <div>
-            <Text type="secondary">选题</Text>
-            <Input
-              style={{ marginTop: 6 }}
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              maxLength={40}
-            />
-          </div>
-          <div>
-            <Text type="secondary">补充（可选）</Text>
-            <TextArea
-              style={{ marginTop: 6 }}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              maxLength={2000}
-            />
-          </div>
-          <Collapse
-            ghost
-            items={[
-              {
-                key: "copy",
-                label: copyDirty ? "文案提示词（已改，点开后可查看编辑）" : "文案提示词（点开后可查看编辑）",
-                children: (
-                  <Space direction="vertical" style={{ width: "100%" }} size={10}>
-                    <div>
-                      <Text type="secondary">系统规则</Text>
-                      <TextArea
-                        style={{ marginTop: 6 }}
-                        value={copySystem}
-                        onChange={(e) => {
-                          setCopyDirty(true);
-                          setCopySystem(e.target.value);
-                        }}
-                        rows={8}
-                        maxLength={12000}
-                      />
-                    </div>
-                    <div>
-                      <Text type="secondary">本次选题</Text>
-                      <TextArea
-                        style={{ marginTop: 6 }}
-                        value={copyUser}
-                        onChange={(e) => {
-                          setCopyDirty(true);
-                          setCopyUser(e.target.value);
-                        }}
-                        rows={8}
-                        maxLength={12000}
-                      />
-                    </div>
-                    <Button type="link" style={{ paddingLeft: 0 }} onClick={() => setCopyDirty(false)}>
-                      恢复默认
+              <div>
+                <Text type="secondary">点一条填入，也可自己写</Text>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                  {presets.map((item) => (
+                    <Button
+                      key={item.topic}
+                      size="small"
+                      type={topic === item.topic ? "primary" : "default"}
+                      onClick={() => applyPreset(item)}
+                    >
+                      {item.topic}
                     </Button>
-                  </Space>
-                ),
-              },
-              {
-                key: "image",
-                label: imageDirty ? "封面提示词（已改，点开后可查看编辑）" : "封面提示词（点开后可查看编辑）",
-                children: (
-                  <Space direction="vertical" style={{ width: "100%" }} size={10}>
-                    <TextArea
-                      value={imagePrompt}
-                      onChange={(e) => {
-                        setImageDirty(true);
-                        setImagePrompt(e.target.value);
-                      }}
-                      rows={12}
-                      maxLength={12000}
-                    />
-                    <Button type="link" style={{ paddingLeft: 0 }} onClick={() => setImageDirty(false)}>
-                      恢复默认
-                    </Button>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-          <Button type="primary" loading={loading} onClick={onGenerate}>
-            生成文案和图片
-          </Button>
-        </Space>
-      </Card>
+                  ))}
+                </div>
+              </div>
+              <Input
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                maxLength={40}
+                placeholder="选题"
+                showCount
+              />
+              <TextArea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="补充：真实数字、对比对象、不要写什么"
+              />
+              <PromptEditor
+                dirty={titleDirty}
+                onReset={() => setTitleDirty(false)}
+                fields={[
+                  {
+                    label: "系统规则",
+                    value: titleSystem,
+                    rows: 5,
+                    onChange: (value) => {
+                      setTitleDirty(true);
+                      setTitleSystem(value);
+                    },
+                  },
+                  {
+                    label: "本次选题",
+                    value: titleUser,
+                    rows: 5,
+                    onChange: (value) => {
+                      setTitleDirty(true);
+                      setTitleUser(value);
+                    },
+                  },
+                ]}
+              />
+              <PanelFooter hint="下一步只出标题，还不出图">
+                <Button type="primary" size="large" loading={titlesLoading} onClick={onGenerateTitles}>
+                  {titles.length > 0 ? "按这个选题换一批标题" : "生成标题"}
+                </Button>
+              </PanelFooter>
+            </Space>
+          </Card>
+        </div>
+      ) : null}
 
-      <Row gutter={16}>
-        <Col xs={24} lg={14}>
-          <Card
-            size="small"
-            title="文案"
-            extra={
-              result ? (
-                <Button
-                  type="link"
-                  icon={<CopyOutlined />}
-                  onClick={() =>
-                    copyText(
-                      "全文",
-                      `${result.title}\n\n${result.body}\n\n${result.tags.map((t) => `#${t}`).join(" ")}`,
-                    )
+      {canOpen("copy") && activePanel !== "titles" ? (
+        <DoneRow
+          title="标题"
+          detail={title || "未选"}
+          onEdit={() => goTo("titles")}
+        />
+      ) : null}
+
+      {activePanel === "titles" ? (
+        <div ref={panelRef}>
+          <Card size="small" title="选一个标题" style={{ marginBottom: 12, borderRadius: 10 }}>
+            <Spin spinning={titlesLoading}>
+              <Space direction="vertical" style={{ width: "100%" }} size={14}>
+                {topicChanged ? (
+                  <Alert type="info" showIcon message="选题改过了。换一批标题不会动已经写好的文案和图片。" />
+                ) : null}
+                {titles.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {titles.map((item) => {
+                      const selected = title === item;
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setTitle(item)}
+                          style={{
+                            textAlign: "left",
+                            padding: "12px 14px",
+                            borderRadius: 8,
+                            border: selected ? "2px solid #1677ff" : "1px solid #f0f0f0",
+                            background: selected ? "#e6f4ff" : "#fff",
+                            cursor: "pointer",
+                            fontSize: 15,
+                            fontWeight: selected ? 650 : 500,
+                          }}
+                        >
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="正在出标题" />
+                )}
+                <div>
+                  <Text type="secondary">选完还能改几个字</Text>
+                  <Input
+                    style={{ marginTop: 6 }}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    maxLength={20}
+                    showCount
+                    placeholder="标题"
+                  />
+                </div>
+                <PanelFooter
+                  hint="下一步只写正文，仍不出图"
+                  extra={
+                    <Button icon={<ReloadOutlined />} loading={titlesLoading} onClick={onGenerateTitles}>
+                      换一批
+                    </Button>
                   }
                 >
-                  复制全部
-                </Button>
-              ) : null
-            }
-          >
-            {result ? (
-              <Space direction="vertical" style={{ width: "100%" }} size={16}>
-                <div>
-                  <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                    <Text type="secondary">标题</Text>
-                    <Button type="link" onClick={() => copyText("标题", result.title)}>
-                      复制
-                    </Button>
-                  </Space>
-                  <div style={{ fontSize: 18, fontWeight: 650 }}>{result.title}</div>
-                </div>
-                <div>
-                  <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                    <Text type="secondary">正文</Text>
-                    <Button type="link" onClick={() => copyText("正文", result.body)}>
-                      复制
-                    </Button>
-                  </Space>
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      margin: 0,
-                      fontFamily: "inherit",
-                      background: "#fafafa",
-                      padding: 12,
-                      borderRadius: 8,
-                    }}
-                  >
-                    {result.body}
-                  </pre>
-                </div>
-                <div>
-                  <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                    <Text type="secondary">话题</Text>
-                    <Button
-                      type="link"
-                      onClick={() =>
-                        copyText("话题", result.tags.map((t) => `#${t}`).join(" "))
-                      }
-                    >
-                      复制
-                    </Button>
-                  </Space>
-                  <Space wrap>
-                    {result.tags.map((tag) => (
-                      <Tag key={tag} color="red">
-                        #{tag}
-                      </Tag>
-                    ))}
-                  </Space>
-                </div>
+                  <Button type="primary" size="large" loading={copyLoading} onClick={onGenerateCopy}>
+                    {body ? "用这个标题重写文案" : "用这个标题写文案"}
+                  </Button>
+                </PanelFooter>
               </Space>
-            ) : (
-              <Text type="secondary">生成后显示标题、正文和话题。</Text>
-            )}
+            </Spin>
           </Card>
-        </Col>
-        <Col xs={24} lg={10}>
+        </div>
+      ) : null}
+
+      {copyConfirmed && activePanel !== "copy" ? (
+        <DoneRow
+          title="文案"
+          detail={`${clipPreview(title)} · ${bodyLen} 字`}
+          onEdit={() => goTo("copy")}
+        />
+      ) : null}
+
+      {activePanel === "copy" ? (
+        <div ref={panelRef}>
           <Card
             size="small"
-            title="封面"
+            title="改正文"
+            style={{ marginBottom: 12, borderRadius: 10 }}
             extra={
-              previewSrc ? (
-                <Button type="link" icon={<DownloadOutlined />} onClick={downloadCover}>
-                  下载
+              body ? (
+                <Button type="link" icon={<CopyOutlined />} onClick={() => copyText("全文", fullPost)}>
+                  复制全文
                 </Button>
               ) : null
             }
           >
-            {previewSrc ? (
-              <img
-                src={previewSrc}
-                alt="小红书封面"
-                style={{ width: "100%", maxWidth: 320, borderRadius: 8, border: "1px solid #f0f0f0" }}
-              />
-            ) : (
-              <Text type="secondary">生成后显示 3:4 封面。</Text>
-            )}
+            <Spin spinning={copyLoading}>
+              <Space direction="vertical" style={{ width: "100%" }} size={14}>
+                {titleChanged ? (
+                  <Alert type="info" showIcon message="标题改过了。重写文案不会动封面和滑页。" />
+                ) : null}
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={20}
+                  showCount
+                />
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <Text type="secondary">正文</Text>
+                    <Text style={{ color: bodyTone }}>
+                      {bodyLen} 字{bodyLen > 0 && (bodyLen < 200 || bodyLen > 400) ? " · 建议 200–400" : ""}
+                    </Text>
+                  </div>
+                  <TextArea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    rows={12}
+                    maxLength={800}
+                    placeholder="钩子 → 共鸣 → 怎么做 → 收尾"
+                  />
+                </div>
+                <div>
+                  <Text type="secondary">话题</Text>
+                  <Select
+                    mode="tags"
+                    style={{ width: "100%", marginTop: 6 }}
+                    value={tags}
+                    onChange={setTags}
+                    tokenSeparators={[" ", ",", "，", "#"]}
+                    placeholder="输入后回车"
+                    open={false}
+                  />
+                </div>
+                <PromptEditor
+                  dirty={copyDirty}
+                  onReset={() => setCopyDirty(false)}
+                  fields={[
+                    {
+                      label: "系统规则",
+                      value: copySystem,
+                      rows: 6,
+                      onChange: (value) => {
+                        setCopyDirty(true);
+                        setCopySystem(value);
+                      },
+                    },
+                    {
+                      label: "本次标题",
+                      value: copyUser,
+                      rows: 6,
+                      onChange: (value) => {
+                        setCopyDirty(true);
+                        setCopyUser(value);
+                      },
+                    },
+                  ]}
+                />
+                <PanelFooter
+                  hint={copyConfirmed ? "出图已解锁，改字不会自动重画" : "确定后才出封面和滑页"}
+                  extra={
+                    <Button icon={<ReloadOutlined />} loading={copyLoading} onClick={onGenerateCopy}>
+                      重写文案
+                    </Button>
+                  }
+                >
+                  <Button type="primary" size="large" onClick={onConfirmCopy}>
+                    {copyConfirmed ? "回到出图" : "文案没问题，去出图"}
+                  </Button>
+                </PanelFooter>
+              </Space>
+            </Spin>
           </Card>
-        </Col>
-      </Row>
+        </div>
+      ) : null}
 
-      <Card
-        size="small"
-        title="正文卡片"
-        style={{ marginTop: 16 }}
-        extra={
-          cards.length > 0 ? (
-            <Button type="link" icon={<DownloadOutlined />} onClick={downloadAllCards}>
-              全部下载
-            </Button>
-          ) : null
-        }
-      >
-        {cards.length > 0 ? (
-          <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
-            {cards.map((card, index) => {
-              const src = imageSrc(card.image);
-              return (
-                <div key={`${card.headline}-${index}`} style={{ flex: "0 0 220px" }}>
-                  {src ? (
-                    <img
-                      src={src}
-                      alt={card.headline || `正文卡片 ${index + 1}`}
-                      style={{
-                        width: "100%",
-                        borderRadius: 8,
-                        border: "1px solid #f0f0f0",
-                        display: "block",
-                      }}
+      {activePanel === "visuals" ? (
+        <div ref={panelRef}>
+          <Card size="small" style={{ marginBottom: 12, borderRadius: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 650, fontSize: 16 }}>{title}</div>
+                <Text type="secondary">封面和滑页分开出，互不影响</Text>
+              </div>
+              <Space wrap>
+                <Button icon={<CopyOutlined />} onClick={() => copyText("全文", fullPost)}>
+                  复制全文
+                </Button>
+                <Button icon={<DownloadOutlined />} disabled={!previewSrc} onClick={downloadCover}>
+                  下载封面
+                </Button>
+                <Button icon={<DownloadOutlined />} disabled={cardImages.length === 0} onClick={downloadAllCards}>
+                  下载滑页
+                </Button>
+              </Space>
+            </div>
+          </Card>
+
+          <Row gutter={16}>
+            <Col xs={24} lg={10}>
+              <Card size="small" title="封面" style={{ borderRadius: 10, marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  <div
+                    style={{
+                      width: "100%",
+                      maxWidth: 320,
+                      aspectRatio: "3 / 4",
+                      borderRadius: 10,
+                      border: "1px solid #f0f0f0",
+                      background: "#fafafa",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {coverLoading ? (
+                      <Spin tip="封面生成中" />
+                    ) : previewSrc ? (
+                      <img
+                        src={previewSrc}
+                        alt="小红书封面"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没出封面" />
+                    )}
+                  </div>
+                  {coverError ? <Alert type="warning" showIcon message={coverError} /> : null}
+                  {coverOptions.length > 0 ? (
+                    <Segmented
+                      size="small"
+                      options={coverOptions.map((item) => ({
+                        label: coverProviderLabel(item.provider),
+                        value: item.provider,
+                      }))}
+                      value={coverProvider}
+                      onChange={(v) => setCoverProvider(v as XhsPromoCoverProvider)}
                     />
                   ) : null}
-                  <Button
-                    type="link"
-                    icon={<DownloadOutlined />}
-                    onClick={() => downloadCard(index)}
-                    style={{ paddingLeft: 0 }}
-                  >
-                    卡片 {index + 1}
+                  <PromptEditor
+                    dirty={imageDirty}
+                    onReset={() => {
+                      setImageDirty(false);
+                      if (defaultImagePrompt) setImagePrompt(defaultImagePrompt);
+                    }}
+                    fields={[
+                      {
+                        label: "封面提示词",
+                        value: imagePrompt,
+                        rows: 8,
+                        onChange: (value) => {
+                          setImageDirty(true);
+                          setImagePrompt(value);
+                        },
+                      },
+                    ]}
+                  />
+                  <Button type="primary" block loading={coverLoading} onClick={onGenerateCover}>
+                    {coverImage ? "重出封面" : "生成封面"}
                   </Button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <Text type="secondary">生成后显示 2–4 张滑页卡片，和封面同一套风格，字由模板排出。</Text>
-        )}
-      </Card>
+                </Space>
+              </Card>
+            </Col>
+            <Col xs={24} lg={14}>
+              <Card size="small" title="滑页" style={{ borderRadius: 10, marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  {cardsTextDirty ? (
+                    <Alert type="info" showIcon message="字改过了，点「按文字重排」才会更新图。" />
+                  ) : null}
+                  <Spin spinning={cardsLoading}>
+                    {cardSlots.length > 0 ? (
+                      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+                        {cardSlots.map((card, index) => {
+                          const src = imageSrc(cardImages[index]?.image);
+                          return (
+                            <div
+                              key={`card-${index}`}
+                              style={{
+                                flex: "0 0 200px",
+                                padding: 10,
+                                border: "1px solid #f0f0f0",
+                                borderRadius: 10,
+                                background: "#fff",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  aspectRatio: "3 / 4",
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  background: "#fafafa",
+                                  marginBottom: 8,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                {src ? (
+                                  <img
+                                    src={src}
+                                    alt={card.headline || `滑页 ${index + 1}`}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  />
+                                ) : (
+                                  <Text type="secondary">{index + 1}</Text>
+                                )}
+                              </div>
+                              <Input
+                                value={card.headline}
+                                onChange={(e) => updateCardSlot(index, { headline: e.target.value })}
+                                maxLength={12}
+                                style={{ marginBottom: 6 }}
+                              />
+                              {card.lines.map((line, lineIndex) => (
+                                <Input
+                                  key={`${index}-${lineIndex}`}
+                                  value={line}
+                                  onChange={(e) => updateCardLine(index, lineIndex, e.target.value)}
+                                  maxLength={18}
+                                  style={{ marginBottom: 6 }}
+                                />
+                              ))}
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<DownloadOutlined />}
+                                onClick={() => downloadCard(index)}
+                                disabled={!src}
+                                style={{ paddingLeft: 0 }}
+                              >
+                                下载 {index + 1}
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没出滑页" />
+                    )}
+                  </Spin>
+                  <PromptEditor
+                    dirty={cardDirty}
+                    onReset={() => {
+                      setCardDirty(false);
+                      setCardSystem(defaultCardSystem);
+                      setCardUser(defaultCardUser);
+                    }}
+                    fields={[
+                      {
+                        label: "系统规则",
+                        value: cardSystem,
+                        rows: 6,
+                        onChange: (value) => {
+                          setCardDirty(true);
+                          setCardSystem(value);
+                        },
+                      },
+                      {
+                        label: "本次文案",
+                        value: cardUser,
+                        rows: 6,
+                        onChange: (value) => {
+                          setCardDirty(true);
+                          setCardUser(value);
+                        },
+                      },
+                    ]}
+                  />
+                  <Space wrap>
+                    <Button type="primary" loading={cardsLoading} onClick={() => onGenerateCards("model")}>
+                      {cardImages.length > 0 ? "按提示词重写滑页" : "生成滑页"}
+                    </Button>
+                    <Button
+                      loading={cardsLoading}
+                      disabled={cardSlots.length === 0}
+                      onClick={() => onGenerateCards("layout")}
+                    >
+                      按文字重排
+                    </Button>
+                  </Space>
+                </Space>
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      ) : null}
     </div>
   );
 }

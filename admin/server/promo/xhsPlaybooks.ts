@@ -26,7 +26,6 @@ export type XhsCopyDraft = {
   body: string;
   tags: string[];
   cover: XhsCoverSlots;
-  cards: XhsContentCard[];
 };
 
 const BANNED = ["最", "第一", "100%", "神仙", "宝藏", "绝对", "保证"];
@@ -50,29 +49,56 @@ export function directionLabel(direction: XhsDirection): string {
   }
 }
 
+export function titlePlaybookHint(direction: XhsDirection): string {
+  switch (direction) {
+    case "howto":
+      return "标题公式：数字+动作，或「别再…」。14 字内，前 8 字能看懂。";
+    case "compare":
+      return "笔记标题用问句或成对区别，如「问得了改不了？」「只动嘴 vs 能改店」。14 字内。禁止只写两个品牌名。";
+    case "data":
+      return "标题公式：结果数字前置，如「转化率 +32%」。没有真实数字就写「某店对照」，禁止编造精确值。";
+    default: {
+      const _never: never = direction;
+      return _never;
+    }
+  }
+}
+
 export function playbookHint(direction: XhsDirection): string {
   switch (direction) {
     case "howto":
       return [
-        "标题公式：数字+动作，或「别再…」。14 字内，前 8 字能看懂。",
+        titlePlaybookHint(direction),
         "正文 200-400 字：钩子（1-2 句）→ 共鸣 → 3 步干货 → 一句收尾。短句换行，别写说明书。",
         "封面槽：headline 可两行写全，不超过 18 字，英文品牌名不要截断；subhead 一句痛点；promptBox 放可复制的短提示词。",
-        "滑页卡片 cards：2-4 张，给图片用，不是笔记正文。每张 headline ≤10 字，lines 2-4 条、每条≤16 字。功能向按「痛点 / 步骤 / 收尾」切页。",
       ].join("\n");
     case "compare":
       return [
-        "笔记标题用问句或成对区别，如「问得了改不了？」「只动嘴 vs 能改店」。14 字内。禁止只写两个品牌名。",
+        titlePlaybookHint(direction),
         "正文 200-400 字：先抛对照对象的坑，再讲 Spark 怎么做，最后一句结论。没有补充里的真实数字，禁止编造转化率/CTR。",
         "封面标题必须成对：leftHook=对照动作（如只动嘴），rightHook=Spark动作（如能改店）。图上两行是「Sidekick 只动嘴 / Spark 能改店」，禁止第二行只剩 Spark。leftTitle=对照对象写全，rightTitle=Spark。",
-        "滑页卡片 cards：2-4 张。对比向按「对照对象坑 / Spark 做法 / 结论」切页。",
       ].join("\n");
     case "data":
       return [
-        "标题公式：结果数字前置，如「转化率 +32%」。没有真实数字就写「某店对照」，禁止编造精确值。",
+        titlePlaybookHint(direction),
         "正文 200-400 字：数字从哪来、改了什么、别的先不动。",
         "封面槽：headline 可两行写全，不超过 18 字；metric 只放一个数字；metricNote 写口径。",
-        "滑页卡片 cards：2-4 张。数据向按「数字从哪来 / 改了什么 / 别的先不动」切页。禁止编造精确值。",
       ].join("\n");
+    default: {
+      const _never: never = direction;
+      return _never;
+    }
+  }
+}
+
+export function cardPlaybookHint(direction: XhsDirection): string {
+  switch (direction) {
+    case "howto":
+      return "滑页卡片 2-4 张，给图片排版，不是笔记正文。每张 headline ≤10 字，lines 2-4 条、每条≤16 字。功能向按「痛点 / 步骤 / 收尾」切页。";
+    case "compare":
+      return "滑页卡片 2-4 张，给图片排版，不是笔记正文。每张 headline ≤10 字，lines 2-4 条、每条≤16 字。对比向按「对照对象坑 / Spark 做法 / 结论」切页。";
+    case "data":
+      return "滑页卡片 2-4 张，给图片排版，不是笔记正文。每张 headline ≤10 字，lines 2-4 条、每条≤16 字。数据向按「数字从哪来 / 改了什么 / 别的先不动」切页。禁止编造精确值。";
     default: {
       const _never: never = direction;
       return _never;
@@ -126,8 +152,26 @@ export function normalizeDraft(raw: unknown, fallbackTopic: string): XhsCopyDraf
       metricNote: clip(asString(coverRaw.metricNote), 22),
       promptBox: clip(asString(coverRaw.promptBox), 80),
     },
-    cards: normalizeCards(obj.cards, title, body),
   };
+}
+
+export function normalizeTitles(raw: unknown, fallbackTopic: string): string[] {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const titles = asStringList(obj.titles ?? obj.options ?? raw)
+    .map((item) => clip(scrubBanned(item), 18))
+    .filter((item) => item.length >= 2);
+  const unique = [...new Set(titles)].slice(0, 5);
+  if (unique.length >= 3) return unique;
+  const fallback = clip(fallbackTopic, 18);
+  return unique.length > 0 ? unique : [fallback];
+}
+
+export function normalizeCardSlots(
+  raw: unknown,
+  fallbackTitle: string,
+  fallbackBody: string,
+): XhsContentCard[] {
+  return normalizeCards(raw, fallbackTitle, fallbackBody);
 }
 
 export function findBannedHit(text: string): string | null {
