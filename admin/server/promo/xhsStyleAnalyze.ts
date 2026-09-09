@@ -2,7 +2,6 @@ import {
   invokeCopyChat,
   parseCopyJson,
   resolveCopyModel,
-  resolveVisionCopyModel,
   type CopyModelInfo,
 } from "./xhsCopyClient.js";
 import type { XhsDirection } from "./xhsPlaybooks.js";
@@ -245,13 +244,11 @@ export async function analyzeReferenceStyle(params: {
   images: ReferenceImage[];
   copyProvider?: string | null;
 }): Promise<{ prompts: Omit<StyleAnalyzeResult, "source" | "model" | "sawImages">; model: CopyModelInfo; sawImages: boolean }> {
-  const visionModel = params.images.length > 0 ? resolveVisionCopyModel(params.copyProvider) : null;
-  const textModel = resolveCopyModel(params.copyProvider);
-  const useVision = Boolean(visionModel && visionModel.provider !== "deepseek" && params.images.length > 0);
-  const model = (useVision ? visionModel : textModel);
+  const model = resolveCopyModel(params.copyProvider);
   if (!model) {
     throw new Error("未配置文案模型，无法分析风格。");
   }
+  const useVision = model.provider !== "deepseek" && params.images.length > 0;
 
   const userText = buildAnalyzeUser({
     direction: params.direction,
