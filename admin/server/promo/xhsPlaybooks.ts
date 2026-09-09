@@ -130,7 +130,7 @@ export function normalizeDraft(raw: unknown, fallbackTopic: string): XhsCopyDraf
       : {};
 
   const title = clip(asString(obj.title) || fallbackTopic, 18);
-  const body = asString(obj.body).slice(0, 480);
+  const body = asString(obj.body || obj.content || obj.copy || obj.text).slice(0, 480);
   const tags = asStringList(obj.tags).slice(0, 6);
   const left = asStringList(coverRaw.left).map((s) => clip(s, 10)).slice(0, 4);
   const right = asStringList(coverRaw.right).map((s) => clip(s, 10)).slice(0, 4);

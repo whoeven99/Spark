@@ -760,7 +760,7 @@ export default function XhsPromo() {
       case "titles":
         return topic.trim().length >= 2 || titles.length > 0 || titlesLoading;
       case "copy":
-        return Boolean(body) || copyLoading;
+        return title.trim().length >= 2 || Boolean(body) || copyLoading;
       case "visuals":
         return copyConfirmed;
       default: {
@@ -830,7 +830,6 @@ export default function XhsPromo() {
       message.success("改完正文再确定，不会出图");
     } catch (e) {
       setError(String(e));
-      goTo("titles");
     } finally {
       setCopyLoading(false);
     }
