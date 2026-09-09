@@ -26,7 +26,9 @@ import {
   CopyOutlined,
   DownloadOutlined,
   EditOutlined,
+  FileTextOutlined,
   HistoryOutlined,
+  LinkOutlined,
   PictureOutlined,
   ReloadOutlined,
   SaveOutlined,
@@ -229,6 +231,23 @@ function defaultCoverProvider(status: XhsPromoStatus): XhsPromoCoverProvider {
   const options = status.cover.options ?? [];
   const seedream = options.find((item) => item.provider === "volc-ark");
   return seedream?.provider ?? (options[0]?.provider as XhsPromoCoverProvider | undefined) ?? "template";
+}
+
+function topicFromAnalyze(next: {
+  suggestedTopic?: string;
+  titleUser?: string;
+  styleSummary?: string;
+}, refTitle: string): string {
+  const direct = next.suggestedTopic?.trim() ?? "";
+  if (direct.length >= 2 && direct !== refTitle.trim()) return direct.slice(0, 40);
+  const fromUser = next.titleUser?.match(/(?:选题|Spark选题)[：:]\s*([^\n]+)/);
+  if (fromUser?.[1]) {
+    const cleaned = fromUser[1].replace(/[\[\]「」【】]/g, "").replace(/已定标题/g, "").trim();
+    if (cleaned.length >= 2) return cleaned.slice(0, 40);
+  }
+  const fromSummary = next.styleSummary?.split(/[。！？\n]/)[0]?.trim() ?? "";
+  if (fromSummary.length >= 2) return fromSummary.slice(0, 40);
+  return "按这篇笔记的气质写 Spark";
 }
 
 function topicKey(
@@ -669,14 +688,9 @@ export default function XhsPromo() {
       setSavedSlots({ title: false, copy: false, cover: false, cards: false });
       setStyleSummary(next.styleSummary);
       setAnalyzeSawImages(next.sawImages);
-      if (next.suggestedTopic?.trim()) {
-        setTopic(next.suggestedTopic.trim());
-      }
-      message.success(
-        next.sawImages
-          ? "已按这篇笔记的文字和图片填入气质"
-          : "已按这篇笔记的文字填入气质，没有看图",
-      );
+      const sparkTopic = topicFromAnalyze(next, refTitle);
+      setTopic(sparkTopic);
+      message.success("已分析这篇笔记，可以生成标题");
     } catch (e) {
       setError(String(e));
     } finally {
@@ -851,9 +865,15 @@ export default function XhsPromo() {
       message.warning("先分析这篇参考笔记，再出标题");
       return;
     }
-    if (topic.trim().length < 2) {
-      message.warning(sourceMode === "note" ? "先写这篇 Spark 发什么" : "请填写选题");
-      return;
+    let nextTopic = topic.trim();
+    if (nextTopic.length < 2) {
+      if (sourceMode === "note" && styleSummary.trim()) {
+        nextTopic = "按这篇笔记的气质写 Spark";
+        setTopic(nextTopic);
+      } else {
+        message.warning(sourceMode === "note" ? "先分析这篇笔记" : "请填写选题");
+        return;
+      }
     }
     goTo("titles");
     setTitlesLoading(true);
@@ -861,7 +881,7 @@ export default function XhsPromo() {
     try {
       const next = await generateXhsPromoTitles({
         direction,
-        topic: topic.trim(),
+        topic: nextTopic,
         notes: generationNotes(),
         copyProvider: copyProvider ?? undefined,
         titleSystemPrompt: titleSystem.trim() || undefined,
@@ -1144,15 +1164,58 @@ export default function XhsPromo() {
         <div ref={panelRef}>
           <Card size="small" title="今天发哪条" style={{ marginBottom: 12, borderRadius: 10 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={14}>
-              <Segmented
-                block
-                options={[
-                  { label: "选选题", value: "topic" },
-                  { label: "参考笔记", value: "note" },
-                ]}
-                value={sourceMode}
-                onChange={(v) => switchSource(v as SourceMode)}
-              />
+              <div>
+                <Text strong style={{ display: "block", marginBottom: 8, fontSize: 15 }}>
+                  先选一条路，只能走其中一个
+                </Text>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {(
+                    [
+                      {
+                        value: "topic" as const,
+                        title: "选选题",
+                        desc: "点预设或自己写，不分析链接",
+                        icon: <FileTextOutlined />,
+                      },
+                      {
+                        value: "note" as const,
+                        title: "参考笔记",
+                        desc: "贴小红书链接，只分析这篇笔记",
+                        icon: <LinkOutlined />,
+                      },
+                    ] as const
+                  ).map((item) => {
+                    const selected = sourceMode === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => switchSource(item.value)}
+                        style={{
+                          textAlign: "left",
+                          padding: "16px 18px",
+                          borderRadius: 10,
+                          border: selected ? "2px solid #1677ff" : "2px solid #d9d9d9",
+                          background: selected ? "#e6f4ff" : "#fff",
+                          cursor: "pointer",
+                          boxShadow: selected ? "0 0 0 3px rgba(22,119,255,0.12)" : "none",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontSize: 18, color: selected ? "#1677ff" : "#8c8c8c" }}>{item.icon}</span>
+                          <span style={{ fontSize: 17, fontWeight: 700, color: selected ? "#1677ff" : "#141414" }}>
+                            {item.title}
+                          </span>
+                          {selected ? <CheckCircleFilled style={{ marginLeft: "auto", color: "#1677ff" }} /> : null}
+                        </div>
+                        <div style={{ fontSize: 13, color: selected ? "#1677ff" : "#8c8c8c", lineHeight: 1.4 }}>
+                          {item.desc}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <Segmented
                 options={DIRECTION_OPTIONS}
                 value={direction}
@@ -1304,7 +1367,7 @@ export default function XhsPromo() {
                     ) : null}
                     {styleSummary ? (
                       <>
-                        <Text type="secondary">这篇 Spark 发什么（可改分析给出的选题）</Text>
+                        <Text type="secondary">这篇 Spark 发什么（分析给出，可改）</Text>
                         <Input
                           value={topic}
                           onChange={(e) => setTopic(e.target.value)}
@@ -1368,7 +1431,7 @@ export default function XhsPromo() {
                   type="primary"
                   size="large"
                   loading={titlesLoading}
-                  disabled={sourceMode === "note" && (!styleSummary || topic.trim().length < 2)}
+                  disabled={sourceMode === "note" && !styleSummary}
                   onClick={onGenerateTitles}
                 >
                   {titles.length > 0 ? "按这个选题换一批标题" : "生成标题"}

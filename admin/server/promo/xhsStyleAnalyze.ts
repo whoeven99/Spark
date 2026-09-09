@@ -200,8 +200,28 @@ function readAnalyzePayload(raw: unknown): Omit<StyleAnalyzeResult, "source" | "
     cardSystem: clipField(obj.cardSystem),
     cardUser: clipField(obj.cardUser),
     styleSummary: clipField(obj.styleSummary).slice(0, 400),
-    suggestedTopic: clipField(obj.suggestedTopic).slice(0, 40),
+    suggestedTopic: clipField(obj.suggestedTopic || obj.topic || obj.sparkTopic).slice(0, 40),
   };
+}
+
+export function resolveSuggestedTopic(
+  prompts: Pick<StyleAnalyzeResult, "suggestedTopic" | "titleUser" | "styleSummary">,
+  refTitle = "",
+): string {
+  const direct = prompts.suggestedTopic.trim();
+  if (direct.length >= 2 && direct !== refTitle.trim()) return direct.slice(0, 40);
+  const fromUser = prompts.titleUser.match(/(?:选题|Spark选题)[：:]\s*([^\n]+)/);
+  if (fromUser?.[1]) {
+    const cleaned = fromUser[1]
+      .replace(/[\[\]「」【】]/g, "")
+      .replace(/已定标题/g, "")
+      .replace(/^Spark\s*/i, "Spark ")
+      .trim();
+    if (cleaned.length >= 2 && cleaned !== refTitle.trim()) return cleaned.slice(0, 40);
+  }
+  const fromSummary = prompts.styleSummary.split(/[。！？\n]/)[0]?.trim() ?? "";
+  if (fromSummary.length >= 2) return fromSummary.slice(0, 40);
+  return "按这篇笔记的气质写 Spark";
 }
 
 function buildAnalyzeSystem(): string {
@@ -270,8 +290,10 @@ export async function analyzeReferenceStyle(params: {
     : userText;
 
   const invoked = await invokeCopyChat(model.provider, buildAnalyzeSystem(), user);
+  const prompts = readAnalyzePayload(parseCopyJson(invoked.content));
+  prompts.suggestedTopic = resolveSuggestedTopic(prompts, params.title);
   return {
-    prompts: readAnalyzePayload(parseCopyJson(invoked.content)),
+    prompts,
     model: invoked.model,
     sawImages: useVision,
   };
