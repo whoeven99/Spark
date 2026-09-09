@@ -7,6 +7,7 @@ import {
   Collapse,
   Drawer,
   Empty,
+  Image as AntdImage,
   Input,
   Modal,
   Row,
@@ -207,6 +208,10 @@ function coverProviderLabel(provider: XhsPromoCoverProvider): string {
       return _never;
     }
   }
+}
+
+function copyProviderSeesImages(provider: XhsPromoCopyProvider | null | undefined): boolean {
+  return provider === "openai" || provider === "volc-ark";
 }
 
 function directionLabel(direction: XhsPromoDirection): string {
@@ -492,6 +497,7 @@ export default function XhsPromo() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [styleSummary, setStyleSummary] = useState("");
+  const [analyzeSawImages, setAnalyzeSawImages] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const shouldScroll = useRef(false);
@@ -608,6 +614,7 @@ export default function XhsPromo() {
       setRefWarning(next.warning ?? "");
       setRefOpened(true);
       setStyleSummary("");
+      setAnalyzeSawImages(false);
       if (next.warning) {
         message.warning(next.warning);
       } else {
@@ -633,7 +640,9 @@ export default function XhsPromo() {
         topic: topic.trim(),
         title: refTitle.trim() || undefined,
         body: refBody.trim() || undefined,
-        images: refImages.map((image) => ({ mimeType: image.mimeType, base64: image.base64 })),
+        images: copyProviderSeesImages(copyProvider)
+          ? refImages.map((image) => ({ mimeType: image.mimeType, base64: image.base64 }))
+          : [],
         copyProvider: copyProvider ?? undefined,
       });
       setTitleSystem(next.titleSystem);
@@ -652,7 +661,8 @@ export default function XhsPromo() {
       setCardDirty(true);
       setSavedSlots({ title: false, copy: false, cover: false, cards: false });
       setStyleSummary(next.styleSummary);
-      message.success(next.sawImages ? "已按文字和图片填入提示词" : "已按文字填入提示词");
+      setAnalyzeSawImages(next.sawImages);
+      message.success(next.sawImages ? "已按文字和图片填入提示词" : "已按文字填入提示词，没有看图");
     } catch (e) {
       setError(String(e));
     } finally {
@@ -748,7 +758,7 @@ export default function XhsPromo() {
       case "topic":
         return true;
       case "titles":
-        return titles.length > 0 || titlesLoading;
+        return topic.trim().length >= 2 || titles.length > 0 || titlesLoading;
       case "copy":
         return Boolean(body) || copyLoading;
       case "visuals":
@@ -785,7 +795,6 @@ export default function XhsPromo() {
       message.success("选出一个标题，或直接改");
     } catch (e) {
       setError(String(e));
-      goTo("topic");
     } finally {
       setTitlesLoading(false);
     }
@@ -1148,39 +1157,52 @@ export default function XhsPromo() {
                         </Button>
                       </Upload>
                       {refImages.length > 0 ? (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {refImages.map((image, index) => (
-                            <div key={`${index}-${image.base64.slice(0, 16)}`} style={{ position: "relative" }}>
-                              <img
-                                src={image.preview}
-                                alt=""
-                                style={{
-                                  width: 88,
-                                  height: 88,
-                                  objectFit: "cover",
-                                  borderRadius: 6,
-                                  display: "block",
-                                }}
-                              />
-                              <Button
-                                size="small"
-                                type="text"
-                                danger
-                                style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22 }}
-                                onClick={() => setRefImages((prev) => prev.filter((_, i) => i !== index))}
-                              >
-                                ×
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
+                        <AntdImage.PreviewGroup items={refImages.map((image) => image.preview)}>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {refImages.map((image, index) => (
+                              <div key={`${index}-${image.base64.slice(0, 16)}`} style={{ position: "relative" }}>
+                                <AntdImage
+                                  src={image.preview}
+                                  alt={`参考图 ${index + 1}`}
+                                  width={88}
+                                  height={88}
+                                  style={{ objectFit: "cover", borderRadius: 6 }}
+                                />
+                                <Button
+                                  size="small"
+                                  type="text"
+                                  danger
+                                  style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, zIndex: 2 }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRefImages((prev) => prev.filter((_, i) => i !== index));
+                                  }}
+                                >
+                                  ×
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </AntdImage.PreviewGroup>
                       ) : (
                         <Text type="secondary">链接没读到图，在这里上传或粘贴。</Text>
                       )}
                       <Button type="primary" loading={analyzeLoading} onClick={() => void onAnalyzeReference()}>
                         分析并填入提示词
                       </Button>
-                      {styleSummary ? <Alert type="info" showIcon message={styleSummary} /> : null}
+                      <Text type="secondary">
+                        {copyProviderSeesImages(copyProvider) && refImages.length > 0
+                          ? `会看标题、正文和 ${refImages.length} 张图，所以会慢一些。`
+                          : "只分析标题和正文，不看图。DeepSeek 看不到图片；要看图请改成 GPT 或豆包。"}
+                      </Text>
+                      {styleSummary ? (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message={analyzeSawImages ? "已按文字和图片填入提示词" : "已按文字填入提示词，没有看图"}
+                          description={styleSummary}
+                        />
+                      ) : null}
                     </>
                   ) : null}
                 </Space>
@@ -1270,7 +1292,10 @@ export default function XhsPromo() {
                     })}
                   </div>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="正在出标题" />
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={titlesLoading ? "正在出标题" : "还没有标题，点「换一批」再试"}
+                  />
                 )}
                 <div>
                   <Text type="secondary">选完还能改几个字</Text>

@@ -88,6 +88,9 @@ function requireCopyModel(provider?: string | null): CopyModelInfo {
   return resolved;
 }
 
+const TITLE_JSON_CONTRACT =
+  "只输出一个 JSON 对象，不要 Markdown、不要解释。字段：titles，必须是 5 个互不相同的标题字符串。";
+
 export async function generateXhsTitles(params: {
   direction: XhsDirection;
   topic: string;
@@ -97,10 +100,17 @@ export async function generateXhsTitles(params: {
   userPrompt?: string | null;
 }): Promise<{ titles: string[]; model: CopyModelInfo }> {
   const resolved = requireCopyModel(params.provider);
-  const system = params.systemPrompt?.trim() || buildTitleSystemPrompt();
-  const user = params.userPrompt?.trim() || buildTitleUserPrompt(params);
+  const system = ensureJsonContract(params.systemPrompt?.trim() || buildTitleSystemPrompt(), TITLE_JSON_CONTRACT);
+  const user = params.userPrompt?.trim()
+    ? [
+        params.userPrompt.trim(),
+        `当前选题：${params.topic}`,
+        `补充：${params.notes.trim() || "（无）"}`,
+        TITLE_JSON_CONTRACT,
+      ].join("\n\n")
+    : buildTitleUserPrompt(params);
   const content = await invokeChat(resolved, system, user);
-  const titles = normalizeTitles(parseJsonObject(content), params.topic).map((item) =>
+  const titles = normalizeTitles(parseTitlesPayload(content), params.topic).map((item) =>
     findBannedHit(item) ? scrubBanned(item) : item,
   );
   return { titles, model: resolved };
@@ -366,13 +376,60 @@ function resolveEndpoint(model: CopyModelInfo): { baseUrl: string; apiKey: strin
   }
 }
 
+function ensureJsonContract(system: string, contract: string): string {
+  if (/只输出一个 JSON|JSON 对象/.test(system)) return system;
+  return `${system.trim()}\n\n${contract}`;
+}
+
+function parseTitlesPayload(text: string): unknown {
+  try {
+    return parseJsonObject(text);
+  } catch {
+    const extracted = extractTitlesFromText(text);
+    if (extracted.length === 0) {
+      throw new Error("文案模型没有返回 JSON");
+    }
+    return { titles: extracted };
+  }
+}
+
+function extractTitlesFromText(text: string): string[] {
+  const titles: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cleaned = line
+      .trim()
+      .replace(/^```(?:json)?/i, "")
+      .replace(/```$/, "")
+      .replace(/^\s*(?:\d+[\.\)、]|[-*•])\s*/, "")
+      .replace(/^["「『]|["」』]$/g, "")
+      .trim();
+    if (cleaned.length < 2 || cleaned.length > 24) continue;
+    if (/^(只输出|字段|方向|选题|补充|JSON|titles)/i.test(cleaned)) continue;
+    titles.push(cleaned);
+  }
+  return [...new Set(titles)].slice(0, 5);
+}
+
 function parseJsonObject(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const payload = (fenced?.[1] ?? text).trim();
-  const start = payload.indexOf("{");
-  const end = payload.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("文案模型没有返回 JSON");
+  const objStart = payload.indexOf("{");
+  const objEnd = payload.lastIndexOf("}");
+  if (objStart >= 0 && objEnd > objStart) {
+    try {
+      return JSON.parse(payload.slice(objStart, objEnd + 1)) as unknown;
+    } catch {
+      // fall through to array / error
+    }
   }
-  return JSON.parse(payload.slice(start, end + 1)) as unknown;
+  const arrStart = payload.indexOf("[");
+  const arrEnd = payload.lastIndexOf("]");
+  if (arrStart >= 0 && arrEnd > arrStart) {
+    try {
+      return JSON.parse(payload.slice(arrStart, arrEnd + 1)) as unknown;
+    } catch {
+      // fall through
+    }
+  }
+  throw new Error("文案模型没有返回 JSON");
 }
