@@ -29,6 +29,7 @@ import { renderContentCards } from "../promo/xhsContentCards.js";
 import {
   generateXhsCover,
   listCoverModels,
+  lockCoverSlotsToTitle,
   previewImagePrompt,
   resolveCoverModel,
 } from "../promo/xhsCoverClient.js";
@@ -143,7 +144,7 @@ xhsPromoRouter.get("/prompts", (req, res) => {
       notes,
       title,
     }),
-    image: previewImagePrompt(direction, title || topicText),
+    image: previewImagePrompt(direction, topicText, undefined, title),
     cardSystem: buildCardVisualSystemPrompt(),
     cardUser: buildCardVisualUserPrompt({
       direction,
@@ -194,7 +195,6 @@ xhsPromoRouter.post("/preview", async (req, res) => {
 
 xhsPromoRouter.post("/analyze", async (req, res) => {
   const direction = readDirection(req.body?.direction);
-  const topic = readTopic(req.body?.topic);
   const title = String(req.body?.title ?? "").trim().slice(0, 80);
   const body = String(req.body?.body ?? "").trim().slice(0, 4000);
   const images = readReferenceImages(req.body?.images);
@@ -209,7 +209,6 @@ xhsPromoRouter.post("/analyze", async (req, res) => {
   try {
     const analyzed = await analyzeReferenceStyle({
       direction,
-      topic,
       title,
       body,
       images,
@@ -401,7 +400,7 @@ xhsPromoRouter.post("/copy", async (req, res) => {
       body: result.draft.body,
       tags: result.draft.tags,
       coverSlots: result.draft.cover,
-      imagePrompt: previewImagePrompt(direction, result.draft.title, result.draft.cover),
+      imagePrompt: previewImagePrompt(direction, topic, result.draft.cover, result.draft.title),
       model: `${result.model.provider}:${result.model.model}`,
     });
   } catch (error) {
@@ -424,10 +423,15 @@ xhsPromoRouter.post("/cover", async (req, res) => {
     return;
   }
   try {
-    const coverSlots = readCoverSlots(req.body?.coverSlots, title);
+    const coverSlots = lockCoverSlotsToTitle(
+      direction,
+      readCoverSlots(req.body?.coverSlots, title),
+      title,
+    );
     const cover = await generateXhsCover({
       direction,
-      topic: title,
+      topic: topic || title,
+      title,
       cover: coverSlots,
       provider: String(req.body?.coverProvider ?? "").trim() || null,
       imagePrompt: clipPrompt(req.body?.imagePrompt),

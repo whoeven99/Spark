@@ -28,6 +28,7 @@ export type StyleAnalyzeResult = {
   cardSystem: string;
   cardUser: string;
   styleSummary: string;
+  suggestedTopic: string;
   source: PublicNoteMeta | null;
   model: string;
   sawImages: boolean;
@@ -199,18 +200,47 @@ function readAnalyzePayload(raw: unknown): Omit<StyleAnalyzeResult, "source" | "
     cardSystem: clipField(obj.cardSystem),
     cardUser: clipField(obj.cardUser),
     styleSummary: clipField(obj.styleSummary).slice(0, 400),
+    suggestedTopic: clipField(obj.suggestedTopic || obj.topic || obj.sparkTopic).slice(0, 40),
   };
+}
+
+function isUsableSparkTopic(text: string, refTitle = ""): boolean {
+  const t = text.trim();
+  if (t.length < 2 || t.length > 22) return false;
+  if (t === refTitle.trim()) return false;
+  if (/学到了|提示词|结构|风格|误区|Markdown|JSON|字段/.test(t)) return false;
+  return true;
+}
+
+export function resolveSuggestedTopic(
+  prompts: Pick<StyleAnalyzeResult, "suggestedTopic" | "titleUser" | "styleSummary">,
+  refTitle = "",
+): string {
+  if (isUsableSparkTopic(prompts.suggestedTopic, refTitle)) {
+    return prompts.suggestedTopic.trim().slice(0, 22);
+  }
+  const fromUser = prompts.titleUser.match(/(?:选题|Spark选题)[：:]\s*([^\n]+)/);
+  if (fromUser?.[1]) {
+    const cleaned = fromUser[1]
+      .replace(/[\[\]「」【】]/g, "")
+      .replace(/已定标题/g, "")
+      .trim();
+    if (isUsableSparkTopic(cleaned, refTitle)) return cleaned.slice(0, 22);
+  }
+  return "按这篇笔记的气质写 Spark";
 }
 
 function buildAnalyzeSystem(): string {
   return [
     "你是小红书风格拆解编辑，给 Spark 运营写可复用提示词。",
     "只输出一个 JSON 对象，不要 Markdown、不要解释。",
-    "字段：titleSystem, titleUser, copySystem, copyUser, imagePrompt, cardSystem, cardUser, styleSummary。",
-    "拆的是风格和结构，不要抄参考笔记的原句、品牌名、具体数字。",
-    "titleSystem / copySystem 写可复用文案规则。titleUser / copyUser 写这次怎么套到 Spark 选题上，用占位写「选题 / 已定标题 / 已定正文」。",
+    "字段：titleSystem, titleUser, copySystem, copyUser, imagePrompt, cardSystem, cardUser, styleSummary, suggestedTopic。",
+    "只拆这篇参考笔记的风格和结构，不要看、不要用任何预设选题。",
+    "不要抄参考笔记的原句、品牌名、具体数字。",
+    "titleSystem / copySystem 写可复用文案规则。titleUser / copyUser 用占位写「选题 / 已定标题 / 已定正文」，内容留给 Spark。",
+    "suggestedTopic：把这篇笔记的写法套到 Spark 后，用一句我们该发的选题。不要抄参考标题，不要写 Sidekick 或 Shopify 官方助手。",
     "cardSystem / cardUser 写滑页画面怎么画：构图、配色、字体气质、模块，不要抄参考图上的字。",
-    "imagePrompt 写竖版 3:4 封面怎么画：构图、配色、字体气质、模块，不要要求出现参考图里的真人脸或小红书水印。",
+    "imagePrompt 只写构图、配色、字体气质、模块，不要写封面上的具体句子，不要编系统名。标题字会在出图时另行锁定。",
     "参考是对比向就用左右栏；功能向用提示词卡；数据向放大数字。没有图就按文字推断。",
     "styleSummary 用两句中文说明学到了什么。",
   ].join("\n");
@@ -218,7 +248,6 @@ function buildAnalyzeSystem(): string {
 
 function buildAnalyzeUser(params: {
   direction: XhsDirection;
-  topic: string;
   title: string;
   body: string;
   imageCount: number;
@@ -226,7 +255,7 @@ function buildAnalyzeUser(params: {
 }): string {
   return [
     `我们要发的方向：${params.direction}`,
-    `我们要发的选题：${params.topic || "（还没定）"}`,
+    "只分析下面这篇参考笔记，不要套任何已有选题。",
     `参考标题：${params.title || "（无）"}`,
     `参考正文：\n${params.body || "（无）"}`,
     params.vision
@@ -238,7 +267,6 @@ function buildAnalyzeUser(params: {
 
 export async function analyzeReferenceStyle(params: {
   direction: XhsDirection;
-  topic: string;
   title: string;
   body: string;
   images: ReferenceImage[];
@@ -252,7 +280,6 @@ export async function analyzeReferenceStyle(params: {
 
   const userText = buildAnalyzeUser({
     direction: params.direction,
-    topic: params.topic,
     title: params.title,
     body: params.body,
     imageCount: params.images.length,
@@ -269,8 +296,10 @@ export async function analyzeReferenceStyle(params: {
     : userText;
 
   const invoked = await invokeCopyChat(model.provider, buildAnalyzeSystem(), user);
+  const prompts = readAnalyzePayload(parseCopyJson(invoked.content));
+  prompts.suggestedTopic = resolveSuggestedTopic(prompts, params.title);
   return {
-    prompts: readAnalyzePayload(parseCopyJson(invoked.content)),
+    prompts,
     model: invoked.model,
     sawImages: useVision,
   };

@@ -91,6 +91,9 @@ function requireCopyModel(provider?: string | null): CopyModelInfo {
 const TITLE_JSON_CONTRACT =
   "只输出一个 JSON 对象，不要 Markdown、不要解释。字段：titles，必须是 5 个互不相同的标题字符串。";
 
+const TITLE_TOPIC_LOCK =
+  "每个标题必须是对当前选题的改写，保留选题里的核心动作或对象。禁止另起炉灶写成品牌口号、BI、晨间、系统名等和选题无关的句子。前 8 字要让人看出还是这条选题。";
+
 export async function generateXhsTitles(params: {
   direction: XhsDirection;
   topic: string;
@@ -100,12 +103,16 @@ export async function generateXhsTitles(params: {
   userPrompt?: string | null;
 }): Promise<{ titles: string[]; model: CopyModelInfo }> {
   const resolved = requireCopyModel(params.provider);
-  const system = ensureJsonContract(params.systemPrompt?.trim() || buildTitleSystemPrompt(), TITLE_JSON_CONTRACT);
+  const system = ensureJsonContract(
+    `${params.systemPrompt?.trim() || buildTitleSystemPrompt()}\n\n${TITLE_TOPIC_LOCK}`,
+    TITLE_JSON_CONTRACT,
+  );
   const user = params.userPrompt?.trim()
     ? [
         params.userPrompt.trim(),
         `当前选题：${params.topic}`,
         `补充：${params.notes.trim() || "（无）"}`,
+        TITLE_TOPIC_LOCK,
         TITLE_JSON_CONTRACT,
       ].join("\n\n")
     : buildTitleUserPrompt(params);
@@ -137,6 +144,7 @@ export async function generateXhsCopy(params: {
         `当前选题：${params.topic}`,
         `已确定标题（不要改写）：${lockedTitle}`,
         `补充：${params.notes.trim() || "（无）"}`,
+        "正文围绕已定标题展开选题。howto/data 的 cover.headline 必须用已定标题。",
         COPY_JSON_CONTRACT,
       ].join("\n\n")
     : buildCopyUserPrompt({
@@ -149,6 +157,9 @@ export async function generateXhsCopy(params: {
     throw new Error("文案模型没有返回正文");
   }
   draft.title = lockedTitle.slice(0, 18);
+  if (params.direction !== "compare") {
+    draft.cover.headline = lockedTitle.slice(0, 18);
+  }
   const bannedSource = [draft.title, draft.body, draft.cover.headline].join("\n");
   if (findBannedHit(bannedSource)) {
     draft.title = scrubBanned(draft.title);
@@ -177,7 +188,9 @@ export async function generateXhsCardSlots(params: {
     ? [
         params.userPrompt.trim(),
         `已确定标题：${title}`,
+        `选题：${params.topic}`,
         `已确定正文：\n${params.body.trim() || "（正文未定）"}`,
+        "第一张必须点题已定标题，后面展开选题。",
         CARD_JSON_CONTRACT,
       ].join("\n\n")
     : buildCardUserPrompt({
@@ -205,6 +218,7 @@ export function buildTitleSystemPrompt(): string {
     "只输出一个 JSON 对象，不要 Markdown、不要解释。",
     "字段：titles，必须是 5 个互不相同的标题字符串。",
     "每个标题 ≤14 字，必须有钩子，禁止只写两个品牌名对打。",
+    TITLE_TOPIC_LOCK,
     "禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
     "没有补充里的真实数字，禁止编造转化率、CTR、百分比。",
   ].join("\n");
@@ -222,6 +236,7 @@ export function buildTitleUserPrompt(params: {
     `选题：${params.topic}`,
     `补充：${notes}`,
     "按这个选题给出 5 个可直接发的标题，不要解释。",
+    TITLE_TOPIC_LOCK,
   ].join("\n\n");
 }
 
@@ -233,8 +248,10 @@ export function buildCopySystemPrompt(): string {
     "语气像真人店主，短句换行。禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
     "body 200-400 字，前 80 字必须是钩子。细节留给滑页，不要写成说明书。",
     "没有补充里的真实数字，禁止编造转化率、CTR、百分比。",
+    "正文必须同时讲清选题和已定标题，不要写成另一套产品介绍。",
+    "howto / data：cover.headline 必须直接用已定标题，不要另写系统名或口号。",
     "对比向：cover.leftTitle 是对照对象，cover.rightTitle 固定写 Spark；leftHook/rightHook 各一个动作，如只动嘴/能改店。禁止第二行只写品牌名。",
-    "cover.headline 写成「只动嘴 vs 能改店」这种成对句，不要「Sidekick只动嘴」后只跟 Spark。tags 3-5 个，不要 #。",
+    "对比向 cover.headline 写成「只动嘴 vs 能改店」这种成对句，不要「Sidekick只动嘴」后只跟 Spark。tags 3-5 个，不要 #。",
   ].join("\n");
 }
 
@@ -251,6 +268,7 @@ export function buildCopyUserPrompt(params: {
     `选题：${params.topic}`,
     `已确定标题（不要改写）：${params.title}`,
     `补充：${notes}`,
+    "正文围绕已定标题展开选题，不要另起卖点。",
     "只写正文、话题和封面槽。不要再给标题，不要写滑页卡片。",
   ].join("\n\n");
 }
@@ -261,6 +279,7 @@ export function buildCardSystemPrompt(): string {
     "只输出一个 JSON 对象，不要 Markdown、不要解释。",
     "字段：cards，2-4 张。",
     "每张 card：headline ≤10 字，lines 2-4 条、每条≤16 字。",
+    "第一张 headline 必须能对上已定标题（压缩到 ≤10 字），后面几张展开选题，不要另写一套产品说明书。",
     "不要把正文原样塞进卡片。禁用：最、第一、100%、神仙、宝藏、绝对、保证。",
     "没有补充里的真实数字，禁止编造转化率、CTR、百分比。",
   ].join("\n");
@@ -282,7 +301,7 @@ export function buildCardUserPrompt(params: {
     `已确定标题：${params.title}`,
     `已确定正文：\n${body}`,
     `补充：${notes}`,
-    "只输出 cards。不要重写标题或正文。",
+    "第一张 headline 点题已定标题，后面展开选题。只输出 cards。不要重写标题或正文。",
   ].join("\n\n");
 }
 
