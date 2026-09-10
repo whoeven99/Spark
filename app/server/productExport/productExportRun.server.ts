@@ -16,6 +16,7 @@ import {
   PRODUCT_EXPORT_MAX_PRODUCTS,
   buildProductExportSkipCsv,
   buildShopifyProductCsv,
+  normalizeProductExportSkipReason,
   type ProductExportFormat,
   type ProductExportSkip,
 } from "../../lib/productExport";
@@ -82,7 +83,7 @@ async function runProductExport(params: EnqueueProductExportParams): Promise<voi
         skips.push({
           productId: product.id,
           productTitle: product.title,
-          reason: mapped.reason,
+          reason: normalizeProductExportSkipReason(mapped.reason),
         });
       }
     }
@@ -108,7 +109,11 @@ async function runProductExport(params: EnqueueProductExportParams): Promise<voi
   const result: ProductExportTaskResult = {
     format: params.format,
     csv,
-    skipCsv: skips.length > 0 ? buildProductExportSkipCsv(skips) : undefined,
+    skipCsv: skips.length > 0
+      ? buildProductExportSkipCsv(skips, (reason) =>
+          t(`productExport.skipReason.${reason}`, { defaultValue: reason }),
+        )
+      : undefined,
     summary: {
       products: exported + skips.length,
       exported,

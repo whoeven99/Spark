@@ -48,8 +48,8 @@ export const productExportSkillDefinition: ToolDefinition = {
   visibility: "public",
   description: "导出已选商品为 Shopify CSV 或 TikTok Catalog Feed CSV。只读，不改店铺。",
   systemPromptExtension: [
-    `用户要导出商品时调用 ${OPEN_PRODUCT_EXPORT_FORM_TOOL_NAME}。`,
-    "一期只导出已选商品，最多 200 个。用户说「导出全部」时也开卡，并说明需要先在工作台选商品。",
+    `用户要导出商品时立刻调用 ${OPEN_PRODUCT_EXPORT_FORM_TOOL_NAME} 打开确认卡，即使还没选商品、或说「导出全部」也要开卡。`,
+    "一期只导出已选商品，最多 200 个；没选时让用户在卡片里选商品，不要只在对话里让对方去工作台选完再来。",
     "TikTok 格式缺图/价/品牌的行会进校验报告，不会假装已完整导出。",
   ].join("\n"),
   createTool: () => [productExportFormTool],

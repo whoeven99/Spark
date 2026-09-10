@@ -88,7 +88,15 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkCollectionEdit,
-    patterns: [/批量.*合集/, /加入合集/, /移出合集/, /bulk\s*collection/i],
+    patterns: [
+      /批量.*合集/,
+      /调整.*合集/,
+      /加入合集/,
+      /移出合集/,
+      /加入或移出/,
+      /手动合集/,
+      /bulk\s*collection/i,
+    ],
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.productDuplicate,
@@ -100,7 +108,15 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.productExport,
-    patterns: [/导出商品/, /导出.*csv/i, /export\s*product/i],
+    patterns: [
+      /导出商品/,
+      /导出已选/,
+      /导出确认卡/,
+      /导出.*csv/i,
+      /export\s*product/i,
+      /export confirmation/i,
+      /export.*csv/i,
+    ],
   },
 ];
 

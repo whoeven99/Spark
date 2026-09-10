@@ -15,6 +15,7 @@ import { downloadCatalogCsv } from "../../../../../app/routes/component/catalogM
 import {
   downloadProductExportCsv,
   productExportDownloadFilename,
+  productExportSkipDownloadFilename,
   readProductExportResult,
 } from "../../../../../app/routes/component/productExport/ProductExportTaskDetailPage";
 
@@ -39,15 +40,23 @@ describe("productExport download helpers", () => {
     vi.unstubAllGlobals();
   });
 
-  it("builds a stable csv filename from the task id", () => {
-    expect(productExportDownloadFilename("abcdef12-3456-7890")).toBe("product-export-abcdef12.csv");
+  it("builds a csv filename from the task id and format", () => {
+    expect(productExportDownloadFilename("abcdef12-3456-7890", "shopify_csv")).toBe(
+      "product-export-shopify-abcdef12.csv",
+    );
+    expect(productExportDownloadFilename("abcdef12-3456-7890", "tiktok_csv")).toBe(
+      "product-export-tiktok-abcdef12.csv",
+    );
+    expect(productExportSkipDownloadFilename("abcdef12-3456-7890")).toBe(
+      "product-export-skip-abcdef12.csv",
+    );
   });
 
   it("downloads immediately when the task snapshot already has csv", async () => {
-    const task = exportTask({ csv: "Handle,Title\nshirt,Shirt" });
+    const task = exportTask({ csv: "Handle,Title\nshirt,Shirt", format: "shopify_csv" });
     await expect(downloadProductExportCsv(task, "")).resolves.toBe(true);
     expect(downloadCatalogCsvMock).toHaveBeenCalledWith(
-      "product-export-abcdef12.csv",
+      "product-export-shopify-abcdef12.csv",
       "Handle,Title\nshirt,Shirt",
     );
   });
@@ -58,7 +67,7 @@ describe("productExport download helpers", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          task: exportTask({ csv: "Handle,Title\nfetched,Fetched" }),
+          task: exportTask({ csv: "Handle,Title\nfetched,Fetched", format: "tiktok_csv" }),
         }),
       }),
     );
@@ -69,7 +78,7 @@ describe("productExport download helpers", () => {
       expect.objectContaining({ cache: "no-store" }),
     );
     expect(downloadCatalogCsvMock).toHaveBeenCalledWith(
-      "product-export-abcdef12.csv",
+      "product-export-tiktok-abcdef12.csv",
       "Handle,Title\nfetched,Fetched",
     );
   });

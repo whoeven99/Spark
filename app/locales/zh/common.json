@@ -693,13 +693,14 @@
     "actionViewApplied": "查看导出结果",
     "reviewTitle": "导出结果 · #{{id}}",
     "reviewTitleShort": "商品导出",
-    "reviewDescription": "下载 CSV。一期只支持已选商品（最多 200 个），不会改店铺数据。",
+    "reviewDescription": "下载 CSV。一期只支持已选商品（最多 200 个），不会改店铺数据。缺必填列的行可下载跳过报告。",
     "noChangeset": "这个任务还没有生成导出文件。",
     "summaryProducts": "商品",
     "summaryExported": "已导出",
     "summarySkipped": "跳过",
     "truncatedWarning": "商品数量超出单次上限（200 个），只导出了前一部分。请收紧范围后重新导出。",
     "downloadChangeset": "下载 CSV",
+    "downloadSkipReport": "下载跳过报告",
     "allExported": "所选商品均已写入 CSV，没有跳过行。",
     "colProduct": "商品",
     "colReason": "跳过原因",
@@ -708,6 +709,13 @@
     "format": {
       "shopify_csv": "Shopify CSV",
       "tiktok_csv": "TikTok Catalog Feed CSV"
+    },
+    "skipReason": {
+      "missing_title": "缺少标题",
+      "missing_link": "缺少商品链接",
+      "missing_image": "缺少图片",
+      "missing_price": "缺少价格",
+      "missing_brand": "缺少品牌"
     }
   },
   "bulkPriceImport": {
@@ -4271,8 +4279,8 @@
       "productExport": {
         "label": "导出商品",
         "prompt": {
-          "shop": "帮我导出已选商品的 CSV，可选 Shopify 格式或 TikTok Catalog Feed。先确认格式，不要改店铺数据。",
-          "selected": "帮我把已选中的商品导出为 CSV，先确认是 Shopify 格式还是 TikTok Feed。"
+          "shop": "打开导出商品确认卡，在卡片里选择 Shopify CSV 或 TikTok Catalog Feed。还没选商品就在卡片里选。不要改店铺数据。",
+          "selected": "打开导出商品确认卡，把已选中的商品导出为 Shopify CSV 或 TikTok Catalog Feed。"
         }
       },
       "bulkProductFieldEdit": {
@@ -4299,8 +4307,8 @@
       "bulkCollectionEdit": {
         "label": "批量调整合集",
         "prompt": {
-          "shop": "帮我把一批商品加入或移出某个手动合集，先确认是加入还是移出、目标合集和商品范围，再给我变更预览，不要直接写回。",
-          "selected": "帮我把已选中的商品加入或移出指定合集，先确认方向和目标合集再给我变更预览，我确认后再写回店铺。"
+          "shop": "打开批量调整合集的确认卡，在卡片里选择加入或移出、目标手动合集和商品。先生成变更预览，不要直接写回。",
+          "selected": "打开批量调整合集的确认卡，把已选中的商品加入或移出指定合集。在卡片里选择方向和目标合集。"
         }
       },
       "bulkSeoEdit": {

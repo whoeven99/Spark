@@ -63,8 +63,8 @@ export const bulkCollectionEditSkillDefinition: ToolDefinition = {
     "把商品批量加入或移出手动合集：先只读试算并生成变更清单，用户验收后才写回。智能合集不能改成员。",
   systemPromptExtension: [
     "批量改合集成员时：",
-    `1) 用户明确要加入或移出合集 → 调用 ${OPEN_BULK_COLLECTION_EDIT_FORM_TOOL_NAME}。`,
-    "2) collectionAction=add 或 remove；collectionId 用合集 GID。智能合集不能用。",
+    `1) 用户要加入/移出/调整合集 → 立刻调用 ${OPEN_BULK_COLLECTION_EDIT_FORM_TOOL_NAME} 打开确认卡。方向和目标合集在卡片里选，不要先问合集 GID，也不要只在对话里追问。`,
+    "2) 若用户已说加入或移出，可预填 collectionAction=add 或 remove；没说就留空。collectionId 仅在用户已给出合集 GID 时填写。智能合集不能用。",
     "3) 你没有写回能力，必须说明还要在卡片里确认两次。",
   ].join("\n"),
   createTool: (context) => [createBulkCollectionEditFormTool(context)],

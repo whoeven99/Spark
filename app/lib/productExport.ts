@@ -140,9 +140,36 @@ export type ProductExportSummary = {
   format: ProductExportFormat;
 };
 
-export function buildProductExportSkipCsv(skips: ProductExportSkip[]): string {
+export const PRODUCT_EXPORT_SKIP_REASON_CODES = [
+  "missing_title",
+  "missing_link",
+  "missing_image",
+  "missing_price",
+  "missing_brand",
+] as const;
+
+const TIKTOK_SKIP_REASON_TO_CODE: Record<string, string> = {
+  "missing title": "missing_title",
+  "missing product link": "missing_link",
+  "missing image": "missing_image",
+  "missing price": "missing_price",
+  "missing brand": "missing_brand",
+};
+
+/** 把 TikTok mapper 英文原因收成稳定码，已是码则原样返回。 */
+export function normalizeProductExportSkipReason(reason: string): string {
+  const trimmed = reason.trim();
+  if (!trimmed) return trimmed;
+  if ((PRODUCT_EXPORT_SKIP_REASON_CODES as readonly string[]).includes(trimmed)) return trimmed;
+  return TIKTOK_SKIP_REASON_TO_CODE[trimmed] ?? trimmed;
+}
+
+export function buildProductExportSkipCsv(
+  skips: ProductExportSkip[],
+  reasonLabel: (reason: string) => string = (reason) => reason,
+): string {
   return toCsv(
     ["product_title", "product_id", "reason"] as const,
-    skips.map((row) => [row.productTitle, row.productId, row.reason]),
+    skips.map((row) => [row.productTitle, row.productId, reasonLabel(row.reason)]),
   );
 }

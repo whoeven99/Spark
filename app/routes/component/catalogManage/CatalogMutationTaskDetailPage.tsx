@@ -37,6 +37,8 @@ type Props<TRow> = {
   changesetCsv?: string;
   rollbackCsv?: string;
   extraCsv?: { filename: string; content: string; label: string };
+  extraCsvs?: Array<{ filename: string; content: string; label: string }>;
+  emptyNotice?: ReactNode;
   canApplyCount: number;
   applyConfirmHintVars?: Record<string, string | number>;
 };
@@ -61,6 +63,8 @@ export function CatalogMutationTaskDetailPage<TRow>({
   changesetCsv,
   rollbackCsv,
   extraCsv,
+  extraCsvs,
+  emptyNotice,
   canApplyCount,
   applyConfirmHintVars,
 }: Props<TRow>) {
@@ -71,6 +75,7 @@ export function CatalogMutationTaskDetailPage<TRow>({
   const [applied, setApplied] = useState<ApplyOutcome | null>(appliedProp ?? null);
   const shortId = task.id.slice(0, 8).toUpperCase();
   const visibleRows = useMemo(() => rows.slice(0, CATALOG_REVIEW_VISIBLE_ROWS), [rows]);
+  const extraDownloads = [...(extraCsv ? [extraCsv] : []), ...(extraCsvs ?? [])];
   const canApply =
     !downloadOnly &&
     Boolean(applyPath) &&
@@ -184,27 +189,35 @@ export function CatalogMutationTaskDetailPage<TRow>({
         </div>
       ) : null}
 
-      <div
-        style={{
-          maxHeight: 380,
-          overflow: "auto",
-          border: `1px solid ${pageColorTokens.borderSubtle}`,
-          borderRadius: 8,
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {headers.map((header) => (
-                <th key={header} style={catalogReviewHeadCellStyle}>
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>{visibleRows.map((row) => <tr key={rowKey(row)}>{renderRow(row)}</tr>)}</tbody>
-        </table>
-      </div>
+      {rows.length === 0 ? (
+        emptyNotice ? (
+          <div style={{ fontSize: 13, color: pageColorTokens.textSecondary, padding: "8px 0" }}>
+            {emptyNotice}
+          </div>
+        ) : null
+      ) : (
+        <div
+          style={{
+            maxHeight: 380,
+            overflow: "auto",
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            borderRadius: 8,
+          }}
+        >
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {headers.map((header) => (
+                  <th key={header} style={catalogReviewHeadCellStyle}>
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>{visibleRows.map((row) => <tr key={rowKey(row)}>{renderRow(row)}</tr>)}</tbody>
+          </table>
+        </div>
+      )}
 
       {rows.length > visibleRows.length ? (
         <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
@@ -245,15 +258,16 @@ export function CatalogMutationTaskDetailPage<TRow>({
               {t(`${i18nPrefix}.downloadRollback`)}
             </button>
           ) : null}
-          {extraCsv ? (
+          {extraDownloads.map((download) => (
             <button
+              key={download.filename}
               type="button"
               style={actionButtonStyle("secondary")}
-              onClick={() => downloadCatalogCsv(extraCsv.filename, extraCsv.content)}
+              onClick={() => downloadCatalogCsv(download.filename, download.content)}
             >
-              {extraCsv.label}
+              {download.label}
             </button>
-          ) : null}
+          ))}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           {canApply && confirmingWrite ? (

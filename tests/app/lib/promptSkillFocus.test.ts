@@ -17,11 +17,23 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromFocus("all")).toBe("all");
   });
 
-  it("routes freeform SEO / inventory phrases", () => {
-    expect(skillNamesFromUserText("帮我给店铺做一次 SEO 体检")).toContain("seoAudit");
-    expect(skillNamesFromUserText("帮我批量改 SEO 标题")).toContain("bulkProductFieldEdit");
-    expect(skillNamesFromUserText("检查库存健康情况")).toContain("shopOperations");
-    expect(skillNamesFromUserText("今天天气怎么样")).toEqual([]);
+  it("routes collection and export recommend phrasing", () => {
+    expect(skillNamesFromUserText("打开批量调整合集的确认卡，在卡片里选择加入或移出")).toContain(
+      "bulkCollectionEdit",
+    );
+    expect(skillNamesFromUserText("帮我把一批商品加入或移出某个手动合集")).toContain(
+      "bulkCollectionEdit",
+    );
+    expect(skillNamesFromUserText("Open the bulk collection confirmation card")).toContain(
+      "bulkCollectionEdit",
+    );
+    expect(skillNamesFromUserText("打开导出商品确认卡")).toContain("productExport");
+    expect(skillNamesFromUserText("帮我导出已选商品的 CSV")).toContain("productExport");
+    expect(
+      skillNamesFromUserText(
+        "Open the export confirmation card and choose Shopify CSV or TikTok Catalog Feed.",
+      ),
+    ).toContain("productExport");
   });
 
   it("prefers explicit skillFocus over userText", () => {

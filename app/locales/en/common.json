@@ -693,13 +693,14 @@
     "actionViewApplied": "View export result",
     "reviewTitle": "Export result · #{{id}}",
     "reviewTitleShort": "Product export",
-    "reviewDescription": "Download the CSV. Phase 1 only exports selected products (up to 200) and never writes to the store.",
+    "reviewDescription": "Download the CSV. Phase 1 only exports selected products (up to 200) and never writes to the store. Rows missing required columns are in the skip report.",
     "noChangeset": "This task has not produced an export file yet.",
     "summaryProducts": "Products",
     "summaryExported": "Exported",
     "summarySkipped": "Skipped",
     "truncatedWarning": "This run hit the 200-product limit, so only the first batch was exported. Narrow the selection and export again.",
     "downloadChangeset": "Download CSV",
+    "downloadSkipReport": "Download skip report",
     "allExported": "All selected products were written to the CSV. Nothing was skipped.",
     "colProduct": "Product",
     "colReason": "Skip reason",
@@ -708,6 +709,13 @@
     "format": {
       "shopify_csv": "Shopify CSV",
       "tiktok_csv": "TikTok Catalog Feed CSV"
+    },
+    "skipReason": {
+      "missing_title": "Missing title",
+      "missing_link": "Missing product link",
+      "missing_image": "Missing image",
+      "missing_price": "Missing price",
+      "missing_brand": "Missing brand"
     }
   },
   "bulkPriceImport": {
@@ -4271,8 +4279,8 @@
       "productExport": {
         "label": "Export products",
         "prompt": {
-          "shop": "Export the selected products as CSV (Shopify or TikTok Catalog Feed). Confirm the format first — do not change store data.",
-          "selected": "Export the selected products as CSV. Confirm whether you want Shopify format or a TikTok Feed first."
+          "shop": "Open the export confirmation card and choose Shopify CSV or TikTok Catalog Feed. If no products are selected yet, pick them on the card. Do not change store data.",
+          "selected": "Open the export confirmation card and export the selected products as Shopify CSV or TikTok Catalog Feed."
         }
       },
       "bulkProductFieldEdit": {
@@ -4299,8 +4307,8 @@
       "bulkCollectionEdit": {
         "label": "Bulk collection update",
         "prompt": {
-          "shop": "Help me add a batch of products to a manual collection or remove them from one: confirm the direction, the target collection and the product range first, then show me a change preview — do not write to the store yet.",
-          "selected": "Add the selected products to a collection or remove them from one: confirm the direction and the target collection with me, show a change preview first, and only write back after I confirm."
+          "shop": "Open the bulk collection confirmation card. Choose add or remove, the manual collection, and the products on the card. Show a change preview first — do not write to the store yet.",
+          "selected": "Open the bulk collection confirmation card and add or remove the selected products. Choose the direction and target collection on the card."
         }
       },
       "bulkSeoEdit": {

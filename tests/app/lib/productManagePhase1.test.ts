@@ -5,7 +5,7 @@ import {
   PRODUCT_DUPLICATE_DEFAULT_SUFFIX,
 } from "../../../app/lib/productDuplicate";
 import { computeProductArchive } from "../../../app/lib/bulkArchive";
-import { buildShopifyProductCsv, parseProductExportRule } from "../../../app/lib/productExport";
+import { buildShopifyProductCsv, normalizeProductExportSkipReason, parseProductExportRule, buildProductExportSkipCsv } from "../../../app/lib/productExport";
 
 describe("productDuplicate", () => {
   it("默认草稿、带图、标题加 Copy", () => {
@@ -100,5 +100,20 @@ describe("productExport", () => {
     expect(lines[1]).toContain("背包");
     expect(lines[2]).not.toContain("背包");
     expect(lines[2]).toContain("B");
+  });
+
+  it("maps TikTok English skip reasons to stable codes", () => {
+    expect(normalizeProductExportSkipReason("missing title")).toBe("missing_title");
+    expect(normalizeProductExportSkipReason("missing product link")).toBe("missing_link");
+    expect(normalizeProductExportSkipReason("missing_title")).toBe("missing_title");
+  });
+
+  it("builds skip csv with localized reason labels", () => {
+    const csv = buildProductExportSkipCsv(
+      [{ productId: "gid://shopify/Product/1", productTitle: "背包", reason: "missing_title" }],
+      (reason) => (reason === "missing_title" ? "缺少标题" : reason),
+    );
+    expect(csv).toContain("缺少标题");
+    expect(csv).not.toContain("missing_title");
   });
 });

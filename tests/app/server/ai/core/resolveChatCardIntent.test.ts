@@ -4,9 +4,14 @@ import {
   buildChatCardPayloadFromIntent,
   hasAnyChatCardInUiPayloads,
   reconcileReplyWithChatCards,
+  resolveDeterministicTaskProposalForTurn,
   tryDeterministicTaskProposalFromSkills,
 } from "../../../../../app/server/ai/core/resolveChatCardIntent.server";
 import { BULK_STATUS_EDIT_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
+import {
+  BULK_COLLECTION_EDIT_SKILL_ID,
+  PRODUCT_EXPORT_SKILL_ID,
+} from "../../../../../app/lib/productManageTaskProposals";
 
 describe("buildChatCardPayloadFromIntent", () => {
   it("injects image generation card for 图片生成 intent", () => {
@@ -130,6 +135,43 @@ describe("tryDeterministicTaskProposalFromSkills", () => {
 
   it("returns null when no deterministic skill matched", () => {
     expect(tryDeterministicTaskProposalFromSkills(["shopOperations"], "今日销售")).toBeNull();
+  });
+});
+
+describe("resolveDeterministicTaskProposalForTurn", () => {
+  it("opens a collection card from recommend phrasing without claiming", () => {
+    const proposal = resolveDeterministicTaskProposalForTurn({
+      lastUserText: "打开批量调整合集的确认卡，在卡片里选择加入或移出、目标手动合集和商品。",
+      claimed: false,
+    });
+    expect(proposal?.skillId).toBe(BULK_COLLECTION_EDIT_SKILL_ID);
+  });
+
+  it("opens an export card from recommend phrasing without claiming", () => {
+    const proposal = resolveDeterministicTaskProposalForTurn({
+      lastUserText: "打开导出商品确认卡，在卡片里选择 Shopify CSV",
+      claimed: false,
+    });
+    expect(proposal?.skillId).toBe(PRODUCT_EXPORT_SKILL_ID);
+  });
+
+  it("does not use sticky skillFocus on an unrelated follow-up", () => {
+    expect(
+      resolveDeterministicTaskProposalForTurn({
+        skillFocus: "bulkCollectionEdit",
+        lastUserText: "今天天气怎么样",
+        claimed: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("uses skillFocus when the assistant claimed a card", () => {
+    const proposal = resolveDeterministicTaskProposalForTurn({
+      skillFocus: "bulkCollectionEdit",
+      lastUserText: "今天天气怎么样",
+      claimed: true,
+    });
+    expect(proposal?.skillId).toBe(BULK_COLLECTION_EDIT_SKILL_ID);
   });
 });
 

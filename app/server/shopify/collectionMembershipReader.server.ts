@@ -6,12 +6,16 @@ import type { BulkCollectionEditProductInput } from "../../lib/bulkCollectionEdi
 import { chunkItems, fetchProductConnectionByIds, toNumericProductId } from "./productIdQuery.server";
 
 const MANUAL_COLLECTIONS_QUERY = `#graphql
-  query BulkCollectionEditList($first: Int!) {
-    collections(first: $first, query: "collection_type:custom", sortKey: TITLE) {
+  query BulkCollectionEditList($first: Int!, $after: String) {
+    collections(first: $first, query: "collection_type:custom", sortKey: TITLE, after: $after) {
+      pageInfo { hasNextPage endCursor }
       nodes { id title }
     }
   }
 `;
+
+const MANUAL_COLLECTIONS_PAGE_SIZE = 100;
+const MANUAL_COLLECTIONS_MAX = 500;
 
 const COLLECTION_QUERY = `#graphql
   query BulkCollectionEditCollection($id: ID!) {
@@ -60,23 +64,41 @@ type CollectionNode = {
 
 export async function listManualCollections(
   admin: ShopifyAdminGraphqlClient,
-  first = 100,
+  first = MANUAL_COLLECTIONS_PAGE_SIZE,
 ): Promise<ManualCollectionOption[]> {
-  const response = await admin.graphql(MANUAL_COLLECTIONS_QUERY, { variables: { first } });
-  if (!response.ok) throw new Error(`Shopify collections query failed: HTTP ${response.status}`);
-  const json = (await response.json()) as {
-    data?: { collections?: { nodes?: Array<{ id?: string; title?: string }> } };
-    errors?: Array<{ message: string }>;
-  };
-  if (json.errors?.length) {
-    throw new Error(json.errors.map((error) => error.message).join("; "));
+  const out: ManualCollectionOption[] = [];
+  let after: string | null = null;
+  while (out.length < MANUAL_COLLECTIONS_MAX) {
+    const pageSize = Math.min(first, MANUAL_COLLECTIONS_MAX - out.length);
+    const response = await admin.graphql(MANUAL_COLLECTIONS_QUERY, {
+      variables: { first: pageSize, after },
+    });
+    if (!response.ok) throw new Error(`Shopify collections query failed: HTTP ${response.status}`);
+    const json = (await response.json()) as {
+      data?: {
+        collections?: {
+          pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+          nodes?: Array<{ id?: string; title?: string }>;
+        };
+      };
+      errors?: Array<{ message: string }>;
+    };
+    if (json.errors?.length) {
+      throw new Error(json.errors.map((error) => error.message).join("; "));
+    }
+    for (const node of json.data?.collections?.nodes ?? []) {
+      const value = node.id?.trim() ?? "";
+      if (!value) continue;
+      out.push({
+        value,
+        label: node.title?.trim() || value,
+      });
+    }
+    const pageInfo = json.data?.collections?.pageInfo;
+    if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
+    after = pageInfo.endCursor;
   }
-  return (json.data?.collections?.nodes ?? [])
-    .map((node) => ({
-      value: node.id?.trim() ?? "",
-      label: node.title?.trim() || node.id?.trim() || "",
-    }))
-    .filter((option) => option.value !== "");
+  return out;
 }
 
 export async function fetchCollectionSnapshot(

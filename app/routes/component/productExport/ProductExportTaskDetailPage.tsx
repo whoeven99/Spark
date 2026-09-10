@@ -3,8 +3,13 @@ import { pageColorTokens } from "../../page/pageUiStyles";
 import { CatalogMutationTaskDetailPage } from "../catalogManage/CatalogMutationTaskDetailPage";
 import { catalogReviewCellStyle, downloadCatalogCsv } from "../catalogManage/catalogReviewUi";
 import { AI_TASK_FETCH_INIT } from "../../../lib/aiTaskStatusSync";
-import type { AITaskItem, AITaskStatus, ProductExportTaskResult } from "../../../lib/aiTaskTypes";
-import type { ProductExportSkip } from "../../../lib/productExport";
+import type { AITaskItem, AITaskStatus, ProductExportTaskConfig, ProductExportTaskResult } from "../../../lib/aiTaskTypes";
+import {
+  buildProductExportSkipCsv,
+  normalizeProductExportSkipReason,
+  type ProductExportFormat,
+  type ProductExportSkip,
+} from "../../../lib/productExport";
 
 type Props = {
   task: AITaskItem;
@@ -24,8 +29,24 @@ export function readProductExportResult(task: AITaskItem): ProductExportTaskResu
   return raw as unknown as ProductExportTaskResult;
 }
 
-export function productExportDownloadFilename(taskId: string): string {
-  return `product-export-${taskId.slice(0, 8)}.csv`;
+function formatFromTask(task: AITaskItem): ProductExportFormat | undefined {
+  const fromResult = readProductExportResult(task)?.format;
+  if (fromResult === "shopify_csv" || fromResult === "tiktok_csv") return fromResult;
+  const fromConfig = (task.config as Partial<ProductExportTaskConfig>).format;
+  if (fromConfig === "shopify_csv" || fromConfig === "tiktok_csv") return fromConfig;
+  return undefined;
+}
+
+export function productExportDownloadFilename(
+  taskId: string,
+  format?: ProductExportFormat | string | null,
+): string {
+  const suffix = format === "tiktok_csv" ? "tiktok" : format === "shopify_csv" ? "shopify" : "export";
+  return `product-export-${suffix}-${taskId.slice(0, 8)}.csv`;
+}
+
+export function productExportSkipDownloadFilename(taskId: string): string {
+  return `product-export-skip-${taskId.slice(0, 8)}.csv`;
 }
 
 /** 进度卡一键下载：列表快照已有 csv 则直接下，否则拉单条任务。 */
@@ -34,7 +55,7 @@ export async function downloadProductExportCsv(
   locationSearch: string,
 ): Promise<boolean> {
   try {
-    const filename = productExportDownloadFilename(task.id);
+    const filename = productExportDownloadFilename(task.id, formatFromTask(task));
     const existing = readProductExportResult(task);
     if (existing?.csv) {
       downloadCatalogCsv(filename, existing.csv);
@@ -51,7 +72,10 @@ export async function downloadProductExportCsv(
     const body = (await response.json()) as { task?: AITaskItem };
     const fetched = body.task ? readProductExportResult(body.task) : null;
     if (!fetched?.csv) return false;
-    downloadCatalogCsv(filename, fetched.csv);
+    downloadCatalogCsv(
+      productExportDownloadFilename(body.task?.id ?? task.id, fetched.format ?? formatFromTask(task)),
+      fetched.csv,
+    );
     return true;
   } catch {
     return false;
@@ -69,12 +93,17 @@ export function ProductExportTaskDetailPage(props: Props) {
     );
   }
   const skips = result.skips ?? [];
+  const skipReasonLabel = (reason: string) =>
+    t(`productExport.skipReason.${normalizeProductExportSkipReason(reason)}`, {
+      defaultValue: reason,
+    });
+  const skipCsv = skips.length > 0 ? buildProductExportSkipCsv(skips, skipReasonLabel) : undefined;
   return (
     <CatalogMutationTaskDetailPage
       {...props}
       i18nPrefix="productExport"
       downloadOnly
-      rows={skips.length > 0 ? skips : [{ productId: "_ok", productTitle: "", reason: "" }]}
+      rows={skips}
       truncated={result.truncated}
       summaryChips={[
         { label: t("productExport.summaryProducts"), value: result.summary.products },
@@ -86,27 +115,31 @@ export function ProductExportTaskDetailPage(props: Props) {
           {t(`productExport.format.${result.format}`)}
         </div>
       }
-      headers={
-        skips.length > 0
-          ? [t("productExport.colProduct"), t("productExport.colReason")]
-          : [t("productExport.colStatus")]
-      }
+      emptyNotice={t("productExport.allExported")}
+      headers={[t("productExport.colProduct"), t("productExport.colReason")]}
       rowKey={(row) => row.productId}
-      renderRow={(row: ProductExportSkip) =>
-        skips.length > 0 ? (
-          <>
-            <td style={{ ...catalogReviewCellStyle, fontWeight: 600 }}>{row.productTitle}</td>
-            <td style={catalogReviewCellStyle}>{row.reason}</td>
-          </>
-        ) : (
-          <td style={catalogReviewCellStyle}>{t("productExport.allExported")}</td>
-        )
-      }
+      renderRow={(row: ProductExportSkip) => (
+        <>
+          <td style={{ ...catalogReviewCellStyle, fontWeight: 600 }}>{row.productTitle}</td>
+          <td style={catalogReviewCellStyle}>{skipReasonLabel(row.reason)}</td>
+        </>
+      )}
       extraCsv={{
-        filename: productExportDownloadFilename(props.task.id),
+        filename: productExportDownloadFilename(props.task.id, result.format),
         content: result.csv,
         label: t("productExport.downloadChangeset"),
       }}
+      extraCsvs={
+        skipCsv
+          ? [
+              {
+                filename: productExportSkipDownloadFilename(props.task.id),
+                content: skipCsv,
+                label: t("productExport.downloadSkipReport"),
+              },
+            ]
+          : undefined
+      }
       changesetCsv={undefined}
       canApplyCount={0}
     />
