@@ -4,6 +4,7 @@ import {
   buildBulkCollectionEditSummary,
   computeCollectionMembershipChange,
   parseBulkCollectionEditRule,
+  pickWritableCollectionSource,
 } from "../../../app/lib/bulkCollectionEdit";
 
 describe("parseBulkCollectionEditRule", () => {
@@ -64,5 +65,41 @@ describe("computeCollectionMembershipChange", () => {
       added: 1,
       removed: 0,
     });
+  });
+});
+
+describe("pickWritableCollectionSource", () => {
+  it("优先选非共享的 PRODUCTS 条件来源", () => {
+    expect(
+      pickWritableCollectionSource([
+        { id: "gid://shopify/CollectionSubCollectionsSource/1", typename: "CollectionSubCollectionsSource" },
+        {
+          id: "gid://shopify/CollectionConditionsSource/share",
+          typename: "CollectionConditionsSource",
+          targetType: "PRODUCTS",
+          shareable: true,
+        },
+        {
+          id: "gid://shopify/CollectionConditionsSource/variants",
+          typename: "CollectionConditionsSource",
+          targetType: "VARIANTS",
+          shareable: false,
+        },
+        {
+          id: "gid://shopify/CollectionConditionsSource/ok",
+          typename: "CollectionConditionsSource",
+          targetType: "PRODUCTS",
+          shareable: false,
+        },
+      ]),
+    ).toBe("gid://shopify/CollectionConditionsSource/ok");
+  });
+
+  it("只有子合集来源时不可写", () => {
+    expect(
+      pickWritableCollectionSource([
+        { id: "gid://shopify/CollectionSubCollectionsSource/1", typename: "CollectionSubCollectionsSource" },
+      ]),
+    ).toBeNull();
   });
 });

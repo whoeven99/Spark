@@ -453,7 +453,7 @@
     "logReadyForReview": "Changeset ready: {{changed}} products will change, {{skipped}} skipped",
     "dryRunFailed": "Could not build the changeset. Please try again.",
     "collectionNotFound": "This collection no longer exists. Please pick another one.",
-    "ruleDrivenCollection": "“{{collection}}” is a smart collection — its members are decided by conditions, so products cannot be added or removed manually. Use a manual collection instead, or edit the conditions in the Shopify admin.",
+    "notWritableCollection": "“{{collection}}” gets its members from other collections or a shared app source, so products cannot be added or removed here. Pick another collection, or edit the sources in the Shopify admin.",
     "noProductsFound": "None of the selected products could be read",
     "cardTitle": "Task: bulk update collection membership",
     "metaRule": "Action: {{rule}}",
@@ -4307,7 +4307,7 @@
       "bulkCollectionEdit": {
         "label": "Bulk collection update",
         "prompt": {
-          "shop": "Open the bulk collection confirmation card. Choose add or remove, the manual collection, and the products on the card. Show a change preview first — do not write to the store yet.",
+          "shop": "Open the bulk collection confirmation card. Choose add or remove, the target collection, and the products on the card. Show a change preview first — do not write to the store yet.",
           "selected": "Open the bulk collection confirmation card and add or remove the selected products. Choose the direction and target collection on the card."
         }
       },

@@ -18,7 +18,7 @@ export function createBulkCollectionEditFormTool(context: AgentContext): Dynamic
   return new DynamicStructuredTool({
     name: OPEN_BULK_COLLECTION_EDIT_FORM_TOOL_NAME,
     description:
-      "打开「批量调整商品所属合集」确认卡片。只支持手动合集；智能合集不能加减成员。方向和目标合集在卡片里选，不必先知道合集 GID。调用后不会修改任何商品。",
+      "打开「批量调整商品所属合集」确认卡片。方向和目标合集在卡片里选，不必先知道合集 GID。调用后不会修改任何商品。",
     schema: z.object({
       products: z
         .array(

@@ -1,6 +1,6 @@
 /**
- * 批量加入 / 移出手动合集。纯函数：规则 → changeset，不含 Shopify IO。
- * 智能合集在 dry-run 读侧直接失败，不会走到这里的逐行计算。
+ * 批量加入 / 移出合集。纯函数：规则 → changeset，不含 Shopify IO。
+ * 没有可写 CollectionConditionsSource 的合集在 dry-run 读侧直接失败。
  */
 import { toCsv } from "./csv";
 
@@ -48,6 +48,32 @@ export type BulkCollectionEditApplyOutcome = {
   pendingJob?: boolean;
   errors: Array<{ productId: string; message: string }>;
 };
+
+export type CollectionSourceSnapshot = {
+  id: string;
+  typename?: string | null;
+  targetType?: string | null;
+  shareable?: boolean | null;
+};
+
+/**
+ * 选一个本应用能改成员的条件来源：跳过子合集来源和别人的 shareable source，
+ * 优先 PRODUCTS，这样加减商品不必带 variantId。
+ */
+export function pickWritableCollectionSource(
+  sources: CollectionSourceSnapshot[],
+): string | null {
+  const writable = sources.filter((source) => {
+    if (!source.id.trim()) return false;
+    if (source.shareable === true) return false;
+    if (source.typename && source.typename !== "CollectionConditionsSource") return false;
+    return true;
+  });
+  const productScoped = writable.find(
+    (source) => !source.targetType || source.targetType === "PRODUCTS",
+  );
+  return productScoped?.id ?? writable[0]?.id ?? null;
+}
 
 export class BulkCollectionEditRuleError extends Error {
   readonly code: string;

@@ -453,7 +453,7 @@
     "logReadyForReview": "变更清单已就绪：{{changed}} 个商品将调整，{{skipped}} 个跳过",
     "dryRunFailed": "生成变更清单失败，请稍后重试",
     "collectionNotFound": "找不到这个合集，可能已被删除，请重新选择",
-    "ruleDrivenCollection": "「{{collection}}」是智能合集，成员由条件自动决定，不能手动加减商品。请改用手动合集，或去 Shopify 后台调整合集条件。",
+    "notWritableCollection": "「{{collection}}」的成员来自其他合集或应用共享规则，不能在这里手动加减商品。请换一个合集，或去 Shopify 后台调整来源。",
     "noProductsFound": "没有读到所选商品",
     "cardTitle": "任务目标：批量调整商品所属合集",
     "metaRule": "操作：{{rule}}",
@@ -4307,7 +4307,7 @@
       "bulkCollectionEdit": {
         "label": "批量调整合集",
         "prompt": {
-          "shop": "打开批量调整合集的确认卡，在卡片里选择加入或移出、目标手动合集和商品。先生成变更预览，不要直接写回。",
+          "shop": "打开批量调整合集的确认卡，在卡片里选择加入或移出、目标合集和商品。先生成变更预览，不要直接写回。",
           "selected": "打开批量调整合集的确认卡，把已选中的商品加入或移出指定合集。在卡片里选择方向和目标合集。"
         }
       },

@@ -4,7 +4,7 @@
 
 改动本族任何文件前先读本文件。全局边界（哪些 `POST /api/bulk-*` 是唯一写回入口、对话内审核白名单、`TaskProposalField` 远端资源字段约定）仍以根 `AGENTS.md` 第 3、7 节为准。
 
-当前在线能力：批量调价 / 打标 / 上下架，商品管理一期（Vendor / 类型 / SEO 字段、手动合集进出、复制、归档、已选导出），以及只读的站内 SEO 体检。Metafield 与价目表 / 成本价 / 库存三个表格导入已删除，不要再加回入口或写回路由。
+当前在线能力：批量调价 / 打标 / 上下架，商品管理一期（Vendor / 类型 / SEO 字段、合集进出、复制、归档、已选导出），以及只读的站内 SEO 体检。Metafield 与价目表 / 成本价 / 库存三个表格导入已删除，不要再加回入口或写回路由。
 
 ## 0. 共享架构
 
@@ -55,9 +55,9 @@
 
 与调价同构：纯算 `app/lib/bulkProductFieldEdit.ts`（`set`/`clear`，SEO 超 `seoDisplayWidth` 跳过）、只读 `app/server/shopify/productFieldReader.server.ts`、试算 `app/server/bulkProductFieldEdit/bulkProductFieldEditDryRun.server.ts`、写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 vendor / productType / seo 的调用处，并发 2）。SEO 只传变化的那一侧（`seo.title` 或 `seo.description`）。Skill 只暴露 `list_product_fields` 与 `open_bulk_product_field_edit_form`。不要用这个能力改 handle。
 
-### 1.6 批量加入 / 移出手动合集
+### 1.6 批量加入 / 移出合集
 
-纯算 `app/lib/bulkCollectionEdit.ts`、只读 `app/server/shopify/collectionMembershipReader.server.ts`、试算 `app/server/bulkCollectionEdit/bulkCollectionEditDryRun.server.ts`、写回 `app/server/bulkCollectionEdit/bulkCollectionEditApply.server.ts`（唯一 `collectionAddProducts` / `collectionRemoveProducts` 调用处，每批 ≤50）。智能合集在 dry-run 整单失败，不要静默跳过。移出可能返回 Shopify 异步 job，结果里带 `pendingJob`。Skill 只暴露只读合集列表与开卡。
+纯算 `app/lib/bulkCollectionEdit.ts`、只读 `app/server/shopify/collectionMembershipReader.server.ts`、试算 `app/server/bulkCollectionEdit/bulkCollectionEditDryRun.server.ts`、写回 `app/server/bulkCollectionEdit/bulkCollectionEditApply.server.ts`（唯一 `collectionUpdate` 改 source selections 的调用处，每批 ≤50）。2026-07 起 `collection_type` 已删除，列表拉全部合集；加入走 `inclusion.selectionsToAdd` 并清 exclusion，移出走 `inclusion.selectionsToRemove` 并加 exclusion，这样条件命中的商品也能移出。没有可写 `CollectionConditionsSource`（仅子合集或他人 shareable source）时 dry-run 整单失败，不要静默跳过。`collectionUpdate` 可能返回异步 job，结果里带 `pendingJob`。Skill 只暴露只读合集列表与开卡。
 
 ### 1.7 复制商品
 

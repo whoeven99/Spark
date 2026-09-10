@@ -77,10 +77,10 @@ async function runBulkCollectionEditDryRun(
     });
     return;
   }
-  if (collection.smart) {
+  if (!collection.sourceId) {
     await failTask({
       taskId: params.taskId,
-      errorMsg: buildAITaskMessage("bulkCollectionEdit.ruleDrivenCollection", t("bulkCollectionEdit.ruleDrivenCollection", {
+      errorMsg: buildAITaskMessage("bulkCollectionEdit.notWritableCollection", t("bulkCollectionEdit.notWritableCollection", {
         collection: collection.title,
       }), { collection: collection.title }),
       startedAt,

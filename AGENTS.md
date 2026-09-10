@@ -110,7 +110,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `POST /api/bulk-tag-edit`：批量打标写回入口，是全仓库**唯一**会改 Shopify 商品标签的地方；门禁与调价一致（`confirm: true` + `pending_review`）。
 - `POST /api/bulk-status-edit`：批量上下架写回入口，是全仓库**唯一**会改商品 `status` 为 ACTIVE/DRAFT 的地方；门禁同上。只写 `ACTIVE` / `DRAFT`，不碰销售渠道发布。
 - `POST /api/bulk-product-field-edit`：批量改 Vendor / 商品类型 / SEO 标题或描述的唯一写回入口；门禁同上。不改 handle。
-- `POST /api/bulk-collection-edit`：批量加入/移出手动合集的唯一写回入口；门禁同上。智能合集在 dry-run 失败。
+- `POST /api/bulk-collection-edit`：批量加入/移出合集的唯一写回入口；门禁同上。写回走 `collectionUpdate` 的 source selections；仅含子合集/共享来源的合集在 dry-run 失败。
 - `POST /api/product-duplicate`：复制商品的唯一写回入口（`productDuplicate`）；门禁同上。上限 50。
 - `POST /api/bulk-archive`：归档商品的唯一写回入口（只写 `ARCHIVED`）；与上下架分开。门禁同上。
 - `/api/support`：客服会话入口。

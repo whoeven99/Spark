@@ -1,28 +1,40 @@
 /**
- * 手动合集列表、合集详情、商品是否已在合集内。只读。
+ * 合集列表、合集详情、商品是否已在合集内。只读。
+ * 2026-07 起不再按 collection_type 过滤；可写成员靠 CollectionConditionsSource。
  */
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
-import type { BulkCollectionEditProductInput } from "../../lib/bulkCollectionEdit";
+import {
+  pickWritableCollectionSource,
+  type BulkCollectionEditProductInput,
+  type CollectionSourceSnapshot,
+} from "../../lib/bulkCollectionEdit";
 import { chunkItems, fetchProductConnectionByIds, toNumericProductId } from "./productIdQuery.server";
 
-const MANUAL_COLLECTIONS_QUERY = `#graphql
+const COLLECTIONS_QUERY = `#graphql
   query BulkCollectionEditList($first: Int!, $after: String) {
-    collections(first: $first, query: "collection_type:custom", sortKey: TITLE, after: $after) {
+    collections(first: $first, sortKey: TITLE, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes { id title }
     }
   }
 `;
 
-const MANUAL_COLLECTIONS_PAGE_SIZE = 100;
-const MANUAL_COLLECTIONS_MAX = 500;
+const COLLECTIONS_PAGE_SIZE = 100;
+const COLLECTIONS_MAX = 500;
 
 const COLLECTION_QUERY = `#graphql
   query BulkCollectionEditCollection($id: ID!) {
     collection(id: $id) {
       id
       title
-      ruleSet { appliedDisjunctively }
+      sources {
+        __typename
+        id
+        ... on CollectionConditionsSource {
+          targetType
+          shareable
+        }
+      }
     }
   }
 `;
@@ -53,24 +65,46 @@ export type ManualCollectionOption = { value: string; label: string };
 export type ShopifyCollectionSnapshot = {
   id: string;
   title: string;
-  smart: boolean;
+  sourceId: string | null;
+};
+
+type SourceNode = {
+  __typename?: string | null;
+  id?: string | null;
+  targetType?: string | null;
+  shareable?: boolean | null;
 };
 
 type CollectionNode = {
   id?: string | null;
   title?: string | null;
-  ruleSet?: { appliedDisjunctively?: boolean | null } | null;
+  sources?: SourceNode[] | null;
 };
+
+function mapSources(nodes: SourceNode[] | null | undefined): CollectionSourceSnapshot[] {
+  const out: CollectionSourceSnapshot[] = [];
+  for (const node of nodes ?? []) {
+    const id = node.id?.trim() ?? "";
+    if (!id) continue;
+    out.push({
+      id,
+      typename: node.__typename ?? null,
+      targetType: node.targetType ?? null,
+      shareable: node.shareable ?? null,
+    });
+  }
+  return out;
+}
 
 export async function listManualCollections(
   admin: ShopifyAdminGraphqlClient,
-  first = MANUAL_COLLECTIONS_PAGE_SIZE,
+  first = COLLECTIONS_PAGE_SIZE,
 ): Promise<ManualCollectionOption[]> {
   const out: ManualCollectionOption[] = [];
   let after: string | null = null;
-  while (out.length < MANUAL_COLLECTIONS_MAX) {
-    const pageSize = Math.min(first, MANUAL_COLLECTIONS_MAX - out.length);
-    const response = await admin.graphql(MANUAL_COLLECTIONS_QUERY, {
+  while (out.length < COLLECTIONS_MAX) {
+    const pageSize = Math.min(first, COLLECTIONS_MAX - out.length);
+    const response = await admin.graphql(COLLECTIONS_QUERY, {
       variables: { first: pageSize, after },
     });
     if (!response.ok) throw new Error(`Shopify collections query failed: HTTP ${response.status}`);
@@ -119,7 +153,7 @@ export async function fetchCollectionSnapshot(
   return {
     id: node.id,
     title: node.title?.trim() || node.id,
-    smart: Boolean(node.ruleSet),
+    sourceId: pickWritableCollectionSource(mapSources(node.sources)),
   };
 }
 

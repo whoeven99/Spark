@@ -163,6 +163,23 @@ describe("product duplicate apply", () => {
 });
 
 describe("bulk collection edit apply", () => {
+  const collectionSnapshot = {
+    data: {
+      collection: {
+        id: "gid://shopify/Collection/1",
+        title: "夏季",
+        sources: [
+          {
+            __typename: "CollectionConditionsSource",
+            id: "gid://shopify/CollectionConditionsSource/1",
+            targetType: "PRODUCTS",
+            shareable: false,
+          },
+        ],
+      },
+    },
+  };
+
   it("drops skipped rows", () => {
     expect(
       buildBulkCollectionEditWritableRows([
@@ -172,16 +189,23 @@ describe("bulk collection edit apply", () => {
     ).toEqual(["gid://shopify/Product/1"]);
   });
 
-  it("adds with collectionAddProducts and flags pending remove jobs", async () => {
+  it("adds with collectionUpdate source selections and flags pending jobs", async () => {
     const { admin, calls } = createAdmin((call) => {
-      if (String(call.query).includes("collectionRemoveProducts")) {
+      if (String(call.query).includes("collectionUpdate")) {
+        const collection = call.variables.collection as {
+          sourcesToUpdate?: Array<{ condition?: { inclusion?: { selectionsToRemove?: unknown } } }>;
+        };
+        const removing = Boolean(collection.sourcesToUpdate?.[0]?.condition?.inclusion?.selectionsToRemove);
         return {
           data: {
-            collectionRemoveProducts: { job: { id: "job-1", done: false }, userErrors: [] },
+            collectionUpdate: {
+              job: removing ? { id: "job-1", done: false } : null,
+              userErrors: [],
+            },
           },
         };
       }
-      return { data: { collectionAddProducts: { userErrors: [] } } };
+      return collectionSnapshot;
     });
     const add = await applyBulkCollectionEdit({
       admin: asAdmin(admin),
@@ -190,7 +214,21 @@ describe("bulk collection edit apply", () => {
       action: "add",
       rows: [collectionRow()],
     });
-    expect(calls[0]?.query).toContain("collectionAddProducts");
+    expect(calls[1]?.query).toContain("collectionUpdate");
+    expect(calls[1]?.variables).toEqual({
+      collection: {
+        id: "gid://shopify/Collection/1",
+        sourcesToUpdate: [
+          {
+            condition: {
+              id: "gid://shopify/CollectionConditionsSource/1",
+              inclusion: { selectionsToAdd: [{ productId: "gid://shopify/Product/1" }] },
+              exclusion: { selectionsToRemove: [{ productId: "gid://shopify/Product/1" }] },
+            },
+          },
+        ],
+      },
+    });
     expect(add.pendingJob).toBeUndefined();
 
     const remove = await applyBulkCollectionEdit({
@@ -200,7 +238,29 @@ describe("bulk collection edit apply", () => {
       action: "remove",
       rows: [collectionRow({ action: "remove", inCollection: true })],
     });
-    expect(calls[1]?.query).toContain("collectionRemoveProducts");
+    expect(calls[3]?.query).toContain("collectionUpdate");
     expect(remove.pendingJob).toBe(true);
+  });
+
+  it("fails all rows when the collection has no writable source", async () => {
+    const { admin, calls } = createAdmin(() => ({
+      data: {
+        collection: {
+          id: "gid://shopify/Collection/1",
+          title: "精选",
+          sources: [{ __typename: "CollectionSubCollectionsSource", id: "gid://shopify/CollectionSubCollectionsSource/1" }],
+        },
+      },
+    }));
+    const outcome = await applyBulkCollectionEdit({
+      admin: asAdmin(admin),
+      shop: "s",
+      collectionId: "gid://shopify/Collection/1",
+      action: "add",
+      rows: [collectionRow()],
+    });
+    expect(calls.some((call) => String(call.query).includes("collectionUpdate"))).toBe(false);
+    expect(outcome.succeeded).toBe(0);
+    expect(outcome.failed).toBe(1);
   });
 });

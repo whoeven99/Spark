@@ -126,7 +126,7 @@ export function buildBulkCollectionEditProposal(args: {
         type: "collection",
         value: args.collectionId ?? "",
         options: collections,
-        placeholder: collections.length === 0 ? "店铺里还没有手动合集" : "搜索合集名称",
+        placeholder: collections.length === 0 ? "店铺里还没有合集" : "搜索合集名称",
       },
     ],
   };
