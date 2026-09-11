@@ -91,6 +91,16 @@ describe("computeProductFieldChange", () => {
     expect(row.skipped).toBe(false);
     expect(row.afterValue).toBe("");
   });
+
+  it("改标题", () => {
+    const row = computeProductFieldChange(product(), {
+      field: "title",
+      mode: "set",
+      value: "新背包",
+    });
+    expect(row.skipped).toBe(false);
+    expect(row.afterValue).toBe("新背包");
+  });
 });
 
 describe("changeset helpers", () => {

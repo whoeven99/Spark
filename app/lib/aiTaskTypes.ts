@@ -42,6 +42,10 @@ import type {
   BulkArchiveRow,
   BulkArchiveSummary,
 } from "./bulkArchive";
+import type { BulkCostEditRow } from "./bulkCostEdit";
+import type { BulkHandleEditRow } from "./bulkHandleEdit";
+import type { BulkMetafieldEditRow } from "./bulkMetafieldEdit";
+import type { BulkProductDeleteRow } from "./bulkProductDelete";
 import type {
   ProductExportFormat,
   ProductExportSkip,
@@ -461,13 +465,17 @@ export type ProductImportTaskResult = {
     changed: number;
     issues: number;
   };
-  priceRows: BulkPriceEditRow[];
-  tagRows: BulkTagEditRow[];
-  statusRows: BulkStatusEditRow[];
-  fieldRows: BulkProductFieldEditRow[];
-  collectionGroups: ProductImportCollectionGroup[];
-  duplicateRows: ProductDuplicateRow[];
-  archiveRows: BulkArchiveRow[];
+    priceRows: BulkPriceEditRow[];
+    costRows: BulkCostEditRow[];
+    tagRows: BulkTagEditRow[];
+    statusRows: BulkStatusEditRow[];
+    fieldRows: BulkProductFieldEditRow[];
+    handleRows: BulkHandleEditRow[];
+    collectionGroups: ProductImportCollectionGroup[];
+    metafieldRows: BulkMetafieldEditRow[];
+    duplicateRows: ProductDuplicateRow[];
+    archiveRows: BulkArchiveRow[];
+    deleteRows: BulkProductDeleteRow[];
   truncated?: boolean;
   apply?: {
     at: string;

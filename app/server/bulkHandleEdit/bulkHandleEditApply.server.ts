@@ -1,54 +1,39 @@
 /**
- * 批量改商品字段写回 —— 全仓库唯一会改 title / descriptionHtml / vendor / productType / SEO 的地方。
- * 不要用它改 handle 或 status。
+ * 批量改 Handle 写回。redirectNewHandle 固定 true，让 Shopify 建 301。
  */
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
-import type {
-  BulkProductFieldEditApplyOutcome,
-  BulkProductFieldEditRow,
-} from "../../lib/bulkProductFieldEdit";
+import type { BulkHandleEditApplyOutcome, BulkHandleEditRow } from "../../lib/bulkHandleEdit";
 import { mapWithConcurrency } from "../shopify/productIdQuery.server";
 
-const LOG_PREFIX = "[BulkProductFieldEdit][Apply]";
+const LOG_PREFIX = "[BulkHandleEdit][Apply]";
 const MUTATION_CONCURRENCY = 2;
 
 const PRODUCT_UPDATE = `#graphql
-  mutation BulkProductFieldEditUpdate($product: ProductUpdateInput!) {
+  mutation BulkHandleEditUpdate($product: ProductUpdateInput!) {
     productUpdate(product: $product) {
-      product { id }
+      product { id handle }
       userErrors { field message }
     }
   }
 `;
 
-export function buildBulkProductFieldEditWritableRows(
-  rows: BulkProductFieldEditRow[],
-): BulkProductFieldEditRow[] {
-  return rows.filter((row) => !row.skipped && row.afterValue !== row.beforeValue);
-}
-
-function toProductInput(row: BulkProductFieldEditRow): Record<string, unknown> {
-  if (row.field === "title") return { id: row.productId, title: row.afterValue };
-  if (row.field === "descriptionHtml") return { id: row.productId, descriptionHtml: row.afterValue };
-  if (row.field === "vendor") return { id: row.productId, vendor: row.afterValue };
-  if (row.field === "productType") return { id: row.productId, productType: row.afterValue };
-  if (row.field === "seoTitle") return { id: row.productId, seo: { title: row.afterValue } };
-  return { id: row.productId, seo: { description: row.afterValue } };
+export function buildBulkHandleEditWritableRows(rows: BulkHandleEditRow[]): BulkHandleEditRow[] {
+  return rows.filter((row) => !row.skipped && row.afterHandle && row.afterHandle !== row.beforeHandle);
 }
 
 async function applyRow(
   admin: ShopifyAdminGraphqlClient,
-  row: BulkProductFieldEditRow,
+  row: BulkHandleEditRow,
 ): Promise<{ productId: string; message: string } | null> {
   try {
     const response = await admin.graphql(PRODUCT_UPDATE, {
-      variables: { product: toProductInput(row) },
+      variables: {
+        product: { id: row.productId, handle: row.afterHandle, redirectNewHandle: true },
+      },
     });
     if (!response.ok) return { productId: row.productId, message: `HTTP ${response.status}` };
     const json = (await response.json()) as {
-      data?: {
-        productUpdate?: { userErrors?: Array<{ message: string }> | null };
-      };
+      data?: { productUpdate?: { userErrors?: Array<{ message: string }> | null } };
       errors?: Array<{ message: string }>;
     };
     if (json.errors?.length) {
@@ -64,12 +49,12 @@ async function applyRow(
   }
 }
 
-export async function applyBulkProductFieldEdit(args: {
+export async function applyBulkHandleEdit(args: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
-  rows: BulkProductFieldEditRow[];
-}): Promise<BulkProductFieldEditApplyOutcome> {
-  const writableRows = buildBulkProductFieldEditWritableRows(args.rows);
+  rows: BulkHandleEditRow[];
+}): Promise<BulkHandleEditApplyOutcome> {
+  const writableRows = buildBulkHandleEditWritableRows(args.rows);
   const outcomes = await mapWithConcurrency(writableRows, MUTATION_CONCURRENCY, (row) =>
     applyRow(args.admin, row),
   );

@@ -4,22 +4,35 @@
  */
 import { toCsv } from "./csv";
 import { SEO_DESCRIPTION_MAX_WIDTH, SEO_TITLE_MAX_WIDTH, seoDisplayWidth } from "./seoAudit";
+import {
+  isSupportedMetafieldType,
+  parseImportMetafieldHeader,
+  type ProductImportMetafieldColumn,
+} from "./bulkMetafieldEdit";
+import { isValidProductHandle, normalizeProductHandle } from "./bulkHandleEdit";
+import { parseMoneyToCents } from "./bulkPriceEdit";
 
 export const PRODUCT_IMPORT_SKILL_ID = "product_import";
 export const PRODUCT_IMPORT_MAX_ROWS = 1000;
 export const PRODUCT_IMPORT_MAX_PRODUCTS = 200;
 
 export const PRODUCT_IMPORT_OPERATIONS = [
+  "title",
+  "descriptionHtml",
   "price",
+  "cost",
   "tags",
   "status",
   "vendor",
   "productType",
   "seoTitle",
   "seoDescription",
+  "handle",
   "collection",
+  "metafield",
   "duplicate",
   "archive",
+  "delete",
 ] as const;
 export type ProductImportOperation = (typeof PRODUCT_IMPORT_OPERATIONS)[number];
 
@@ -33,10 +46,15 @@ export const PRODUCT_IMPORT_ISSUE_CODES = [
   "too_long_seo_description",
   "invalid_status",
   "invalid_collection_action",
-  "handle_not_in_v1",
-  "cost_not_in_v1",
-  "metafield_not_in_v1",
-  "delete_not_in_v1",
+  "invalid_cost",
+  "cost_needs_sku",
+  "invalid_handle",
+  "handle_taken",
+  "invalid_delete",
+  "metafield_definition_missing",
+  "metafield_type_unsupported",
+  "metafield_invalid_value",
+  "metafield_needs_sku",
   "inventory_not_in_v1",
   "create_fields_not_in_v1",
   "sku_not_found",
@@ -67,6 +85,15 @@ const CANONICAL_ALIASES: Record<string, string> = {
   "product id": "product_id",
   product_id: "product_id",
   productid: "product_id",
+  title: "title",
+  "body (html)": "body_html",
+  "body html": "body_html",
+  body_html: "body_html",
+  "new handle": "new_handle",
+  new_handle: "new_handle",
+  cost: "cost",
+  "cost per item": "cost",
+  "variant cost": "cost",
   price: "price",
   "variant price": "price",
   variant_price: "price",
@@ -101,13 +128,11 @@ const CANONICAL_ALIASES: Record<string, string> = {
   "include images": "duplicate_images",
   duplicate_images: "duplicate_images",
   archive: "archive",
+  delete: "delete",
+  "delete product": "delete",
 };
 
 const UNSUPPORTED_REASON: Record<string, ProductImportIssueCode> = {
-  title: "create_fields_not_in_v1",
-  "body (html)": "create_fields_not_in_v1",
-  "body html": "create_fields_not_in_v1",
-  "body_html": "create_fields_not_in_v1",
   published: "create_fields_not_in_v1",
   "option1 name": "create_fields_not_in_v1",
   "option1 value": "create_fields_not_in_v1",
@@ -117,22 +142,15 @@ const UNSUPPORTED_REASON: Record<string, ProductImportIssueCode> = {
   "option3 value": "create_fields_not_in_v1",
   "variant barcode": "create_fields_not_in_v1",
   "image src": "create_fields_not_in_v1",
-  "new handle": "handle_not_in_v1",
-  new_handle: "handle_not_in_v1",
-  cost: "cost_not_in_v1",
-  "cost per item": "cost_not_in_v1",
-  "variant cost": "cost_not_in_v1",
   inventory: "inventory_not_in_v1",
   "inventory qty": "inventory_not_in_v1",
   "on hand": "inventory_not_in_v1",
   quantity: "inventory_not_in_v1",
-  delete: "delete_not_in_v1",
-  "delete product": "delete_not_in_v1",
 };
 
 export type ProductImportHeaderMapping = {
-  /** canonical → 原列表头 */
   columns: Record<string, string>;
+  metafields: ProductImportMetafieldColumn[];
   unsupported: Array<{ header: string; code: ProductImportIssueCode }>;
   unknown: string[];
 };
@@ -143,21 +161,31 @@ export function normalizeImportHeader(raw: string): string {
 
 export function mapImportHeaders(headers: string[]): ProductImportHeaderMapping {
   const columns: Record<string, string> = {};
+  const metafields: ProductImportMetafieldColumn[] = [];
   const unsupported: Array<{ header: string; code: ProductImportIssueCode }> = [];
   const unknown: string[] = [];
   const seenUnsupported = new Set<string>();
+  const seenMetafields = new Set<string>();
 
   for (const header of headers) {
     const trimmed = header.trim();
     if (!trimmed) continue;
-    const normalized = normalizeImportHeader(trimmed);
-    if (normalized.startsWith("metafield") || normalized.includes(" metafield")) {
-      if (!seenUnsupported.has("metafield")) {
-        seenUnsupported.add("metafield");
-        unsupported.push({ header: trimmed, code: "metafield_not_in_v1" });
+    const metafield = parseImportMetafieldHeader(trimmed);
+    if (metafield) {
+      if (metafield.type && !isSupportedMetafieldType(metafield.type)) {
+        if (!seenUnsupported.has(metafield.cellKey)) {
+          seenUnsupported.add(metafield.cellKey);
+          unsupported.push({ header: trimmed, code: "metafield_type_unsupported" });
+        }
+        continue;
+      }
+      if (!seenMetafields.has(metafield.cellKey)) {
+        seenMetafields.add(metafield.cellKey);
+        metafields.push(metafield);
       }
       continue;
     }
+    const normalized = normalizeImportHeader(trimmed);
     const canonical = CANONICAL_ALIASES[normalized];
     if (canonical) {
       if (!columns[canonical]) columns[canonical] = trimmed;
@@ -173,7 +201,7 @@ export function mapImportHeaders(headers: string[]): ProductImportHeaderMapping 
     }
     unknown.push(trimmed);
   }
-  return { columns, unsupported, unknown };
+  return { columns, metafields, unsupported, unknown };
 }
 
 export type ProductImportRecord = {
@@ -206,22 +234,32 @@ export function hasIdentity(record: Pick<ProductImportRecord, "handle" | "sku" |
 }
 
 const OPERATION_COLUMNS: Record<ProductImportOperation, string[]> = {
+  title: ["title"],
+  descriptionHtml: ["body_html"],
   price: ["price", "compare_at"],
+  cost: ["cost"],
   tags: ["tags", "add_tags", "remove_tags"],
   status: ["status"],
   vendor: ["vendor"],
   productType: ["product_type"],
   seoTitle: ["seo_title"],
   seoDescription: ["seo_description"],
+  handle: ["new_handle"],
   collection: ["collection"],
+  metafield: [],
   duplicate: ["duplicate"],
   archive: ["archive"],
+  delete: ["delete"],
 };
 
-export function detectImportOperations(columns: Record<string, string>): ProductImportOperation[] {
-  return PRODUCT_IMPORT_OPERATIONS.filter((operation) =>
-    OPERATION_COLUMNS[operation].some((column) => Boolean(columns[column])),
-  );
+export function detectImportOperations(
+  columns: Record<string, string>,
+  metafields: ProductImportMetafieldColumn[] = [],
+): ProductImportOperation[] {
+  return PRODUCT_IMPORT_OPERATIONS.filter((operation) => {
+    if (operation === "metafield") return metafields.length > 0;
+    return OPERATION_COLUMNS[operation].some((column) => Boolean(columns[column]));
+  });
 }
 
 export function parseImportStatus(raw: string): "ACTIVE" | "DRAFT" | "ARCHIVED" | null {
@@ -289,7 +327,7 @@ export function analyzeImportSheet(headers: string[], rows: string[][]): Product
     })),
   ];
 
-  const operations = detectImportOperations(mapping.columns);
+  const operations = detectImportOperations(mapping.columns, mapping.metafields);
   if (operations.length === 0) {
     issues.push({ rowNumber: 0, code: "no_supported_columns" });
   }
@@ -306,30 +344,39 @@ export function analyzeImportSheet(headers: string[], rows: string[][]): Product
     const rowNumber = index + 2;
     const allBlank = row.every((cell) => !String(cell ?? "").trim());
     if (allBlank) return;
+    const cells: Record<string, string> = {
+      title: cellAt(row, columnIndex("title")),
+      body_html: cellAt(row, columnIndex("body_html")),
+      price: cellAt(row, columnIndex("price")),
+      compare_at: cellAt(row, columnIndex("compare_at")),
+      cost: cellAt(row, columnIndex("cost")),
+      vendor: cellAt(row, columnIndex("vendor")),
+      product_type: cellAt(row, columnIndex("product_type")),
+      seo_title: cellAt(row, columnIndex("seo_title")),
+      seo_description: cellAt(row, columnIndex("seo_description")),
+      new_handle: cellAt(row, columnIndex("new_handle")),
+      tags: cellAt(row, columnIndex("tags")),
+      add_tags: cellAt(row, columnIndex("add_tags")),
+      remove_tags: cellAt(row, columnIndex("remove_tags")),
+      status: cellAt(row, columnIndex("status")),
+      collection: cellAt(row, columnIndex("collection")),
+      collection_action: cellAt(row, columnIndex("collection_action")),
+      duplicate: cellAt(row, columnIndex("duplicate")),
+      duplicate_suffix: cellAt(row, columnIndex("duplicate_suffix")),
+      duplicate_status: cellAt(row, columnIndex("duplicate_status")),
+      duplicate_images: cellAt(row, columnIndex("duplicate_images")),
+      archive: cellAt(row, columnIndex("archive")),
+      delete: cellAt(row, columnIndex("delete")),
+    };
+    for (const metafield of mapping.metafields) {
+      cells[metafield.cellKey] = cellAt(row, headerIndex.get(metafield.header));
+    }
     records.push({
       rowNumber,
       handle: cellAt(row, columnIndex("handle")),
       sku: cellAt(row, columnIndex("sku")),
       productId: cellAt(row, columnIndex("product_id")),
-      cells: {
-        price: cellAt(row, columnIndex("price")),
-        compare_at: cellAt(row, columnIndex("compare_at")),
-        vendor: cellAt(row, columnIndex("vendor")),
-        product_type: cellAt(row, columnIndex("product_type")),
-        seo_title: cellAt(row, columnIndex("seo_title")),
-        seo_description: cellAt(row, columnIndex("seo_description")),
-        tags: cellAt(row, columnIndex("tags")),
-        add_tags: cellAt(row, columnIndex("add_tags")),
-        remove_tags: cellAt(row, columnIndex("remove_tags")),
-        status: cellAt(row, columnIndex("status")),
-        collection: cellAt(row, columnIndex("collection")),
-        collection_action: cellAt(row, columnIndex("collection_action")),
-        duplicate: cellAt(row, columnIndex("duplicate")),
-        duplicate_suffix: cellAt(row, columnIndex("duplicate_suffix")),
-        duplicate_status: cellAt(row, columnIndex("duplicate_status")),
-        duplicate_images: cellAt(row, columnIndex("duplicate_images")),
-        archive: cellAt(row, columnIndex("archive")),
-      },
+      cells,
     });
   });
 
@@ -338,7 +385,7 @@ export function analyzeImportSheet(headers: string[], rows: string[][]): Product
     if (!hasIdentity(record)) {
       issues.push({ rowNumber: record.rowNumber, code: "missing_identity" });
     }
-    issues.push(...validateImportRecord(record, operations));
+    issues.push(...validateImportRecord(record, operations, mapping.metafields));
   }
 
   return { mapping, operations, records: filled, issues, truncated };
@@ -347,48 +394,42 @@ export function analyzeImportSheet(headers: string[], rows: string[][]): Product
 export function validateImportRecord(
   record: ProductImportRecord,
   operations: ProductImportOperation[],
+  metafields: ProductImportMetafieldColumn[] = [],
 ): ProductImportIssue[] {
   const issues: ProductImportIssue[] = [];
   const { cells, rowNumber } = record;
-  if (operations.includes("price") && cells.price) {
-    const cents = Number(cells.price.replace(/,/g, ""));
-    if (!Number.isFinite(cents) || cents < 0) {
-      issues.push({ rowNumber, code: "invalid_price", column: "price", value: cells.price });
-    }
+  if (operations.includes("price") && cells.price && parseMoneyToCents(cells.price.replace(/,/g, "")) == null) {
+    issues.push({ rowNumber, code: "invalid_price", column: "price", value: cells.price });
   }
-  if (operations.includes("price") && cells.compare_at) {
-    const cents = Number(cells.compare_at.replace(/,/g, ""));
-    if (!Number.isFinite(cents) || cents < 0) {
-      issues.push({
-        rowNumber,
-        code: "invalid_price",
-        column: "compare_at",
-        value: cells.compare_at,
-      });
-    }
+  if (operations.includes("price") && cells.compare_at && parseMoneyToCents(cells.compare_at.replace(/,/g, "")) == null) {
+    issues.push({ rowNumber, code: "invalid_price", column: "compare_at", value: cells.compare_at });
   }
-  if (operations.includes("seoTitle") && cells.seo_title) {
-    if (seoDisplayWidth(cells.seo_title) > SEO_TITLE_MAX_WIDTH) {
-      issues.push({
-        rowNumber,
-        code: "too_long_seo_title",
-        column: "seo_title",
-        value: cells.seo_title,
-      });
-    }
+  if (operations.includes("cost") && cells.cost && parseMoneyToCents(cells.cost.replace(/,/g, "")) == null) {
+    issues.push({ rowNumber, code: "invalid_cost", column: "cost", value: cells.cost });
   }
-  if (operations.includes("seoDescription") && cells.seo_description) {
-    if (seoDisplayWidth(cells.seo_description) > SEO_DESCRIPTION_MAX_WIDTH) {
-      issues.push({
-        rowNumber,
-        code: "too_long_seo_description",
-        column: "seo_description",
-        value: cells.seo_description,
-      });
-    }
+  if (operations.includes("seoTitle") && cells.seo_title && seoDisplayWidth(cells.seo_title) > SEO_TITLE_MAX_WIDTH) {
+    issues.push({ rowNumber, code: "too_long_seo_title", column: "seo_title", value: cells.seo_title });
+  }
+  if (
+    operations.includes("seoDescription") &&
+    cells.seo_description &&
+    seoDisplayWidth(cells.seo_description) > SEO_DESCRIPTION_MAX_WIDTH
+  ) {
+    issues.push({
+      rowNumber,
+      code: "too_long_seo_description",
+      column: "seo_description",
+      value: cells.seo_description,
+    });
   }
   if (operations.includes("status") && cells.status && parseImportStatus(cells.status) == null) {
     issues.push({ rowNumber, code: "invalid_status", column: "status", value: cells.status });
+  }
+  if (operations.includes("handle") && cells.new_handle && !isValidProductHandle(normalizeProductHandle(cells.new_handle))) {
+    issues.push({ rowNumber, code: "invalid_handle", column: "new_handle", value: cells.new_handle });
+  }
+  if (operations.includes("delete") && cells.delete && parseImportBool(cells.delete) == null) {
+    issues.push({ rowNumber, code: "invalid_delete", column: "delete", value: cells.delete });
   }
   if (operations.includes("collection") && cells.collection) {
     const action = parseImportCollectionAction(cells.collection_action);
@@ -401,13 +442,17 @@ export function validateImportRecord(
       });
     }
   }
+  for (const metafield of metafields) {
+    const value = cells[metafield.cellKey];
+    if (!value) continue;
+    if (metafield.owner === "variant" && !record.sku) {
+      issues.push({ rowNumber, code: "metafield_needs_sku", column: metafield.header, value });
+    }
+  }
   return issues;
 }
 
-export function rowHasBlockingIssue(
-  issues: ProductImportIssue[],
-  rowNumber: number,
-): boolean {
+export function rowHasBlockingIssue(issues: ProductImportIssue[], rowNumber: number): boolean {
   return issues.some((issue) => issue.rowNumber === rowNumber);
 }
 

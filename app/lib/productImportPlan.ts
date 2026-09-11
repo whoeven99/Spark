@@ -1,32 +1,22 @@
 /**
  * 把已匹配的店铺快照 + 导入行收成各能力现有的 changeset 行。纯算。
  */
+import type { BulkMetafieldDefinition, BulkMetafieldValue, ProductImportMetafieldColumn } from "./bulkMetafieldEdit";
 import {
-  formatCentsToMoney,
-  parseMoneyToCents,
-  type BulkPriceEditRow,
-} from "./bulkPriceEdit";
-import { computeProductTagChange, type BulkTagEditRow } from "./bulkTagEdit";
-import type { BulkStatusEditRow } from "./bulkStatusEdit";
-import { computeProductFieldChange, type BulkProductFieldEditRow } from "./bulkProductFieldEdit";
-import { computeCollectionMembershipChange, type BulkCollectionEditRow } from "./bulkCollectionEdit";
-import {
-  computeProductDuplicate,
-  PRODUCT_DUPLICATE_DEFAULT_SUFFIX,
-  PRODUCT_DUPLICATE_MAX_PRODUCTS,
-  type ProductDuplicateRow,
-} from "./productDuplicate";
-import { computeProductArchive, type BulkArchiveRow } from "./bulkArchive";
-import {
-  parseImportBool,
-  parseImportCollectionAction,
-  parseImportStatus,
-  parseImportTags,
   rowHasBlockingIssue,
   type ProductImportIssue,
   type ProductImportOperation,
   type ProductImportRecord,
 } from "./productImport";
+import {
+  capDuplicates,
+  emptyImportPlan,
+  planMatchedImportRow,
+  type ProductImportPlan,
+} from "./productImportPlanOps";
+
+export type { ProductImportPlan } from "./productImportPlanOps";
+export { countImportWritable } from "./productImportPlanOps";
 
 export type ProductImportVariantSnapshot = {
   variantId: string;
@@ -34,12 +24,16 @@ export type ProductImportVariantSnapshot = {
   sku: string | null;
   price: string | null;
   compareAtPrice: string | null;
+  inventoryItemId: string | null;
+  cost: string | null;
+  metafields: BulkMetafieldValue[];
 };
 
 export type ProductImportProductSnapshot = {
   productId: string;
   productTitle: string;
   handle: string;
+  descriptionHtml: string;
   vendor: string;
   productType: string;
   seoTitle: string;
@@ -49,6 +43,7 @@ export type ProductImportProductSnapshot = {
   totalInventory: number;
   tracksInventory: boolean;
   publishedAt: string | null;
+  metafields: BulkMetafieldValue[];
   variants: ProductImportVariantSnapshot[];
 };
 
@@ -133,52 +128,8 @@ export type ProductImportCollectionGroup = {
   collectionId: string;
   collectionTitle: string;
   action: "add" | "remove";
-  rows: BulkCollectionEditRow[];
+  rows: import("./bulkCollectionEdit").BulkCollectionEditRow[];
 };
-
-export type ProductImportPlan = {
-  issues: ProductImportIssue[];
-  operations: ProductImportOperation[];
-  priceRows: BulkPriceEditRow[];
-  tagRows: BulkTagEditRow[];
-  statusRows: BulkStatusEditRow[];
-  fieldRows: BulkProductFieldEditRow[];
-  collectionGroups: ProductImportCollectionGroup[];
-  duplicateRows: ProductDuplicateRow[];
-  archiveRows: BulkArchiveRow[];
-};
-
-export function buildProductImportPlan(args: {
-  matches: ProductImportMatch[];
-  sheetIssues: ProductImportIssue[];
-  operations: ProductImportOperation[];
-  collections: ProductImportCollectionRef[];
-  membershipByCollection?: Map<string, Set<string>>;
-}): ProductImportPlan {
-  const issues = [...args.sheetIssues];
-  const plan: ProductImportPlan = {
-    issues,
-    operations: args.operations,
-    priceRows: [],
-    tagRows: [],
-    statusRows: [],
-    fieldRows: [],
-    collectionGroups: [],
-    duplicateRows: [],
-    archiveRows: [],
-  };
-  const collectionIndex = indexCollections(args.collections);
-  const seenProductOps = new Set<string>();
-  for (const match of args.matches) {
-    issues.push(...match.matchIssues);
-    if (rowHasBlockingIssue(issues, match.record.rowNumber)) continue;
-    if (!match.product) continue;
-    planPrice(plan, match);
-    planProductLevel(plan, match, seenProductOps, collectionIndex, args.membershipByCollection);
-  }
-  capDuplicates(plan, issues);
-  return plan;
-}
 
 function indexCollections(
   collections: ProductImportCollectionRef[],
@@ -191,233 +142,46 @@ function indexCollections(
   return map;
 }
 
-function planPrice(plan: ProductImportPlan, match: ProductImportMatch): void {
-  if (!plan.operations.includes("price")) return;
-  const { record, product, variant } = match;
-  if (!product) return;
-  const hasPrice = Boolean(record.cells.price || record.cells.compare_at);
-  if (!hasPrice) return;
-  if (!variant) {
-    plan.issues.push({
-      rowNumber: record.rowNumber,
-      code: "price_needs_sku",
-      column: "price",
-      value: record.cells.price,
-    });
-    return;
+function seedHandleOwners(products: ProductImportProductSnapshot[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const product of products) {
+    if (product.handle) map.set(product.handle.toLowerCase(), product.productId);
   }
-  const beforeCents = parseMoneyToCents(variant.price);
-  const afterCents = record.cells.price
-    ? parseMoneyToCents(record.cells.price.replace(/,/g, ""))
-    : beforeCents;
-  const beforeCompare = parseMoneyToCents(variant.compareAtPrice);
-  const afterCompare = record.cells.compare_at
-    ? parseMoneyToCents(record.cells.compare_at.replace(/,/g, ""))
-    : beforeCompare;
-  const afterPrice = afterCents != null ? formatCentsToMoney(afterCents) : formatCentsToMoney(beforeCents ?? 0);
-  const afterCompareAt = afterCompare != null ? formatCentsToMoney(afterCompare) : null;
-  const beforePrice = beforeCents != null ? formatCentsToMoney(beforeCents) : "";
-  const priceChanged = Boolean(record.cells.price) && afterPrice !== beforePrice;
-  const compareAtChanged =
-    Boolean(record.cells.compare_at) && (afterCompareAt ?? "") !== (beforeCompare != null ? formatCentsToMoney(beforeCompare) : "");
-  plan.priceRows.push({
-    variantId: variant.variantId,
-    productId: product.productId,
-    productTitle: product.productTitle,
-    variantTitle: variant.title,
-    sku: variant.sku,
-    beforePrice,
-    afterPrice: priceChanged ? afterPrice : beforePrice,
-    beforeCompareAt: beforeCompare != null ? formatCentsToMoney(beforeCompare) : null,
-    afterCompareAt: compareAtChanged ? afterCompareAt : beforeCompare != null ? formatCentsToMoney(beforeCompare) : null,
-    priceChanged,
-    compareAtChanged,
-    skipped: !priceChanged && !compareAtChanged,
-    ...(priceChanged || compareAtChanged ? {} : { skipReason: "no_change" }),
-  });
+  return map;
 }
 
-function planProductLevel(
-  plan: ProductImportPlan,
-  match: ProductImportMatch,
-  seen: Set<string>,
-  collections: Map<string, ProductImportCollectionRef>,
-  membershipByCollection?: Map<string, Set<string>>,
-): void {
-  const product = match.product;
-  if (!product) return;
-  const record = match.record;
-  const once = (operation: string): boolean => {
-    const key = `${product.productId}:${operation}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  };
-
-  if (plan.operations.includes("vendor") && record.cells.vendor && once("vendor")) {
-    plan.fieldRows.push(
-      computeProductFieldChange(product, { field: "vendor", mode: "set", value: record.cells.vendor }),
-    );
-  }
-  if (plan.operations.includes("productType") && record.cells.product_type && once("productType")) {
-    plan.fieldRows.push(
-      computeProductFieldChange(product, {
-        field: "productType",
-        mode: "set",
-        value: record.cells.product_type,
-      }),
-    );
-  }
-  if (plan.operations.includes("seoTitle") && record.cells.seo_title && once("seoTitle")) {
-    plan.fieldRows.push(
-      computeProductFieldChange(product, { field: "seoTitle", mode: "set", value: record.cells.seo_title }),
-    );
-  }
-  if (plan.operations.includes("seoDescription") && record.cells.seo_description && once("seoDescription")) {
-    plan.fieldRows.push(
-      computeProductFieldChange(product, {
-        field: "seoDescription",
-        mode: "set",
-        value: record.cells.seo_description,
-      }),
-    );
-  }
-  if (plan.operations.includes("tags") && once("tags")) {
-    plan.tagRows.push(planTags(product, record));
-  }
-  if (plan.operations.includes("status") && record.cells.status && once("status")) {
-    const target = parseImportStatus(record.cells.status);
-    if (target === "ARCHIVED") {
-      plan.archiveRows.push(computeProductArchive(product));
-    } else if (target === "ACTIVE" || target === "DRAFT") {
-      plan.statusRows.push(planStatus(product, target));
-    }
-  }
-  if (plan.operations.includes("archive") && parseImportBool(record.cells.archive) === true && once("archive")) {
-    plan.archiveRows.push(computeProductArchive(product));
-  }
-  if (plan.operations.includes("duplicate") && parseImportBool(record.cells.duplicate) === true && once("duplicate")) {
-    const statusRaw = parseImportStatus(record.cells.duplicate_status);
-    plan.duplicateRows.push(
-      computeProductDuplicate(product, {
-        titleSuffix: record.cells.duplicate_suffix || PRODUCT_DUPLICATE_DEFAULT_SUFFIX,
-        includeImages: parseImportBool(record.cells.duplicate_images) !== false,
-        newStatus: statusRaw === "ACTIVE" ? "ACTIVE" : "DRAFT",
-      }),
-    );
-  }
-  if (plan.operations.includes("collection") && record.cells.collection && once("collection")) {
-    planCollection(plan, product, record, collections, membershipByCollection);
-  }
-}
-
-function planTags(product: ProductImportProductSnapshot, record: ProductImportRecord): BulkTagEditRow {
-  if (record.cells.tags) {
-    const desired = parseImportTags(record.cells.tags);
-    const desiredKeys = new Set(desired.map((tag) => tag.toLowerCase()));
-    const beforeKeys = new Set(product.tags.map((tag) => tag.toLowerCase()));
-    const addTags = desired.filter((tag) => !beforeKeys.has(tag.toLowerCase()));
-    const removeTags = product.tags.filter((tag) => !desiredKeys.has(tag.toLowerCase()));
-    return computeProductTagChange(product, { addTags, removeTags, removePrefixes: [] });
-  }
-  return computeProductTagChange(product, {
-    addTags: parseImportTags(record.cells.add_tags),
-    removeTags: parseImportTags(record.cells.remove_tags),
-    removePrefixes: [],
-  });
-}
-
-function planStatus(
-  product: ProductImportProductSnapshot,
-  target: "ACTIVE" | "DRAFT",
-): BulkStatusEditRow {
-  const skipped = product.status.toUpperCase() === target;
-  return {
-    productId: product.productId,
-    productTitle: product.productTitle,
-    beforeStatus: product.status,
-    afterStatus: target,
-    totalInventory: product.totalInventory,
-    tracksInventory: product.tracksInventory,
-    needsPublishCheck: target === "ACTIVE" && !product.publishedAt,
-    skipped,
-    ...(skipped ? { skipReason: "no_change" as const } : {}),
-  };
-}
-
-function planCollection(
-  plan: ProductImportPlan,
-  product: ProductImportProductSnapshot,
-  record: ProductImportRecord,
-  collections: Map<string, ProductImportCollectionRef>,
-  membershipByCollection?: Map<string, Set<string>>,
-): void {
-  const action = parseImportCollectionAction(record.cells.collection_action) ?? "add";
-  const key = record.cells.collection.trim().toLowerCase();
-  const collection = collections.get(record.cells.collection) ?? collections.get(key);
-  if (!collection) {
-    plan.issues.push({
-      rowNumber: record.rowNumber,
-      code: "collection_not_found",
-      column: "collection",
-      value: record.cells.collection,
-    });
-    return;
-  }
-  if (!collection.writable) {
-    plan.issues.push({
-      rowNumber: record.rowNumber,
-      code: "collection_not_writable",
-      column: "collection",
-      value: collection.title,
-    });
-    return;
-  }
-  const row = computeCollectionMembershipChange(
-    {
-      productId: product.productId,
-      productTitle: product.productTitle,
-      status: product.status,
-      inCollection: membershipByCollection?.get(collection.id)?.has(product.productId) === true,
-    },
-    action,
-  );
-  const existing = plan.collectionGroups.find(
-    (group) => group.collectionId === collection.id && group.action === action,
-  );
-  if (existing) existing.rows.push(row);
-  else {
-    plan.collectionGroups.push({
-      collectionId: collection.id,
-      collectionTitle: collection.title,
-      action,
-      rows: [row],
+export function buildProductImportPlan(args: {
+  matches: ProductImportMatch[];
+  sheetIssues: ProductImportIssue[];
+  operations: ProductImportOperation[];
+  collections: ProductImportCollectionRef[];
+  membershipByCollection?: Map<string, Set<string>>;
+  metafields?: ProductImportMetafieldColumn[];
+  definitions?: Map<string, BulkMetafieldDefinition>;
+}): ProductImportPlan {
+  const issues = [...args.sheetIssues];
+  const plan = emptyImportPlan(args.operations, issues);
+  const collectionIndex = indexCollections(args.collections);
+  const catalogProducts = args.matches
+    .map((match) => match.product)
+    .filter((item): item is ProductImportProductSnapshot => Boolean(item));
+  const handleOwners = seedHandleOwners(catalogProducts);
+  const seen = new Set<string>();
+  for (const match of args.matches) {
+    issues.push(...match.matchIssues);
+    if (rowHasBlockingIssue(issues, match.record.rowNumber)) continue;
+    if (!match.product) continue;
+    planMatchedImportRow({
+      plan,
+      match,
+      seen,
+      collections: collectionIndex,
+      membershipByCollection: args.membershipByCollection,
+      metafields: args.metafields ?? [],
+      definitions: args.definitions ?? new Map(),
+      handleOwners,
     });
   }
-}
-
-function capDuplicates(plan: ProductImportPlan, issues: ProductImportIssue[]): void {
-  if (plan.duplicateRows.length <= PRODUCT_DUPLICATE_MAX_PRODUCTS) return;
-  const extra = plan.duplicateRows.slice(PRODUCT_DUPLICATE_MAX_PRODUCTS);
-  plan.duplicateRows = plan.duplicateRows.slice(0, PRODUCT_DUPLICATE_MAX_PRODUCTS);
-  for (const row of extra) {
-    issues.push({
-      rowNumber: 0,
-      code: "duplicate_over_limit",
-      value: row.productTitle,
-    });
-  }
-}
-
-export function countImportWritable(plan: ProductImportPlan): number {
-  const collections = plan.collectionGroups.flatMap((group) => group.rows);
-  return (
-    plan.priceRows.filter((row) => !row.skipped).length +
-    plan.tagRows.filter((row) => !row.skipped).length +
-    plan.statusRows.filter((row) => !row.skipped).length +
-    plan.fieldRows.filter((row) => !row.skipped).length +
-    collections.filter((row) => !row.skipped).length +
-    plan.duplicateRows.filter((row) => !row.skipped).length +
-    plan.archiveRows.filter((row) => !row.skipped).length
-  );
+  capDuplicates(plan, issues);
+  return plan;
 }

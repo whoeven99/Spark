@@ -65,6 +65,18 @@ const PRODUCT_IMPORT_HEURISTIC_PATTERNS: RegExp[] = [
   /归档商品/,
   /批量归档/,
   /archive\s*product/i,
+  /批量改成本/,
+  /单位成本/,
+  /cost per item/i,
+  /new handle/i,
+  /批量.*handle/i,
+  /批量.*metafield/i,
+  /自定义字段/,
+  /批量删除商品/,
+  /delete\s*product/i,
+  /批量修改商品/,
+  /批量改标题/,
+  /批量改正文/,
 ];
 
 export function userTextMatchesProductImport(text: string | null | undefined): boolean {
@@ -101,7 +113,7 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.optimizeCopy,
-    patterns: [/优化.*文案/, /商品描述/, /改标题/, /product\s*copy/i, /rewrite.*(title|description)/i],
+    patterns: [/优化.*文案/, /商品描述/, /(?<!批量)改标题/, /product\s*copy/i, /rewrite.*(title|description)/i],
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.translateImage,

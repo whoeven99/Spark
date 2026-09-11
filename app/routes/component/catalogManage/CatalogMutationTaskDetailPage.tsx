@@ -41,6 +41,9 @@ type Props<TRow> = {
   emptyNotice?: ReactNode;
   canApplyCount: number;
   applyConfirmHintVars?: Record<string, string | number>;
+  applyExtraBody?: Record<string, unknown>;
+  confirmSlot?: ReactNode;
+  confirmBlocked?: boolean;
 };
 
 export function CatalogMutationTaskDetailPage<TRow>({
@@ -67,6 +70,9 @@ export function CatalogMutationTaskDetailPage<TRow>({
   emptyNotice,
   canApplyCount,
   applyConfirmHintVars,
+  applyExtraBody,
+  confirmSlot,
+  confirmBlocked = false,
 }: Props<TRow>) {
   const { t } = useTranslation();
   const [applying, setApplying] = useState(false);
@@ -92,7 +98,7 @@ export function CatalogMutationTaskDetailPage<TRow>({
       const response = await fetch(applyPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: task.id, confirm: true }),
+        body: JSON.stringify({ taskId: task.id, confirm: true, ...applyExtraBody }),
       });
       const json = (await response.json()) as CatalogBulkApplyResponse;
       if (!json.ok) {
@@ -272,6 +278,7 @@ export function CatalogMutationTaskDetailPage<TRow>({
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           {canApply && confirmingWrite ? (
             <>
+              {confirmSlot}
               <span style={{ fontSize: 12, color: pageColorTokens.criticalText }}>
                 {t(`${i18nPrefix}.applyConfirmHint`, {
                   count: canApplyCount,
@@ -288,8 +295,8 @@ export function CatalogMutationTaskDetailPage<TRow>({
               </button>
               <button
                 type="button"
-                style={actionButtonStyle("primary", applying)}
-                disabled={applying}
+                style={actionButtonStyle("primary", applying || confirmBlocked)}
+                disabled={applying || confirmBlocked}
                 onClick={() => void handleApply()}
               >
                 {applying ? t(`${i18nPrefix}.applying`) : t(`${i18nPrefix}.applyConfirmButton`)}

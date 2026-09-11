@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { CatalogMutationTaskDetailPage } from "../catalogManage/CatalogMutationTaskDetailPage";
@@ -11,12 +12,16 @@ import {
 import { countImportWritable, type ProductImportCollectionGroup } from "../../../lib/productImportPlan";
 import type { AITaskItem, AITaskStatus, ProductImportTaskResult } from "../../../lib/aiTaskTypes";
 import { coerceBulkPriceEditRows } from "../../../lib/bulkPriceEdit";
+import { coerceBulkCostEditRows } from "../../../lib/bulkCostEdit";
 import { coerceBulkTagEditRows } from "../../../lib/bulkTagEdit";
 import { coerceBulkStatusEditRows } from "../../../lib/bulkStatusEdit";
 import { coerceBulkProductFieldEditRows } from "../../../lib/bulkProductFieldEdit";
+import { coerceBulkHandleEditRows } from "../../../lib/bulkHandleEdit";
 import { coerceBulkCollectionEditRows } from "../../../lib/bulkCollectionEdit";
+import { coerceBulkMetafieldEditRows } from "../../../lib/bulkMetafieldEdit";
 import { coerceProductDuplicateRows } from "../../../lib/productDuplicate";
 import { coerceBulkArchiveRows } from "../../../lib/bulkArchive";
+import { coerceBulkProductDeleteRows, countWritableProductDeletes } from "../../../lib/bulkProductDelete";
 
 type Props = {
   task: AITaskItem;
@@ -49,17 +54,21 @@ export function readProductImportResult(task: AITaskItem): ProductImportTaskResu
       issues: Number(summary.issues) || 0,
     },
     priceRows: coerceBulkPriceEditRows(record.priceRows),
+    costRows: coerceBulkCostEditRows(record.costRows),
     tagRows: coerceBulkTagEditRows(record.tagRows),
     statusRows: coerceBulkStatusEditRows(record.statusRows),
     fieldRows: coerceBulkProductFieldEditRows(record.fieldRows),
+    handleRows: coerceBulkHandleEditRows(record.handleRows),
     collectionGroups: Array.isArray(record.collectionGroups)
       ? (record.collectionGroups as ProductImportCollectionGroup[]).map((group) => ({
           ...group,
           rows: coerceBulkCollectionEditRows(group.rows),
         }))
       : [],
+    metafieldRows: coerceBulkMetafieldEditRows(record.metafieldRows),
     duplicateRows: coerceProductDuplicateRows(record.duplicateRows),
     archiveRows: coerceBulkArchiveRows(record.archiveRows),
+    deleteRows: coerceBulkProductDeleteRows(record.deleteRows),
     truncated: record.truncated === true,
     ...(record.apply && typeof record.apply === "object"
       ? { apply: record.apply as ProductImportTaskResult["apply"] }
@@ -69,6 +78,7 @@ export function readProductImportResult(task: AITaskItem): ProductImportTaskResu
 
 export function ProductImportTaskDetailPage(props: Props) {
   const { t } = useTranslation();
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
   const result = readProductImportResult(props.task);
   if (!result) {
     return (
@@ -78,6 +88,8 @@ export function ProductImportTaskDetailPage(props: Props) {
     );
   }
   const writable = countImportWritable(result);
+  const deleteCount = countWritableProductDeletes(result.deleteRows);
+  const handleCount = result.handleRows.filter((row) => !row.skipped).length;
   const issueCsv =
     result.issues.length > 0
       ? buildProductImportIssueCsv(
@@ -101,11 +113,21 @@ export function ProductImportTaskDetailPage(props: Props) {
         { label: t("productImport.summaryIssues"), value: result.summary.issues },
       ]}
       extraNotices={
-        <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-          {t("productImport.sourceFile")} {result.fileName}
-          {result.operations.length > 0
-            ? ` · ${result.operations.map((operation) => t(`productImport.operation.${operation}`)).join("、")}`
-            : null}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+            {t("productImport.sourceFile")} {result.fileName}
+            {result.operations.length > 0
+              ? ` · ${result.operations.map((operation) => t(`productImport.operation.${operation}`)).join("、")}`
+              : null}
+          </div>
+          {handleCount > 0 ? (
+            <div style={{ fontSize: 12, color: "#92400e" }}>{t("productImport.handleRedirectNotice")}</div>
+          ) : null}
+          {deleteCount > 0 ? (
+            <div style={{ fontSize: 12, color: pageColorTokens.criticalText }}>
+              {t("productImport.deleteWarning", { count: deleteCount })}
+            </div>
+          ) : null}
         </div>
       }
       emptyNotice={t("productImport.noIssues")}
@@ -138,6 +160,20 @@ export function ProductImportTaskDetailPage(props: Props) {
           : undefined
       }
       canApplyCount={writable}
+      applyExtraBody={deleteCount > 0 && deleteAcknowledged ? { confirmDelete: true } : undefined}
+      confirmBlocked={deleteCount > 0 && !deleteAcknowledged}
+      confirmSlot={
+        deleteCount > 0 ? (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: pageColorTokens.criticalText }}>
+            <input
+              type="checkbox"
+              checked={deleteAcknowledged}
+              onChange={(event) => setDeleteAcknowledged(event.target.checked)}
+            />
+            {t("productImport.deleteConfirmCheckbox", { count: deleteCount })}
+          </label>
+        ) : null
+      }
     />
   );
 }

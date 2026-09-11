@@ -30,6 +30,11 @@ describe("promptSkillFocus", () => {
     );
     expect(skillNamesFromUserText("打开导入商品确认卡")).toContain("productImport");
     expect(skillNamesFromUserText("帮我批量调价降价 10%")).toContain("productImport");
+    expect(skillNamesFromUserText("批量改成本")).toContain("productImport");
+    expect(skillNamesFromUserText("批量删除商品")).toContain("productImport");
+    expect(skillNamesFromUserText("批量改标题")).toEqual(["productImport"]);
+    expect(skillNamesFromUserText("帮我改标题")).toContain("productImprove");
+    expect(skillNamesFromUserText("帮我改标题")).not.toContain("productImport");
     expect(skillNamesFromUserText("打开导出商品确认卡")).toContain("productExport");
     expect(skillNamesFromUserText("帮我导出已选商品的 CSV")).toContain("productExport");
     expect(

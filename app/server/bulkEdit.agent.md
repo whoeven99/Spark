@@ -4,7 +4,7 @@
 
 改动本族任何文件前先读本文件。全局边界（哪些 `POST /api/bulk-*` 是唯一写回入口、对话内审核白名单、`TaskProposalField` 远端资源字段约定）仍以根 `AGENTS.md` 第 3、7 节为准。
 
-当前在线能力：商户入口是**导出商品**与**导入商品**。调价 / 打标 / 上下架仍有独立规则 Skill（进行中任务可审可写）。Vendor·类型·SEO / 合集 / 复制 / 归档没有独立入口，只作为导入内部 apply。另有只读站内 SEO 体检。独立的价目表 / 成本价 / 库存导入路由不要加回；成本、库存、Handle、删除、Metafield、用表格新建商品一期仍不写回。
+当前在线能力：商户入口是**导出商品**与**导入商品**。调价 / 打标 / 上下架仍有独立规则 Skill（进行中任务可审可写）。Vendor·类型·SEO / 标题正文 / 合集 / 复制 / 归档 / 成本 / Handle / Metafield / 删除没有独立入口，只作为导入内部 apply。另有只读站内 SEO 体检。独立的价目表 / 成本价 / 库存导入路由不要加回；库存、用表格新建商品仍不写回。
 
 ## 0. 共享架构
 
@@ -51,11 +51,15 @@
 
 每条 issue 带 `fixability`（`product_content` / `bulk_seo` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 与重复标题/描述恒为 `manual`（改 handle 会断链接、要配 301；互不相同的 SEO 不能用同一条 set 规则批量写）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
 
-### 1.5 Vendor / 类型 / SEO、合集、复制、归档（仅导入内部调用）
+### 1.5 Vendor / 类型 / SEO / 标题正文、合集、复制、归档、成本、Handle、Metafield、删除（仅导入内部调用）
 
-这四项没有独立 Skill、开卡、dry-run 或写回路由。商户改这些列只走导入。mutation 仍只出现在各自 apply：
+这些项没有独立 Skill、开卡、dry-run 或写回路由。商户改这些列只走导入。mutation 仍只出现在各自 apply：
 
-- 字段 / SEO：纯算 `app/lib/bulkProductFieldEdit.ts`，写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 vendor / productType / seo 的调用处）。不要用它改 handle。
+- 字段 / SEO / 标题 / 正文：纯算 `app/lib/bulkProductFieldEdit.ts`，写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 title / descriptionHtml / vendor / productType / seo 的调用处）。不要用它改 handle 或 status。
+- 成本：纯算 `app/lib/bulkCostEdit.ts`，写回 `bulkCostEditApply.server.ts`。走 `productVariantsBulkUpdate.inventoryItem.cost`（与调价共用 `productVariantsBulkUpdate.server.ts` helper），不申请 `write_inventory`。
+- Handle：纯算 `app/lib/bulkHandleEdit.ts`，写回 `bulkHandleEditApply.server.ts`（`productUpdate` + `redirectNewHandle: true`）。身份列 Handle 只用来匹配，改值走 New Handle。
+- Metafield：纯算 `app/lib/bulkMetafieldEdit.ts`，只读 `productMetafieldReader`，写回 `bulkMetafieldEditApply.server.ts`（`metafieldsSet` / `metafieldsDelete`）。只写有 definition 的商品/变体标量。
+- 删除：纯算 `app/lib/bulkProductDelete.ts`，写回 `bulkProductDeleteApply.server.ts`（唯一 `productDelete` 调用处）。不可恢复；审核页必须额外勾选，apply 放在导入最后。同一行其它列忽略。
 - 合集：纯算 `app/lib/bulkCollectionEdit.ts`，只读 `collectionMembershipReader`，写回 `bulkCollectionEditApply.server.ts`（唯一 `collectionUpdate` 改 source selections 的调用处，每批 ≤50）。没有可写 `CollectionConditionsSource` 时不要静默跳过。
 - 复制：纯算 `app/lib/productDuplicate.ts`（默认后缀 ` (Copy)`、草稿、带图，上限 50），写回 `productDuplicateApply.server.ts`（唯一 `productDuplicate` 调用处）。
 - 归档：纯算 `app/lib/bulkArchive.ts`，读侧复用 `productStatusReader`，写回 `bulkArchiveApply.server.ts`（只写 `status: ARCHIVED`）。与上下架分开，避免破坏 ACTIVE/DRAFT 白名单。
@@ -68,7 +72,7 @@
 
 一期路径：识别文件 → 校验 → 反馈问题行及改法 → 确认后写回。纯算 `app/lib/productImport.ts` + `app/lib/productImportPlan.ts`，解析 `app/server/productImport/parseImportSpreadsheet.server.ts`（必须读 original buffer，不能用 parsed.txt），只读 `app/server/shopify/productImportReader.server.ts`，试算 `app/server/productImport/productImportDryRun.server.ts`（零 mutation，落 `pending_review`），写回 `app/server/productImport/productImportApply.server.ts`（只编排已有 apply，不新增 GraphQL mutation）。路由 `POST /api/product-import`，门禁 `confirm: true` + `pending_review`。Skill 只开卡 `open_product_import_form`；没有文件也要开卡。
 
-一期写回列：价格、Tags、状态、Vendor / 类型 / SEO、合集；文件能表达则做复制、归档。不做：Handle、删除、Metafields、成本、库存、用表格新建商品。未知列进 `unsupported_column`。Shopify CSV 的 Handle 向下填充。匹配按 SKU / Handle / Product ID。合集按标题匹配，无写出来源的合集记 `collection_not_writable`。
+写回列：标题/正文、价格、成本、Tags、状态、Vendor / 类型 / SEO、Handle、合集、有 definition 的标量 Metafield；文件能表达则做复制、归档、删除。不做：库存数量、用表格新建商品、销售渠道。未知列进 `unsupported_column`。Shopify CSV 的 Handle 向下填充。匹配按 SKU / Handle / Product ID。合集按标题匹配，无写出来源的合集记 `collection_not_writable`。删除行忽略同一行其它列，审核页额外勾选后才写回。
 
 ## 2. 新增同类能力时的检查清单
 

@@ -13,18 +13,10 @@ import {
   type BulkPriceEditApplyOutcome,
   type BulkPriceEditRow,
 } from "../../lib/bulkPriceEdit";
+import { executeProductVariantsBulkUpdate } from "../shopify/productVariantsBulkUpdate.server";
 
 const LOG_PREFIX = "[BulkPriceEdit][Apply]";
 const MUTATION_CONCURRENCY = 2;
-
-const VARIANTS_BULK_UPDATE = `#graphql
-  mutation BulkPriceEditUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-    productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-      productVariants { id price compareAtPrice }
-      userErrors { field message }
-    }
-  }
-`;
 
 type VariantInput = {
   id: string;
@@ -80,43 +72,12 @@ async function runBatch(
     errors: batch.rows.map((row) => ({ variantId: row.variantId, message })),
   });
 
-  let json: {
-    data?: {
-      productVariantsBulkUpdate?: {
-        productVariants?: Array<{ id: string }> | null;
-        userErrors?: Array<{ field?: string[] | null; message: string }> | null;
-      } | null;
-    };
-    errors?: Array<{ message: string }>;
-  };
-  try {
-    const response = await admin.graphql(VARIANTS_BULK_UPDATE, {
-      variables: { productId: batch.productId, variants: batch.variants },
-    });
-    if (!response.ok) {
-      return failAll(`HTTP ${response.status}`);
-    }
-    json = await response.json();
-  } catch (e) {
-    return failAll(e instanceof Error ? e.message : String(e));
-  }
-
-  if (json.errors?.length) {
-    return failAll(json.errors.map((e) => e.message).join("; "));
-  }
-
-  const payload = json.data?.productVariantsBulkUpdate;
-  const userErrors = payload?.userErrors ?? [];
-  if (userErrors.length > 0) {
-    // userErrors 不保证能定位到具体变体：整批标记失败，宁可少报成功也不误报
-    return failAll(userErrors.map((e) => e.message).join("; "));
-  }
-
-  const updatedIds = new Set((payload?.productVariants ?? []).map((v) => v.id));
+  const outcome = await executeProductVariantsBulkUpdate(admin, batch.productId, batch.variants);
+  if (outcome.error) return failAll(outcome.error);
   const errors: Array<{ variantId: string; message: string }> = [];
   let succeeded = 0;
   for (const row of batch.rows) {
-    if (updatedIds.size === 0 || updatedIds.has(row.variantId)) succeeded += 1;
+    if (outcome.updatedIds.size === 0 || outcome.updatedIds.has(row.variantId)) succeeded += 1;
     else errors.push({ variantId: row.variantId, message: "variant not returned by Shopify" });
   }
   return { succeeded, errors };

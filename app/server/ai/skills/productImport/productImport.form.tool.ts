@@ -11,7 +11,7 @@ export type ProductImportFormPayload = {
 export const productImportFormTool = new DynamicStructuredTool({
   name: OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME,
   description:
-    "打开「导入商品」确认卡片。用户要导入/批量改价格、标签、状态、Vendor、类型、SEO、合集、复制或归档时调用。即使还没上传文件也要先开卡。不会立即写回店铺。",
+    "打开「导入商品」确认卡片。用户要导入/批量改标题、正文、价格、成本、标签、状态、Vendor、类型、SEO、Handle、合集、Metafield、复制、归档或删除时调用。即使还没上传文件也要先开卡。不会立即写回店铺。",
   schema: z.object({
     fileId: z.string().optional(),
     fileName: z.string().optional(),

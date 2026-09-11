@@ -13,6 +13,10 @@ import {
   listManualCollections,
 } from "../shopify/collectionMembershipReader.server";
 import { fetchProductsForImport, indexImportCatalog } from "../shopify/productImportReader.server";
+import {
+  fetchImportMetafieldDefinitions,
+  indexMetafieldDefinitions,
+} from "../shopify/productMetafieldReader.server";
 import { parseImportSpreadsheet } from "./parseImportSpreadsheet.server";
 import { analyzeImportSheet, PRODUCT_IMPORT_MAX_PRODUCTS } from "../../lib/productImport";
 import {
@@ -103,10 +107,18 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
   });
 
   const { admin } = await unauthenticated.admin(params.shop);
-  const handles = unique(analysis.records.map((record) => record.handle));
+  const handles = unique([
+    ...analysis.records.map((record) => record.handle),
+    ...analysis.records.map((record) => record.cells.new_handle),
+  ]);
   const skus = unique(analysis.records.map((record) => record.sku));
   const productIds = unique(analysis.records.map((record) => record.productId));
-  const catalogProducts = await fetchProductsForImport(admin, { handles, skus, productIds });
+  const includeMetafields = analysis.operations.includes("metafield");
+  const catalogProducts = await fetchProductsForImport(
+    admin,
+    { handles, skus, productIds },
+    { includeMetafields },
+  );
   const catalog = indexImportCatalog(catalogProducts);
   const matches = analysis.records.map((record) => matchImportRecord(record, catalog));
 
@@ -119,6 +131,9 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
     collections,
     catalogProducts.map((item) => item.productId),
   );
+  const definitions = includeMetafields
+    ? indexMetafieldDefinitions(await fetchImportMetafieldDefinitions(admin))
+    : new Map();
 
   const plan = buildProductImportPlan({
     matches,
@@ -126,6 +141,8 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
     operations: analysis.operations,
     collections,
     membershipByCollection,
+    metafields: analysis.mapping.metafields,
+    definitions,
   });
   const changed = countImportWritable(plan);
   const result: ProductImportTaskResult = {
@@ -139,12 +156,16 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
       issues: plan.issues.length,
     },
     priceRows: plan.priceRows,
+    costRows: plan.costRows,
     tagRows: plan.tagRows,
     statusRows: plan.statusRows,
     fieldRows: plan.fieldRows,
+    handleRows: plan.handleRows,
     collectionGroups: plan.collectionGroups,
+    metafieldRows: plan.metafieldRows,
     duplicateRows: plan.duplicateRows,
     archiveRows: plan.archiveRows,
+    deleteRows: plan.deleteRows,
     ...(analysis.truncated || catalogProducts.length > PRODUCT_IMPORT_MAX_PRODUCTS
       ? { truncated: true }
       : {}),

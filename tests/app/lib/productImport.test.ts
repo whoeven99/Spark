@@ -14,6 +14,7 @@ const product = (overrides: Partial<ProductImportProductSnapshot> = {}): Product
   productId: "gid://shopify/Product/1",
   productTitle: "Tee",
   handle: "tee",
+  descriptionHtml: "<p>old</p>",
   vendor: "Old",
   productType: "Apparel",
   seoTitle: "Old title",
@@ -23,6 +24,7 @@ const product = (overrides: Partial<ProductImportProductSnapshot> = {}): Product
   totalInventory: 3,
   tracksInventory: true,
   publishedAt: "2026-01-01",
+  metafields: [],
   variants: [
     {
       variantId: "gid://shopify/ProductVariant/1",
@@ -30,13 +32,16 @@ const product = (overrides: Partial<ProductImportProductSnapshot> = {}): Product
       sku: "TEE-1",
       price: "10.00",
       compareAtPrice: null,
+      inventoryItemId: "gid://shopify/InventoryItem/1",
+      cost: "4.00",
+      metafields: [],
     },
   ],
   ...overrides,
 });
 
 describe("mapImportHeaders", () => {
-  it("maps Shopify CSV headers and flags v1-unsupported columns", () => {
+  it("maps Shopify CSV headers and flags still-unsupported create columns", () => {
     const mapped = mapImportHeaders([
       "Handle",
       "Title",
@@ -48,14 +53,30 @@ describe("mapImportHeaders", () => {
       "SEO Title",
       "Status",
       "Cost per item",
+      "Option1 Name",
     ]);
     expect(mapped.columns.handle).toBe("Handle");
+    expect(mapped.columns.title).toBe("Title");
     expect(mapped.columns.sku).toBe("Variant SKU");
     expect(mapped.columns.price).toBe("Variant Price");
     expect(mapped.columns.vendor).toBe("Vendor");
-    expect(mapped.unsupported.map((item) => item.code)).toEqual(
-      expect.arrayContaining(["create_fields_not_in_v1", "cost_not_in_v1"]),
-    );
+    expect(mapped.columns.cost).toBe("Cost per item");
+    expect(mapped.unsupported.map((item) => item.code)).toEqual(["create_fields_not_in_v1"]);
+  });
+
+  it("parses metafield headers", () => {
+    const mapped = mapImportHeaders([
+      "Handle",
+      "Metafield: custom.fabric [single_line_text_field]",
+    ]);
+    expect(mapped.metafields).toEqual([
+      expect.objectContaining({
+        owner: "product",
+        namespace: "custom",
+        key: "fabric",
+        type: "single_line_text_field",
+      }),
+    ]);
   });
 
   it("keeps unrecognized headers as unknown", () => {
@@ -83,11 +104,11 @@ describe("analyzeImportSheet", () => {
     );
   });
 
-  it("fails the sheet when there is no identity column and no supported mutation columns", () => {
+  it("requires identity even when Title and Cost are present", () => {
     const analysis = analyzeImportSheet(["Title", "Cost"], [["Hat", "3"]]);
-    expect(analysis.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining(["missing_identity", "no_supported_columns", "cost_not_in_v1"]),
-    );
+    expect(analysis.operations).toEqual(expect.arrayContaining(["title", "cost"]));
+    expect(analysis.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(["missing_identity"]));
+    expect(analysis.issues.some((issue) => issue.code === "no_supported_columns")).toBe(false);
   });
 
   it("reports unknown columns so merchants know to remove them", () => {
@@ -132,6 +153,90 @@ describe("buildProductImportPlan", () => {
     expect(plan.priceRows[0]?.afterPrice).toBe("12.50");
     expect(plan.priceRows[0]?.skipped).toBe(false);
     expect(plan.fieldRows[0]?.afterValue).toBe("NewCo");
+  });
+
+  it("plans title, cost, handle and skips other ops when delete is true", () => {
+    const snapshot = product();
+    const analysis = analyzeImportSheet(
+      ["Handle", "Title", "Cost per item", "New Handle", "Delete", "Vendor"],
+      [["tee", "New Tee", "5.00", "new-tee", "true", "Nike"]],
+    );
+    const catalog = {
+      byHandle: new Map([["tee", snapshot]]),
+      byId: new Map([[snapshot.productId, snapshot]]),
+      bySku: new Map([["tee-1", [snapshot]]]),
+    };
+    const matches = analysis.records.map((record) => matchImportRecord(record, catalog));
+    const plan = buildProductImportPlan({
+      matches,
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      collections: [],
+    });
+    expect(plan.deleteRows).toHaveLength(1);
+    expect(plan.deleteRows[0]?.skipped).toBe(false);
+    expect(plan.fieldRows).toHaveLength(0);
+    expect(plan.costRows).toHaveLength(0);
+    expect(plan.handleRows).toHaveLength(0);
+  });
+
+  it("plans cost and title when the row is not a delete", () => {
+    const snapshot = product();
+    const analysis = analyzeImportSheet(
+      ["Handle", "Title", "Variant SKU", "Cost per item"],
+      [["tee", "New Tee", "TEE-1", "5.50"]],
+    );
+    const catalog = {
+      byHandle: new Map([["tee", snapshot]]),
+      byId: new Map([[snapshot.productId, snapshot]]),
+      bySku: new Map([["tee-1", [snapshot]]]),
+    };
+    const matches = analysis.records.map((record) => matchImportRecord(record, catalog));
+    const plan = buildProductImportPlan({
+      matches,
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      collections: [],
+    });
+    expect(plan.fieldRows.find((row) => row.field === "title")?.afterValue).toBe("New Tee");
+    expect(plan.costRows[0]?.afterCost).toBe("5.50");
+    expect(plan.costRows[0]?.skipped).toBe(false);
+  });
+
+  it("plans a defined scalar metafield and skips blank cells", () => {
+    const snapshot = product({
+      metafields: [{ namespace: "custom", key: "fabric", type: "single_line_text_field", value: "cotton" }],
+    });
+    const analysis = analyzeImportSheet(
+      ["Handle", "Metafield: custom.fabric [single_line_text_field]"],
+      [
+        ["tee", "linen"],
+        ["tee", ""],
+      ],
+    );
+    const catalog = {
+      byHandle: new Map([["tee", snapshot]]),
+      byId: new Map([[snapshot.productId, snapshot]]),
+      bySku: new Map(),
+    };
+    const matches = analysis.records.map((record) => matchImportRecord(record, catalog));
+    const plan = buildProductImportPlan({
+      matches,
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      collections: [],
+      metafields: analysis.mapping.metafields,
+      definitions: new Map([
+        [
+          "product:custom.fabric",
+          { owner: "product", namespace: "custom", key: "fabric", type: "single_line_text_field" },
+        ],
+      ]),
+    });
+    expect(plan.metafieldRows).toHaveLength(1);
+    expect(plan.metafieldRows[0]?.afterValue).toBe("linen");
+    expect(plan.metafieldRows[0]?.action).toBe("set");
+    expect(plan.issues.some((issue) => issue.code === "metafield_definition_missing")).toBe(false);
   });
 
   it("reports missing SKU and does not write that row", () => {

@@ -16,6 +16,7 @@ const APPLY_STALE_MS = 10 * 60 * 1000;
 const bodySchema = z.object({
   taskId: z.string().min(1),
   confirm: z.literal(true),
+  confirmDelete: z.boolean().optional(),
 });
 
 export async function runConfirmedCatalogApply(args: {
@@ -26,6 +27,7 @@ export async function runConfirmedCatalogApply(args: {
     shop: string;
     task: NonNullable<Awaited<ReturnType<typeof getTaskForShop>>>;
     rawResult: Record<string, unknown>;
+    confirmDelete?: boolean;
   }) => Promise<{ succeeded: number; failed: number; extra?: Record<string, unknown> }>;
 }): Promise<ReturnType<typeof data>> {
   const fail = (error: string, status: number) =>
@@ -70,6 +72,7 @@ export async function runConfirmedCatalogApply(args: {
       shop: session.shop,
       task,
       rawResult: resultWithoutApplyFlag,
+      confirmDelete: parsed.data.confirmDelete,
     });
     await markTaskAppliedWithResult({
       taskId: task.id,

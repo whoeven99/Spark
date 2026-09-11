@@ -1,6 +1,6 @@
 /**
- * 批量改商品标量字段 — vendor / productType / SEO 标题 / SEO 描述。
- * 纯函数：规则 → changeset，不含 Shopify IO。
+ * 批量改商品标量字段 — Title / Body / vendor / productType / SEO。
+ * 纯函数：规则 → changeset，不含 Shopify IO。不要用它改 handle。
  */
 import { toCsv } from "./csv";
 import { SEO_DESCRIPTION_MAX_WIDTH, SEO_TITLE_MAX_WIDTH, seoDisplayWidth } from "./seoAudit";
@@ -8,6 +8,16 @@ import { SEO_DESCRIPTION_MAX_WIDTH, SEO_TITLE_MAX_WIDTH, seoDisplayWidth } from 
 export const BULK_PRODUCT_FIELD_EDIT_MAX_PRODUCTS = 200;
 
 export const BULK_PRODUCT_FIELD_EDIT_FIELDS = [
+  "title",
+  "descriptionHtml",
+  "vendor",
+  "productType",
+  "seoTitle",
+  "seoDescription",
+] as const;
+
+/** 独立规则 Skill 仍只开这四项；Title / Body 只走导入。 */
+export const BULK_PRODUCT_FIELD_EDIT_RULE_FIELDS = [
   "vendor",
   "productType",
   "seoTitle",
@@ -28,6 +38,8 @@ export type BulkProductFieldEditSkipReason = "no_change" | "empty_value" | "too_
 export type BulkProductFieldEditProductInput = {
   productId: string;
   productTitle: string;
+  title?: string;
+  descriptionHtml?: string;
   vendor: string;
   productType: string;
   seoTitle: string;
@@ -70,11 +82,15 @@ function isField(value: string): value is BulkProductFieldEditField {
   return (BULK_PRODUCT_FIELD_EDIT_FIELDS as readonly string[]).includes(value);
 }
 
+function isRuleField(value: string): value is BulkProductFieldEditField {
+  return (BULK_PRODUCT_FIELD_EDIT_RULE_FIELDS as readonly string[]).includes(value);
+}
+
 export function parseBulkProductFieldEditRule(
   params: Record<string, string>,
 ): BulkProductFieldEditRule {
   const field = (params.field ?? "").trim();
-  if (!isField(field)) {
+  if (!isRuleField(field)) {
     throw new BulkProductFieldEditRuleError(
       "invalid_field",
       "请先选择要改的字段：Vendor、商品类型、SEO 标题或 SEO 描述",
@@ -96,7 +112,12 @@ function currentValue(
   product: BulkProductFieldEditProductInput,
   field: BulkProductFieldEditField,
 ): string {
-  return product[field] ?? "";
+  if (field === "title") return product.title ?? product.productTitle ?? "";
+  if (field === "descriptionHtml") return product.descriptionHtml ?? "";
+  if (field === "vendor") return product.vendor ?? "";
+  if (field === "productType") return product.productType ?? "";
+  if (field === "seoTitle") return product.seoTitle ?? "";
+  return product.seoDescription ?? "";
 }
 
 function seoMaxWidth(field: BulkProductFieldEditField): number | null {
@@ -119,6 +140,9 @@ export function computeProductFieldChange(
     afterValue,
     skipped: false,
   };
+  if (rule.field === "title" && rule.mode === "set" && !afterValue.trim()) {
+    return { ...base, skipped: true, skipReason: "empty_value" };
+  }
   if (beforeValue === afterValue) {
     return { ...base, skipped: true, skipReason: "no_change" };
   }

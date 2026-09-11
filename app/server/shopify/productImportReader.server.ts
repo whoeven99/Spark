@@ -3,6 +3,7 @@
  */
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { chunkItems } from "../shopify/productIdQuery.server";
+import type { BulkMetafieldValue } from "../../lib/bulkMetafieldEdit";
 import {
   normalizeGid,
   type ProductImportProductSnapshot,
@@ -18,6 +19,7 @@ const PRODUCTS_QUERY = `#graphql
           id
           title
           handle
+          descriptionHtml
           vendor
           productType
           status
@@ -27,7 +29,14 @@ const PRODUCTS_QUERY = `#graphql
           publishedAt
           seo { title description }
           variants(first: 100) {
-            nodes { id title sku price compareAtPrice }
+            nodes {
+              id
+              title
+              sku
+              price
+              compareAtPrice
+              inventoryItem { id unitCost { amount } }
+            }
           }
         }
       }
@@ -35,18 +44,64 @@ const PRODUCTS_QUERY = `#graphql
   }
 `;
 
+const PRODUCTS_WITH_METAFIELDS_QUERY = `#graphql
+  query ProductImportProductsWithMetafields($first: Int!, $after: String, $query: String!) {
+    products(first: $first, after: $after, query: $query) {
+      pageInfo { hasNextPage endCursor }
+      edges {
+        node {
+          id
+          title
+          handle
+          descriptionHtml
+          vendor
+          productType
+          status
+          tags
+          totalInventory
+          tracksInventory
+          publishedAt
+          seo { title description }
+          metafields(first: 30) { nodes { namespace key type value } }
+          variants(first: 100) {
+            nodes {
+              id
+              title
+              sku
+              price
+              compareAtPrice
+              inventoryItem { id unitCost { amount } }
+              metafields(first: 20) { nodes { namespace key type value } }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+type MetafieldNode = {
+  namespace?: string | null;
+  key?: string | null;
+  type?: string | null;
+  value?: string | null;
+};
+
 type VariantNode = {
   id?: string | null;
   title?: string | null;
   sku?: string | null;
   price?: string | null;
   compareAtPrice?: string | null;
+  inventoryItem?: { id?: string | null; unitCost?: { amount?: string | null } | null } | null;
+  metafields?: { nodes?: MetafieldNode[] | null } | null;
 };
 
 type ProductNode = {
   id?: string | null;
   title?: string | null;
   handle?: string | null;
+  descriptionHtml?: string | null;
   vendor?: string | null;
   productType?: string | null;
   status?: string | null;
@@ -55,8 +110,25 @@ type ProductNode = {
   tracksInventory?: boolean | null;
   publishedAt?: string | null;
   seo?: { title?: string | null; description?: string | null } | null;
+  metafields?: { nodes?: MetafieldNode[] | null } | null;
   variants?: { nodes?: VariantNode[] | null } | null;
 };
+
+function mapMetafields(nodes: MetafieldNode[] | null | undefined): BulkMetafieldValue[] {
+  const out: BulkMetafieldValue[] = [];
+  for (const node of nodes ?? []) {
+    const namespace = node.namespace?.trim();
+    const key = node.key?.trim();
+    if (!namespace || !key) continue;
+    out.push({
+      namespace,
+      key,
+      type: node.type?.trim() || "",
+      value: node.value ?? "",
+    });
+  }
+  return out;
+}
 
 function mapVariant(node: VariantNode): ProductImportVariantSnapshot | null {
   const variantId = node.id?.trim();
@@ -67,6 +139,9 @@ function mapVariant(node: VariantNode): ProductImportVariantSnapshot | null {
     sku: node.sku?.trim() || null,
     price: node.price ?? null,
     compareAtPrice: node.compareAtPrice ?? null,
+    inventoryItemId: node.inventoryItem?.id?.trim() || null,
+    cost: node.inventoryItem?.unitCost?.amount ?? null,
+    metafields: mapMetafields(node.metafields?.nodes),
   };
 }
 
@@ -77,6 +152,7 @@ function mapProduct(node: ProductNode): ProductImportProductSnapshot | null {
     productId,
     productTitle: node.title?.trim() || productId,
     handle: node.handle?.trim() || "",
+    descriptionHtml: node.descriptionHtml ?? "",
     vendor: node.vendor?.trim() ?? "",
     productType: node.productType?.trim() ?? "",
     seoTitle: node.seo?.title?.trim() ?? "",
@@ -86,7 +162,10 @@ function mapProduct(node: ProductNode): ProductImportProductSnapshot | null {
     totalInventory: typeof node.totalInventory === "number" ? node.totalInventory : 0,
     tracksInventory: node.tracksInventory === true,
     publishedAt: node.publishedAt ?? null,
-    variants: (node.variants?.nodes ?? []).map(mapVariant).filter((item): item is ProductImportVariantSnapshot => Boolean(item)),
+    metafields: mapMetafields(node.metafields?.nodes),
+    variants: (node.variants?.nodes ?? [])
+      .map(mapVariant)
+      .filter((item): item is ProductImportVariantSnapshot => Boolean(item)),
   };
 }
 
@@ -97,6 +176,7 @@ function quoteTerm(value: string): string {
 async function queryProducts(
   admin: ShopifyAdminGraphqlClient,
   clauses: string[],
+  query: string,
 ): Promise<ProductImportProductSnapshot[]> {
   const collected: ProductImportProductSnapshot[] = [];
   const seen = new Set<string>();
@@ -104,7 +184,7 @@ async function queryProducts(
     let after: string | null = null;
     const search = group.join(" OR ");
     for (;;) {
-      const response = await admin.graphql(PRODUCTS_QUERY, {
+      const response = await admin.graphql(query, {
         variables: { first: 50, after, query: search },
       });
       if (!response.ok) throw new Error(`Shopify products query failed: HTTP ${response.status}`);
@@ -136,6 +216,7 @@ async function queryProducts(
 export async function fetchProductsForImport(
   admin: ShopifyAdminGraphqlClient,
   args: { handles: string[]; skus: string[]; productIds: string[] },
+  options: { includeMetafields?: boolean } = {},
 ): Promise<ProductImportProductSnapshot[]> {
   const clauses: string[] = [];
   for (const handle of args.handles) {
@@ -150,7 +231,11 @@ export async function fetchProductsForImport(
     if (numeric) clauses.push(`id:${numeric}`);
   }
   if (clauses.length === 0) return [];
-  return queryProducts(admin, clauses);
+  return queryProducts(
+    admin,
+    clauses,
+    options.includeMetafields ? PRODUCTS_WITH_METAFIELDS_QUERY : PRODUCTS_QUERY,
+  );
 }
 
 export function indexImportCatalog(products: ProductImportProductSnapshot[]) {
