@@ -15,10 +15,6 @@ import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skil
 import { bulkPriceEditSkillDefinition } from "./bulkPriceEdit";
 import { bulkTagEditSkillDefinition } from "./bulkTagEdit";
 import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
-import { bulkProductFieldEditSkillDefinition } from "./bulkProductFieldEdit";
-import { bulkCollectionEditSkillDefinition } from "./bulkCollectionEdit";
-import { productDuplicateSkillDefinition } from "./productDuplicate";
-import { bulkArchiveSkillDefinition } from "./bulkArchive";
 import { productExportSkillDefinition } from "./productExport";
 import { productImportSkillDefinition } from "./productImport";
 import { seoAuditSkillDefinition } from "./seoAudit";
@@ -123,10 +119,6 @@ globalToolRegistry.register(bulkTagEditSkillDefinition);
 // 批量上下架：同上，写回走 productUpdate 只改 status，不碰销售渠道发布
 globalToolRegistry.register(bulkStatusEditSkillDefinition);
 
-globalToolRegistry.register(bulkProductFieldEditSkillDefinition);
-globalToolRegistry.register(bulkCollectionEditSkillDefinition);
-globalToolRegistry.register(productDuplicateSkillDefinition);
-globalToolRegistry.register(bulkArchiveSkillDefinition);
 globalToolRegistry.register(productExportSkillDefinition);
 globalToolRegistry.register(productImportSkillDefinition);
 

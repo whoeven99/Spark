@@ -43,10 +43,11 @@ describe("isChatInlineReviewTask", () => {
     expect(isChatInlineReviewTask("picture_translate")).toBe(true);
     expect(isChatInlineReviewTask("image_generation")).toBe(true);
     expect(isChatInlineReviewTask("bulk_price_edit")).toBe(true);
-    expect(isChatInlineReviewTask("bulk_product_field_edit")).toBe(true);
-    expect(isChatInlineReviewTask("bulk_collection_edit")).toBe(true);
-    expect(isChatInlineReviewTask("product_duplicate")).toBe(true);
-    expect(isChatInlineReviewTask("bulk_archive")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_status_edit")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_product_field_edit")).toBe(false);
+    expect(isChatInlineReviewTask("bulk_collection_edit")).toBe(false);
+    expect(isChatInlineReviewTask("product_duplicate")).toBe(false);
+    expect(isChatInlineReviewTask("bulk_archive")).toBe(false);
     expect(isChatInlineReviewTask("product_export")).toBe(true);
     expect(isChatInlineReviewTask("product_import")).toBe(true);
   });

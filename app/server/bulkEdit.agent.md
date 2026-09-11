@@ -4,7 +4,7 @@
 
 改动本族任何文件前先读本文件。全局边界（哪些 `POST /api/bulk-*` 是唯一写回入口、对话内审核白名单、`TaskProposalField` 远端资源字段约定）仍以根 `AGENTS.md` 第 3、7 节为准。
 
-当前在线能力：商户入口是**导出商品**与**导入商品**。调价 / 打标 / 上下架 / Vendor·类型·SEO / 合集 / 复制 / 归档仍走各自四层与 apply，但首页与启发式开卡收成导入；旧规则 Skill 保留给进行中任务。另有只读站内 SEO 体检。独立的价目表 / 成本价 / 库存导入路由不要加回；成本、库存、Handle、删除、Metafield、用表格新建商品一期仍不写回。
+当前在线能力：商户入口是**导出商品**与**导入商品**。调价 / 打标 / 上下架仍有独立规则 Skill（进行中任务可审可写）。Vendor·类型·SEO / 合集 / 复制 / 归档没有独立入口，只作为导入内部 apply。另有只读站内 SEO 体检。独立的价目表 / 成本价 / 库存导入路由不要加回；成本、库存、Handle、删除、Metafield、用表格新建商品一期仍不写回。
 
 ## 0. 共享架构
 
@@ -51,27 +51,20 @@
 
 每条 issue 带 `fixability`（`product_content` / `bulk_seo` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 与重复标题/描述恒为 `manual`（改 handle 会断链接、要配 301；互不相同的 SEO 不能用同一条 set 规则批量写）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
 
-### 1.5 批量改 Vendor / 类型 / SEO 字段
+### 1.5 Vendor / 类型 / SEO、合集、复制、归档（仅导入内部调用）
 
-与调价同构：纯算 `app/lib/bulkProductFieldEdit.ts`（`set`/`clear`，SEO 超 `seoDisplayWidth` 跳过）、只读 `app/server/shopify/productFieldReader.server.ts`、试算 `app/server/bulkProductFieldEdit/bulkProductFieldEditDryRun.server.ts`、写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 vendor / productType / seo 的调用处，并发 2）。SEO 只传变化的那一侧（`seo.title` 或 `seo.description`）。Skill 只暴露 `list_product_fields` 与 `open_bulk_product_field_edit_form`。不要用这个能力改 handle。
+这四项没有独立 Skill、开卡、dry-run 或写回路由。商户改这些列只走导入。mutation 仍只出现在各自 apply：
 
-### 1.6 批量加入 / 移出合集
+- 字段 / SEO：纯算 `app/lib/bulkProductFieldEdit.ts`，写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 vendor / productType / seo 的调用处）。不要用它改 handle。
+- 合集：纯算 `app/lib/bulkCollectionEdit.ts`，只读 `collectionMembershipReader`，写回 `bulkCollectionEditApply.server.ts`（唯一 `collectionUpdate` 改 source selections 的调用处，每批 ≤50）。没有可写 `CollectionConditionsSource` 时不要静默跳过。
+- 复制：纯算 `app/lib/productDuplicate.ts`（默认后缀 ` (Copy)`、草稿、带图，上限 50），写回 `productDuplicateApply.server.ts`（唯一 `productDuplicate` 调用处）。
+- 归档：纯算 `app/lib/bulkArchive.ts`，读侧复用 `productStatusReader`，写回 `bulkArchiveApply.server.ts`（只写 `status: ARCHIVED`）。与上下架分开，避免破坏 ACTIVE/DRAFT 白名单。
 
-纯算 `app/lib/bulkCollectionEdit.ts`、只读 `app/server/shopify/collectionMembershipReader.server.ts`、试算 `app/server/bulkCollectionEdit/bulkCollectionEditDryRun.server.ts`、写回 `app/server/bulkCollectionEdit/bulkCollectionEditApply.server.ts`（唯一 `collectionUpdate` 改 source selections 的调用处，每批 ≤50）。2026-07 起 `collection_type` 已删除，列表拉全部合集；加入走 `inclusion.selectionsToAdd` 并清 exclusion，移出走 `inclusion.selectionsToRemove` 并加 exclusion，这样条件命中的商品也能移出。没有可写 `CollectionConditionsSource`（仅子合集或他人 shareable source）时 dry-run 整单失败，不要静默跳过。`collectionUpdate` 可能返回异步 job，结果里带 `pendingJob`。Skill 只暴露只读合集列表与开卡。
-
-### 1.7 复制商品
-
-纯算 `app/lib/productDuplicate.ts`（默认后缀 ` (Copy)`、草稿、带图，上限 50）、只读 `app/server/shopify/productDuplicateReader.server.ts`、试算 `app/server/productDuplicate/productDuplicateDryRun.server.ts`、写回 `app/server/productDuplicate/productDuplicateApply.server.ts`（唯一 `productDuplicate` 调用处，`synchronous: true`；过大商品若只返回 job 记失败）。Skill 只开卡。
-
-### 1.8 归档商品
-
-与上下架分开，避免破坏 ACTIVE/DRAFT 白名单。纯算 `app/lib/bulkArchive.ts`、读侧复用 `productStatusReader`、试算 `app/server/bulkArchive/bulkArchiveDryRun.server.ts`、写回 `app/server/bulkArchive/bulkArchiveApply.server.ts`（只写 `status: ARCHIVED`）。已归档跳过。Skill 只开卡。
-
-### 1.9 导出商品（只读）
+### 1.6 导出商品（只读）
 
 纯算 `app/lib/productExport.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200），格式为 Shopify CSV 或 TikTok Catalog Feed CSV（复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告）。
 
-### 1.10 导入商品（商户主入口）
+### 1.7 导入商品（商户主入口）
 
 一期路径：识别文件 → 校验 → 反馈问题行及改法 → 确认后写回。纯算 `app/lib/productImport.ts` + `app/lib/productImportPlan.ts`，解析 `app/server/productImport/parseImportSpreadsheet.server.ts`（必须读 original buffer，不能用 parsed.txt），只读 `app/server/shopify/productImportReader.server.ts`，试算 `app/server/productImport/productImportDryRun.server.ts`（零 mutation，落 `pending_review`），写回 `app/server/productImport/productImportApply.server.ts`（只编排已有 apply，不新增 GraphQL mutation）。路由 `POST /api/product-import`，门禁 `confirm: true` + `pending_review`。Skill 只开卡 `open_product_import_form`；没有文件也要开卡。
 

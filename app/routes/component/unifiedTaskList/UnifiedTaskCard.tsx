@@ -3,10 +3,6 @@ import { ProductImproveTaskCard } from "../productImprove/ProductImproveTaskCard
 import { BulkPriceEditTaskCard } from "../bulkPriceEdit/BulkPriceEditTaskCard";
 import { BulkTagEditTaskCard } from "../bulkTagEdit/BulkTagEditTaskCard";
 import { BulkStatusEditTaskCard } from "../bulkStatusEdit/BulkStatusEditTaskCard";
-import { BulkProductFieldEditTaskCard } from "../bulkProductFieldEdit/BulkProductFieldEditTaskCard";
-import { BulkCollectionEditTaskCard } from "../bulkCollectionEdit/BulkCollectionEditTaskCard";
-import { ProductDuplicateTaskCard } from "../productDuplicate/ProductDuplicateTaskCard";
-import { BulkArchiveTaskCard } from "../bulkArchive/BulkArchiveTaskCard";
 import { ProductExportTaskCard } from "../productExport/ProductExportTaskCard";
 import { ProductImportTaskCard } from "../productImport/ProductImportTaskCard";
 import { TaskCard } from "../aiTask/TaskCard";
@@ -97,54 +93,6 @@ export function UnifiedTaskCard({
   if (task.taskType === "bulk_status_edit") {
     return (
       <BulkStatusEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_product_field_edit") {
-    return (
-      <BulkProductFieldEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_collection_edit") {
-    return (
-      <BulkCollectionEditTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "product_duplicate") {
-    return (
-      <ProductDuplicateTaskCard
-        task={task}
-        locationSearch={locationSearch}
-        onDelete={() => onAITaskDeleted(task.id)}
-        onTaskUpdated={onTaskUpdated}
-        deleting={deleting}
-      />
-    );
-  }
-
-  if (task.taskType === "bulk_archive") {
-    return (
-      <BulkArchiveTaskCard
         task={task}
         locationSearch={locationSearch}
         onDelete={() => onAITaskDeleted(task.id)}

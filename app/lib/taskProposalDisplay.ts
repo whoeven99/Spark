@@ -12,10 +12,6 @@ import {
   type TaskProposalTargetKind,
 } from "./taskProposalPayload";
 import {
-  BULK_ARCHIVE_SKILL_ID,
-  BULK_COLLECTION_EDIT_SKILL_ID,
-  BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
-  PRODUCT_DUPLICATE_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
   PRODUCT_IMPORT_SKILL_ID,
 } from "./productManageTaskProposals";
@@ -29,10 +25,6 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.title`,
   [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.title`,
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.title`,
-  [BULK_PRODUCT_FIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkProductFieldEdit.title`,
-  [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.title`,
-  [PRODUCT_DUPLICATE_SKILL_ID]: `${PREFIX}.skills.productDuplicate.title`,
-  [BULK_ARCHIVE_SKILL_ID]: `${PREFIX}.skills.bulkArchive.title`,
   [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.title`,
   [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.title`,
 };
@@ -44,10 +36,6 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
 const SINGLE_TASK_SKILL_IDS = new Set<string>([
   BULK_PRICE_EDIT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
-  BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
-  BULK_COLLECTION_EDIT_SKILL_ID,
-  PRODUCT_DUPLICATE_SKILL_ID,
-  BULK_ARCHIVE_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
   PRODUCT_IMPORT_SKILL_ID,
 ]);
@@ -62,10 +50,6 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.summary`,
   [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.summary`,
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.summary`,
-  [BULK_PRODUCT_FIELD_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkProductFieldEdit.summary`,
-  [BULK_COLLECTION_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkCollectionEdit.summary`,
-  [PRODUCT_DUPLICATE_SKILL_ID]: `${PREFIX}.skills.productDuplicate.summary`,
-  [BULK_ARCHIVE_SKILL_ID]: `${PREFIX}.skills.bulkArchive.summary`,
   [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.summary`,
   [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.summary`,
 };
@@ -77,10 +61,6 @@ const TASK_TYPE_TO_SKILL_ID: Record<string, string> = {
   image_generation: IMAGE_GENERATION_SKILL_ID,
   bulk_price_edit: BULK_PRICE_EDIT_SKILL_ID,
   bulk_status_edit: BULK_STATUS_EDIT_SKILL_ID,
-  bulk_product_field_edit: BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
-  bulk_collection_edit: BULK_COLLECTION_EDIT_SKILL_ID,
-  product_duplicate: PRODUCT_DUPLICATE_SKILL_ID,
-  bulk_archive: BULK_ARCHIVE_SKILL_ID,
   product_export: PRODUCT_EXPORT_SKILL_ID,
   product_import: PRODUCT_IMPORT_SKILL_ID,
 };

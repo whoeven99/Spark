@@ -39,17 +39,11 @@ import {
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import {
-  BULK_COLLECTION_EDIT_SKILL_ID,
-  buildBulkArchiveProposal,
-  buildBulkCollectionEditProposal,
-  buildBulkProductFieldEditProposal,
-  buildProductDuplicateProposal,
   buildProductExportProposal,
   buildProductImportProposal,
 } from "../../../lib/productManageTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImport } from "../../../lib/promptSkillFocus";
-import { listManualCollections } from "../../shopify/collectionMembershipReader.server";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
@@ -126,10 +120,6 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "bulkStatusEditForm",
   "bulkPriceEditForm",
   "bulkTagEditForm",
-  "bulkProductFieldEditForm",
-  "bulkCollectionEditForm",
-  "productDuplicateForm",
-  "bulkArchiveForm",
   "productExportForm",
   "productImportForm",
   "productImproveForm",
@@ -169,22 +159,6 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   {
     skill: "bulkPriceEdit",
     build: (products) => buildBulkPriceEditProposal({ products }),
-  },
-  {
-    skill: "bulkProductFieldEdit",
-    build: (products) => buildBulkProductFieldEditProposal({ products }),
-  },
-  {
-    skill: "bulkCollectionEdit",
-    build: (products) => buildBulkCollectionEditProposal({ products }),
-  },
-  {
-    skill: "productDuplicate",
-    build: (products) => buildProductDuplicateProposal({ products }),
-  },
-  {
-    skill: "bulkArchive",
-    build: (products) => buildBulkArchiveProposal({ products }),
   },
   {
     skill: "productExport",
@@ -242,27 +216,6 @@ export function resolveDeterministicTaskProposalForTurn(params: {
     ? uniqueSkillNames([...heuristicSkills, ...focusSkills])
     : heuristicSkills;
   return tryDeterministicTaskProposalFromSkills(skillNames, params.lastUserText);
-}
-
-async function enrichDeterministicTaskProposal(
-  proposal: TaskProposalPayload,
-  admin?: ShopifyAdminGraphqlClient,
-): Promise<TaskProposalPayload> {
-  if (proposal.skillId !== BULK_COLLECTION_EDIT_SKILL_ID || !admin) return proposal;
-  let collections: Array<{ value: string; label: string }> = [];
-  try {
-    collections = await listManualCollections(admin);
-  } catch (error) {
-    console.error("[BulkCollectionEdit][Fallback] list collections failed", error);
-  }
-  const collectionAction = proposal.params.find((field) => field.key === "collectionAction")?.value;
-  const collectionId = proposal.params.find((field) => field.key === "collectionId")?.value;
-  return buildBulkCollectionEditProposal({
-    products: proposal.targets.items,
-    collections,
-    ...(collectionAction ? { collectionAction } : {}),
-    ...(collectionId ? { collectionId } : {}),
-  });
 }
 
 export function extractToolsCalledFromMessages(messages: BaseMessage[]): string[] {
@@ -443,10 +396,6 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "bulkStatusEdit",
   "bulkPriceEdit",
   "bulkTagEdit",
-  "bulkProductFieldEdit",
-  "bulkCollectionEdit",
-  "productDuplicate",
-  "bulkArchive",
   "productExport",
   "productImport",
 ]);
@@ -490,7 +439,7 @@ function resolutionFromTaskProposal(
 
 /**
  * 文案声称开卡但工具未下发时的一致性兜底：
- * 1) 按用户意图确定性补 TaskProposal（批量合集 / 导出等，不要求助手先声称开卡）；
+ * 1) 按用户意图确定性补 TaskProposal（导入 / 导出等，不要求助手先声称开卡）；
  * 2) 再走原有 LLM 补卡（图片生成等旧卡类型）；
  * 3) 仍无卡则改掉误导开卡话术，禁止「说了有卡却没有」。
  */
@@ -519,8 +468,7 @@ export async function resolveMissingChatCardsWithLlm(params: {
     claimed,
   });
   if (deterministic) {
-    const proposal = await enrichDeterministicTaskProposal(deterministic, params.admin);
-    return resolutionFromTaskProposal(proposal, emittedFlags);
+    return resolutionFromTaskProposal(deterministic, emittedFlags);
   }
 
   // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，

@@ -36,7 +36,7 @@ export const productImportSkillDefinition: ToolDefinition = {
     "上传 CSV / Excel 导入商品变更。先检查是否符合 Shopify 要求并反馈怎么改，确认后才写回。一期支持价格、标签、状态、Vendor、类型、SEO、合集、复制、归档。",
   systemPromptExtension: [
     `用户要导入商品、按表格批量改价/标签/状态/字段/合集/复制/归档时，立刻调用 ${OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME}。没有文件也要开卡，不要只在对话里让对方去上传完再来。`,
-    "不要再打开批量调价/打标/上下架/改字段/合集/复制/归档那些独立确认卡；那些都是导入的子集。",
+    "不要再打开批量调价/打标/上下架那些独立确认卡。改字段/SEO、合集、复制、归档没有独立入口，一律走导入。",
     "Handle / 成本 / Metafield / 删除商品 / 用表格新建商品一期不做，开卡后在校验报告里说明。",
   ].join("\n"),
   createTool: () => [productImportFormTool],

@@ -37,10 +37,6 @@ import { ImageGenerationTaskDetailPage } from "../../component/imageStudio/Image
 import { BulkPriceEditTaskDetailPage } from "../../component/bulkPriceEdit/BulkPriceEditTaskDetailPage";
 import { BulkTagEditTaskDetailPage } from "../../component/bulkTagEdit/BulkTagEditTaskDetailPage";
 import { BulkStatusEditTaskDetailPage } from "../../component/bulkStatusEdit/BulkStatusEditTaskDetailPage";
-import { BulkProductFieldEditTaskDetailPage } from "../../component/bulkProductFieldEdit/BulkProductFieldEditTaskDetailPage";
-import { BulkCollectionEditTaskDetailPage } from "../../component/bulkCollectionEdit/BulkCollectionEditTaskDetailPage";
-import { ProductDuplicateTaskDetailPage } from "../../component/productDuplicate/ProductDuplicateTaskDetailPage";
-import { BulkArchiveTaskDetailPage } from "../../component/bulkArchive/BulkArchiveTaskDetailPage";
 import { ProductExportTaskDetailPage } from "../../component/productExport/ProductExportTaskDetailPage";
 import { ProductImportTaskDetailPage } from "../../component/productImport/ProductImportTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
@@ -1011,66 +1007,6 @@ export function ChatPanel({
           />
         ) : reviewTask?.taskType === "bulk_status_edit" ? (
           <BulkStatusEditTaskDetailPage
-            task={reviewTask}
-            onBack={closeReviewDialog}
-            showBackButton={false}
-            onTaskUpdated={(taskId, status, result) => {
-              upsertTaskStatus(taskId, status, result);
-              setReviewTask((prev) =>
-                prev && prev.id === taskId
-                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
-                  : prev,
-              );
-              onAiTaskUpdated(conversation.id, taskId, status, result);
-            }}
-          />
-        ) : reviewTask?.taskType === "bulk_product_field_edit" ? (
-          <BulkProductFieldEditTaskDetailPage
-            task={reviewTask}
-            onBack={closeReviewDialog}
-            showBackButton={false}
-            onTaskUpdated={(taskId, status, result) => {
-              upsertTaskStatus(taskId, status, result);
-              setReviewTask((prev) =>
-                prev && prev.id === taskId
-                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
-                  : prev,
-              );
-              onAiTaskUpdated(conversation.id, taskId, status, result);
-            }}
-          />
-        ) : reviewTask?.taskType === "bulk_collection_edit" ? (
-          <BulkCollectionEditTaskDetailPage
-            task={reviewTask}
-            onBack={closeReviewDialog}
-            showBackButton={false}
-            onTaskUpdated={(taskId, status, result) => {
-              upsertTaskStatus(taskId, status, result);
-              setReviewTask((prev) =>
-                prev && prev.id === taskId
-                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
-                  : prev,
-              );
-              onAiTaskUpdated(conversation.id, taskId, status, result);
-            }}
-          />
-        ) : reviewTask?.taskType === "product_duplicate" ? (
-          <ProductDuplicateTaskDetailPage
-            task={reviewTask}
-            onBack={closeReviewDialog}
-            showBackButton={false}
-            onTaskUpdated={(taskId, status, result) => {
-              upsertTaskStatus(taskId, status, result);
-              setReviewTask((prev) =>
-                prev && prev.id === taskId
-                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
-                  : prev,
-              );
-              onAiTaskUpdated(conversation.id, taskId, status, result);
-            }}
-          />
-        ) : reviewTask?.taskType === "bulk_archive" ? (
-          <BulkArchiveTaskDetailPage
             task={reviewTask}
             onBack={closeReviewDialog}
             showBackButton={false}
