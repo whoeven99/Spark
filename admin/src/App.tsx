@@ -39,6 +39,7 @@ import OpenRouterProbe from "./pages/OpenRouterProbe";
 import SparkCredits from "./pages/SparkCredits";
 import SparkBilling from "./pages/SparkBilling";
 import ReferralCodes from "./pages/ReferralCodes";
+import XhsPromo from "./pages/XhsPromo";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="billing" element={<SparkBilling />} />
             <Route path="credits" element={<SparkCredits />} />
             <Route path="referral-codes" element={<ReferralCodes />} />
+            <Route path="xhs-promo" element={<XhsPromo />} />
             <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="agent-runs" element={<AgentRuns />} />

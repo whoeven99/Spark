@@ -42,6 +42,8 @@ const MEMBERS: { key: TodoAssignee; label: string; hue: string; soft: string }[]
   { key: "yewen",    label: "Yewen",    hue: "#3b7fc4", soft: "#eaf2fb" },
   { key: "allen",    label: "Allen",    hue: "#2f9e6b", soft: "#e8f6ef" },
   { key: "zhuangze", label: "Zhuangze", hue: "#8b5cd6", soft: "#f2ebfb" },
+  { key: "joel",     label: "Joel",     hue: "#d46b08", soft: "#fff7e6" },
+  { key: "sun",      label: "Sun",      hue: "#13c2c2", soft: "#e6fffb" },
 ];
 const UNASSIGNED = { key: null as null, label: "未分配", hue: "#9ca3af", soft: "#f1f0ee" };
 const COLS = [...MEMBERS, UNASSIGNED];

@@ -1,11 +1,25 @@
 import "./styles/app.css";
 import { useEffect, useState } from "react";
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
+import {
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useLoaderData,
+  useMatches,
+} from "react-router";
 import { ConfigProvider } from "antd";
 import { DEFAULT_LOCALE } from "./i18n/config";
 import { antdTheme } from "./styles/antdTheme";
 
+export async function loader() {
+  const gaMeasurementId = process.env.GA_MEASUREMENT_ID?.trim();
+  return { gaMeasurementId: gaMeasurementId || null };
+}
+
 export default function App() {
+  const { gaMeasurementId } = useLoaderData<typeof loader>();
   const matches = useMatches();
   const [antdReady, setAntdReady] = useState(false);
   const appMatch = matches.find((match) => match.id === "routes/app");
@@ -33,6 +47,22 @@ export default function App() {
           rel="stylesheet"
           href="https://cdn.shopify.com/static/fonts/inter/v4/styles.css"
         />
+        {gaMeasurementId ? (
+          <>
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${gaMeasurementId}');`,
+              }}
+            />
+          </>
+        ) : null}
         <Meta />
         <Links />
       </head>

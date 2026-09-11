@@ -150,6 +150,7 @@ npm run turso:migrate:test
 - Partner API 卸载反馈：`SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`。
 - 广告 Meta：`META_APP_ID`、`META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。
 - PageSpeed Insights：仅走 Google PSI API v5；可选平台级 `GOOGLE_PAGESPEED_API_KEY`（不是商户 OAuth）。
+- Google Analytics（Spark 应用自身使用上报）：可选 `GA_MEASUREMENT_ID`（GA4 测量 ID，形如 `G-XXXXXXXXXX`）；缺省不注入 gtag 脚本。
 - TikTok Pixel（Ads Catalog）：
   - UI：`/app/ads-catalog` TikTok 面板；店面 Theme App Embed 读 Shop metafield `spark_tiktok.pixel_config`。
   - 测试事件：保存 / Go to Online Store 时写入 `testEventCode` + `storefrontTrackUrl`；店面浏览/加购经公开端点双发 Events API；删除后恢复正式事件。

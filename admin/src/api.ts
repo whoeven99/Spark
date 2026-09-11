@@ -3,7 +3,7 @@ const ROLE_KEY = "spark_admin_role";
 const USER_ID_KEY = "spark_admin_user_id";
 
 export type AdminRole = "owner" | "user";
-export type AdminUserId = "yewen" | "allen" | "zhuangze";
+export type AdminUserId = "yewen" | "allen" | "zhuangze" | "joel" | "sun";
 
 export const ADMIN_USER_OPTIONS: ReadonlyArray<{
   id: AdminUserId;
@@ -12,6 +12,8 @@ export const ADMIN_USER_OPTIONS: ReadonlyArray<{
   { id: "yewen", label: "Yewen" },
   { id: "allen", label: "Allen" },
   { id: "zhuangze", label: "Zhuangze" },
+  { id: "joel", label: "Joel" },
+  { id: "sun", label: "Sun" },
 ];
 
 export function getToken(): string {
@@ -43,7 +45,9 @@ export function isOwner(): boolean {
 
 export function getAdminUserId(): AdminUserId | null {
   const v = localStorage.getItem(USER_ID_KEY);
-  if (v === "yewen" || v === "allen" || v === "zhuangze") return v;
+  if (v === "yewen" || v === "allen" || v === "zhuangze" || v === "joel" || v === "sun") {
+    return v;
+  }
   return null;
 }
 
@@ -1216,7 +1220,7 @@ export function deleteMonthlyFixedCost(id: string): Promise<{ ok: boolean }> {
 
 export type TodoStatus = "todo" | "doing" | "done";
 export type TodoPriority = "low" | "medium" | "high";
-export type TodoAssignee = "yewen" | "allen" | "zhuangze";
+export type TodoAssignee = "yewen" | "allen" | "zhuangze" | "joel" | "sun";
 
 export type TodoRow = {
   id: string;
@@ -3277,5 +3281,291 @@ export function postOpenRouterImages(body: {
   return apiFetch("/openrouter-probe/images", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export type XhsPromoDirection = "howto" | "compare" | "data";
+
+export type XhsPromoCopyProvider = "volc-ark" | "deepseek" | "openai";
+export type XhsPromoCoverProvider = "volc-ark" | "openai" | "template";
+
+export type XhsPromoCopyOption = {
+  provider: XhsPromoCopyProvider;
+  model: string;
+};
+
+export type XhsPromoCoverOption = {
+  provider: XhsPromoCoverProvider;
+  model: string;
+};
+
+export type XhsPromoStatus = {
+  copy: {
+    configured: boolean;
+    provider: string | null;
+    model: string | null;
+    options: XhsPromoCopyOption[];
+    hint?: string;
+  };
+  cover: {
+    configured: boolean;
+    provider: string;
+    model: string;
+    options: XhsPromoCoverOption[];
+  };
+};
+
+export type XhsPromoCoverSlots = {
+  headline: string;
+  subhead: string;
+  leftTitle: string;
+  rightTitle: string;
+  leftHook: string;
+  rightHook: string;
+  left: string[];
+  right: string[];
+  metric: string;
+  metricNote: string;
+  promptBox: string;
+};
+
+export type XhsPromoContentCardSlot = {
+  headline: string;
+  lines: string[];
+};
+
+export type XhsPromoContentCard = XhsPromoContentCardSlot & {
+  image: { mimeType: string; base64: string };
+};
+
+export type XhsPromoPrompts = {
+  titleSystem: string;
+  titleUser: string;
+  copySystem: string;
+  copyUser: string;
+  image: string;
+  cardSystem: string;
+  cardUser: string;
+};
+
+export type XhsPromoTitlesResult = {
+  titles: string[];
+  model: string;
+};
+
+export type XhsPromoCopyResult = {
+  title: string;
+  body: string;
+  tags: string[];
+  coverSlots: XhsPromoCoverSlots;
+  imagePrompt: string;
+  model: string;
+};
+
+export type XhsPromoCoverResult = {
+  image: { mimeType: string; base64: string } | null;
+  coverSlots: XhsPromoCoverSlots;
+  model: string;
+  coverError: string | null;
+};
+
+export type XhsPromoCardsResult = {
+  cards: XhsPromoContentCard[];
+  model: string | null;
+  cardError: string | null;
+};
+
+export type XhsPromoPromptSlot = "title" | "copy" | "cover" | "cards";
+
+export type XhsPromoPromptVersion = {
+  id: string;
+  slot: XhsPromoPromptSlot;
+  direction: XhsPromoDirection;
+  note: string | null;
+  payload: Record<string, string>;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type XhsPromoPromptLatest = Record<XhsPromoPromptSlot, XhsPromoPromptVersion | null>;
+
+export function fetchXhsPromoStatus(): Promise<XhsPromoStatus> {
+  return apiFetch("/promo/xhs/status");
+}
+
+export function fetchXhsPromoPrompts(params: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+  title?: string;
+  body?: string;
+}): Promise<XhsPromoPrompts> {
+  const query = new URLSearchParams({
+    direction: params.direction,
+    topic: params.topic,
+    notes: params.notes ?? "",
+    title: params.title ?? "",
+    body: params.body ?? "",
+  });
+  return apiFetch(`/promo/xhs/prompts?${query.toString()}`);
+}
+
+export function generateXhsPromoTitles(body: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+  copyProvider?: XhsPromoCopyProvider;
+  titleSystemPrompt?: string;
+  titleUserPrompt?: string;
+}): Promise<XhsPromoTitlesResult> {
+  return apiFetch("/promo/xhs/titles", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function generateXhsPromoCopy(body: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+  title: string;
+  copyProvider?: XhsPromoCopyProvider;
+  copySystemPrompt?: string;
+  copyUserPrompt?: string;
+}): Promise<XhsPromoCopyResult> {
+  return apiFetch("/promo/xhs/copy", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function generateXhsPromoCover(body: {
+  direction: XhsPromoDirection;
+  topic: string;
+  title: string;
+  coverProvider?: XhsPromoCoverProvider;
+  coverSlots?: XhsPromoCoverSlots;
+  imagePrompt?: string;
+}): Promise<XhsPromoCoverResult> {
+  return apiFetch("/promo/xhs/cover", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type XhsPromoPreviewResult = {
+  title: string;
+  description: string;
+  images: Array<{ mimeType: string; base64: string }>;
+  finalUrl: string;
+  warning: string | null;
+};
+
+export type XhsPromoAnalyzeResult = {
+  titleSystem: string;
+  titleUser: string;
+  copySystem: string;
+  copyUser: string;
+  imagePrompt: string;
+  cardSystem: string;
+  cardUser: string;
+  styleSummary: string;
+  suggestedTopic: string;
+  source: {
+    title: string;
+    description: string;
+    imageCount: number;
+    finalUrl: string;
+    warning: string | null;
+  } | null;
+  model: string;
+  sawImages: boolean;
+};
+
+export function previewXhsPromoReference(body: {
+  link: string;
+}): Promise<XhsPromoPreviewResult> {
+  return apiFetch("/promo/xhs/preview", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function analyzeXhsPromoReference(body: {
+  direction: XhsPromoDirection;
+  topic?: string;
+  title?: string;
+  body?: string;
+  images?: Array<{ mimeType: string; base64: string }>;
+  copyProvider?: XhsPromoCopyProvider;
+}): Promise<XhsPromoAnalyzeResult> {
+  return apiFetch("/promo/xhs/analyze", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchXhsPromoPromptLatest(
+  direction: XhsPromoDirection,
+): Promise<XhsPromoPromptLatest> {
+  const query = new URLSearchParams({ direction });
+  return apiFetch(`/promo/xhs/prompt-versions/latest?${query.toString()}`);
+}
+
+export function fetchXhsPromoPromptVersions(params: {
+  direction: XhsPromoDirection;
+  slot: XhsPromoPromptSlot;
+}): Promise<{ versions: XhsPromoPromptVersion[] }> {
+  const query = new URLSearchParams({
+    direction: params.direction,
+    slot: params.slot,
+  });
+  return apiFetch(`/promo/xhs/prompt-versions?${query.toString()}`);
+}
+
+export function saveXhsPromoPromptVersion(body: {
+  direction: XhsPromoDirection;
+  slot: XhsPromoPromptSlot;
+  note?: string;
+  payload: Record<string, string>;
+}): Promise<{ version: XhsPromoPromptVersion; duplicate: boolean }> {
+  return apiFetch("/promo/xhs/prompt-versions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteXhsPromoPromptVersion(id: string): Promise<{ ok: true }> {
+  return apiFetch(`/promo/xhs/prompt-versions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function generateXhsPromoCards(body: {
+  direction: XhsPromoDirection;
+  topic: string;
+  notes?: string;
+  title: string;
+  bodyText?: string;
+  copyProvider?: XhsPromoCopyProvider;
+  coverProvider?: XhsPromoCoverProvider;
+  cardSystemPrompt?: string;
+  cardUserPrompt?: string;
+  cards?: XhsPromoContentCardSlot[];
+}): Promise<XhsPromoCardsResult> {
+  return apiFetch("/promo/xhs/cards", {
+    method: "POST",
+    body: JSON.stringify({
+      direction: body.direction,
+      topic: body.topic,
+      notes: body.notes,
+      title: body.title,
+      body: body.bodyText,
+      copyProvider: body.copyProvider,
+      coverProvider: body.coverProvider,
+      cardSystemPrompt: body.cardSystemPrompt,
+      cardUserPrompt: body.cardUserPrompt,
+      cards: body.cards,
+    }),
   });
 }

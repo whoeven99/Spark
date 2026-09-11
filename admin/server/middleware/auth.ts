@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { getEnv } from "../lib/env.js";
 
 export type AdminRole = "owner" | "user";
-export type AdminUserId = "yewen" | "allen" | "zhuangze";
+export type AdminUserId = "yewen" | "allen" | "zhuangze" | "joel" | "sun";
 
 export type AdminUserDef = {
   id: AdminUserId;
@@ -21,6 +21,8 @@ export const ADMIN_USERS: readonly AdminUserDef[] = [
     role: "user",
     envKey: "ADMIN_SECRET_ZHUANGZE",
   },
+  { id: "joel", label: "Joel", role: "user", envKey: "ADMIN_SECRET_JOEL" },
+  { id: "sun", label: "Sun", role: "user", envKey: "ADMIN_SECRET_SUN" },
 ] as const;
 
 export type ResolvedAdminAuth = {
