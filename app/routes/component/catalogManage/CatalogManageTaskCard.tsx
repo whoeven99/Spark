@@ -23,6 +23,23 @@ type DetailProps = {
 
 type Summary = { changed?: number; skipped?: number; exported?: number };
 
+function catalogPreviewActionLabel(
+  status: AITaskStatus,
+  t: (key: string) => string,
+  i18nPrefix: string,
+): string {
+  if (status === "applied") return t(`${i18nPrefix}.actionViewApplied`);
+  if (status === "succeeded") {
+    const key = `${i18nPrefix}.actionViewSucceeded`;
+    const label = t(key);
+    return label !== key ? label : t(`${i18nPrefix}.actionViewApplied`);
+  }
+  const previewKey = `${i18nPrefix}.actionPreview`;
+  const preview = t(previewKey);
+  if (status === "running" && preview !== previewKey) return preview;
+  return t(`${i18nPrefix}.actionReview`);
+}
+
 type Props = {
   task: AITaskItem;
   locationSearch: string;
@@ -123,14 +140,7 @@ export function CatalogManageTaskCard({
     localStatus === "running" ||
     localStatus === "failed" ||
     localStatus === "cancelled";
-  const previewLabelKey = `${i18nPrefix}.actionPreview`;
-  const previewLabelTranslated = t(previewLabelKey);
-  const previewLabel =
-    localStatus === "applied" || localStatus === "succeeded"
-      ? t(`${i18nPrefix}.actionViewApplied`)
-      : localStatus === "running" && previewLabelTranslated !== previewLabelKey
-        ? previewLabelTranslated
-        : t(`${i18nPrefix}.actionReview`);
+  const previewLabel = catalogPreviewActionLabel(localStatus, (key) => t(key), i18nPrefix);
   const actions: CardAction[] = canPreview
     ? [
         {

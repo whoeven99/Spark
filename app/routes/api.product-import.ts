@@ -1,10 +1,29 @@
 import type { ActionFunctionArgs } from "react-router";
 import { runConfirmedCatalogApply } from "../server/bulkEdit/confirmedCatalogApply.server";
 import { applyProductImport } from "../server/productImport/productImportApply.server";
+import { completeEmptyProductImportReview } from "../server/productImport/productImportCompleteReview.server";
 import { coerceBulkProductDeleteRows, countWritableProductDeletes } from "../lib/bulkProductDelete";
 
-export const action = async ({ request }: ActionFunctionArgs) =>
-  runConfirmedCatalogApply({
+function isCompleteReviewBody(raw: unknown): boolean {
+  return Boolean(
+    raw &&
+      typeof raw === "object" &&
+      (raw as { completeReview?: unknown }).completeReview === true,
+  );
+}
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  if (request.method === "POST") {
+    const probe = request.clone();
+    try {
+      if (isCompleteReviewBody(await probe.json())) {
+        return completeEmptyProductImportReview(request);
+      }
+    } catch {
+      // JSON 无效时交给写回骨架返回 400
+    }
+  }
+  return runConfirmedCatalogApply({
     request,
     taskType: "product_import",
     apply: async ({ admin, shop, rawResult, confirmDelete }) => {
@@ -23,3 +42,4 @@ export const action = async ({ request }: ActionFunctionArgs) =>
       };
     },
   });
+};

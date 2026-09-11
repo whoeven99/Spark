@@ -70,7 +70,7 @@
 
 ### 1.7 导入商品（商户主入口）
 
-一期路径：识别文件 → 校验 → 反馈问题行及改法 → 确认后写回。纯算 `app/lib/productImport.ts` + `app/lib/productImportPlan.ts`，解析 `app/server/productImport/parseImportSpreadsheet.server.ts`（必须读 original buffer，不能用 parsed.txt），只读 `app/server/shopify/productImportReader.server.ts`，试算 `app/server/productImport/productImportDryRun.server.ts`（零 mutation，落 `pending_review`），写回 `app/server/productImport/productImportApply.server.ts`（只编排已有 apply，不新增 GraphQL mutation）。路由 `POST /api/product-import`，门禁 `confirm: true` + `pending_review`。Skill 只开卡 `open_product_import_form`；没有文件也要开卡。确认卡上必须勾选要写入的子功能（空卡默认全不勾）并选择 CSV/Excel；勾选哪项，试算/写回就只走对应已有 apply 模块。未勾选的列记 `column_not_selected` 且不写入。
+一期路径：识别文件 → 校验 → 反馈问题行及改法 → 确认后写回。纯算 `app/lib/productImport.ts` + `app/lib/productImportPlan.ts`，解析 `app/server/productImport/parseImportSpreadsheet.server.ts`（必须读 original buffer，不能用 parsed.txt），只读 `app/server/shopify/productImportReader.server.ts`，试算 `app/server/productImport/productImportDryRun.server.ts`（零 mutation，落 `pending_review`），写回 `app/server/productImport/productImportApply.server.ts`（只编排已有 apply，不新增 GraphQL mutation）。路由 `POST /api/product-import`，门禁 `confirm: true` + `pending_review`；无可写变更时打开审核会走 `completeReview: true` 标 `succeeded`（不是 `applied`）。Skill 只开卡 `open_product_import_form`；没有文件也要开卡。确认卡上必须勾选要写入的子功能（空卡默认全不勾）并选择 CSV/Excel；勾选哪项，试算/写回就只走对应已有 apply 模块。未勾选的列记 `column_not_selected` 且不写入。
 
 写回列：标题/正文、价格、成本、Tags、状态、Vendor / 类型 / SEO、Handle、合集、有 definition 的标量 Metafield；文件能表达则做复制、归档、删除。不做：库存数量、用表格新建商品、销售渠道。未知列进 `unsupported_column`。Shopify CSV 的 Handle 向下填充。匹配按 SKU / Handle / Product ID。合集按标题匹配，无写出来源的合集记 `collection_not_writable`。删除行忽略同一行其它列，审核页额外勾选后才写回。
 

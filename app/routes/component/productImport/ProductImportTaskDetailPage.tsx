@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { CatalogMutationTaskDetailPage } from "../catalogManage/CatalogMutationTaskDetailPage";
@@ -16,6 +16,11 @@ import {
   flattenProductImportPreview,
   type ProductImportPreviewRow,
 } from "../../../lib/productImportPreview";
+import {
+  coerceProductImportSheetPreview,
+  type ProductImportSheetPreview,
+} from "../../../lib/productImportSheetPreview";
+import { ProductImportSheetPreviewView } from "./ProductImportSheetPreviewView";
 import type {
   AITaskItem,
   AITaskStatus,
@@ -89,6 +94,12 @@ export function readProductImportResult(task: AITaskItem): ProductImportTaskResu
   };
 }
 
+export function readProductImportSheetPreview(task: AITaskItem): ProductImportSheetPreview | null {
+  const raw = task.result;
+  if (!raw || typeof raw !== "object") return null;
+  return coerceProductImportSheetPreview((raw as Record<string, unknown>).sheetPreview);
+}
+
 export function readProductImportConfig(task: AITaskItem): ProductImportTaskConfig {
   const raw = task.config as Partial<ProductImportTaskConfig>;
   return {
@@ -125,6 +136,7 @@ export function ProductImportTaskDetailPage(props: Props) {
   const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
   const [tab, setTab] = useState<PreviewTab>("changes");
   const result = readProductImportResult(props.task);
+  const sheetPreview = readProductImportSheetPreview(props.task);
   const config = readProductImportConfig(props.task);
   const preview = useMemo(
     () => (result ? flattenProductImportPreview(result) : { changes: [], skips: [] }),
@@ -136,12 +148,45 @@ export function ProductImportTaskDetailPage(props: Props) {
   );
   const issueAndSkipRows = useMemo(() => [...issueRows, ...preview.skips], [issueRows, preview.skips]);
   const writable = result ? countImportWritable(result) : 0;
+  const hasResult = Boolean(result);
+  const onTaskUpdatedRef = useRef(props.onTaskUpdated);
+  const taskResultRef = useRef(props.task.result);
+  onTaskUpdatedRef.current = props.onTaskUpdated;
+  taskResultRef.current = props.task.result;
+
+  useEffect(() => {
+    if (props.task.status !== "pending_review" || !hasResult || writable > 0) return;
+    const taskId = props.task.id;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/product-import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId, completeReview: true }),
+        });
+        const json = (await response.json()) as { ok?: boolean };
+        if (cancelled || !json.ok) return;
+        onTaskUpdatedRef.current?.(
+          taskId,
+          "succeeded",
+          (taskResultRef.current ?? {}) as Record<string, unknown>,
+        );
+      } catch {
+        // 保持 pending_review，商户关闭后再打开可重试
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.task.id, props.task.status, hasResult, writable]);
   const deleteCount = result ? countWritableProductDeletes(result.deleteRows) : 0;
   const handleCount = result ? result.handleRows.filter((row) => !row.skipped).length : 0;
-  const fileName = result?.fileName || config.fileName || t("productImport.ruleLabel");
+    const fileName = result?.fileName || sheetPreview?.fileName || config.fileName || t("productImport.ruleLabel");
   const operations = result?.operations.length ? result.operations : config.operations;
   const activeRows = tab === "changes" ? preview.changes : issueAndSkipRows;
   const running = props.task.status === "running" && !result;
+  const showSheetPreview = running && Boolean(sheetPreview);
   const issueCsv =
     result && result.issues.length > 0
       ? buildProductImportIssueCsv(
@@ -151,11 +196,13 @@ export function ProductImportTaskDetailPage(props: Props) {
         )
       : undefined;
 
-  const emptyNotice = running
-    ? t("productImport.runningPreview")
-    : tab === "changes"
-      ? t("productImport.noChanges")
-      : t("productImport.noIssues");
+  const emptyNotice = showSheetPreview
+    ? null
+    : running
+      ? t("productImport.runningPreview")
+      : tab === "changes"
+        ? t("productImport.noChanges")
+        : t("productImport.noIssues");
 
   return (
     <CatalogMutationTaskDetailPage
@@ -166,10 +213,13 @@ export function ProductImportTaskDetailPage(props: Props) {
       truncated={result?.truncated}
       applied={result?.apply ? { succeeded: result.apply.succeeded, failed: result.apply.failed } : null}
       summaryChips={[
-        { label: t("productImport.summaryRows"), value: result?.summary.rows ?? "—" },
+        { label: t("productImport.summaryRows"), value: result?.summary.rows ?? sheetPreview?.rowCount ?? "—" },
         { label: t("productImport.summaryMatched"), value: result?.summary.matched ?? "—" },
         { label: t("productImport.summaryChanged"), value: result?.summary.changed ?? writable },
-        { label: t("productImport.summaryIssues"), value: result?.summary.issues ?? issueAndSkipRows.length },
+        {
+          label: t("productImport.summaryIssues"),
+          value: result?.summary.issues ?? (sheetPreview ? sheetPreview.issueCount : issueAndSkipRows.length),
+        },
       ]}
       extraNotices={
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -201,6 +251,8 @@ export function ProductImportTaskDetailPage(props: Props) {
               { key: "issues", label: t("productImport.tabIssues"), badgeCount: issueAndSkipRows.length },
             ]}
           />
+        ) : sheetPreview ? (
+          <ProductImportSheetPreviewView preview={sheetPreview} matchingHint={running} />
         ) : null
       }
       emptyNotice={emptyNotice}

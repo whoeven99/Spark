@@ -13,12 +13,15 @@ export function shouldKeepPollingAiTaskStatus(status: AITaskStatus): boolean {
   return status === "running" || status === "pending_review" || status === "scored";
 }
 
-/** 本地已应用后，迟到或缓存的 pending_review 快照不能把状态打回去。 */
+/** 本地已应用/完成后，迟到或缓存的 pending_review 快照不能把状态打回去。 */
 export function shouldRetainLocalAiTaskStatus(
   localStatus: AITaskStatus,
   incomingStatus: AITaskStatus,
 ): boolean {
-  return localStatus === "applied" && incomingStatus === "pending_review";
+  return (
+    (localStatus === "applied" || localStatus === "succeeded") &&
+    incomingStatus === "pending_review"
+  );
 }
 
 export function mergeFetchedAiTask(local: AITaskItem, incoming: AITaskItem): AITaskItem {

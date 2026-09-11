@@ -25,7 +25,11 @@ export function ProductImportTaskCard(props: Props) {
       hasResult={Boolean(result)}
       summary={
         result
-          ? { changed: result.summary.changed, skipped: result.summary.issues }
+          ? {
+              changed: result.summary.changed,
+              skipped: result.summary.issues,
+              exported: result.summary.changed,
+            }
           : null
       }
       ruleLabel={result?.fileName || t("productImport.ruleLabel")}

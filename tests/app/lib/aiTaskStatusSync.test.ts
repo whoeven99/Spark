@@ -45,6 +45,10 @@ describe("shouldRetainLocalAiTaskStatus", () => {
     expect(shouldRetainLocalAiTaskStatus("applied", "pending_review")).toBe(true);
   });
 
+  it("keeps succeeded when a stale pending_review snapshot arrives", () => {
+    expect(shouldRetainLocalAiTaskStatus("succeeded", "pending_review")).toBe(true);
+  });
+
   it("does not block legitimate transitions", () => {
     expect(shouldRetainLocalAiTaskStatus("pending_review", "applied")).toBe(false);
     expect(shouldRetainLocalAiTaskStatus("applied", "applied")).toBe(false);

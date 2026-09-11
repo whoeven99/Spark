@@ -1,7 +1,7 @@
 /**
  * 商品导入 dry-run：读文件 → 校验 → 匹配店铺 → pending_review。零 mutation。
  */
-import { appendLog, failTask, pendingReviewTask } from "../aiTask/aiTaskLogger.server";
+import { appendLog, failTask, pendingReviewTask, updateTaskProgress } from "../aiTask/aiTaskLogger.server";
 import { buildAITaskMessage } from "../../lib/aiTaskMessage";
 import { initI18n } from "../../i18n";
 import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
@@ -19,6 +19,7 @@ import {
 } from "../shopify/productMetafieldReader.server";
 import { parseImportSpreadsheet } from "./parseImportSpreadsheet.server";
 import { analyzeImportSheet, coerceProductImportOperations, PRODUCT_IMPORT_MAX_PRODUCTS } from "../../lib/productImport";
+import { buildProductImportSheetPreview } from "../../lib/productImportSheetPreview";
 import {
   buildProductImportPlan,
   countImportWritable,
@@ -110,6 +111,18 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
     });
     return;
   }
+
+  await updateTaskProgress({
+    taskId: params.taskId,
+    result: {
+      fileName: file.name,
+      sheetPreview: buildProductImportSheetPreview({
+        fileName: file.name,
+        analysis,
+        selectedOperations: selected,
+      }),
+    },
+  });
 
   await appendLog({
     taskId: params.taskId,

@@ -42,6 +42,10 @@ import {
   type ProductImagesCacheEntry,
 } from "./TaskProposalProductImageGrid";
 import { FileField, MultiselectField } from "./TaskProposalFieldControls";
+import {
+  ProductImportProposalPreview,
+  type ProductImportPreviewGate,
+} from "../productImport/ProductImportProposalPreview";
 
 function buildPictureTranslateTargetId(productId: string, imageUrl: string): string {
   return `${productId}::${imageUrl}`;
@@ -585,6 +589,13 @@ export function TaskProposalCard({
     Object.fromEntries(resolved.params.map((f) => [f.key, f.value])),
   );
   const [fileUploading, setFileUploading] = useState(false);
+  const [importPreviewGate, setImportPreviewGate] = useState<ProductImportPreviewGate>({
+    loading: false,
+    blocked: false,
+  });
+  const handleImportPreviewGate = useCallback((gate: ProductImportPreviewGate) => {
+    setImportPreviewGate(gate);
+  }, []);
 
   // 估算（per-item，由前端乘以勾选数量）
   const [estimateLoading, setEstimateLoading] = useState(true);
@@ -671,6 +682,9 @@ export function TaskProposalCard({
       .split(/[,，]/)
       .some((item) => item.trim().length > 0);
   });
+  const isProductImport = resolved.skillId === PRODUCT_IMPORT_SKILL_ID;
+  const importFileId =
+    (paramValues.fileId ?? "").trim() || (isProductImport ? fallbackFileId?.trim() ?? "" : "");
   const canSubmit =
     descriptionReady &&
     resourceFieldsReady &&
@@ -681,7 +695,8 @@ export function TaskProposalCard({
       (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
       targetsQuery !== null) &&
     !submitting &&
-    !done;
+    !done &&
+    !(isProductImport && (importPreviewGate.loading || importPreviewGate.blocked));
   /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标 / 可选目标技能恒为 1 */
   const effectiveCount =
     targetless || targetsOptional
@@ -1206,6 +1221,14 @@ export function TaskProposalCard({
               </div>
             ))}
 
+            {isProductImport && importFileId ? (
+              <ProductImportProposalPreview
+                fileId={importFileId}
+                operations={paramValues.operations ?? ""}
+                onGateChange={handleImportPreviewGate}
+              />
+            ) : null}
+
             {/* Estimation：未选对象时不占版面 */}
             {effectiveCount > 0 || targetless ? (
               <EstimateLine
@@ -1231,6 +1254,12 @@ export function TaskProposalCard({
                 ? t("workspace.taskProposal.card.footerSelectOperations")
                 : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && !fileFieldsReady
                   ? t("workspace.taskProposal.card.footerSelectFile")
+                : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && importPreviewGate.loading
+                  ? t("productImport.sheetPreview.loading")
+                : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && importPreviewGate.blocked
+                  ? t(
+                      importPreviewGate.reasonKey ?? "productImport.sheetPreview.error.parse_failed",
+                    )
                   : targetless
                     ? t("workspace.taskProposal.card.footerCreateOne")
                     : targetsQuery
