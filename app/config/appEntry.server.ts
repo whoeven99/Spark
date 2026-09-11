@@ -3,7 +3,7 @@
  * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
  * 计费在一级「账户与订阅」`/app/account`；旧 `/app/settings/billing` 重定向至此。
  *
- * 导航按运行时环境分流：prod 仅首页 + 账户；测/本地展示全量。
+ * 导航按运行时环境分流：prod 为任务 + 账户；测/本地展示全量（不含创作，`/app/create` 仍可直达）。
  */
 import { isProductionNodeEnv } from "./nodeEnv.server";
 
@@ -14,7 +14,9 @@ export type NavItemKey =
   | "today"
   | "health-monitor"
   | "studio"
+  | "create"
   | "tasks"
+  | "tasks-v2"
   | "account"
   | "settings"
   | "ads-catalog";
@@ -31,13 +33,14 @@ const FULL_NAV = [
   "today",
   "health-monitor",
   "studio",
+  "tasks-v2",
   "tasks",
   "account",
   "settings",
 ] as const satisfies readonly NavItemKey[];
 
-/** 生产：第一版仅账户与订阅；首页由点应用名进入。 */
-const PROD_NAV = ["account"] as const satisfies readonly NavItemKey[];
+/** 生产：任务 + 账户与订阅；首页由点应用名进入。旧任务页与创作不进导航。 */
+const PROD_NAV = ["tasks-v2", "account"] as const satisfies readonly NavItemKey[];
 
 export function getAppEntryConfig(): AppShellConfig {
   return {

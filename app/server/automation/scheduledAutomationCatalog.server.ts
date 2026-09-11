@@ -16,7 +16,7 @@ const SCHEDULED_AUTOMATION_SEEDS: ScheduledAutomationSeed[] = [
     ownerRoles: ["老板", "运营负责人"],
     defaultQuestion: "昨天和近 7 天发生了什么",
     outputs: ["收入与订单", "流量变化", "广告花费", "库存异常"],
-    enabled: true,
+    enabled: false,
     sortOrder: 1,
   },
   {
@@ -27,7 +27,7 @@ const SCHEDULED_AUTOMATION_SEEDS: ScheduledAutomationSeed[] = [
     ownerRoles: ["经营负责人"],
     defaultQuestion: "今天最重要的问题是什么",
     outputs: ["核心问题判断", "关键证据", "解决动作", "可进入任务建议"],
-    enabled: true,
+    enabled: false,
     sortOrder: 2,
   },
   {
@@ -38,13 +38,13 @@ const SCHEDULED_AUTOMATION_SEEDS: ScheduledAutomationSeed[] = [
     ownerRoles: ["运营", "投放", "履约"],
     defaultQuestion: "哪些监测器异常了",
     outputs: ["风险监测器", "关注监测器", "优先级分组", "进入详情页 / AI / Tasks"],
-    enabled: true,
+    enabled: false,
     sortOrder: 3,
   },
 ];
 
 export function listScheduledAutomationTasks(): ScheduledAutomationTaskView[] {
-  return SCHEDULED_AUTOMATION_SEEDS.map((item) => ({
+  return SCHEDULED_AUTOMATION_SEEDS.filter((item) => item.enabled).map((item) => ({
     ...item,
     createdAt: SCHEDULED_AUTOMATION_CREATED_AT,
     updatedAt: SCHEDULED_AUTOMATION_CREATED_AT,

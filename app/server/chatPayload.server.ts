@@ -1,20 +1,19 @@
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
+import { CHAT_INPUT_TOKEN_BUDGET } from "../lib/chatContextLimits";
+import { estimateMessagesTokens } from "../lib/tokenEstimate";
 import { extractMessageText } from "./ai/utils/langchainMessageText";
 import { getShopSummaryModel } from "./ai/core/shopChatGraph.server";
 import { recordChatTokenUsage } from "./tokenUsage/index.server";
 
-/** 单次请求最多带入的上屏消息条数（含欢迎语与当前输入）。 */
-export const MAX_CHAT_HISTORY_MESSAGES = 36;
+/** 兼容旧调用方：条数不再截断，真正上限是 token 预算。 */
+export const MAX_CHAT_HISTORY_MESSAGES = Number.MAX_SAFE_INTEGER;
 
 /** 单条消息最大字符数，防止异常大包。 */
 export const MAX_CHAT_MESSAGE_CHARS = 12000;
 
-/** 滑动窗口保留的最近消息条数（原文保留，不压缩）。 */
+/** 滑动窗口保留的最近消息条数（仅在开启摘要且超出预算时使用）。 */
 const RECENT_WINDOW_SIZE = 10;
-
-/** 触发摘要压缩的最小消息总数。低于此值直接返回，不做摘要。 */
-const SUMMARY_THRESHOLD = RECENT_WINDOW_SIZE + 4;
 
 /** 摘要 prompt 的最大输入字符数（防止 older 部分过大）。 */
 const SUMMARY_INPUT_MAX_CHARS = 6000;
@@ -34,10 +33,9 @@ export function parseClientChatMessages(raw: unknown): BaseMessage[] | null {
     return null;
   }
 
-  const capped = raw.slice(-MAX_CHAT_HISTORY_MESSAGES);
   const out: BaseMessage[] = [];
 
-  for (const item of capped) {
+  for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const { role, content } = item as RawItem;
     const text = String(content ?? "").slice(0, MAX_CHAT_MESSAGE_CHARS).trim();
@@ -120,41 +118,70 @@ export type ContextWindowOptions = {
   recentCount?: number;
   /** 有 shop 时将摘要 LLM 用量记入账户 */
   shop?: string;
+  tokenBudget?: number;
 };
 
 /**
- * 对消息序列应用滑动窗口 + 摘要压缩策略。
- *
- * - 消息总数 <= SUMMARY_THRESHOLD 时直接返回原序列
- * - 否则保留最近 recentCount 条原文，对之前的消息生成 LLM 摘要
- * - 摘要失败时 fallback 到硬截断（仅保留最近 recentCount 条）
+ * 按 DeepSeek 1M 上下文做预算裁剪：未超预算则原样送出。
+ * 仅当开启摘要且仍超预算时，才压缩最旧的一段。
+ */
+export function trimMessagesToTokenBudget(
+  messages: BaseMessage[],
+  tokenBudget = CHAT_INPUT_TOKEN_BUDGET,
+): BaseMessage[] {
+  if (messages.length <= 1) return messages;
+  if (estimateLangChainTokens(messages) <= tokenBudget) return messages;
+
+  const last = messages[messages.length - 1];
+  const kept: BaseMessage[] = [last];
+  let used = estimateLangChainTokens(kept);
+
+  for (let i = messages.length - 2; i >= 0; i -= 1) {
+    const nextUsed = estimateLangChainTokens([messages[i]]) + used;
+    if (nextUsed > tokenBudget) break;
+    kept.unshift(messages[i]);
+    used = nextUsed;
+  }
+
+  return kept;
+}
+
+function estimateLangChainTokens(messages: BaseMessage[]): number {
+  return estimateMessagesTokens(
+    messages.map((message) => ({ text: extractMessageText(message) })),
+  );
+}
+
+/**
+ * 对消息序列应用 1M token 预算；默认保留原文。
+ * 开启 CHAT_CONTEXT_SUMMARY_ENABLED 且仍超预算时，才对最旧一段做摘要。
  */
 export async function buildContextWindow(
   messages: BaseMessage[],
   options?: ContextWindowOptions,
 ): Promise<BaseMessage[]> {
-  const recentCount = options?.recentCount ?? RECENT_WINDOW_SIZE;
-
-  if (messages.length <= SUMMARY_THRESHOLD) {
+  const tokenBudget = options?.tokenBudget ?? CHAT_INPUT_TOKEN_BUDGET;
+  if (estimateLangChainTokens(messages) <= tokenBudget) {
     return messages;
   }
 
-  const splitAt = messages.length - recentCount;
+  const trimmed = trimMessagesToTokenBudget(messages, tokenBudget);
+  if (!isContextSummaryEnabled()) {
+    return trimmed;
+  }
+
+  const recentCount = options?.recentCount ?? RECENT_WINDOW_SIZE;
+  const splitAt = Math.max(0, messages.length - recentCount);
   const older = messages.slice(0, splitAt);
   const recent = messages.slice(splitAt);
-
-  if (!isContextSummaryEnabled()) {
-    return recent;
-  }
-
   const summary = await summarizeOlderMessages(older, options?.shop);
-
-  if (summary) {
-    return [
-      new SystemMessage(`[历史对话摘要]\n${summary}`),
-      ...recent,
-    ];
+  if (!summary) {
+    return trimmed;
   }
 
-  return recent;
+  const withSummary = [
+    new SystemMessage(`[历史对话摘要]\n${summary}`),
+    ...recent,
+  ];
+  return trimMessagesToTokenBudget(withSummary, tokenBudget);
 }

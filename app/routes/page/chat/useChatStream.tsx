@@ -613,7 +613,7 @@ export function useChatStream() {
           finalizeOnce(snapshotToFinishPayload(snapshotRef.current, true));
         } else {
           console.error("Stream error", e);
-          const fallback = "抱歉，服务暂时不可用，请稍后重试。";
+          const fallback = "我这边刚刚有点忙，请稍后再试一次。";
           setStreamingText(fallback);
           snapshotRef.current.reply = fallback;
           finalizeOnce(snapshotToFinishPayload(snapshotRef.current, false));
