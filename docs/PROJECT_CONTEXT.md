@@ -15,7 +15,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 
 ## 2. 主应用信息架构
 
-一级导航由 `app/config/appEntry.server.ts` 定义（点侧栏应用名进 `/app`；prod 另展示「创作」与「账户与订阅」；测/本地全量子页），应用壳是 `app/routes/app.tsx`。
+一级导航由 `app/config/appEntry.server.ts` 定义（点侧栏应用名进 `/app`；prod 另展示「任务」与「账户与订阅」；测/本地全量子页，不含创作），应用壳是 `app/routes/app.tsx`。
 
 | 目的地 | URL | 实现 |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前由四块组成：
 | Today | `/app/today` | `app.today._index.tsx`、`app.today.roi.tsx`、`app.today.orders.tsx`、`app.today.traffic.tsx`、`app.today.conversion.tsx` |
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx` |
 | Studio | `/app/studio` | 测环境工具目录；`app.studio.copy.tsx`、`app.studio.image.tsx`；`app.studio.translate.tsx` 重定向到 copy |
-| 创作 | `/app/create` | `CreatePage`：能力目录 + 页内工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio |
+| 创作 | `/app/create` | `CreatePage`：能力目录 + 页内工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；导航不展示，URL 可直达 |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
 | 账户与订阅 | `/app/account` | `app.account.tsx` + `BillingPage`；旧 `/app/settings/billing` 重定向 |
 | Settings | `/app/settings` | 连接、物流、数据、反馈等（计费已迁出） |
