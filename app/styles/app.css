@@ -115,6 +115,23 @@ code {
   font-size: 12px;
 }
 
+.spark-segmented-tabs.is-large {
+  gap: 6px;
+  padding: 5px;
+  border-radius: 12px;
+}
+
+.spark-segmented-tabs.is-large .spark-segmented-tabs__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 7.5rem;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
 .spark-segmented-tabs__item:hover {
   color: #1f2124;
   background: rgba(255, 255, 255, 0.85);

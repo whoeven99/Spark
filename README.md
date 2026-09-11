@@ -12,6 +12,8 @@ Spark 是一个嵌入式 Shopify 应用，集成 AI Assistant、翻译 V3、商�
 
 ## 快速开始
 
+
+
 ```bash
 # 本地开发
 npm run dev
@@ -29,19 +31,25 @@ npm run turso:migrate:prod   # 生产库
 
 ## 项目结构速查
 
-| 路径 | 说明 |
-|------|------|
-| `app/routes/` | 页面与 API 路由 |
-| `app/server/ai/` | AI Agent 链路（LangGraph + ReAct） |
-| `app/server/generateDescription/` | 商品描述生成 |
-| `app/server/translation/` | 翻译 V3 流水线 |
-| `app/server/pictureTranslate/` | 图片翻译 |
-| `app/server/billing/` | 订阅与计费 |
-| `app/server/email/` | 邮件（腾讯 SES） |
-| `prisma/` | 数据库 Schema + 迁移 |
-| `docs/` | 项目文档（**改代码前必读**） |
+
+| 路径                                | 说明                             |
+| --------------------------------- | ------------------------------ |
+| `app/routes/`                     | 页面与 API 路由                     |
+| `app/server/ai/`                  | AI Agent 链路（LangGraph + ReAct） |
+| `app/server/generateDescription/` | 商品描述生成                         |
+| `app/server/translation/`         | 翻译 V3 流水线                      |
+| `app/server/pictureTranslate/`    | 图片翻译                           |
+| `app/server/billing/`             | 订阅与计费                          |
+| `app/server/email/`               | 邮件（腾讯 SES）                     |
+| `prisma/`                         | 数据库 Schema + 迁移                |
+| `docs/`                           | 项目文档（**改代码前必读**）               |
+
+
+
 
 ## 改动指南
+
+
 
 ### 改代码前必读对应文档
 
@@ -53,6 +61,8 @@ npm run turso:migrate:prod   # 生产库
 - 改 Agent 摘要 → `docs/agent-run-log.md`
 - 完整架构 → `docs/PROJECT_CONTEXT.md`
 
+
+
 ### 改代码后必须运行
 
 ```bash
@@ -60,18 +70,24 @@ npm run lint && npm run typecheck && npm run test
 npm run build  # 推送前必须通过
 ```
 
+
+
 ## 常用路由
 
-| 路由 | 说明 |
-|------|------|
-| `/app` | 应用壳、鉴权 |
-| `/app/_index` | 首页（聊天） |
-| `/app/additional` | 诊断报告 |
-| `/app/translation` | 翻译页 |
-| `/app/product-improve` | 商品文案优化 |
-| `/app/billing` | 订阅与计费页 |
-| `/app/image-studio` | 图片工具 |
-| `POST /chat-stream` | 聊天 SSE 流 |
+
+| 路由                     | 说明       |
+| ---------------------- | -------- |
+| `/app`                 | 应用壳、鉴权   |
+| `/app/_index`          | 首页（聊天）   |
+| `/app/additional`      | 诊断报告     |
+| `/app/translation`     | 翻译页      |
+| `/app/product-improve` | 商品文案优化   |
+| `/app/billing`         | 订阅与计费页   |
+| `/app/image-studio`    | 图片工具     |
+| `POST /chat-stream`    | 聊天 SSE 流 |
+
+
+
 
 ## 数据存储
 
@@ -79,6 +95,8 @@ npm run build  # 推送前必须通过
 - **Azure Cosmos DB**：翻译任务元数据、Agent 运行摘要
 - **Azure Blob Storage**：翻译报表/chunk、图片翻译结果、生成图片
 - **Redis**：翻译进度键、监控指标
+
+
 
 ## AI 工具
 
@@ -92,6 +110,8 @@ npm run build  # 推送前必须通过
 - `picture_translate` - 整图翻译
 - `send_template_email` - 模板邮件
 
+
+
 ## 计费系统
 
 - **启用开关**：默认启用；设 `BILLING_ENABLED=false` 可关闭
@@ -99,13 +119,15 @@ npm run build  # 推送前必须通过
 - **Token 池**：订阅赠送 + 购包 - 使用
 - **校验**：生成描述 API 调用前通过 `hasTokenQuota()` 校验
 
+
+
 ## 快速诊断
 
 **聊天不工作** → 检查 `app/server/chat-stream.ts` + `app/server/ai/graph/shopChatGraph.server.ts` + Shopify admin 鉴权
 
 **工具不工作** → 检查 `app/server/ai/skills/index.ts` 注册 + 工具实现 + LangSmith
 
-**翻译不工作** → 检查 `COSMOS_*`、`REDIS_*`、`BLOB_*` 环境变量 + `translationPipelineCore` 逻辑
+**翻译不工作** → 检查 `COSMOS_`*、`REDIS_*`、`BLOB_*` 环境变量 + `translationPipelineCore` 逻辑
 
 **计费不工作** → 检查 `BILLING_GATEWAY` + `BILLING_ENABLED` + `hasTokenQuota()`
 
@@ -118,6 +140,8 @@ npm run build  # 推送前必须通过
 - **[app/server/billing/agent.md](./app/server/billing/agent.md)** - 计费系统详解
 - **[docs/INTERACTION_DESIGN.md](./docs/INTERACTION_DESIGN.md)** - 任务型工具交互规范
 - **[docs/DESIGN.md](./docs/DESIGN.md)** - 视觉系统与组件设计规范
+
+
 
 ## 环境配置
 

@@ -1113,9 +1113,7 @@ export function WorkspaceAppShellPage({
             const reply = payload.reply.trim();
             if (reply) return reply;
             if (payload.httpStatus !== undefined) {
-              return t("workspace.shell.chat.requestFailed", {
-                status: payload.httpStatus,
-              });
+              return t("workspace.shell.chat.requestFailed");
             }
             if (payload.aborted) return t("workspace.shell.chat.replyStopped");
             return t("workspace.shell.chat.invalidReply");

@@ -13,7 +13,7 @@ type Props<T extends string> = {
   ariaLabel: string;
   className?: string;
   style?: CSSProperties;
-  density?: "default" | "compact";
+  density?: "default" | "compact" | "large";
   mobileFullWidth?: boolean;
 };
 
@@ -30,6 +30,7 @@ export function SegmentedPageTabs<T extends string>({
   const baseClassName = [
     "spark-segmented-tabs",
     density === "compact" ? "is-compact" : "",
+    density === "large" ? "is-large" : "",
     mobileFullWidth ? "is-mobile-full" : "",
     className ?? "",
   ]

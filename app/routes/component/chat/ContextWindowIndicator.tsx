@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
+import { formatContextTokenCount } from "../../../lib/chatContextLimits";
 
 type Props = {
   currentTokens: number;
@@ -7,8 +8,7 @@ type Props = {
 };
 
 function formatTokenCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
+  return formatContextTokenCount(n);
 }
 
 function getColor(ratio: number): string {

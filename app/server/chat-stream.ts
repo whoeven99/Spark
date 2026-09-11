@@ -9,9 +9,11 @@ import {
   requireBillingAccess,
 } from "./billing/index.server";
 import { resolveUiLocale } from "../i18n/resolveUiLocale.server";
+import { deepseekBusyUserMessage } from "./ai/core/deepseekTransientError.server";
 import {
   merchantFriendlyJson,
   merchantFriendlySseError,
+  merchantFriendlySseReply,
 } from "./http/merchantFriendlyResponse.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -119,8 +121,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const hint =
       error instanceof Error && error.message.includes("DEEPSEEK_API_KEY")
         ? "未配置 DEEPSEEK_API_KEY，请在环境变量中设置后再试。"
-        : "AI 服务暂时不可用，请稍后重试。";
+        : deepseekBusyUserMessage();
 
-    return merchantFriendlySseError(hint);
+    return merchantFriendlySseReply(hint);
   }
 };

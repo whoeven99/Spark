@@ -20,7 +20,7 @@ export type UnifiedTaskEntry =
   | { entryType: "operation_task"; task: OperationTaskView }
   | { entryType: "automation_task"; task: ScheduledAutomationTaskView };
 
-export type UnifiedTaskView = "current" | "history";
+export type UnifiedTaskView = "current" | "history" | "all";
 export type UnifiedTaskTypeFilter =
   | "all"
   | "automation_task"

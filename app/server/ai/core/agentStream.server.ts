@@ -12,6 +12,12 @@ import {
   extractMessagesContext,
 } from "../utils/langchainMessageText";
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
+import {
+  deepseekBusyUserMessage,
+  isDeepseekRateLimited,
+  isDeepseekReasoningContentError,
+  isDeepseekRetryable,
+} from "./deepseekTransientError.server";
 import { buildFallbackAssistantSystemPrompt } from "./shopAssistantPrompt";
 import { polishFinalReply } from "../utils/polishFinalReply";
 import { DEFAULT_LOCALE, type SupportedLocale } from "../../../i18n/config";
@@ -458,6 +464,8 @@ export function invokeChatAgentStream(
         });
       };
 
+      let streamedTextAccum = "";
+
       try {
         context.emitProgress = (event) => {
           controller.enqueue({ type: "skill_progress", event });
@@ -485,7 +493,6 @@ export function invokeChatAgentStream(
           emittedFlags: new Set<string>(),
           lastUserText: lastUserTextInput,
         };
-        let streamedTextAccum = "";
 
         for await (const item of lgStream) {
           if (!Array.isArray(item) || item.length < 2) continue;
@@ -817,11 +824,16 @@ export function invokeChatAgentStream(
             console.error("[AgentRunLog] async abort persist failed:", err);
           });
           if (timedOut) {
-            // 超时是服务端主动中断，客户端仍在监听，需给出可读提示并收尾。
-            safeEnqueue({
-              type: "error",
-              message: "本次回答处理超时，请稍后重试，或把问题拆得更聚焦一些。",
-            });
+            // 超时是服务端主动中断；用普通回复收尾，避免前端出现失败态。
+            if (!streamedTextAccum.trim()) {
+              safeEnqueue({
+                type: "text",
+                content:
+                  context.locale === "en"
+                    ? "That took a bit long. Please try again, or narrow the question."
+                    : "这次想得有点久，请稍后再试一次，或把问题拆得更聚焦一些。",
+              });
+            }
             safeEnqueue({
               type: "done",
               metadata: { totalTokens: 0, model: modelName, ...traceMeta() },
@@ -833,20 +845,74 @@ export function invokeChatAgentStream(
         }
 
         console.error("invokeChatAgentStream:", error);
-        const hint =
-          error instanceof Error && error.message.includes("DEEPSEEK_API_KEY")
-            ? "未配置 DEEPSEEK_API_KEY，请在环境变量中设置后再试。"
-            : error instanceof Error
-              ? error.message
-              : "AI 服务暂时不可用，请稍后重试。";
+        const logMessage =
+          error instanceof Error ? error.message : String(error);
         void persistStreamRun({
           status: "error",
           resultMessages: [],
-          errorMessage: hint,
+          errorMessage: logMessage,
         }).catch((err) => {
           console.error("[AgentRunLog] async error persist failed:", err);
         });
-        safeEnqueue({ type: "error", message: hint });
+
+        if (streamedTextAccum.trim()) {
+          safeEnqueue({
+            type: "done",
+            metadata: { totalTokens: 0, model: modelName, ...traceMeta() },
+          });
+          safeClose();
+          return;
+        }
+
+        const canFallback =
+          isDeepseekRateLimited(error) ||
+          isDeepseekReasoningContentError(error) ||
+          isDeepseekRetryable(error);
+
+        if (canFallback) {
+          try {
+            if (isDeepseekRateLimited(error)) {
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            }
+            const fb = await generateFallbackReplyStream(
+              lastUserTextInput,
+              extractMessagesContext(agentInputMessages),
+              shop,
+              context.locale ?? DEFAULT_LOCALE,
+              abortController.signal,
+            );
+            const reader = fb.getReader();
+            let fallbackText = "";
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value.type === "text") {
+                fallbackText += value.content;
+                safeEnqueue(value);
+              }
+            }
+            if (!fallbackText.trim()) {
+              safeEnqueue({
+                type: "text",
+                content: deepseekBusyUserMessage(context.locale),
+              });
+            }
+            safeEnqueue({
+              type: "done",
+              metadata: { totalTokens: 0, model: modelName, ...traceMeta() },
+            });
+            safeClose();
+            return;
+          } catch (fallbackError) {
+            console.error("invokeChatAgentStream fallback:", fallbackError);
+          }
+        }
+
+        safeEnqueue({
+          type: "text",
+          content: deepseekBusyUserMessage(context.locale),
+        });
         safeEnqueue({
           type: "done",
           metadata: { totalTokens: 0, model: modelName, ...traceMeta() },

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatMessages } from "../../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../../component/chat/StreamingAssistantReply";
+import { DEEPSEEK_CONTEXT_TOKENS } from "../../../lib/chatContextLimits";
 import { ContextWindowIndicator } from "../../component/chat/ContextWindowIndicator";
 import { estimateMessagesTokens } from "../../../lib/tokenEstimate";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
@@ -98,7 +99,7 @@ import {
 
 type ChatStreamController = ReturnType<typeof useChatStream>;
 
-const MAX_CONTEXT_TOKENS = 8000;
+const MAX_CONTEXT_TOKENS = DEEPSEEK_CONTEXT_TOKENS;
 
 const reviewNavButtonStyle = (disabled: boolean) =>
   ({

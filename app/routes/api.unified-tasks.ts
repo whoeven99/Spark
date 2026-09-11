@@ -3,6 +3,7 @@ import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   AI_TASK_VIEW_FETCH_LIMIT,
+  listRecentAITasksForShop,
   listTasksPageForShop,
 } from "../server/aiTask/aiTaskStore.server";
 import type { AITaskItem, AITaskListPageData } from "../lib/aiTaskTypes";
@@ -56,6 +57,16 @@ function parseStatusFilter(value: string | null): UnifiedTaskStatusFilter {
     return value;
   }
   return "all";
+}
+
+/**
+ * 排序口径。`default` 把定时任务钉在最前（任务中心的既有行为）；
+ * `time_desc` 一律按更新时间倒序，不给任何类型置顶特权。
+ */
+type UnifiedTaskSort = "default" | "time_desc";
+
+function parseSort(value: string | null): UnifiedTaskSort {
+  return value === "time_desc" ? "time_desc" : "default";
 }
 
 function parseOperationSourceFilter(value: string | null): string[] {
@@ -139,8 +150,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const now = new Date();
 
+  const viewParam = url.searchParams.get("view");
   const view: UnifiedTaskView =
-    url.searchParams.get("view") === "history" ? "history" : "current";
+    viewParam === "history" ? "history" : viewParam === "all" ? "all" : "current";
+  const includeAiOnly = url.searchParams.get("include") === "ai";
   const pageRaw = Number(url.searchParams.get("page"));
   const page =
     Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1;
@@ -152,23 +165,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const typeFilter = parseTypeFilter(url.searchParams.get("type"));
   const statusFilter = parseStatusFilter(url.searchParams.get("status"));
   const operationSourceFilter = parseOperationSourceFilter(url.searchParams.get("operationSource"));
+  const sort = parseSort(url.searchParams.get("sort"));
 
   const [aiTaskPage, operationTasks] = await Promise.all([
-    listTasksPageForShop({
-      shop: session.shop,
-      view,
-      page: 1,
-      pageSize: AI_TASK_VIEW_FETCH_LIMIT,
-      maxPageSize: AI_TASK_VIEW_FETCH_LIMIT,
-    }).catch((error) => {
+    (view === "all"
+      ? listRecentAITasksForShop(session.shop, AI_TASK_VIEW_FETCH_LIMIT).then((tasks) => ({
+          tasks,
+          metrics: {
+            currentCount: 0,
+            historyCount: 0,
+            runningCount: 0,
+            totalCount: tasks.length,
+          },
+        }))
+      : listTasksPageForShop({
+          shop: session.shop,
+          view: view === "history" ? "history" : "current",
+          page: 1,
+          pageSize: AI_TASK_VIEW_FETCH_LIMIT,
+          maxPageSize: AI_TASK_VIEW_FETCH_LIMIT,
+        })
+    ).catch((error) => {
       console.error("[api.unified-tasks] failed to load AI tasks, falling back to empty list:", error);
-      return buildEmptyAITaskPage(view, 1, AI_TASK_VIEW_FETCH_LIMIT);
+      return buildEmptyAITaskPage(view === "all" ? "current" : view, 1, AI_TASK_VIEW_FETCH_LIMIT);
     }),
-    listOperationTasks(session.shop),
+    includeAiOnly ? Promise.resolve([]) : listOperationTasks(session.shop),
   ]);
-  const scheduledAutomationTasks = listScheduledAutomationTasks();
+  const scheduledAutomationTasks = includeAiOnly ? [] : listScheduledAutomationTasks();
   const automationEntries: UnifiedTaskEntry[] =
-    view === "current"
+    !includeAiOnly && view === "current"
       ? scheduledAutomationTasks.map((task) => ({
           entryType: "automation_task",
           task,
@@ -179,27 +204,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     entryType: "ai_task",
     task,
   }));
-  const operationEntries: UnifiedTaskEntry[] = operationTasks
-    .filter((task) => {
-      return view === "history"
-        ? isOperationTaskHistory(task, now)
-        : isOperationTaskCurrent(task, now);
-    })
-    .map((task) => ({
-      entryType: "operation_task",
-      task,
-    }));
+  const operationEntries: UnifiedTaskEntry[] = includeAiOnly
+    ? []
+    : operationTasks
+        .filter((task) => {
+          if (view === "all") return true;
+          return view === "history"
+            ? isOperationTaskHistory(task, now)
+            : isOperationTaskCurrent(task, now);
+        })
+        .map((task) => ({
+          entryType: "operation_task",
+          task,
+        }));
 
   const merged = [...automationEntries, ...aiEntries, ...operationEntries]
     .filter((entry) => matchesTypeFilter(entry, typeFilter))
     .filter((entry) => matchesStatusFilter(entry, statusFilter))
     .filter((entry) => matchesOperationSourceFilter(entry, operationSourceFilter))
     .sort((a, b) => {
-      if (a.entryType === "automation_task" && b.entryType === "automation_task") {
-        return a.task.sortOrder - b.task.sortOrder;
+      if (sort === "default") {
+        if (a.entryType === "automation_task" && b.entryType === "automation_task") {
+          return a.task.sortOrder - b.task.sortOrder;
+        }
+        if (a.entryType === "automation_task") return -1;
+        if (b.entryType === "automation_task") return 1;
       }
-      if (a.entryType === "automation_task") return -1;
-      if (b.entryType === "automation_task") return 1;
       return new Date(entryUpdatedAt(b)).getTime() - new Date(entryUpdatedAt(a)).getTime();
     });
 

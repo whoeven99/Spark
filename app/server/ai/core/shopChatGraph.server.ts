@@ -1,6 +1,7 @@
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import { ChatOpenAI } from "@langchain/openai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { resolveChatMaxOutputTokens } from "../../../lib/chatContextLimits";
 import { getPersonalizedSystemPrompt } from "./shopAssistantPrompt";
 import { fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection.server";
 import { baseAgentTools } from "../skills/system/baseAgentTools.server";
@@ -21,16 +22,18 @@ function createShopModel(maxTokens: number): ChatOpenAI {
     model: process.env.DEEPSEEK_MODEL ?? process.env.OPENAI_MODEL ?? "deepseek-chat",
     temperature: 0.2,
     maxTokens,
+    maxRetries: 8,
     apiKey: process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY,
     configuration: {
       baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
+      maxRetries: 8,
     },
   });
 }
 
 export function getShopChatModel(): ChatOpenAI {
   if (!shopChatModel) {
-    shopChatModel = createShopModel(Number(process.env.AI_MAX_TOKENS) || 4096);
+    shopChatModel = createShopModel(resolveChatMaxOutputTokens());
   }
   return shopChatModel;
 }

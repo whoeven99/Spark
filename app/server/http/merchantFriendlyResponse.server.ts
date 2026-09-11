@@ -12,6 +12,38 @@ export function merchantFriendlyJson(
   return Response.json(body, { ...init, status: MERCHANT_FRIENDLY_HTTP_STATUS });
 }
 
+/** 以普通助手回复收尾，前端不会走失败态。 */
+export function merchantFriendlySseReply(
+  message: string,
+  init?: Omit<ResponseInit, "status">,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({ type: "text", content: message })}\n\n`,
+        ),
+      );
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({ type: "done", metadata: { totalTokens: 0, model: "unknown" } })}\n\n`,
+        ),
+      );
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    ...init,
+    status: MERCHANT_FRIENDLY_HTTP_STATUS,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
 export function merchantFriendlySseError(
   message: string,
   init?: Omit<ResponseInit, "status">,

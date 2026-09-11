@@ -951,7 +951,9 @@
     "today": "Operations",
     "healthMonitor": "Health Monitor",
     "studio": "Creative Workbench",
-    "tasks": "Tasks",
+    "create": "Create",
+    "tasks": "Tasks v1",
+    "tasksV2": "Tasks",
     "settings": "Settings",
     "adsCatalog": "Ads Catalog"
   },
@@ -992,6 +994,255 @@
   },
   "todayShell": {
     "overview": "Overview"
+  },
+  "createPage": {
+    "title": "Create",
+    "subtitle": "Pick a capability from the catalog, then run it on this page.",
+    "backToCatalog": "Back to catalog",
+    "kind": {
+      "read": "Read-only",
+      "generate": "AI generated",
+      "write": "Changes data",
+      "import": "Import"
+    },
+    "catalog": {
+      "open": "Open",
+      "openInChat": "Start in assistant"
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "estimatedDuration": "Estimated time",
+      "estimatedCredits": "Estimated usage",
+      "creditsValue": "{{value}} credits",
+      "creditsUnknown": "Not enough data",
+      "affectedFields": "Fields affected"
+    },
+    "domains": {
+      "content": {
+        "label": "Content",
+        "description": "Product copy and images. AI drafts them; you confirm before anything reaches the store."
+      },
+      "products": {
+        "label": "Products",
+        "description": "Review and bulk edit product fields."
+      },
+      "pricing": {
+        "label": "Pricing",
+        "description": "Bulk changes to price, compare-at price, and cost."
+      },
+      "inventory": {
+        "label": "Inventory & SKU",
+        "description": "Maintain inventory levels, SKUs, barcodes, and variant details in bulk."
+      },
+      "orders": {
+        "label": "Orders",
+        "description": "Order exports plus bulk tagging, notes, and archiving."
+      },
+      "customers": {
+        "label": "Customers",
+        "description": "Customer import and export, bulk tagging, and segments."
+      },
+      "images": {
+        "label": "Images",
+        "description": "Bulk upload, replace, reorder product images and manage alt text."
+      },
+      "collections": {
+        "label": "Collections",
+        "description": "Create and export collections, add or remove products in bulk."
+      },
+      "discounts": {
+        "label": "Discounts",
+        "description": "Bulk create, toggle, and adjust discounts and codes."
+      },
+      "metafields": {
+        "label": "Metafields",
+        "description": "Bulk import, update, and audit metafields and metaobjects."
+      },
+      "markets": {
+        "label": "Markets",
+        "description": "Markets, per-market product availability, and international pricing."
+      },
+      "ads": {
+        "label": "Ads",
+        "description": "Export ad performance and search terms; move catalogs between platforms."
+      },
+      "alerts": {
+        "label": "Alerts",
+        "description": "Set your own alert window, conditions, and thresholds, then get notified."
+      }
+    },
+    "operations": {
+      "product-copy": {
+        "label": "Product copy",
+        "description": "Pick a product and language, generate title and description, then save on confirm."
+      },
+      "image-generate": {
+        "label": "Generate image",
+        "description": "Describe the scene in one line and get a store-ready image."
+      },
+      "image-translate": {
+        "label": "Translate image text",
+        "description": "Translate the text on a product photo or image URL."
+      },
+      "seo-audit": {
+        "label": "SEO audit",
+        "description": "Scan published products for title, description, and duplicate issues. Read-only."
+      },
+      "bulk-tag-edit": {
+        "label": "Bulk tags",
+        "description": "Add or remove product tags in bulk, applied after a dry run and your confirmation."
+      },
+      "bulk-status-edit": {
+        "label": "Bulk publish state",
+        "description": "Activate or draft products in bulk, applied after a dry run and your confirmation."
+      },
+      "bulk-price-edit": {
+        "label": "Bulk pricing",
+        "description": "Change variant prices by percentage or rule, applied after a dry run and your confirmation."
+      }
+    },
+    "copy": {
+      "configTitle": "Write copy",
+      "configSubtitle": "Pick a product and language, then edit, copy, or save the result on the right.",
+      "productLabel": "Product",
+      "languageLabel": "Target language",
+      "selectProductFirst": "Select a product first",
+      "generate": "Generate copy",
+      "generating": "Generating…",
+      "newRound": "Start over",
+      "generateConfirmTitle": "Generate copy?",
+      "generateConfirmGoal": "Drafts a title and description for the selected product. Generating alone does not change your store.",
+      "resultTitle": "Result",
+      "resultSubtitle": "{{product}} · {{language}}",
+      "resultEmptyHint": "The generated copy will appear here.",
+      "resultEmpty": "No copy yet",
+      "draftTitle": "Title",
+      "draftDescription": "Description",
+      "copyTitle": "Copy title",
+      "copyDescription": "Copy description",
+      "copyAll": "Copy all",
+      "save": "Save to product",
+      "saveConfirmTitle": "Save to Shopify?",
+      "saveConfirmBody": "This replaces the title and description of “{{product}}”.",
+      "saveConfirmFields": "Title, description",
+      "saveConfirmOk": "Save",
+      "selectedProductFallback": "this product"
+    },
+    "image": {
+      "generateTitle": "Generate image",
+      "generateSubtitle": "Describe the scene. The result appears on the right.",
+      "translateTitle": "Translate image text",
+      "translateSubtitle": "Choose a product photo or paste an image URL.",
+      "promptLabel": "Prompt",
+      "promptPlaceholder": "Example: ceramic mug on a white background, soft daylight, ecommerce hero shot",
+      "generateAction": "Generate",
+      "generating": "Generating image…",
+      "sourceProduct": "From product",
+      "sourceUrl": "Image URL",
+      "productSearch": "Search products",
+      "search": "Search",
+      "urlLabel": "Image URL",
+      "urlPlaceholder": "https://",
+      "sourceLanguage": "Source language",
+      "targetLanguage": "Target language",
+      "translateAction": "Translate",
+      "translating": "Translating image…",
+      "newRound": "Start over",
+      "generateConfirmTitle": "Generate image?",
+      "generateConfirmGoal": "Creates one image from your prompt. The result is not saved to your store automatically.",
+      "translateConfirmTitle": "Translate image?",
+      "translateConfirmGoal": "Translates the text on the image into a new file. The original image is not replaced.",
+      "confirmSource": "Image source",
+      "confirmLanguages": "Languages",
+      "resultTitle": "Result",
+      "generateResultHint": "Preview the generated image here.",
+      "translateResultHint": "Preview the translated image here.",
+      "resultEmpty": "No image yet",
+      "resultAlt": "Generated result",
+      "openImage": "Open image",
+      "failed": "This run did not finish",
+      "pollFailed": "Status refresh failed. Retrying."
+    }
+  },
+  "tasksV2": {
+    "title": "Tasks",
+    "subtitle": "Every task in reverse chronological order. Review what is waiting right here.",
+    "viewAriaLabel": "Task time range",
+    "view": {
+      "current": "Current",
+      "history": "History"
+    },
+    "resultCount": "{{count}} total",
+    "empty": "No tasks yet",
+    "emptyCurrent": "No tasks in progress",
+    "emptyHistory": "No task history yet",
+    "loadFailed": "Could not load tasks. Please try again.",
+    "filter": {
+      "type": {
+        "all": "All types",
+        "automation_task": "Scheduled",
+        "operation_task": "Operations",
+        "product_improve": "Product copy",
+        "image_generation": "Image generation",
+        "picture_translate": "Image translation"
+      },
+      "status": {
+        "all": "All statuses",
+        "running": "Running",
+        "needs_review": "Needs review",
+        "open": "Open",
+        "in_progress": "In progress",
+        "completed": "Completed",
+        "failed": "Failed",
+        "ignored": "Ignored"
+      }
+    },
+    "type": {
+      "productImprove": "Product copy",
+      "imageGeneration": "Image generation",
+      "pictureTranslate": "Image translation",
+      "adsCatalogSync": "Catalog sync",
+      "bulkPriceEdit": "Bulk pricing",
+      "bulkTagEdit": "Bulk tags",
+      "bulkStatusEdit": "Bulk publish state",
+      "productImport": "Import products",
+      "productExport": "Export products",
+      "productDuplicate": "Duplicate products",
+      "unknown": "Other task",
+      "operation": "Operations",
+      "automation": "Scheduled"
+    },
+    "status": {
+      "automationOn": "Enabled",
+      "automationOff": "Disabled"
+    },
+    "action": {
+      "review": "Review",
+      "viewResult": "Result",
+      "viewReason": "Reason",
+      "viewProgress": "Progress",
+      "handle": "Handle",
+      "run": "Run"
+    },
+    "meta": {
+      "credits": "{{value}} credits"
+    },
+    "fallback": {
+      "product": "Untitled product",
+      "image": "Image task",
+      "products": "Products × {{count}}",
+      "bulk": "Bulk operation",
+      "ads": "Ad catalog",
+      "generic": "Untitled task"
+    },
+    "prompt": {
+      "operation": "Help me handle this operations task: {{title}}. Trigger: {{reason}}. Tell me which data to check first, then give me the steps."
+    },
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{value}} min ago",
+      "hoursAgo": "{{value}} h ago"
+    }
   },
   "studioWorkbench": {
     "eyebrow": "Tools Hub",
@@ -3976,10 +4227,10 @@
         "prefillWelcome": "A new chat has been prepared from the operations task. You can send it directly or add more context first."
       },
       "chat": {
-        "requestFailed": "Request failed ({{status}}). Please try again later.",
+        "requestFailed": "I'm a bit busy right now. Please try again in a moment.",
         "replyStopped": "Reply stopped.",
-        "invalidReply": "AI Assistant did not return valid content. Please try again.",
-        "sendFailed": "Sorry, sending failed. Please try again later.",
+        "invalidReply": "I couldn't finish that reply. Please try again in a moment.",
+        "sendFailed": "That didn't go through. Please try again in a moment.",
         "justNow": "Just now",
         "copy": "Copy",
         "copied": "Copied",

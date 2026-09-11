@@ -23,7 +23,7 @@ export default function AppTasks() {
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
-        title="任务中心"
+        title="任务 v1"
         subtitle="统一查看并处理定时任务、经营任务、文案、图片与批处理任务。"
         titleBarTitle={t("nav.tasks")}
         backLabel={returnTo ? "返回上一级" : "返回首页"}

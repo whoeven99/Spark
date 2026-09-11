@@ -951,7 +951,9 @@
     "today": "经营",
     "healthMonitor": "健康度监测",
     "studio": "创作工作台",
-    "tasks": "任务",
+    "create": "创作",
+    "tasks": "任务 v1",
+    "tasksV2": "任务",
     "settings": "设置",
     "adsCatalog": "广告 Catalog"
   },
@@ -992,6 +994,255 @@
   },
   "todayShell": {
     "overview": "概览"
+  },
+  "createPage": {
+    "title": "创作",
+    "subtitle": "先在目录里选一个能力，再在本页完成操作。",
+    "backToCatalog": "返回能力目录",
+    "kind": {
+      "read": "只读",
+      "generate": "AI 生成",
+      "write": "会改数据",
+      "import": "导入"
+    },
+    "catalog": {
+      "open": "打开",
+      "openInChat": "去助手发起"
+    },
+    "confirm": {
+      "cancel": "取消",
+      "estimatedDuration": "预估耗时",
+      "estimatedCredits": "预估消耗",
+      "creditsValue": "{{value}} 积分",
+      "creditsUnknown": "数据不足",
+      "affectedFields": "影响字段"
+    },
+    "domains": {
+      "content": {
+        "label": "内容创作",
+        "description": "商品文案与图片，AI 生成后由你确认再落回店铺。"
+      },
+      "products": {
+        "label": "商品",
+        "description": "商品字段的批量查看与修改。"
+      },
+      "pricing": {
+        "label": "价格",
+        "description": "售价、划线价与成本相关的批量调整。"
+      },
+      "inventory": {
+        "label": "库存与 SKU",
+        "description": "库存数量、SKU、条码与变体信息的批量维护。"
+      },
+      "orders": {
+        "label": "订单",
+        "description": "订单导出与批量标记、备注、归档。"
+      },
+      "customers": {
+        "label": "客户",
+        "description": "客户导入导出与批量打标、分群。"
+      },
+      "images": {
+        "label": "图片",
+        "description": "商品图的批量上传、替换、排序与 alt 文本。"
+      },
+      "collections": {
+        "label": "合集",
+        "description": "合集创建、导出与批量增删商品。"
+      },
+      "discounts": {
+        "label": "优惠",
+        "description": "折扣与优惠码的批量创建、启停与调整。"
+      },
+      "metafields": {
+        "label": "自定义字段",
+        "description": "Metafield 与 Metaobject 的批量导入、更新与巡检。"
+      },
+      "markets": {
+        "label": "市场",
+        "description": "Markets 与各市场的商品可售范围、国际定价。"
+      },
+      "ads": {
+        "label": "广告",
+        "description": "广告表现与搜索词导出，目录跨平台导入导出。"
+      },
+      "alerts": {
+        "label": "异常报警",
+        "description": "自定义报警周期、触发条件与阈值，命中后通知你。"
+      }
+    },
+    "operations": {
+      "product-copy": {
+        "label": "商品文案",
+        "description": "选商品和目标语言，生成标题与详情，确认后写回。"
+      },
+      "image-generate": {
+        "label": "生成图片",
+        "description": "用一句话描述画面，生成电商可用的图片。"
+      },
+      "image-translate": {
+        "label": "翻译图片文字",
+        "description": "把商品图或图片链接上的文字翻成目标语言。"
+      },
+      "seo-audit": {
+        "label": "SEO 体检",
+        "description": "扫已上架商品的标题、描述与重复问题，只读不改。"
+      },
+      "bulk-tag-edit": {
+        "label": "批量打标",
+        "description": "按条件批量增删商品标签，试算确认后写回。"
+      },
+      "bulk-status-edit": {
+        "label": "批量上下架",
+        "description": "按条件批量改商品上架状态，试算确认后写回。"
+      },
+      "bulk-price-edit": {
+        "label": "批量调价",
+        "description": "按比例或规则批量改变体售价，试算确认后写回。"
+      }
+    },
+    "copy": {
+      "configTitle": "写文案",
+      "configSubtitle": "选商品和目标语言，生成后可在右侧改、复制或写回店铺。",
+      "productLabel": "商品",
+      "languageLabel": "目标语言",
+      "selectProductFirst": "请先选择商品",
+      "generate": "生成文案",
+      "generating": "正在生成…",
+      "newRound": "再写一篇",
+      "generateConfirmTitle": "开始生成文案？",
+      "generateConfirmGoal": "为所选商品生成一版标题与详情，生成本身不会改店铺数据。",
+      "resultTitle": "结果",
+      "resultSubtitle": "{{product}} · {{language}}",
+      "resultEmptyHint": "选好商品后，生成结果会出现在这里。",
+      "resultEmpty": "还没有文案",
+      "draftTitle": "标题",
+      "draftDescription": "详情",
+      "copyTitle": "复制标题",
+      "copyDescription": "复制详情",
+      "copyAll": "全部复制",
+      "save": "写回商品",
+      "saveConfirmTitle": "写回 Shopify？",
+      "saveConfirmBody": "将覆盖「{{product}}」的标题和详情。",
+      "saveConfirmFields": "标题、详情",
+      "saveConfirmOk": "确认写回",
+      "selectedProductFallback": "当前商品"
+    },
+    "image": {
+      "generateTitle": "生成图片",
+      "generateSubtitle": "用一句话描述画面，结果会显示在右侧。",
+      "translateTitle": "翻译图片文字",
+      "translateSubtitle": "选一张商品图或贴图片链接，翻译图上的文字。",
+      "promptLabel": "画面描述",
+      "promptPlaceholder": "例如：白色背景上的陶瓷杯，柔和日光，电商主图",
+      "generateAction": "生成",
+      "generating": "正在生成图片…",
+      "sourceProduct": "从商品选图",
+      "sourceUrl": "图片链接",
+      "productSearch": "搜索商品",
+      "search": "搜索",
+      "urlLabel": "图片 URL",
+      "urlPlaceholder": "https://",
+      "sourceLanguage": "原文语言",
+      "targetLanguage": "目标语言",
+      "translateAction": "翻译",
+      "translating": "正在翻译图片…",
+      "newRound": "再做一张",
+      "generateConfirmTitle": "开始生成图片？",
+      "generateConfirmGoal": "按描述生成一张图片，结果不会自动写回店铺。",
+      "translateConfirmTitle": "开始翻译图片？",
+      "translateConfirmGoal": "翻译图上的文字并生成新图，原图不会被替换。",
+      "confirmSource": "图片来源",
+      "confirmLanguages": "语言",
+      "resultTitle": "结果",
+      "generateResultHint": "生成完成后在这里预览。",
+      "translateResultHint": "翻译完成后在这里预览。",
+      "resultEmpty": "还没有图片",
+      "resultAlt": "生成结果",
+      "openImage": "打开原图",
+      "failed": "这次没有完成",
+      "pollFailed": "状态刷新失败，正在重试。"
+    }
+  },
+  "tasksV2": {
+    "title": "任务",
+    "subtitle": "按更新时间倒序查看全部任务，待审核的直接在这里处理。",
+    "viewAriaLabel": "任务时间范围",
+    "view": {
+      "current": "当前任务",
+      "history": "历史任务"
+    },
+    "resultCount": "共 {{count}} 条",
+    "empty": "暂无任务",
+    "emptyCurrent": "暂无进行中的任务",
+    "emptyHistory": "暂无历史任务",
+    "loadFailed": "任务加载失败，请稍后重试。",
+    "filter": {
+      "type": {
+        "all": "全部类型",
+        "automation_task": "定时任务",
+        "operation_task": "经营任务",
+        "product_improve": "商品文案",
+        "image_generation": "图片生成",
+        "picture_translate": "图片翻译"
+      },
+      "status": {
+        "all": "全部状态",
+        "running": "进行中",
+        "needs_review": "待审核",
+        "open": "待处理",
+        "in_progress": "处理中",
+        "completed": "已完成",
+        "failed": "失败",
+        "ignored": "已忽略"
+      }
+    },
+    "type": {
+      "productImprove": "商品文案",
+      "imageGeneration": "图片生成",
+      "pictureTranslate": "图片翻译",
+      "adsCatalogSync": "目录同步",
+      "bulkPriceEdit": "批量调价",
+      "bulkTagEdit": "批量打标",
+      "bulkStatusEdit": "批量上下架",
+      "productImport": "导入商品",
+      "productExport": "导出商品",
+      "productDuplicate": "复制商品",
+      "unknown": "其他任务",
+      "operation": "经营任务",
+      "automation": "定时任务"
+    },
+    "status": {
+      "automationOn": "已启用",
+      "automationOff": "已停用"
+    },
+    "action": {
+      "review": "去审核",
+      "viewResult": "看结果",
+      "viewReason": "看原因",
+      "viewProgress": "看进展",
+      "handle": "去处理",
+      "run": "去运行"
+    },
+    "meta": {
+      "credits": "{{value}} 积分"
+    },
+    "fallback": {
+      "product": "未命名商品",
+      "image": "图片任务",
+      "products": "商品 × {{count}}",
+      "bulk": "批量操作",
+      "ads": "广告目录",
+      "generic": "未命名任务"
+    },
+    "prompt": {
+      "operation": "帮我处理这条经营任务：{{title}}。触发原因：{{reason}}。先告诉我该先看哪些数据，再给出处理步骤。"
+    },
+    "time": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{value}} 分钟前",
+      "hoursAgo": "{{value}} 小时前"
+    }
   },
   "studioWorkbench": {
     "eyebrow": "Tools Hub",
@@ -3976,10 +4227,10 @@
         "prefillWelcome": "已根据经营任务生成新对话，你可以直接发送或继续补充上下文。"
       },
       "chat": {
-        "requestFailed": "请求失败（{{status}}），请稍后重试。",
+        "requestFailed": "我这边刚刚有点忙，请稍后再试一次。",
         "replyStopped": "回复已停止。",
-        "invalidReply": "AI Assistant 未返回有效内容，请重试。",
-        "sendFailed": "抱歉，发送失败，请稍后重试。",
+        "invalidReply": "我这边没能完成这次回答，请稍后再试一次。",
+        "sendFailed": "刚才没发出去，请稍后再试一次。",
         "justNow": "刚刚",
         "copy": "复制",
         "copied": "已复制",
