@@ -42,6 +42,7 @@ import { BulkCollectionEditTaskDetailPage } from "../../component/bulkCollection
 import { ProductDuplicateTaskDetailPage } from "../../component/productDuplicate/ProductDuplicateTaskDetailPage";
 import { BulkArchiveTaskDetailPage } from "../../component/bulkArchive/BulkArchiveTaskDetailPage";
 import { ProductExportTaskDetailPage } from "../../component/productExport/ProductExportTaskDetailPage";
+import { ProductImportTaskDetailPage } from "../../component/productImport/ProductImportTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
 
@@ -814,6 +815,7 @@ export function ChatPanel({
                   streamingWorkspaceActions={streamingWorkspaceActions}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
+                  fallbackFileId={selectedFileIds[0]}
                   onOpenProductPicker={handleOpenProductPicker}
                   onTaskProposalExecuted={(run) =>
                     onTaskProposalExecuted(conversation.id, run)
@@ -838,6 +840,7 @@ export function ChatPanel({
               }
               contextProducts={workspaceBatchProducts}
               contextProductQuery={objectQuerySelectionByType.product}
+              fallbackFileId={selectedFileIds[0]}
               onOpenProductPicker={handleOpenProductPicker}
               tasksById={tasksById}
             />
@@ -1068,6 +1071,21 @@ export function ChatPanel({
           />
         ) : reviewTask?.taskType === "bulk_archive" ? (
           <BulkArchiveTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "product_import" ? (
+          <ProductImportTaskDetailPage
             task={reviewTask}
             onBack={closeReviewDialog}
             showBackButton={false}

@@ -47,6 +47,13 @@ import type {
   ProductExportSkip,
   ProductExportSummary,
 } from "./productExport";
+import type {
+  ProductImportIssue,
+  ProductImportOperation,
+} from "./productImport";
+import type {
+  ProductImportCollectionGroup,
+} from "./productImportPlan";
 
 export type AITaskStatus =
   | "running"
@@ -69,7 +76,8 @@ export type AITaskType =
   | "bulk_collection_edit"
   | "product_duplicate"
   | "bulk_archive"
-  | "product_export";
+  | "product_export"
+  | "product_import";
 
 export type AITaskListView = "current" | "history";
 
@@ -436,6 +444,38 @@ export type ProductExportTaskResult = {
   summary: ProductExportSummary;
   skips: ProductExportSkip[];
   truncated?: boolean;
+};
+
+export type ProductImportTaskConfig = {
+  fileId: string;
+  fileName?: string;
+};
+
+export type ProductImportTaskResult = {
+  fileName: string;
+  operations: ProductImportOperation[];
+  issues: ProductImportIssue[];
+  summary: {
+    rows: number;
+    matched: number;
+    changed: number;
+    issues: number;
+  };
+  priceRows: BulkPriceEditRow[];
+  tagRows: BulkTagEditRow[];
+  statusRows: BulkStatusEditRow[];
+  fieldRows: BulkProductFieldEditRow[];
+  collectionGroups: ProductImportCollectionGroup[];
+  duplicateRows: ProductDuplicateRow[];
+  archiveRows: BulkArchiveRow[];
+  truncated?: boolean;
+  apply?: {
+    at: string;
+    succeeded: number;
+    failed: number;
+    byOperation?: Record<string, { succeeded: number; failed: number }>;
+  };
+  applyStartedAt?: string;
 };
 
 export type CatalogBulkApplyResponse =

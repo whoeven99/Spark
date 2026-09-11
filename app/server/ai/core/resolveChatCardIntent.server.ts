@@ -45,9 +45,10 @@ import {
   buildBulkProductFieldEditProposal,
   buildProductDuplicateProposal,
   buildProductExportProposal,
+  buildProductImportProposal,
 } from "../../../lib/productManageTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
-import { skillNamesFromFocus, skillNamesFromUserText } from "../../../lib/promptSkillFocus";
+import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImport } from "../../../lib/promptSkillFocus";
 import { listManualCollections } from "../../shopify/collectionMembershipReader.server";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
 import { getShopChatModel } from "./shopChatGraph.server";
@@ -130,6 +131,7 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "productDuplicateForm",
   "bulkArchiveForm",
   "productExportForm",
+  "productImportForm",
   "productImproveForm",
   "pictureTranslateForm",
   "imageGenerationForm",
@@ -144,7 +146,7 @@ export function hasEmittedChatCardFlag(emittedFlags: Set<string> | undefined): b
 
 /**
  * 可确定性补出的 TaskProposal 开卡 Skill（不依赖文件 ID / Shopify 预取也能出可用空卡）。
- * 表格导入类缺 fileId 时不能补，只能走纠偏文案。
+ * 导入一期即使没有文件也要开空卡；fileId 可在确认前由工作台已选文件补上。
  */
 const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   skill: string;
@@ -152,6 +154,10 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
     products: Array<{ id: string; title: string; imageUrl?: string | null }>,
   ) => TaskProposalPayload;
 }> = [
+  {
+    skill: "productImport",
+    build: () => buildProductImportProposal({}),
+  },
   {
     skill: "bulkStatusEdit",
     build: (products) => buildBulkStatusEditProposal({ products }),
@@ -195,6 +201,13 @@ export function tryDeterministicTaskProposalFromSkills(
   const products = parseWorkspaceProductsFromText(lastUserText);
   for (const entry of DETERMINISTIC_TASK_PROPOSAL_BY_SKILL) {
     if (!skillSet.has(entry.skill)) continue;
+    if (
+      entry.skill === "productImport" &&
+      skillSet.has("seoAudit") &&
+      !userTextMatchesProductImport(extractUserIntentText(lastUserText))
+    ) {
+      continue;
+    }
     return entry.build(products);
   }
   return null;
@@ -435,6 +448,7 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "productDuplicate",
   "bulkArchive",
   "productExport",
+  "productImport",
 ]);
 
 /** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */

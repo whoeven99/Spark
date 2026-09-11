@@ -9,8 +9,8 @@ import {
 } from "../../../../../app/server/ai/core/resolveChatCardIntent.server";
 import { BULK_STATUS_EDIT_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
 import {
-  BULK_COLLECTION_EDIT_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
 } from "../../../../../app/lib/productManageTaskProposals";
 
 describe("buildChatCardPayloadFromIntent", () => {
@@ -139,12 +139,21 @@ describe("tryDeterministicTaskProposalFromSkills", () => {
 });
 
 describe("resolveDeterministicTaskProposalForTurn", () => {
-  it("opens a collection card from recommend phrasing without claiming", () => {
+  it("opens an import card from collection recommend phrasing without claiming", () => {
     const proposal = resolveDeterministicTaskProposalForTurn({
       lastUserText: "打开批量调整合集的确认卡，在卡片里选择加入或移出、目标手动合集和商品。",
       claimed: false,
     });
-    expect(proposal?.skillId).toBe(BULK_COLLECTION_EDIT_SKILL_ID);
+    expect(proposal?.skillId).toBe(PRODUCT_IMPORT_SKILL_ID);
+  });
+
+  it("does not open import just because SEO audit injects the skill", () => {
+    expect(
+      resolveDeterministicTaskProposalForTurn({
+        lastUserText: "帮我给店铺做一次 SEO 体检，找出商品搜索标题和描述有哪些问题",
+        claimed: false,
+      }),
+    ).toBeNull();
   });
 
   it("opens an export card from recommend phrasing without claiming", () => {
@@ -171,7 +180,7 @@ describe("resolveDeterministicTaskProposalForTurn", () => {
       lastUserText: "今天天气怎么样",
       claimed: true,
     });
-    expect(proposal?.skillId).toBe(BULK_COLLECTION_EDIT_SKILL_ID);
+    expect(proposal?.skillId).toBe(PRODUCT_IMPORT_SKILL_ID);
   });
 });
 

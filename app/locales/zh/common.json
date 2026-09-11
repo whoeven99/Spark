@@ -718,6 +718,112 @@
       "missing_brand": "缺少品牌"
     }
   },
+  "productImport": {
+    "logReadingFile": "正在读取上传的表格…",
+    "logMatching": "正在按 Handle / SKU 匹配 {{count}} 行…",
+    "logReadyForReview": "校验完成：{{changed}} 处将写入，{{issues}} 条需要先改文件",
+    "dryRunFailed": "读取表格失败，请确认文件格式后重试",
+    "fileNotFound": "找不到这个文件，请重新上传后再试",
+    "parseFailed": "无法解析这个文件，请上传 CSV 或 Excel",
+    "noUsableRows": "表格里没有可用的数据行，请检查表头和内容",
+    "cardTitle": "任务目标：导入商品",
+    "ruleLabel": "导入表格",
+    "metaRule": "文件：{{rule}}",
+    "metaProducts": "{{count}} 行",
+    "cardPrimaryRunning": "正在读取表格并对照店铺商品校验…",
+    "cardPrimaryPendingReview": "校验完成：{{changed}} 处将写入，{{skipped}} 条问题需先改文件",
+    "cardPrimarySucceeded": "校验完成：{{exported}} 处将写入，{{skipped}} 条问题",
+    "cardPrimaryApplied": "已写回店铺：成功 {{succeeded}} 处，失败 {{failed}} 处",
+    "cardPrimaryFailed": "任务失败：{{reason}}",
+    "cardPrimaryCancelled": "任务已取消",
+    "cardSecondaryPendingReview": "本步骤没有修改任何商品。请先按问题报告改文件，或确认无误后写回通过校验的行。",
+    "cardSecondaryApplied": "导入写回已完成。",
+    "cardSecondarySucceeded": "校验已完成，请查看问题报告后确认写回。",
+    "cardSecondaryDefault": "读取与校验全程只读，不会修改商品。",
+    "actionReview": "查看校验",
+    "actionViewApplied": "查看写回结果",
+    "reviewTitle": "导入校验 · #{{id}}",
+    "reviewTitleShort": "导入商品",
+    "reviewDescription": "不符合 Shopify 要求的行会列在下面，并说明怎么改。确认后只会写回通过校验的变更。",
+    "noChangeset": "这个任务还没有生成校验结果。",
+    "sourceFile": "来源文件：",
+    "noIssues": "没有需要修改的问题行。",
+    "summaryRows": "表格行",
+    "summaryMatched": "已匹配",
+    "summaryChanged": "将写入",
+    "summaryIssues": "需修改",
+    "truncatedWarning": "行数超出单次上限，只处理了前一部分。请拆分文件后分批导入。",
+    "appliedBanner": "已写回店铺：成功 {{succeeded}} 处，失败 {{failed}} 处。",
+    "downloadIssues": "下载问题报告",
+    "applyButton": "确认写回（{{count}} 处变更）",
+    "applyConfirmHint": "将把表格里已通过校验的 {{count}} 处变更写回店铺。问题行不会写入。",
+    "applyConfirmButton": "确认写回",
+    "applying": "写回中…",
+    "applyFailed": "写回失败，请稍后重试",
+    "colRow": "行",
+    "colColumn": "列",
+    "colProblem": "问题",
+    "colFix": "怎么改",
+    "moreRowsHint": "表格只显示前 {{shown}} 行，共 {{total}} 行；完整清单请下载问题报告。",
+    "operation": {
+      "price": "价格",
+      "tags": "标签",
+      "status": "状态",
+      "vendor": "Vendor",
+      "productType": "商品类型",
+      "seoTitle": "SEO 标题",
+      "seoDescription": "SEO 描述",
+      "collection": "合集",
+      "duplicate": "复制",
+      "archive": "归档"
+    },
+    "issue": {
+      "missing_identity": "缺少商品标识",
+      "no_supported_columns": "没有可导入的列",
+      "unsupported_column": "不支持的列",
+      "invalid_price": "价格无法识别",
+      "price_needs_sku": "改价需要 SKU",
+      "too_long_seo_title": "SEO 标题超出搜索展示宽度",
+      "too_long_seo_description": "SEO 描述超出搜索展示宽度",
+      "invalid_status": "状态值无效",
+      "invalid_collection_action": "合集操作无效",
+      "handle_not_in_v1": "一期不支持改 Handle",
+      "cost_not_in_v1": "一期不支持导入成本",
+      "metafield_not_in_v1": "一期不支持导入 Metafield",
+      "delete_not_in_v1": "一期不支持删除商品",
+      "inventory_not_in_v1": "一期不支持导入库存",
+      "create_fields_not_in_v1": "一期不支持用表格创建或改标题/正文",
+      "sku_not_found": "SKU 在店铺里找不到",
+      "handle_not_found": "Handle 在店铺里找不到",
+      "sku_matches_multiple": "SKU 对应多个变体",
+      "collection_not_found": "找不到这个合集",
+      "collection_not_writable": "这个合集不能在这里加减商品",
+      "duplicate_over_limit": "复制数量超过 50 个上限"
+    },
+    "fix": {
+      "missing_identity": "增加 Handle、Variant SKU 或 Product ID 列，并保证每行有值。",
+      "no_supported_columns": "请至少包含价格、Tags、Status、Vendor、Type、SEO、Collection、duplicate 或 archive 其中一列。",
+      "unsupported_column": "删掉该列，或改用本期支持的列名。",
+      "invalid_price": "改成纯数字金额，例如 19.99，不要带货币符号。",
+      "price_needs_sku": "该商品有多个变体时，请填写 Variant SKU 再改价。",
+      "too_long_seo_title": "缩短 SEO 标题，中文大约 30 字以内。",
+      "too_long_seo_description": "缩短 SEO 描述，避免搜索结果被截断。",
+      "invalid_status": "只能填 active、draft 或 archived。",
+      "invalid_collection_action": "合集操作只能填 add 或 remove。",
+      "handle_not_in_v1": "请在 Shopify 后台逐个改 Handle，并配置 301。",
+      "cost_not_in_v1": "请去掉成本列；成本导入尚未开放。",
+      "metafield_not_in_v1": "请去掉 Metafield 列；自定义字段导入尚未开放。",
+      "delete_not_in_v1": "请去掉删除列；如需下架请用 Status=draft，如需归档请用 Status=archived。",
+      "inventory_not_in_v1": "请去掉库存列；库存导入尚未开放。",
+      "create_fields_not_in_v1": "Title / Body 等创建列会被忽略。请先在店铺里有商品，再用导入改支持的列。",
+      "sku_not_found": "核对 SKU 是否与 Shopify 变体 SKU 完全一致。",
+      "handle_not_found": "核对 Handle 是否与店铺商品句柄一致。",
+      "sku_matches_multiple": "给重复 SKU 改成唯一值，或改用 Product ID。",
+      "collection_not_found": "把合集名改成店铺里已有合集的准确名称。",
+      "collection_not_writable": "换一个可手动加减商品的合集。",
+      "duplicate_over_limit": "把复制行拆成每批最多 50 个。"
+    }
+  },
   "bulkPriceImport": {
     "logReadingFile": "正在读取上传的表格…",
     "logParsedRows": "已解析 {{count}} 行数据，正在按 SKU 匹配店铺商品…",
@@ -4283,6 +4389,13 @@
           "selected": "打开导出商品确认卡，把已选中的商品导出为 Shopify CSV 或 TikTok Catalog Feed。"
         }
       },
+      "productImport": {
+        "label": "导入商品",
+        "prompt": {
+          "shop": "打开导入商品确认卡。我会先上传 CSV 或 Excel，你校验后列出问题行和改法，我确认后再写回店铺。不要直接改数据。",
+          "selected": "打开导入商品确认卡，用我已选中的表格文件做校验。列出问题行和改法，确认后再写回。"
+        }
+      },
       "bulkProductFieldEdit": {
         "label": "批量改字段 / SEO",
         "prompt": {
@@ -4614,6 +4727,10 @@
         "productExport": {
           "title": "导出商品",
           "summary": "导出已选商品的 CSV。一期只支持已选范围（最多 200 个），不会改店铺数据。缺必填列的行会进校验报告。"
+        },
+        "productImport": {
+          "title": "导入商品",
+          "summary": "识别上传的表格、校验每行，并列出问题与改法。确认后只写回通过校验的价格、标签、状态、Vendor/类型/SEO、合集、复制或归档。本步骤不会修改任何商品。"
         },
         "bulkCollectionEdit": {
           "title": "批量调整商品所属合集",

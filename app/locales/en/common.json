@@ -718,6 +718,112 @@
       "missing_brand": "Missing brand"
     }
   },
+  "productImport": {
+    "logReadingFile": "Reading the uploaded spreadsheet…",
+    "logMatching": "Matching {{count}} rows by Handle / SKU…",
+    "logReadyForReview": "Validation complete: {{changed}} changes to write, {{issues}} issues to fix first",
+    "dryRunFailed": "Could not read the spreadsheet. Check the file format and try again.",
+    "fileNotFound": "This file could not be found. Upload it again and retry.",
+    "parseFailed": "Could not parse this file. Upload a CSV or Excel spreadsheet.",
+    "noUsableRows": "The spreadsheet has no usable data rows. Check the headers and content.",
+    "cardTitle": "Task: Import products",
+    "ruleLabel": "Import spreadsheet",
+    "metaRule": "File: {{rule}}",
+    "metaProducts": "{{count}} rows",
+    "cardPrimaryRunning": "Reading the spreadsheet and validating against store products…",
+    "cardPrimaryPendingReview": "Validation complete: {{changed}} changes to write, {{skipped}} issues to fix first",
+    "cardPrimarySucceeded": "Validation complete: {{exported}} changes to write, {{skipped}} issues",
+    "cardPrimaryApplied": "Written back: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing was changed yet. Fix issues in the file, or confirm to write back only validated rows.",
+    "cardSecondaryApplied": "Import write-back is complete.",
+    "cardSecondarySucceeded": "Validation is complete. Review the issue report, then confirm write-back.",
+    "cardSecondaryDefault": "Reading and validation are read-only and will not change products.",
+    "actionReview": "Review validation",
+    "actionViewApplied": "View write-back results",
+    "reviewTitle": "Import validation · #{{id}}",
+    "reviewTitleShort": "Import products",
+    "reviewDescription": "Rows that do not meet Shopify requirements are listed below, with how to fix them. Confirming writes back only validated changes.",
+    "noChangeset": "This task does not have a validation result yet.",
+    "sourceFile": "Source file:",
+    "noIssues": "No issue rows to fix.",
+    "summaryRows": "Spreadsheet rows",
+    "summaryMatched": "Matched",
+    "summaryChanged": "To write",
+    "summaryIssues": "To fix",
+    "truncatedWarning": "The row count exceeded the per-run limit. Only the first part was processed. Split the file and import in batches.",
+    "appliedBanner": "Written back: {{succeeded}} succeeded, {{failed}} failed.",
+    "downloadIssues": "Download issue report",
+    "applyButton": "Confirm write-back ({{count}} changes)",
+    "applyConfirmHint": "This will write {{count}} validated changes back to the store. Issue rows will not be written.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing back…",
+    "applyFailed": "Write-back failed. Please try again later.",
+    "colRow": "Row",
+    "colColumn": "Column",
+    "colProblem": "Problem",
+    "colFix": "How to fix",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the issue report for the full list.",
+    "operation": {
+      "price": "Price",
+      "tags": "Tags",
+      "status": "Status",
+      "vendor": "Vendor",
+      "productType": "Product type",
+      "seoTitle": "SEO title",
+      "seoDescription": "SEO description",
+      "collection": "Collection",
+      "duplicate": "Duplicate",
+      "archive": "Archive"
+    },
+    "issue": {
+      "missing_identity": "Missing product identity",
+      "no_supported_columns": "No importable columns",
+      "unsupported_column": "Unsupported column",
+      "invalid_price": "Price could not be parsed",
+      "price_needs_sku": "Price changes need a SKU",
+      "too_long_seo_title": "SEO title exceeds search display width",
+      "too_long_seo_description": "SEO description exceeds search display width",
+      "invalid_status": "Invalid status value",
+      "invalid_collection_action": "Invalid collection action",
+      "handle_not_in_v1": "Handle changes are not supported in v1",
+      "cost_not_in_v1": "Cost import is not supported in v1",
+      "metafield_not_in_v1": "Metafield import is not supported in v1",
+      "delete_not_in_v1": "Deleting products is not supported in v1",
+      "inventory_not_in_v1": "Inventory import is not supported in v1",
+      "create_fields_not_in_v1": "Creating products or changing title/body via spreadsheet is not supported in v1",
+      "sku_not_found": "SKU not found in the store",
+      "handle_not_found": "Handle not found in the store",
+      "sku_matches_multiple": "SKU matches multiple variants",
+      "collection_not_found": "Collection not found",
+      "collection_not_writable": "This collection cannot add or remove products here",
+      "duplicate_over_limit": "Duplicate count exceeds the 50-item limit"
+    },
+    "fix": {
+      "missing_identity": "Add a Handle, Variant SKU, or Product ID column, and make sure every row has a value.",
+      "no_supported_columns": "Include at least one of: Price, Tags, Status, Vendor, Type, SEO, Collection, duplicate, or archive.",
+      "unsupported_column": "Remove this column, or rename it to a supported column.",
+      "invalid_price": "Use a numeric amount such as 19.99, without a currency symbol.",
+      "price_needs_sku": "If the product has multiple variants, fill in Variant SKU before changing price.",
+      "too_long_seo_title": "Shorten the SEO title to about 30 characters for CJK scripts.",
+      "too_long_seo_description": "Shorten the SEO description so search results are not truncated.",
+      "invalid_status": "Use only active, draft, or archived.",
+      "invalid_collection_action": "Collection action must be add or remove.",
+      "handle_not_in_v1": "Change handles one by one in Shopify admin and set up 301 redirects.",
+      "cost_not_in_v1": "Remove the cost column. Cost import is not available yet.",
+      "metafield_not_in_v1": "Remove the metafield column. Custom field import is not available yet.",
+      "delete_not_in_v1": "Remove the delete column. Use Status=draft to unpublish, or Status=archived to archive.",
+      "inventory_not_in_v1": "Remove the inventory column. Inventory import is not available yet.",
+      "create_fields_not_in_v1": "Title / Body and other create columns are ignored. Create the product in the store first, then import supported columns.",
+      "sku_not_found": "Check that the SKU exactly matches a Shopify variant SKU.",
+      "handle_not_found": "Check that the Handle matches the product handle in the store.",
+      "sku_matches_multiple": "Make duplicate SKUs unique, or use Product ID instead.",
+      "collection_not_found": "Change the collection name to an exact match of an existing collection.",
+      "collection_not_writable": "Choose a collection that allows adding and removing products manually.",
+      "duplicate_over_limit": "Split duplicate rows into batches of at most 50."
+    }
+  },
   "bulkPriceImport": {
     "logReadingFile": "Reading the uploaded spreadsheet…",
     "logParsedRows": "Parsed {{count}} rows. Matching them to store products by SKU…",
@@ -4283,6 +4389,13 @@
           "selected": "Open the export confirmation card and export the selected products as Shopify CSV or TikTok Catalog Feed."
         }
       },
+      "productImport": {
+        "label": "Import products",
+        "prompt": {
+          "shop": "Open the import confirmation card. I will upload a CSV or Excel file first; validate it, list issue rows and how to fix them, and only write back after I confirm. Do not change store data yet.",
+          "selected": "Open the import confirmation card and validate the spreadsheet I already selected. List issue rows and how to fix them, then write back only after I confirm."
+        }
+      },
       "bulkProductFieldEdit": {
         "label": "Bulk edit fields / SEO",
         "prompt": {
@@ -4614,6 +4727,10 @@
         "productExport": {
           "title": "Export products",
           "summary": "Export a CSV of the selected products. Phase 1 only supports the selected range (up to 200) and never writes to the store. Rows missing required columns go into a validation report."
+        },
+        "productImport": {
+          "title": "Import products",
+          "summary": "Identify the uploaded spreadsheet, validate each row, and list issues with how to fix them. After you confirm, only validated price, tags, status, vendor/type/SEO, collection, duplicate, or archive changes are written back. This step does not modify any products."
         },
         "bulkCollectionEdit": {
           "title": "Bulk update collection membership",

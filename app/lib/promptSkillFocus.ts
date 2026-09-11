@@ -9,21 +9,69 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   todayTodos: ["shopOperations", "healthDiagnosisForm"],
   inventoryHealth: ["shopOperations"],
   abandonRefund: ["shopOperations"],
-  // SEO 体检后正文过薄可开文案卡；搜索标题/描述缺失或超宽可开批量字段卡
-  seoAudit: ["seoAudit", "productImprove", "bulkProductFieldEdit"],
+  // SEO 体检后正文过薄可开文案卡；搜索标题/描述缺失或超宽走导入商品改 SEO 列
+  seoAudit: ["seoAudit", "productImprove", "productImport"],
   qualityScore: ["productQualityScore", "productImprove"],
   optimizeCopy: ["productImprove"],
   translateImage: ["pictureTranslateForm", "pictureTranslate"],
   generateImage: ["imageGenerationForm", "imageGeneration"],
-  bulkPriceEdit: ["bulkPriceEdit"],
-  bulkTagEdit: ["bulkTagEdit"],
-  bulkStatusEdit: ["bulkStatusEdit"],
-  bulkProductFieldEdit: ["bulkProductFieldEdit"],
-  bulkCollectionEdit: ["bulkCollectionEdit"],
-  productDuplicate: ["productDuplicate"],
-  bulkArchive: ["bulkArchive"],
   productExport: ["productExport"],
+  productImport: ["productImport"],
+  bulkPriceEdit: ["productImport"],
+  bulkTagEdit: ["productImport"],
+  bulkStatusEdit: ["productImport"],
+  bulkProductFieldEdit: ["productImport"],
+  bulkCollectionEdit: ["productImport"],
+  productDuplicate: ["productImport"],
+  bulkArchive: ["productImport"],
 };
+
+/** 导入商品及旧批量编辑话术；SEO 体检也会注入 productImport，确定性开卡时要单独判断这组。 */
+const PRODUCT_IMPORT_HEURISTIC_PATTERNS: RegExp[] = [
+  /导入商品/,
+  /导入.*表格/,
+  /按表格/,
+  /上传.*csv/i,
+  /import\s*product/i,
+  /bulk\s*import/i,
+  /批量调价/,
+  /批量.*改价/,
+  /降价\s*\d/,
+  /涨价\s*\d/,
+  /bulk\s*price/i,
+  /批量打标/,
+  /批量.*标签/,
+  /bulk\s*tag/i,
+  /批量上下架/,
+  /批量.*上架/,
+  /批量.*下架/,
+  /bulk\s*status/i,
+  /批量.*vendor/i,
+  /批量.*品牌/,
+  /批量.*商品类型/,
+  /批量.*seo/i,
+  /改.*seo\s*标题/i,
+  /bulk\s*(vendor|seo|product\s*type)/i,
+  /批量.*合集/,
+  /调整.*合集/,
+  /加入合集/,
+  /移出合集/,
+  /加入或移出/,
+  /手动合集/,
+  /bulk\s*collection/i,
+  /复制商品/,
+  /拷贝商品/,
+  /duplicate\s*product/i,
+  /归档商品/,
+  /批量归档/,
+  /archive\s*product/i,
+];
+
+export function userTextMatchesProductImport(text: string | null | undefined): boolean {
+  const value = text?.trim() ?? "";
+  if (!value) return false;
+  return PRODUCT_IMPORT_HEURISTIC_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 /** 自由输入时的轻量关键词路由（中英）；命中则注入对应 Skill 组 */
 const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> = [
@@ -64,47 +112,8 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
     patterns: [/生成.*主图/, /文生图/, /生成.*商品图/, /generate.*(image|主图)/i],
   },
   {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkPriceEdit,
-    patterns: [/批量调价/, /批量.*改价/, /降价\s*\d/, /涨价\s*\d/, /bulk\s*price/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkTagEdit,
-    patterns: [/批量打标/, /批量.*标签/, /bulk\s*tag/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkStatusEdit,
-    patterns: [/批量上下架/, /批量.*上架/, /批量.*下架/, /bulk\s*status/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkProductFieldEdit,
-    patterns: [
-      /批量.*vendor/i,
-      /批量.*品牌/,
-      /批量.*商品类型/,
-      /批量.*seo/i,
-      /改.*seo\s*标题/i,
-      /bulk\s*(vendor|seo|product\s*type)/i,
-    ],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkCollectionEdit,
-    patterns: [
-      /批量.*合集/,
-      /调整.*合集/,
-      /加入合集/,
-      /移出合集/,
-      /加入或移出/,
-      /手动合集/,
-      /bulk\s*collection/i,
-    ],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.productDuplicate,
-    patterns: [/复制商品/, /拷贝商品/, /duplicate\s*product/i],
-  },
-  {
-    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkArchive,
-    patterns: [/归档商品/, /批量归档/, /archive\s*product/i],
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.productImport,
+    patterns: PRODUCT_IMPORT_HEURISTIC_PATTERNS,
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.productExport,

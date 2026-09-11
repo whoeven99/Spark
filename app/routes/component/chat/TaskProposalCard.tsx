@@ -35,6 +35,7 @@ import {
   resolveTaskProposalTitle,
 } from "../../../lib/taskProposalDisplay";
 import { formatThinkingDuration } from "../../../lib/thinkingDuration";
+import { PRODUCT_IMPORT_SKILL_ID } from "../../../lib/productImport";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import {
   TaskProposalProductImageGrid,
@@ -485,6 +486,8 @@ type Props = {
   contextProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query；items 与手动选择都为空时兜底 */
   contextProductQuery?: ObjectQuerySelection | null;
+  /** 导入商品：工作台已选文件 ID，卡片 hidden fileId 为空时带上 */
+  fallbackFileId?: string;
   /**
    * 打开与底部「添加上下文 → 商品」相同的选择弹窗。
    * 选中结果写入工作台上下文后，本卡跟随 contextProducts 更新（点「更换」后）。
@@ -500,6 +503,7 @@ export function TaskProposalCard({
   proposal,
   contextProducts = [],
   contextProductQuery = null,
+  fallbackFileId,
   onOpenProductPicker,
   onTasksCreated,
   onExecuted,
@@ -731,7 +735,14 @@ export function TaskProposalCard({
         body: JSON.stringify({
           intent: "execute",
           skillId: resolved.skillId,
-          params: paramValues,
+          params: {
+            ...paramValues,
+            ...(resolved.skillId === PRODUCT_IMPORT_SKILL_ID &&
+            !(paramValues.fileId ?? "").trim() &&
+            fallbackFileId
+              ? { fileId: fallbackFileId }
+              : {}),
+          },
           ...(targetsQuery
             ? {
                 targetsQuery: {
@@ -802,7 +813,7 @@ export function TaskProposalCard({
       setSubmitting(false);
       setDone(true);
     }
-  }, [canSubmit, resolved, paramValues, executeTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
+  }, [canSubmit, resolved, paramValues, fallbackFileId, executeTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
 
   const headerSubtitle = done
     ? t("workspace.taskProposal.card.submitted")

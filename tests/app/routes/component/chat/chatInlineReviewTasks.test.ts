@@ -48,6 +48,7 @@ describe("isChatInlineReviewTask", () => {
     expect(isChatInlineReviewTask("product_duplicate")).toBe(true);
     expect(isChatInlineReviewTask("bulk_archive")).toBe(true);
     expect(isChatInlineReviewTask("product_export")).toBe(true);
+    expect(isChatInlineReviewTask("product_import")).toBe(true);
   });
 
   it("rejects unknown and empty task types", () => {

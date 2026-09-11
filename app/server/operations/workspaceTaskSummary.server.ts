@@ -19,6 +19,7 @@ const AI_TASK_TYPE_LABELS: Record<AITaskType, string> = {
   product_duplicate: "复制商品",
   bulk_archive: "归档商品",
   product_export: "导出商品",
+  product_import: "导入商品",
 };
 
 const AI_STATUS_LABELS: Record<AITaskStatus, string> = {

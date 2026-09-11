@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "../../core/toolRegistry.server";
 import { OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME } from "../marketing/marketing.form.tool";
+import { OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME } from "../productImport/productImport.form.tool";
 import { createRunSeoAuditTool, RUN_SEO_AUDIT_TOOL_NAME } from "./runSeoAudit.tool";
 
 export const seoAuditSkillDefinition: ToolDefinition = {
@@ -16,7 +17,7 @@ export const seoAuditSkillDefinition: ToolDefinition = {
     "2) 再解释：按返回的 issues 顺序（已按严重程度排好）用短列表讲清：影响多少商品、为什么是问题、怎么改。成因和改法直接用 issue.guidance，不要另编 SEO 常识；举例用 samples 里的真实商品。",
     "3) 然后立刻行动（同一回合，不要只口头问「要不要改」）：",
     `   - 若返回了 suggestedNextActions：按数组顺序调用其中的 tool，products 原样预填；开卡本身是安全闸，不等于写回。`,
-    `   - 若没有 suggestedNextActions 字段：有 fixability=product_content 的 issue → 立刻调用 ${OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME}（可先开一张代表性商品卡）；fixability=bulk_seo → 立刻调用 open_bulk_product_field_edit_form（标题类预填 field=seoTitle，描述类预填 field=seoDescription，mode/value 留给商户）；manual（重复标题/描述、不可读 handle）→ 说明需要商户在 Shopify 后台逐个改，不要假装能批量生成互不相同的 SEO。`,
+    `   - 若没有 suggestedNextActions 字段：有 fixability=product_content 的 issue → 立刻调用 ${OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME}（可先开一张代表性商品卡）；fixability=bulk_seo → 立刻调用 ${OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME}（导出后改 SEO 列再导入）；manual（重复标题/描述、不可读 handle）→ 说明需要商户在 Shopify 后台逐个改，不要假装能批量生成互不相同的 SEO。`,
     "   - 商户点了 SEO 体检是为了改，不是听课。",
     "关于长度：阈值单位是「半角当量宽度」，一个汉字算 2。跟商户解释时说「约 30 个汉字」比说「60 字符」更好懂。",
     "这个工具只读，永远不要说「我已经帮你优化了 SEO」。",

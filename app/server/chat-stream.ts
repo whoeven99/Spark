@@ -83,8 +83,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop,
         locale,
       },
-      // LangSmith tracer 与 runCollector 由 invokeChatAgentStream 内部统一挂载，避免重复注册。
       skillFocus,
+      fileIds,
       signal: request.signal,
     });
 

@@ -23,13 +23,15 @@ describe("chatToolSelection", () => {
   it("gates heavy skills until intent matches", () => {
     const idle = selectActiveGatedSkills({ skillFocus: null, recentUserText: "今天天气如何" });
     expect(shouldBindSkillForTurn("bulkPriceEdit", idle)).toBe(false);
+    expect(shouldBindSkillForTurn("productImport", idle)).toBe(false);
     expect(shouldBindSkillForTurn("imageGeneration", idle)).toBe(false);
 
     const priceIntent = selectActiveGatedSkills({
       skillFocus: null,
       recentUserText: "帮我批量调价降价 10%",
     });
-    expect(shouldBindSkillForTurn("bulkPriceEdit", priceIntent)).toBe(true);
+    expect(shouldBindSkillForTurn("productImport", priceIntent)).toBe(true);
+    expect(shouldBindSkillForTurn("bulkPriceEdit", priceIntent)).toBe(false);
     expect(shouldBindSkillForTurn("imageGeneration", priceIntent)).toBe(false);
   });
 

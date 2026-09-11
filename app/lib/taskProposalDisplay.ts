@@ -17,6 +17,7 @@ import {
   BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
   PRODUCT_DUPLICATE_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
 } from "./productManageTaskProposals";
 import type { TaskRunPayload } from "./taskRunPayload";
 
@@ -33,6 +34,7 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [PRODUCT_DUPLICATE_SKILL_ID]: `${PREFIX}.skills.productDuplicate.title`,
   [BULK_ARCHIVE_SKILL_ID]: `${PREFIX}.skills.bulkArchive.title`,
   [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.title`,
+  [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.title`,
 };
 
 /**
@@ -47,6 +49,7 @@ const SINGLE_TASK_SKILL_IDS = new Set<string>([
   PRODUCT_DUPLICATE_SKILL_ID,
   BULK_ARCHIVE_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
 ]);
 
 export function isSingleTaskProposalSkill(skillId: string): boolean {
@@ -64,6 +67,7 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [PRODUCT_DUPLICATE_SKILL_ID]: `${PREFIX}.skills.productDuplicate.summary`,
   [BULK_ARCHIVE_SKILL_ID]: `${PREFIX}.skills.bulkArchive.summary`,
   [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.summary`,
+  [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.summary`,
 };
 
 /** 历史消息仅有 taskType 时映射到 skillId，便于侧栏标题 i18n */
@@ -78,6 +82,7 @@ const TASK_TYPE_TO_SKILL_ID: Record<string, string> = {
   product_duplicate: PRODUCT_DUPLICATE_SKILL_ID,
   bulk_archive: BULK_ARCHIVE_SKILL_ID,
   product_export: PRODUCT_EXPORT_SKILL_ID,
+  product_import: PRODUCT_IMPORT_SKILL_ID,
 };
 
 export function skillIdFromAiTaskType(taskType: string): string | undefined {

@@ -20,6 +20,7 @@ import { bulkCollectionEditSkillDefinition } from "./bulkCollectionEdit";
 import { productDuplicateSkillDefinition } from "./productDuplicate";
 import { bulkArchiveSkillDefinition } from "./bulkArchive";
 import { productExportSkillDefinition } from "./productExport";
+import { productImportSkillDefinition } from "./productImport";
 import { seoAuditSkillDefinition } from "./seoAudit";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
@@ -127,6 +128,7 @@ globalToolRegistry.register(bulkCollectionEditSkillDefinition);
 globalToolRegistry.register(productDuplicateSkillDefinition);
 globalToolRegistry.register(bulkArchiveSkillDefinition);
 globalToolRegistry.register(productExportSkillDefinition);
+globalToolRegistry.register(productImportSkillDefinition);
 
 // SEO 体检：纯规则只读诊断，先告诉商户搜索标题/描述哪里有问题
 globalToolRegistry.register(seoAuditSkillDefinition);

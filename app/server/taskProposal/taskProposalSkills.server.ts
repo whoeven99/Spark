@@ -35,6 +35,7 @@ import {
   BULK_PRODUCT_FIELD_EDIT_SKILL_ID,
   PRODUCT_DUPLICATE_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
 } from "../../lib/productManageTaskProposals";
 import {
   BULK_PRICE_EDIT_MAX_PRODUCTS,
@@ -80,6 +81,7 @@ import { enqueueBulkCollectionEditDryRun } from "../bulkCollectionEdit/bulkColle
 import { enqueueProductDuplicateDryRun } from "../productDuplicate/productDuplicateDryRun.server";
 import { enqueueBulkArchiveDryRun } from "../bulkArchive/bulkArchiveDryRun.server";
 import { enqueueProductExport } from "../productExport/productExportRun.server";
+import { enqueueProductImportDryRun } from "../productImport/productImportDryRun.server";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
@@ -568,6 +570,31 @@ const productExportHandler: TaskProposalSkillHandler = {
   },
 };
 
+const productImportHandler: TaskProposalSkillHandler = {
+  skillId: PRODUCT_IMPORT_SKILL_ID,
+  allowEmptyTargets: true,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const fileId = (params.fileId ?? "").trim();
+    if (!fileId) throw new Error("请先在对话输入区上传 CSV 或 Excel");
+    const config = { fileId };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "product_import",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueProductImportDryRun({ taskId, shop, locale, fileId });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
@@ -580,6 +607,7 @@ const handlers = new Map<string, TaskProposalSkillHandler>([
   [productDuplicateHandler.skillId, productDuplicateHandler],
   [bulkArchiveHandler.skillId, bulkArchiveHandler],
   [productExportHandler.skillId, productExportHandler],
+  [productImportHandler.skillId, productImportHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

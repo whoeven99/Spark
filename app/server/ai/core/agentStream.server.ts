@@ -238,6 +238,8 @@ export type InvokeChatAgentStreamParams = {
   sessionName?: string;
   /** 推荐操作 key 或 Skill 名，用于按需注入 systemPromptExtension */
   skillFocus?: string | null;
+  /** 工作台本轮附带的上传文件 ID，供导入类开卡预填 */
+  fileIds?: string[];
   /** 客户端请求的 AbortSignal（HTTP 断开时透传，用于取消图执行与模型调用） */
   signal?: AbortSignal;
 };
@@ -268,6 +270,7 @@ export function invokeChatAgentStream(
     config,
     sessionName,
     skillFocus,
+    fileIds,
     signal: externalSignal,
   } = params;
 
@@ -484,6 +487,7 @@ export function invokeChatAgentStream(
         const streamContext = {
           emittedFlags: new Set<string>(),
           lastUserText: lastUserTextInput,
+          fileIds: fileIds ?? [],
         };
         let streamedTextAccum = "";
 

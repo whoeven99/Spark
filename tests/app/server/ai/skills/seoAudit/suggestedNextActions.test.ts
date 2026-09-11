@@ -14,7 +14,7 @@ function issue(
 }
 
 describe("buildSeoAuditSuggestedNextActions", () => {
-  it("opens copy card for thin content and field-edit card for missing SEO", () => {
+  it("opens copy card for thin content and import card for missing SEO", () => {
     const actions = buildSeoAuditSuggestedNextActions([
       issue({
         code: "description_missing",
@@ -59,14 +59,14 @@ describe("buildSeoAuditSuggestedNextActions", () => {
     expect(actions[0]?.products).toEqual([
       { id: "gid://shopify/Product/2", title: "B" },
     ]);
-    expect(actions[1]?.tool).toBe("open_bulk_product_field_edit_form");
+    expect(actions[1]?.tool).toBe("open_product_import_form");
     expect(actions[1]?.field).toBe("seoDescription");
     expect(actions[1]?.products).toEqual([
       { id: "gid://shopify/Product/1", title: "A" },
     ]);
   });
 
-  it("opens a title field card for missing SEO titles", () => {
+  it("opens an import card for missing SEO titles", () => {
     const actions = buildSeoAuditSuggestedNextActions([
       issue({
         code: "title_missing",
@@ -83,7 +83,7 @@ describe("buildSeoAuditSuggestedNextActions", () => {
     ]);
     expect(actions).toEqual([
       expect.objectContaining({
-        tool: "open_bulk_product_field_edit_form",
+        tool: "open_product_import_form",
         field: "seoTitle",
         products: [{ id: "gid://shopify/Product/9", title: "T" }],
       }),

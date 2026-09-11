@@ -10,23 +10,26 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromFocus("seoAudit")).toEqual([
       "seoAudit",
       "productImprove",
-      "bulkProductFieldEdit",
+      "productImport",
     ]);
-    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["productImport"]);
     expect(skillNamesFromFocus("productExport")).toEqual(["productExport"]);
+    expect(skillNamesFromFocus("productImport")).toEqual(["productImport"]);
     expect(skillNamesFromFocus("all")).toBe("all");
   });
 
-  it("routes collection and export recommend phrasing", () => {
+  it("routes collection, import and export recommend phrasing", () => {
     expect(skillNamesFromUserText("打开批量调整合集的确认卡，在卡片里选择加入或移出")).toContain(
-      "bulkCollectionEdit",
+      "productImport",
     );
     expect(skillNamesFromUserText("帮我把一批商品加入或移出某个手动合集")).toContain(
-      "bulkCollectionEdit",
+      "productImport",
     );
     expect(skillNamesFromUserText("Open the bulk collection confirmation card")).toContain(
-      "bulkCollectionEdit",
+      "productImport",
     );
+    expect(skillNamesFromUserText("打开导入商品确认卡")).toContain("productImport");
+    expect(skillNamesFromUserText("帮我批量调价降价 10%")).toContain("productImport");
     expect(skillNamesFromUserText("打开导出商品确认卡")).toContain("productExport");
     expect(skillNamesFromUserText("帮我导出已选商品的 CSV")).toContain("productExport");
     expect(

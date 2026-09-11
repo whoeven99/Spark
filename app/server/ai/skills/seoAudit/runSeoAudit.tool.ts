@@ -13,7 +13,7 @@ import {
   type SeoAuditIssue,
 } from "../../../../lib/seoAudit";
 import { OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME } from "../marketing/marketing.form.tool";
-import { OPEN_BULK_PRODUCT_FIELD_EDIT_FORM_TOOL_NAME } from "../bulkProductFieldEdit/bulkProductFieldEdit.form.tool";
+import { OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME } from "../productImport/productImport.form.tool";
 
 export const RUN_SEO_AUDIT_TOOL_NAME = "run_seo_audit";
 const LOG_PREFIX = "[RunSeoAudit]";
@@ -34,7 +34,7 @@ type SuggestedNextAction = {
 
 /**
  * 把可修的问题样例收成下游开卡动作。
- * product_content 开文案卡；bulk_seo 开批量字段卡；manual 不开卡。
+ * product_content 开文案卡；bulk_seo 开导入商品卡（用表格改 SEO）；manual 不开卡。
  */
 export function buildSeoAuditSuggestedNextActions(
   issues: SeoAuditIssue[],
@@ -78,11 +78,11 @@ export function buildSeoAuditSuggestedNextActions(
       .map(([id, title]) => ({ id, title }));
     actions.push({
       fixability: "bulk_seo",
-      tool: OPEN_BULK_PRODUCT_FIELD_EDIT_FORM_TOOL_NAME,
+      tool: OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME,
       products,
       field: "seoTitle",
       instruction:
-        "搜索标题缺失或超展示宽度。解释后立刻调用本工具打开批量改字段卡，传入 field=seoTitle 与 products；mode/value 留给商户填，不要猜一套统一文案。",
+        "搜索标题缺失或超展示宽度。解释后立刻调用导入商品卡：请商户导出 CSV、改 SEO Title 列后再导入。不要打开独立的批量改字段卡。",
     });
   }
 
@@ -92,11 +92,11 @@ export function buildSeoAuditSuggestedNextActions(
       .map(([id, title]) => ({ id, title }));
     actions.push({
       fixability: "bulk_seo",
-      tool: OPEN_BULK_PRODUCT_FIELD_EDIT_FORM_TOOL_NAME,
+      tool: OPEN_PRODUCT_IMPORT_FORM_TOOL_NAME,
       products,
       field: "seoDescription",
       instruction:
-        "搜索描述缺失或超展示宽度。解释后立刻调用本工具打开批量改字段卡，传入 field=seoDescription 与 products；mode/value 留给商户填。",
+        "搜索描述缺失或超展示宽度。解释后立刻调用导入商品卡：请商户导出 CSV、改 SEO Description 列后再导入。",
     });
   }
 

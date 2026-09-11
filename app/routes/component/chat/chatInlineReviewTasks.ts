@@ -23,6 +23,7 @@ const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
   "product_duplicate",
   "bulk_archive",
   "product_export",
+  "product_import",
 ]);
 
 export function isChatInlineReviewTask(taskType?: string | null): boolean {
@@ -38,6 +39,7 @@ const REVIEW_DIALOG_TITLE_KEYS: Record<string, string> = {
   product_duplicate: "productDuplicate.reviewTitleShort",
   bulk_archive: "bulkArchive.reviewTitleShort",
   product_export: "productExport.reviewTitleShort",
+  product_import: "productImport.reviewTitleShort",
 };
 
 /** 审核弹窗标题：默认沿用商品文案那套「审核结果」，特殊类型可覆盖。 */
