@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeImportSheet,
+  coerceProductImportOperations,
   mapImportHeaders,
   parseImportStatus,
 } from "../../../app/lib/productImport";
+import { buildProductImportProposal } from "../../../app/lib/productManageTaskProposals";
 import {
   buildProductImportPlan,
   matchImportRecord,
@@ -120,6 +122,52 @@ describe("analyzeImportSheet", () => {
       true,
     );
   });
+
+  it("only plans selected operations and ignores other supported columns", () => {
+    const analysis = analyzeImportSheet(
+      ["Handle", "Vendor", "Variant SKU", "Variant Price"],
+      [["tee", "Acme", "TEE-1", "12.50"]],
+      ["price"],
+    );
+    expect(analysis.operations).toEqual(["price"]);
+    expect(analysis.issues.some((issue) => issue.code === "column_not_selected" && issue.column === "Vendor")).toBe(
+      true,
+    );
+    expect(analysis.issues.some((issue) => issue.code === "missing_column_for_operation")).toBe(false);
+  });
+
+  it("reports a missing column when the selected action is not in the file", () => {
+    const analysis = analyzeImportSheet(["Handle", "Vendor"], [["tee", "Acme"]], ["seoTitle"]);
+    expect(analysis.operations).toEqual([]);
+    expect(
+      analysis.issues.some(
+        (issue) => issue.code === "missing_column_for_operation" && issue.value === "seoTitle",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("coerceProductImportOperations", () => {
+  it("parses a comma-separated string in canonical order", () => {
+    expect(coerceProductImportOperations("tags, price, tags")).toEqual(["price", "tags"]);
+  });
+});
+
+describe("buildProductImportProposal", () => {
+  it("opens an empty card with no operations and a visible file field", () => {
+    const proposal = buildProductImportProposal({});
+    const operations = proposal.params.find((field) => field.key === "operations");
+    const file = proposal.params.find((field) => field.key === "fileId");
+    expect(operations?.type).toBe("multiselect");
+    expect(operations?.value).toBe("");
+    expect(file?.type).toBe("file");
+    expect(file?.value).toBe("");
+  });
+
+  it("prefills operations when the tool already knows the intent", () => {
+    const proposal = buildProductImportProposal({ operations: ["seoTitle", "price"] });
+    expect(proposal.params.find((field) => field.key === "operations")?.value).toBe("price,seoTitle");
+  });
 });
 
 describe("parseImportStatus", () => {
@@ -153,6 +201,30 @@ describe("buildProductImportPlan", () => {
     expect(plan.priceRows[0]?.afterPrice).toBe("12.50");
     expect(plan.priceRows[0]?.skipped).toBe(false);
     expect(plan.fieldRows[0]?.afterValue).toBe("NewCo");
+  });
+
+  it("calls only the price module when vendor was not selected", () => {
+    const snapshot = product();
+    const analysis = analyzeImportSheet(
+      ["Handle", "Vendor", "Variant SKU", "Variant Price"],
+      [["tee", "NewCo", "TEE-1", "12.50"]],
+      ["price"],
+    );
+    const catalog = {
+      byHandle: new Map([["tee", snapshot]]),
+      byId: new Map([[snapshot.productId, snapshot]]),
+      bySku: new Map([["tee-1", [snapshot]]]),
+    };
+    const matches = analysis.records.map((record) => matchImportRecord(record, catalog));
+    const plan = buildProductImportPlan({
+      matches,
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      collections: [],
+    });
+    expect(plan.operations).toEqual(["price"]);
+    expect(plan.priceRows[0]?.afterPrice).toBe("12.50");
+    expect(plan.fieldRows).toEqual([]);
   });
 
   it("plans title, cost, handle and skips other ops when delete is true", () => {

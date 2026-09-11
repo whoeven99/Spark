@@ -453,6 +453,7 @@ export type ProductExportTaskResult = {
 export type ProductImportTaskConfig = {
   fileId: string;
   fileName?: string;
+  operations: ProductImportOperation[];
 };
 
 export type ProductImportTaskResult = {

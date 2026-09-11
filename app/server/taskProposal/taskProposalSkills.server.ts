@@ -59,6 +59,7 @@ import {
 } from "../../lib/productExport";
 import { enqueueProductExport } from "../productExport/productExportRun.server";
 import { enqueueProductImportDryRun } from "../productImport/productImportDryRun.server";
+import { coerceProductImportOperations } from "../../lib/productImport";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
@@ -429,8 +430,11 @@ const productImportHandler: TaskProposalSkillHandler = {
       throw new TaskProposalBillingError();
     }
     const fileId = (params.fileId ?? "").trim();
-    if (!fileId) throw new Error("请先在对话输入区上传 CSV 或 Excel");
-    const config = { fileId };
+    if (!fileId) throw new Error("请先在卡片上选择 CSV 或 Excel");
+    const operations = coerceProductImportOperations(params.operations);
+    if (operations.length === 0) throw new Error("请先选择要写入的内容");
+    const fileName = (params.fileName ?? "").trim() || undefined;
+    const config = { fileId, ...(fileName ? { fileName } : {}), operations };
     const { taskId } = await createBatchWithTask({
       shop,
       taskType: "product_import",
@@ -438,7 +442,7 @@ const productImportHandler: TaskProposalSkillHandler = {
       taskConfig: config,
       estimatedCredits: 0,
     });
-    enqueueProductImportDryRun({ taskId, shop, locale, fileId });
+    enqueueProductImportDryRun({ taskId, shop, locale, fileId, operations });
     return { taskIds: [taskId], errors: [] };
   },
 };

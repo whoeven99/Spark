@@ -726,6 +726,7 @@
     "fileNotFound": "This file could not be found. Upload it again and retry.",
     "parseFailed": "Could not parse this file. Upload a CSV or Excel spreadsheet.",
     "noUsableRows": "The spreadsheet has no usable data rows. Check the headers and content.",
+    "noOperationsSelected": "Select what to write on the confirmation card first",
     "cardTitle": "Task: Import products",
     "ruleLabel": "Import spreadsheet",
     "metaRule": "File: {{rule}}",
@@ -786,6 +787,16 @@
       "archive": "Archive",
       "delete": "Delete"
     },
+    "operationGroup": {
+      "basic": "Basic info",
+      "pricing": "Price and cost",
+      "seo": "SEO",
+      "organize": "Organization",
+      "bulk": "Bulk actions"
+    },
+    "operationHint": {
+      "delete": "Permanent. You will confirm again on the review page."
+    },
     "issue": {
       "missing_identity": "Missing product identity",
       "no_supported_columns": "No importable columns",
@@ -812,7 +823,9 @@
       "sku_matches_multiple": "SKU matches multiple variants",
       "collection_not_found": "Collection not found",
       "collection_not_writable": "This collection cannot add or remove products here",
-      "duplicate_over_limit": "Duplicate count exceeds the 50-item limit"
+      "duplicate_over_limit": "Duplicate count exceeds the 50-item limit",
+      "missing_column_for_operation": "The selected action has no matching column in the spreadsheet",
+      "column_not_selected": "This column will not be written because that action was not selected"
     },
     "fix": {
       "missing_identity": "Add a Handle, Variant SKU, or Product ID column, and make sure every row has a value.",
@@ -840,7 +853,9 @@
       "sku_matches_multiple": "Make duplicate SKUs unique, or use Product ID instead.",
       "collection_not_found": "Change the collection name to an exact match of an existing collection.",
       "collection_not_writable": "Choose a collection that allows adding and removing products manually.",
-      "duplicate_over_limit": "Split duplicate rows into batches of at most 50."
+      "duplicate_over_limit": "Split duplicate rows into batches of at most 50.",
+      "missing_column_for_operation": "Add the column for that action, or deselect it on the card.",
+      "column_not_selected": "To write this column, go back and select the matching action on the card."
     }
   },
   "bulkPriceImport": {
@@ -4408,13 +4423,13 @@
           "selected": "Open the export confirmation card and export the selected products as Shopify CSV or TikTok Catalog Feed."
         }
       },
-      "productImport": {
-        "label": "Import products",
-        "prompt": {
-          "shop": "Open the import confirmation card. I will upload a CSV or Excel file first; validate it, list issue rows and how to fix them, and only write back after I confirm. Do not change store data yet.",
-          "selected": "Open the import confirmation card and validate the spreadsheet I already selected. List issue rows and how to fix them, then write back only after I confirm."
-        }
-      },
+        "productImport": {
+          "label": "Import products",
+          "prompt": {
+            "shop": "Open the import confirmation card. On the card, select what to write and upload a CSV or Excel file. Validate it, list issue rows and how to fix them, and only write back after I confirm. Do not change store data yet.",
+            "selected": "Open the import confirmation card. Select what to write on the card and validate the spreadsheet I already selected. List issue rows and how to fix them, then write back only after I confirm."
+          }
+        },
       "bulkProductFieldEdit": {
         "label": "Bulk edit fields / SEO",
         "prompt": {
@@ -4749,7 +4764,7 @@
         },
         "productImport": {
           "title": "Import products",
-          "summary": "Identify the uploaded spreadsheet, validate each row, and list issues with how to fix them. After you confirm, only validated price, tags, status, vendor/type/SEO, collection, duplicate, or archive changes are written back. This step does not modify any products."
+          "summary": "Select what to write, then upload a spreadsheet on the card. After you confirm, only the selected modules are validated. This step does not modify any products."
         },
         "bulkCollectionEdit": {
           "title": "Bulk update collection membership",
@@ -4796,6 +4811,8 @@
         "titleSuffix": "New title suffix",
         "newStatus": "Copy status",
         "exportFormat": "Export format",
+        "operations": "What to write",
+        "fileId": "Upload spreadsheet",
         "collectionAction": "Action",
         "collectionId": "Target collection",
         "titleTemplate": "SEO title template",
@@ -4896,6 +4913,16 @@
       "card": {
         "submitted": "Submitted",
         "confirmParamsToRun": "Confirm parameters to start",
+        "operationsHint": "Only selected actions are written. Other supported columns in the file are ignored.",
+        "filePick": "Choose a CSV or Excel file",
+        "fileReplace": "Replace file",
+        "fileHint": "Accepts .csv / .xlsx / .xls. You can also drop a file here.",
+        "fileUploading": "Uploading…",
+        "fileInvalidType": "Please upload a CSV or Excel file",
+        "fileTooLarge": "Files cannot be larger than 10MB",
+        "fileUploadFailed": "Upload failed. Please try again.",
+        "fileSelected": "Selected: {{name}}",
+        "fileUsingContext": "Using the file already selected in chat. You can replace it above.",
         "targetsSelected": "{{count}} {{kind}} · batch create after confirm",
         "targetsSelectedWithImages": "{{products}} {{kind}} · {{images}} images · batch create after confirm",
         "queryTargets": "Filter by criteria{{approx}} · re-evaluated at run time",
@@ -4935,6 +4962,8 @@
         "resourceSearchLabel": "Filter options",
         "resourceNoMatch": "No matching options. Try a different keyword.",
         "footerCreateOne": "Will create 1 task",
+        "footerSelectOperations": "Select what to write first",
+        "footerSelectFile": "Choose a spreadsheet on the card first",
         "footerCreateQuery": "Will create tasks by filter{{approx}}",
         "footerCreateQueryApprox": " (~{{count}})",
         "footerSelectOne": "Select a product first",

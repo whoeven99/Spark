@@ -69,6 +69,35 @@ describe("mergeTaskProposalTargets image_generation", () => {
   });
 });
 
+describe("coerceTaskProposalPayload file and multiselect", () => {
+  it("keeps file and grouped multiselect fields", () => {
+    const roundTrip = coerceTaskProposalPayload({
+      skillId: "product_import",
+      title: "导入商品",
+      targets: { kind: "none", items: [] },
+      params: [
+        {
+          key: "operations",
+          label: "要写入的内容",
+          type: "multiselect",
+          value: "price",
+          options: [{ value: "price", label: "价格", group: "pricing" }],
+        },
+        { key: "fileId", label: "上传表格", type: "file", value: "abc" },
+      ],
+    });
+    expect(roundTrip?.params).toEqual([
+      expect.objectContaining({
+        key: "operations",
+        type: "multiselect",
+        value: "price",
+        options: [expect.objectContaining({ value: "price", group: "pricing" })],
+      }),
+      expect.objectContaining({ key: "fileId", type: "file", value: "abc" }),
+    ]);
+  });
+});
+
 describe("coerceTaskProposalPayload textarea", () => {
   it("keeps textarea type and multiline description", () => {
     const proposal = buildImageGenerationProposal({

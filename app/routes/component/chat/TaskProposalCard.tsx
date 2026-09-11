@@ -41,6 +41,7 @@ import {
   TaskProposalProductImageGrid,
   type ProductImagesCacheEntry,
 } from "./TaskProposalProductImageGrid";
+import { FileField, MultiselectField } from "./TaskProposalFieldControls";
 
 function buildPictureTranslateTargetId(productId: string, imageUrl: string): string {
   return `${productId}::${imageUrl}`;
@@ -583,6 +584,7 @@ export function TaskProposalCard({
   const [paramValues, setParamValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(resolved.params.map((f) => [f.key, f.value])),
   );
+  const [fileUploading, setFileUploading] = useState(false);
 
   // 估算（per-item，由前端乘以勾选数量）
   const [estimateLoading, setEstimateLoading] = useState(true);
@@ -656,9 +658,24 @@ export function TaskProposalCard({
       !isResourceOptionField(field.type) ||
       (paramValues[field.key] ?? field.value).trim().length > 0,
   );
+  const fileFieldsReady = resolved.params.every((field) => {
+    if (field.type !== "file") return true;
+    if (fileUploading) return false;
+    const local = (paramValues[field.key] ?? field.value).trim();
+    if (local) return true;
+    return field.key === "fileId" && Boolean(fallbackFileId?.trim());
+  });
+  const multiselectFieldsReady = resolved.params.every((field) => {
+    if (field.type !== "multiselect") return true;
+    return (paramValues[field.key] ?? field.value)
+      .split(/[,，]/)
+      .some((item) => item.trim().length > 0);
+  });
   const canSubmit =
     descriptionReady &&
     resourceFieldsReady &&
+    fileFieldsReady &&
+    multiselectFieldsReady &&
     (targetless ||
       targetsOptional ||
       (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
@@ -1123,6 +1140,29 @@ export function TaskProposalCard({
                       </option>
                     ))}
                   </select>
+                ) : field.type === "multiselect" ? (
+                  <MultiselectField
+                    field={field}
+                    value={paramValues[field.key] ?? field.value}
+                    onChange={(next) =>
+                      setParamValues((prev) => ({ ...prev, [field.key]: next }))
+                    }
+                  />
+                ) : field.type === "file" ? (
+                  <FileField
+                    field={field}
+                    value={paramValues[field.key] ?? field.value}
+                    fileName={paramValues.fileName ?? ""}
+                    fallbackFileId={field.key === "fileId" ? fallbackFileId : undefined}
+                    onChange={(fileId, name) =>
+                      setParamValues((prev) => ({
+                        ...prev,
+                        [field.key]: fileId,
+                        fileName: name,
+                      }))
+                    }
+                    onUploading={setFileUploading}
+                  />
                 ) : isResourceOptionField(field.type) ? (
                   <ResourceSelectField
                     field={field}
@@ -1187,26 +1227,30 @@ export function TaskProposalCard({
                 flex: 1,
               }}
             >
-              {targetless
-                ? t("workspace.taskProposal.card.footerCreateOne")
-                : targetsQuery
-                  ? t("workspace.taskProposal.card.footerCreateQuery", {
-                      approx:
-                        queryCount != null
-                          ? t("workspace.taskProposal.card.footerCreateQueryApprox", {
-                              count: queryCount,
-                            })
-                          : "",
-                    })
-                  : selectedTargets.length === 0
-                    ? t("workspace.taskProposal.card.footerSelectOne")
-                    : singleTask
-                      ? t("workspace.taskProposal.card.footerCreateOneForCount", {
-                          count: selectedTargets.length,
+              {resolved.skillId === PRODUCT_IMPORT_SKILL_ID && !multiselectFieldsReady
+                ? t("workspace.taskProposal.card.footerSelectOperations")
+                : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && !fileFieldsReady
+                  ? t("workspace.taskProposal.card.footerSelectFile")
+                  : targetless
+                    ? t("workspace.taskProposal.card.footerCreateOne")
+                    : targetsQuery
+                      ? t("workspace.taskProposal.card.footerCreateQuery", {
+                          approx:
+                            queryCount != null
+                              ? t("workspace.taskProposal.card.footerCreateQueryApprox", {
+                                  count: queryCount,
+                                })
+                              : "",
                         })
-                      : t("workspace.taskProposal.card.footerCreateCount", {
-                          count: selectedTargets.length,
-                        })}
+                      : selectedTargets.length === 0
+                        ? t("workspace.taskProposal.card.footerSelectOne")
+                        : singleTask
+                          ? t("workspace.taskProposal.card.footerCreateOneForCount", {
+                              count: selectedTargets.length,
+                            })
+                          : t("workspace.taskProposal.card.footerCreateCount", {
+                              count: selectedTargets.length,
+                            })}
             </span>
             <button
               type="button"

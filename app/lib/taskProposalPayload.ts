@@ -26,8 +26,11 @@ export const TASK_PROPOSAL_VERSION = 1;
 /**
  * schema 驱动的参数字段：value 内联在字段里，前端按 type 渲染控件。
  *
- * `hidden` 用于执行端需要、但用户不该看见也不该改的值（如上传文件的 fileId）：
+ * `hidden` 用于执行端需要、但用户不该看见也不该改的值（如导入文件名）：
  * 卡片不渲染它，提交时照常随 params 一起带上。
+ *
+ * `file` 是本地上传：value 为 fileId，卡片内 POST `/api/upload-file`。
+ * `multiselect` 的 value 是逗号分隔的选项值。
  *
  * `collection` / `location` / `metafieldDefinition` 是「远端资源选择器」：
  * 取值是店铺侧的资源标识（前两个是 Shopify GID，metafieldDefinition 是 `namespace.key`
@@ -41,6 +44,8 @@ export type TaskProposalField = {
   label: string;
   type:
     | "select"
+    | "multiselect"
+    | "file"
     | "collection"
     | "location"
     | "metafieldDefinition"
@@ -48,8 +53,8 @@ export type TaskProposalField = {
     | "textarea"
     | "hidden";
   value: string;
-  /** type === "select" 或任一资源选择器时必填 */
-  options?: Array<{ value: string; label: string }>;
+  /** type === "select" / `multiselect` 或任一资源选择器时必填 */
+  options?: Array<{ value: string; label: string; group?: string }>;
   placeholder?: string;
 };
 
@@ -124,6 +129,8 @@ function safeString(v: unknown, fallback = ""): string {
 
 const KNOWN_FIELD_TYPES = new Set<TaskProposalField["type"]>([
   "select",
+  "multiselect",
+  "file",
   "collection",
   "location",
   "metafieldDefinition",
@@ -144,7 +151,11 @@ function coerceField(raw: unknown): TaskProposalField | null {
   const options = Array.isArray(r.options)
     ? r.options
         .filter((o): o is Record<string, unknown> => o !== null && typeof o === "object")
-        .map((o) => ({ value: safeString(o.value), label: safeString(o.label, safeString(o.value)) }))
+        .map((o) => ({
+          value: safeString(o.value),
+          label: safeString(o.label, safeString(o.value)),
+          ...(safeString(o.group) ? { group: safeString(o.group) } : {}),
+        }))
         .filter((o) => o.value !== "")
     : undefined;
   return {

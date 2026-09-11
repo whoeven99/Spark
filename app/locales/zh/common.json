@@ -726,6 +726,7 @@
     "fileNotFound": "找不到这个文件，请重新上传后再试",
     "parseFailed": "无法解析这个文件，请上传 CSV 或 Excel",
     "noUsableRows": "表格里没有可用的数据行，请检查表头和内容",
+    "noOperationsSelected": "请先在确认卡上选择要写入的内容",
     "cardTitle": "任务目标：导入商品",
     "ruleLabel": "导入表格",
     "metaRule": "文件：{{rule}}",
@@ -786,6 +787,16 @@
       "archive": "归档",
       "delete": "删除"
     },
+    "operationGroup": {
+      "basic": "基础信息",
+      "pricing": "价格与成本",
+      "seo": "SEO",
+      "organize": "组织方式",
+      "bulk": "批量操作"
+    },
+    "operationHint": {
+      "delete": "不可恢复，审核时还要再确认一次"
+    },
     "issue": {
       "missing_identity": "缺少商品标识",
       "no_supported_columns": "没有可导入的列",
@@ -812,7 +823,9 @@
       "sku_matches_multiple": "SKU 对应多个变体",
       "collection_not_found": "找不到这个合集",
       "collection_not_writable": "这个合集不能在这里加减商品",
-      "duplicate_over_limit": "复制数量超过 50 个上限"
+      "duplicate_over_limit": "复制数量超过 50 个上限",
+      "missing_column_for_operation": "勾选的子功能在表格里没有对应列",
+      "column_not_selected": "未勾选该子功能，此列不会写入"
     },
     "fix": {
       "missing_identity": "增加 Handle、Variant SKU 或 Product ID 列，并保证每行有值。",
@@ -840,7 +853,9 @@
       "sku_matches_multiple": "给重复 SKU 改成唯一值，或改用 Product ID。",
       "collection_not_found": "把合集名改成店铺里已有合集的准确名称。",
       "collection_not_writable": "换一个可手动加减商品的合集。",
-      "duplicate_over_limit": "把复制行拆成每批最多 50 个。"
+      "duplicate_over_limit": "把复制行拆成每批最多 50 个。",
+      "missing_column_for_operation": "在表格里加上该子功能对应的列，或取消勾选。",
+      "column_not_selected": "若要写入此列，请回到确认卡勾选对应子功能。"
     }
   },
   "bulkPriceImport": {
@@ -4408,13 +4423,13 @@
           "selected": "打开导出商品确认卡，把已选中的商品导出为 Shopify CSV 或 TikTok Catalog Feed。"
         }
       },
-      "productImport": {
-        "label": "导入商品",
-        "prompt": {
-          "shop": "打开导入商品确认卡。我会先上传 CSV 或 Excel，你校验后列出问题行和改法，我确认后再写回店铺。不要直接改数据。",
-          "selected": "打开导入商品确认卡，用我已选中的表格文件做校验。列出问题行和改法，确认后再写回。"
-        }
-      },
+        "productImport": {
+          "label": "导入商品",
+          "prompt": {
+            "shop": "打开导入商品确认卡。在卡片里勾选要写入的内容并上传 CSV 或 Excel。校验后列出问题行和改法，我确认后再写回店铺。不要直接改数据。",
+            "selected": "打开导入商品确认卡。在卡片里勾选要写入的内容，用我已选中的表格做校验。列出问题行和改法，确认后再写回。"
+          }
+        },
       "bulkProductFieldEdit": {
         "label": "批量改字段 / SEO",
         "prompt": {
@@ -4749,7 +4764,7 @@
         },
         "productImport": {
           "title": "导入商品",
-          "summary": "识别上传的表格、校验每行，并列出问题与改法。确认后只写回通过校验的价格、标签、状态、Vendor/类型/SEO、合集、复制或归档。本步骤不会修改任何商品。"
+          "summary": "先勾选要写入的内容，再在卡片上上传表格。确认后只校验勾选的模块，不会立刻改店铺。"
         },
         "bulkCollectionEdit": {
           "title": "批量调整商品所属合集",
@@ -4796,6 +4811,8 @@
         "titleSuffix": "新标题后缀",
         "newStatus": "副本状态",
         "exportFormat": "导出格式",
+        "operations": "要写入的内容",
+        "fileId": "上传表格",
         "collectionAction": "操作方向",
         "collectionId": "目标合集",
         "titleTemplate": "SEO 标题模板",
@@ -4896,6 +4913,16 @@
       "card": {
         "submitted": "已提交",
         "confirmParamsToRun": "确认参数后开始执行",
+        "operationsHint": "只写回勾选的内容；表格里其它支持列会被忽略。",
+        "filePick": "选择 CSV 或 Excel",
+        "fileReplace": "更换文件",
+        "fileHint": "支持 .csv / .xlsx / .xls，可拖到此处",
+        "fileUploading": "正在上传…",
+        "fileInvalidType": "请上传 CSV 或 Excel 文件",
+        "fileTooLarge": "文件不能超过 10MB",
+        "fileUploadFailed": "上传失败，请重试",
+        "fileSelected": "已选：{{name}}",
+        "fileUsingContext": "将使用对话中已选的文件，也可在上方更换",
         "targetsSelected": "{{count}} 个{{kind}} · 确认后批量创建",
         "targetsSelectedWithImages": "{{products}} 个{{kind}} · {{images}} 张图 · 确认后批量创建",
         "queryTargets": "按条件圈定{{approx}} · 执行时重新求值",
@@ -4935,6 +4962,8 @@
         "resourceSearchLabel": "筛选可选项",
         "resourceNoMatch": "没有匹配的选项，换个关键词试试。",
         "footerCreateOne": "将创建 1 个任务",
+        "footerSelectOperations": "请先选择要写入的内容",
+        "footerSelectFile": "请先在卡片上选择表格文件",
         "footerCreateQuery": "将按条件创建任务{{approx}}",
         "footerCreateQueryApprox": "（约 {{count}} 个）",
         "footerSelectOne": "请先选择商品",

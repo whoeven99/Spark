@@ -18,7 +18,7 @@ import {
   indexMetafieldDefinitions,
 } from "../shopify/productMetafieldReader.server";
 import { parseImportSpreadsheet } from "./parseImportSpreadsheet.server";
-import { analyzeImportSheet, PRODUCT_IMPORT_MAX_PRODUCTS } from "../../lib/productImport";
+import { analyzeImportSheet, coerceProductImportOperations, PRODUCT_IMPORT_MAX_PRODUCTS } from "../../lib/productImport";
 import {
   buildProductImportPlan,
   countImportWritable,
@@ -34,6 +34,7 @@ export type EnqueueProductImportDryRunParams = {
   shop: string;
   locale: string;
   fileId: string;
+  operations: string[];
 };
 
 export function enqueueProductImportDryRun(params: EnqueueProductImportDryRunParams): void {
@@ -90,7 +91,17 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
     return;
   }
 
-  const analysis = analyzeImportSheet(sheet.headers, sheet.rows);
+  const selected = coerceProductImportOperations(params.operations);
+  if (selected.length === 0) {
+    await failTask({
+      taskId: params.taskId,
+      errorMsg: buildAITaskMessage("productImport.noOperationsSelected", t("productImport.noOperationsSelected")),
+      startedAt,
+    });
+    return;
+  }
+
+  const analysis = analyzeImportSheet(sheet.headers, sheet.rows, selected);
   if (analysis.records.length === 0) {
     await failTask({
       taskId: params.taskId,

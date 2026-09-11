@@ -6,7 +6,11 @@ import {
   TASK_PROPOSAL_VERSION,
   type TaskProposalPayload,
 } from "./taskProposalPayload";
-import { PRODUCT_IMPORT_SKILL_ID } from "./productImport";
+import {
+  PRODUCT_IMPORT_OPERATION_GROUPS,
+  PRODUCT_IMPORT_SKILL_ID,
+  serializeImportOperations,
+} from "./productImport";
 
 function proposalId(): string {
   return `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`;
@@ -68,23 +72,45 @@ export function buildProductExportProposal(args: {
 export function buildProductImportProposal(args: {
   fileId?: string;
   fileName?: string;
+  operations?: string[] | string;
 }): TaskProposalPayload {
   const fileId = args.fileId?.trim() ?? "";
+  const fileName = args.fileName?.trim() ?? "";
+  const operations = serializeImportOperations(args.operations);
+  const operationOptions = PRODUCT_IMPORT_OPERATION_GROUPS.flatMap((group) =>
+    group.operations.map((operation) => ({
+      value: operation,
+      label: operation,
+      group: group.key,
+    })),
+  );
   return {
     version: TASK_PROPOSAL_VERSION,
     proposalId: proposalId(),
     skillId: PRODUCT_IMPORT_SKILL_ID,
     title: "导入商品",
-    summary: args.fileName
-      ? `将读取「${args.fileName}」，先对照 Shopify 要求检查问题行并告诉你怎么改，确认后才写回。本步骤不会修改店铺。`
-      : "请先在对话输入区上传 CSV 或 Excel。导入会先检查是否符合 Shopify 要求并反馈怎么改，确认后才写回。没有文件无法试算。",
+    summary:
+      "先勾选要写入的内容，再在卡片上上传 CSV 或 Excel。确认后只校验勾选的模块，不会立刻改店铺。",
     targets: { kind: "none", items: [] },
     params: [
       {
+        key: "operations",
+        label: "要写入的内容",
+        type: "multiselect",
+        value: operations,
+        options: operationOptions,
+      },
+      {
         key: "fileId",
-        label: "上传文件",
-        type: "hidden",
+        label: "上传表格",
+        type: "file",
         value: fileId,
+      },
+      {
+        key: "fileName",
+        label: "文件名",
+        type: "hidden",
+        value: fileName,
       },
     ],
   };

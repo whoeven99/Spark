@@ -82,7 +82,7 @@ export function buildSeoAuditSuggestedNextActions(
       products,
       field: "seoTitle",
       instruction:
-        "搜索标题缺失或超展示宽度。解释后立刻调用导入商品卡：请商户导出 CSV、改 SEO Title 列后再导入。不要打开独立的批量改字段卡。",
+        "搜索标题缺失或超展示宽度。解释后立刻调用导入商品卡，并预填 operations 为 [\"seoTitle\"]。请商户在卡片上上传改过 SEO Title 列的 CSV/Excel。不要打开独立的批量改字段卡。",
     });
   }
 
@@ -96,7 +96,7 @@ export function buildSeoAuditSuggestedNextActions(
       products,
       field: "seoDescription",
       instruction:
-        "搜索描述缺失或超展示宽度。解释后立刻调用导入商品卡：请商户导出 CSV、改 SEO Description 列后再导入。",
+        "搜索描述缺失或超展示宽度。解释后立刻调用导入商品卡，并预填 operations 为 [\"seoDescription\"]。请商户在卡片上上传改过 SEO Description 列的 CSV/Excel。",
     });
   }
 

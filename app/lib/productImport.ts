@@ -15,6 +15,12 @@ import { parseMoneyToCents } from "./bulkPriceEdit";
 export const PRODUCT_IMPORT_SKILL_ID = "product_import";
 export const PRODUCT_IMPORT_MAX_ROWS = 1000;
 export const PRODUCT_IMPORT_MAX_PRODUCTS = 200;
+export const PRODUCT_IMPORT_FILE_EXTENSIONS = [".csv", ".xlsx", ".xls"] as const;
+
+export function isProductImportSpreadsheetName(filename: string): boolean {
+  const lower = filename.trim().toLowerCase();
+  return PRODUCT_IMPORT_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
 
 export const PRODUCT_IMPORT_OPERATIONS = [
   "title",
@@ -35,6 +41,20 @@ export const PRODUCT_IMPORT_OPERATIONS = [
   "delete",
 ] as const;
 export type ProductImportOperation = (typeof PRODUCT_IMPORT_OPERATIONS)[number];
+
+export const PRODUCT_IMPORT_OPERATION_GROUPS: Array<{
+  key: "basic" | "pricing" | "seo" | "organize" | "bulk";
+  operations: ProductImportOperation[];
+}> = [
+  {
+    key: "basic",
+    operations: ["title", "descriptionHtml", "vendor", "productType", "handle", "tags", "status"],
+  },
+  { key: "pricing", operations: ["price", "cost"] },
+  { key: "seo", operations: ["seoTitle", "seoDescription"] },
+  { key: "organize", operations: ["collection", "metafield"] },
+  { key: "bulk", operations: ["duplicate", "archive", "delete"] },
+];
 
 export const PRODUCT_IMPORT_ISSUE_CODES = [
   "missing_identity",
@@ -63,6 +83,8 @@ export const PRODUCT_IMPORT_ISSUE_CODES = [
   "collection_not_found",
   "collection_not_writable",
   "duplicate_over_limit",
+  "missing_column_for_operation",
+  "column_not_selected",
 ] as const;
 export type ProductImportIssueCode = (typeof PRODUCT_IMPORT_ISSUE_CODES)[number];
 
@@ -262,6 +284,44 @@ export function detectImportOperations(
   });
 }
 
+function operationHeaders(
+  mapping: ProductImportHeaderMapping,
+  operation: ProductImportOperation,
+): string[] {
+  if (operation === "metafield") return mapping.metafields.map((item) => item.header);
+  return OPERATION_COLUMNS[operation]
+    .map((column) => mapping.columns[column])
+    .filter((header): header is string => Boolean(header));
+}
+
+/** 商户勾选 ∩ 表头检出：只把选中的子功能交给对应模块。 */
+export function filterImportOperationsForSelection(args: {
+  detected: ProductImportOperation[];
+  selected: readonly string[];
+  mapping: ProductImportHeaderMapping;
+}): { operations: ProductImportOperation[]; issues: ProductImportIssue[] } {
+  const selected = coerceProductImportOperations(args.selected);
+  const selectedSet = new Set(selected);
+  const operations = args.detected.filter((operation) => selectedSet.has(operation));
+  const issues: ProductImportIssue[] = [];
+  for (const operation of selected) {
+    if (args.detected.includes(operation)) continue;
+    issues.push({
+      rowNumber: 0,
+      code: "missing_column_for_operation",
+      column: operationHeaders(args.mapping, operation)[0] ?? operation,
+      value: operation,
+    });
+  }
+  for (const operation of args.detected) {
+    if (selectedSet.has(operation)) continue;
+    for (const column of operationHeaders(args.mapping, operation)) {
+      issues.push({ rowNumber: 0, code: "column_not_selected", column, value: operation });
+    }
+  }
+  return { operations, issues };
+}
+
 export function parseImportStatus(raw: string): "ACTIVE" | "DRAFT" | "ARCHIVED" | null {
   const value = raw.trim().toLowerCase();
   if (!value) return null;
@@ -302,7 +362,11 @@ export type ProductImportSheetAnalysis = {
   truncated: boolean;
 };
 
-export function analyzeImportSheet(headers: string[], rows: string[][]): ProductImportSheetAnalysis {
+export function analyzeImportSheet(
+  headers: string[],
+  rows: string[][],
+  selectedOperations?: readonly string[],
+): ProductImportSheetAnalysis {
   const mapping = mapImportHeaders(headers);
   const headerIndex = new Map<string, number>();
   headers.forEach((header, index) => {
@@ -327,8 +391,20 @@ export function analyzeImportSheet(headers: string[], rows: string[][]): Product
     })),
   ];
 
-  const operations = detectImportOperations(mapping.columns, mapping.metafields);
-  if (operations.length === 0) {
+  const detected = detectImportOperations(mapping.columns, mapping.metafields);
+  const selected =
+    selectedOperations === undefined ? undefined : coerceProductImportOperations(selectedOperations);
+  const filtered =
+    selected === undefined
+      ? { operations: detected, issues: [] as ProductImportIssue[] }
+      : filterImportOperationsForSelection({
+          detected,
+          selected,
+          mapping,
+        });
+  const operations = filtered.operations;
+  issues.push(...filtered.issues);
+  if (selected === undefined && operations.length === 0) {
     issues.push({ rowNumber: 0, code: "no_supported_columns" });
   }
 
@@ -442,11 +518,13 @@ export function validateImportRecord(
       });
     }
   }
-  for (const metafield of metafields) {
-    const value = cells[metafield.cellKey];
-    if (!value) continue;
-    if (metafield.owner === "variant" && !record.sku) {
-      issues.push({ rowNumber, code: "metafield_needs_sku", column: metafield.header, value });
+  if (operations.includes("metafield")) {
+    for (const metafield of metafields) {
+      const value = cells[metafield.cellKey];
+      if (!value) continue;
+      if (metafield.owner === "variant" && !record.sku) {
+        issues.push({ rowNumber, code: "metafield_needs_sku", column: metafield.header, value });
+      }
     }
   }
   return issues;
@@ -495,7 +573,22 @@ export function coerceProductImportIssues(raw: unknown): ProductImportIssue[] {
 }
 
 export function coerceProductImportOperations(raw: unknown): ProductImportOperation[] {
-  if (!Array.isArray(raw)) return [];
+  const values = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[,，]/)
+      : [];
   const allowed = new Set<string>(PRODUCT_IMPORT_OPERATIONS);
-  return raw.filter((item): item is ProductImportOperation => typeof item === "string" && allowed.has(item));
+  const seen = new Set<ProductImportOperation>();
+  for (const item of values) {
+    if (typeof item !== "string") continue;
+    const value = item.trim() as ProductImportOperation;
+    if (!allowed.has(value) || seen.has(value)) continue;
+    seen.add(value);
+  }
+  return PRODUCT_IMPORT_OPERATIONS.filter((operation) => seen.has(operation));
+}
+
+export function serializeImportOperations(raw: unknown): string {
+  return coerceProductImportOperations(raw).join(",");
 }
