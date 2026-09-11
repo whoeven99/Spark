@@ -5,7 +5,7 @@ import { getTaskStatusTone } from "../aiTask/taskStatusTone";
 import { AITaskCardShell, type CardAction } from "../aiTask/AITaskCardShell";
 import { DialogShell } from "../shared/DialogShell";
 import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
-import { shouldRetainLocalAiTaskStatus } from "../../../lib/aiTaskStatusSync";
+import { mergeFetchedAiTask, shouldRetainLocalAiTaskStatus } from "../../../lib/aiTaskStatusSync";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import { progressPercentForCatalogTask } from "./catalogReviewUi";
 
@@ -58,13 +58,15 @@ export function CatalogManageTaskCard({
 }: Props) {
   const { t } = useTranslation();
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
+  const [localTask, setLocalTask] = useState(task);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     if (shouldRetainLocalAiTaskStatus(localStatus, task.status)) return;
     setLocalStatus(task.status);
-  }, [localStatus, task.status]);
+    setLocalTask((prev) => (prev.id === task.id ? mergeFetchedAiTask(prev, task) : task));
+  }, [localStatus, task]);
 
   const unknown = t("common.unknown");
   const config = task.config as { totalProducts?: number };
@@ -116,13 +118,23 @@ export function CatalogManageTaskCard({
     onClick: onDelete,
     disabled: deleting,
   };
-  const actions: CardAction[] = hasResult
+  const canPreview =
+    hasResult ||
+    localStatus === "running" ||
+    localStatus === "failed" ||
+    localStatus === "cancelled";
+  const previewLabelKey = `${i18nPrefix}.actionPreview`;
+  const previewLabelTranslated = t(previewLabelKey);
+  const previewLabel =
+    localStatus === "applied" || localStatus === "succeeded"
+      ? t(`${i18nPrefix}.actionViewApplied`)
+      : localStatus === "running" && previewLabelTranslated !== previewLabelKey
+        ? previewLabelTranslated
+        : t(`${i18nPrefix}.actionReview`);
+  const actions: CardAction[] = canPreview
     ? [
         {
-          label:
-            localStatus === "applied" || localStatus === "succeeded"
-              ? t(`${i18nPrefix}.actionViewApplied`)
-              : t(`${i18nPrefix}.actionReview`),
+          label: previewLabel,
           tone: "primary",
           onClick: () => setReviewOpen(true),
         },
@@ -169,10 +181,16 @@ export function CatalogManageTaskCard({
         showLogViewer={localStatus === "running"}
         onStatusChange={(status, nextResult) => {
           setLocalStatus(status);
+          setLocalTask((prev) => ({
+            ...prev,
+            status,
+            result: nextResult ?? prev.result,
+            updatedAt: new Date().toISOString(),
+          }));
           onTaskUpdated?.(task.id, status, nextResult);
         }}
       />
-      {hasResult ? (
+      {canPreview ? (
         <DialogShell
           open={reviewOpen}
           onClose={() => setReviewOpen(false)}
@@ -183,11 +201,17 @@ export function CatalogManageTaskCard({
           destroyOnHidden
         >
           <DetailPage
-            task={task}
+            task={localTask}
             onBack={() => setReviewOpen(false)}
             showBackButton={false}
             onTaskUpdated={(taskId, status, nextResult) => {
               setLocalStatus(status);
+              setLocalTask((prev) => ({
+                ...prev,
+                status,
+                result: nextResult ?? prev.result,
+                updatedAt: new Date().toISOString(),
+              }));
               onTaskUpdated?.(taskId, status, nextResult);
             }}
             onBusyChange={setApplying}

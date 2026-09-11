@@ -39,7 +39,7 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromUserText("帮我导出已选商品的 CSV")).toContain("productExport");
     expect(
       skillNamesFromUserText(
-        "Open the export confirmation card and choose Shopify CSV or TikTok Catalog Feed.",
+        "Open the export confirmation card and choose Shopify, TikTok Ads catalog, TikTok Shop, Amazon, or Temu format.",
       ),
     ).toContain("productExport");
   });

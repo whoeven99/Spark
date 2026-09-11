@@ -56,6 +56,7 @@ import {
   PRODUCT_EXPORT_MAX_PRODUCTS,
   ProductExportRuleError,
   parseProductExportRule,
+  type ProductExportPreviewProduct,
 } from "../../lib/productExport";
 import { enqueueProductExport } from "../productExport/productExportRun.server";
 import { enqueueProductImportDryRun } from "../productImport/productImportDryRun.server";
@@ -388,6 +389,19 @@ function uniqueProductIds(targets: TaskProposalTarget[]): string[] {
   ).filter(Boolean);
 }
 
+function uniqueExportPreviewProducts(targets: TaskProposalTarget[]): ProductExportPreviewProduct[] {
+  const seen = new Set<string>();
+  const products: ProductExportPreviewProduct[] = [];
+  for (const target of targets) {
+    const productId = (target.productId?.trim() || target.id.trim());
+    const title = target.title.trim();
+    if (!productId || !title || seen.has(productId)) continue;
+    seen.add(productId);
+    products.push({ productId, title, handle: "" });
+  }
+  return products;
+}
+
 const productExportHandler: TaskProposalSkillHandler = {
   skillId: PRODUCT_EXPORT_SKILL_ID,
   maxTargets: PRODUCT_EXPORT_MAX_PRODUCTS,
@@ -406,7 +420,13 @@ const productExportHandler: TaskProposalSkillHandler = {
     }
     const productIds = uniqueProductIds(targets);
     if (productIds.length === 0) throw new Error("请先在工作台选择要导出的商品（一期最多 200 个）");
-    const config = { format: rule.format, productIds, totalProducts: productIds.length };
+    const products = uniqueExportPreviewProducts(targets);
+    const config = {
+      format: rule.format,
+      productIds,
+      totalProducts: productIds.length,
+      ...(products.length > 0 ? { products } : {}),
+    };
     const { taskId } = await createBatchWithTask({
       shop,
       taskType: "product_export",

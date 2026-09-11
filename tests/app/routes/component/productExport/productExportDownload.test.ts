@@ -47,6 +47,12 @@ describe("productExport download helpers", () => {
     expect(productExportDownloadFilename("abcdef12-3456-7890", "tiktok_csv")).toBe(
       "product-export-tiktok-abcdef12.csv",
     );
+    expect(productExportDownloadFilename("abcdef12-3456-7890", "amazon_csv")).toBe(
+      "product-export-amazon-abcdef12.csv",
+    );
+    expect(productExportDownloadFilename("abcdef12-3456-7890", "tiktok_shop_csv")).toBe(
+      "product-export-tiktok-shop-abcdef12.csv",
+    );
     expect(productExportSkipDownloadFilename("abcdef12-3456-7890")).toBe(
       "product-export-skip-abcdef12.csv",
     );

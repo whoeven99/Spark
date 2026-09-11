@@ -112,10 +112,15 @@ describe("resolveInlineReviewOptions", () => {
     expect(opts?.taskId).toBe("t1");
   });
 
-  it("gives no entry when nothing is pending and the skill is not product improve", () => {
-    expect(
-      resolveInlineReviewOptions(run(), [task("t1", "bulk_price_edit", "applied")]),
-    ).toBeUndefined();
+  it("opens preview for applied catalog tasks, not only pending review", () => {
+    const opts = resolveInlineReviewOptions(run(), [task("t1", "bulk_price_edit", "applied")]);
+    expect(opts).toEqual({
+      skillId: "bulk_price_edit",
+      taskType: "bulk_price_edit",
+      taskId: "t1",
+      taskIds: ["t1"],
+      intent: "review",
+    });
   });
 
   it("offers a result entry when product export succeeded", () => {
@@ -132,12 +137,25 @@ describe("resolveInlineReviewOptions", () => {
     });
   });
 
-  it("does not offer an export entry while the task is still running", () => {
-    expect(
-      resolveInlineReviewOptions(run({ skillId: "product_export" }), [
-        task("t1", "product_export", "running"),
-      ]),
-    ).toBeUndefined();
+  it("offers a preview entry while product export is still running", () => {
+    const opts = resolveInlineReviewOptions(run({ skillId: "product_export" }), [
+      task("t1", "product_export", "running"),
+    ]);
+    expect(opts).toEqual({
+      skillId: "product_export",
+      taskType: "product_export",
+      taskId: "t1",
+      taskIds: ["t1"],
+      intent: "review",
+    });
+  });
+
+  it("offers a preview entry for applied product import", () => {
+    const opts = resolveInlineReviewOptions(run({ skillId: "product_import" }), [
+      task("t1", "product_import", "applied"),
+    ]);
+    expect(opts?.taskType).toBe("product_import");
+    expect(opts?.taskId).toBe("t1");
   });
 
   it("gives no entry for task types that cannot be reviewed in the chat", () => {

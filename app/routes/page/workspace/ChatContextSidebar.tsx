@@ -7,6 +7,7 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
+import { isChatInlineReviewTask } from "../../component/chat/chatInlineReviewTasks";
 import {
   WORKSPACE_HISTORY_UPLOAD_NOTE,
   type ConversationTaskRunEntry,
@@ -254,14 +255,8 @@ function ConversationTasksCard({
                   key={run.runId}
                   type="button"
                   onClick={() => {
-                    // 文案优化 / 图片翻译 / 生图 / 导出：优先待审核，否则打开详情弹窗查看结果
-                    const reviewableTasks = runTasks.filter(
-                      (task) =>
-                        task.taskType === "product_improve" ||
-                        task.taskType === "picture_translate" ||
-                        task.taskType === "image_generation" ||
-                        task.taskType === "product_export",
-                    );
+                    // 对话内可审核/预览的任务：优先待审核，否则打开详情弹窗
+                    const reviewableTasks = runTasks.filter((task) => isChatInlineReviewTask(task.taskType));
                     const preferredTask =
                       reviewableTasks.find((task) => task.status === "pending_review") ??
                       reviewableTasks[0];

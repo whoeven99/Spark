@@ -6,6 +6,7 @@ import { buildAITaskMessage } from "../../lib/aiTaskMessage";
 import { initI18n } from "../../i18n";
 import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
 import { unauthenticated } from "../../shopify.server";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { fetchProductsForShopifyCsvExport } from "../shopify/productExportReader.server";
 import { fetchProductsForCatalog } from "../adsCatalog/productFetcher.server";
 import {
@@ -13,16 +14,31 @@ import {
   mapShopifyToTiktokFeedCsv,
 } from "../adsCatalog/mappers/shopifyToTiktokFeedCsv";
 import {
+  buildAmazonProductCsv,
+  buildTemuProductCsv,
+  buildTiktokShopProductCsv,
+} from "../../lib/productExportPlatformCsv";
+import {
   PRODUCT_EXPORT_MAX_PRODUCTS,
   buildProductExportSkipCsv,
   buildShopifyProductCsv,
+  countProductExportWarned,
   normalizeProductExportSkipReason,
   type ProductExportFormat,
+  type ProductExportPreviewProduct,
   type ProductExportSkip,
 } from "../../lib/productExport";
 import type { ProductExportTaskResult } from "../../lib/aiTaskTypes";
 
 const LOG_PREFIX = "[ProductExport][Run]";
+
+const PLATFORM_CSV_BUILDERS: Partial<
+  Record<ProductExportFormat, typeof buildAmazonProductCsv>
+> = {
+  amazon_csv: buildAmazonProductCsv,
+  temu_csv: buildTemuProductCsv,
+  tiktok_shop_csv: buildTiktokShopProductCsv,
+};
 
 export type EnqueueProductExportParams = {
   taskId: string;
@@ -49,6 +65,87 @@ function translator(locale: string) {
   return i18n.t.bind(i18n);
 }
 
+function localizeReasonCsv(
+  rows: ProductExportSkip[],
+  t: (key: string, options?: Record<string, string>) => string,
+): string | undefined {
+  if (rows.length === 0) return undefined;
+  return buildProductExportSkipCsv(rows, (reason) =>
+    t(`productExport.skipReason.${reason}`, { defaultValue: reason }),
+  );
+}
+
+async function runTiktokCatalogExport(
+  admin: ShopifyAdminGraphqlClient,
+  params: EnqueueProductExportParams,
+): Promise<{
+  csv: string;
+  skips: ProductExportSkip[];
+  exportedProducts: ProductExportPreviewProduct[];
+  truncated: boolean;
+}> {
+  const products = await fetchProductsForCatalog(admin, {
+    productIds: params.productIds,
+    maxProducts: PRODUCT_EXPORT_MAX_PRODUCTS,
+  });
+  const rows = [];
+  const skips: ProductExportSkip[] = [];
+  const exportedProducts: ProductExportPreviewProduct[] = [];
+  for (const product of products) {
+    const mapped = mapShopifyToTiktokFeedCsv(product, { shopDomain: params.shop });
+    const preview = { productId: product.id, title: product.title, handle: product.handle };
+    if (mapped.ok) {
+      rows.push(mapped.row);
+      exportedProducts.push(preview);
+    } else {
+      skips.push({
+        productId: product.id,
+        productTitle: product.title,
+        reason: normalizeProductExportSkipReason(mapped.reason),
+      });
+    }
+  }
+  return {
+    csv: buildTiktokFeedCsv(rows),
+    skips,
+    exportedProducts,
+    truncated: products.length < params.productIds.length,
+  };
+}
+
+async function runShopifyFamilyExport(
+  admin: ShopifyAdminGraphqlClient,
+  params: EnqueueProductExportParams,
+): Promise<{
+  csv: string;
+  skips: ProductExportSkip[];
+  warnings: ProductExportSkip[];
+  exportedProducts: ProductExportPreviewProduct[];
+  truncated: boolean;
+}> {
+  const fetched = await fetchProductsForShopifyCsvExport(admin, params.productIds, {
+    maxProducts: PRODUCT_EXPORT_MAX_PRODUCTS,
+  });
+  const builder = PLATFORM_CSV_BUILDERS[params.format];
+  if (builder) {
+    const mapped = builder(fetched.products);
+    return { ...mapped, truncated: fetched.truncated };
+  }
+  return {
+    csv: buildShopifyProductCsv(fetched.products),
+    skips: [],
+    warnings: [],
+    exportedProducts: fetched.products
+      .filter((product) => Boolean(product.id))
+      .map((product) => ({
+        productId: product.id as string,
+        title: product.title,
+        handle: product.handle,
+      })),
+    truncated: fetched.truncated,
+  };
+}
+
 async function runProductExport(params: EnqueueProductExportParams): Promise<void> {
   const startedAt = Date.now();
   const t = translator(params.locale);
@@ -62,42 +159,13 @@ async function runProductExport(params: EnqueueProductExportParams): Promise<voi
   });
 
   const { admin } = await unauthenticated.admin(params.shop);
-  let csv = "";
-  let skips: ProductExportSkip[] = [];
-  let exported = 0;
-  let truncated = false;
+  const built =
+    params.format === "tiktok_csv"
+      ? { ...(await runTiktokCatalogExport(admin, params)), warnings: [] as ProductExportSkip[] }
+      : await runShopifyFamilyExport(admin, params);
 
-  if (params.format === "tiktok_csv") {
-    const products = await fetchProductsForCatalog(admin, {
-      productIds: params.productIds,
-      maxProducts: PRODUCT_EXPORT_MAX_PRODUCTS,
-    });
-    truncated = products.length < params.productIds.length;
-    const rows = [];
-    for (const product of products) {
-      const mapped = mapShopifyToTiktokFeedCsv(product, { shopDomain: params.shop });
-      if (mapped.ok) {
-        rows.push(mapped.row);
-        exported += 1;
-      } else {
-        skips.push({
-          productId: product.id,
-          productTitle: product.title,
-          reason: normalizeProductExportSkipReason(mapped.reason),
-        });
-      }
-    }
-    csv = buildTiktokFeedCsv(rows);
-  } else {
-    const fetched = await fetchProductsForShopifyCsvExport(admin, params.productIds, {
-      maxProducts: PRODUCT_EXPORT_MAX_PRODUCTS,
-    });
-    truncated = fetched.truncated;
-    csv = buildShopifyProductCsv(fetched.products);
-    exported = fetched.products.length;
-  }
-
-  if (exported === 0 && skips.length === 0) {
+  const exported = built.exportedProducts.length;
+  if (exported === 0 && built.skips.length === 0) {
     await failTask({
       taskId: params.taskId,
       errorMsg: buildAITaskMessage("productExport.noProductsFound", t("productExport.noProductsFound")),
@@ -106,22 +174,23 @@ async function runProductExport(params: EnqueueProductExportParams): Promise<voi
     return;
   }
 
+  const warned = countProductExportWarned(built.warnings);
   const result: ProductExportTaskResult = {
     format: params.format,
-    csv,
-    skipCsv: skips.length > 0
-      ? buildProductExportSkipCsv(skips, (reason) =>
-          t(`productExport.skipReason.${reason}`, { defaultValue: reason }),
-        )
-      : undefined,
+    csv: built.csv,
+    skipCsv: localizeReasonCsv(built.skips, t),
+    warningCsv: localizeReasonCsv(built.warnings, t),
     summary: {
-      products: exported + skips.length,
+      products: exported + built.skips.length,
       exported,
-      skipped: skips.length,
+      skipped: built.skips.length,
+      ...(warned > 0 ? { warned } : {}),
       format: params.format,
     },
-    skips,
-    ...(truncated ? { truncated: true } : {}),
+    skips: built.skips,
+    ...(built.warnings.length > 0 ? { warnings: built.warnings } : {}),
+    products: built.exportedProducts,
+    ...(built.truncated ? { truncated: true } : {}),
   };
 
   await completeTask({
@@ -129,9 +198,13 @@ async function runProductExport(params: EnqueueProductExportParams): Promise<voi
     result: result as unknown as Record<string, unknown>,
     actualCredits: 0,
     startedAt,
-    finalMessage: msg("productExport.logReady", {
-      exported,
-      skipped: skips.length,
-    }),
+    finalMessage:
+      warned > 0
+        ? msg("productExport.logReadyWithWarnings", {
+            exported,
+            skipped: built.skips.length,
+            warned,
+          })
+        : msg("productExport.logReady", { exported, skipped: built.skips.length }),
   });
 }

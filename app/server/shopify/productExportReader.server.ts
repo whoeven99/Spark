@@ -224,6 +224,7 @@ export function mapProductExportShopifyNode(node: ProductNode): ProductExportSho
   const options =
     (node.options ?? []).length > 0 ? sortOptions(node.options ?? []) : optionColumnsFromVariants(variantNodes);
   return {
+    id: node.id,
     handle: node.handle?.trim() ?? "",
     title: node.title?.trim() ?? "",
     bodyHtml: node.descriptionHtml ?? "",

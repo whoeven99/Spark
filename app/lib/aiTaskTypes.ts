@@ -48,6 +48,7 @@ import type { BulkMetafieldEditRow } from "./bulkMetafieldEdit";
 import type { BulkProductDeleteRow } from "./bulkProductDelete";
 import type {
   ProductExportFormat,
+  ProductExportPreviewProduct,
   ProductExportSkip,
   ProductExportSummary,
 } from "./productExport";
@@ -439,14 +440,18 @@ export type ProductExportTaskConfig = {
   format: ProductExportFormat;
   productIds: string[];
   totalProducts: number;
+  products?: ProductExportPreviewProduct[];
 };
 
 export type ProductExportTaskResult = {
   format: ProductExportFormat;
   csv: string;
   skipCsv?: string;
+  warningCsv?: string;
   summary: ProductExportSummary;
   skips: ProductExportSkip[];
+  warnings?: ProductExportSkip[];
+  products: ProductExportPreviewProduct[];
   truncated?: boolean;
 };
 

@@ -6,6 +6,7 @@ import {
   TASK_PROPOSAL_VERSION,
   type TaskProposalPayload,
 } from "./taskProposalPayload";
+import { PRODUCT_EXPORT_FORMAT_OPTIONS } from "./productExport";
 import {
   PRODUCT_IMPORT_OPERATION_GROUPS,
   PRODUCT_IMPORT_SKILL_ID,
@@ -38,12 +39,7 @@ function pickOption(
 }
 
 export const PRODUCT_EXPORT_SKILL_ID = "product_export";
-export { PRODUCT_IMPORT_SKILL_ID };
-
-export const PRODUCT_EXPORT_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "shopify_csv", label: "Shopify CSV" },
-  { value: "tiktok_csv", label: "TikTok Catalog Feed CSV" },
-];
+export { PRODUCT_IMPORT_SKILL_ID, PRODUCT_EXPORT_FORMAT_OPTIONS };
 
 export function buildProductExportProposal(args: {
   products: Array<{ id: string; title: string; imageUrl?: string | null }>;
@@ -55,7 +51,7 @@ export function buildProductExportProposal(args: {
     skillId: PRODUCT_EXPORT_SKILL_ID,
     title: "导出商品",
     summary:
-      "导出已选商品的 CSV。一期只支持已选范围（最多 200 个），不会改店铺数据。缺必填列的行会进校验报告。",
+      "导出已选商品 CSV（最多 200 个），不改店铺。Amazon / Temu / TikTok Shop 是起步表，需粘贴到官方模板并补类目与仓配。",
     targets: productTargets(args.products),
     params: [
       {

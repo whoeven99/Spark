@@ -114,6 +114,18 @@ describe("productExport", () => {
     expect(parseProductExportRule({})).toEqual({ format: "shopify_csv" });
   });
 
+  it("接受 Amazon / Temu / TikTok Shop 起步表格式", () => {
+    expect(parseProductExportRule({ exportFormat: "amazon_csv" })).toEqual({ format: "amazon_csv" });
+    expect(parseProductExportRule({ format: "temu_csv" })).toEqual({ format: "temu_csv" });
+    expect(parseProductExportRule({ exportFormat: "tiktok_shop_csv" })).toEqual({
+      format: "tiktok_shop_csv",
+    });
+  });
+
+  it("拒绝未知格式", () => {
+    expect(() => parseProductExportRule({ exportFormat: "ebay_csv" })).toThrow("请选择支持的导出格式");
+  });
+
   it("表头对齐原生商品 CSV 主体列", () => {
     expect(SHOPIFY_CSV_HEADERS).toEqual(
       expect.arrayContaining([

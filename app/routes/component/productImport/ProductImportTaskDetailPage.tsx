@@ -1,16 +1,27 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { CatalogMutationTaskDetailPage } from "../catalogManage/CatalogMutationTaskDetailPage";
 import { catalogReviewCellStyle } from "../catalogManage/catalogReviewUi";
+import { SegmentedPageTabs } from "../shared/SegmentedPageTabs";
 import {
   buildProductImportIssueCsv,
   coerceProductImportIssues,
   coerceProductImportOperations,
-  type ProductImportIssue,
+  type ProductImportOperation,
 } from "../../../lib/productImport";
 import { countImportWritable, type ProductImportCollectionGroup } from "../../../lib/productImportPlan";
-import type { AITaskItem, AITaskStatus, ProductImportTaskResult } from "../../../lib/aiTaskTypes";
+import {
+  flattenProductImportIssues,
+  flattenProductImportPreview,
+  type ProductImportPreviewRow,
+} from "../../../lib/productImportPreview";
+import type {
+  AITaskItem,
+  AITaskStatus,
+  ProductImportTaskConfig,
+  ProductImportTaskResult,
+} from "../../../lib/aiTaskTypes";
 import { coerceBulkPriceEditRows } from "../../../lib/bulkPriceEdit";
 import { coerceBulkCostEditRows } from "../../../lib/bulkCostEdit";
 import { coerceBulkTagEditRows } from "../../../lib/bulkTagEdit";
@@ -22,6 +33,8 @@ import { coerceBulkMetafieldEditRows } from "../../../lib/bulkMetafieldEdit";
 import { coerceProductDuplicateRows } from "../../../lib/productDuplicate";
 import { coerceBulkArchiveRows } from "../../../lib/bulkArchive";
 import { coerceBulkProductDeleteRows, countWritableProductDeletes } from "../../../lib/bulkProductDelete";
+
+type PreviewTab = "changes" | "issues";
 
 type Props = {
   task: AITaskItem;
@@ -76,48 +89,94 @@ export function readProductImportResult(task: AITaskItem): ProductImportTaskResu
   };
 }
 
+export function readProductImportConfig(task: AITaskItem): ProductImportTaskConfig {
+  const raw = task.config as Partial<ProductImportTaskConfig>;
+  return {
+    fileId: typeof raw.fileId === "string" ? raw.fileId : "",
+    fileName: typeof raw.fileName === "string" ? raw.fileName : undefined,
+    operations: coerceProductImportOperations(raw.operations),
+  };
+}
+
+function operationLabel(
+  operation: ProductImportOperation | "issue",
+  t: (key: string, options?: Record<string, string>) => string,
+): string {
+  if (operation === "issue") return t("productImport.tabIssueOp");
+  return t(`productImport.operation.${operation}`);
+}
+
+function fieldLabel(row: ProductImportPreviewRow, t: (key: string, options?: Record<string, string>) => string): string {
+  if (row.operation === "issue") return row.field || "—";
+  if (row.field === row.operation) return operationLabel(row.operation, t);
+  return row.field || "—";
+}
+
+function skipReasonLabel(
+  row: ProductImportPreviewRow,
+  t: (key: string, options?: Record<string, string>) => string,
+): string {
+  if (!row.skipReason) return "";
+  return t(`productImport.changeSkipReason.${row.skipReason}`, { defaultValue: row.skipReason });
+}
+
 export function ProductImportTaskDetailPage(props: Props) {
   const { t } = useTranslation();
   const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
+  const [tab, setTab] = useState<PreviewTab>("changes");
   const result = readProductImportResult(props.task);
-  if (!result) {
-    return (
-      <div style={{ fontSize: 13, color: pageColorTokens.textSecondary, padding: "24px 0" }}>
-        {t("productImport.noChangeset")}
-      </div>
-    );
-  }
-  const writable = countImportWritable(result);
-  const deleteCount = countWritableProductDeletes(result.deleteRows);
-  const handleCount = result.handleRows.filter((row) => !row.skipped).length;
+  const config = readProductImportConfig(props.task);
+  const preview = useMemo(
+    () => (result ? flattenProductImportPreview(result) : { changes: [], skips: [] }),
+    [result],
+  );
+  const issueRows = useMemo(
+    () => (result ? flattenProductImportIssues(result.issues) : []),
+    [result],
+  );
+  const issueAndSkipRows = useMemo(() => [...issueRows, ...preview.skips], [issueRows, preview.skips]);
+  const writable = result ? countImportWritable(result) : 0;
+  const deleteCount = result ? countWritableProductDeletes(result.deleteRows) : 0;
+  const handleCount = result ? result.handleRows.filter((row) => !row.skipped).length : 0;
+  const fileName = result?.fileName || config.fileName || t("productImport.ruleLabel");
+  const operations = result?.operations.length ? result.operations : config.operations;
+  const activeRows = tab === "changes" ? preview.changes : issueAndSkipRows;
+  const running = props.task.status === "running" && !result;
   const issueCsv =
-    result.issues.length > 0
+    result && result.issues.length > 0
       ? buildProductImportIssueCsv(
           result.issues,
           (code) => t(`productImport.issue.${code}`, { defaultValue: code }),
           (code) => t(`productImport.fix.${code}`, { defaultValue: "" }),
         )
       : undefined;
+
+  const emptyNotice = running
+    ? t("productImport.runningPreview")
+    : tab === "changes"
+      ? t("productImport.noChanges")
+      : t("productImport.noIssues");
+
   return (
     <CatalogMutationTaskDetailPage
       {...props}
       i18nPrefix="productImport"
       applyPath="/api/product-import"
-      rows={result.issues}
-      truncated={result.truncated}
-      applied={result.apply ? { succeeded: result.apply.succeeded, failed: result.apply.failed } : null}
+      rows={activeRows}
+      truncated={result?.truncated}
+      applied={result?.apply ? { succeeded: result.apply.succeeded, failed: result.apply.failed } : null}
       summaryChips={[
-        { label: t("productImport.summaryRows"), value: result.summary.rows },
-        { label: t("productImport.summaryMatched"), value: result.summary.matched },
-        { label: t("productImport.summaryChanged"), value: result.summary.changed },
-        { label: t("productImport.summaryIssues"), value: result.summary.issues },
+        { label: t("productImport.summaryRows"), value: result?.summary.rows ?? "—" },
+        { label: t("productImport.summaryMatched"), value: result?.summary.matched ?? "—" },
+        { label: t("productImport.summaryChanged"), value: result?.summary.changed ?? writable },
+        { label: t("productImport.summaryIssues"), value: result?.summary.issues ?? issueAndSkipRows.length },
       ]}
       extraNotices={
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-            {t("productImport.sourceFile")} {result.fileName}
-            {result.operations.length > 0
-              ? ` · ${result.operations.map((operation) => t(`productImport.operation.${operation}`)).join("、")}`
+            {t("productImport.sourceFile")} {fileName}
+            {operations.length > 0
+              ? ` · ${operations.map((operation) => t(`productImport.operation.${operation}`)).join("、")}`
               : null}
           </div>
           {handleCount > 0 ? (
@@ -130,26 +189,68 @@ export function ProductImportTaskDetailPage(props: Props) {
           ) : null}
         </div>
       }
-      emptyNotice={t("productImport.noIssues")}
-      headers={[
-        t("productImport.colRow"),
-        t("productImport.colColumn"),
-        t("productImport.colProblem"),
-        t("productImport.colFix"),
-      ]}
-      rowKey={(row: ProductImportIssue) => `${row.rowNumber}-${row.code}-${row.column ?? ""}`}
-      renderRow={(row: ProductImportIssue) => (
-        <>
-          <td style={catalogReviewCellStyle}>{row.rowNumber > 0 ? row.rowNumber : "—"}</td>
-          <td style={catalogReviewCellStyle}>{row.column || "—"}</td>
-          <td style={catalogReviewCellStyle}>
-            {t(`productImport.issue.${row.code}`, { defaultValue: row.code })}
-          </td>
-          <td style={catalogReviewCellStyle}>
-            {t(`productImport.fix.${row.code}`, { defaultValue: "" })}
-          </td>
-        </>
-      )}
+      beforeTable={
+        result ? (
+          <SegmentedPageTabs
+            activeTab={tab}
+            onTabChange={setTab}
+            ariaLabel={t("productImport.previewTabsAria")}
+            density="compact"
+            items={[
+              { key: "changes", label: t("productImport.tabChanges"), badgeCount: preview.changes.length },
+              { key: "issues", label: t("productImport.tabIssues"), badgeCount: issueAndSkipRows.length },
+            ]}
+          />
+        ) : null
+      }
+      emptyNotice={emptyNotice}
+      headers={
+        tab === "changes"
+          ? [
+              t("productImport.colProduct"),
+              t("productImport.colOperation"),
+              t("productImport.colField"),
+              t("productImport.colBefore"),
+              t("productImport.colAfter"),
+            ]
+          : [
+              t("productImport.colProduct"),
+              t("productImport.colOperation"),
+              t("productImport.colField"),
+              t("productImport.colProblem"),
+              t("productImport.colFix"),
+            ]
+      }
+      rowKey={(row: ProductImportPreviewRow) => row.key}
+      renderRow={(row: ProductImportPreviewRow) =>
+        tab === "changes" ? (
+          <>
+            <td style={{ ...catalogReviewCellStyle, fontWeight: 600 }}>{row.productTitle || "—"}</td>
+            <td style={catalogReviewCellStyle}>{operationLabel(row.operation, t)}</td>
+            <td style={catalogReviewCellStyle}>{fieldLabel(row, t)}</td>
+            <td style={catalogReviewCellStyle}>{row.beforeValue || "—"}</td>
+            <td style={{ ...catalogReviewCellStyle, fontWeight: 700, color: pageColorTokens.brandGreenDeep }}>
+              {row.afterValue || "—"}
+            </td>
+          </>
+        ) : (
+          <>
+            <td style={{ ...catalogReviewCellStyle, fontWeight: 600 }}>{row.productTitle || "—"}</td>
+            <td style={catalogReviewCellStyle}>{operationLabel(row.operation, t)}</td>
+            <td style={catalogReviewCellStyle}>{fieldLabel(row, t)}</td>
+            <td style={catalogReviewCellStyle}>
+              {row.kind === "issue" && row.issue
+                ? t(`productImport.issue.${row.issue.code}`, { defaultValue: row.issue.code })
+                : skipReasonLabel(row, t) || "—"}
+            </td>
+            <td style={catalogReviewCellStyle}>
+              {row.kind === "issue" && row.issue
+                ? t(`productImport.fix.${row.issue.code}`, { defaultValue: "" })
+                : "—"}
+            </td>
+          </>
+        )
+      }
       extraCsv={
         issueCsv
           ? {

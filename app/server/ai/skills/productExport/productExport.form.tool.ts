@@ -1,6 +1,9 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { PRODUCT_EXPORT_MAX_PRODUCTS } from "../../../../lib/productExport";
+import {
+  PRODUCT_EXPORT_FORMATS,
+  PRODUCT_EXPORT_MAX_PRODUCTS,
+} from "../../../../lib/productExport";
 
 export const OPEN_PRODUCT_EXPORT_FORM_TOOL_NAME = "open_product_export_form";
 
@@ -12,7 +15,7 @@ export type ProductExportFormPayload = {
 export const productExportFormTool = new DynamicStructuredTool({
   name: OPEN_PRODUCT_EXPORT_FORM_TOOL_NAME,
   description:
-    "打开「导出商品」确认卡片。一期只导出工作台已选商品（最多 200 个），格式为 Shopify CSV 或 TikTok Catalog Feed CSV。不会修改店铺。没选商品或用户说导出全店时也先开这张卡，让用户在卡片里选商品。",
+    "打开「导出商品」确认卡片。一期只导出工作台已选商品（最多 200 个）。格式：Shopify CSV、TikTok 广告目录 Feed、TikTok Shop / Amazon / Temu 核心字段起步表。起步表不是官方类目模板。不会修改店铺。没选商品或用户说导出全店时也先开这张卡，让用户在卡片里选商品。",
   schema: z.object({
     products: z
       .array(
@@ -24,7 +27,7 @@ export const productExportFormTool = new DynamicStructuredTool({
       )
       .max(PRODUCT_EXPORT_MAX_PRODUCTS)
       .optional(),
-    exportFormat: z.enum(["shopify_csv", "tiktok_csv"]).optional(),
+    exportFormat: z.enum(PRODUCT_EXPORT_FORMATS).optional(),
   }),
   func: async ({ products, exportFormat }) =>
     JSON.stringify({

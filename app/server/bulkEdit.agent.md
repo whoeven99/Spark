@@ -66,7 +66,7 @@
 
 ### 1.6 导出商品（只读）
 
-纯算 `app/lib/productExport.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200）。Shopify CSV 列对齐原生商品 CSV 主体（多图行、类目、Gift Card、成本、重量、库存列、Option Linked To）；不含 Markets / Google Shopping / 商品 Metafield 动态列。TikTok Catalog Feed CSV 复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告。
+纯算 `app/lib/productExport.ts` + `app/lib/productExportPlatformCsv.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200）。Shopify CSV 列对齐原生商品 CSV 主体（多图行、类目、Gift Card、成本、重量、库存列、Option Linked To）；不含 Markets / Google Shopping / 商品 Metafield 动态列。TikTok 广告目录 Feed 复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告。Amazon / Temu / TikTok Shop 是核心字段起步表（不是官方类目模板）：无标题/价格/SKU 硬跳过，缺 GTIN/重量/图片等仍导出并进警告报告。
 
 ### 1.7 导入商品（商户主入口）
 

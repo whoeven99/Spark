@@ -1,5 +1,5 @@
 /**
- * 已选商品导出 — Shopify CSV / TikTok feed CSV。纯算，不含 IO。
+ * 已选商品导出 — Shopify / 广告 Feed / 跨平台起步表。纯算，不含 IO。
  */
 import { toCsv } from "./csv";
 
@@ -10,12 +10,58 @@ export const PRODUCT_EXPORT_MAX_IMAGES = 250;
 export const PRODUCT_EXPORT_MAX_VARIANTS = 100;
 export const PRODUCT_EXPORT_GRAPHQL_PAGE_SIZE = 2;
 
-export const PRODUCT_EXPORT_FORMATS = ["shopify_csv", "tiktok_csv"] as const;
+export const PRODUCT_EXPORT_FORMATS = [
+  "shopify_csv",
+  "tiktok_csv",
+  "tiktok_shop_csv",
+  "amazon_csv",
+  "temu_csv",
+] as const;
 export type ProductExportFormat = (typeof PRODUCT_EXPORT_FORMATS)[number];
+
+export const PRODUCT_EXPORT_STARTER_FORMATS = [
+  "amazon_csv",
+  "temu_csv",
+  "tiktok_shop_csv",
+] as const;
+export type ProductExportStarterFormat = (typeof PRODUCT_EXPORT_STARTER_FORMATS)[number];
+
+export const PRODUCT_EXPORT_FORMAT_OPTIONS: Array<{ value: ProductExportFormat; label: string }> = [
+  { value: "shopify_csv", label: "Shopify CSV" },
+  { value: "tiktok_csv", label: "TikTok 广告目录 Feed" },
+  { value: "tiktok_shop_csv", label: "TikTok Shop 核心字段表" },
+  { value: "amazon_csv", label: "Amazon 核心字段表" },
+  { value: "temu_csv", label: "Temu 核心字段表" },
+];
 
 export type ProductExportRule = {
   format: ProductExportFormat;
 };
+
+export function isProductExportFormat(value: unknown): value is ProductExportFormat {
+  return typeof value === "string" && (PRODUCT_EXPORT_FORMATS as readonly string[]).includes(value);
+}
+
+export function isProductExportStarterFormat(value: unknown): value is ProductExportStarterFormat {
+  return typeof value === "string" && (PRODUCT_EXPORT_STARTER_FORMATS as readonly string[]).includes(value);
+}
+
+export function productExportFormatFilenameSuffix(format?: string | null): string {
+  switch (format) {
+    case "shopify_csv":
+      return "shopify";
+    case "tiktok_csv":
+      return "tiktok";
+    case "tiktok_shop_csv":
+      return "tiktok-shop";
+    case "amazon_csv":
+      return "amazon";
+    case "temu_csv":
+      return "temu";
+    default:
+      return "export";
+  }
+}
 
 export class ProductExportRuleError extends Error {
   readonly code: string;
@@ -28,13 +74,10 @@ export class ProductExportRuleError extends Error {
 
 export function parseProductExportRule(params: Record<string, string>): ProductExportRule {
   const format = (params.exportFormat ?? params.format ?? "shopify_csv").trim();
-  if (!(PRODUCT_EXPORT_FORMATS as readonly string[]).includes(format)) {
-    throw new ProductExportRuleError(
-      "invalid_format",
-      "请选择导出格式：Shopify CSV 或 TikTok Feed CSV",
-    );
+  if (!isProductExportFormat(format)) {
+    throw new ProductExportRuleError("invalid_format", "请选择支持的导出格式");
   }
-  return { format: format as ProductExportFormat };
+  return { format };
 }
 
 export type ProductExportShopifyImage = {
@@ -70,6 +113,7 @@ export type ProductExportShopifyVariant = {
 };
 
 export type ProductExportShopifyProduct = {
+  id?: string;
   handle: string;
   title: string;
   bodyHtml: string;
@@ -273,6 +317,7 @@ export type ProductExportSummary = {
   products: number;
   exported: number;
   skipped: number;
+  warned?: number;
   format: ProductExportFormat;
 };
 
@@ -282,6 +327,12 @@ export const PRODUCT_EXPORT_SKIP_REASON_CODES = [
   "missing_image",
   "missing_price",
   "missing_brand",
+  "missing_sku",
+  "missing_gtin",
+  "missing_weight",
+  "missing_quantity",
+  "missing_category",
+  "partial_variants_skipped",
 ] as const;
 
 const TIKTOK_SKIP_REASON_TO_CODE: Record<string, string> = {
@@ -308,4 +359,124 @@ export function buildProductExportSkipCsv(
     ["product_title", "product_id", "reason"] as const,
     skips.map((row) => [row.productTitle, row.productId, reasonLabel(row.reason)]),
   );
+}
+
+export function countProductExportWarned(warnings: ProductExportSkip[]): number {
+  return new Set(warnings.map((row) => row.productId)).size;
+}
+
+export type ProductExportPreviewProduct = {
+  productId: string;
+  title: string;
+  handle: string;
+};
+
+export type ProductExportPreviewOutcome = "pending" | "exported" | "skipped";
+
+export type ProductExportPreviewRow = {
+  productId: string;
+  title: string;
+  handle: string;
+  outcome: ProductExportPreviewOutcome;
+  skipReason?: string;
+};
+
+function asTrimmed(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function coerceProductExportPreviewProducts(raw: unknown): ProductExportPreviewProduct[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ProductExportPreviewProduct[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const productId = asTrimmed(record.productId) || asTrimmed(record.id);
+    if (!productId || seen.has(productId)) continue;
+    seen.add(productId);
+    out.push({
+      productId,
+      title: asTrimmed(record.title) || asTrimmed(record.productTitle),
+      handle: asTrimmed(record.handle),
+    });
+  }
+  return out;
+}
+
+function indexExportPreviewProducts(
+  configProducts: ProductExportPreviewProduct[],
+  resultProducts: ProductExportPreviewProduct[],
+  skips: ProductExportSkip[],
+): Map<string, ProductExportPreviewProduct> {
+  const byId = new Map<string, ProductExportPreviewProduct>();
+  for (const product of configProducts) byId.set(product.productId, product);
+  for (const product of resultProducts) {
+    const previous = byId.get(product.productId);
+    byId.set(product.productId, {
+      productId: product.productId,
+      title: product.title || previous?.title || "",
+      handle: product.handle || previous?.handle || "",
+    });
+  }
+  for (const skip of skips) {
+    const previous = byId.get(skip.productId);
+    byId.set(skip.productId, {
+      productId: skip.productId,
+      title: skip.productTitle || previous?.title || "",
+      handle: previous?.handle || "",
+    });
+  }
+  return byId;
+}
+
+function uniquePreviewProductIds(
+  productIds: string[],
+  indexed: Map<string, ProductExportPreviewProduct>,
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const id of [...productIds, ...indexed.keys()]) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function resolveExportPreviewOutcome(
+  productId: string,
+  skip: ProductExportSkip | undefined,
+  completed: boolean,
+  exportedIds: Set<string>,
+  hasResultList: boolean,
+): ProductExportPreviewOutcome {
+  if (skip) return "skipped";
+  if (!completed) return "pending";
+  if (!hasResultList || exportedIds.has(productId)) return "exported";
+  return "skipped";
+}
+
+export function buildProductExportPreviewRows(args: {
+  productIds: string[];
+  configProducts: ProductExportPreviewProduct[];
+  resultProducts: ProductExportPreviewProduct[];
+  skips: ProductExportSkip[];
+  completed: boolean;
+}): ProductExportPreviewRow[] {
+  const skipById = new Map(args.skips.map((skip) => [skip.productId, skip]));
+  const byId = indexExportPreviewProducts(args.configProducts, args.resultProducts, args.skips);
+  const exportedIds = new Set(args.resultProducts.map((product) => product.productId));
+  const hasResultList = args.resultProducts.length > 0;
+  return uniquePreviewProductIds(args.productIds, byId).map((productId) => {
+    const product = byId.get(productId);
+    const skip = skipById.get(productId);
+    return {
+      productId,
+      title: product?.title || skip?.productTitle || "",
+      handle: product?.handle || "",
+      outcome: resolveExportPreviewOutcome(productId, skip, args.completed, exportedIds, hasResultList),
+      ...(skip ? { skipReason: skip.reason } : {}),
+    };
+  });
 }

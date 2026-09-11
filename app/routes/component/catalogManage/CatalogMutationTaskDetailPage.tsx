@@ -31,6 +31,7 @@ type Props<TRow> = {
   truncated?: boolean;
   applied?: ApplyOutcome | null;
   extraNotices?: ReactNode;
+  beforeTable?: ReactNode;
   headers: string[];
   renderRow: (row: TRow) => ReactNode;
   rowKey: (row: TRow) => string;
@@ -60,6 +61,7 @@ export function CatalogMutationTaskDetailPage<TRow>({
   truncated,
   applied: appliedProp,
   extraNotices,
+  beforeTable,
   headers,
   renderRow,
   rowKey,
@@ -194,6 +196,8 @@ export function CatalogMutationTaskDetailPage<TRow>({
           {error}
         </div>
       ) : null}
+
+      {beforeTable}
 
       {rows.length === 0 ? (
         emptyNotice ? (

@@ -20,8 +20,7 @@ import {
   resolveTaskRunTitle,
 } from "../../../lib/taskProposalDisplay";
 import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepLink";
-import { resolveInlineReviewOptions, resolveSucceededProductExportTask } from "./chatInlineReviewTasks";
-import { downloadProductExportCsv } from "../productExport/ProductExportTaskDetailPage";
+import { resolveInlineReviewOptions } from "./chatInlineReviewTasks";
 import { useTranslation } from "react-i18next";
 import styles from "./TaskRunChatCard.module.css";
 
@@ -173,10 +172,8 @@ export function TaskRunChatCard({
   const agg = aggregate(matchedTasks.map((task) => task.status));
   const inProgress = agg.known === 0 || agg.running > 0;
   const badgeKind = resolveBadgeKind(agg);
-  const reviewOptions = inProgress ? undefined : resolveInlineReviewOptions(run, matchedTasks);
-  const exportTask = inProgress ? undefined : resolveSucceededProductExportTask(matchedTasks);
-  const showExportDownload = Boolean(exportTask);
-  const showReviewButton = Boolean(reviewOptions) && agg.pendingReview > 0 && !showExportDownload;
+  const reviewOptions = resolveInlineReviewOptions(run, matchedTasks);
+  const showReviewButton = Boolean(reviewOptions);
   /** 少量图片类任务时内嵌逐任务详情卡（含图片预览/操作），其余保持聚合视角 */
   const embedTaskDetails =
     run.taskIds.length > 0 &&
@@ -452,7 +449,7 @@ export function TaskRunChatCard({
           </div>
         ) : null}
 
-        {showExportDownload || showReviewButton ? (
+        {showReviewButton ? (
           <div
             style={{
               display: "flex",
@@ -479,16 +476,12 @@ export function TaskRunChatCard({
                 cursor: "pointer",
               }}
               onClick={() => {
-                if (exportTask) {
-                  void downloadProductExportCsv(exportTask, locationSearch);
-                  return;
-                }
                 if (reviewOptions) onOpenTasks?.(reviewOptions);
               }}
             >
-              {showExportDownload
-                ? t("productExport.downloadChangeset")
-                : t("productImproveStage1.chatGoReview")}
+              {agg.pendingReview > 0
+                ? t("productImproveStage1.chatGoReview")
+                : t("workspace.taskProposal.taskRunCard.viewPreview")}
             </button>
           </div>
         ) : null}
