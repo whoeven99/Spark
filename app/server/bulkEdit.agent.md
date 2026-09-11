@@ -66,7 +66,7 @@
 
 ### 1.6 导出商品（只读）
 
-纯算 `app/lib/productExport.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200），格式为 Shopify CSV 或 TikTok Catalog Feed CSV（复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告）。
+纯算 `app/lib/productExport.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200）。Shopify CSV 列对齐原生商品 CSV 主体（多图行、类目、Gift Card、成本、重量、库存列、Option Linked To）；不含 Markets / Google Shopping / 商品 Metafield 动态列。TikTok Catalog Feed CSV 复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告。
 
 ### 1.7 导入商品（商户主入口）
 

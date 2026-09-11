@@ -25,6 +25,8 @@ export async function fetchProductConnectionByIds<TNode, TOut>(
     query: string;
     maxProducts: number;
     mapNode: (node: TNode) => TOut | null;
+    idsPerQuery?: number;
+    pageSize?: number;
   },
 ): Promise<{ items: TOut[]; truncated: boolean }> {
   const numericIds = productIds.map(toNumericProductId).filter(Boolean);
@@ -32,15 +34,17 @@ export async function fetchProductConnectionByIds<TNode, TOut>(
 
   const collected: TOut[] = [];
   let truncated = false;
+  const idsPerQuery = options.idsPerQuery ?? PRODUCT_IDS_PER_QUERY;
+  const pageSize = options.pageSize ?? PRODUCT_PAGE_SIZE;
 
-  for (const group of chunkItems(numericIds, PRODUCT_IDS_PER_QUERY)) {
+  for (const group of chunkItems(numericIds, idsPerQuery)) {
     if (truncated) break;
     let after: string | null = null;
     const search = group.map((id) => `id:${id}`).join(" OR ");
 
     while (!truncated) {
       const response = await admin.graphql(options.query, {
-        variables: { first: PRODUCT_PAGE_SIZE, after, query: search },
+        variables: { first: pageSize, after, query: search },
       });
       if (!response.ok) {
         throw new Error(`Shopify products query failed: HTTP ${response.status}`);
