@@ -1,0 +1,50 @@
+---
+description: 用户说 rebase 时，按相对 master 的 diff 重写中文标题/摘要、压提交、改 PR、强推
+alwaysApply: true
+---
+
+# 一键 rebase PR
+
+当用户说 **「rebase」**、**「压一下提交」**、**「整理 commit」**、**「rebase pr」** 时：
+
+忘掉对话里旧的标题/摘要/commit，只根据 `origin/master...HEAD` 的 **diff** 当一份新 PR 来写。不要沿用旧 commit 说明，不要用 `git rebase -i`，不要手写 reset / commit / force push。
+
+## 文案口径
+
+先看 diff 在做什么，再选动词：
+
+- 相对 master **新加的能力** → 写「新增 …」，不要写成「改为 / 改成 …」。
+- 相对 master **改已有行为** → 才写「改为 …」。
+- 标题、摘要、commit 三者口径一致，都只描述这份 diff。
+
+格式：
+
+- **PR 标题**：中文、产品向，不加 `feat:`，不加分支名。
+- **commit**：第一行 `feat: …` / `fix: …`，空一行，再写 1–2 句 why。
+- **PR 正文**：
+
+```markdown
+## 摘要
+
+- 三条以内，写清用户能感知的变化
+
+## 测试
+
+- [ ] 主路径
+- [ ] 失败/边界
+```
+
+不要把「强推 / squash / 脚本」写进 PR。
+
+## 步骤
+
+1. 读 `git diff --stat origin/master...HEAD` 和关键改动，用中文写好标题、commit、摘要。
+2. 写入两个文件（`scripts/tmp/` 即可），再执行：
+
+```bash
+npm run rebase:pr -- --title "中文 PR 标题" --message-file scripts/tmp/rebase-commit.txt --body-file scripts/tmp/rebase-pr.md
+```
+
+3. 回复输出里的 `PR_URL:`。失败只报摘要，不要再手动强推。
+
+用户说 rebase **即授权** `--force-with-lease`。不要对 `master` 执行。

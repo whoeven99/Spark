@@ -1,0 +1,25 @@
+---
+description: 用户说上传代码/提 PR 时，直接运行 push:pr 脚本
+alwaysApply: true
+---
+
+# 一键提交并创建 PR
+
+当用户说 **「上传代码」**、**「提个 pr」**、**「提交并创建 pr」**、**「push pr」** 或类似意思时：
+
+1. **不要**手动跑 `git status` / `git diff` / `git commit` / `gh pr create` 等一串命令。
+2. **直接运行**（在 Spark 仓库根目录）：
+   ```bash
+   npm run push:pr
+   ```
+3. 若用户指定了提交说明，附加参数：
+   ```bash
+   npm run push:pr -- --message "说明文字"
+   ```
+4. 从脚本输出中提取 `PR_URL:` 那一行，把链接回复给用户。
+5. 若脚本报错，只把错误摘要告诉用户，不要重复执行整套 git 流程。
+
+脚本路径：`scripts/cursor-push-pr.mjs`  
+会自动：提交当前改动（跳过 `.env` 等敏感文件）→ push → 创建 PR（已有 PR 则返回原链接）。
+
+依赖：本机已安装 `gh` 并登录，或设置了 `GH_TOKEN` / `GITHUB_TOKEN`。

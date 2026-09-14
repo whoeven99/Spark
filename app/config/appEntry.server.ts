@@ -3,7 +3,11 @@
  * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
  * 计费在一级「账户与订阅」`/app/account`；旧 `/app/settings/billing` 重定向至此。
  *
- * 导航按运行时环境分流：prod 为任务 + 账户；测/本地展示全量（不含创作，`/app/create` 仍可直达）。
+ * 环境分流原则：
+ * - prod：功能尽量在对话里闭环（首页 `/app` 聊天 + 推荐操作 + 对话内确认/审核）。
+ *   导航只留「任务」和「账户与订阅」——前者是对话产出的异步工作台账，后者是 Shopify Billing 页面。
+ *   不要把 Today / Health Monitor / Studio / Settings / 助手 加进 PROD_NAV。
+ * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作，`/app/create` 仍可直达）。
  */
 import { isProductionNodeEnv } from "./nodeEnv.server";
 
@@ -39,7 +43,7 @@ const FULL_NAV = [
   "settings",
 ] as const satisfies readonly NavItemKey[];
 
-/** 生产：任务 + 账户与订阅；首页由点应用名进入。旧任务页与创作不进导航。 */
+/** 生产：对话工作台在首页；导航只留任务台账 + 账户。不要往这里加功能页。 */
 const PROD_NAV = ["tasks-v2", "account"] as const satisfies readonly NavItemKey[];
 
 export function getAppEntryConfig(): AppShellConfig {

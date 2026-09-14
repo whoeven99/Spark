@@ -80,14 +80,14 @@ Spark/
 | 首页 | `/app` | `app._index.tsx` + `HomeV2Panel`（本页直接聊天）；旧 `/app/home-v2` 重定向至此 |
 | 助手 | `/app/assistant` | `app.assistant.tsx` → `WorkspaceAppShellPage`（默认进对话；prod 导航可不展示） |
 | 首页 v1 | `/app/home-v1` | `app.home-v1.tsx` + `HomePanel`（原首页经营概览；提问跳转助手；prod 导航可不展示） |
-| Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情） |
-| Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（总览走 `ensureDailySnapshotOverview`，`?view=detail` 才走 `ensureDailySnapshot`） |
-| Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
+| Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情）。**测环境页面入口；prod 走对话，不进导航** |
+| Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（总览走 `ensureDailySnapshotOverview`，`?view=detail` 才走 `ensureDailySnapshot`）。**测环境页面入口；prod 走对话，不进导航** |
+| Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
 | 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`；测/产导航都不展示，URL 仍可直达 |
 | 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：压缩单行列表，当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；审核/结果复用对话内那套详情弹窗；prod 与测/本地导航都露出 |
 | 任务 v1 | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage`（旧卡片列表）；仅测/本地导航露出 |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
-| Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航） |
+| Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
 
 兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。旧 `/app/home-v2` 重定向到 `/app`。
 
@@ -223,6 +223,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
+- **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings / 助手）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。例外只有两类：`/app/tasks-v2`（对话产出的异步任务台账；审核仍须能在对话内闭环）和 `/app/account`（Shopify Billing 必须走页面）。OAuth / 数据回补等配置页可以 URL 直达，但不占 prod 一级导航。
 - 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另展示「任务」（`/app/tasks-v2`）与「账户与订阅」；测/本地另展示助手 / 首页 v1 / Today / Health Monitor / Studio（创作工作台）/ 任务 / 任务 v1 / 账户 / Settings。创作页 `/app/create` 测/产导航都不展示，URL 仍可直达。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前四组：经营诊断（只读；含 SEO 体检）/ 商品优化、图片生成（AI 生成内容）/ 批量编辑（试算→审核→写回；批量调价、批量打标、批量上下架）。新增能力要在这里登记才会出现在首页。首页刻意只保留一句行动号召，不要再往问候下方、卡头或推荐区加副标题、徽标与分组描述——那些描述会复述下面的行标题，是这一版专门删掉的。改这里时 `HomeV2SsrFallback` 要同步（占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后列数跳变）。
