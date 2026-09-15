@@ -28,6 +28,7 @@ export const TURN_GATED_SKILL_NAMES: ReadonlySet<string> = new Set([
   "pictureTranslate",
   "productImprove",
   "productQualityScore",
+  "productImport",
 ]);
 
 /** 工具裁剪总开关；设 `CHAT_TOOL_TRIM=false` 可回退到全量绑定。 */

@@ -249,3 +249,29 @@ async function downloadBlobText(blobPath: string): Promise<string | null> {
   const buffer = await downloadBlobBuffer(blobPath);
   return buffer ? buffer.toString("utf-8") : null;
 }
+
+export async function uploadJsonBlob(blobPath: string, value: unknown): Promise<void> {
+  const container = await getContainer();
+  await container.getBlockBlobClient(blobPath).uploadData(Buffer.from(JSON.stringify(value), "utf-8"), {
+    blobHTTPHeaders: { blobContentType: "application/json; charset=utf-8" },
+  });
+}
+
+export async function downloadJsonBlob<T>(blobPath: string): Promise<T | null> {
+  const text = await downloadBlobText(blobPath);
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteBlobIfExists(blobPath: string): Promise<void> {
+  try {
+    const container = await getContainer();
+    await container.getBlockBlobClient(blobPath).deleteIfExists();
+  } catch {
+    // 清理失败不阻断删任务
+  }
+}

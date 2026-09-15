@@ -30,6 +30,10 @@ import {
   type TaskProposalTarget,
 } from "../../lib/taskProposalPayload";
 import {
+  PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
+} from "../../lib/productManageTaskProposals";
+import {
   BULK_PRICE_EDIT_MAX_PRODUCTS,
   BulkPriceEditRuleError,
   parseBulkPriceEditRule,
@@ -48,6 +52,15 @@ import { createBatchWithTask } from "../aiTask/aiTaskStore.server";
 import { enqueueBulkPriceEditDryRun } from "../bulkPriceEdit/bulkPriceEditDryRun.server";
 import { enqueueBulkTagEditDryRun } from "../bulkTagEdit/bulkTagEditDryRun.server";
 import { enqueueBulkStatusEditDryRun } from "../bulkStatusEdit/bulkStatusEditDryRun.server";
+import {
+  PRODUCT_EXPORT_MAX_PRODUCTS,
+  ProductExportRuleError,
+  parseProductExportRule,
+  type ProductExportPreviewProduct,
+} from "../../lib/productExport";
+import { enqueueProductExport } from "../productExport/productExportRun.server";
+import { enqueueProductImportDryRun } from "../productImport/productImportDryRun.server";
+import { coerceProductImportOperations } from "../../lib/productImport";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
@@ -64,6 +77,7 @@ export const TASK_PROPOSAL_TARGETS_HARD_CEILING = Math.max(
   BULK_PRICE_EDIT_MAX_PRODUCTS,
   BULK_TAG_EDIT_MAX_PRODUCTS,
   BULK_STATUS_EDIT_MAX_PRODUCTS,
+  PRODUCT_EXPORT_MAX_PRODUCTS,
 );
 
 export function resolveTaskProposalMaxTargets(
@@ -369,6 +383,90 @@ const bulkStatusEditHandler: TaskProposalSkillHandler = {
   },
 };
 
+function uniqueProductIds(targets: TaskProposalTarget[]): string[] {
+  return Array.from(
+    new Set(targets.map((target) => target.productId?.trim() || target.id.trim())),
+  ).filter(Boolean);
+}
+
+function uniqueExportPreviewProducts(targets: TaskProposalTarget[]): ProductExportPreviewProduct[] {
+  const seen = new Set<string>();
+  const products: ProductExportPreviewProduct[] = [];
+  for (const target of targets) {
+    const productId = (target.productId?.trim() || target.id.trim());
+    const title = target.title.trim();
+    if (!productId || !title || seen.has(productId)) continue;
+    seen.add(productId);
+    products.push({ productId, title, handle: "" });
+  }
+  return products;
+}
+
+const productExportHandler: TaskProposalSkillHandler = {
+  skillId: PRODUCT_EXPORT_SKILL_ID,
+  maxTargets: PRODUCT_EXPORT_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    let rule;
+    try {
+      rule = parseProductExportRule(params);
+    } catch (error) {
+      throw error instanceof ProductExportRuleError ? new Error(error.message) : error;
+    }
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先在工作台选择要导出的商品（一期最多 200 个）");
+    const products = uniqueExportPreviewProducts(targets);
+    const config = {
+      format: rule.format,
+      productIds,
+      totalProducts: productIds.length,
+      ...(products.length > 0 ? { products } : {}),
+    };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "product_export",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueProductExport({ taskId, shop, locale, productIds, format: rule.format });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const productImportHandler: TaskProposalSkillHandler = {
+  skillId: PRODUCT_IMPORT_SKILL_ID,
+  allowEmptyTargets: true,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const fileId = (params.fileId ?? "").trim();
+    if (!fileId) throw new Error("请先在卡片上选择 CSV 或 Excel");
+    const operations = coerceProductImportOperations(params.operations);
+    if (operations.length === 0) throw new Error("请先选择要写入的内容");
+    const fileName = (params.fileName ?? "").trim() || undefined;
+    const config = { fileId, ...(fileName ? { fileName } : {}), operations };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "product_import",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueProductImportDryRun({ taskId, shop, locale, fileId, operations });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
@@ -376,6 +474,8 @@ const handlers = new Map<string, TaskProposalSkillHandler>([
   [bulkPriceEditHandler.skillId, bulkPriceEditHandler],
   [bulkTagEditHandler.skillId, bulkTagEditHandler],
   [bulkStatusEditHandler.skillId, bulkStatusEditHandler],
+  [productExportHandler.skillId, productExportHandler],
+  [productImportHandler.skillId, productImportHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

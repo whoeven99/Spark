@@ -2,7 +2,7 @@
  * 首页与对话输入区共用的推荐操作列表。
  *
  * 分组按「做什么」切：经营诊断只读、商品优化与图片生成靠 AI 生成内容、
- * 批量编辑按规则改店铺结构化字段（试算 → 审核 → 写回，Agent 回合内不写）。
+ * 批量改价/标签/状态/字段/合集/复制/归档/成本/Handle/Metafield/删除都走「导入商品」；导出单独保留。
  */
 
 export type WorkspaceRecommendScope = "shop" | "selected";
@@ -97,31 +97,25 @@ export function buildWorkspaceRecommendedGroups(
       },
     ],
   };
-  const bulkEdit: WorkspaceRecommendedGroup = {
-    key: "bulkEdit",
-    label: t("workspace.shell.chat.recommend.groupBulkEdit"),
+  const productManage: WorkspaceRecommendedGroup = {
+    key: "productManage",
+    label: t("workspace.shell.chat.recommend.groupProductManage"),
     items: [
       {
-        key: "bulkPriceEdit",
-        label: t("workspace.shell.chat.recommend.bulkPriceEdit.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkPriceEdit.prompt.${scope}`),
+        key: "productExport",
+        label: t("workspace.shell.chat.recommend.productExport.label"),
+        prompt: t(`workspace.shell.chat.recommend.productExport.prompt.${scope}`),
         createsTask: true,
       },
       {
-        key: "bulkTagEdit",
-        label: t("workspace.shell.chat.recommend.bulkTagEdit.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkTagEdit.prompt.${scope}`),
-        createsTask: true,
-      },
-      {
-        key: "bulkStatusEdit",
-        label: t("workspace.shell.chat.recommend.bulkStatusEdit.label"),
-        prompt: t(`workspace.shell.chat.recommend.bulkStatusEdit.prompt.${scope}`),
+        key: "productImport",
+        label: t("workspace.shell.chat.recommend.productImport.label"),
+        prompt: t(`workspace.shell.chat.recommend.productImport.prompt.${scope}`),
         createsTask: true,
       },
     ],
   };
   return hasProductContext
-    ? [productOptimization, bulkEdit, imageGeneration, operations]
-    : [operations, productOptimization, bulkEdit, imageGeneration];
+    ? [productOptimization, productManage, imageGeneration, operations]
+    : [operations, productOptimization, productManage, imageGeneration];
 }

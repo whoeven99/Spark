@@ -10,15 +10,40 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromFocus("seoAudit")).toEqual([
       "seoAudit",
       "productImprove",
+      "productImport",
     ]);
-    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["productImport"]);
+    expect(skillNamesFromFocus("productExport")).toEqual(["productExport"]);
+    expect(skillNamesFromFocus("productImport")).toEqual(["productImport"]);
     expect(skillNamesFromFocus("all")).toBe("all");
   });
 
-  it("routes freeform SEO / inventory phrases", () => {
-    expect(skillNamesFromUserText("帮我给店铺做一次 SEO 体检")).toContain("seoAudit");
-    expect(skillNamesFromUserText("检查库存健康情况")).toContain("shopOperations");
-    expect(skillNamesFromUserText("今天天气怎么样")).toEqual([]);
+  it("routes collection, import and export recommend phrasing", () => {
+    expect(skillNamesFromUserText("打开批量调整合集的确认卡，在卡片里选择加入或移出")).toContain(
+      "productImport",
+    );
+    expect(skillNamesFromUserText("帮我把一批商品加入或移出某个手动合集")).toContain(
+      "productImport",
+    );
+    expect(skillNamesFromUserText("Open the bulk collection confirmation card")).toContain(
+      "productImport",
+    );
+    expect(skillNamesFromUserText("打开导入商品确认卡")).toContain("productImport");
+    expect(skillNamesFromUserText("第 3 行怎么改")).toContain("productImport");
+    expect(skillNamesFromUserText("校验结果")).toContain("productImport");
+    expect(skillNamesFromUserText("帮我批量调价降价 10%")).toContain("productImport");
+    expect(skillNamesFromUserText("批量改成本")).toContain("productImport");
+    expect(skillNamesFromUserText("批量删除商品")).toContain("productImport");
+    expect(skillNamesFromUserText("批量改标题")).toEqual(["productImport"]);
+    expect(skillNamesFromUserText("帮我改标题")).toContain("productImprove");
+    expect(skillNamesFromUserText("帮我改标题")).not.toContain("productImport");
+    expect(skillNamesFromUserText("打开导出商品确认卡")).toContain("productExport");
+    expect(skillNamesFromUserText("帮我导出已选商品的 CSV")).toContain("productExport");
+    expect(
+      skillNamesFromUserText(
+        "Open the export confirmation card and choose Shopify, TikTok Ads catalog, TikTok Shop, Amazon, or Temu format.",
+      ),
+    ).toContain("productExport");
   });
 
   it("prefers explicit skillFocus over userText", () => {

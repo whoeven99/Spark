@@ -106,6 +106,21 @@ describe("applyBulkPriceEdit", () => {
     expect(outcome.errors).toEqual([]);
   });
 
+  it("counts a successful mutation even if Shopify omits some variant ids", async () => {
+    const { admin } = fakeAdmin(() => ({
+      productVariants: [{ id: "v1" }],
+      userErrors: [],
+    }));
+    const outcome = await applyBulkPriceEdit({
+      admin,
+      shop: "test.myshopify.com",
+      rows: [row({ variantId: "v1" }), row({ variantId: "v2", productId: "gid://shopify/Product/1" })],
+    });
+    expect(outcome.succeeded).toBe(2);
+    expect(outcome.failed).toBe(0);
+    expect(outcome.errors).toEqual([]);
+  });
+
   it("keeps other products writing when one product returns userErrors", async () => {
     const { admin } = fakeAdmin((productId, variantIds) =>
       productId === "p2"

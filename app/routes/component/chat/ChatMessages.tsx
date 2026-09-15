@@ -37,6 +37,7 @@ type ChatMessagesProps = {
   /** 工作台已选商品，供 TaskProposalCard 空目标时补全 */
   contextProducts?: BatchTaskProduct[];
   contextProductQuery?: ObjectQuerySelection | null;
+  fallbackFileId?: string;
   /** 打开与底部工具栏相同的商品选择弹窗 */
   onOpenProductPicker?: () => void;
   /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */
@@ -53,6 +54,7 @@ export function ChatMessages({
   onRecommendedPrompt,
   contextProducts = [],
   contextProductQuery = null,
+  fallbackFileId,
   onOpenProductPicker,
   tasksById,
 }: ChatMessagesProps) {
@@ -257,6 +259,7 @@ export function ChatMessages({
                         proposal={item.taskProposal}
                         contextProducts={contextProducts}
                         contextProductQuery={contextProductQuery}
+                        fallbackFileId={fallbackFileId}
                         onOpenProductPicker={onOpenProductPicker}
                         onExecuted={onTaskProposalExecuted}
                       />

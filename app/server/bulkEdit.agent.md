@@ -4,7 +4,7 @@
 
 改动本族任何文件前先读本文件。全局边界（哪些 `POST /api/bulk-*` 是唯一写回入口、对话内审核白名单、`TaskProposalField` 远端资源字段约定）仍以根 `AGENTS.md` 第 3、7 节为准。
 
-当前在线能力：批量调价 / 打标 / 上下架，以及只读的站内 SEO 体检。批量改 SEO、调整合集、改自定义字段，以及价目表 / 成本价 / 库存三个表格导入已删除，不要再加回入口或写回路由。
+当前在线能力：商户入口是**导出商品**与**导入商品**。调价 / 打标 / 上下架仍有独立规则 Skill（进行中任务可审可写）。Vendor·类型·SEO / 标题正文 / 合集 / 复制 / 归档 / 成本 / Handle / Metafield / 删除没有独立入口，只作为导入内部 apply。另有只读站内 SEO 体检。独立的价目表 / 成本价 / 库存导入路由不要加回；库存、用表格新建商品仍不写回。
 
 ## 0. 共享架构
 
@@ -43,13 +43,36 @@
 
 ### 1.4 站内 SEO 体检（只读诊断）
 
-纯算 `app/lib/seoAudit.ts`（阈值 + 问题检测 + 重复检测 + **SEO 知识库**）、只读 `app/server/shopify/productSeoAuditReader.server.ts`、Skill `app/server/ai/skills/seoAudit/` 只暴露 `run_seo_audit`。解决的是「商户还不知道自己 SEO 哪里有问题」。搜索标题/描述没有 Spark 内批量改写入口，`fixability` 为 `manual`；正文过薄走商品文案优化。
+纯算 `app/lib/seoAudit.ts`（阈值 + 问题检测 + 重复检测 + **SEO 知识库**）、只读 `app/server/shopify/productSeoAuditReader.server.ts`、Skill `app/server/ai/skills/seoAudit/` 只暴露 `run_seo_audit`。解决的是「商户还不知道自己 SEO 哪里有问题」。搜索标题/描述的缺失与超宽 `fixability` 为 `bulk_seo`，引导导入商品（导出 CSV 改 SEO 列后再导入）；重复标题/描述与 handle 仍为 `manual`；正文过薄走商品文案优化。
 
 几条不能退化的约束：长度判定一律用 **`seoDisplayWidth` 半角当量**（CJK 记 2）而不是字符数——Google 按像素截断，中文标题 30 个字就到线了，按字符数判断会让中文店永远报不出超长；**只判定已上架商品**（`publishedAt != null`），未上架页面不会被收录，算进覆盖率只会让结论失真；重复检测的两个口径**故意不同**——标题带商品名回落一起比（空标题时 Shopify 会回落，实际渲染出来的才会打架），描述只比商户明确填过的值（空描述输出什么由主题决定，全比会把一堆空值报成重复）；每类问题最多带 5 个样例，`affectedCount` 仍是真实总数，上下文不随店铺规模膨胀。
 
 **图片 alt 检查刻意不做**：`featuredMedia` 会额外要求 `read_files` / `read_images`，加 scope 会让所有已安装店铺弹一次重新授权，不值得；现有 `read_products` 已覆盖全部检查项。
 
-每条 issue 带 `fixability`（`product_content` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 恒为 `manual`（改 handle 会断链接、要配 301）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
+每条 issue 带 `fixability`（`product_content` / `bulk_seo` / `manual`）指明往哪个能力引导，`handle_non_descriptive` 与重复标题/描述恒为 `manual`（改 handle 会断链接、要配 301；互不相同的 SEO 不能用同一条 set 规则批量写）。`SEO_AUDIT_GUIDANCE` 是唯一的 SEO 知识出处，工具会随结果一起交给模型，不要再往 prompt 里散写 SEO 常识。
+
+### 1.5 Vendor / 类型 / SEO / 标题正文、合集、复制、归档、成本、Handle、Metafield、删除（仅导入内部调用）
+
+这些项没有独立 Skill、开卡、dry-run 或写回路由。商户改这些列只走导入。mutation 仍只出现在各自 apply：
+
+- 字段 / SEO / 标题 / 正文：纯算 `app/lib/bulkProductFieldEdit.ts`，写回 `app/server/bulkProductFieldEdit/bulkProductFieldEditApply.server.ts`（唯一 `productUpdate` 改 title / descriptionHtml / vendor / productType / seo 的调用处）。不要用它改 handle 或 status。导入 SEO 上限按 Shopify 字符数 **70 / 320**（`SHOPIFY_SEO_TITLE_MAX_CHARS` / `SHOPIFY_SEO_DESCRIPTION_MAX_CHARS`），不要改成 Health Monitor `seoAudit.ts` 的展示宽度 60/160。
+- 成本：纯算 `app/lib/bulkCostEdit.ts`，写回 `bulkCostEditApply.server.ts`。走 `productVariantsBulkUpdate.inventoryItem.cost`（与调价共用 `productVariantsBulkUpdate.server.ts` helper），不申请 `write_inventory`。
+- Handle：纯算 `app/lib/bulkHandleEdit.ts`，写回 `bulkHandleEditApply.server.ts`（`productUpdate` + `redirectNewHandle: true`）。身份列 Handle 只用来匹配，改值走 New Handle。
+- Metafield：纯算 `app/lib/bulkMetafieldEdit.ts`，只读 `productMetafieldReader`，写回 `bulkMetafieldEditApply.server.ts`（`metafieldsSet` / `metafieldsDelete`）。只写有 definition 的商品/变体标量，以及 `list.single_line_text_field`。
+- 删除：纯算 `app/lib/bulkProductDelete.ts`，写回 `bulkProductDeleteApply.server.ts`（唯一 `productDelete` 调用处）。不可恢复；审核页必须额外勾选，apply 放在导入最后。同一行其它列忽略。
+- 合集：纯算 `app/lib/bulkCollectionEdit.ts`，只读 `collectionMembershipReader`，写回 `bulkCollectionEditApply.server.ts`（唯一 `collectionUpdate` 改 source selections 的调用处，每批 ≤50）。没有可写 `CollectionConditionsSource` 时不要静默跳过。
+- 复制：纯算 `app/lib/productDuplicate.ts`（默认后缀 ` (Copy)`、草稿、带图；导入路径不截断 50），写回 `productDuplicateApply.server.ts`（唯一 `productDuplicate` 调用处）。2026-07 payload 只选 `newProduct` / `imageJob` / `productDuplicateOperation`，不要再查已删除的 `productDuplicateJob`；带图时 `imageJob` 未完成仍算商品复制成功。
+- 归档：纯算 `app/lib/bulkArchive.ts`，读侧复用 `productStatusReader`，写回 `bulkArchiveApply.server.ts`（只写 `status: ARCHIVED`）。与上下架分开，避免破坏 ACTIVE/DRAFT 白名单。
+
+### 1.6 导出商品（只读）
+
+纯算 `app/lib/productExport.ts` + `app/lib/productExportPlatformCsv.ts`、读侧 `productExportReader` / Catalog fetcher、运行 `app/server/productExport/productExportRun.server.ts`。任务直接 `succeeded`，没有 apply。一期只导出已选（最多 200）。Shopify CSV 列对齐原生商品 CSV 主体（多图行、类目、Gift Card、成本、重量、库存列、Option Linked To）；不含 Markets / Google Shopping / 商品 Metafield 动态列。TikTok 广告目录 Feed 复用 `shopifyToTiktokFeedCsv`，缺列进 skip 报告。Amazon / Temu / TikTok Shop 是核心字段起步表（不是官方类目模板）：无标题/价格/SKU 硬跳过，缺 GTIN/重量/图片等仍导出并进警告报告。
+
+### 1.7 导入商品（商户主入口）
+
+一期路径：识别文件 → 校验 → 反馈问题行及改法 → 确认后**后台异步分批**写回。纯算 `app/lib/productImport.ts` + `app/lib/productImportPlan.ts`，解析 `app/server/productImport/parseImportSpreadsheet.server.ts`（必须读 original buffer，不能用 parsed.txt），只读 `app/server/shopify/productImportReader.server.ts`，试算 `app/server/productImport/productImportDryRun.server.ts`（零 mutation，落 `pending_review`），写回 `app/server/productImport/productImportApply.server.ts`（只编排已有 apply，不新增 GraphQL mutation）。路由 `POST /api/product-import`，门禁 `confirm: true` + `pending_review`；确认后立刻返回 `{ queued: true }`，任务保持 `pending_review` 并写 `applyStartedAt`（不要改成 `running`，否则 stale reclaim 会误杀）。后台按商品边界切批（`PRODUCT_IMPORT_WORK_CHUNK_PRODUCTS = 200`，切活不丢数据）再 apply；成功走 `applied`，失败保持 `pending_review` 并清 `applyStartedAt`（已写入的不回滚）。无可写变更时打开审核会走 `completeReview: true` 标 `succeeded`（不是 `applied`）。Skill 只开卡 `open_product_import_form`；没有文件也要开卡。确认卡上必须勾选要写入的子功能（空卡默认全不勾）并选择 CSV/Excel；勾选哪项，试算/写回就只走对应已有 apply 模块。未勾选的列记 `column_not_selected` 且不写入，但不计入卡片/对话的「需修改」。确认卡未勾选时预览按表头检出，不刷 `column_not_selected`；上传后可建议勾选检出列（不含复制/归档/删除）。「需修改」只含会挡住写回或违反 Shopify 硬限制的项（含标题 255 字符、空标题 `empty_title`、单标签 255、每商品 250 个标签、SEO 70/320 字符），并在卡片、进度卡和审核页展示「怎么改」。一期不支持列 / 未知列走「未写入列」说明，不进需修改。dry-run 完成后把问题摘要注入对话进度卡和 productImport Skill 上下文，助手按行说明改法，不改文件。
+
+写回列：标题/正文、价格（含划线价）、成本、Tags、状态、Vendor / 类型 / SEO、Handle、合集、有 definition 的标量及 `list.single_line_text_field` Metafield。勾选复制/归档/删除时，没有对应列则默认整表 TRUE（预览补列，不必改文件）；有该列则仍按 TRUE/FALSE 逐行。删除仍须审核页额外勾选后才写回。不做：库存数量、用表格新建商品、销售渠道。Metafield 表头同时认 `Metafield: ns.key [type]` 与 Shopify 后台导出 `{名} (product.metafields.ns.key)`。文件上限 **15MB**（对齐 Shopify CSV）；**不截断** 1000 行 / 200 商品 / 复制 50。全量 changeset 存 Azure Blob（`{shop}/ai-tasks/{taskId}/import-changeset.json`），Turso 任务 result 只放摘要、问题与审核抽样（约 100 行）。勾选列里空单元格会清空对应字段：标题不允许空；价格空写成 `0.00`；划线价/成本/Vendor/正文/类型/SEO/标签/Metafield 空则清空；Handle 空不改；状态空记 `invalid_status`；合集空不改成员；复制/归档/删除空则该行不执行。Shopify 导出图行（无标题、无 SKU，价格和划线价都空）不要把价格写成 0 或报 `price_needs_sku`，单变体同样跳过。`columnKeys` 必须来自真实表头，不能按 operation 推断（否则会把未出现的 `compare_at` 当成存在）。数字型 Metafield、Variant SKU、Product ID、Option Value、价格 / 划线价 / 成本都会去掉 Excel 文本前缀 `'`。Shopify 导出中本期不写的列（类目、重量、Gift Card、物流/税、Option Name / Linked To、Google Shopping、Unit Price 等）记 `ignored`，不进问题报告；Option Value 只用于匹配变体、不写回；库存 / 图片 / 条码（含 `Variant Barcodes`）仍报一期不支持。未知列进 `unsupported_column`。Shopify CSV 的 Handle 向下填充。匹配先定商品（Product ID → Handle → 全店唯一 SKU），再在该商品内定变体（Option1/2/3 唯一命中优先，其次该商品内唯一 SKU，再其次单变体）。Handle 已命中时不跨商品用 SKU。选项也无法消歧时才报 `sku_matches_multiple`。同一 Handle 的后续图行沿用上一行已匹配商品，避免句柄已改后图片行误报 `handle_not_found`。Product ID 找不到用 `product_id_not_found`。读侧商品/变体 Metafield 翻页，不能截成 `first: 30`。合集按标题匹配，无写出来源的合集记 `collection_not_writable`。删除行忽略同一行其它列，审核页额外勾选后才写回。审核页分「将写入 / 需修改 / 跳过 / 失败」四栏，无变化进跳过；写回失败进失败栏并展示原因和改法，apply 必须收集各能力 errors，不得只报数量。合集 `COLLECTIONS_MAX=500`、`variants(first: 100)` 本次不扩。独立调价 Skill 的最低价/涨跌幅不作用在导入上。
 
 ## 2. 新增同类能力时的检查清单
 

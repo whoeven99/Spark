@@ -23,6 +23,12 @@ import type { OpenWorkspaceTasksOptions } from "../../../lib/productImproveDeepL
 import { resolveInlineReviewOptions } from "./chatInlineReviewTasks";
 import { useTranslation } from "react-i18next";
 import styles from "./TaskRunChatCard.module.css";
+import {
+  coerceProductImportIssues,
+  collapseRepeatedImportIssues,
+  filterActionableImportIssues,
+} from "../../../lib/productImport";
+import { ProductImportIssueFixList } from "../productImport/ProductImportIssueFixList";
 
 const POLL_INTERVAL_MS = 5000;
 /** 卡片挂载后最长轮询时长，避免长期占用请求 */
@@ -172,8 +178,8 @@ export function TaskRunChatCard({
   const agg = aggregate(matchedTasks.map((task) => task.status));
   const inProgress = agg.known === 0 || agg.running > 0;
   const badgeKind = resolveBadgeKind(agg);
-  const reviewOptions = inProgress ? undefined : resolveInlineReviewOptions(run, matchedTasks);
-  const showReviewButton = Boolean(reviewOptions) && agg.pendingReview > 0;
+  const reviewOptions = resolveInlineReviewOptions(run, matchedTasks);
+  const showReviewButton = Boolean(reviewOptions);
   /** 少量图片类任务时内嵌逐任务详情卡（含图片预览/操作），其余保持聚合视角 */
   const embedTaskDetails =
     run.taskIds.length > 0 &&
@@ -449,6 +455,8 @@ export function TaskRunChatCard({
           </div>
         ) : null}
 
+        <ProductImportRunIssues tasks={matchedTasks} />
+
         {showReviewButton ? (
           <div
             style={{
@@ -479,11 +487,45 @@ export function TaskRunChatCard({
                 if (reviewOptions) onOpenTasks?.(reviewOptions);
               }}
             >
-              {t("productImproveStage1.chatGoReview")}
+              {agg.pendingReview > 0
+                ? t("productImproveStage1.chatGoReview")
+                : t("workspace.taskProposal.taskRunCard.viewPreview")}
             </button>
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function ProductImportRunIssues({ tasks }: { tasks: AITaskItem[] }) {
+  const { t } = useTranslation();
+  const task = tasks.find(
+    (item) =>
+      item.taskType === "product_import" &&
+      (item.status === "pending_review" || item.status === "succeeded") &&
+      item.result,
+  );
+  if (!task?.result) return null;
+  const issues = collapseRepeatedImportIssues(
+    filterActionableImportIssues(coerceProductImportIssues(task.result.issues)),
+  );
+  const summary = task.result.summary;
+  const changed =
+    summary && typeof summary === "object" && typeof (summary as { changed?: unknown }).changed === "number"
+      ? (summary as { changed: number }).changed
+      : 0;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 12, color: pageColorTokens.textPrimary, fontWeight: 600 }}>
+        {t("productImport.runReviewSummary", { changed, issues: issues.length })}
+      </div>
+      <ProductImportIssueFixList issues={issues} issueCount={issues.length} />
+      {issues.length > 0 ? (
+        <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+          {t("productImport.runReviewHint")}
+        </div>
+      ) : null}
     </div>
   );
 }

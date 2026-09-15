@@ -1,4 +1,5 @@
 import { deleteTranslateV3BlobIfExists } from "../translation/translateBlobStore.server";
+import { deleteProductImportChangeset } from "../productImport/productImportChangeset.server";
 import type { AITaskType } from "../../lib/aiTaskTypes";
 
 export async function cleanupTaskBlobs(
@@ -6,6 +7,12 @@ export async function cleanupTaskBlobs(
   result: Record<string, unknown> | null,
 ): Promise<void> {
   if (!result) return;
+  if (taskType === "product_import") {
+    await deleteProductImportChangeset(
+      typeof result.changesetBlobPath === "string" ? result.changesetBlobPath : null,
+    );
+    return;
+  }
   const paths = collectResultBlobPaths(taskType, result);
   for (const path of paths) {
     await deleteTranslateV3BlobIfExists(path);

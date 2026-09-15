@@ -3,6 +3,7 @@ import {
   isChatInlineReviewTask,
   resolveChatReviewDialogTitleKey,
   resolveInlineReviewOptions,
+  resolveSucceededProductExportTask,
 } from "../../../../../app/routes/component/chat/chatInlineReviewTasks";
 import { TASK_RUN_VERSION, type TaskRunPayload } from "../../../../../app/lib/taskRunPayload";
 import { BATCH_PRODUCT_IMPROVE_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
@@ -37,11 +38,18 @@ const task = (
   }) as unknown as AITaskItem;
 
 describe("isChatInlineReviewTask", () => {
-  it("covers the four task types reviewable inside the chat", () => {
+  it("covers the task types reviewable inside the chat", () => {
     expect(isChatInlineReviewTask("product_improve")).toBe(true);
     expect(isChatInlineReviewTask("picture_translate")).toBe(true);
     expect(isChatInlineReviewTask("image_generation")).toBe(true);
     expect(isChatInlineReviewTask("bulk_price_edit")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_status_edit")).toBe(true);
+    expect(isChatInlineReviewTask("bulk_product_field_edit")).toBe(false);
+    expect(isChatInlineReviewTask("bulk_collection_edit")).toBe(false);
+    expect(isChatInlineReviewTask("product_duplicate")).toBe(false);
+    expect(isChatInlineReviewTask("bulk_archive")).toBe(false);
+    expect(isChatInlineReviewTask("product_export")).toBe(true);
+    expect(isChatInlineReviewTask("product_import")).toBe(true);
   });
 
   it("rejects unknown and empty task types", () => {
@@ -104,10 +112,50 @@ describe("resolveInlineReviewOptions", () => {
     expect(opts?.taskId).toBe("t1");
   });
 
-  it("gives no entry when nothing is pending and the skill is not product improve", () => {
-    expect(
-      resolveInlineReviewOptions(run(), [task("t1", "bulk_price_edit", "applied")]),
-    ).toBeUndefined();
+  it("opens preview for applied catalog tasks, not only pending review", () => {
+    const opts = resolveInlineReviewOptions(run(), [task("t1", "bulk_price_edit", "applied")]);
+    expect(opts).toEqual({
+      skillId: "bulk_price_edit",
+      taskType: "bulk_price_edit",
+      taskId: "t1",
+      taskIds: ["t1"],
+      intent: "review",
+    });
+  });
+
+  it("offers a result entry when product export succeeded", () => {
+    const opts = resolveInlineReviewOptions(
+      run({ skillId: "product_export", title: "导出商品" }),
+      [task("t1", "product_export", "succeeded")],
+    );
+    expect(opts).toEqual({
+      skillId: "product_export",
+      taskType: "product_export",
+      taskId: "t1",
+      taskIds: ["t1"],
+      intent: "review",
+    });
+  });
+
+  it("offers a preview entry while product export is still running", () => {
+    const opts = resolveInlineReviewOptions(run({ skillId: "product_export" }), [
+      task("t1", "product_export", "running"),
+    ]);
+    expect(opts).toEqual({
+      skillId: "product_export",
+      taskType: "product_export",
+      taskId: "t1",
+      taskIds: ["t1"],
+      intent: "review",
+    });
+  });
+
+  it("offers a preview entry for applied product import", () => {
+    const opts = resolveInlineReviewOptions(run({ skillId: "product_import" }), [
+      task("t1", "product_import", "applied"),
+    ]);
+    expect(opts?.taskType).toBe("product_import");
+    expect(opts?.taskId).toBe("t1");
   });
 
   it("gives no entry for task types that cannot be reviewed in the chat", () => {
@@ -120,5 +168,21 @@ describe("resolveInlineReviewOptions", () => {
 
   it("gives no entry when no task snapshot is available at all", () => {
     expect(resolveInlineReviewOptions(run(), [])).toBeUndefined();
+  });
+});
+
+describe("resolveSucceededProductExportTask", () => {
+  it("returns the succeeded export task", () => {
+    const exportTask = task("t1", "product_export", "succeeded");
+    expect(resolveSucceededProductExportTask([exportTask])?.id).toBe("t1");
+  });
+
+  it("ignores running or failed export tasks", () => {
+    expect(
+      resolveSucceededProductExportTask([
+        task("t1", "product_export", "running"),
+        task("t2", "bulk_price_edit", "succeeded"),
+      ]),
+    ).toBeUndefined();
   });
 });

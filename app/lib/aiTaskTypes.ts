@@ -19,6 +19,46 @@ import type {
   BulkStatusEditSummary,
   BulkStatusEditTargetStatus,
 } from "./bulkStatusEdit";
+import type {
+  BulkProductFieldEditApplyOutcome,
+  BulkProductFieldEditField,
+  BulkProductFieldEditMode,
+  BulkProductFieldEditRow,
+  BulkProductFieldEditSummary,
+} from "./bulkProductFieldEdit";
+import type {
+  BulkCollectionEditAction,
+  BulkCollectionEditApplyOutcome,
+  BulkCollectionEditRow,
+  BulkCollectionEditSummary,
+} from "./bulkCollectionEdit";
+import type {
+  ProductDuplicateApplyOutcome,
+  ProductDuplicateRow,
+  ProductDuplicateSummary,
+} from "./productDuplicate";
+import type {
+  BulkArchiveApplyOutcome,
+  BulkArchiveRow,
+  BulkArchiveSummary,
+} from "./bulkArchive";
+import type { BulkCostEditRow } from "./bulkCostEdit";
+import type { BulkHandleEditRow } from "./bulkHandleEdit";
+import type { BulkMetafieldEditRow } from "./bulkMetafieldEdit";
+import type { BulkProductDeleteRow } from "./bulkProductDelete";
+import type {
+  ProductExportFormat,
+  ProductExportPreviewProduct,
+  ProductExportSkip,
+  ProductExportSummary,
+} from "./productExport";
+import type {
+  ProductImportIssue,
+  ProductImportOperation,
+} from "./productImport";
+import type {
+  ProductImportCollectionGroup,
+} from "./productImportPlan";
 
 export type AITaskStatus =
   | "running"
@@ -36,7 +76,13 @@ export type AITaskType =
   | "ads_catalog_sync"
   | "bulk_price_edit"
   | "bulk_tag_edit"
-  | "bulk_status_edit";
+  | "bulk_status_edit"
+  | "bulk_product_field_edit"
+  | "bulk_collection_edit"
+  | "product_duplicate"
+  | "bulk_archive"
+  | "product_export"
+  | "product_import";
 
 export type AITaskListView = "current" | "history";
 
@@ -324,6 +370,145 @@ export type BulkStatusEditTaskResult = {
 
 export type BulkStatusEditApplyResponse =
   | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string };
+
+export type BulkProductFieldEditTaskConfig = {
+  field: BulkProductFieldEditField;
+  mode: BulkProductFieldEditMode;
+  value: string;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkProductFieldEditTaskResult = {
+  rows: BulkProductFieldEditRow[];
+  summary: BulkProductFieldEditSummary;
+  truncated?: boolean;
+  apply?: BulkProductFieldEditApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type BulkCollectionEditTaskConfig = {
+  action: BulkCollectionEditAction;
+  collectionId: string;
+  collectionTitle?: string;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkCollectionEditTaskResult = {
+  rows: BulkCollectionEditRow[];
+  summary: BulkCollectionEditSummary;
+  collectionId: string;
+  collectionTitle: string;
+  action: BulkCollectionEditAction;
+  truncated?: boolean;
+  apply?: BulkCollectionEditApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type ProductDuplicateTaskConfig = {
+  titleSuffix: string;
+  includeImages: boolean;
+  newStatus: "ACTIVE" | "DRAFT";
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type ProductDuplicateTaskResult = {
+  rows: ProductDuplicateRow[];
+  summary: ProductDuplicateSummary;
+  truncated?: boolean;
+  apply?: ProductDuplicateApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type BulkArchiveTaskConfig = {
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type BulkArchiveTaskResult = {
+  rows: BulkArchiveRow[];
+  summary: BulkArchiveSummary;
+  truncated?: boolean;
+  apply?: BulkArchiveApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type ProductExportTaskConfig = {
+  format: ProductExportFormat;
+  productIds: string[];
+  totalProducts: number;
+  products?: ProductExportPreviewProduct[];
+};
+
+export type ProductExportTaskResult = {
+  format: ProductExportFormat;
+  csv: string;
+  skipCsv?: string;
+  warningCsv?: string;
+  summary: ProductExportSummary;
+  skips: ProductExportSkip[];
+  warnings?: ProductExportSkip[];
+  products: ProductExportPreviewProduct[];
+  truncated?: boolean;
+};
+
+export type ProductImportTaskConfig = {
+  fileId: string;
+  fileName?: string;
+  operations: ProductImportOperation[];
+};
+
+export type ProductImportTaskResult = {
+  fileName: string;
+  operations: ProductImportOperation[];
+  issues: ProductImportIssue[];
+  summary: {
+    rows: number;
+    matched: number;
+    changed: number;
+    issues: number;
+    deletes?: number;
+    handles?: number;
+  };
+  changesetBlobPath?: string;
+  priceRows: BulkPriceEditRow[];
+  costRows: BulkCostEditRow[];
+  tagRows: BulkTagEditRow[];
+  statusRows: BulkStatusEditRow[];
+  fieldRows: BulkProductFieldEditRow[];
+  handleRows: BulkHandleEditRow[];
+  collectionGroups: ProductImportCollectionGroup[];
+  metafieldRows: BulkMetafieldEditRow[];
+  duplicateRows: ProductDuplicateRow[];
+  archiveRows: BulkArchiveRow[];
+  deleteRows: BulkProductDeleteRow[];
+  truncated?: boolean;
+    apply?: {
+      at: string;
+      succeeded: number;
+      failed: number;
+      byOperation?: Record<string, { succeeded: number; failed: number }>;
+      errors?: Array<{
+        operation?: string;
+        code?: string;
+        message: string;
+        productTitle?: string;
+        field?: string;
+        beforeValue?: string;
+        afterValue?: string;
+        productId?: string;
+        variantId?: string;
+      }>;
+    };
+  applyStartedAt?: string;
+};
+
+export type CatalogBulkApplyResponse =
+  | { ok: true; queued: true }
+  | { ok: true; succeeded: number; failed: number; errors?: Array<{ productId?: string; message: string }> }
   | { ok: false; error: string };
 
 export type AITaskCreateResponse =
