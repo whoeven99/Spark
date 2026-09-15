@@ -7,7 +7,10 @@ import {
   resolveDeterministicTaskProposalForTurn,
   tryDeterministicTaskProposalFromSkills,
 } from "../../../../../app/server/ai/core/resolveChatCardIntent.server";
-import { BULK_STATUS_EDIT_SKILL_ID } from "../../../../../app/lib/taskProposalPayload";
+import {
+  BULK_PRICE_EDIT_SKILL_ID,
+  BULK_STATUS_EDIT_SKILL_ID,
+} from "../../../../../app/lib/taskProposalPayload";
 import {
   PRODUCT_EXPORT_SKILL_ID,
   PRODUCT_IMPORT_SKILL_ID,
@@ -154,6 +157,14 @@ describe("resolveDeterministicTaskProposalForTurn", () => {
         claimed: false,
       }),
     ).toBeNull();
+  });
+
+  it("opens a rule bulk-price card from recommend phrasing, not import", () => {
+    const proposal = resolveDeterministicTaskProposalForTurn({
+      lastUserText: "帮我批量调整商品价格，先确认调价规则和商品范围，再给我变更预览，不要直接写回。",
+      claimed: false,
+    });
+    expect(proposal?.skillId).toBe(BULK_PRICE_EDIT_SKILL_ID);
   });
 
   it("opens an export card from recommend phrasing without claiming", () => {

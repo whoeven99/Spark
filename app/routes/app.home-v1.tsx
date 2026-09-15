@@ -7,7 +7,7 @@ import { useEmbeddedNavigate } from "../hooks/useEmbeddedNavigate";
 import { useSparkBrandName } from "../hooks/useSparkBrandName";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useFeatureView } from "../lib/featureTrack";
-import { buildWorkspaceAssistantPath } from "../lib/workspaceChatPrefill";
+import { buildWorkspaceHomePath } from "../lib/workspaceChatPrefill";
 import { normalizeWorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 import {
   BILLING_PAGE_PATH,
@@ -23,7 +23,7 @@ import { HomePanel } from "./page/workspace/HomePanel";
 import { contentStyle, mobileContentStyle } from "./page/workspace/styles";
 
 /**
- * 首页 v1：原 `/app` 经营概览落地（指标 / 告警 / 提问跳转助手）。
+ * 首页 v1：原 `/app` 经营概览落地（指标 / 告警 / 提问跳转首页对话）。
  * 现 `/app` 已改为 home-v2 体验；本页保留对照与回退。
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -81,12 +81,12 @@ export default function HomeV1Route() {
           displayName={data.accountName}
           snapshot={data.dashboardSnapshot}
           initialRenderTimeIso={data.homeRenderTimeIso}
-          onSubmitPrompt={(prompt) => navigate(buildWorkspaceAssistantPath({ prompt }))}
+          onSubmitPrompt={(prompt) => navigate(buildWorkspaceHomePath({ prompt }))}
           onOpenContextTool={(tool) =>
-            navigate(buildWorkspaceAssistantPath({ openContextTool: tool }))
+            navigate(buildWorkspaceHomePath({ openContextTool: tool }))
           }
           onMoreContext={() =>
-            navigate(buildWorkspaceAssistantPath({ openContextTool: "article" }))
+            navigate(buildWorkspaceHomePath({ openContextTool: "article" }))
           }
           onOpenDashboard={() => navigate("/app/today")}
           onOpenDailyOps={() => navigate("/app/health-monitor")}

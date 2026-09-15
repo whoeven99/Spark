@@ -1509,7 +1509,7 @@
     },
     "catalog": {
       "open": "Open",
-      "openInChat": "Start in assistant"
+      "openInChat": "Start in chat"
     },
     "confirm": {
       "cancel": "Cancel",
