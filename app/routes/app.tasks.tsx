@@ -1,44 +1,8 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
-import { useFeatureView } from "../lib/featureTrack";
-import { UnifiedTaskListPage } from "./component/unifiedTaskList/UnifiedTaskListPage";
-import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
-import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { DestinationPage } from "./component/shared/DestinationPage";
-import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+import { redirect } from "react-router";
+import { buildEmbeddedAppPath } from "../config/appEntry.server";
 
+/** 旧任务 v1：带 query 一并落到任务页。 */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
-};
-
-export default function AppTasks() {
-  const { t } = useTranslation();
-  const { isMobile } = useResponsiveLayout();
-  const [searchParams] = useSearchParams();
-  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
-  useFeatureView("tasks");
-  return (
-    <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
-      <DestinationPage
-        title="任务 v1"
-        subtitle="统一查看并处理定时任务、经营任务、文案、图片与批处理任务。"
-        titleBarTitle={t("nav.tasks")}
-        backLabel={returnTo ? "返回上一级" : "返回首页"}
-        fallbackPath="/app"
-        returnTo={returnTo}
-        isMobile={isMobile}
-      >
-      <UnifiedTaskListPage
-        locationSearch={typeof window !== "undefined" ? window.location.search : ""}
-      />
-      </DestinationPage>
-    </div>
-  );
-}
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
+  throw redirect(buildEmbeddedAppPath("/app/tasks-v2", request));
 };
