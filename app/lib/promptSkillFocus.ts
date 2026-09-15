@@ -5,6 +5,7 @@
 
 /** 推荐操作 key → 需要注入的 SkillDefinition.name（可含下游协作 Skill） */
 export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
+  todayPulse: ["shopOperations", "healthDiagnosisForm"],
   todayOverview: ["shopOperations"],
   todayTodos: ["shopOperations", "healthDiagnosisForm"],
   inventoryHealth: ["shopOperations"],
@@ -97,7 +98,15 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.todayTodos,
-    patterns: [/今日待办/, /健康诊断/, /有什么.*风险/, /今天.*要处理/, /店铺.*健康/],
+    patterns: [
+      /今日待办/,
+      /健康诊断/,
+      /有什么.*风险/,
+      /今天.*要处理/,
+      /店铺.*健康/,
+      /今天店里怎么样/,
+      /how('s| is) (my |the )?store today/i,
+    ],
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryHealth,

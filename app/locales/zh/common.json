@@ -4761,6 +4761,9 @@
           "groupOperations": "经营诊断",
           "groupProduct": "商品优化",
           "groupImage": "图片生成",
+          "todayPulse": {
+            "label": "今天店里怎么样"
+          },
           "todayOverview": {
             "label": "今日经营概况",
             "prompt": "帮我查看今天的销售额、订单数、转化率与客单价，并说明与上一周期相比的变化。"
@@ -5497,6 +5500,15 @@
         "afternoon": "下午好",
         "evening": "晚上好",
         "title": "{{greeting}}，{{name}}"
+      },
+      "pulse": {
+        "ok": "昨天经营正常",
+        "attention": "有 {{count}} 件该处理：{{reasons}}",
+        "attentionPlain": "有 {{count}} 件该处理",
+        "noData": "还没有订单数据",
+        "syncing": "正在同步近 30 天订单",
+        "seeDetails": "看详情",
+        "backfill": "去回补"
       },
       "today": "今日",
       "inspectionAt": "今日 {{time}}",

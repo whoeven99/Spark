@@ -4,7 +4,7 @@
 
 ## 0. 怎么用本文件
 
-本文件是仓库地图与硬门禁，不是逐步执行的流程清单。默认：查代码 → 直接做 → 按风险自选验证。有产品/技术分叉或不可逆操作时再停下来对齐；复杂协作可按需参考 `.cursor/skills/deliberate-collab/SKILL.md`。
+本文件是仓库地图与硬门禁，不是逐步执行的流程清单。默认：查代码 → 直接做 → 按风险自选验证。有产品/技术分叉或不可逆操作时再停下来对齐；**涉及用户可见交互/布局的 UI 改动须先出交互样例**（见第 7、12 节），用户看过再改产品代码。复杂协作可按需参考 `.cursor/skills/deliberate-collab/SKILL.md`。
 
 若本文件已随上下文注入，不必为「怕旧副本」再完整重读；只有不确定或仅凭历史记忆时再打开。不推测没打开过的代码。
 
@@ -77,7 +77,7 @@ Spark/
 
 | 目的地 | URL | 主要实现 |
 |---|---|---|
-| 首页 | `/app` | `app._index.tsx` + `HomeV2Panel`（本页直接聊天）；旧 `/app/home-v2` 重定向至此 |
+| 首页 | `/app` | `app._index.tsx` + `HomeV2Panel`（问候下一句 `DailyPulse` + 本页直接聊天）；旧 `/app/home-v2` 重定向至此 |
 | 助手 | `/app/assistant` | `app.assistant.tsx` → `WorkspaceAppShellPage`（默认进对话；prod 导航可不展示） |
 | 首页 v1 | `/app/home-v1` | `app.home-v1.tsx` + `HomePanel`（原首页经营概览；提问跳转助手；prod 导航可不展示） |
 | Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情）。**测环境页面入口；prod 走对话，不进导航** |
@@ -107,6 +107,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/ai-capabilities`、`/api/upload-file`：AI 能力清单（由 Skill Manifest 派生）与工作台文件上传解析。
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源（`context-resources` 类型为 product / article / order）。
 - `/api/automation-overview`：Today/自动化概览。
+- `GET /api/daily-pulse`：首页问候下一句经营结论。只 peek 当日快照，不跑 30 天诊断。
 - `/api/unified-tasks`：统一任务列表。`sort=time_desc` 关掉定时任务置顶、纯按更新时间倒序（Tasks v2 用）；缺省仍是定时任务在前的旧口径，不要改缺省值。
 - `/api/task-proposal`：TaskProposal 确认卡的估算/执行入口（由聊天流里的 `task_proposal` 卡片触发，不是独立工具栏按钮）。
 - `POST /api/bulk-price-edit`：批量调价写回入口，是全仓库**唯一**会改 Shopify 商品价格的地方；必须带 `confirm: true` 且任务处于 `pending_review`。Agent 回合内（chat-stream / Skill / dry-run）禁止走到这里。
@@ -147,7 +148,7 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts`（Skill/SSE 产出 `task_proposal` → 前端 `TaskProposalCard` → `/api/task-proposal`） |
-| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断）。「近 7 天」经营页与健康度共用 UTC 完整日、不含今天（`app/lib/observationWindow.ts`）；展示按店铺 `ianaTimezone` 格式化 |
+| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断）。首页问候脉冲走 `peekDailySnapshotOverview` / `loadHomeDailyPulse`（无快照返回 null，绝不重算）。「近 7 天」经营页与健康度共用 UTC 完整日、不含今天（`app/lib/observationWindow.ts`）；展示按店铺 `ianaTimezone` 格式化 |
 | Health Monitor | `app/routes/app.health-monitor.tsx` + `app/lib/healthMonitor*`；总览走 `ensureDailySnapshotOverview`，详情（`?view=detail`）才走 `ensureDailySnapshot`（不要把总览接到完整快照入口） |
 | 工作台上下文（前端） | `app/routes/page/workspace/useWorkspaceContext.ts`、`ContextToolModal.tsx`、`ChatPanel.tsx`；Shopify 对象搜索 `app/server/shopify/contextResourceSearch.server.ts` + `/api/context-resources*` |
 | Shopify 数据读取与同步 | `app/server/shopify/`、`app/server/shopify/sync/` |
@@ -224,10 +225,11 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
+- **UI 先出交互样例，再改产品代码。** 新增、改信息架构、改主路径交互或布局时：先对照现有页面做一份可点的交互样例（优先 Cursor Canvas，放工作区 `canvases/`，回复里用 markdown 链接打开），覆盖关键状态（正常 / 空 / 异常 / 点开后）。样例对齐当前 IA（prod 对话优先、测环境页面优先）和 `docs/DESIGN.md` 的疏密，不要另起一套视觉。用户看过或明确说可以做之后，再改 `app/` / `admin/` 里的真实 UI。纯文案替换、修回归、复现已有交互的像素级修正不必出样例。
 - **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings / 助手）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。例外只有两类：`/app/tasks-v2`（对话产出的异步任务台账；审核仍须能在对话内闭环）和 `/app/account`（Shopify Billing 必须走页面）。OAuth / 数据回补等配置页可以 URL 直达，但不占 prod 一级导航。
 - 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另展示「任务」（`/app/tasks-v2`）与「账户与订阅」；测/本地另展示助手 / 首页 v1 / Today / Health Monitor / Studio（创作工作台）/ 任务 / 任务 v1 / 账户 / Settings。创作页 `/app/create` 测/产导航都不展示，URL 仍可直达。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
-- 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前四组：经营诊断（只读；含 SEO 体检）/ 商品优化 / 商品管理（导出、导入）/ 图片生成。调价、打标、上下架、改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除都走导入。新增能力要在这里登记才会出现在首页。首页刻意只保留一句行动号召，不要再往问候下方、卡头或推荐区加副标题、徽标与分组描述——那些描述会复述下面的行标题，是这一版专门删掉的。改这里时 `HomeV2SsrFallback` 要同步（占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后列数跳变）。
+- 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前四组：经营诊断（只读；今日店况 + SEO 体检）/ 商品优化 / 商品管理（导出、导入）/ 图片生成。调价、打标、上下架、改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除都走导入。新增能力要在这里登记才会出现在首页。问候日期下一句经营结论（`DailyPulse`）是例外：有待办才给「看详情」、没数据才给「去回补」，都发诊断 prompt 留在 `/app` 对话；正常/同步中只留句子。不要再往卡头或推荐区加副标题、徽标与分组描述。改这里时 `HomeV2SsrFallback` 要同步（问候下预留脉冲行高度，占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后跳变）。
 - 创作页（`/app/create`）是「能力目录 + 页内工作区」骨架，能力只在 `app/lib/createCapabilities.ts` 登记一次，目录与工作区都从注册表派生，不要在页面里硬编码工具列表。每条能力的 `kind` 决定交互契约：`read` 直接出结果、`generate` 发起前确认且草稿落回店铺前再确认、`write` 必须走试算→审核→二次确认→应用（复用 bulk-edit 四层）、`import` 先校验再确认。`status` 决定露出方式：`ready` 有页内工作区、`chat` 闭环在助手对话（写回门禁要求 dry-run 产出的 `pending_review`）、`planned` 只做路线图占位且**目录不渲染**，别把没做完的入口摆给商户。消耗 Credit 或写店铺数据的操作统一用 `CreateConfirmDialog`，执行前预估只放弹窗、不在配置页常驻。域（domain）已按《Spark-商家常见操作》铺好，未落地的域不渲染但保留归属；整店翻译归 TSF，刻意不设该域。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。
@@ -372,7 +374,7 @@ npm run build
 ### 思考与执行节奏
 
 - 深入思考会增加延迟，只在能实质提升结果质量时展开，典型是需要多步推理的问题；拿不准时直接回答。
-- 选定一个方案就执行到底。除非遇到与判断直接矛盾的新信息，不要反复推翻已定的做法；先走通一条路、失败了再修正，比在两个方案之间来回权衡更快。
+- 选定一个方案就执行到底。除非遇到与判断直接矛盾的新信息，不要反复推翻已定的做法；先走通一条路、失败了再修正，比在两个方案之间来回权衡更快。**UI 交互/布局除外**：先出第 7 节的交互样例，等用户看过再写产品代码，不要直接改页面。
 - 打算调用多个彼此无依赖的工具时一次全部并行发起。例如要读三个文件就同时发三次读取，不要串成三轮。只有参数依赖上一步结果的调用才串行，并且不要用占位值猜参数。
 - 不推测没打开过的代码。用户引用了具体文件就先读再答；对调用链、schema、组件行为下结论前先查，查不到就明确标成假设，不编造路径或 API。
 - 避免过度设计：只做被明确要求或确实必需的改动。修 bug 不必顺手清理周边代码，简单功能不必预留配置项；不为不可能发生的场景加防御分支，只在系统边界（用户输入、外部 API）做校验；不为一次性操作抽 helper。

@@ -1,6 +1,11 @@
-/** 上架前并行首页：问候 + 本页提问 + 文案/生图提示。不含经营、健康度、任务入口。 */
-import { useMemo, useState, type KeyboardEvent } from "react";
+/** 首页：问候 + 一句经营结论 + 本页提问。点脉冲仍留在本页对话。 */
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useEmbeddedLocationSearch } from "../../../hooks/useEmbeddedLocationSearch";
+import {
+  formatDailyPulseHeadline,
+  type DailyPulse,
+} from "../../../lib/dailyPulse";
 import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
 import type { ContextTool } from "./types";
 import {
@@ -31,6 +36,26 @@ const homeV2Styles = {
     marginTop: 6,
     fontSize: 13,
     color: shopifyUi.textMuted,
+  },
+  pulseRow: {
+    marginTop: 8,
+    minHeight: 20,
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  pulseButton: {
+    display: "inline",
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    font: "inherit",
+    cursor: "pointer",
+    textAlign: "left" as const,
+  },
+  pulseAction: {
+    marginLeft: 6,
+    color: shopifyUi.link,
+    fontWeight: 600,
   },
   assistantCard: {
     padding: "20px",
@@ -219,34 +244,133 @@ const homeV2Styles = {
 const CAPABILITY_ICONS: Record<string, string> = {
   operations: "▤",
   productOptimization: "◫",
-  bulkEdit: "▥",
+  productManage: "▥",
   imageGeneration: "▣",
 };
+
+function pulseReasonJoiner(language: string): string {
+  return language.startsWith("zh") ? "、" : ", ";
+}
+
+function HomeDailyPulseLine({
+  pulse,
+  language,
+  onOpen,
+}: {
+  pulse: DailyPulse | null;
+  language: string;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!pulse) {
+    return <div style={homeV2Styles.pulseRow} aria-hidden="true" />;
+  }
+
+  const headline = formatDailyPulseHeadline(pulse, t, pulseReasonJoiner(language));
+  const actionLabel =
+    pulse.status === "attention"
+      ? t("workspace.home.pulse.seeDetails")
+      : pulse.status === "no_data"
+        ? t("workspace.home.pulse.backfill")
+        : null;
+  const weight = pulse.status === "attention" ? 650 : 500;
+  const color =
+    pulse.status === "attention" ? shopifyUi.text : shopifyUi.textMuted;
+
+  if (!actionLabel) {
+    return (
+      <div style={{ ...homeV2Styles.pulseRow, color, fontWeight: weight }}>{headline}</div>
+    );
+  }
+
+  return (
+    <div style={homeV2Styles.pulseRow}>
+      <button
+        type="button"
+        style={{ ...homeV2Styles.pulseButton, color, fontWeight: weight }}
+        onClick={onOpen}
+      >
+        {headline}
+        <span style={homeV2Styles.pulseAction}>{actionLabel}</span>
+      </button>
+    </div>
+  );
+}
 
 export function HomeV2Panel({
   displayName,
   initialRenderTimeIso,
+  initialPulse,
   onSubmitPrompt,
   onOpenContextTool,
 }: {
   displayName: string;
   initialRenderTimeIso?: string;
+  initialPulse?: DailyPulse | null;
   onSubmitPrompt: (prompt: string, skillFocus?: string) => void;
   onOpenContextTool: (tool: ContextTool) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const locationSearch = useEmbeddedLocationSearch();
   const [draft, setDraft] = useState("");
+  const [pulse, setPulse] = useState<DailyPulse | null>(initialPulse ?? null);
   const now = useMemo(() => {
     if (!initialRenderTimeIso) return new Date();
     const parsed = new Date(initialRenderTimeIso);
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }, [initialRenderTimeIso]);
-  const locale = i18n.resolvedLanguage || i18n.language || "en";
-  // 首页无会话商品上下文，与输入区「店铺级」推荐同源（8 条、三组）
+  // 首页无会话商品上下文，与输入区「店铺级」推荐同源
   const recommendedGroups = useMemo(
     () => buildWorkspaceRecommendedGroups(t, false),
     [t],
   );
+  const todayPulsePrompt = t("workspace.shell.chat.recommend.todayTodos.prompt");
+  const locale = i18n.resolvedLanguage || i18n.language || "en";
+
+  useEffect(() => {
+    setPulse(initialPulse ?? null);
+  }, [initialPulse]);
+
+  useEffect(() => {
+    if (initialPulse?.status === "ok" || initialPulse?.status === "attention") {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const response = await fetch(`/api/daily-pulse${locationSearch}`, {
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) return;
+        const body = (await response.json()) as { ok?: boolean; pulse?: DailyPulse };
+        if (cancelled || !body.pulse) return;
+        setPulse(body.pulse);
+        if (body.pulse.status === "ok" || body.pulse.status === "attention") {
+          return "stop";
+        }
+      } catch {
+        // 预热未完成时保持当前句子
+      }
+      return attempts >= 8 ? "stop" : "again";
+    };
+
+    const timer = window.setInterval(() => {
+      void poll().then((result) => {
+        if (result === "stop") window.clearInterval(timer);
+      });
+    }, 3000);
+    void poll().then((result) => {
+      if (result === "stop") window.clearInterval(timer);
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [initialPulse, locationSearch]);
   const contextChips = useMemo(
     () => [
       { tool: "product" as const, label: t("workspace.home.context.product"), icon: "◫" },
@@ -282,6 +406,11 @@ export function HomeV2Panel({
             })}
           </h1>
           <div style={homeV2Styles.greetingDate}>{formatHomeDate(now, locale)}</div>
+          <HomeDailyPulseLine
+            pulse={pulse}
+            language={locale}
+            onOpen={() => onSubmitPrompt(todayPulsePrompt, "todayPulse")}
+          />
         </div>
       </header>
 

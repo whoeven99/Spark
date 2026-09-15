@@ -12,6 +12,7 @@ const LABELS: Record<string, string> = {
   "workspace.shell.chat.recommend.productImport.label": "导入商品",
   "workspace.shell.chat.recommend.productImport.prompt.shop": "import-shop",
   "workspace.shell.chat.recommend.productImport.prompt.selected": "import-selected",
+  "workspace.shell.chat.recommend.todayPulse.label": "今天店里怎么样",
   "workspace.shell.chat.recommend.todayOverview.label": "今日经营概况",
   "workspace.shell.chat.recommend.todayOverview.prompt": "overview-prompt",
   "workspace.shell.chat.recommend.todayTodos.label": "今日待办与风险",
@@ -40,7 +41,7 @@ function t(key: string): string {
 }
 
 describe("buildWorkspaceRecommendedGroups", () => {
-  it("returns 11 shop-scoped actions in operations-first order", () => {
+  it("returns 8 shop-scoped actions in operations-first order", () => {
     const groups = buildWorkspaceRecommendedGroups(t, false);
     expect(groups.map((g) => g.key)).toEqual([
       "operations",
@@ -49,7 +50,13 @@ describe("buildWorkspaceRecommendedGroups", () => {
       "imageGeneration",
     ]);
     const items = groups.flatMap((g) => g.items);
-    expect(items).toHaveLength(11);
+    expect(items).toHaveLength(8);
+    expect(groups[0].items.map((i) => i.key)).toEqual(["todayPulse", "seoAudit"]);
+    expect(items.find((i) => i.key === "todayPulse")?.prompt).toBe("todos-prompt");
+    expect(items.find((i) => i.key === "todayOverview")).toBeUndefined();
+    expect(items.find((i) => i.key === "todayTodos")).toBeUndefined();
+    expect(items.find((i) => i.key === "inventoryHealth")).toBeUndefined();
+    expect(items.find((i) => i.key === "abandonRefund")).toBeUndefined();
     expect(items.find((i) => i.key === "optimizeCopy")?.prompt).toBe("copy-shop");
     expect(items.find((i) => i.key === "productExport")?.prompt).toBe("export-shop");
     expect(items.find((i) => i.key === "productImport")?.prompt).toBe("import-shop");
