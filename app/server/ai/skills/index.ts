@@ -17,6 +17,13 @@ import { bulkTagEditSkillDefinition } from "./bulkTagEdit";
 import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
 import { productExportSkillDefinition } from "./productExport";
 import { productImportSkillDefinition } from "./productImport";
+import { inventoryExportSkillDefinition } from "./inventoryExport";
+import { inventoryImportSkillDefinition } from "./inventoryImport";
+import {
+  inventoryAdjustSkillDefinition,
+  inventorySetSkillDefinition,
+  inventoryZeroSkillDefinition,
+} from "./inventoryQty";
 import { seoAuditSkillDefinition } from "./seoAudit";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
@@ -121,6 +128,12 @@ globalToolRegistry.register(bulkStatusEditSkillDefinition);
 
 globalToolRegistry.register(productExportSkillDefinition);
 globalToolRegistry.register(productImportSkillDefinition);
+
+globalToolRegistry.register(inventoryExportSkillDefinition);
+globalToolRegistry.register(inventoryImportSkillDefinition);
+globalToolRegistry.register(inventorySetSkillDefinition);
+globalToolRegistry.register(inventoryAdjustSkillDefinition);
+globalToolRegistry.register(inventoryZeroSkillDefinition);
 
 // SEO 体检：纯规则只读诊断，先告诉商户搜索标题/描述哪里有问题
 globalToolRegistry.register(seoAuditSkillDefinition);

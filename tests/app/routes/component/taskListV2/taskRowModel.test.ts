@@ -32,6 +32,9 @@ describe("taskRowModel i18n", () => {
     expect(resolveAiTypeLabel("product_improve", t)).toBe("商品文案");
     expect(resolveAiTypeLabel("product_import", t)).toBe("导入商品");
     expect(resolveAiTypeLabel("product_export", t)).toBe("导出商品");
+    expect(resolveAiTypeLabel("inventory_export", t)).toBe("导出库存");
+    expect(resolveAiTypeLabel("inventory_import", t)).toBe("导入库存");
+    expect(resolveAiTypeLabel("bulk_inventory_edit", t)).toBe("调整库存");
     expect(resolveAiTypeLabel("product_duplicate", t)).toBe("复制商品");
     expect(resolveAiTypeLabel("not_a_real_type", t)).toBe("其他任务");
   });

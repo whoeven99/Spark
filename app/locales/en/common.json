@@ -941,7 +941,7 @@
       "metafield_type_unsupported": "This metafield type cannot be imported yet",
       "metafield_invalid_value": "Metafield value does not match its type",
       "metafield_needs_sku": "Variant metafields need a SKU",
-      "inventory_not_in_v1": "Inventory import is not supported in v1",
+      "inventory_not_in_v1": "Product import does not write inventory quantities",
       "create_fields_not_in_v1": "Creating products or changing options/images via spreadsheet is not supported in v1",
       "sku_not_found": "SKU not found in the store",
       "handle_not_found": "Handle not found in the store",
@@ -977,7 +977,7 @@
       "metafield_type_unsupported": "This version supports text, number, boolean, date, URL, JSON, and text lists. Edit files, references, rich text, and other lists in admin.",
       "metafield_invalid_value": "Match the definition type: integers without decimals or a leading apostrophe, booleans as true/false, dates as YYYY-MM-DD, URLs starting with https://, and text lists as comma-separated values or a JSON array.",
       "metafield_needs_sku": "Fill in Variant SKU or matching Option1/2/3 values when changing variant metafields.",
-      "inventory_not_in_v1": "Remove the inventory column. Inventory import is not available yet.",
+      "inventory_not_in_v1": "Remove the inventory column. Use Import inventory under Inventory & SKU on the home page.",
       "create_fields_not_in_v1": "Published, image, and barcode columns are ignored. Option columns are used only to match variants, not to change options. Other supported columns can still be imported. Create the product in the store first, then import supported columns.",
       "sku_not_found": "Check that the SKU matches a Shopify variant SKU. A leading apostrophe from Admin CSV export (such as '2) is ignored.",
       "handle_not_found": "Check that the Handle matches the product handle in the store. To change a handle, add a New Handle column.",
@@ -1217,6 +1217,167 @@
     "colQuantity": "Available",
     "colDelta": "Change",
     "moreRowsHint": "Showing the first {{shown}} of {{total}} rows. Download the CSV for the full list."
+  },
+  "inventoryExport": {
+    "logReading": "Reading inventory for {{count}} products…",
+    "logDone": "Exported {{rows}} inventory rows",
+    "dryRunFailed": "Inventory export failed. Please try again.",
+    "cardTitle": "Task: Export inventory",
+    "ruleLabel": "Shopify inventory CSV",
+    "metaRule": "Format: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "cardPrimaryRunning": "Reading inventory and building the CSV…",
+    "cardPrimaryPendingReview": "Export complete: {{exported}} rows, {{skipped}} skipped",
+    "cardPrimarySucceeded": "Exported {{exported}} rows, skipped {{skipped}}",
+    "cardPrimaryApplied": "Exported {{succeeded}} rows",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Open Preview to review and download the CSV. Nothing was changed in the store.",
+    "cardSecondaryApplied": "Export is complete.",
+    "cardSecondarySucceeded": "Export is complete. Download the official All states inventory CSV. Nothing was changed in the store.",
+    "cardSecondaryDefault": "This is read-only and does not change inventory.",
+    "actionReview": "View preview",
+    "actionPreview": "View preview",
+    "actionViewApplied": "View export",
+    "reviewTitle": "Inventory export · #{{id}}",
+    "reviewTitleShort": "Export inventory",
+    "reviewDescription": "Exports Shopify’s official per-location inventory CSV (including On hand current). Phase 1 supports selected products only and never writes to the store.",
+    "noChangeset": "This task has not generated an export file yet.",
+    "runningPreview": "Reading inventory and building the CSV.",
+    "summaryProducts": "Products",
+    "summaryExported": "Exported",
+    "summaryRows": "Rows",
+    "truncatedWarning": "The row limit was reached, so only the first part was exported. Narrow the range and export again.",
+    "downloadChangeset": "Download CSV",
+    "formatHint": "This is Shopify’s official All states inventory sheet. Edit On hand (new), then use Import inventory to write back.",
+    "colProduct": "Product",
+    "colHandle": "Handle",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows."
+  },
+  "inventoryImport": {
+    "logReadingFile": "Reading the inventory spreadsheet…",
+    "logReadyForReview": "Validation complete: {{changed}} rows will change On hand, {{issues}} need attention",
+    "dryRunFailed": "Could not read the inventory spreadsheet. Check the file format and try again.",
+    "fileNotFound": "This file could not be found. Upload it again and retry.",
+    "unsupportedFormat": "Upload Shopify’s official All states inventory CSV (Location and On hand columns). For location-as-column Available sheets, export inventory first.",
+    "cardTitle": "Task: Import inventory",
+    "ruleLabel": "Official inventory CSV",
+    "metaRule": "File: {{rule}}",
+    "metaProducts": "{{count}} rows",
+    "cardPrimaryRunning": "Reading the spreadsheet and validating against store inventory…",
+    "cardPrimaryPendingReview": "Validation complete: {{changed}} rows to write, {{skipped}} need attention",
+    "cardPrimarySucceeded": "Reviewed: {{exported}} rows to write, {{skipped}} issues",
+    "cardPrimaryApplied": "Written back: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing was changed yet. Review On hand values, then confirm write-back.",
+    "cardSecondaryApplied": "Inventory import write-back is complete.",
+    "cardSecondarySucceeded": "Nothing to write back.",
+    "cardSecondaryDefault": "Reading and validation are read-only and do not change inventory.",
+    "actionReview": "View preview",
+    "actionPreview": "View preview",
+    "actionViewApplied": "View write-back",
+    "actionViewSucceeded": "View preview",
+    "reviewTitle": "Inventory import preview · #{{id}}",
+    "reviewTitleShort": "Import inventory",
+    "reviewDescription": "Only On hand (new) is written. Rows whose On hand (current) no longer matches the store are skipped so in-between sales are not overwritten.",
+    "noChangeset": "This task has not generated a validation result yet.",
+    "runningPreview": "Reading the spreadsheet and matching store inventory.",
+    "sourceFile": "Source file:",
+    "summaryRows": "Rows",
+    "summaryChanged": "To write",
+    "summaryIssues": "Need attention",
+    "truncatedWarning": "The row limit was reached, so only the first part was processed. Split the file and import in batches.",
+    "downloadChangeset": "Download changeset CSV",
+    "applyButton": "Write to store ({{count}} rows)",
+    "applyConfirmHint": "This writes On hand for {{count}} rows at their locations. Rows whose current value no longer matches were skipped.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colSku": "SKU",
+    "colLocation": "Location",
+    "colBefore": "On hand before",
+    "colAfter": "On hand after",
+    "colStatus": "Status",
+    "outcomeChanged": "Will write",
+    "outcomeSkipped": "Skipped",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows.",
+    "skipReason": {
+      "unsupported_format": "Not an official All states inventory sheet",
+      "missing_identity": "Missing Location, and no SKU or Handle",
+      "invalid_quantity": "Quantity is not an integer",
+      "location_not_found": "Location not found",
+      "variant_not_found": "Variant not found",
+      "stale_on_hand": "On hand (current) no longer matches the store, skipped so sales are not overwritten",
+      "committed_blocks_on_hand": "New On hand is below committed quantity",
+      "inventory_untracked": "Inventory is not tracked",
+      "gift_card": "Gift cards cannot change inventory",
+      "not_stocked": "Not stocked at this location",
+      "no_change": "No change"
+    }
+  },
+  "inventoryQty": {
+    "logReading": "Reading available inventory for {{count}} products…",
+    "logReadyForReview": "Change list ready: {{changed}} variants will change available stock, {{skipped}} skipped",
+    "dryRunFailed": "Could not build the inventory change list. Please try again.",
+    "noVariantsFound": "The selected products have no editable inventory at this location",
+    "cardTitle": "Task: Adjust inventory",
+    "metaRule": "Rule: {{rule}}",
+    "metaProducts": "{{count}} products",
+    "cardPrimaryRunning": "Reading inventory and computing changes…",
+    "cardPrimaryPendingReview": "Change list ready: {{changed}} variants will change, {{skipped}} skipped",
+    "cardPrimarySucceeded": "Previewed: {{exported}} will change, {{skipped}} skipped",
+    "cardPrimaryApplied": "Written back: {{succeeded}} succeeded, {{failed}} failed",
+    "cardPrimaryFailed": "Task failed: {{reason}}",
+    "cardPrimaryCancelled": "Task cancelled",
+    "cardSecondaryPendingReview": "Nothing was changed yet. Review available quantities, then confirm write-back.",
+    "cardSecondaryApplied": "Available inventory was updated. The rollback CSV keeps the previous available quantities.",
+    "cardSecondarySucceeded": "Nothing to write back.",
+    "cardSecondaryDefault": "Reading and computing are read-only and do not change inventory.",
+    "actionReview": "Review changes",
+    "actionPreview": "View preview",
+    "actionViewApplied": "View write-back",
+    "actionViewSucceeded": "View preview",
+    "reviewTitle": "Inventory change preview · #{{id}}",
+    "reviewTitleShort": "Adjust inventory",
+    "reviewDescription": "This changes available stock at the selected location. Committed quantity is not wiped.",
+    "noChangeset": "This task has not generated a change list yet.",
+    "runningPreview": "Reading inventory and computing changes.",
+    "summaryProducts": "Products",
+    "summaryChanged": "Will change",
+    "summarySkipped": "Skipped",
+    "truncatedWarning": "The row limit was reached, so only the first part is listed. Narrow the range and run again.",
+    "downloadChangeset": "Download changeset CSV",
+    "downloadRollback": "Download rollback CSV",
+    "applyButton": "Write to store ({{count}} variants)",
+    "applyConfirmHint": "This changes available stock for {{count}} variants at this location.",
+    "applyConfirmButton": "Confirm write-back",
+    "applying": "Writing…",
+    "applyFailed": "Write-back failed. Please try again.",
+    "colProduct": "Product",
+    "colVariant": "Variant",
+    "colSku": "SKU",
+    "colBefore": "Available before",
+    "colAfter": "Available after",
+    "colStatus": "Status",
+    "outcomeChanged": "Will change",
+    "outcomeSkipped": "Skipped",
+    "moreRowsHint": "Showing the first {{shown}} of {{total}} rows.",
+    "mode": {
+      "set": "Set available stock",
+      "adjust": "Increase / decrease available",
+      "zero": "Zero available stock"
+    },
+    "skipReason": {
+      "inventory_untracked": "Inventory is not tracked",
+      "gift_card": "Gift cards cannot change inventory",
+      "not_stocked": "Not stocked at this location",
+      "location_mismatch": "Not at the selected location",
+      "negative_not_allowed": "Result would be negative",
+      "no_change": "No change",
+      "invalid_quantity": "Invalid quantity"
+    }
   },
   "bulkMetafieldEdit": {
     "logReadingDefinition": "Reading the definition of custom field {{field}}…",
@@ -1601,6 +1762,26 @@
       "bulk-price-edit": {
         "label": "Bulk pricing",
         "description": "Change variant prices by percentage or rule, applied after a dry run and your confirmation."
+      },
+      "inventory-export": {
+        "label": "Export inventory",
+        "description": "Export Shopify’s official per-location inventory sheet for selected products. Read-only."
+      },
+      "inventory-import": {
+        "label": "Import inventory",
+        "description": "Correct On hand from an official All states inventory CSV after validation and confirmation."
+      },
+      "inventory-set": {
+        "label": "Set inventory",
+        "description": "Set available stock at a location to an integer, applied after a dry run and confirmation."
+      },
+      "inventory-adjust": {
+        "label": "Increase / decrease inventory",
+        "description": "Add or subtract available stock at a location, applied after a dry run and confirmation."
+      },
+      "inventory-zero": {
+        "label": "Zero inventory",
+        "description": "Set available stock to 0 at a location. Committed quantity is not wiped."
       }
     },
     "copy": {
@@ -1710,6 +1891,9 @@
       "productImport": "Import products",
       "productExport": "Export products",
       "productDuplicate": "Duplicate products",
+      "inventoryExport": "Export inventory",
+      "inventoryImport": "Import inventory",
+      "bulkInventoryEdit": "Adjust inventory",
       "unknown": "Other task",
       "operation": "Operations",
       "automation": "Scheduled"
@@ -4804,6 +4988,7 @@
           },
       "groupBulkEdit": "Bulk edits",
       "groupProductManage": "Product management",
+      "groupInventorySku": "Inventory & SKU",
       "bulkPriceEdit": {
         "label": "Bulk price edit",
         "prompt": {
@@ -4839,6 +5024,41 @@
             "selected": "Open the import confirmation card. Select what to write on the card and validate the spreadsheet I already selected. List issue rows and how to fix them, then write back only after I confirm."
           }
         },
+      "inventoryExport": {
+        "label": "Export inventory",
+        "prompt": {
+          "shop": "Open the export inventory card and export Shopify’s official per-location inventory CSV. If no products are selected yet, pick them on the card. Do not change store data.",
+          "selected": "Open the export inventory card and export the official inventory CSV for the selected products. Do not change store data."
+        }
+      },
+      "inventoryImport": {
+        "label": "Import inventory",
+        "prompt": {
+          "shop": "Open the import inventory card. Upload Shopify’s official All states inventory CSV, validate On hand (new), and only write back after I confirm. Do not change store data yet.",
+          "selected": "Open the import inventory card and validate the selected spreadsheet as an official inventory CSV. Write On hand only after I confirm."
+        }
+      },
+      "inventorySet": {
+        "label": "Set inventory",
+        "prompt": {
+          "shop": "Open the set inventory card. Pick a location and set available stock to an integer. Show a preview first — do not write to the store yet.",
+          "selected": "Open the set inventory card and set available stock for the selected products at a location. Show a preview first."
+        }
+      },
+      "inventoryAdjust": {
+        "label": "Increase / decrease inventory",
+        "prompt": {
+          "shop": "Open the adjust inventory card. Pick a location and add or subtract a positive integer from available stock. Show a preview first — do not write to the store yet.",
+          "selected": "Open the adjust inventory card and add or subtract available stock for the selected products at a location. Show a preview first."
+        }
+      },
+      "inventoryZero": {
+        "label": "Zero inventory",
+        "prompt": {
+          "shop": "Open the zero inventory card. Pick a location and set available stock to 0. Show a preview first — do not write to the store yet.",
+          "selected": "Open the zero inventory card and set available stock to 0 for the selected products at a location. Show a preview first."
+        }
+      },
       "bulkProductFieldEdit": {
         "label": "Bulk edit fields / SEO",
         "prompt": {
@@ -5175,6 +5395,26 @@
           "title": "Import products",
           "summary": "Select what to write, then upload a spreadsheet on the card. After you confirm, only the selected modules are validated. This step does not modify any products."
         },
+        "inventoryExport": {
+          "title": "Export inventory",
+          "summary": "Export Shopify’s official per-location inventory CSV for the selected products, including On hand current. Does not change the store."
+        },
+        "inventoryImport": {
+          "title": "Import inventory",
+          "summary": "Upload Shopify’s official All states inventory sheet. Only On hand (new) is written; rows whose current value no longer matches are skipped. This step does not change the store."
+        },
+        "inventorySet": {
+          "title": "Set inventory",
+          "summary": "Set available stock at a location to an integer. A change preview is shown first; nothing is written until you confirm."
+        },
+        "inventoryAdjust": {
+          "title": "Increase / decrease inventory",
+          "summary": "Add or subtract a positive integer from available stock at a location. A preview is shown first; nothing is written until you confirm."
+        },
+        "inventoryZero": {
+          "title": "Zero inventory",
+          "summary": "Set available stock to 0 at a location. Committed quantity is not wiped."
+        },
         "bulkCollectionEdit": {
           "title": "Bulk update collection membership",
           "summary": "First compute how each product enters or leaves the collection and build a change list you can export as CSV. Nothing is written to your store until you confirm."
@@ -5236,7 +5476,10 @@
         "compareAtColumn": "Compare-at column",
         "costColumn": "Cost column",
         "quantityColumn": "Quantity column",
-        "locationId": "Location"
+        "locationId": "Location",
+        "quantity": "Target available stock",
+        "direction": "Direction",
+        "amount": "Amount"
       },
       "paramValues": {
         "priceMode": {
@@ -5267,6 +5510,10 @@
           "none": "Any stock level",
           "out_of_stock_only": "Only out-of-stock items",
           "in_stock_only": "Only in-stock items"
+        },
+        "direction": {
+          "up": "Increase",
+          "down": "Decrease"
         },
         "field": {
           "unset": "Choose a field",

@@ -15,6 +15,13 @@ import {
   PRODUCT_EXPORT_SKILL_ID,
   PRODUCT_IMPORT_SKILL_ID,
 } from "./productManageTaskProposals";
+import {
+  INVENTORY_ADJUST_SKILL_ID,
+  INVENTORY_EXPORT_SKILL_ID,
+  INVENTORY_IMPORT_SKILL_ID,
+  INVENTORY_SET_SKILL_ID,
+  INVENTORY_ZERO_SKILL_ID,
+} from "./inventoryTaskProposals";
 import type { TaskRunPayload } from "./taskRunPayload";
 
 const PREFIX = "workspace.taskProposal";
@@ -27,6 +34,11 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.title`,
   [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.title`,
   [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.title`,
+  [INVENTORY_EXPORT_SKILL_ID]: `${PREFIX}.skills.inventoryExport.title`,
+  [INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.inventoryImport.title`,
+  [INVENTORY_SET_SKILL_ID]: `${PREFIX}.skills.inventorySet.title`,
+  [INVENTORY_ADJUST_SKILL_ID]: `${PREFIX}.skills.inventoryAdjust.title`,
+  [INVENTORY_ZERO_SKILL_ID]: `${PREFIX}.skills.inventoryZero.title`,
 };
 
 /**
@@ -38,6 +50,11 @@ const SINGLE_TASK_SKILL_IDS = new Set<string>([
   BULK_STATUS_EDIT_SKILL_ID,
   PRODUCT_EXPORT_SKILL_ID,
   PRODUCT_IMPORT_SKILL_ID,
+  INVENTORY_EXPORT_SKILL_ID,
+  INVENTORY_IMPORT_SKILL_ID,
+  INVENTORY_SET_SKILL_ID,
+  INVENTORY_ADJUST_SKILL_ID,
+  INVENTORY_ZERO_SKILL_ID,
 ]);
 
 export function isSingleTaskProposalSkill(skillId: string): boolean {
@@ -52,6 +69,11 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.summary`,
   [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.summary`,
   [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.summary`,
+  [INVENTORY_EXPORT_SKILL_ID]: `${PREFIX}.skills.inventoryExport.summary`,
+  [INVENTORY_IMPORT_SKILL_ID]: `${PREFIX}.skills.inventoryImport.summary`,
+  [INVENTORY_SET_SKILL_ID]: `${PREFIX}.skills.inventorySet.summary`,
+  [INVENTORY_ADJUST_SKILL_ID]: `${PREFIX}.skills.inventoryAdjust.summary`,
+  [INVENTORY_ZERO_SKILL_ID]: `${PREFIX}.skills.inventoryZero.summary`,
 };
 
 /** 历史消息仅有 taskType 时映射到 skillId，便于侧栏标题 i18n */
@@ -63,6 +85,9 @@ const TASK_TYPE_TO_SKILL_ID: Record<string, string> = {
   bulk_status_edit: BULK_STATUS_EDIT_SKILL_ID,
   product_export: PRODUCT_EXPORT_SKILL_ID,
   product_import: PRODUCT_IMPORT_SKILL_ID,
+  inventory_export: INVENTORY_EXPORT_SKILL_ID,
+  inventory_import: INVENTORY_IMPORT_SKILL_ID,
+  bulk_inventory_edit: INVENTORY_SET_SKILL_ID,
 };
 
 export function skillIdFromAiTaskType(taskType: string): string | undefined {

@@ -17,6 +17,11 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   generateImage: ["imageGenerationForm", "imageGeneration"],
   productExport: ["productExport"],
   productImport: ["productImport"],
+  inventoryExport: ["inventoryExport"],
+  inventoryImport: ["inventoryImport"],
+  inventorySet: ["inventorySet"],
+  inventoryAdjust: ["inventoryAdjust"],
+  inventoryZero: ["inventoryZero"],
   bulkPriceEdit: ["productImport"],
   bulkTagEdit: ["productImport"],
   bulkStatusEdit: ["productImport"],
@@ -126,6 +131,26 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.generateImage,
     patterns: [/生成.*主图/, /文生图/, /生成.*商品图/, /generate.*(image|主图)/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryImport,
+    patterns: [/导入库存/, /库存.*(csv|excel|表格)/i, /import\s*inventory/i, /on\s*hand/i, /all\s*states/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryExport,
+    patterns: [/导出库存/, /export\s*inventory/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventorySet,
+    patterns: [/设置库存/, /把库存设为/, /set\s*(available\s*)?inventory/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryAdjust,
+    patterns: [/增加库存/, /减少库存/, /adjust\s*inventory/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryZero,
+    patterns: [/清零库存/, /库存清零/, /zero\s*inventory/i],
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.productImport,

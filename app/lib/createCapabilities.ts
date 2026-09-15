@@ -116,6 +116,41 @@ export const CREATE_OPERATIONS: readonly CreateOperation[] = [
     status: "chat",
     chatPromptKey: "workspace.shell.chat.recommend.bulkPriceEdit.prompt.shop",
   },
+  {
+    key: "inventory-export",
+    domain: "inventory",
+    kind: "read",
+    status: "chat",
+    chatPromptKey: "workspace.shell.chat.recommend.inventoryExport.prompt.shop",
+  },
+  {
+    key: "inventory-import",
+    domain: "inventory",
+    kind: "import",
+    status: "chat",
+    chatPromptKey: "workspace.shell.chat.recommend.inventoryImport.prompt.shop",
+  },
+  {
+    key: "inventory-set",
+    domain: "inventory",
+    kind: "write",
+    status: "chat",
+    chatPromptKey: "workspace.shell.chat.recommend.inventorySet.prompt.shop",
+  },
+  {
+    key: "inventory-adjust",
+    domain: "inventory",
+    kind: "write",
+    status: "chat",
+    chatPromptKey: "workspace.shell.chat.recommend.inventoryAdjust.prompt.shop",
+  },
+  {
+    key: "inventory-zero",
+    domain: "inventory",
+    kind: "write",
+    status: "chat",
+    chatPromptKey: "workspace.shell.chat.recommend.inventoryZero.prompt.shop",
+  },
 ];
 
 export type CreateDomainSection = {

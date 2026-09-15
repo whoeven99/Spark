@@ -2,7 +2,8 @@
  * 首页与对话输入区共用的推荐操作列表。
  *
  * 分组按「做什么」切：经营诊断只读、商品优化与图片生成靠 AI 生成内容、
- * 批量改价/标签/状态/字段/合集/复制/归档/成本/Handle/Metafield/删除都走「导入商品」；导出单独保留。
+ * 批量改价/标签/状态/字段/合集/复制/归档/成本/Handle/Metafield/删除都走「导入商品」；
+ * 库存数量走独立的「库存与 SKU」组（Wave 1：导出/导入/设置/增减/清零）。
  */
 
 export type WorkspaceRecommendScope = "shop" | "selected";
@@ -115,7 +116,43 @@ export function buildWorkspaceRecommendedGroups(
       },
     ],
   };
+  const inventorySku: WorkspaceRecommendedGroup = {
+    key: "inventorySku",
+    label: t("workspace.shell.chat.recommend.groupInventorySku"),
+    items: [
+      {
+        key: "inventoryExport",
+        label: t("workspace.shell.chat.recommend.inventoryExport.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryExport.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventoryImport",
+        label: t("workspace.shell.chat.recommend.inventoryImport.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryImport.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventorySet",
+        label: t("workspace.shell.chat.recommend.inventorySet.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventorySet.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventoryAdjust",
+        label: t("workspace.shell.chat.recommend.inventoryAdjust.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryAdjust.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventoryZero",
+        label: t("workspace.shell.chat.recommend.inventoryZero.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryZero.prompt.${scope}`),
+        createsTask: true,
+      },
+    ],
+  };
   return hasProductContext
-    ? [productOptimization, productManage, imageGeneration, operations]
-    : [operations, productOptimization, productManage, imageGeneration];
+    ? [productOptimization, productManage, inventorySku, imageGeneration, operations]
+    : [operations, productOptimization, productManage, inventorySku, imageGeneration];
 }

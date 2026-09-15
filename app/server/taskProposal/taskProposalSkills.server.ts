@@ -61,6 +61,23 @@ import {
 import { enqueueProductExport } from "../productExport/productExportRun.server";
 import { enqueueProductImportDryRun } from "../productImport/productImportDryRun.server";
 import { coerceProductImportOperations } from "../../lib/productImport";
+import {
+  INVENTORY_EXPORT_SKILL_ID,
+  INVENTORY_IMPORT_SKILL_ID,
+  INVENTORY_ADJUST_SKILL_ID,
+  INVENTORY_SET_SKILL_ID,
+  INVENTORY_ZERO_SKILL_ID,
+} from "../../lib/inventoryTaskProposals";
+import {
+  INVENTORY_QTY_MAX_PRODUCTS,
+  InventoryQtyRuleError,
+  parseInventoryQtyRule,
+  type InventoryQtyMode,
+} from "../../lib/inventoryQtyEdit";
+import { fetchShopLocations } from "../shopify/locationReader.server";
+import { enqueueInventoryExport } from "../inventoryExport/inventoryExportRun.server";
+import { enqueueInventoryImportDryRun } from "../inventoryImport/inventoryImportDryRun.server";
+import { enqueueInventoryQtyDryRun } from "../inventoryQtyEdit/inventoryQtyEditDryRun.server";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
 import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
@@ -78,6 +95,7 @@ export const TASK_PROPOSAL_TARGETS_HARD_CEILING = Math.max(
   BULK_TAG_EDIT_MAX_PRODUCTS,
   BULK_STATUS_EDIT_MAX_PRODUCTS,
   PRODUCT_EXPORT_MAX_PRODUCTS,
+  INVENTORY_QTY_MAX_PRODUCTS,
 );
 
 export function resolveTaskProposalMaxTargets(
@@ -467,6 +485,107 @@ const productImportHandler: TaskProposalSkillHandler = {
   },
 };
 
+async function resolveLocationName(
+  admin: ShopifyAdminGraphqlClient,
+  locationId: string,
+  fallback: string,
+): Promise<string> {
+  try {
+    const locations = await fetchShopLocations(admin);
+    return locations.find((location) => location.id === locationId)?.name ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function inventoryQtyHandler(skillId: string, mode: InventoryQtyMode): TaskProposalSkillHandler {
+  return {
+    skillId,
+    maxTargets: INVENTORY_QTY_MAX_PRODUCTS,
+    estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+    execute: async ({ admin, shop, locale, params, targets }) => {
+      try {
+        await requireBillingAccess(shop);
+      } catch {
+        throw new TaskProposalBillingError();
+      }
+      let rule;
+      try {
+        rule = parseInventoryQtyRule(params, mode);
+      } catch (error) {
+        throw error instanceof InventoryQtyRuleError ? new Error(error.message) : error;
+      }
+      const productIds = uniqueProductIds(targets);
+      if (productIds.length === 0) throw new Error("请先选择要改库存的商品");
+      rule.locationName = await resolveLocationName(admin, rule.locationId, rule.locationName);
+      const config = { ...rule, productIds, totalProducts: productIds.length };
+      const { taskId } = await createBatchWithTask({
+        shop,
+        taskType: "bulk_inventory_edit",
+        batchConfig: config,
+        taskConfig: config,
+        estimatedCredits: 0,
+      });
+      enqueueInventoryQtyDryRun({ taskId, shop, locale, productIds, rule });
+      return { taskIds: [taskId], errors: [] };
+    },
+  };
+}
+
+const inventorySetHandler = inventoryQtyHandler(INVENTORY_SET_SKILL_ID, "set");
+const inventoryAdjustHandler = inventoryQtyHandler(INVENTORY_ADJUST_SKILL_ID, "adjust");
+const inventoryZeroHandler = inventoryQtyHandler(INVENTORY_ZERO_SKILL_ID, "zero");
+
+const inventoryExportHandler: TaskProposalSkillHandler = {
+  skillId: INVENTORY_EXPORT_SKILL_ID,
+  maxTargets: INVENTORY_QTY_MAX_PRODUCTS,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, targets }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const productIds = uniqueProductIds(targets);
+    if (productIds.length === 0) throw new Error("请先选择要导出库存的商品");
+    const config = { productIds, totalProducts: productIds.length };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "inventory_export",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueInventoryExport({ taskId, shop, locale, productIds });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
+const inventoryImportHandler: TaskProposalSkillHandler = {
+  skillId: INVENTORY_IMPORT_SKILL_ID,
+  allowEmptyTargets: true,
+  estimate: async () => ({ perItemCredits: null, perItemSeconds: null }),
+  execute: async ({ shop, locale, params }) => {
+    try {
+      await requireBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const fileId = params.fileId?.trim();
+    if (!fileId) throw new Error("请先上传库存 CSV 或 Excel");
+    const config = { fileId, fileName: params.fileName?.trim() ?? "" };
+    const { taskId } = await createBatchWithTask({
+      shop,
+      taskType: "inventory_import",
+      batchConfig: config,
+      taskConfig: config,
+      estimatedCredits: 0,
+    });
+    enqueueInventoryImportDryRun({ taskId, shop, locale, fileId });
+    return { taskIds: [taskId], errors: [] };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
@@ -476,6 +595,11 @@ const handlers = new Map<string, TaskProposalSkillHandler>([
   [bulkStatusEditHandler.skillId, bulkStatusEditHandler],
   [productExportHandler.skillId, productExportHandler],
   [productImportHandler.skillId, productImportHandler],
+  [inventoryExportHandler.skillId, inventoryExportHandler],
+  [inventoryImportHandler.skillId, inventoryImportHandler],
+  [inventorySetHandler.skillId, inventorySetHandler],
+  [inventoryAdjustHandler.skillId, inventoryAdjustHandler],
+  [inventoryZeroHandler.skillId, inventoryZeroHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

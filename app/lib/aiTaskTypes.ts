@@ -52,6 +52,13 @@ import type {
   ProductExportSkip,
   ProductExportSummary,
 } from "./productExport";
+import type { InventoryImportRow } from "./inventoryCsv";
+import type {
+  InventoryQtyApplyOutcome,
+  InventoryQtyMode,
+  InventoryQtyRow,
+  InventoryQtySummary,
+} from "./inventoryQtyEdit";
 import type {
   ProductImportIssue,
   ProductImportOperation,
@@ -82,7 +89,10 @@ export type AITaskType =
   | "product_duplicate"
   | "bulk_archive"
   | "product_export"
-  | "product_import";
+  | "product_import"
+  | "inventory_export"
+  | "inventory_import"
+  | "bulk_inventory_edit";
 
 export type AITaskListView = "current" | "history";
 
@@ -503,6 +513,66 @@ export type ProductImportTaskResult = {
         variantId?: string;
       }>;
     };
+  applyStartedAt?: string;
+};
+
+export type InventoryExportTaskConfig = {
+  productIds: string[];
+  totalProducts: number;
+  products?: ProductExportPreviewProduct[];
+};
+
+export type InventoryExportTaskResult = {
+  csv: string;
+  summary: {
+    products: number;
+    rows: number;
+    exported: number;
+    skipped: number;
+  };
+  products: ProductExportPreviewProduct[];
+  truncated?: boolean;
+};
+
+export type InventoryImportTaskConfig = {
+  fileId: string;
+  fileName?: string;
+};
+
+export type InventoryImportTaskResult = {
+  fileName: string;
+  rows: InventoryImportRow[];
+  issues: Array<{ rowNumber: number; code: string; column?: string; value?: string }>;
+  summary: {
+    rows: number;
+    matched: number;
+    changed: number;
+    issues: number;
+  };
+  truncated?: boolean;
+  apply?: InventoryQtyApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type InventoryQtyTaskConfig = {
+  mode: InventoryQtyMode;
+  locationId: string;
+  locationName: string;
+  quantity: number | null;
+  direction: "up" | "down" | null;
+  amount: number | null;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type InventoryQtyTaskResult = {
+  mode: InventoryQtyMode;
+  locationId: string;
+  locationName: string;
+  rows: InventoryQtyRow[];
+  summary: InventoryQtySummary;
+  truncated?: boolean;
+  apply?: InventoryQtyApplyOutcome;
   applyStartedAt?: string;
 };
 

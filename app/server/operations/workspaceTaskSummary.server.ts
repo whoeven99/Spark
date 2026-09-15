@@ -20,6 +20,9 @@ const AI_TASK_TYPE_LABELS: Record<AITaskType, string> = {
   bulk_archive: "归档商品",
   product_export: "导出商品",
   product_import: "导入商品",
+  inventory_export: "导出库存",
+  inventory_import: "导入库存",
+  bulk_inventory_edit: "调整库存",
 };
 
 const AI_STATUS_LABELS: Record<AITaskStatus, string> = {

@@ -42,6 +42,10 @@ import {
   buildProductExportProposal,
   buildProductImportProposal,
 } from "../../../lib/productManageTaskProposals";
+import {
+  buildInventoryExportProposal,
+  buildInventoryImportProposal,
+} from "../../../lib/inventoryTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImport } from "../../../lib/promptSkillFocus";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
@@ -122,6 +126,11 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "bulkTagEditForm",
   "productExportForm",
   "productImportForm",
+  "inventoryExportForm",
+  "inventoryImportForm",
+  "inventorySetForm",
+  "inventoryAdjustForm",
+  "inventoryZeroForm",
   "productImproveForm",
   "pictureTranslateForm",
   "imageGenerationForm",
@@ -144,6 +153,14 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
     products: Array<{ id: string; title: string; imageUrl?: string | null }>,
   ) => TaskProposalPayload;
 }> = [
+  {
+    skill: "inventoryImport",
+    build: () => buildInventoryImportProposal({}),
+  },
+  {
+    skill: "inventoryExport",
+    build: (products) => buildInventoryExportProposal({ products }),
+  },
   {
     skill: "productImport",
     build: () => buildProductImportProposal({}),
@@ -398,6 +415,11 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "bulkTagEdit",
   "productExport",
   "productImport",
+  "inventoryExport",
+  "inventoryImport",
+  "inventorySet",
+  "inventoryAdjust",
+  "inventoryZero",
 ]);
 
 /** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */

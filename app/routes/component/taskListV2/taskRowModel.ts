@@ -33,7 +33,7 @@ export type TaskRowModel = {
   action: TaskRowAction;
 };
 
-const AI_TYPE_LABEL_KEY: Record<AITaskType, string> = {
+const AI_TYPE_LABEL_KEY: Partial<Record<AITaskType, string>> = {
   product_improve: "tasksV2.type.productImprove",
   image_generation: "tasksV2.type.imageGeneration",
   picture_translate: "tasksV2.type.pictureTranslate",
@@ -48,6 +48,9 @@ const EXTRA_AI_TYPE_LABEL_KEY: Record<string, string> = {
   product_import: "tasksV2.type.productImport",
   product_export: "tasksV2.type.productExport",
   product_duplicate: "tasksV2.type.productDuplicate",
+  inventory_export: "tasksV2.type.inventoryExport",
+  inventory_import: "tasksV2.type.inventoryImport",
+  bulk_inventory_edit: "tasksV2.type.bulkInventoryEdit",
 };
 
 /** 内部 key（snake / kebab），不应直接展示给商户。 */
@@ -112,7 +115,16 @@ function describeAiTask(task: AITaskItem, t: TranslateFn): string {
     }
     case "bulk_price_edit":
     case "bulk_tag_edit":
-    case "bulk_status_edit": {
+    case "bulk_status_edit":
+    case "bulk_product_field_edit":
+    case "bulk_collection_edit":
+    case "bulk_archive":
+    case "bulk_inventory_edit":
+    case "product_export":
+    case "product_import":
+    case "product_duplicate":
+    case "inventory_export":
+    case "inventory_import": {
       const total = readCount(config.totalProducts);
       return total != null
         ? t("tasksV2.fallback.products", { count: total })

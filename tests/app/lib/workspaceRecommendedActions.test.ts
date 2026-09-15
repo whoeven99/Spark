@@ -6,12 +6,28 @@ const LABELS: Record<string, string> = {
   "workspace.shell.chat.recommend.groupProduct": "商品优化",
   "workspace.shell.chat.recommend.groupImage": "图片生成",
   "workspace.shell.chat.recommend.groupProductManage": "商品管理",
+  "workspace.shell.chat.recommend.groupInventorySku": "库存与 SKU",
   "workspace.shell.chat.recommend.productExport.label": "导出商品",
   "workspace.shell.chat.recommend.productExport.prompt.shop": "export-shop",
   "workspace.shell.chat.recommend.productExport.prompt.selected": "export-selected",
   "workspace.shell.chat.recommend.productImport.label": "导入商品",
   "workspace.shell.chat.recommend.productImport.prompt.shop": "import-shop",
   "workspace.shell.chat.recommend.productImport.prompt.selected": "import-selected",
+  "workspace.shell.chat.recommend.inventoryExport.label": "导出库存",
+  "workspace.shell.chat.recommend.inventoryExport.prompt.shop": "inv-export-shop",
+  "workspace.shell.chat.recommend.inventoryExport.prompt.selected": "inv-export-selected",
+  "workspace.shell.chat.recommend.inventoryImport.label": "导入库存",
+  "workspace.shell.chat.recommend.inventoryImport.prompt.shop": "inv-import-shop",
+  "workspace.shell.chat.recommend.inventoryImport.prompt.selected": "inv-import-selected",
+  "workspace.shell.chat.recommend.inventorySet.label": "设置库存",
+  "workspace.shell.chat.recommend.inventorySet.prompt.shop": "inv-set-shop",
+  "workspace.shell.chat.recommend.inventorySet.prompt.selected": "inv-set-selected",
+  "workspace.shell.chat.recommend.inventoryAdjust.label": "增加 / 减少库存",
+  "workspace.shell.chat.recommend.inventoryAdjust.prompt.shop": "inv-adjust-shop",
+  "workspace.shell.chat.recommend.inventoryAdjust.prompt.selected": "inv-adjust-selected",
+  "workspace.shell.chat.recommend.inventoryZero.label": "清零库存",
+  "workspace.shell.chat.recommend.inventoryZero.prompt.shop": "inv-zero-shop",
+  "workspace.shell.chat.recommend.inventoryZero.prompt.selected": "inv-zero-selected",
   "workspace.shell.chat.recommend.todayOverview.label": "今日经营概况",
   "workspace.shell.chat.recommend.todayOverview.prompt": "overview-prompt",
   "workspace.shell.chat.recommend.todayTodos.label": "今日待办与风险",
@@ -40,19 +56,23 @@ function t(key: string): string {
 }
 
 describe("buildWorkspaceRecommendedGroups", () => {
-  it("returns 11 shop-scoped actions in operations-first order", () => {
+  it("returns 16 shop-scoped actions including Wave 1 inventory rows", () => {
     const groups = buildWorkspaceRecommendedGroups(t, false);
     expect(groups.map((g) => g.key)).toEqual([
       "operations",
       "productOptimization",
       "productManage",
+      "inventorySku",
       "imageGeneration",
     ]);
     const items = groups.flatMap((g) => g.items);
-    expect(items).toHaveLength(11);
+    expect(items).toHaveLength(16);
     expect(items.find((i) => i.key === "optimizeCopy")?.prompt).toBe("copy-shop");
     expect(items.find((i) => i.key === "productExport")?.prompt).toBe("export-shop");
     expect(items.find((i) => i.key === "productImport")?.prompt).toBe("import-shop");
+    expect(items.find((i) => i.key === "inventoryExport")?.prompt).toBe("inv-export-shop");
+    expect(items.find((i) => i.key === "inventoryImport")?.prompt).toBe("inv-import-shop");
+    expect(items.find((i) => i.key === "inventorySet")?.createsTask).toBe(true);
     expect(items.find((i) => i.key === "bulkEdit")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkPriceEdit")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkTagEdit")).toBeUndefined();
@@ -67,7 +87,7 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(items.find((i) => i.key === "bulkCostImport")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkInventoryImport")).toBeUndefined();
     expect(items.find((i) => i.key === "seoAudit")?.createsTask).toBeUndefined();
-    expect(items.filter((i) => i.createsTask)).toHaveLength(6);
+    expect(items.filter((i) => i.createsTask)).toHaveLength(11);
   });
 
   it("prioritizes product actions and switches to selected prompts", () => {
@@ -75,11 +95,13 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(groups.map((g) => g.key)).toEqual([
       "productOptimization",
       "productManage",
+      "inventorySku",
       "imageGeneration",
       "operations",
     ]);
     expect(groups[0].items.find((i) => i.key === "optimizeCopy")?.prompt).toBe("copy-selected");
     expect(groups[1].items.find((i) => i.key === "productExport")?.prompt).toBe("export-selected");
     expect(groups[1].items.find((i) => i.key === "productImport")?.prompt).toBe("import-selected");
+    expect(groups[2].items.find((i) => i.key === "inventoryExport")?.prompt).toBe("inv-export-selected");
   });
 });
