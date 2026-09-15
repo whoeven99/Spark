@@ -1675,7 +1675,8 @@
       "history": "历史任务"
     },
     "resultCount": "共 {{count}} 条",
-    "empty": "暂无任务",
+    "empty": "还没有任务",
+    "emptyHint": "在首页对话里开导入、批量或出图后，会出现在这里。",
     "emptyCurrent": "暂无进行中的任务",
     "emptyHistory": "暂无历史任务",
     "loadFailed": "任务加载失败，请稍后重试。",
@@ -1707,6 +1708,9 @@
       "bulkPriceEdit": "批量调价",
       "bulkTagEdit": "批量打标",
       "bulkStatusEdit": "批量上下架",
+      "bulkProductFieldEdit": "批量改字段",
+      "bulkCollectionEdit": "批量调整合集",
+      "bulkArchive": "批量归档",
       "productImport": "导入商品",
       "productExport": "导出商品",
       "productDuplicate": "复制商品",
@@ -1727,7 +1731,16 @@
       "run": "去运行"
     },
     "meta": {
-      "credits": "{{value}} 积分"
+      "credits": "{{value}} 积分",
+      "rows": "{{count}} 行",
+      "variants": "{{count}} 个变体"
+    },
+    "summary": {
+      "running": "任务进行中…",
+      "pendingReview": "已就绪，等待确认",
+      "done": "任务已完成",
+      "failed": "任务失败：{{reason}}",
+      "cancelled": "任务已取消"
     },
     "fallback": {
       "product": "未命名商品",

@@ -1,18 +1,20 @@
 /**
- * 把三类任务（AI 任务 / 经营任务 / 定时任务）压成同一个行模型。
- *
- * 压缩列表只呈现「这是什么、跑到哪了、什么时候、下一步点哪」，
- * 详细字段留给详情弹窗，不在行里铺开。
+ * 把三类任务压成两行列表模型：状态、对象、结论句、进度和下一步。
  */
 import type { AITaskItem, AITaskStatus, AITaskType } from "../../../lib/aiTaskTypes";
+import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
 import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
+import {
+  catalogPreviewActionLabel,
+  progressPercentForCatalogTask,
+} from "../catalogManage/catalogReviewUi";
 import { isChatInlineReviewTask } from "../chat/chatInlineReviewTasks";
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
 export type TaskRowAction =
-  /** 在本页弹窗里看结果或做审核 */
-  | { type: "detail"; label: string; primary: boolean }
+  /** 本页先只选中这一行；审核仍走对话 */
+  | { type: "select"; label: string; primary: boolean }
   /** 交给助手继续处理，带预填话术 */
   | { type: "chat"; label: string; prompt: string }
   | { type: "none" };
@@ -23,11 +25,12 @@ export type TaskRowModel = {
   entryType: UnifiedTaskEntry["entryType"];
   typeLabel: string;
   title: string;
-  /** 副行的次要信息，已按有值过滤 */
+  /** 对象旁的短计量，如「1 行」「86 个变体」 */
   meta: string[];
-  /** 排序与展示共用的时间戳 */
+  /** 第二行结论，来自任务 v1 卡片主文案 */
+  summary: string;
+  progressPercent: number;
   timestamp: string;
-  /** AI 任务才有语义状态色，其余类型用 statusText */
   aiStatus: AITaskStatus | null;
   statusText: string | null;
   action: TaskRowAction;
@@ -41,16 +44,14 @@ const AI_TYPE_LABEL_KEY: Record<AITaskType, string> = {
   bulk_price_edit: "tasksV2.type.bulkPriceEdit",
   bulk_tag_edit: "tasksV2.type.bulkTagEdit",
   bulk_status_edit: "tasksV2.type.bulkStatusEdit",
-};
-
-/** 库里可能出现、但尚未收入 AITaskType 联合的任务类型。 */
-const EXTRA_AI_TYPE_LABEL_KEY: Record<string, string> = {
-  product_import: "tasksV2.type.productImport",
-  product_export: "tasksV2.type.productExport",
+  bulk_product_field_edit: "tasksV2.type.bulkProductFieldEdit",
+  bulk_collection_edit: "tasksV2.type.bulkCollectionEdit",
   product_duplicate: "tasksV2.type.productDuplicate",
+  bulk_archive: "tasksV2.type.bulkArchive",
+  product_export: "tasksV2.type.productExport",
+  product_import: "tasksV2.type.productImport",
 };
 
-/** 内部 key（snake / kebab），不应直接展示给商户。 */
 const MACHINE_KEY_RE = /^[a-z][a-z0-9]*([_-][a-z0-9]+)+$/;
 
 function translateKey(key: string, t: TranslateFn): string | null {
@@ -58,10 +59,8 @@ function translateKey(key: string, t: TranslateFn): string | null {
   return label && label !== key ? label : null;
 }
 
-/** 任务类型一律走 i18n；没有条目时用「其他任务」，不把 raw key 亮出去。 */
 export function resolveAiTypeLabel(taskType: string, t: TranslateFn): string {
-  const mapped =
-    AI_TYPE_LABEL_KEY[taskType as AITaskType] ?? EXTRA_AI_TYPE_LABEL_KEY[taskType];
+  const mapped = AI_TYPE_LABEL_KEY[taskType as AITaskType];
   if (mapped) {
     const label = translateKey(mapped, t);
     if (label) return label;
@@ -93,8 +92,27 @@ function readCount(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function failedReason(task: AITaskItem, t: TranslateFn): string {
+  if (task.errorMsgKey) {
+    return safeTranslateAITaskMessage({
+      t,
+      message: task.errorMsg ?? t("common.unknown"),
+      messageKey: task.errorMsgKey,
+      messageParams: task.errorMsgParams,
+    });
+  }
+  return task.errorMsg ?? t("common.unknown");
+}
+
 function describeAiTask(task: AITaskItem, t: TranslateFn): string {
   const config = task.config ?? {};
+  const result = asRecord(task.result);
 
   switch (task.taskType) {
     case "product_improve":
@@ -112,7 +130,11 @@ function describeAiTask(task: AITaskItem, t: TranslateFn): string {
     }
     case "bulk_price_edit":
     case "bulk_tag_edit":
-    case "bulk_status_edit": {
+    case "bulk_status_edit":
+    case "bulk_product_field_edit":
+    case "bulk_collection_edit":
+    case "product_duplicate":
+    case "bulk_archive": {
       const total = readCount(config.totalProducts);
       return total != null
         ? t("tasksV2.fallback.products", { count: total })
@@ -120,47 +142,262 @@ function describeAiTask(task: AITaskItem, t: TranslateFn): string {
     }
     case "ads_catalog_sync":
       return readString(config.platform) ?? t("tasksV2.fallback.ads");
+    case "product_import":
+    case "product_export":
+      return (
+        readString(result?.fileName) ??
+        readString(config.fileName) ??
+        readString(config.filename) ??
+        t("tasksV2.fallback.generic")
+      );
     default: {
       const exhaustive: never = task.taskType;
-      void exhaustive;
-      return (
-        localizeMachineName(
-          readString(config.originalTitle) ??
-            readString(config.title) ??
-            readString(config.fileName) ??
-            readString(config.filename) ??
-            readString(config.name) ??
-            "",
-          t,
-        ) || t("tasksV2.fallback.generic")
-      );
+      return exhaustive;
+    }
+  }
+}
+
+function catalogActionPrefix(taskType: AITaskType): "productImport" | "productExport" | null {
+  if (taskType === "product_import") return "productImport";
+  if (taskType === "product_export") return "productExport";
+  return null;
+}
+
+function catalogSummaryPrefix(taskType: AITaskType): string | null {
+  switch (taskType) {
+    case "product_import":
+      return "productImport";
+    case "product_export":
+      return "productExport";
+    case "bulk_price_edit":
+      return "bulkPriceEdit";
+    case "bulk_tag_edit":
+      return "bulkTagEdit";
+    case "bulk_status_edit":
+      return "bulkStatusEdit";
+    case "bulk_product_field_edit":
+      return "bulkProductFieldEdit";
+    case "bulk_collection_edit":
+      return "bulkCollectionEdit";
+    case "product_duplicate":
+      return "productDuplicate";
+    case "bulk_archive":
+      return "bulkArchive";
+    case "product_improve":
+    case "image_generation":
+    case "picture_translate":
+    case "ads_catalog_sync":
+      return null;
+    default: {
+      const exhaustive: never = taskType;
+      return exhaustive;
+    }
+  }
+}
+
+function readCatalogCounts(task: AITaskItem): {
+  changed: number;
+  skipped: number;
+  exported: number;
+  succeeded: number;
+  failed: number;
+  issues: number;
+} {
+  const result = asRecord(task.result);
+  const summary = asRecord(result?.summary);
+  const apply = asRecord(result?.apply);
+  const changed = readCount(summary?.changed) ?? 0;
+  const skipped = readCount(summary?.skipped) ?? readCount(summary?.issues) ?? 0;
+  const exported = readCount(summary?.exported) ?? changed;
+  return {
+    changed,
+    skipped,
+    exported,
+    succeeded: readCount(apply?.succeeded) ?? 0,
+    failed: readCount(apply?.failed) ?? 0,
+    issues: readCount(summary?.issues) ?? skipped,
+  };
+}
+
+function buildCatalogSummary(
+  prefix: string,
+  task: AITaskItem,
+  t: TranslateFn,
+): string {
+  const counts = readCatalogCounts(task);
+  const reason = failedReason(task, t);
+  switch (task.status) {
+    case "running":
+      return t(`${prefix}.cardPrimaryRunning`);
+    case "pending_review":
+      return t(`${prefix}.cardPrimaryPendingReview`, {
+        changed: counts.changed,
+        skipped: counts.skipped,
+        exported: counts.exported,
+        issues: counts.issues,
+      });
+    case "succeeded": {
+      const key = `${prefix}.cardPrimarySucceeded`;
+      const label = t(key, {
+        exported: counts.exported,
+        skipped: counts.skipped,
+      });
+      return label !== key
+        ? label
+        : t(`${prefix}.cardPrimaryApplied`, {
+            succeeded: counts.succeeded,
+            failed: counts.failed,
+          });
+    }
+    case "applied":
+      return t(`${prefix}.cardPrimaryApplied`, {
+        succeeded: counts.succeeded,
+        failed: counts.failed,
+      });
+    case "failed":
+      return t(`${prefix}.cardPrimaryFailed`, { reason });
+    case "cancelled":
+      return t(`${prefix}.cardPrimaryCancelled`);
+    case "scored":
+      return t(`${prefix}.cardPrimaryPendingReview`, {
+        changed: counts.changed,
+        skipped: counts.skipped,
+        exported: counts.exported,
+        issues: counts.issues,
+      });
+    default: {
+      const exhaustive: never = task.status;
+      return exhaustive;
+    }
+  }
+}
+
+function buildAiSummary(task: AITaskItem, t: TranslateFn): string {
+  const catalogPrefix = catalogSummaryPrefix(task.taskType);
+  if (catalogPrefix) return buildCatalogSummary(catalogPrefix, task, t);
+
+  const reason = failedReason(task, t);
+  if (task.taskType === "product_improve") {
+    switch (task.status) {
+      case "running":
+        return t("productImproveStage1.cardPrimaryRunning");
+      case "pending_review":
+        return t("productImproveStage1.cardPrimaryPendingReview");
+      case "succeeded":
+        return t("productImproveStage1.cardPrimarySucceeded");
+      case "scored":
+        return t("productImproveStage1.cardPrimaryScored");
+      case "applied":
+        return t("productImproveStage1.cardPrimaryApplied");
+      case "failed":
+        return t("productImproveStage1.cardPrimaryFailed", { errorReason: reason });
+      case "cancelled":
+        return t("productImproveStage1.cardPrimaryCancelled");
+      default: {
+        const exhaustive: never = task.status;
+        return exhaustive;
+      }
+    }
+  }
+
+  if (task.taskType === "image_generation") {
+    if (task.status === "running") return t("imageStudio.cardPrimaryGenerating");
+    if (task.status === "failed") {
+      return t("imageStudio.cardPrimaryGenerationFailed", { errorReason: reason });
+    }
+    return t("imageStudio.cardPrimaryGenerationReady");
+  }
+
+  if (task.taskType === "picture_translate") {
+    if (task.status === "running") return t("imageStudio.cardPrimaryTranslating");
+    if (task.status === "failed") {
+      return t("imageStudio.cardPrimaryTranslateFailed", { errorReason: reason });
+    }
+    return t("imageStudio.cardPrimaryTranslateReady");
+  }
+
+  switch (task.status) {
+    case "running":
+      return t("tasksV2.summary.running");
+    case "pending_review":
+    case "scored":
+      return t("tasksV2.summary.pendingReview");
+    case "failed":
+      return t("tasksV2.summary.failed", { reason });
+    case "cancelled":
+      return t("tasksV2.summary.cancelled");
+    case "applied":
+    case "succeeded":
+      return t("tasksV2.summary.done");
+    default: {
+      const exhaustive: never = task.status;
+      return exhaustive;
     }
   }
 }
 
 function resolveAiAction(task: AITaskItem, t: TranslateFn): TaskRowAction {
-  // 详情弹窗复用的是对话内审核那套组件，白名单外的类型没有可挂的详情页。
   if (!isChatInlineReviewTask(task.taskType)) return { type: "none" };
 
+  const catalogPrefix = catalogActionPrefix(task.taskType);
+  if (catalogPrefix) {
+    return {
+      type: "select",
+      label: catalogPreviewActionLabel(task.status, t, catalogPrefix),
+      primary: task.status === "pending_review" || task.status === "scored",
+    };
+  }
+
   if (task.status === "pending_review" || task.status === "scored") {
-    return { type: "detail", label: t("tasksV2.action.review"), primary: true };
+    return { type: "select", label: t("tasksV2.action.review"), primary: true };
   }
   if (task.status === "failed") {
-    return { type: "detail", label: t("tasksV2.action.viewReason"), primary: false };
+    return { type: "select", label: t("tasksV2.action.viewReason"), primary: false };
   }
   if (task.status === "running") {
-    return { type: "detail", label: t("tasksV2.action.viewProgress"), primary: false };
+    return { type: "select", label: t("tasksV2.action.viewProgress"), primary: false };
   }
-  return { type: "detail", label: t("tasksV2.action.viewResult"), primary: false };
+  return { type: "select", label: t("tasksV2.action.viewResult"), primary: false };
 }
 
 function buildAiMeta(task: AITaskItem, t: TranslateFn): string[] {
-  const credits = task.actualCredits ?? task.estimatedCredits;
-  return [
-    credits != null && credits > 0
-      ? t("tasksV2.meta.credits", { value: credits })
-      : null,
-  ].filter((item): item is string => Boolean(item));
+  const config = task.config ?? {};
+  const result = asRecord(task.result);
+  const summary = asRecord(result?.summary);
+
+  if (task.taskType === "product_import") {
+    const rows = readCount(summary?.rows) ?? readCount(config.totalProducts);
+    return rows != null ? [t("tasksV2.meta.rows", { count: rows })] : [];
+  }
+
+  if (task.taskType === "bulk_price_edit") {
+    const variants = readCount(summary?.variants);
+    if (variants != null) return [t("tasksV2.meta.variants", { count: variants })];
+  }
+
+  if (
+    task.taskType === "bulk_price_edit" ||
+    task.taskType === "bulk_tag_edit" ||
+    task.taskType === "bulk_status_edit" ||
+    task.taskType === "bulk_product_field_edit" ||
+    task.taskType === "bulk_collection_edit" ||
+    task.taskType === "product_duplicate" ||
+    task.taskType === "bulk_archive" ||
+    task.taskType === "product_export"
+  ) {
+    const products = readCount(summary?.products) ?? readCount(config.totalProducts);
+    return products != null ? [t("tasksV2.fallback.products", { count: products })] : [];
+  }
+
+  return [];
+}
+
+function buildAiProgress(task: AITaskItem): number {
+  if (task.taskType === "product_improve") {
+    const fromResult = readCount(asRecord(task.result)?.progressPercent);
+    if (fromResult != null) return Math.max(0, Math.min(100, fromResult));
+  }
+  return progressPercentForCatalogTask(task.status);
 }
 
 export function buildTaskRow(entry: UnifiedTaskEntry, t: TranslateFn): TaskRowModel {
@@ -175,6 +412,8 @@ export function buildTaskRow(entry: UnifiedTaskEntry, t: TranslateFn): TaskRowMo
       typeLabel,
       title: described && described !== typeLabel ? described : t("tasksV2.fallback.generic"),
       meta: buildAiMeta(task, t),
+      summary: buildAiSummary(task, t),
+      progressPercent: buildAiProgress(task),
       timestamp: task.updatedAt || task.createdAt,
       aiStatus: task.status,
       statusText: null,
@@ -185,6 +424,7 @@ export function buildTaskRow(entry: UnifiedTaskEntry, t: TranslateFn): TaskRowMo
   if (entry.entryType === "operation_task") {
     const { task } = entry;
     const statusKey = OPERATION_STATUS_LABEL_KEY[task.status];
+    const done = task.status === "done" || task.status === "ignored" || task.status === "auto_closed";
     return {
       key: `operation:${task.id}`,
       taskId: task.id,
@@ -192,6 +432,8 @@ export function buildTaskRow(entry: UnifiedTaskEntry, t: TranslateFn): TaskRowMo
       typeLabel: t("tasksV2.type.operation"),
       title: task.title,
       meta: [task.ownerRole].filter((item): item is string => Boolean(item)),
+      summary: task.triggerReason || t("tasksV2.summary.pendingReview"),
+      progressPercent: done ? 100 : 45,
       timestamp: task.resolvedAt ?? task.createdAt,
       aiStatus: null,
       statusText: statusKey ? t(statusKey) : task.status,
@@ -214,6 +456,8 @@ export function buildTaskRow(entry: UnifiedTaskEntry, t: TranslateFn): TaskRowMo
     typeLabel: t("tasksV2.type.automation"),
     title: task.title,
     meta: [task.schedule].filter((item): item is string => Boolean(item)),
+    summary: task.summary || t("tasksV2.summary.done"),
+    progressPercent: task.enabled ? 100 : 24,
     timestamp: task.updatedAt || task.createdAt,
     aiStatus: null,
     statusText: t(
@@ -225,17 +469,12 @@ export function buildTaskRow(entry: UnifiedTaskEntry, t: TranslateFn): TaskRowMo
   };
 }
 
-/** 严格按时间倒序；不给任何任务类型置顶特权。 */
 export function sortTaskRowsByTimeDesc(rows: TaskRowModel[]): TaskRowModel[] {
   return [...rows].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 }
 
-/**
- * 相对时间：一天内用相对说法，超过一天落到具体日期。
- * SSR 与首帧统一走 UTC，避免 hydrate 前后文案跳动。
- */
 export function formatTaskRowTime(
   iso: string,
   t: TranslateFn,

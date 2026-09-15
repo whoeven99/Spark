@@ -1676,6 +1676,7 @@
     },
     "resultCount": "{{count}} total",
     "empty": "No tasks yet",
+    "emptyHint": "Import, bulk edit, or image tasks started from home chat will show up here.",
     "emptyCurrent": "No tasks in progress",
     "emptyHistory": "No task history yet",
     "loadFailed": "Could not load tasks. Please try again.",
@@ -1707,6 +1708,9 @@
       "bulkPriceEdit": "Bulk pricing",
       "bulkTagEdit": "Bulk tags",
       "bulkStatusEdit": "Bulk publish state",
+      "bulkProductFieldEdit": "Bulk fields",
+      "bulkCollectionEdit": "Bulk collections",
+      "bulkArchive": "Bulk archive",
       "productImport": "Import products",
       "productExport": "Export products",
       "productDuplicate": "Duplicate products",
@@ -1727,7 +1731,16 @@
       "run": "Run"
     },
     "meta": {
-      "credits": "{{value}} credits"
+      "credits": "{{value}} credits",
+      "rows": "{{count}} rows",
+      "variants": "{{count}} variants"
+    },
+    "summary": {
+      "running": "Task in progress…",
+      "pendingReview": "Ready, waiting for confirmation",
+      "done": "Task finished",
+      "failed": "Task failed: {{reason}}",
+      "cancelled": "Task cancelled"
     },
     "fallback": {
       "product": "Untitled product",

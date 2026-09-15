@@ -52,6 +52,40 @@ describe("taskRowModel i18n", () => {
     expect(row.typeLabel).toBe("导入商品");
     expect(row.title).toBe("未命名任务");
     expect(row.title.includes("product_")).toBe(false);
+    expect(row.action).toEqual({
+      type: "select",
+      label: "查看预览",
+      primary: true,
+    });
+  });
+
+  it("shows write-back summary for an applied import", () => {
+    const i18n = initI18n("zh-CN");
+    const t = i18n.t.bind(i18n);
+    const row = buildTaskRow(
+      {
+        entryType: "ai_task",
+        task: aiTask({
+          taskType: "product_import",
+          status: "applied",
+          config: { fileName: "products_export_1.csv" },
+          result: {
+            fileName: "products_export_1.csv",
+            summary: { rows: 1, matched: 1, changed: 12770, issues: 48 },
+            apply: { succeeded: 12770, failed: 48 },
+          },
+        }),
+      },
+      t,
+    );
+    expect(row.title).toBe("products_export_1.csv");
+    expect(row.meta).toEqual(["1 行"]);
+    expect(row.summary).toBe("已写回店铺：成功 12770 处，失败 48 处");
+    expect(row.action).toEqual({
+      type: "select",
+      label: "查看写回结果",
+      primary: false,
+    });
   });
 
   it("keeps a real product name for copy tasks", () => {

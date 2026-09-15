@@ -7,7 +7,7 @@ import { DialogShell } from "../shared/DialogShell";
 import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
 import { mergeFetchedAiTask, shouldRetainLocalAiTaskStatus } from "../../../lib/aiTaskStatusSync";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
-import { progressPercentForCatalogTask } from "./catalogReviewUi";
+import { catalogPreviewActionLabel, progressPercentForCatalogTask } from "./catalogReviewUi";
 
 type DetailProps = {
   task: AITaskItem;
@@ -22,23 +22,6 @@ type DetailProps = {
 };
 
 type Summary = { changed?: number; skipped?: number; exported?: number };
-
-function catalogPreviewActionLabel(
-  status: AITaskStatus,
-  t: (key: string) => string,
-  i18nPrefix: string,
-): string {
-  if (status === "applied") return t(`${i18nPrefix}.actionViewApplied`);
-  if (status === "succeeded") {
-    const key = `${i18nPrefix}.actionViewSucceeded`;
-    const label = t(key);
-    return label !== key ? label : t(`${i18nPrefix}.actionViewApplied`);
-  }
-  const previewKey = `${i18nPrefix}.actionPreview`;
-  const preview = t(previewKey);
-  if (status === "running" && preview !== previewKey) return preview;
-  return t(`${i18nPrefix}.actionReview`);
-}
 
 type Props = {
   task: AITaskItem;

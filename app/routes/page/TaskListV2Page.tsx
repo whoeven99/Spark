@@ -5,7 +5,6 @@ import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch
 import { useEmbeddedNavigate } from "../../hooks/useEmbeddedNavigate";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFeatureView } from "../../lib/featureTrack";
-import type { AITaskStatus } from "../../lib/aiTaskTypes";
 import type {
   UnifiedTaskEntry,
   UnifiedTaskListResponse,
@@ -14,7 +13,6 @@ import type {
 } from "../../lib/unifiedTaskTypes";
 import { buildWorkspaceChatPrefillPath } from "../../lib/workspaceChatPrefill";
 import { AITaskPagination } from "../component/aiTask/AITaskPagination";
-import { TaskDetailDialog } from "../component/taskListV2/TaskDetailDialog";
 import { TaskRowItem } from "../component/taskListV2/TaskRowItem";
 import { buildTaskRow, sortTaskRowsByTimeDesc } from "../component/taskListV2/taskRowModel";
 import {
@@ -100,7 +98,7 @@ export function TaskListV2Page() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const requestIdRef = useRef(0);
   const pageCacheRef = useRef(new Map<string, CachedTaskPage>());
@@ -200,34 +198,6 @@ export function TaskListV2Page() {
     return () => window.clearInterval(timer);
   }, [hasRunningTask, load]);
 
-  const detailTask = useMemo(() => {
-    if (!detailTaskId) return null;
-    const entry = entries.find(
-      (item): item is Extract<UnifiedTaskEntry, { entryType: "ai_task" }> =>
-        item.entryType === "ai_task" && item.task.id === detailTaskId,
-    );
-    return entry?.task ?? null;
-  }, [detailTaskId, entries]);
-
-  const handleTaskUpdated = useCallback(
-    (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => {
-      const patchEntries = (list: UnifiedTaskEntry[]) =>
-        list.map((entry) =>
-          entry.entryType === "ai_task" && entry.task.id === taskId
-            ? { ...entry, task: { ...entry.task, status, ...(result ? { result } : {}) } }
-            : entry,
-        );
-      setEntries((prev) => patchEntries(prev));
-      for (const [key, cached] of pageCacheRef.current) {
-        pageCacheRef.current.set(key, {
-          ...cached,
-          data: { ...cached.data, entries: patchEntries(cached.data.entries) },
-        });
-      }
-    },
-    [],
-  );
-
   const handleChatAction = useCallback(
     (prompt: string) => {
       void navigate(buildWorkspaceChatPrefillPath({ prompt }));
@@ -285,7 +255,16 @@ export function TaskListV2Page() {
           ) : rows.length === 0 ? (
             <Empty
               className="spark-ant-empty py-12"
-              description={loadFailed ? t("tasksV2.loadFailed") : t("tasksV2.empty")}
+              description={
+                loadFailed ? (
+                  t("tasksV2.loadFailed")
+                ) : (
+                  <div>
+                    <div>{t("tasksV2.empty")}</div>
+                    <div className="mt-1">{t("tasksV2.emptyHint")}</div>
+                  </div>
+                )
+              }
             />
           ) : (
             <div>
@@ -295,7 +274,8 @@ export function TaskListV2Page() {
                   row={row}
                   hydrated={hydrated}
                   showTopBorder={index > 0}
-                  onDetail={setDetailTaskId}
+                  selected={selectedTaskId === row.taskId}
+                  onSelect={setSelectedTaskId}
                   onChat={handleChatAction}
                 />
               ))}
@@ -312,12 +292,6 @@ export function TaskListV2Page() {
         onPageChange={setPage}
       />
 
-      <TaskDetailDialog
-        task={detailTask}
-        locationSearch={locationSearch}
-        onClose={() => setDetailTaskId(null)}
-        onTaskUpdated={handleTaskUpdated}
-      />
     </div>
   );
 }

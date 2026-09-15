@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 export const CATALOG_REVIEW_VISIBLE_ROWS = 100;
@@ -37,6 +38,23 @@ export function downloadCatalogCsv(filename: string, content: string): void {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export function catalogPreviewActionLabel(
+  status: AITaskStatus,
+  t: (key: string) => string,
+  i18nPrefix: string,
+): string {
+  if (status === "applied") return t(`${i18nPrefix}.actionViewApplied`);
+  if (status === "succeeded") {
+    const key = `${i18nPrefix}.actionViewSucceeded`;
+    const label = t(key);
+    return label !== key ? label : t(`${i18nPrefix}.actionViewApplied`);
+  }
+  const previewKey = `${i18nPrefix}.actionPreview`;
+  const preview = t(previewKey);
+  if (status === "running" && preview !== previewKey) return preview;
+  return t(`${i18nPrefix}.actionReview`);
 }
 
 export function progressPercentForCatalogTask(status: string): number {
