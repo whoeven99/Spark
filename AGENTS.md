@@ -84,7 +84,7 @@ Spark/
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（总览走 `ensureDailySnapshotOverview`，`?view=detail` 才走 `ensureDailySnapshot`）。**测环境页面入口；prod 走对话，不进导航** |
 | Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
 | 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`；测/产导航都不展示，URL 仍可直达 |
-| 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：压缩单行列表，当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；审核/结果复用对话内那套详情弹窗；prod 与测/本地导航都露出 |
+| 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出 |
 | 任务 v1 | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage`（旧卡片列表）；仅测/本地导航露出 |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
 | Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
