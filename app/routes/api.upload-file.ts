@@ -2,8 +2,9 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { parseFileBuffer, isSupportedFileExtension, SUPPORTED_EXTENSIONS_LABEL } from "../server/fileContext/fileParser.server";
 import { uploadParsedFile } from "../server/fileContext/fileStore.server";
+import { isProductImportSpreadsheetName, PRODUCT_IMPORT_MAX_FILE_BYTES } from "../lib/productImport";
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -35,9 +36,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  if (file.size > MAX_FILE_SIZE_BYTES) {
+  const maxBytes = isProductImportSpreadsheetName(file.name)
+    ? PRODUCT_IMPORT_MAX_FILE_BYTES
+    : DEFAULT_MAX_FILE_SIZE_BYTES;
+  if (file.size > maxBytes) {
+    const limitMb = Math.round(maxBytes / 1024 / 1024);
     return Response.json(
-      { error: `文件大小超过 10MB 限制（当前 ${(file.size / 1024 / 1024).toFixed(1)} MB）` },
+      { error: `文件大小超过 ${limitMb}MB 限制（当前 ${(file.size / 1024 / 1024).toFixed(1)} MB）` },
       { status: 400 },
     );
   }

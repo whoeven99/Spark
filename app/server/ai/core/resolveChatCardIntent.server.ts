@@ -38,8 +38,13 @@ import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
+import {
+  buildProductExportProposal,
+  buildProductImportProposal,
+} from "../../../lib/productManageTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
-import { skillNamesFromUserText } from "../../../lib/promptSkillFocus";
+import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImport } from "../../../lib/promptSkillFocus";
+import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
 
@@ -115,6 +120,8 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "bulkStatusEditForm",
   "bulkPriceEditForm",
   "bulkTagEditForm",
+  "productExportForm",
+  "productImportForm",
   "productImproveForm",
   "pictureTranslateForm",
   "imageGenerationForm",
@@ -129,7 +136,7 @@ export function hasEmittedChatCardFlag(emittedFlags: Set<string> | undefined): b
 
 /**
  * 可确定性补出的 TaskProposal 开卡 Skill（不依赖文件 ID / Shopify 预取也能出可用空卡）。
- * 表格导入类缺 fileId 时不能补，只能走纠偏文案。
+ * 导入一期即使没有文件也要开空卡；fileId 可在确认前由工作台已选文件补上。
  */
 const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   skill: string;
@@ -137,6 +144,10 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
     products: Array<{ id: string; title: string; imageUrl?: string | null }>,
   ) => TaskProposalPayload;
 }> = [
+  {
+    skill: "productImport",
+    build: () => buildProductImportProposal({}),
+  },
   {
     skill: "bulkStatusEdit",
     build: (products) => buildBulkStatusEditProposal({ products }),
@@ -149,6 +160,10 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
     skill: "bulkPriceEdit",
     build: (products) => buildBulkPriceEditProposal({ products }),
   },
+  {
+    skill: "productExport",
+    build: (products) => buildProductExportProposal({ products }),
+  },
 ];
 
 export function tryDeterministicTaskProposalFromSkills(
@@ -160,9 +175,47 @@ export function tryDeterministicTaskProposalFromSkills(
   const products = parseWorkspaceProductsFromText(lastUserText);
   for (const entry of DETERMINISTIC_TASK_PROPOSAL_BY_SKILL) {
     if (!skillSet.has(entry.skill)) continue;
+    if (
+      entry.skill === "productImport" &&
+      skillSet.has("seoAudit") &&
+      !userTextMatchesProductImport(extractUserIntentText(lastUserText))
+    ) {
+      continue;
+    }
     return entry.build(products);
   }
   return null;
+}
+
+function uniqueSkillNames(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of names) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
+/**
+ * 本轮该不该确定性补 TaskProposal。
+ * 默认只看用户正文启发式，避免会话粘性 skillFocus 让后续闲聊再弹出卡。
+ * 助手已声称开卡时，才把本轮 skillFocus 也算进去。
+ */
+export function resolveDeterministicTaskProposalForTurn(params: {
+  skillFocus?: string | null;
+  lastUserText: string;
+  claimed: boolean;
+}): TaskProposalPayload | null {
+  const intentText = extractUserIntentText(params.lastUserText);
+  const heuristicSkills = skillNamesFromUserText(intentText);
+  const focusNames = skillNamesFromFocus(params.skillFocus);
+  const focusSkills = focusNames && focusNames !== "all" ? [...focusNames] : [];
+  const skillNames = params.claimed
+    ? uniqueSkillNames([...heuristicSkills, ...focusSkills])
+    : heuristicSkills;
+  return tryDeterministicTaskProposalFromSkills(skillNames, params.lastUserText);
 }
 
 export function extractToolsCalledFromMessages(messages: BaseMessage[]): string[] {
@@ -343,6 +396,8 @@ const CARD_RELEVANT_SKILL_NAMES = new Set<string>([
   "bulkStatusEdit",
   "bulkPriceEdit",
   "bulkTagEdit",
+  "productExport",
+  "productImport",
 ]);
 
 /** 助手回复里“已为你打开/准备好卡片/表单”之类的开卡话术。 */
@@ -384,7 +439,7 @@ function resolutionFromTaskProposal(
 
 /**
  * 文案声称开卡但工具未下发时的一致性兜底：
- * 1) 按用户意图确定性补 TaskProposal（批量上下架等）；
+ * 1) 按用户意图确定性补 TaskProposal（导入 / 导出等，不要求助手先声称开卡）；
  * 2) 再走原有 LLM 补卡（图片生成等旧卡类型）；
  * 3) 仍无卡则改掉误导开卡话术，禁止「说了有卡却没有」。
  */
@@ -395,6 +450,8 @@ export async function resolveMissingChatCardsWithLlm(params: {
   existingUiPayloads: Record<string, unknown>;
   emittedFlags?: Set<string>;
   shop?: string;
+  skillFocus?: string | null;
+  admin?: ShopifyAdminGraphqlClient;
   signal?: AbortSignal;
 }): Promise<LlmChatCardResolution> {
   const emittedFlags = params.emittedFlags ?? new Set<string>();
@@ -404,15 +461,14 @@ export async function resolveMissingChatCardsWithLlm(params: {
   }
 
   const claimed = assistantClaimsChatCard(params.assistantReply);
-  const intentText = extractUserIntentText(params.lastUserText);
-  const skillNames = skillNamesFromUserText(intentText);
 
-  // 硬保证：声称开卡时，能识别出批量 TaskProposal Skill 就直接补卡，不依赖二次 LLM。
-  if (claimed) {
-    const proposal = tryDeterministicTaskProposalFromSkills(skillNames, params.lastUserText);
-    if (proposal) {
-      return resolutionFromTaskProposal(proposal, emittedFlags);
-    }
+  const deterministic = resolveDeterministicTaskProposalForTurn({
+    skillFocus: params.skillFocus,
+    lastUserText: params.lastUserText,
+    claimed,
+  });
+  if (deterministic) {
+    return resolutionFromTaskProposal(deterministic, emittedFlags);
   }
 
   // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，

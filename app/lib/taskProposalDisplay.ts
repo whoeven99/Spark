@@ -11,6 +11,10 @@ import {
   type TaskProposalPayload,
   type TaskProposalTargetKind,
 } from "./taskProposalPayload";
+import {
+  PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
+} from "./productManageTaskProposals";
 import type { TaskRunPayload } from "./taskRunPayload";
 
 const PREFIX = "workspace.taskProposal";
@@ -21,6 +25,8 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.title`,
   [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.title`,
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.title`,
+  [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.title`,
+  [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.title`,
 };
 
 /**
@@ -30,6 +36,8 @@ const SKILL_TITLE_KEYS: Record<string, string> = {
 const SINGLE_TASK_SKILL_IDS = new Set<string>([
   BULK_PRICE_EDIT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
+  PRODUCT_EXPORT_SKILL_ID,
+  PRODUCT_IMPORT_SKILL_ID,
 ]);
 
 export function isSingleTaskProposalSkill(skillId: string): boolean {
@@ -42,6 +50,8 @@ const SKILL_SUMMARY_KEYS: Record<string, string> = {
   [IMAGE_GENERATION_SKILL_ID]: `${PREFIX}.skills.imageGeneration.summary`,
   [BULK_PRICE_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkPriceEdit.summary`,
   [BULK_STATUS_EDIT_SKILL_ID]: `${PREFIX}.skills.bulkStatusEdit.summary`,
+  [PRODUCT_EXPORT_SKILL_ID]: `${PREFIX}.skills.productExport.summary`,
+  [PRODUCT_IMPORT_SKILL_ID]: `${PREFIX}.skills.productImport.summary`,
 };
 
 /** 历史消息仅有 taskType 时映射到 skillId，便于侧栏标题 i18n */
@@ -49,6 +59,10 @@ const TASK_TYPE_TO_SKILL_ID: Record<string, string> = {
   product_improve: BATCH_PRODUCT_IMPROVE_SKILL_ID,
   picture_translate: BATCH_PICTURE_TRANSLATE_SKILL_ID,
   image_generation: IMAGE_GENERATION_SKILL_ID,
+  bulk_price_edit: BULK_PRICE_EDIT_SKILL_ID,
+  bulk_status_edit: BULK_STATUS_EDIT_SKILL_ID,
+  product_export: PRODUCT_EXPORT_SKILL_ID,
+  product_import: PRODUCT_IMPORT_SKILL_ID,
 };
 
 export function skillIdFromAiTaskType(taskType: string): string | undefined {
@@ -175,14 +189,39 @@ export function formatTaskProposalParamSummary(
   value: string,
   t: TFunction,
 ): string {
-  // 枚举字段的 label 是中文硬编码，必须走 i18n；资源字段的 label 是店铺真实名称，直接用
   const resourceLabel = isResourceOptionField(field.type ?? "text")
     ? field.options?.find((option) => option.value === value)?.label
     : undefined;
+  const displayValue =
+    field.type === "multiselect" || field.key === "operations"
+      ? formatMultiselectValue(field, value, t)
+      : (resourceLabel ?? resolveTaskProposalParamValueLabel(field.key, value, t));
   return t(`${PREFIX}.paramSummary`, {
     label: resolveTaskProposalFieldLabel(field, t),
-    value: resourceLabel ?? resolveTaskProposalParamValueLabel(field.key, value, t),
+    value: displayValue,
   });
+}
+
+function formatMultiselectValue(
+  field: TaskProposalSummaryField,
+  value: string,
+  t: TFunction,
+): string {
+  const parts = value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return value;
+  return parts
+    .map((part) => {
+      if (field.key === "operations") {
+        const operationLabel = t(`productImport.operation.${part}`, { defaultValue: "" });
+        if (operationLabel) return operationLabel;
+      }
+      const optionLabel = field.options?.find((option) => option.value === part)?.label;
+      return optionLabel || resolveTaskProposalParamValueLabel(field.key, part, t);
+    })
+    .join("、");
 }
 
 export function buildTaskRunParamsSummary(args: {
@@ -191,9 +230,15 @@ export function buildTaskRunParamsSummary(args: {
   paramValues: Record<string, string>;
   t: TFunction;
 }): string[] {
-  return args.params.map((field) =>
-    formatTaskProposalParamSummary(field, args.paramValues[field.key] ?? "", args.t),
-  );
+  return args.params
+    .filter((field) => field.type !== "hidden" && field.key !== "fileName")
+    .map((field) => {
+      const raw =
+        field.type === "file"
+          ? args.paramValues.fileName?.trim() || args.paramValues[field.key] || ""
+          : (args.paramValues[field.key] ?? "");
+      return formatTaskProposalParamSummary(field, raw, args.t);
+    });
 }
 
 export function resolveTaskRunTitle(run: Pick<TaskRunPayload, "skillId" | "title">, t: TFunction): string {

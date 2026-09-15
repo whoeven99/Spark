@@ -5,7 +5,7 @@
  *   目标对象勾选 + schema 驱动的参数表单 + 执行估算（分桶 EWMA） + 确认执行。
  * 执行走 POST /api/task-proposal，按 skillId 路由到服务端注册表。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   TaskProposalExecuteResponse,
@@ -35,11 +35,19 @@ import {
   resolveTaskProposalTitle,
 } from "../../../lib/taskProposalDisplay";
 import { formatThinkingDuration } from "../../../lib/thinkingDuration";
+import { PRODUCT_IMPORT_SKILL_ID, suggestImportOperations, type ProductImportOperation } from "../../../lib/productImport";
+import type { ProductImportSheetPreview } from "../../../lib/productImportSheetPreview";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import {
   TaskProposalProductImageGrid,
   type ProductImagesCacheEntry,
 } from "./TaskProposalProductImageGrid";
+import { FileField, MultiselectField } from "./TaskProposalFieldControls";
+import {
+  ProductImportProposalPreview,
+  type ProductImportPreviewGate,
+} from "../productImport/ProductImportProposalPreview";
+import { ProductImportConfirmDialog } from "../productImport/ProductImportConfirmDialog";
 
 function buildPictureTranslateTargetId(productId: string, imageUrl: string): string {
   return `${productId}::${imageUrl}`;
@@ -485,6 +493,8 @@ type Props = {
   contextProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query；items 与手动选择都为空时兜底 */
   contextProductQuery?: ObjectQuerySelection | null;
+  /** 导入商品：工作台已选文件 ID，卡片 hidden fileId 为空时带上 */
+  fallbackFileId?: string;
   /**
    * 打开与底部「添加上下文 → 商品」相同的选择弹窗。
    * 选中结果写入工作台上下文后，本卡跟随 contextProducts 更新（点「更换」后）。
@@ -500,6 +510,7 @@ export function TaskProposalCard({
   proposal,
   contextProducts = [],
   contextProductQuery = null,
+  fallbackFileId,
   onOpenProductPicker,
   onTasksCreated,
   onExecuted,
@@ -579,6 +590,33 @@ export function TaskProposalCard({
   const [paramValues, setParamValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(resolved.params.map((f) => [f.key, f.value])),
   );
+  const [fileUploading, setFileUploading] = useState(false);
+  const [importPreviewGate, setImportPreviewGate] = useState<ProductImportPreviewGate>({
+    loading: false,
+    blocked: false,
+  });
+  const handleImportPreviewGate = useCallback((gate: ProductImportPreviewGate) => {
+    setImportPreviewGate(gate);
+  }, []);
+  const [importSheetPreview, setImportSheetPreview] = useState<ProductImportSheetPreview | null>(
+    null,
+  );
+  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
+  const handleImportPreviewChange = useCallback((preview: ProductImportSheetPreview | null) => {
+    setImportSheetPreview(preview);
+  }, []);
+  const autoFilledImportOpsRef = useRef(false);
+  const lastImportFileIdRef = useRef("");
+  const handleDetectedImportOperations = useCallback((detected: ProductImportOperation[]) => {
+    setParamValues((prev) => {
+      if ((prev.operations ?? "").trim()) return prev;
+      if (autoFilledImportOpsRef.current) return prev;
+      const suggested = suggestImportOperations(detected);
+      if (suggested.length === 0) return prev;
+      autoFilledImportOpsRef.current = true;
+      return { ...prev, operations: suggested.join(",") };
+    });
+  }, []);
 
   // 估算（per-item，由前端乘以勾选数量）
   const [estimateLoading, setEstimateLoading] = useState(true);
@@ -652,15 +690,42 @@ export function TaskProposalCard({
       !isResourceOptionField(field.type) ||
       (paramValues[field.key] ?? field.value).trim().length > 0,
   );
+  const fileFieldsReady = resolved.params.every((field) => {
+    if (field.type !== "file") return true;
+    if (fileUploading) return false;
+    const local = (paramValues[field.key] ?? field.value).trim();
+    if (local) return true;
+    return field.key === "fileId" && Boolean(fallbackFileId?.trim());
+  });
+  const multiselectFieldsReady = resolved.params.every((field) => {
+    if (field.type !== "multiselect") return true;
+    return (paramValues[field.key] ?? field.value)
+      .split(/[,，]/)
+      .some((item) => item.trim().length > 0);
+  });
+  const isProductImport = resolved.skillId === PRODUCT_IMPORT_SKILL_ID;
+  const importFileId =
+    (paramValues.fileId ?? "").trim() || (isProductImport ? fallbackFileId?.trim() ?? "" : "");
+  useEffect(() => {
+    if (!isProductImport) return;
+    if (lastImportFileIdRef.current === importFileId) return;
+    lastImportFileIdRef.current = importFileId;
+    if (!autoFilledImportOpsRef.current) return;
+    autoFilledImportOpsRef.current = false;
+    setParamValues((prev) => ({ ...prev, operations: "" }));
+  }, [importFileId, isProductImport]);
   const canSubmit =
     descriptionReady &&
     resourceFieldsReady &&
+    fileFieldsReady &&
+    multiselectFieldsReady &&
     (targetless ||
       targetsOptional ||
       (isPictureTranslate ? executeTargets.length > 0 : selectedTargets.length > 0) ||
       targetsQuery !== null) &&
     !submitting &&
-    !done;
+    !done &&
+    !(isProductImport && (importPreviewGate.loading || importPreviewGate.blocked));
   /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标 / 可选目标技能恒为 1 */
   const effectiveCount =
     targetless || targetsOptional
@@ -721,9 +786,10 @@ export function TaskProposalCard({
     [],
   );
 
-  const handleConfirm = useCallback(async () => {
-    if (!canSubmit) return;
+  const handleConfirm = useCallback(async (): Promise<string[]> => {
+    if (!canSubmit) return [];
     setSubmitting(true);
+    let createdIds: string[] = [];
     try {
       const resp = await fetch("/api/task-proposal", {
         method: "POST",
@@ -731,7 +797,14 @@ export function TaskProposalCard({
         body: JSON.stringify({
           intent: "execute",
           skillId: resolved.skillId,
-          params: paramValues,
+          params: {
+            ...paramValues,
+            ...(resolved.skillId === PRODUCT_IMPORT_SKILL_ID &&
+            !(paramValues.fileId ?? "").trim() &&
+            fallbackFileId
+              ? { fileId: fallbackFileId }
+              : {}),
+          },
           ...(targetsQuery
             ? {
                 targetsQuery: {
@@ -756,6 +829,7 @@ export function TaskProposalCard({
       });
       const json = (await resp.json()) as TaskProposalExecuteResponse;
       if (json.ok) {
+        createdIds = json.taskIds;
         setDoneCreated(json.created);
         setDoneErrors(json.errors);
         if (json.taskIds.length > 0) {
@@ -800,9 +874,17 @@ export function TaskProposalCard({
       ]);
     } finally {
       setSubmitting(false);
-      setDone(true);
+      if (createdIds.length > 0 || resolved.skillId !== PRODUCT_IMPORT_SKILL_ID) {
+        setDone(true);
+      }
     }
-  }, [canSubmit, resolved, paramValues, executeTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
+    return createdIds;
+  }, [canSubmit, resolved, paramValues, fallbackFileId, executeTargets, targetsQuery, onTasksCreated, onExecuted, displayTitle, t]);
+
+  const handleImportMatchConfirm = useCallback(() => {
+    setImportPreviewOpen(false);
+    void handleConfirm();
+  }, [handleConfirm]);
 
   const headerSubtitle = done
     ? t("workspace.taskProposal.card.submitted")
@@ -1112,6 +1194,29 @@ export function TaskProposalCard({
                       </option>
                     ))}
                   </select>
+                ) : field.type === "multiselect" ? (
+                  <MultiselectField
+                    field={field}
+                    value={paramValues[field.key] ?? field.value}
+                    onChange={(next) =>
+                      setParamValues((prev) => ({ ...prev, [field.key]: next }))
+                    }
+                  />
+                ) : field.type === "file" ? (
+                  <FileField
+                    field={field}
+                    value={paramValues[field.key] ?? field.value}
+                    fileName={paramValues.fileName ?? ""}
+                    fallbackFileId={field.key === "fileId" ? fallbackFileId : undefined}
+                    onChange={(fileId, name) =>
+                      setParamValues((prev) => ({
+                        ...prev,
+                        [field.key]: fileId,
+                        fileName: name,
+                      }))
+                    }
+                    onUploading={setFileUploading}
+                  />
                 ) : isResourceOptionField(field.type) ? (
                   <ResourceSelectField
                     field={field}
@@ -1155,6 +1260,17 @@ export function TaskProposalCard({
               </div>
             ))}
 
+            {isProductImport && importFileId ? (
+              <ProductImportProposalPreview
+                fileId={importFileId}
+                operations={paramValues.operations ?? ""}
+                density="compact"
+                onGateChange={handleImportPreviewGate}
+                onPreviewChange={handleImportPreviewChange}
+                onDetectedOperations={handleDetectedImportOperations}
+              />
+            ) : null}
+
             {/* Estimation：未选对象时不占版面 */}
             {effectiveCount > 0 || targetless ? (
               <EstimateLine
@@ -1176,36 +1292,56 @@ export function TaskProposalCard({
                 flex: 1,
               }}
             >
-              {targetless
-                ? t("workspace.taskProposal.card.footerCreateOne")
-                : targetsQuery
-                  ? t("workspace.taskProposal.card.footerCreateQuery", {
-                      approx:
-                        queryCount != null
-                          ? t("workspace.taskProposal.card.footerCreateQueryApprox", {
-                              count: queryCount,
-                            })
-                          : "",
-                    })
-                  : selectedTargets.length === 0
-                    ? t("workspace.taskProposal.card.footerSelectOne")
-                    : singleTask
-                      ? t("workspace.taskProposal.card.footerCreateOneForCount", {
-                          count: selectedTargets.length,
+              {resolved.skillId === PRODUCT_IMPORT_SKILL_ID && !multiselectFieldsReady
+                ? t("workspace.taskProposal.card.footerSelectOperations")
+                : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && !fileFieldsReady
+                  ? t("workspace.taskProposal.card.footerSelectFile")
+                : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && importPreviewGate.loading
+                  ? t("productImport.sheetPreview.loading")
+                : resolved.skillId === PRODUCT_IMPORT_SKILL_ID && importPreviewGate.blocked
+                  ? t(
+                      importPreviewGate.reasonKey ?? "productImport.sheetPreview.error.parse_failed",
+                    )
+                  : resolved.skillId === PRODUCT_IMPORT_SKILL_ID
+                    ? t("productImport.previewSheetFooter")
+                    : targetless
+                    ? t("workspace.taskProposal.card.footerCreateOne")
+                    : targetsQuery
+                      ? t("workspace.taskProposal.card.footerCreateQuery", {
+                          approx:
+                            queryCount != null
+                              ? t("workspace.taskProposal.card.footerCreateQueryApprox", {
+                                  count: queryCount,
+                                })
+                              : "",
                         })
-                      : t("workspace.taskProposal.card.footerCreateCount", {
-                          count: selectedTargets.length,
-                        })}
+                      : selectedTargets.length === 0
+                        ? t("workspace.taskProposal.card.footerSelectOne")
+                        : singleTask
+                          ? t("workspace.taskProposal.card.footerCreateOneForCount", {
+                              count: selectedTargets.length,
+                            })
+                          : t("workspace.taskProposal.card.footerCreateCount", {
+                              count: selectedTargets.length,
+                            })}
             </span>
             <button
               type="button"
               disabled={!canSubmit}
               style={confirmBtnStyle(!canSubmit)}
-              onClick={() => void handleConfirm()}
+              onClick={() => {
+                if (isProductImport) {
+                  setImportPreviewOpen(true);
+                  return;
+                }
+                void handleConfirm();
+              }}
             >
               {submitting
                 ? t("workspace.taskProposal.card.confirmSubmitting")
-                : targetless
+                : isProductImport
+                  ? t("productImport.previewSheetButton")
+                  : targetless
                   ? t("workspace.taskProposal.card.confirmStart")
                   : targetsQuery
                     ? t("workspace.taskProposal.card.confirmQuery")
@@ -1222,6 +1358,17 @@ export function TaskProposalCard({
           </div>
         </>
       )}
+      {isProductImport ? (
+        <ProductImportConfirmDialog
+          open={importPreviewOpen}
+          preview={importSheetPreview}
+          previewLoading={importPreviewGate.loading}
+          previewErrorKey={importPreviewGate.reasonKey}
+          submitting={submitting}
+          onClose={() => setImportPreviewOpen(false)}
+          onConfirmMatch={handleImportMatchConfirm}
+        />
+      ) : null}
     </div>
   );
 }

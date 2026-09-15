@@ -15,6 +15,8 @@ import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skil
 import { bulkPriceEditSkillDefinition } from "./bulkPriceEdit";
 import { bulkTagEditSkillDefinition } from "./bulkTagEdit";
 import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
+import { productExportSkillDefinition } from "./productExport";
+import { productImportSkillDefinition } from "./productImport";
 import { seoAuditSkillDefinition } from "./seoAudit";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
@@ -116,6 +118,9 @@ globalToolRegistry.register(bulkTagEditSkillDefinition);
 
 // 批量上下架：同上，写回走 productUpdate 只改 status，不碰销售渠道发布
 globalToolRegistry.register(bulkStatusEditSkillDefinition);
+
+globalToolRegistry.register(productExportSkillDefinition);
+globalToolRegistry.register(productImportSkillDefinition);
 
 // SEO 体检：纯规则只读诊断，先告诉商户搜索标题/描述哪里有问题
 globalToolRegistry.register(seoAuditSkillDefinition);

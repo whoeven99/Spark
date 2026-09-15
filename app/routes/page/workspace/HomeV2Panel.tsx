@@ -105,7 +105,7 @@ const homeV2Styles = {
     }) as const,
   capabilityGrid: {
     display: "grid",
-    // 176px 让四组在常见嵌入宽度下排成一行；放不下时 auto-fit 自行换行
+    // 176px 让五组在常见嵌入宽度下尽量排成一行；放不下时 auto-fit 自行换行
     gridTemplateColumns: "repeat(auto-fit, minmax(176px, 1fr))",
     gap: 10,
   },

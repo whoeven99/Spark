@@ -5,8 +5,8 @@
  * 这一层同时是 Spark 的 SEO 知识库：判定阈值、为什么是问题、怎么改，
  * 全部在这里成文，避免把 SEO 经验散落进各处 prompt 字符串。
  *
- * 搜索标题/描述问题目前没有 Spark 内批量改写入口，fixability 记为 manual；
- * 正文过薄走商品文案优化（product_content）。
+ * 搜索标题/描述的缺失、过长、过短可走商品管理一期的批量字段编辑（fixability = bulk_seo）；
+ * 重复标题/描述仍要逐条改写（manual）；正文过薄走商品文案优化（product_content）。
  */
 
 /* ── 显示宽度 ───────────────────────────────────────────────
@@ -79,6 +79,8 @@ export type SeoAuditSeverity = "high" | "medium" | "low";
 export type SeoAuditFixability =
   /** 要改的是商品正文，走商品文案优化 */
   | "product_content"
+  /** 搜索标题/描述可用批量字段编辑统一 set/clear */
+  | "bulk_seo"
   /** 没有安全的批量改法，只能人工逐个处理 */
   | "manual";
 
@@ -238,12 +240,12 @@ const SEVERITY_BY_CODE: Record<SeoAuditIssueCode, SeoAuditSeverity> = {
 const FIXABILITY_BY_CODE: Record<SeoAuditIssueCode, SeoAuditFixability> = {
   title_duplicated: "manual",
   description_duplicated: "manual",
-  title_missing: "manual",
-  description_missing: "manual",
-  title_too_long: "manual",
-  description_too_long: "manual",
-  title_too_short: "manual",
-  description_too_short: "manual",
+  title_missing: "bulk_seo",
+  description_missing: "bulk_seo",
+  title_too_long: "bulk_seo",
+  description_too_long: "bulk_seo",
+  title_too_short: "bulk_seo",
+  description_too_short: "bulk_seo",
   body_too_thin: "product_content",
   // 改 handle 会断链接、需要配 301，没有安全的批量改法
   handle_non_descriptive: "manual",

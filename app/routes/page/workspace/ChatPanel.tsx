@@ -22,6 +22,7 @@ import {
   type WorkspaceConversationMessage,
 } from "./types";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import { AI_TASK_FETCH_INIT, mergeFetchedAiTask } from "../../../lib/aiTaskStatusSync";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { HealthDiagnosisFormPayload } from "../../../lib/healthDiagnosisCardPayload";
 import {
@@ -38,6 +39,8 @@ import { ImageGenerationTaskDetailPage } from "../../component/imageStudio/Image
 import { BulkPriceEditTaskDetailPage } from "../../component/bulkPriceEdit/BulkPriceEditTaskDetailPage";
 import { BulkTagEditTaskDetailPage } from "../../component/bulkTagEdit/BulkTagEditTaskDetailPage";
 import { BulkStatusEditTaskDetailPage } from "../../component/bulkStatusEdit/BulkStatusEditTaskDetailPage";
+import { ProductExportTaskDetailPage } from "../../component/productExport/ProductExportTaskDetailPage";
+import { ProductImportTaskDetailPage } from "../../component/productImport/ProductImportTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
 
@@ -342,7 +345,10 @@ export function ChatPanel({
 
     const cached = tasksById[reviewTaskId];
     if (cached && isChatInlineReviewTask(cached.taskType)) {
-      setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : cached));
+      setReviewTask((prev) => {
+        if (!prev || prev.id !== reviewTaskId) return cached;
+        return mergeFetchedAiTask(prev, cached);
+      });
       setReviewLoading(false);
       return;
     }
@@ -365,7 +371,7 @@ export function ChatPanel({
     const query = new URLSearchParams(
       locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
     );
-    void fetch(`/api/ai-task/${encodeURIComponent(reviewTaskId)}?${query.toString()}`)
+    void fetch(`/api/ai-task/${encodeURIComponent(reviewTaskId)}?${query.toString()}`, AI_TASK_FETCH_INIT)
       .then(async (resp) => {
         if (cancelled) return;
         if (!resp.ok) {
@@ -374,7 +380,10 @@ export function ChatPanel({
         }
         const body = (await resp.json()) as { task?: AITaskItem };
         if (body.task && isChatInlineReviewTask(body.task.taskType)) {
-          setReviewTask((prev) => (prev?.id === reviewTaskId ? prev : body.task!));
+          setReviewTask((prev) => {
+            if (!prev || prev.id !== reviewTaskId) return body.task!;
+            return mergeFetchedAiTask(prev, body.task!);
+          });
           return;
         }
         closeReviewDialog();
@@ -810,6 +819,7 @@ export function ChatPanel({
                   streamingWorkspaceActions={streamingWorkspaceActions}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
+                  fallbackFileId={selectedFileIds[0]}
                   onOpenProductPicker={handleOpenProductPicker}
                   onTaskProposalExecuted={(run) =>
                     onTaskProposalExecuted(conversation.id, run)
@@ -834,6 +844,7 @@ export function ChatPanel({
               }
               contextProducts={workspaceBatchProducts}
               contextProductQuery={objectQuerySelectionByType.product}
+              fallbackFileId={selectedFileIds[0]}
               onOpenProductPicker={handleOpenProductPicker}
               tasksById={tasksById}
             />
@@ -1004,6 +1015,36 @@ export function ChatPanel({
           />
         ) : reviewTask?.taskType === "bulk_status_edit" ? (
           <BulkStatusEditTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "product_import" ? (
+          <ProductImportTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "product_export" ? (
+          <ProductExportTaskDetailPage
             task={reviewTask}
             onBack={closeReviewDialog}
             showBackButton={false}

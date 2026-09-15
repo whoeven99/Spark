@@ -4,6 +4,7 @@ import {
   markTaskFailed,
   markTaskPendingReview,
   markTaskSucceeded,
+  markTaskAppliedWithResult,
   getTaskMeta,
   updateTaskResult,
 } from "./aiTaskStore.server";
@@ -145,6 +146,44 @@ export async function pendingReviewTask(params: {
     type: "status_change",
     taskId: params.taskId,
     status: "pending_review",
+    result: params.result,
+  });
+  clearTaskSubscribers(params.taskId);
+}
+
+export async function appliedTask(params: {
+  taskId: string;
+  result: Record<string, unknown>;
+  startedAt?: number;
+  finalMessage?: AITaskMessageInput;
+}): Promise<void> {
+  if (params.finalMessage) {
+    const elapsedSeconds = params.startedAt
+      ? Math.floor((Date.now() - params.startedAt) / 1000)
+      : 0;
+    const entry = await appendTaskLog({
+      taskId: params.taskId,
+      elapsedSeconds,
+      message: params.finalMessage,
+    });
+    emitTaskEvent(params.taskId, {
+      type: "log",
+      taskId: params.taskId,
+      elapsedSeconds: entry.elapsedSeconds,
+      message: entry.message,
+      messageKey: entry.messageKey,
+      messageParams: entry.messageParams,
+      createdAt: entry.createdAt,
+    });
+  }
+  await markTaskAppliedWithResult({
+    taskId: params.taskId,
+    result: params.result,
+  });
+  emitTaskEvent(params.taskId, {
+    type: "status_change",
+    taskId: params.taskId,
+    status: "applied",
     result: params.result,
   });
   clearTaskSubscribers(params.taskId);

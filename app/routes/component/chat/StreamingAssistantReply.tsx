@@ -39,6 +39,7 @@ type StreamingAssistantReplyProps = {
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
+  fallbackFileId?: string;
   /** 打开与底部工具栏相同的商品选择弹窗 */
   onOpenProductPicker?: () => void;
   /** TaskProposal 执行成功（向对话追加「任务已开始」新一轮） */
@@ -290,6 +291,7 @@ export function StreamingAssistantReply({
   streamingWorkspaceActions = false,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
+  fallbackFileId,
   onOpenProductPicker,
   onTaskProposalExecuted,
   onHealthDiagnosisRefreshed,
@@ -396,6 +398,7 @@ export function StreamingAssistantReply({
                     proposal={streamingTaskProposal}
                     contextProducts={workspaceBatchProducts}
                     contextProductQuery={workspaceProductQuery}
+                    fallbackFileId={fallbackFileId}
                     onOpenProductPicker={onOpenProductPicker}
                     onExecuted={onTaskProposalExecuted}
                   />

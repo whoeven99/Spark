@@ -18,6 +18,8 @@ const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
   "bulk_price_edit",
   "bulk_tag_edit",
   "bulk_status_edit",
+  "product_export",
+  "product_import",
 ]);
 
 export function isChatInlineReviewTask(taskType?: string | null): boolean {
@@ -28,6 +30,8 @@ const REVIEW_DIALOG_TITLE_KEYS: Record<string, string> = {
   bulk_price_edit: "bulkPriceEdit.reviewTitleShort",
   bulk_tag_edit: "bulkTagEdit.reviewTitleShort",
   bulk_status_edit: "bulkStatusEdit.reviewTitleShort",
+  product_export: "productExport.reviewTitleShort",
+  product_import: "productImport.reviewTitleShort",
 };
 
 /** 审核弹窗标题：默认沿用商品文案那套「审核结果」，特殊类型可覆盖。 */
@@ -38,21 +42,35 @@ export function resolveChatReviewDialogTitleKey(taskType?: string | null): strin
   return "productImproveStage1.chatReviewDialogTitle";
 }
 
+/** 导出完成后也要在对话里给结果入口。 */
+export function resolveSucceededProductExportTask(
+  matchedTasks: AITaskItem[],
+): AITaskItem | undefined {
+  return matchedTasks.find(
+    (task) => task.taskType === "product_export" && task.status === "succeeded",
+  );
+}
+
+function resolveInlineReviewTask(matchedTasks: AITaskItem[]): AITaskItem | undefined {
+  return (
+    matchedTasks.find(
+      (task) => task.status === "pending_review" && isChatInlineReviewTask(task.taskType),
+    ) ?? matchedTasks.find((task) => isChatInlineReviewTask(task.taskType))
+  );
+}
+
 /**
- * 找出这一轮里可以在对话内审核的任务类型。
+ * 找出这一轮里可以在对话内审核/预览的任务类型。
  *
- * 只要任务类型支持对话内审核就给入口，不再只认商品文案。
- * 同一轮任务类型是同质的，取第一个待审核项的类型即可。
+ * 进行中、待审核、已结束（含失败）都可以打开同一套详情弹窗。
+ * 同一轮任务类型是同质的，优先待审核项。
  */
 function resolveInlineReviewTaskType(
   run: TaskRunPayload,
   matchedTasks: AITaskItem[],
 ): string | undefined {
-  const pending = matchedTasks.find(
-    (task) => task.status === "pending_review" && isChatInlineReviewTask(task.taskType),
-  );
-  if (pending?.taskType) return pending.taskType;
-  // 批量商品文案在任务快照还没到位时也要给入口
+  const matched = resolveInlineReviewTask(matchedTasks);
+  if (matched?.taskType) return matched.taskType;
   if (run.skillId === BATCH_PRODUCT_IMPROVE_SKILL_ID) return "product_improve";
   return undefined;
 }
