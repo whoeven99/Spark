@@ -203,6 +203,11 @@ function buildTodoPrompt(
 }
 
 const emptyStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
+};
 
 const errorStyle: CSSProperties = {
   margin: 0,
