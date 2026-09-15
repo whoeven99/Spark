@@ -3,7 +3,7 @@
  *
  * prod 导航不展示任务页（见 app/config/appEntry.server.ts），
  * 所以待审核任务的验收入口必须留在对话内：进度卡据此决定是否给「去审核」，
- * ChatPanel 据此决定是否开 DialogShell 而不是跳 /app/tasks。
+ * ChatPanel 据此决定是否开 DialogShell 而不是跳 /app/tasks-v2。
  * 新增可对话内审核的任务类型时，这里和 ChatPanel 的渲染分支要一起加。
  */
 import type { AITaskItem } from "../../../lib/aiTaskTypes";

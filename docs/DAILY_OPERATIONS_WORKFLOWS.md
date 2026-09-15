@@ -751,7 +751,7 @@ type DetailAiContext = {
 /app/health-monitor?view=detail&monitor=refund-health
 /app/health-monitor?view=detail&monitor=fulfillment-health
 /app/health-monitor?view=detail&monitor=inventory-health
-/app/tasks?taskId=<taskId>
+/app/tasks-v2?taskId=<taskId>
 ```
 
 如果需要深链接定位，建议继续附加：

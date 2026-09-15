@@ -159,7 +159,7 @@ export function StudioWorkbenchPage() {
           description: t("studioWorkbench.cards.taskWorkbench.description"),
           meta: t("studioWorkbench.cards.taskWorkbench.meta"),
           tone: "ready",
-          href: appendSearchToPath("/app/tasks", locationSearch),
+          href: appendSearchToPath("/app/tasks-v2", locationSearch),
         },
         {
           title: t("studioWorkbench.cards.automation.title"),

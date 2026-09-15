@@ -89,7 +89,7 @@ describe("legacy /app/today/diagnosis task redirect", () => {
 
     await expectRedirectLocation(
       request,
-      "/app/tasks?taskId=task_1&returnTo=%2Fapp%2Ftoday&unifiedView=history",
+      "/app/tasks-v2?taskId=task_1&returnTo=%2Fapp%2Ftoday&unifiedView=history",
     );
     expect(getOperationTaskByIdForShop).toHaveBeenCalledWith(
       "spark-test.myshopify.com",
@@ -105,7 +105,7 @@ describe("legacy /app/today/diagnosis task redirect", () => {
       "https://example.com/app/today/diagnosis?detail=task&taskId=task_1",
     );
 
-    await expectRedirectLocation(request, "/app/tasks?taskId=task_1");
+    await expectRedirectLocation(request, "/app/tasks-v2?taskId=task_1");
     expect(ensureDailySnapshot).not.toHaveBeenCalled();
   });
 
@@ -121,7 +121,7 @@ describe("legacy /app/today/diagnosis task redirect", () => {
       "https://example.com/app/today/diagnosis?detail=task&taskId=task_1",
     );
 
-    await expectRedirectLocation(request, "/app/tasks?taskId=task_1");
+    await expectRedirectLocation(request, "/app/tasks-v2?taskId=task_1");
   });
 
   it("redirects without tab hint when the task cannot be found", async () => {
@@ -131,14 +131,14 @@ describe("legacy /app/today/diagnosis task redirect", () => {
       "https://example.com/app/today/diagnosis?detail=task&taskId=missing_task",
     );
 
-    await expectRedirectLocation(request, "/app/tasks?taskId=missing_task");
+    await expectRedirectLocation(request, "/app/tasks-v2?taskId=missing_task");
     expect(ensureDailySnapshot).not.toHaveBeenCalled();
   });
 
   it("redirects without lookup when taskId is missing", async () => {
     const request = new Request("https://example.com/app/today/diagnosis?detail=task");
 
-    await expectRedirectLocation(request, "/app/tasks");
+    await expectRedirectLocation(request, "/app/tasks-v2");
     expect(getOperationTaskByIdForShop).not.toHaveBeenCalled();
     expect(ensureDailySnapshot).not.toHaveBeenCalled();
   });
@@ -150,7 +150,7 @@ describe("legacy /app/today/diagnosis task redirect", () => {
       "https://example.com/app/today/diagnosis?detail=task&taskId=task_1",
     );
 
-    await expectRedirectLocation(request, "/app/tasks?taskId=task_1");
+    await expectRedirectLocation(request, "/app/tasks-v2?taskId=task_1");
     expect(ensureDailySnapshot).not.toHaveBeenCalled();
   });
 });

@@ -33,7 +33,7 @@ export function buildTodayAnalysisTodoHref(todo: TodayAnalysisTodo): string {
         params.set("unifiedOperationSource", todo.payload.operationSourceFilter.join(","));
       }
       const query = params.toString();
-      return `/app/tasks${query ? `?${query}` : ""}`;
+      return `/app/tasks-v2${query ? `?${query}` : ""}`;
     }
     case "open_assistant":
       return buildWorkspaceChatPrefillPath({
