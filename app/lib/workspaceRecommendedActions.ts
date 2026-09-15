@@ -35,24 +35,9 @@ export function buildWorkspaceRecommendedGroups(
     label: t("workspace.shell.chat.recommend.groupOperations"),
     items: [
       {
-        key: "todayOverview",
-        label: t("workspace.shell.chat.recommend.todayOverview.label"),
-        prompt: t("workspace.shell.chat.recommend.todayOverview.prompt"),
-      },
-      {
-        key: "todayTodos",
-        label: t("workspace.shell.chat.recommend.todayTodos.label"),
+        key: "todayPulse",
+        label: t("workspace.shell.chat.recommend.todayPulse.label"),
         prompt: t("workspace.shell.chat.recommend.todayTodos.prompt"),
-      },
-      {
-        key: "inventoryHealth",
-        label: t("workspace.shell.chat.recommend.inventoryHealth.label"),
-        prompt: t("workspace.shell.chat.recommend.inventoryHealth.prompt"),
-      },
-      {
-        key: "abandonRefund",
-        label: t("workspace.shell.chat.recommend.abandonRefund.label"),
-        prompt: t("workspace.shell.chat.recommend.abandonRefund.prompt"),
       },
       {
         key: "seoAudit",

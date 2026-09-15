@@ -4761,6 +4761,9 @@
           "groupOperations": "Store diagnostics",
           "groupProduct": "Product optimization",
           "groupImage": "Image generation",
+          "todayPulse": {
+            "label": "How is the store today"
+          },
           "todayOverview": {
             "label": "Today's performance",
             "prompt": "Show me today's revenue, order count, conversion rate and average order value, and how they compare with the previous period."
@@ -5497,6 +5500,15 @@
         "afternoon": "Good afternoon",
         "evening": "Good evening",
         "title": "{{greeting}}, {{name}}"
+      },
+      "pulse": {
+        "ok": "Yesterday looked normal",
+        "attention": "{{count}} items need attention: {{reasons}}",
+        "attentionPlain": "{{count}} items need attention",
+        "noData": "No order data yet",
+        "syncing": "Syncing the last 30 days of orders",
+        "seeDetails": "See details",
+        "backfill": "Backfill orders"
       },
       "today": "Today",
       "inspectionAt": "Today {{time}}",

@@ -997,6 +997,28 @@ export async function ensureDailySnapshotOverview(
 }
 
 /**
+ * 只读当日快照。没有或应重建时返回 null，绝不跑 30 天全量诊断。
+ * 首页脉冲用这个，计算仍交给 fire-and-forget 的 ensureDailySnapshotOverview。
+ */
+export async function peekDailySnapshotOverview(
+  shop: string,
+  options?: Omit<EnsureDailySnapshotOptions, "force" | "shopifyAdmin">,
+): Promise<DailyOperationsOverviewResult | null> {
+  const now = options?.now ?? new Date();
+  const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
+  const existing = await prisma.operationDiagnosisSnapshot.findUnique({
+    where: {
+      shop_snapshotDate: { shop, snapshotDate: toDateKey(now, timeZone) },
+    },
+    include: { items: true },
+  });
+  if (!existing || shouldRebuildDailySnapshot(existing)) {
+    return null;
+  }
+  return buildOverviewFromSnapshot(shop, existing, now, timeZone);
+}
+
+/**
  * 确保当日快照存在并返回完整结果（含 detail）的懒巡检入口。
  * 即使命中快照也必须重算一次诊断来取 detail，只读概览时请用
  * `ensureDailySnapshotOverview`。force=true 时重算当日快照（用于手动刷新）。

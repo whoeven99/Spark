@@ -11,6 +11,7 @@ import {
 } from "../server/billing/buildBillingReturnUrl.server";
 import { listConversations } from "../server/conversation/conversationStore.server";
 import { ensureDailySnapshotOverview } from "../server/operations/dailyInspection.server";
+import { loadHomeDailyPulse } from "../server/operations/loadHomeDailyPulse.server";
 import { authenticate } from "../shopify.server";
 import { resolveConversationDisplayTimeZone } from "../lib/viewerCountry";
 import { useSparkBrandName } from "../hooks/useSparkBrandName";
@@ -38,9 +39,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const conversations = await listConversations(session.shop);
 
-  // 首页渲染的是 HomeV2Panel，不消费诊断快照；这里只借首屏预热当日快照供 Today /
-  // Health Monitor 复用。快照未命中时会跑一轮全量诊断，必须 fire-and-forget，
-  // 否则会把秒级耗时压在 SSR 首字节上（与 app.tsx 壳层的安装引导同一模式）。
+  // 脉冲只 peek 当日快照，不重算。未命中时预热仍 fire-and-forget，避免首字节被 30 天诊断拖住。
+  const dailyPulse = await loadHomeDailyPulse(session.shop);
   void ensureDailySnapshotOverview(session.shop, { shopifyAdmin: admin }).catch((error) => {
     console.error("[app._index] daily snapshot warmup failed:", error);
   });
@@ -63,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     accountName,
     homeRenderTimeIso: new Date().toISOString(),
     conversationTimeZone: resolveConversationDisplayTimeZone(request.headers),
+    dailyPulse,
   };
 };
 
@@ -95,6 +96,7 @@ export default function Index() {
     <HomeV2SsrFallback
       displayName={data?.accountName ?? ""}
       homeRenderTimeIso={data?.homeRenderTimeIso}
+      pulse={data?.dailyPulse}
     />
   );
 
@@ -109,6 +111,7 @@ export default function Index() {
           homeVariant="v2"
           homeRenderTimeIso={data?.homeRenderTimeIso}
           conversationTimeZone={data?.conversationTimeZone}
+          initialDailyPulse={data?.dailyPulse}
         />
       </Suspense>
     </ClientMount>

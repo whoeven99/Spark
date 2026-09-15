@@ -12,10 +12,24 @@ describe("promptSkillFocus", () => {
       "productImprove",
       "productImport",
     ]);
+    expect(skillNamesFromFocus("todayPulse")).toEqual([
+      "shopOperations",
+      "healthDiagnosisForm",
+    ]);
     expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["productImport"]);
     expect(skillNamesFromFocus("productExport")).toEqual(["productExport"]);
     expect(skillNamesFromFocus("productImport")).toEqual(["productImport"]);
     expect(skillNamesFromFocus("all")).toBe("all");
+  });
+
+  it("routes freeform SEO / inventory / today pulse phrases", () => {
+    expect(skillNamesFromUserText("帮我给店铺做一次 SEO 体检")).toContain("seoAudit");
+    expect(skillNamesFromUserText("检查库存健康情况")).toContain("shopOperations");
+    expect(skillNamesFromUserText("今天店里怎么样")).toEqual([
+      "shopOperations",
+      "healthDiagnosisForm",
+    ]);
+    expect(skillNamesFromUserText("今天天气怎么样")).toEqual([]);
   });
 
   it("routes collection, import and export recommend phrasing", () => {

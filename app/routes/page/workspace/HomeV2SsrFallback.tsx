@@ -1,6 +1,10 @@
 /** 首页 SSR / ClientMount 占位：把 LCP 问候语写进首屏 HTML，不拉工作台壳。 */
 import { useMemo, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  formatDailyPulseHeadline,
+  type DailyPulse,
+} from "../../../lib/dailyPulse";
 import { shopifyUi } from "./styles";
 import {
   formatHomeDate,
@@ -24,6 +28,13 @@ const styles = {
   greetingDate: {
     marginTop: 6,
     fontSize: 13,
+    color: shopifyUi.textMuted,
+  } satisfies CSSProperties,
+  pulseRow: {
+    marginTop: 8,
+    minHeight: 20,
+    fontSize: 13,
+    lineHeight: 1.45,
     color: shopifyUi.textMuted,
   } satisfies CSSProperties,
   assistantCard: {
@@ -73,9 +84,11 @@ const styles = {
 export function HomeV2SsrFallback({
   displayName,
   homeRenderTimeIso,
+  pulse,
 }: {
   displayName: string;
   homeRenderTimeIso?: string;
+  pulse?: DailyPulse | null;
 }) {
   const { t, i18n } = useTranslation();
   const now = useMemo(() => {
@@ -98,6 +111,15 @@ export function HomeV2SsrFallback({
               })}
             </h1>
             <div style={styles.greetingDate}>{formatHomeDate(now, locale)}</div>
+            <div style={styles.pulseRow}>
+              {pulse
+                ? formatDailyPulseHeadline(
+                    pulse,
+                    t,
+                    locale.startsWith("zh") ? "、" : ", ",
+                  )
+                : null}
+            </div>
           </div>
         </header>
         <section style={styles.assistantCard}>

@@ -20,6 +20,7 @@ import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { SparkMark } from "../../component/common/SparkMark";
 import { useSparkBrandName } from "../../../hooks/useSparkBrandName";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
+import type { DailyPulse } from "../../../lib/dailyPulse";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { normalizeWorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import { useChatStream } from "../chat/useChatStream";
@@ -308,6 +309,7 @@ export function WorkspaceAppShellPage({
   homeVariant = "default",
   homeRenderTimeIso,
   conversationTimeZone = "UTC",
+  initialDailyPulse = null,
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
@@ -319,6 +321,8 @@ export function WorkspaceAppShellPage({
   homeRenderTimeIso?: string;
   /** 对话更新时间展示时区：默认 UTC，确认中国 IP 时为 Asia/Shanghai。 */
   conversationTimeZone?: string;
+  /** 首页问候下一句经营结论；快照未就绪时为 null。 */
+  initialDailyPulse?: DailyPulse | null;
 }) {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
@@ -1871,6 +1875,7 @@ export function WorkspaceAppShellPage({
           <HomeV2Panel
             displayName={displayName}
             initialRenderTimeIso={homeRenderTimeIso}
+            initialPulse={initialDailyPulse}
             onSubmitPrompt={(prompt, skillFocus) =>
               createConversation({ draft: prompt, autoSend: true, skillFocus })
             }
