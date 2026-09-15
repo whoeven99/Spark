@@ -1,5 +1,5 @@
 ---
-description: 用户说上传代码/提 PR 时，直接运行 push:pr 脚本
+description: 用户说上传代码/提 PR 时，按 diff 写中文标题摘要再跑 push:pr
 alwaysApply: true
 ---
 
@@ -7,19 +7,46 @@ alwaysApply: true
 
 当用户说 **「上传代码」**、**「提个 pr」**、**「提交并创建 pr」**、**「push pr」** 或类似意思时：
 
-1. **不要**手动跑 `git status` / `git diff` / `git commit` / `gh pr create` 等一串命令。
-2. **直接运行**（在 Spark 仓库根目录）：
-   ```bash
-   npm run push:pr
-   ```
-3. 若用户指定了提交说明，附加参数：
-   ```bash
-   npm run push:pr -- --message "说明文字"
-   ```
-4. 从脚本输出中提取 `PR_URL:` 那一行，把链接回复给用户。
-5. 若脚本报错，只把错误摘要告诉用户，不要重复执行整套 git 流程。
+不要手写 `git commit` / `git push` / `gh pr create`。先按 **当前未提交改动 + 相对 origin/master 的 diff** 用中文写好标题、commit、摘要，再交给脚本。
 
-脚本路径：`scripts/cursor-push-pr.mjs`  
-会自动：提交当前改动（跳过 `.env` 等敏感文件）→ push → 创建 PR（已有 PR 则返回原链接）。
+## 文案口径
+
+和 rebase 同一套：先看 diff 在做什么，再选动词。
+
+- 相对 master **新加的能力** → 写「新增 …」，不要写成「改为 / 改成 …」。
+- 相对 master **改已有行为** → 才写「改为 …」。
+- 标题、摘要、commit 三者口径一致，都只描述这份 diff。
+
+格式：
+
+- **PR 标题**：中文、产品向，不加 `feat:`，不加分支名。
+- **commit**：第一行 `feat: …` / `fix: …`，空一行，再写 1–2 句 why。
+- **PR 正文**：
+
+```markdown
+## 摘要
+
+- 三条以内，写清用户能感知的变化
+
+## 测试
+
+- [ ] 主路径
+- [ ] 失败/边界
+```
+
+不要把「脚本 / 自动生成」写进 PR。用户指定了提交说明时，commit 用用户的原文，标题和摘要仍按 diff 写中文。
+
+## 步骤
+
+1. 读未提交改动和 `git diff --stat origin/master...HEAD`，用中文写好标题、commit、摘要。
+2. 写入两个文件（`scripts/tmp/` 即可），再执行：
+
+```bash
+npm run push:pr -- --title "中文 PR 标题" --message-file scripts/tmp/push-commit.txt --body-file scripts/tmp/push-pr.md
+```
+
+3. 从脚本输出里提取 `PR_URL:` 回复用户。失败只报摘要，不要再手动跑整套 git。
+
+脚本会：提交当前改动（跳过 `.env` 等敏感文件）→ push → 创建 PR。已有仍打开的 PR 则改标题正文并返回原链接。
 
 依赖：本机已安装 `gh` 并登录，或设置了 `GH_TOKEN` / `GITHUB_TOKEN`。

@@ -19,6 +19,7 @@ import {
 } from "../server/operations/opsCopy.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { getOrderBackfillDays } from "../server/shopify/sync/orderBackfillConfig.server";
+import { summarizeDiagnosisRelatedLines } from "../lib/healthDiagnosisRelatedLines";
 
 const LOG_PREFIX = "[HealthDiagnosis][Route]";
 
@@ -67,6 +68,8 @@ function toCardView(
       status: task.status,
       triggerReason: copy.triggerReason,
       quadrant: task.quadrant,
+      suggestedActions: task.suggestedActions,
+      relatedLines: summarizeDiagnosisRelatedLines(task.relatedObjects, locale),
     };
   });
 

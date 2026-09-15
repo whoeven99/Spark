@@ -39,7 +39,7 @@ export const healthDiagnosisFormSkillDefinition: ToolDefinition = {
   description: "在聊天内打开今日健康诊断与待办卡片（规则引擎快照，不调 LLM）",
   uiPayloadKey: "healthDiagnosisCard",
   systemPromptExtension:
-    "当用户问「今天有什么要处理的」「店铺今天健康吗」「今日待办与风险」「健康诊断」时，必须先调用 open_health_diagnosis_form 打开聊天内卡片（这就是下一步，不要只文字列待办）；调用后简短说明用户可在卡片内查看风险与待办，并可点击「刷新诊断」。禁止在未成功调用该工具时声称「已打开卡片」。本卡片读取规则引擎快照，不消耗 LLM、不创建异步 AITask。仅当用户明确要求用文字解读/总结诊断并引用数字时，再调用 get_daily_operations；文字解读后若用户还想看可点的待办卡，再补开 open_health_diagnosis_form。",
+    "当用户问「今天有什么要处理的」「店铺今天健康吗」「今日待办与风险」「健康诊断」时，必须先调用 open_health_diagnosis_form 打开聊天内卡片（这就是下一步，不要只文字列待办）；调用后简短说明用户可在卡片内查看风险与待办，点一条待办可看建议并列出相关订单（只读），无数据时可在卡片上回补历史订单。禁止让用户去设置页或 Today。禁止在未成功调用该工具时声称「已打开卡片」。本卡片读取规则引擎快照，不消耗 LLM、不创建异步 AITask。用户追问某条待办时只做只读解读与列对象，不要发货、写回或改店铺数据。仅当用户明确要求用文字解读/总结诊断并引用数字时，再调用 get_daily_operations；文字解读后若用户还想看可点的待办卡，再补开 open_health_diagnosis_form。",
   createTool: () => [healthDiagnosisFormTool],
   onStreamEvent: (ev, enqueue, streamContext) => {
     if (
