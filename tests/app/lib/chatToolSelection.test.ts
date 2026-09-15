@@ -30,8 +30,8 @@ describe("chatToolSelection", () => {
       skillFocus: null,
       recentUserText: "帮我批量调价降价 10%",
     });
-    expect(shouldBindSkillForTurn("productImport", priceIntent)).toBe(true);
-    expect(shouldBindSkillForTurn("bulkPriceEdit", priceIntent)).toBe(false);
+    expect(shouldBindSkillForTurn("bulkPriceEdit", priceIntent)).toBe(true);
+    expect(shouldBindSkillForTurn("productImport", priceIntent)).toBe(false);
     expect(shouldBindSkillForTurn("imageGeneration", priceIntent)).toBe(false);
   });
 

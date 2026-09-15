@@ -47,4 +47,6 @@ npm run rebase:pr -- --title "中文 PR 标题" --message-file scripts/tmp/rebas
 
 3. 回复输出里的 `PR_URL:`。失败只报摘要，不要再手动强推。
 
+脚本只认**仍打开**的 PR：有则压提交、强推、改标题正文；没有（含同名分支 PR 已合并）则强推后新建。不要拿已合并的 PR 改标题。
+
 用户说 rebase **即授权** `--force-with-lease`。不要对 `master` 执行。

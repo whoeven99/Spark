@@ -245,6 +245,7 @@ const CAPABILITY_ICONS: Record<string, string> = {
   operations: "▤",
   productOptimization: "◫",
   productManage: "▥",
+  bulkEdit: "▦",
   imageGeneration: "▣",
 };
 

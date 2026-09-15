@@ -16,7 +16,9 @@ describe("promptSkillFocus", () => {
       "shopOperations",
       "healthDiagnosisForm",
     ]);
-    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["productImport"]);
+    expect(skillNamesFromFocus("bulkPriceEdit")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromFocus("bulkTagEdit")).toEqual(["bulkTagEdit"]);
+    expect(skillNamesFromFocus("bulkStatusEdit")).toEqual(["bulkStatusEdit"]);
     expect(skillNamesFromFocus("productExport")).toEqual(["productExport"]);
     expect(skillNamesFromFocus("productImport")).toEqual(["productImport"]);
     expect(skillNamesFromFocus("all")).toBe("all");
@@ -45,7 +47,27 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromUserText("打开导入商品确认卡")).toContain("productImport");
     expect(skillNamesFromUserText("第 3 行怎么改")).toContain("productImport");
     expect(skillNamesFromUserText("校验结果")).toContain("productImport");
-    expect(skillNamesFromUserText("帮我批量调价降价 10%")).toContain("productImport");
+    expect(skillNamesFromUserText("帮我批量调价降价 10%")).toEqual(["bulkPriceEdit"]);
+    expect(
+      skillNamesFromUserText("帮我批量调整商品价格，先确认调价规则和商品范围，再给我变更预览，不要直接写回。"),
+    ).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromUserText("帮我调整已选中商品的价格，先给我变更预览")).toEqual([
+      "bulkPriceEdit",
+    ]);
+    expect(skillNamesFromUserText("批量打标")).toEqual(["bulkTagEdit"]);
+    expect(skillNamesFromUserText("帮我批量修改商品标签，先确认要加/去掉哪些标签")).toEqual([
+      "bulkTagEdit",
+    ]);
+    expect(skillNamesFromUserText("帮我修改已选中商品的标签，先给我变更预览")).toEqual([
+      "bulkTagEdit",
+    ]);
+    expect(skillNamesFromUserText("批量上下架")).toEqual(["bulkStatusEdit"]);
+    expect(skillNamesFromUserText("帮我批量上下架商品，先确认是要上架还是下架")).toEqual([
+      "bulkStatusEdit",
+    ]);
+    expect(skillNamesFromUserText("帮我修改已选中商品的上下架状态，先确认方向")).toEqual([
+      "bulkStatusEdit",
+    ]);
     expect(skillNamesFromUserText("批量改成本")).toContain("productImport");
     expect(skillNamesFromUserText("批量删除商品")).toContain("productImport");
     expect(skillNamesFromUserText("批量改标题")).toEqual(["productImport"]);

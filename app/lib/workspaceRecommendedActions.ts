@@ -2,7 +2,7 @@
  * 首页与对话输入区共用的推荐操作列表。
  *
  * 分组按「做什么」切：经营诊断只读、商品优化与图片生成靠 AI 生成内容、
- * 批量改价/标签/状态/字段/合集/复制/归档/成本/Handle/Metafield/删除都走「导入商品」；导出单独保留。
+ * 导出、导入与规则批量（调价/打标/上下架）分开露出；后三者开独立确认卡，不用 CSV。
  */
 
 export type WorkspaceRecommendScope = "shop" | "selected";
@@ -100,7 +100,31 @@ export function buildWorkspaceRecommendedGroups(
       },
     ],
   };
+  const bulkEdit: WorkspaceRecommendedGroup = {
+    key: "bulkEdit",
+    label: t("workspace.shell.chat.recommend.groupBulkEdit"),
+    items: [
+      {
+        key: "bulkPriceEdit",
+        label: t("workspace.shell.chat.recommend.bulkPriceEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkPriceEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkTagEdit",
+        label: t("workspace.shell.chat.recommend.bulkTagEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkTagEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "bulkStatusEdit",
+        label: t("workspace.shell.chat.recommend.bulkStatusEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.bulkStatusEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+    ],
+  };
   return hasProductContext
-    ? [productOptimization, productManage, imageGeneration, operations]
-    : [operations, productOptimization, productManage, imageGeneration];
+    ? [productOptimization, productManage, bulkEdit, imageGeneration, operations]
+    : [operations, productOptimization, productManage, bulkEdit, imageGeneration];
 }

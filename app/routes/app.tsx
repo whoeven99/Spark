@@ -65,7 +65,6 @@ const NAV_ITEMS: Record<
     href: string;
     labelKey:
       | "nav.home"
-      | "nav.ask"
       | "nav.homeV1"
       | "nav.today"
       | "nav.healthMonitor"
@@ -79,7 +78,6 @@ const NAV_ITEMS: Record<
   }
 > = {
   home: { href: "/app", labelKey: "nav.home" },
-  ask: { href: "/app/assistant", labelKey: "nav.ask" },
   "home-v1": { href: "/app/home-v1", labelKey: "nav.homeV1" },
   today: { href: "/app/today", labelKey: "nav.today" },
   "health-monitor": { href: "/app/health-monitor", labelKey: "nav.healthMonitor" },

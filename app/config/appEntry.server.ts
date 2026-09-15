@@ -6,14 +6,13 @@
  * 环境分流原则：
  * - prod：功能尽量在对话里闭环（首页 `/app` 聊天 + 推荐操作 + 对话内确认/审核）。
  *   导航只留「任务」和「账户与订阅」——前者是对话产出的异步工作台账，后者是 Shopify Billing 页面。
- *   不要把 Today / Health Monitor / Studio / Settings / 助手 加进 PROD_NAV。
- * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作，`/app/create` 仍可直达）。
+ *   不要把 Today / Health Monitor / Studio / Settings 加进 PROD_NAV。
+ * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作与助手，`/app/create` 仍可直达；`/app/assistant` 重定向到 `/app`）。
  */
 import { isProductionNodeEnv } from "./nodeEnv.server";
 
 export type NavItemKey =
   | "home"
-  | "ask"
   | "home-v1"
   | "today"
   | "health-monitor"
@@ -32,7 +31,6 @@ type AppShellConfig = {
 
 /** 测环境 / 本地：全量一级导航（不含首页——点侧栏「Spark」即进 `/app`）。 */
 const FULL_NAV = [
-  "ask",
   "home-v1",
   "today",
   "health-monitor",

@@ -9,7 +9,7 @@
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
-| LangGraph ReAct Agent / Ask 工作台 | ✅ 已上线 | `/app` + `/app/assistant`，上下文：商品 / 订单 / 文章 / 文件 |
+| LangGraph ReAct Agent / Ask 工作台 | ✅ 已上线 | `/app`（旧 `/app/assistant` 重定向至此），上下文：商品 / 订单 / 文章 / 文件 |
 | 六目的地 IA | ✅ 已上线 | Ask / Today / Health Monitor / Studio / Tasks / Settings |
 | 商品文案 / 质量评分 / 写回 Shopify | ✅ 已上线 | Studio Copy；写回走现有商品更新 API，尚无统一 writeBack 治理层 |
 | 图片翻译 / 图片生成 | ✅ 已上线 | Studio Image |

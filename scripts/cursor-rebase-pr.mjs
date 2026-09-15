@@ -1,5 +1,6 @@
 /**
- * 把当前分支相对 base 的提交压成一条中文 commit，改 PR 标题/摘要，--force-with-lease 推送。
+ * 把当前分支相对 base 的提交压成一条中文 commit，--force-with-lease 推送。
+ * 只认仍打开的 PR：有则改标题/摘要；没有（含同名分支旧 PR 已合并）则新建。
  *
  * 标题、commit、PR 正文由调用方按「相对 origin/master 的 diff」用中文写好再传入。
  * commit / PR 正文走文件，避免 Windows 命令行把换行吃掉。
@@ -165,10 +166,8 @@ function getDefaultBase() {
   return "master";
 }
 
-function findPrUrl(branch) {
-  const current = ghAllowFail(["pr", "view", "--json", "url", "-q", ".url"]);
-  if (current.ok && current.out.startsWith("http")) return current.out.trim();
-
+/** 只认仍打开的 PR。`gh pr view` 会返回已合并的同名分支 PR，不能用。 */
+function findOpenPrUrl(branch) {
   const listed = ghAllowFail([
     "pr",
     "list",
@@ -273,7 +272,7 @@ function main() {
   git(["push", "--force-with-lease", "-u", "origin", "HEAD"]);
   console.log("PUSHED: true");
 
-  let prUrl = findPrUrl(branch);
+  let prUrl = findOpenPrUrl(branch);
   withTempFile("cursor-rebase-pr", prBody, (file) => {
     if (prUrl) {
       gh(["pr", "edit", prUrl, "--title", title, "--body-file", file]);

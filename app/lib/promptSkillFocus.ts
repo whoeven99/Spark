@@ -18,16 +18,16 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   generateImage: ["imageGenerationForm", "imageGeneration"],
   productExport: ["productExport"],
   productImport: ["productImport"],
-  bulkPriceEdit: ["productImport"],
-  bulkTagEdit: ["productImport"],
-  bulkStatusEdit: ["productImport"],
+  bulkPriceEdit: ["bulkPriceEdit"],
+  bulkTagEdit: ["bulkTagEdit"],
+  bulkStatusEdit: ["bulkStatusEdit"],
   bulkProductFieldEdit: ["productImport"],
   bulkCollectionEdit: ["productImport"],
   productDuplicate: ["productImport"],
   bulkArchive: ["productImport"],
 };
 
-/** 导入商品及旧批量编辑话术；SEO 体检也会注入 productImport，确定性开卡时要单独判断这组。 */
+/** 导入表格话术。规则批量（调价/打标/上下架）不在这里，走独立 Skill。 */
 const PRODUCT_IMPORT_HEURISTIC_PATTERNS: RegExp[] = [
   /导入商品/,
   /导入.*表格/,
@@ -39,18 +39,6 @@ const PRODUCT_IMPORT_HEURISTIC_PATTERNS: RegExp[] = [
   /问题行/,
   /第\s*\d+\s*行/,
   /how to fix/i,
-  /批量调价/,
-  /批量.*改价/,
-  /降价\s*\d/,
-  /涨价\s*\d/,
-  /bulk\s*price/i,
-  /批量打标/,
-  /批量.*标签/,
-  /bulk\s*tag/i,
-  /批量上下架/,
-  /批量.*上架/,
-  /批量.*下架/,
-  /bulk\s*status/i,
   /批量.*vendor/i,
   /批量.*品牌/,
   /批量.*商品类型/,
@@ -79,7 +67,7 @@ const PRODUCT_IMPORT_HEURISTIC_PATTERNS: RegExp[] = [
   /自定义字段/,
   /批量删除商品/,
   /delete\s*product/i,
-  /批量修改商品/,
+  /批量修改商品(?!标签|价格|状态)/,
   /批量改标题/,
   /批量改正文/,
 ];
@@ -135,6 +123,32 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.generateImage,
     patterns: [/生成.*主图/, /文生图/, /生成.*商品图/, /generate.*(image|主图)/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkPriceEdit,
+    patterns: [
+      /批量调价/,
+      /批量调整.*价格/,
+      /调整已选中商品的价格/,
+      /批量.*改价/,
+      /降价\s*\d/,
+      /涨价\s*\d/,
+      /bulk\s*price/i,
+    ],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkTagEdit,
+    patterns: [/批量打标/, /批量修改.*标签/, /修改已选中商品的标签/, /批量.*标签/, /bulk\s*tag/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.bulkStatusEdit,
+    patterns: [
+      /批量上下架/,
+      /已选中商品的上下架/,
+      /批量.*上架/,
+      /批量.*下架/,
+      /bulk\s*status/i,
+    ],
   },
   {
     skills: RECOMMEND_KEY_TO_SKILL_NAMES.productImport,

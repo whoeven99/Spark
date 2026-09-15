@@ -3,13 +3,15 @@ import {
   type ManagedAiLaunchContext,
 } from "./managedAiLaunchContext";
 
-export const WORKSPACE_ASSISTANT_PATH = "/app/assistant";
+export const WORKSPACE_HOME_PATH = "/app";
 
-export function buildWorkspaceAssistantPath(params: {
+type WorkspacePrefillParams = {
   prompt?: string | null;
   openContextTool?: string | null;
   managedAiContext?: ManagedAiLaunchContext | null;
-}) {
+};
+
+function buildWorkspacePrefillPath(basePath: string, params: WorkspacePrefillParams) {
   const searchParams = new URLSearchParams();
   const prompt = params.prompt?.trim();
   const openContextTool = params.openContextTool?.trim();
@@ -28,13 +30,18 @@ export function buildWorkspaceAssistantPath(params: {
   }
 
   const query = searchParams.toString();
-  return query ? `${WORKSPACE_ASSISTANT_PATH}?${query}` : WORKSPACE_ASSISTANT_PATH;
+  return query ? `${basePath}?${query}` : basePath;
 }
 
-export function buildWorkspaceChatPrefillPath(params: {
-  prompt?: string | null;
-  openContextTool?: string | null;
-  managedAiContext?: ManagedAiLaunchContext | null;
-}) {
-  return buildWorkspaceAssistantPath(params);
+/** 预填后进首页 `/app` 对话。旧助手路径已重定向到这里。 */
+export function buildWorkspaceHomePath(params: WorkspacePrefillParams) {
+  return buildWorkspacePrefillPath(WORKSPACE_HOME_PATH, params);
+}
+
+export function buildWorkspaceAssistantPath(params: WorkspacePrefillParams) {
+  return buildWorkspaceHomePath(params);
+}
+
+export function buildWorkspaceChatPrefillPath(params: WorkspacePrefillParams) {
+  return buildWorkspaceHomePath(params);
 }
