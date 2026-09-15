@@ -80,7 +80,7 @@ function localizeDashboardText(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   const exactMap: Record<string, string> = {
-    "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。":
+    "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请在对话诊断卡上回补。":
       t("workspace.dashboard.empty.orders"),
     "暂无可用经营数据": t("workspace.home.command.noData"),
     "完成数据回补后会生成今日经营摘要": t("workspace.home.command.snapshotPending"),

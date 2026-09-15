@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDailyPulse,
   formatDailyPulseHeadline,
+  resolveHomeDailyPulse,
   type DailyPulse,
   type DailyPulseSource,
 } from "../../../app/lib/dailyPulse";
@@ -97,6 +98,24 @@ describe("buildDailyPulse", () => {
     });
     expect(buildDailyPulse(source({ hasData: false }))).toMatchObject({
       status: "no_data",
+    });
+  });
+});
+
+describe("resolveHomeDailyPulse", () => {
+  it("returns no_data when there is no snapshot and zero orders", () => {
+    expect(resolveHomeDailyPulse(null, { orderCount: 0 })).toMatchObject({
+      status: "no_data",
+    });
+  });
+
+  it("keeps the pulse empty when orders exist but the snapshot is not ready", () => {
+    expect(resolveHomeDailyPulse(null, { orderCount: 12 })).toBeNull();
+  });
+
+  it("prefers syncing over the empty snapshot", () => {
+    expect(resolveHomeDailyPulse(null, { backfillRunning: true, orderCount: 0 })).toMatchObject({
+      status: "syncing",
     });
   });
 });

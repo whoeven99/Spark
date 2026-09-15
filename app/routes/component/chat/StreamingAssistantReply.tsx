@@ -387,6 +387,7 @@ export function StreamingAssistantReply({
                     embedded
                     initialPayload={healthPayload}
                     onDiagnosisRefreshed={onHealthDiagnosisRefreshed}
+                    onAskTodo={onRecommendedPrompt}
                   />
                 </div>
               ) : null}

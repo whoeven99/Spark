@@ -9,12 +9,12 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type {
   HealthDiagnosisApiResponse,
+  HealthDiagnosisCardTask,
   HealthDiagnosisCardView,
   HealthDiagnosisFormPayload,
 } from "../../../lib/healthDiagnosisCardPayload";
 import { healthDiagnosisResultPayload } from "../../../lib/healthDiagnosisCardPayload";
 import type { OrderBackfillApiResponse } from "../../../lib/orderBackfillTypes";
-import { useEmbeddedNavigate } from "../../../hooks/useEmbeddedNavigate";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 type Props = {
@@ -22,6 +22,8 @@ type Props = {
   initialPayload?: HealthDiagnosisFormPayload;
   /** 刷新/回补成功：工作台追加「诊断结果」对话轮 */
   onDiagnosisRefreshed?: (payload: HealthDiagnosisFormPayload) => void;
+  /** 点待办：同对话追问（只读解读 / 列相关对象） */
+  onAskTodo?: (prompt: string) => void;
 };
 
 const DEFAULT_BACKFILL_DAYS = 30;
@@ -169,12 +171,38 @@ const secondaryBtnStyle = (disabled: boolean): CSSProperties => ({
   cursor: disabled ? "not-allowed" : "pointer",
 });
 
-const emptyStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 12,
-  lineHeight: 1.5,
-  color: pageColorTokens.textSecondary,
+const todoButtonStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  textAlign: "left",
+  cursor: "pointer",
+  fontFamily: "inherit",
 };
+
+function backfillDayChoices(defaultDays: number): number[] {
+  return [...new Set([7, 30, 90, defaultDays].filter((days) => days > 0))].sort((a, b) => a - b);
+}
+
+function buildTodoPrompt(
+  task: HealthDiagnosisCardTask,
+  t: (key: string, options?: Record<string, string>) => string,
+): string {
+  return t("workspace.shell.chat.healthDiagnosis.todoPrompt", {
+    title: task.title.trim() || "—",
+    reason: task.triggerReason.trim() || "—",
+    actions:
+      task.suggestedActions.map((item) => item.trim()).filter(Boolean).join("；") ||
+      t("workspace.shell.chat.healthDiagnosis.todoPromptEmptyActions"),
+    related:
+      task.relatedLines.map((item) => item.trim()).filter(Boolean).join("\n") ||
+      t("workspace.shell.chat.healthDiagnosis.todoPromptEmptyRelated"),
+  });
+}
+
+const emptyStyle: CSSProperties = {
 
 const errorStyle: CSSProperties = {
   margin: 0,
@@ -194,12 +222,14 @@ function DiagnosisBody({
   refreshing,
   backfilling,
   error,
+  onAskTodo,
 }: {
   view: HealthDiagnosisCardView | null;
   loading: boolean;
   refreshing: boolean;
   backfilling: boolean;
   error: string | null;
+  onAskTodo?: (prompt: string) => void;
 }) {
   const { t } = useTranslation();
 
@@ -248,8 +278,24 @@ function DiagnosisBody({
           <ul style={{ ...listStyle, marginTop: 8 }}>
             {view.priorityTasks.map((task) => (
               <li key={task.id} style={listItemStyle}>
-                <p style={itemTitleStyle}>{task.title}</p>
-                {task.triggerReason ? <p style={itemMetaStyle}>{task.triggerReason}</p> : null}
+                {onAskTodo ? (
+                  <button
+                    type="button"
+                    style={{
+                      ...todoButtonStyle,
+                    }}
+                    onClick={() => onAskTodo(buildTodoPrompt(task, t))}
+                  >
+                    <p style={itemTitleStyle}>{task.title}</p>
+                    {task.triggerReason ? <p style={itemMetaStyle}>{task.triggerReason}</p> : null}
+                    <p style={itemMetaStyle}>{t("workspace.shell.chat.healthDiagnosis.askTodo")}</p>
+                  </button>
+                ) : (
+                  <>
+                    <p style={itemTitleStyle}>{task.title}</p>
+                    {task.triggerReason ? <p style={itemMetaStyle}>{task.triggerReason}</p> : null}
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -285,9 +331,9 @@ export function HealthDiagnosisChatCard({
   embedded = false,
   initialPayload,
   onDiagnosisRefreshed,
+  onAskTodo,
 }: Props) {
   const shopify = useAppBridge();
-  const navigate = useEmbeddedNavigate();
   const { t, i18n } = useTranslation();
   const isResult = initialPayload?.mode === "result";
   const [view, setView] = useState<HealthDiagnosisCardView | null>(
@@ -298,6 +344,8 @@ export function HealthDiagnosisChatCard({
   const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [defaultBackfillDays, setDefaultBackfillDays] = useState(DEFAULT_BACKFILL_DAYS);
+  const [selectedDays, setSelectedDays] = useState(DEFAULT_BACKFILL_DAYS);
+  const [pickingDays, setPickingDays] = useState(false);
 
   const search = typeof window !== "undefined" ? window.location.search : "";
   const busy = loading || refreshing || backfilling;
@@ -306,6 +354,9 @@ export function HealthDiagnosisChatCard({
     (body: HealthDiagnosisApiResponse) => {
       if (typeof body.defaultBackfillDays === "number" && body.defaultBackfillDays > 0) {
         setDefaultBackfillDays(body.defaultBackfillDays);
+        setSelectedDays((current) =>
+          current === DEFAULT_BACKFILL_DAYS ? body.defaultBackfillDays! : current,
+        );
       }
       if (!body.success || !body.response) {
         setError(
@@ -400,7 +451,7 @@ export function HealthDiagnosisChatCard({
         },
         body: JSON.stringify({
           intent: "backfill_orders",
-          daysBack: defaultBackfillDays,
+          daysBack: selectedDays,
         }),
       });
       const body = (await res.json()) as OrderBackfillApiResponse;
@@ -418,6 +469,7 @@ export function HealthDiagnosisChatCard({
           synced: body.response.synced,
           days: body.response.daysBack,
         }),
+      setPickingDays(false);
       );
 
       // 回补完成后强制刷新诊断并追加结果卡
@@ -452,7 +504,7 @@ export function HealthDiagnosisChatCard({
   }, [
     applyResponse,
     busy,
-    defaultBackfillDays,
+    selectedDays,
     onDiagnosisRefreshed,
     search,
     shopify,
@@ -515,7 +567,7 @@ export function HealthDiagnosisChatCard({
             ? t("workspace.shell.chat.healthDiagnosis.resultSummary")
             : showNoDataActions
               ? t("workspace.shell.chat.healthDiagnosis.noDataSummary", {
-                  days: defaultBackfillDays,
+                  days: selectedDays,
                 })
               : t("workspace.shell.chat.healthDiagnosis.liveSummary")}
         </div>
@@ -526,36 +578,56 @@ export function HealthDiagnosisChatCard({
           refreshing={refreshing}
           backfilling={backfilling}
           error={error}
+          onAskTodo={onAskTodo}
         />
       </div>
 
       {!isResult ? (
         <div style={footerStyle}>
           {showNoDataActions ? (
-            <>
-              <button
-                type="button"
-                style={secondaryBtnStyle(busy)}
-                disabled={busy}
-                onClick={() => navigate("/app/settings/data")}
-              >
-                {t("workspace.shell.chat.healthDiagnosis.openSettings")}
-              </button>
-              <button
-                type="button"
-                style={confirmBtnStyle(busy)}
-                disabled={busy}
-                onClick={() => {
-                  void backfillOrders();
-                }}
-              >
-                {backfilling
-                  ? t("workspace.shell.chat.healthDiagnosis.backfilling")
-                  : t("workspace.shell.chat.healthDiagnosis.backfill", {
-                      days: defaultBackfillDays,
-                    })}
-              </button>
-            </>
+            pickingDays ? (
+              <>
+                {backfillDayChoices(defaultBackfillDays).map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    style={days === selectedDays ? confirmBtnStyle(busy) : secondaryBtnStyle(busy)}
+                    disabled={busy}
+                    onClick={() => {
+                      setSelectedDays(days);
+                      setPickingDays(false);
+                    }}
+                  >
+                    {t("workspace.shell.chat.healthDiagnosis.backfillDays", { days })}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  style={secondaryBtnStyle(busy)}
+                  disabled={busy}
+                  onClick={() => setPickingDays(true)}
+                >
+                  {t("workspace.shell.chat.healthDiagnosis.changeDays")}
+                </button>
+                <button
+                  type="button"
+                  style={confirmBtnStyle(busy)}
+                  disabled={busy}
+                  onClick={() => {
+                    void backfillOrders();
+                  }}
+                >
+                  {backfilling
+                    ? t("workspace.shell.chat.healthDiagnosis.backfilling")
+                    : t("workspace.shell.chat.healthDiagnosis.backfill", {
+                        days: selectedDays,
+                      })}
+                </button>
+              </>
+            )
           ) : (
             <button
               type="button"

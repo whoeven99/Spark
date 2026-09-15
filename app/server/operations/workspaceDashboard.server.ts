@@ -11,7 +11,7 @@ import type { DailyOperationsOverviewResult } from "./dailyInspection.server";
 export type { WorkspaceDashboardSnapshot } from "../../lib/workspaceDashboardTypes";
 
 const EMPTY_ORDER_MESSAGE =
-  "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。";
+  "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请在对话诊断卡上回补。";
 
 function round(value: number, digits = 1): number {
   const factor = 10 ** digits;
