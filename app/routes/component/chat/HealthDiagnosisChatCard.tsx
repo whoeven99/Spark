@@ -474,8 +474,8 @@ export function HealthDiagnosisChatCard({
           synced: body.response.synced,
           days: body.response.daysBack,
         }),
-      setPickingDays(false);
       );
+      setPickingDays(false);
 
       // 回补完成后强制刷新诊断并追加结果卡
       setBackfilling(false);
