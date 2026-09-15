@@ -7,6 +7,8 @@ import { resolveChatReviewDialogTitleKey } from "../chat/chatInlineReviewTasks";
 import { ImageGenerationTaskDetailPage } from "../imageStudio/ImageGenerationTaskDetailPage";
 import { PictureTranslateTaskDetailPage } from "../imageStudio/PictureTranslateTaskDetailPage";
 import { ProductImproveTaskDetailPage } from "../productImprove/ProductImproveTaskDetailPage";
+import { ProductExportTaskDetailPage } from "../productExport/ProductExportTaskDetailPage";
+import { ProductImportTaskDetailPage } from "../productImport/ProductImportTaskDetailPage";
 import { DialogShell } from "../shared/DialogShell";
 
 type TaskUpdatedHandler = (
@@ -79,6 +81,20 @@ export function TaskDetailDialog({
         />
       ) : task?.taskType === "bulk_status_edit" ? (
         <BulkStatusEditTaskDetailPage
+          task={task}
+          onBack={onClose}
+          showBackButton={false}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : task?.taskType === "product_import" ? (
+        <ProductImportTaskDetailPage
+          task={task}
+          onBack={onClose}
+          showBackButton={false}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : task?.taskType === "product_export" ? (
+        <ProductExportTaskDetailPage
           task={task}
           onBack={onClose}
           showBackButton={false}
