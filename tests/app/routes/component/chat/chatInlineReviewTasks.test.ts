@@ -50,6 +50,10 @@ describe("isChatInlineReviewTask", () => {
     expect(isChatInlineReviewTask("bulk_archive")).toBe(false);
     expect(isChatInlineReviewTask("product_export")).toBe(true);
     expect(isChatInlineReviewTask("product_import")).toBe(true);
+    expect(isChatInlineReviewTask("sku_export")).toBe(true);
+    expect(isChatInlineReviewTask("inventory_export")).toBe(true);
+    expect(isChatInlineReviewTask("inventory_import")).toBe(true);
+    expect(isChatInlineReviewTask("inventory_qty_edit")).toBe(true);
   });
 
   it("rejects unknown and empty task types", () => {

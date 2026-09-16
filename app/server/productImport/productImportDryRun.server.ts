@@ -220,6 +220,7 @@ async function runProductImportDryRun(params: EnqueueProductImportDryRunParams):
     duplicateRows: reviewPlan.duplicateRows,
     archiveRows: reviewPlan.archiveRows,
     deleteRows: reviewPlan.deleteRows,
+    identityRows: reviewPlan.identityRows,
     changesetBlobPath,
   };
 

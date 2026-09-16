@@ -42,6 +42,12 @@ import {
   buildProductExportProposal,
   buildProductImportProposal,
 } from "../../../lib/productManageTaskProposals";
+import {
+  buildInventoryExportProposal,
+  buildInventoryImportProposal,
+  buildInventoryQtyEditProposal,
+  buildSkuExportProposal,
+} from "../../../lib/inventoryTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImport } from "../../../lib/promptSkillFocus";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
@@ -122,6 +128,10 @@ const CHAT_CARD_EMITTED_FLAGS = [
   "bulkTagEditForm",
   "productExportForm",
   "productImportForm",
+  "skuExportForm",
+  "inventoryExportForm",
+  "inventoryImportForm",
+  "inventoryQtyEditForm",
   "productImproveForm",
   "pictureTranslateForm",
   "imageGenerationForm",
@@ -163,6 +173,22 @@ const DETERMINISTIC_TASK_PROPOSAL_BY_SKILL: Array<{
   {
     skill: "productExport",
     build: (products) => buildProductExportProposal({ products }),
+  },
+  {
+    skill: "skuExport",
+    build: (products) => buildSkuExportProposal({ products }),
+  },
+  {
+    skill: "inventoryExport",
+    build: (products) => buildInventoryExportProposal({ products, locations: [] }),
+  },
+  {
+    skill: "inventoryImport",
+    build: () => buildInventoryImportProposal({}),
+  },
+  {
+    skill: "inventoryQtyEdit",
+    build: (products) => buildInventoryQtyEditProposal({ products, locations: [] }),
   },
 ];
 

@@ -26,6 +26,11 @@ import {
 } from "./bulkMetafieldEdit";
 import { computeProductDelete, type BulkProductDeleteRow } from "./bulkProductDelete";
 import {
+  computeVariantIdentityChange,
+  type VariantIdentityChange,
+  type VariantIdentityRow,
+} from "./bulkVariantIdentityEdit";
+import {
   parseImportBool,
   parseImportCollectionAction,
   parseImportStatus,
@@ -56,6 +61,7 @@ export type ProductImportPlan = {
   duplicateRows: ProductDuplicateRow[];
   archiveRows: BulkArchiveRow[];
   deleteRows: BulkProductDeleteRow[];
+  identityRows: VariantIdentityRow[];
 };
 
 export function emptyImportPlan(
@@ -76,6 +82,7 @@ export function emptyImportPlan(
     duplicateRows: [],
     archiveRows: [],
     deleteRows: [],
+    identityRows: [],
   };
 }
 
@@ -98,6 +105,7 @@ export function planMatchedImportRow(args: {
   }
   planPrice(plan, match, args.columnKeys);
   planCost(plan, match, args.columnKeys);
+  planIdentity(plan, match, args.columnKeys);
   planProductLevel(plan, match, args);
 }
 
@@ -214,6 +222,69 @@ function planCost(plan: ProductImportPlan, match: ProductImportMatch, columnKeys
         cost: match.variant.cost,
       },
       match.record.cells.cost,
+    ),
+  );
+}
+
+function planIdentity(plan: ProductImportPlan, match: ProductImportMatch, columnKeys: Set<string>): void {
+  const wantsSku = plan.operations.includes("sku");
+  const wantsBarcode = plan.operations.includes("barcode") && columnKeys.has("barcode");
+  const wantsWeight = plan.operations.includes("weight") && columnKeys.has("grams");
+  if (!wantsSku && !wantsBarcode && !wantsWeight) return;
+  const { record, product, variant } = match;
+  if (!product) return;
+  if (!variant) {
+    plan.issues.push({
+      rowNumber: record.rowNumber,
+      code: "identity_needs_sku",
+      column: wantsSku ? "sku" : wantsBarcode ? "barcode" : "grams",
+      value: record.sku || record.cells.barcode || record.cells.grams,
+      productTitle: product.productTitle,
+    });
+    return;
+  }
+  const matchedByHandleOrId = Boolean(record.handle || record.productId);
+  const change: VariantIdentityChange = {};
+  if (wantsSku) {
+    if (matchedByHandleOrId && columnKeys.has("sku")) {
+      change.sku = record.sku || null;
+    } else if (columnKeys.has("new_sku")) {
+      change.sku = record.cells.new_sku || null;
+    } else {
+      plan.issues.push({
+        rowNumber: record.rowNumber,
+        code: "sku_is_identity_only",
+        column: "sku",
+        value: record.sku,
+        productTitle: product.productTitle,
+      });
+    }
+  }
+  if (wantsBarcode) {
+    change.barcode = record.cells.barcode || null;
+  }
+  if (wantsWeight) {
+    const grams = Number((record.cells.grams ?? "").replace(/,/g, ""));
+    if (Number.isFinite(grams) && grams >= 0) {
+      change.weightValue = grams;
+      change.weightUnit = "GRAMS";
+    }
+  }
+  if (change.sku === undefined && change.barcode === undefined && change.weightValue === undefined) return;
+  plan.identityRows.push(
+    computeVariantIdentityChange(
+      {
+        variantId: variant.variantId,
+        productId: product.productId,
+        productTitle: product.productTitle,
+        variantTitle: variant.title,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        inventoryItemId: variant.inventoryItemId,
+        weightValue: variant.weightValue,
+        weightUnit: variant.weightUnit,
+      },
+      change,
     ),
   );
 }
@@ -601,6 +672,7 @@ export function sampleImportPlanForReview(
     duplicateRows: plan.duplicateRows.slice(0, limit),
     archiveRows: plan.archiveRows.slice(0, limit),
     deleteRows: plan.deleteRows.slice(0, limit),
+    identityRows: plan.identityRows.slice(0, limit),
   };
 }
 
@@ -625,6 +697,7 @@ function collectPlanProductIds(plan: ProductImportPlan): string[] {
   for (const row of plan.duplicateRows) push(row.productId);
   for (const row of plan.archiveRows) push(row.productId);
   for (const row of plan.deleteRows) push(row.productId);
+  for (const row of plan.identityRows) push(row.productId);
   return ids;
 }
 
@@ -656,6 +729,7 @@ export function chunkImportPlanByProduct(
       duplicateRows: plan.duplicateRows.filter((row) => allowed.has(row.productId)),
       archiveRows: plan.archiveRows.filter((row) => allowed.has(row.productId)),
       deleteRows: plan.deleteRows.filter((row) => allowed.has(row.productId)),
+      identityRows: plan.identityRows.filter((row) => allowed.has(row.productId)),
     });
   }
   return chunks;
@@ -674,6 +748,7 @@ export function countImportWritable(plan: ProductImportPlan): number {
     plan.metafieldRows.filter((row) => !row.skipped).length +
     plan.duplicateRows.filter((row) => !row.skipped).length +
     plan.archiveRows.filter((row) => !row.skipped).length +
-    plan.deleteRows.filter((row) => !row.skipped).length
+    plan.deleteRows.filter((row) => !row.skipped).length +
+    plan.identityRows.filter((row) => !row.skipped).length
   );
 }

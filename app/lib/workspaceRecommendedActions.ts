@@ -2,7 +2,7 @@
  * 首页与对话输入区共用的推荐操作列表。
  *
  * 分组按「做什么」切：经营诊断只读、商品优化与图片生成靠 AI 生成内容、
- * 导出、导入与规则批量（调价/打标/上下架）分开露出；后三者开独立确认卡，不用 CSV。
+ * 导出、导入、库存与规则批量（调价/打标/上下架）分开露出。设置库存开规则卡；导入库存走官方 CSV。
  */
 
 export type WorkspaceRecommendScope = "shop" | "selected";
@@ -100,6 +100,36 @@ export function buildWorkspaceRecommendedGroups(
       },
     ],
   };
+  const inventory: WorkspaceRecommendedGroup = {
+    key: "inventory",
+    label: t("workspace.shell.chat.recommend.groupInventory"),
+    items: [
+      {
+        key: "skuExport",
+        label: t("workspace.shell.chat.recommend.skuExport.label"),
+        prompt: t(`workspace.shell.chat.recommend.skuExport.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventoryExport",
+        label: t("workspace.shell.chat.recommend.inventoryExport.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryExport.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventoryImport",
+        label: t("workspace.shell.chat.recommend.inventoryImport.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryImport.prompt.${scope}`),
+        createsTask: true,
+      },
+      {
+        key: "inventoryQtyEdit",
+        label: t("workspace.shell.chat.recommend.inventoryQtyEdit.label"),
+        prompt: t(`workspace.shell.chat.recommend.inventoryQtyEdit.prompt.${scope}`),
+        createsTask: true,
+      },
+    ],
+  };
   const bulkEdit: WorkspaceRecommendedGroup = {
     key: "bulkEdit",
     label: t("workspace.shell.chat.recommend.groupBulkEdit"),
@@ -125,6 +155,6 @@ export function buildWorkspaceRecommendedGroups(
     ],
   };
   return hasProductContext
-    ? [productOptimization, productManage, bulkEdit, imageGeneration, operations]
-    : [operations, productOptimization, productManage, bulkEdit, imageGeneration];
+    ? [productOptimization, productManage, inventory, bulkEdit, imageGeneration, operations]
+    : [operations, productOptimization, productManage, inventory, bulkEdit, imageGeneration];
 }

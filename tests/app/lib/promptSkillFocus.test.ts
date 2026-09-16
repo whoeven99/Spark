@@ -21,6 +21,10 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromFocus("bulkStatusEdit")).toEqual(["bulkStatusEdit"]);
     expect(skillNamesFromFocus("productExport")).toEqual(["productExport"]);
     expect(skillNamesFromFocus("productImport")).toEqual(["productImport"]);
+    expect(skillNamesFromFocus("skuExport")).toEqual(["skuExport"]);
+    expect(skillNamesFromFocus("inventoryExport")).toEqual(["inventoryExport"]);
+    expect(skillNamesFromFocus("inventoryImport")).toEqual(["inventoryImport"]);
+    expect(skillNamesFromFocus("inventoryQtyEdit")).toEqual(["inventoryQtyEdit"]);
     expect(skillNamesFromFocus("all")).toBe("all");
   });
 
@@ -75,6 +79,10 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromUserText("帮我改标题")).not.toContain("productImport");
     expect(skillNamesFromUserText("打开导出商品确认卡")).toContain("productExport");
     expect(skillNamesFromUserText("帮我导出已选商品的 CSV")).toContain("productExport");
+    expect(skillNamesFromUserText("帮我导出 SKU 对照表")).toEqual(["skuExport"]);
+    expect(skillNamesFromUserText("帮我导出库存")).toContain("inventoryExport");
+    expect(skillNamesFromUserText("帮我导入库存 CSV")).toContain("inventoryImport");
+    expect(skillNamesFromUserText("帮我设置库存")).toEqual(["inventoryQtyEdit"]);
     expect(
       skillNamesFromUserText(
         "Open the export confirmation card and choose Shopify, TikTok Ads catalog, TikTok Shop, Amazon, or Temu format.",

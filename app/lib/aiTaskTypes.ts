@@ -56,6 +56,7 @@ import type {
   ProductImportIssue,
   ProductImportOperation,
 } from "./productImport";
+import type { ProductImportApplyError } from "./productImportApplyError";
 import type {
   ProductImportCollectionGroup,
 } from "./productImportPlan";
@@ -82,7 +83,11 @@ export type AITaskType =
   | "product_duplicate"
   | "bulk_archive"
   | "product_export"
-  | "product_import";
+  | "product_import"
+  | "sku_export"
+  | "inventory_export"
+  | "inventory_import"
+  | "inventory_qty_edit";
 
 export type AITaskListView = "current" | "history";
 
@@ -485,24 +490,74 @@ export type ProductImportTaskResult = {
   duplicateRows: ProductDuplicateRow[];
   archiveRows: BulkArchiveRow[];
   deleteRows: BulkProductDeleteRow[];
+  identityRows?: import("./bulkVariantIdentityEdit").VariantIdentityRow[];
   truncated?: boolean;
     apply?: {
       at: string;
       succeeded: number;
       failed: number;
       byOperation?: Record<string, { succeeded: number; failed: number }>;
-      errors?: Array<{
-        operation?: string;
-        code?: string;
-        message: string;
-        productTitle?: string;
-        field?: string;
-        beforeValue?: string;
-        afterValue?: string;
-        productId?: string;
-        variantId?: string;
-      }>;
+      errors?: ProductImportApplyError[];
     };
+  applyStartedAt?: string;
+};
+
+export type SkuExportTaskConfig = {
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type SkuExportTaskResult = {
+  csv: string;
+  warningCsv?: string;
+  summary: { products: number; variants: number; warned: number };
+  truncated?: boolean;
+};
+
+export type InventoryExportTaskConfig = {
+  locationId: string;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type InventoryExportTaskResult = {
+  csv: string;
+  summary: { products: number; rows: number; locations: number };
+  truncated?: boolean;
+};
+
+export type InventoryImportTaskConfig = {
+  fileId: string;
+  fileName?: string;
+};
+
+export type InventoryImportTaskResult = {
+  fileName: string;
+  rows: import("./inventoryImport").InventoryImportRow[];
+  issues: import("./inventoryImport").InventoryImportIssue[];
+  summary: import("./inventoryImport").InventoryImportSummary;
+  truncated?: boolean;
+  apply?: import("./inventoryImport").InventoryImportApplyOutcome;
+  applyStartedAt?: string;
+};
+
+export type InventoryQtyEditTaskConfig = {
+  mode: import("./inventoryQtyEdit").InventoryQtyMode;
+  value: number;
+  locationId: string;
+  locationName: string;
+  allWritableLocations: boolean;
+  productIds: string[];
+  totalProducts: number;
+};
+
+export type InventoryQtyEditTaskResult = {
+  rows: import("./inventoryQtyEdit").InventoryQtyEditRow[];
+  summary: import("./inventoryQtyEdit").InventoryQtyEditSummary;
+  locationName?: string;
+  mode?: import("./inventoryQtyEdit").InventoryQtyMode;
+  truncated?: boolean;
+  apply?: import("./inventoryQtyEdit").InventoryQtyEditApplyOutcome;
   applyStartedAt?: string;
 };
 

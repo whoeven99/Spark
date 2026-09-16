@@ -5,6 +5,10 @@ import { BulkTagEditTaskCard } from "../bulkTagEdit/BulkTagEditTaskCard";
 import { BulkStatusEditTaskCard } from "../bulkStatusEdit/BulkStatusEditTaskCard";
 import { ProductExportTaskCard } from "../productExport/ProductExportTaskCard";
 import { ProductImportTaskCard } from "../productImport/ProductImportTaskCard";
+import { SkuExportTaskCard } from "../skuExport/SkuExportTaskCard";
+import { InventoryExportTaskCard } from "../inventoryExport/InventoryExportTaskCard";
+import { InventoryImportTaskCard } from "../inventoryImport/InventoryImportTaskCard";
+import { InventoryQtyEditTaskCard } from "../inventoryQtyEdit/InventoryQtyEditTaskCard";
 import { TaskCard } from "../aiTask/TaskCard";
 import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
@@ -117,6 +121,54 @@ export function UnifiedTaskCard({
   if (task.taskType === "product_export") {
     return (
       <ProductExportTaskCard
+        task={task}
+        locationSearch={locationSearch}
+        onDelete={() => onAITaskDeleted(task.id)}
+        onTaskUpdated={onTaskUpdated}
+        deleting={deleting}
+      />
+    );
+  }
+
+  if (task.taskType === "sku_export") {
+    return (
+      <SkuExportTaskCard
+        task={task}
+        locationSearch={locationSearch}
+        onDelete={() => onAITaskDeleted(task.id)}
+        onTaskUpdated={onTaskUpdated}
+        deleting={deleting}
+      />
+    );
+  }
+
+  if (task.taskType === "inventory_export") {
+    return (
+      <InventoryExportTaskCard
+        task={task}
+        locationSearch={locationSearch}
+        onDelete={() => onAITaskDeleted(task.id)}
+        onTaskUpdated={onTaskUpdated}
+        deleting={deleting}
+      />
+    );
+  }
+
+  if (task.taskType === "inventory_import") {
+    return (
+      <InventoryImportTaskCard
+        task={task}
+        locationSearch={locationSearch}
+        onDelete={() => onAITaskDeleted(task.id)}
+        onTaskUpdated={onTaskUpdated}
+        deleting={deleting}
+      />
+    );
+  }
+
+  if (task.taskType === "inventory_qty_edit") {
+    return (
+      <InventoryQtyEditTaskCard
         task={task}
         locationSearch={locationSearch}
         onDelete={() => onAITaskDeleted(task.id)}

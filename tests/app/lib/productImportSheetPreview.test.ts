@@ -70,13 +70,13 @@ describe("buildProductImportSheetPreview", () => {
 
   it("lists ignored native Shopify columns without treating them as issues", () => {
     const result = preview(
-      ["Handle", "Vendor", "Product Category", "Gift Card", "Variant Grams"],
-      [["tee", "Acme", "Apparel", "FALSE", "100"]],
+      ["Handle", "Vendor", "Product Category", "Gift Card"],
+      [["tee", "Acme", "Apparel", "FALSE"]],
       ["vendor"],
     );
-    expect(result.ignoredColumns).toEqual(["Product Category", "Gift Card", "Variant Grams"]);
+    expect(result.ignoredColumns).toEqual(["Product Category", "Gift Card"]);
     expect(result.issues.some((issue) => issue.column === "Product Category")).toBe(false);
-    expect(countUnusedImportColumns(result)).toBe(3);
+    expect(countUnusedImportColumns(result)).toBe(2);
   });
 
   it("does not count native unsupported columns as issues to fix", () => {

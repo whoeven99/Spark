@@ -43,6 +43,30 @@ describe("decideEmptyImportReview", () => {
     ).toBe("has_writes");
   });
 
+  it("counts identity rows as writable", () => {
+    expect(
+      decideEmptyImportReview({
+        taskType: "product_import",
+        status: "pending_review",
+        rawResult: {
+          identityRows: [
+            {
+              variantId: "v1",
+              productId: "p1",
+              productTitle: "Tee",
+              variantTitle: "Default",
+              inventoryItemId: "inv1",
+              beforeSku: "A",
+              afterSku: "B",
+              skuChanged: true,
+              skipped: false,
+            },
+          ],
+        },
+      }),
+    ).toBe("has_writes");
+  });
+
   it("is idempotent after succeeded or applied", () => {
     expect(
       decideEmptyImportReview({

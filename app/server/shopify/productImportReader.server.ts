@@ -9,6 +9,7 @@ import {
   type ProductImportProductSnapshot,
   type ProductImportVariantSnapshot,
 } from "../../lib/productImportPlan";
+import { parseWeightUnit } from "../../lib/bulkVariantIdentityEdit";
 import { normalizeImportSku } from "../../lib/productImport";
 
 const METAFIELD_PAGE_SIZE = 250;
@@ -39,10 +40,11 @@ const PRODUCTS_QUERY = `#graphql
               id
               title
               sku
+              barcode
               price
               compareAtPrice
               selectedOptions { name value }
-              inventoryItem { id unitCost { amount } }
+              inventoryItem { id unitCost { amount } measurement { weight { value unit } } }
             }
           }
         }
@@ -78,10 +80,11 @@ const PRODUCTS_WITH_METAFIELDS_QUERY = `#graphql
               id
               title
               sku
+              barcode
               price
               compareAtPrice
               selectedOptions { name value }
-              inventoryItem { id unitCost { amount } }
+              inventoryItem { id unitCost { amount } measurement { weight { value unit } } }
               metafields(first: 20) {
                 pageInfo { hasNextPage endCursor }
                 nodes { namespace key type value }
@@ -129,10 +132,15 @@ type VariantNode = {
   id?: string | null;
   title?: string | null;
   sku?: string | null;
+  barcode?: string | null;
   price?: string | null;
   compareAtPrice?: string | null;
   selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
-  inventoryItem?: { id?: string | null; unitCost?: { amount?: string | null } | null } | null;
+  inventoryItem?: {
+    id?: string | null;
+    unitCost?: { amount?: string | null } | null;
+    measurement?: { weight?: { value?: number | null; unit?: string | null } | null } | null;
+  } | null;
   metafields?: MetafieldConnection | null;
 };
 
@@ -176,10 +184,16 @@ function mapVariant(node: VariantNode): ProductImportVariantSnapshot | null {
     variantId,
     title: node.title?.trim() || "",
     sku: node.sku?.trim() || null,
+    barcode: node.barcode?.trim() || null,
     price: node.price ?? null,
     compareAtPrice: node.compareAtPrice ?? null,
     inventoryItemId: node.inventoryItem?.id?.trim() || null,
     cost: node.inventoryItem?.unitCost?.amount ?? null,
+    weightValue:
+      typeof node.inventoryItem?.measurement?.weight?.value === "number"
+        ? node.inventoryItem.measurement.weight.value
+        : null,
+    weightUnit: parseWeightUnit(node.inventoryItem?.measurement?.weight?.unit ?? ""),
     metafields: mapMetafields(node.metafields?.nodes),
     selectedOptions: (node.selectedOptions ?? [])
       .map((option) => ({

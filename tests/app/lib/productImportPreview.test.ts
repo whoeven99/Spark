@@ -21,6 +21,7 @@ const emptyResult = (): ProductImportTaskResult => ({
   duplicateRows: [],
   archiveRows: [],
   deleteRows: [],
+  identityRows: [],
 });
 
 describe("flattenProductImportPreview", () => {
@@ -151,6 +152,37 @@ describe("flattenProductImportPreview", () => {
         productTitle: "#14–15",
         issue: expect.objectContaining({ code: "handle_not_found", rowLabel: "14–15" }),
       }),
+    );
+  });
+
+  it("lists SKU / barcode / weight changes from identity rows", () => {
+    const result = emptyResult();
+    result.identityRows = [
+      {
+        variantId: "v1",
+        productId: "p1",
+        productTitle: "Tee",
+        variantTitle: "Default",
+        inventoryItemId: "inv1",
+        beforeSku: "TEE-1",
+        afterSku: "TEE-NEW",
+        skuChanged: true,
+        beforeBarcode: "111",
+        afterBarcode: "999",
+        barcodeChanged: true,
+        beforeWeight: "100 grams",
+        afterWeight: "250 grams",
+        weightChanged: true,
+        skipped: false,
+      },
+    ];
+    const preview = flattenProductImportPreview(result);
+    expect(preview.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ operation: "sku", afterValue: "TEE-NEW", kind: "change" }),
+        expect.objectContaining({ operation: "barcode", afterValue: "999", kind: "change" }),
+        expect.objectContaining({ operation: "weight", afterValue: "250 grams", kind: "change" }),
+      ]),
     );
   });
 });

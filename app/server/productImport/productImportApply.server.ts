@@ -13,6 +13,7 @@ import { coerceBulkMetafieldEditRows } from "../../lib/bulkMetafieldEdit";
 import { coerceProductDuplicateRows } from "../../lib/productDuplicate";
 import { coerceBulkArchiveRows } from "../../lib/bulkArchive";
 import { coerceBulkProductDeleteRows } from "../../lib/bulkProductDelete";
+import { coerceVariantIdentityRows } from "../../lib/bulkVariantIdentityEdit";
 import { applyBulkPriceEdit } from "../bulkPriceEdit/bulkPriceEditApply.server";
 import { applyBulkCostEdit } from "../bulkCostEdit/bulkCostEditApply.server";
 import { applyBulkTagEdit } from "../bulkTagEdit/bulkTagEditApply.server";
@@ -24,6 +25,7 @@ import { applyBulkMetafieldEdit } from "../bulkMetafieldEdit/bulkMetafieldEditAp
 import { applyProductDuplicate } from "../productDuplicate/productDuplicateApply.server";
 import { applyBulkArchive } from "../bulkArchive/bulkArchiveApply.server";
 import { applyBulkProductDelete } from "../bulkProductDelete/bulkProductDeleteApply.server";
+import { applyVariantIdentityEdit } from "../bulkVariantIdentityEdit/bulkVariantIdentityEditApply.server";
 import type { ProductImportCollectionGroup } from "../../lib/productImportPlan";
 import type { ProductImportOperation } from "../../lib/productImport";
 import {
@@ -231,6 +233,16 @@ function buildLookups(raw: Record<string, unknown>): ImportApplyLookupMaps {
       productId: row.productId,
     });
   }
+  for (const row of coerceVariantIdentityRows(raw.identityRows)) {
+    putLookup(lookups.byVariantId, row.variantId, {
+      productTitle: row.productTitle,
+      field: row.variantTitle || row.beforeSku || "identity",
+      beforeValue: [row.beforeSku, row.beforeBarcode, row.beforeWeight].filter(Boolean).join(" / "),
+      afterValue: [row.afterSku, row.afterBarcode, row.afterWeight].filter(Boolean).join(" / "),
+      productId: row.productId,
+      variantId: row.variantId,
+    });
+  }
   return lookups;
 }
 
@@ -327,6 +339,13 @@ export async function applyProductImport(args: {
     rows: coerceBulkProductDeleteRows(args.rawResult.deleteRows),
   });
   addOperation(total, "delete", "delete", deleted, lookups);
+
+  const identity = await applyVariantIdentityEdit({
+    admin: args.admin,
+    shop: args.shop,
+    rows: coerceVariantIdentityRows(args.rawResult.identityRows),
+  });
+  addOperation(total, "identity", "sku", identity, lookups);
 
   return total;
 }

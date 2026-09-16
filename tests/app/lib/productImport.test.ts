@@ -40,10 +40,13 @@ const product = (overrides: Partial<ProductImportProductSnapshot> = {}): Product
       variantId: "gid://shopify/ProductVariant/1",
       title: "Default",
       sku: "TEE-1",
+      barcode: null,
       price: "10.00",
       compareAtPrice: null,
       inventoryItemId: "gid://shopify/InventoryItem/1",
       cost: "4.00",
+      weightValue: null,
+      weightUnit: null,
       metafields: [],
     },
   ],
@@ -125,6 +128,7 @@ describe("mapImportHeaders", () => {
     expect(mapped.columns.handle).toBe("Handle");
     expect(mapped.columns.new_handle).toBe("New Handle");
     expect(mapped.columns.collection).toBe("Collection");
+    expect(mapped.columns.barcode).toBe("Variant Barcodes");
     expect(mapped.unknown).toEqual([]);
     expect(mapped.ignored).toEqual(
       expect.arrayContaining([
@@ -134,9 +138,7 @@ describe("mapImportHeaders", () => {
         "Google Shopping / Custom Label 0",
       ]),
     );
-    expect(mapped.unsupported).toEqual([
-      expect.objectContaining({ header: "Variant Barcodes", code: "create_fields_not_in_v1" }),
-    ]);
+    expect(mapped.unsupported).toEqual([]);
     expect(mapped.metafields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -178,17 +180,18 @@ describe("mapImportHeaders", () => {
     expect(mapped.columns.status).toBe("Status");
     expect(mapped.unknown).toEqual([]);
     expect(mapped.ignored).toEqual(
-      expect.arrayContaining(["Product Category", "Variant Grams", "Gift Card", "Option1 Name"]),
+      expect.arrayContaining(["Product Category", "Gift Card", "Option1 Name"]),
     );
     expect(mapped.columns.option1).toBe("Option1 Value");
     expect(mapped.columns.option2).toBe("Option2 Value");
     expect(mapped.columns.option3).toBe("Option3 Value");
+    expect(mapped.columns.barcode).toBe("Variant Barcode");
+    expect(mapped.columns.grams).toBe("Variant Grams");
     expect(mapped.unsupported).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ header: "Published", code: "create_fields_not_in_v1" }),
         expect.objectContaining({ header: "Variant Inventory Qty", code: "inventory_not_in_v1" }),
         expect.objectContaining({ header: "Image Src", code: "create_fields_not_in_v1" }),
-        expect.objectContaining({ header: "Variant Barcode", code: "create_fields_not_in_v1" }),
       ]),
     );
     expect(mapped.unsupported.some((item) => item.header.startsWith("Option"))).toBe(false);
@@ -329,8 +332,8 @@ describe("coerceProductImportOperations", () => {
 });
 
 describe("suggestImportOperations", () => {
-  it("suggests detected columns except duplicate, archive, and delete", () => {
-    expect(suggestImportOperations(["title", "delete", "archive", "price", "duplicate"])).toEqual([
+  it("suggests detected columns except sku, duplicate, archive, and delete", () => {
+    expect(suggestImportOperations(["title", "delete", "archive", "price", "duplicate", "sku"])).toEqual([
       "title",
       "price",
     ]);
@@ -808,20 +811,26 @@ describe("buildProductImportPlan", () => {
           variantId: "gid://shopify/ProductVariant/1",
           title: "S",
           sku: "TEE-S",
+          barcode: null,
           price: "10.00",
           compareAtPrice: "12.00",
           inventoryItemId: "gid://shopify/InventoryItem/1",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
         {
           variantId: "gid://shopify/ProductVariant/2",
           title: "M",
           sku: "TEE-M",
+          barcode: null,
           price: "11.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/2",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -861,10 +870,13 @@ describe("buildProductImportPlan", () => {
           variantId: "gid://shopify/ProductVariant/1",
           title: "Default",
           sku: "TEE-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/1",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -903,10 +915,13 @@ describe("buildProductImportPlan", () => {
           variantId: "gid://shopify/ProductVariant/1",
           title: "Default",
           sku: "TEE-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/1",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -1043,10 +1058,13 @@ describe("matchImportRecord SKU disambiguation", () => {
         variantId: "gid://shopify/ProductVariant/2",
         title: "Default",
         sku: "TEE-1",
+        barcode: null,
         price: "10.00",
         compareAtPrice: null,
         inventoryItemId: "gid://shopify/InventoryItem/2",
         cost: "4.00",
+        weightValue: null,
+        weightUnit: null,
         metafields: [],
       },
     ],
@@ -1116,20 +1134,26 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/11",
           title: "S",
           sku: "TEE-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/11",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
         {
           variantId: "gid://shopify/ProductVariant/12",
           title: "M",
           sku: "TEE-1",
+          barcode: null,
           price: "11.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/12",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -1156,10 +1180,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/1",
           title: "Acrylic / Beige / Handheld",
           sku: "1",
+          barcode: null,
           price: "21.00",
           compareAtPrice: "25.00",
           inventoryItemId: "gid://shopify/InventoryItem/1",
           cost: null,
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
           selectedOptions: [
             { name: "Decoration material", value: "Acrylic" },
@@ -1171,10 +1198,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/2",
           title: "Acrylic / Beige / Hanger",
           sku: null,
+          barcode: null,
           price: "21.00",
           compareAtPrice: "25.00",
           inventoryItemId: "gid://shopify/InventoryItem/2",
           cost: null,
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
           selectedOptions: [
             { name: "Decoration material", value: "Acrylic" },
@@ -1217,10 +1247,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/2",
           title: "Bronze",
           sku: "2",
+          barcode: null,
           price: "21.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/2",
           cost: null,
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -1266,10 +1299,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/11",
           title: "2",
           sku: "TEE-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/11",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
           selectedOptions: [{ name: "Size", value: "2" }],
         },
@@ -1277,10 +1313,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/12",
           title: "4",
           sku: "TEE-1",
+          barcode: null,
           price: "11.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/12",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
           selectedOptions: [{ name: "Size", value: "4" }],
         },
@@ -1309,10 +1348,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/1",
           title: "Default",
           sku: "TEE-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: "12.00",
           inventoryItemId: "gid://shopify/InventoryItem/1",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -1352,10 +1394,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/11",
           title: "S",
           sku: "TEE-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/11",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
           selectedOptions: [{ name: "Size", value: "S" }],
         },
@@ -1363,10 +1408,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/12",
           title: "M",
           sku: "TEE-1",
+          barcode: null,
           price: "11.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/12",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
           selectedOptions: [{ name: "Size", value: "M" }],
         },
@@ -1398,10 +1446,13 @@ describe("matchImportRecord SKU disambiguation", () => {
           variantId: "gid://shopify/ProductVariant/9",
           title: "Default",
           sku: "COPY-1",
+          barcode: null,
           price: "10.00",
           compareAtPrice: null,
           inventoryItemId: "gid://shopify/InventoryItem/9",
           cost: "4.00",
+          weightValue: null,
+          weightUnit: null,
           metafields: [],
         },
       ],
@@ -1439,6 +1490,89 @@ describe("stripExcelTextPrefix", () => {
     expect(stripExcelTextPrefix("TEE-1")).toBe("TEE-1");
     expect(stripExcelTextPrefix("'")).toBe("'");
     expect(normalizeImportSku("'2")).toBe("2");
+  });
+});
+
+describe("product import identity", () => {
+  function catalogFor(snapshot: ProductImportProductSnapshot) {
+    const sku = snapshot.variants[0]?.sku?.toLowerCase() ?? "";
+    return {
+      byHandle: new Map([[snapshot.handle, snapshot]]),
+      byId: new Map([[snapshot.productId, snapshot]]),
+      bySku: new Map(sku ? [[sku, [snapshot]]] : []),
+    };
+  }
+
+  it("writes Variant SKU when the row matched by Handle and options", () => {
+    const snapshot = product({
+      variants: [
+        {
+          ...product().variants[0]!,
+          title: "S",
+          selectedOptions: [{ name: "Size", value: "S" }],
+        },
+      ],
+    });
+    const analysis = analyzeImportSheet(
+      ["Handle", "Option1 Value", "Variant SKU"],
+      [["tee", "S", "TEE-NEW"]],
+      ["sku"],
+    );
+    const plan = buildProductImportPlan({
+      matches: analysis.records.map((record) => matchImportRecord(record, catalogFor(snapshot))),
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      columnKeys: Object.keys(analysis.mapping.columns),
+      collections: [],
+    });
+    expect(plan.identityRows[0]).toMatchObject({ afterSku: "TEE-NEW", skuChanged: true, skipped: false });
+    expect(plan.issues.some((issue) => issue.code === "sku_is_identity_only")).toBe(false);
+  });
+
+  it("requires New SKU when the row matched by SKU only", () => {
+    const snapshot = product();
+    const analysis = analyzeImportSheet(["Variant SKU"], [["TEE-1"]], ["sku"]);
+    const plan = buildProductImportPlan({
+      matches: analysis.records.map((record) => matchImportRecord(record, catalogFor(snapshot))),
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      columnKeys: Object.keys(analysis.mapping.columns),
+      collections: [],
+    });
+    expect(plan.issues.map((issue) => issue.code)).toContain("sku_is_identity_only");
+    expect(plan.identityRows).toEqual([]);
+  });
+
+  it("writes barcode and grams from native Shopify columns", () => {
+    const snapshot = product({
+      variants: [
+        {
+          ...product().variants[0]!,
+          barcode: "111",
+          weightValue: 100,
+          weightUnit: "GRAMS",
+        },
+      ],
+    });
+    const analysis = analyzeImportSheet(
+      ["Handle", "Variant Barcode", "Variant Grams"],
+      [["tee", "999", "250"]],
+      ["barcode", "weight"],
+    );
+    const plan = buildProductImportPlan({
+      matches: analysis.records.map((record) => matchImportRecord(record, catalogFor(snapshot))),
+      sheetIssues: analysis.issues,
+      operations: analysis.operations,
+      columnKeys: Object.keys(analysis.mapping.columns),
+      collections: [],
+    });
+    expect(plan.identityRows[0]).toMatchObject({
+      afterBarcode: "999",
+      barcodeChanged: true,
+      afterWeight: "250 grams",
+      weightChanged: true,
+      skipped: false,
+    });
   });
 });
 

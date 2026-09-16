@@ -131,6 +131,7 @@ export function HomeV2SsrFallback({
             <div style={styles.capabilityStub} />
             <div style={styles.capabilityStub} />
             <div style={styles.capabilityStub} />
+            <div style={styles.capabilityStub} />
           </div>
         </section>
       </div>

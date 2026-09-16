@@ -7,6 +7,19 @@ const LABELS: Record<string, string> = {
   "workspace.shell.chat.recommend.groupImage": "图片生成",
   "workspace.shell.chat.recommend.groupProductManage": "商品管理",
   "workspace.shell.chat.recommend.groupBulkEdit": "批量编辑",
+  "workspace.shell.chat.recommend.groupInventory": "库存与 SKU",
+  "workspace.shell.chat.recommend.skuExport.label": "导出 SKU",
+  "workspace.shell.chat.recommend.skuExport.prompt.shop": "sku-shop",
+  "workspace.shell.chat.recommend.skuExport.prompt.selected": "sku-selected",
+  "workspace.shell.chat.recommend.inventoryExport.label": "导出库存",
+  "workspace.shell.chat.recommend.inventoryExport.prompt.shop": "inv-export-shop",
+  "workspace.shell.chat.recommend.inventoryExport.prompt.selected": "inv-export-selected",
+  "workspace.shell.chat.recommend.inventoryImport.label": "导入库存",
+  "workspace.shell.chat.recommend.inventoryImport.prompt.shop": "inv-import-shop",
+  "workspace.shell.chat.recommend.inventoryImport.prompt.selected": "inv-import-selected",
+  "workspace.shell.chat.recommend.inventoryQtyEdit.label": "设置库存",
+  "workspace.shell.chat.recommend.inventoryQtyEdit.prompt.shop": "inv-qty-shop",
+  "workspace.shell.chat.recommend.inventoryQtyEdit.prompt.selected": "inv-qty-selected",
   "workspace.shell.chat.recommend.bulkPriceEdit.label": "批量调价",
   "workspace.shell.chat.recommend.bulkPriceEdit.prompt.shop": "price-shop",
   "workspace.shell.chat.recommend.bulkPriceEdit.prompt.selected": "price-selected",
@@ -51,17 +64,18 @@ function t(key: string): string {
 }
 
 describe("buildWorkspaceRecommendedGroups", () => {
-  it("returns 11 shop-scoped actions in operations-first order", () => {
+  it("returns 15 shop-scoped actions in operations-first order", () => {
     const groups = buildWorkspaceRecommendedGroups(t, false);
     expect(groups.map((g) => g.key)).toEqual([
       "operations",
       "productOptimization",
       "productManage",
+      "inventory",
       "bulkEdit",
       "imageGeneration",
     ]);
     const items = groups.flatMap((g) => g.items);
-    expect(items).toHaveLength(11);
+    expect(items).toHaveLength(15);
     expect(groups[0].items.map((i) => i.key)).toEqual(["todayPulse", "seoAudit"]);
     expect(items.find((i) => i.key === "todayPulse")?.prompt).toBe("todos-prompt");
     expect(items.find((i) => i.key === "todayOverview")).toBeUndefined();
@@ -84,8 +98,12 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(items.find((i) => i.key === "bulkPriceImport")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkCostImport")).toBeUndefined();
     expect(items.find((i) => i.key === "bulkInventoryImport")).toBeUndefined();
+    expect(items.find((i) => i.key === "skuExport")?.prompt).toBe("sku-shop");
+    expect(items.find((i) => i.key === "inventoryExport")?.prompt).toBe("inv-export-shop");
+    expect(items.find((i) => i.key === "inventoryImport")?.prompt).toBe("inv-import-shop");
+    expect(items.find((i) => i.key === "inventoryQtyEdit")?.prompt).toBe("inv-qty-shop");
     expect(items.find((i) => i.key === "seoAudit")?.createsTask).toBeUndefined();
-    expect(items.filter((i) => i.createsTask)).toHaveLength(9);
+    expect(items.filter((i) => i.createsTask)).toHaveLength(13);
   });
 
   it("prioritizes product actions and switches to selected prompts", () => {
@@ -93,6 +111,7 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(groups.map((g) => g.key)).toEqual([
       "productOptimization",
       "productManage",
+      "inventory",
       "bulkEdit",
       "imageGeneration",
       "operations",
@@ -100,6 +119,7 @@ describe("buildWorkspaceRecommendedGroups", () => {
     expect(groups[0].items.find((i) => i.key === "optimizeCopy")?.prompt).toBe("copy-selected");
     expect(groups[1].items.find((i) => i.key === "productExport")?.prompt).toBe("export-selected");
     expect(groups[1].items.find((i) => i.key === "productImport")?.prompt).toBe("import-selected");
-    expect(groups[2].items.find((i) => i.key === "bulkPriceEdit")?.prompt).toBe("price-selected");
+    expect(groups[2].items.find((i) => i.key === "skuExport")?.prompt).toBe("sku-selected");
+    expect(groups[3].items.find((i) => i.key === "bulkPriceEdit")?.prompt).toBe("price-selected");
   });
 });

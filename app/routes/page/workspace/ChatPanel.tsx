@@ -41,6 +41,10 @@ import { BulkTagEditTaskDetailPage } from "../../component/bulkTagEdit/BulkTagEd
 import { BulkStatusEditTaskDetailPage } from "../../component/bulkStatusEdit/BulkStatusEditTaskDetailPage";
 import { ProductExportTaskDetailPage } from "../../component/productExport/ProductExportTaskDetailPage";
 import { ProductImportTaskDetailPage } from "../../component/productImport/ProductImportTaskDetailPage";
+import { SkuExportTaskDetailPage } from "../../component/skuExport/SkuExportTaskDetailPage";
+import { InventoryExportTaskDetailPage } from "../../component/inventoryExport/InventoryExportTaskDetailPage";
+import { InventoryImportTaskDetailPage } from "../../component/inventoryImport/InventoryImportTaskDetailPage";
+import { InventoryQtyEditTaskDetailPage } from "../../component/inventoryQtyEdit/InventoryQtyEditTaskDetailPage";
 import { DialogShell } from "../../component/shared/DialogShell";
 import { pageColorTokens } from "../pageUiStyles";
 
@@ -1045,6 +1049,66 @@ export function ChatPanel({
           />
         ) : reviewTask?.taskType === "product_export" ? (
           <ProductExportTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "sku_export" ? (
+          <SkuExportTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "inventory_export" ? (
+          <InventoryExportTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "inventory_import" ? (
+          <InventoryImportTaskDetailPage
+            task={reviewTask}
+            onBack={closeReviewDialog}
+            showBackButton={false}
+            onTaskUpdated={(taskId, status, result) => {
+              upsertTaskStatus(taskId, status, result);
+              setReviewTask((prev) =>
+                prev && prev.id === taskId
+                  ? { ...prev, status, ...(result !== undefined ? { result } : {}) }
+                  : prev,
+              );
+              onAiTaskUpdated(conversation.id, taskId, status, result);
+            }}
+          />
+        ) : reviewTask?.taskType === "inventory_qty_edit" ? (
+          <InventoryQtyEditTaskDetailPage
             task={reviewTask}
             onBack={closeReviewDialog}
             showBackButton={false}

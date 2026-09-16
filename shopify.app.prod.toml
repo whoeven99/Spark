@@ -59,10 +59,11 @@ uri = "/webhooks/fulfillments/update"
 [access_scopes]
 # 审核期与 test 同一姿态：不包含 write_pixels,read_customer_events,read_pixels。过审后若恢复 Pixel 再加回。
 # 第一版 + PCD：经营/订单查询与镜像、履约、商品文案评分查找与写回、语言、文章
-# inventory：读 inventoryItem.unitCost 供利润/ROI 用真实 COGS（只读，不写回 Shopify 库存/成本）。
-# 未包含：translations（归 TSF）、pixels、themes、reports、locations（做多仓库存时再加）
+# inventory：read_inventory 读 unitCost 供利润/ROI；write_inventory 写可售/在库数量。
+# read_locations 列出仓库供库存确认卡与官方库存 CSV 按仓匹配。
+# 未包含：translations（归 TSF）、pixels、themes、reports
 # 有意比 test 更窄：不申请 read_themes / read_reports / 翻译，减小 5.1.1 与审核面。
-scopes = "read_orders,read_fulfillments,read_products,write_products,read_locales,read_content,read_inventory"
+scopes = "read_orders,read_fulfillments,read_products,write_products,read_locales,read_content,read_inventory,write_inventory,read_locations"
 
 [auth]
 redirect_urls = [

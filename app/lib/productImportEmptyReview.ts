@@ -9,6 +9,7 @@ import { coerceBulkMetafieldEditRows } from "./bulkMetafieldEdit";
 import { coerceProductDuplicateRows } from "./productDuplicate";
 import { coerceBulkArchiveRows } from "./bulkArchive";
 import { coerceBulkProductDeleteRows } from "./bulkProductDelete";
+import { coerceVariantIdentityRows } from "./bulkVariantIdentityEdit";
 import {
   countImportWritable,
   type ProductImportPlan,
@@ -55,6 +56,7 @@ export function importPlanFromRawResult(raw: Record<string, unknown>): ProductIm
     duplicateRows: coerceProductDuplicateRows(raw.duplicateRows),
     archiveRows: coerceBulkArchiveRows(raw.archiveRows),
     deleteRows: coerceBulkProductDeleteRows(raw.deleteRows),
+    identityRows: coerceVariantIdentityRows(raw.identityRows),
   };
 }
 

@@ -9,6 +9,10 @@ import { PictureTranslateTaskDetailPage } from "../imageStudio/PictureTranslateT
 import { ProductImproveTaskDetailPage } from "../productImprove/ProductImproveTaskDetailPage";
 import { ProductExportTaskDetailPage } from "../productExport/ProductExportTaskDetailPage";
 import { ProductImportTaskDetailPage } from "../productImport/ProductImportTaskDetailPage";
+import { SkuExportTaskDetailPage } from "../skuExport/SkuExportTaskDetailPage";
+import { InventoryExportTaskDetailPage } from "../inventoryExport/InventoryExportTaskDetailPage";
+import { InventoryImportTaskDetailPage } from "../inventoryImport/InventoryImportTaskDetailPage";
+import { InventoryQtyEditTaskDetailPage } from "../inventoryQtyEdit/InventoryQtyEditTaskDetailPage";
 import { DialogShell } from "../shared/DialogShell";
 
 type TaskUpdatedHandler = (
@@ -95,6 +99,34 @@ export function TaskDetailDialog({
         />
       ) : task?.taskType === "product_export" ? (
         <ProductExportTaskDetailPage
+          task={task}
+          onBack={onClose}
+          showBackButton={false}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : task?.taskType === "sku_export" ? (
+        <SkuExportTaskDetailPage
+          task={task}
+          onBack={onClose}
+          showBackButton={false}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : task?.taskType === "inventory_export" ? (
+        <InventoryExportTaskDetailPage
+          task={task}
+          onBack={onClose}
+          showBackButton={false}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : task?.taskType === "inventory_import" ? (
+        <InventoryImportTaskDetailPage
+          task={task}
+          onBack={onClose}
+          showBackButton={false}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : task?.taskType === "inventory_qty_edit" ? (
+        <InventoryQtyEditTaskDetailPage
           task={task}
           onBack={onClose}
           showBackButton={false}

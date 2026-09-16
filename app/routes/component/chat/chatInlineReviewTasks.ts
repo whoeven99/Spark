@@ -20,6 +20,10 @@ const CHAT_INLINE_REVIEW_TASK_TYPES = new Set([
   "bulk_status_edit",
   "product_export",
   "product_import",
+  "sku_export",
+  "inventory_export",
+  "inventory_import",
+  "inventory_qty_edit",
 ]);
 
 export function isChatInlineReviewTask(taskType?: string | null): boolean {
@@ -32,6 +36,10 @@ const REVIEW_DIALOG_TITLE_KEYS: Record<string, string> = {
   bulk_status_edit: "bulkStatusEdit.reviewTitleShort",
   product_export: "productExport.reviewTitleShort",
   product_import: "productImport.reviewTitleShort",
+  sku_export: "skuExport.reviewTitleShort",
+  inventory_export: "inventoryExport.reviewTitleShort",
+  inventory_import: "inventoryImport.reviewTitleShort",
+  inventory_qty_edit: "inventoryQtyEdit.reviewTitleShort",
 };
 
 /** 审核弹窗标题：默认沿用商品文案那套「审核结果」，特殊类型可覆盖。 */

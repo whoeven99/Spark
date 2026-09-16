@@ -12,6 +12,7 @@ import type { BulkProductDeleteRow } from "./bulkProductDelete";
 import type { BulkStatusEditRow } from "./bulkStatusEdit";
 import type { BulkTagEditRow } from "./bulkTagEdit";
 import type { ProductDuplicateRow } from "./productDuplicate";
+import type { VariantIdentityRow } from "./bulkVariantIdentityEdit";
 import type { ProductImportCollectionGroup } from "./productImportPlan";
 import {
   collapseRepeatedImportIssues,
@@ -295,5 +296,36 @@ export function flattenProductImportPreview(result: ProductImportTaskResult): Sp
     duplicatePreviewRows(result.duplicateRows),
     archivePreviewRows(result.archiveRows),
     deletePreviewRows(result.deleteRows),
+    identityPreviewRows(result.identityRows ?? []),
   ]);
+}
+
+function identityPreviewRows(rows: VariantIdentityRow[]): SplitRows {
+  const out: ProductImportPreviewRow[] = [];
+  for (const row of rows) {
+    const push = (
+      operation: ProductImportOperation,
+      field: string,
+      beforeValue: string,
+      afterValue: string,
+      changed: boolean,
+    ) => {
+      if (!changed && !row.skipped) return;
+      if (!changed && row.skipped && row.skipReason !== "sku_is_identity_only" && operation !== "sku") return;
+      out.push({
+        key: `identity-${operation}-${row.variantId}`,
+        kind: row.skipped || !changed ? "skip" : "change",
+        productTitle: row.productTitle,
+        operation,
+        field,
+        beforeValue,
+        afterValue,
+        ...(row.skipReason ? { skipReason: row.skipReason } : {}),
+      });
+    };
+    push("sku", row.variantTitle || "sku", row.beforeSku ?? "", row.afterSku ?? "", row.skuChanged);
+    push("barcode", row.variantTitle || "barcode", row.beforeBarcode ?? "", row.afterBarcode ?? "", row.barcodeChanged);
+    push("weight", row.variantTitle || "weight", row.beforeWeight, row.afterWeight, row.weightChanged);
+  }
+  return splitBySkipped(out);
 }

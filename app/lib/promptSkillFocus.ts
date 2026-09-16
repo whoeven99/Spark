@@ -18,6 +18,10 @@ export const RECOMMEND_KEY_TO_SKILL_NAMES: Record<string, readonly string[]> = {
   generateImage: ["imageGenerationForm", "imageGeneration"],
   productExport: ["productExport"],
   productImport: ["productImport"],
+  skuExport: ["skuExport"],
+  inventoryExport: ["inventoryExport"],
+  inventoryImport: ["inventoryImport"],
+  inventoryQtyEdit: ["inventoryQtyEdit"],
   bulkPriceEdit: ["bulkPriceEdit"],
   bulkTagEdit: ["bulkTagEdit"],
   bulkStatusEdit: ["bulkStatusEdit"],
@@ -148,6 +152,30 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
       /批量.*上架/,
       /批量.*下架/,
       /bulk\s*status/i,
+    ],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.skuExport,
+    patterns: [/导出\s*sku/i, /导出条码/, /export\s*sku/i, /sku\s*(表|对照)/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryExport,
+    patterns: [/导出库存/, /库存\s*csv/i, /export\s*inventory/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryImport,
+    patterns: [/导入库存/, /库存盘点/, /import\s*inventory/i, /on\s*hand/i],
+  },
+  {
+    skills: RECOMMEND_KEY_TO_SKILL_NAMES.inventoryQtyEdit,
+    patterns: [
+      /设置库存/,
+      /增减库存/,
+      /清零库存/,
+      /改.*可售/,
+      /set\s*inventory/i,
+      /adjust\s*inventory/i,
+      /clear\s*inventory/i,
     ],
   },
   {

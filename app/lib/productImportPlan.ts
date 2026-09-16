@@ -23,10 +23,13 @@ export type ProductImportVariantSnapshot = {
   variantId: string;
   title: string;
   sku: string | null;
+  barcode: string | null;
   price: string | null;
   compareAtPrice: string | null;
   inventoryItemId: string | null;
   cost: string | null;
+  weightValue: number | null;
+  weightUnit: import("./bulkVariantIdentityEdit").WeightUnit | null;
   metafields: BulkMetafieldValue[];
   selectedOptions?: Array<{ name: string; value: string }>;
 };

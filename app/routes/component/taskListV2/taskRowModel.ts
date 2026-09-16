@@ -50,6 +50,10 @@ const AI_TYPE_LABEL_KEY: Record<AITaskType, string> = {
   bulk_archive: "tasksV2.type.bulkArchive",
   product_export: "tasksV2.type.productExport",
   product_import: "tasksV2.type.productImport",
+  sku_export: "tasksV2.type.skuExport",
+  inventory_export: "tasksV2.type.inventoryExport",
+  inventory_import: "tasksV2.type.inventoryImport",
+  inventory_qty_edit: "tasksV2.type.inventoryQtyEdit",
 };
 
 const MACHINE_KEY_RE = /^[a-z][a-z0-9]*([_-][a-z0-9]+)+$/;
@@ -144,6 +148,10 @@ function describeAiTask(task: AITaskItem, t: TranslateFn): string {
       return readString(config.platform) ?? t("tasksV2.fallback.ads");
     case "product_import":
     case "product_export":
+    case "sku_export":
+    case "inventory_export":
+    case "inventory_import":
+    case "inventory_qty_edit":
       return (
         readString(result?.fileName) ??
         readString(config.fileName) ??
@@ -157,9 +165,15 @@ function describeAiTask(task: AITaskItem, t: TranslateFn): string {
   }
 }
 
-function catalogActionPrefix(taskType: AITaskType): "productImport" | "productExport" | null {
+function catalogActionPrefix(
+  taskType: AITaskType,
+): "productImport" | "productExport" | "skuExport" | "inventoryExport" | "inventoryImport" | "inventoryQtyEdit" | null {
   if (taskType === "product_import") return "productImport";
   if (taskType === "product_export") return "productExport";
+  if (taskType === "sku_export") return "skuExport";
+  if (taskType === "inventory_export") return "inventoryExport";
+  if (taskType === "inventory_import") return "inventoryImport";
+  if (taskType === "inventory_qty_edit") return "inventoryQtyEdit";
   return null;
 }
 
@@ -169,6 +183,14 @@ function catalogSummaryPrefix(taskType: AITaskType): string | null {
       return "productImport";
     case "product_export":
       return "productExport";
+    case "sku_export":
+      return "skuExport";
+    case "inventory_export":
+      return "inventoryExport";
+    case "inventory_import":
+      return "inventoryImport";
+    case "inventory_qty_edit":
+      return "inventoryQtyEdit";
     case "bulk_price_edit":
       return "bulkPriceEdit";
     case "bulk_tag_edit":
@@ -365,7 +387,7 @@ function buildAiMeta(task: AITaskItem, t: TranslateFn): string[] {
   const result = asRecord(task.result);
   const summary = asRecord(result?.summary);
 
-  if (task.taskType === "product_import") {
+  if (task.taskType === "product_import" || task.taskType === "inventory_import") {
     const rows = readCount(summary?.rows) ?? readCount(config.totalProducts);
     return rows != null ? [t("tasksV2.meta.rows", { count: rows })] : [];
   }
@@ -383,7 +405,10 @@ function buildAiMeta(task: AITaskItem, t: TranslateFn): string[] {
     task.taskType === "bulk_collection_edit" ||
     task.taskType === "product_duplicate" ||
     task.taskType === "bulk_archive" ||
-    task.taskType === "product_export"
+    task.taskType === "product_export" ||
+    task.taskType === "sku_export" ||
+    task.taskType === "inventory_export" ||
+    task.taskType === "inventory_qty_edit"
   ) {
     const products = readCount(summary?.products) ?? readCount(config.totalProducts);
     return products != null ? [t("tasksV2.fallback.products", { count: products })] : [];

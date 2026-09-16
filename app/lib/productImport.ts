@@ -42,6 +42,9 @@ export const PRODUCT_IMPORT_OPERATIONS = [
   "handle",
   "collection",
   "metafield",
+  "sku",
+  "barcode",
+  "weight",
   "duplicate",
   "archive",
   "delete",
@@ -49,7 +52,7 @@ export const PRODUCT_IMPORT_OPERATIONS = [
 export type ProductImportOperation = (typeof PRODUCT_IMPORT_OPERATIONS)[number];
 
 export const PRODUCT_IMPORT_OPERATION_GROUPS: Array<{
-  key: "basic" | "pricing" | "seo" | "organize" | "bulk";
+  key: "basic" | "pricing" | "identity" | "seo" | "organize" | "bulk";
   operations: ProductImportOperation[];
 }> = [
   {
@@ -57,6 +60,7 @@ export const PRODUCT_IMPORT_OPERATION_GROUPS: Array<{
     operations: ["title", "descriptionHtml", "vendor", "productType", "handle", "tags", "status"],
   },
   { key: "pricing", operations: ["price", "cost"] },
+  { key: "identity", operations: ["sku", "barcode", "weight"] },
   { key: "seo", operations: ["seoTitle", "seoDescription"] },
   { key: "organize", operations: ["collection", "metafield"] },
   { key: "bulk", operations: ["duplicate", "archive", "delete"] },
@@ -81,6 +85,9 @@ export const PRODUCT_IMPORT_ISSUE_CODES = [
   "metafield_type_unsupported",
   "metafield_invalid_value",
   "metafield_needs_sku",
+  "identity_needs_sku",
+  "sku_is_identity_only",
+  "invalid_weight",
   "inventory_not_in_v1",
   "create_fields_not_in_v1",
   "sku_not_found",
@@ -188,6 +195,16 @@ const CANONICAL_ALIASES: Record<string, string> = {
   body_html: "body_html",
   "new handle": "new_handle",
   new_handle: "new_handle",
+  "new sku": "new_sku",
+  new_sku: "new_sku",
+  barcode: "barcode",
+  "variant barcode": "barcode",
+  "variant barcodes": "barcode",
+  grams: "grams",
+  "variant grams": "grams",
+  "variant weight": "grams",
+  "weight unit": "weight_unit",
+  "variant weight unit": "weight_unit",
   cost: "cost",
   "cost per item": "cost",
   "variant cost": "cost",
@@ -231,8 +248,6 @@ const CANONICAL_ALIASES: Record<string, string> = {
 
 const UNSUPPORTED_REASON: Record<string, ProductImportIssueCode> = {
   published: "create_fields_not_in_v1",
-  "variant barcode": "create_fields_not_in_v1",
-  "variant barcodes": "create_fields_not_in_v1",
   "image src": "create_fields_not_in_v1",
   inventory: "inventory_not_in_v1",
   "inventory qty": "inventory_not_in_v1",
@@ -252,7 +267,6 @@ const IGNORED_NATIVE_HEADERS = new Set([
   "option1 linked to",
   "option2 linked to",
   "option3 linked to",
-  "variant grams",
   "variant inventory tracker",
   "variant inventory policy",
   "variant fulfillment service",
@@ -262,7 +276,6 @@ const IGNORED_NATIVE_HEADERS = new Set([
   "image alt text",
   "gift card",
   "variant image",
-  "variant weight unit",
   "variant tax code",
 ]);
 
@@ -272,6 +285,7 @@ function isIgnoredNativeHeader(normalized: string): boolean {
 }
 
 const PRODUCT_IMPORT_UNSUGGESTED_OPERATIONS = new Set<ProductImportOperation>([
+  "sku",
   "duplicate",
   "archive",
   "delete",
@@ -406,6 +420,9 @@ const OPERATION_COLUMNS: Record<ProductImportOperation, string[]> = {
   handle: ["new_handle"],
   collection: ["collection"],
   metafield: [],
+  sku: ["sku", "new_sku"],
+  barcode: ["barcode"],
+  weight: ["grams"],
   duplicate: ["duplicate"],
   archive: ["archive"],
   delete: ["delete"],
@@ -617,6 +634,10 @@ export function analyzeImportSheet(
       duplicate_images: cellAt(row, columnIndex("duplicate_images")),
       archive: cellAt(row, columnIndex("archive")),
       delete: cellAt(row, columnIndex("delete")),
+      new_sku: normalizeImportSku(cellAt(row, columnIndex("new_sku"))),
+      barcode: stripExcelTextPrefix(cellAt(row, columnIndex("barcode"))),
+      grams: stripExcelTextPrefix(cellAt(row, columnIndex("grams"))),
+      weight_unit: cellAt(row, columnIndex("weight_unit")),
     };
     for (const metafield of mapping.metafields) {
       cells[metafield.cellKey] = cellAt(row, headerIndex.get(metafield.header));
@@ -687,6 +708,12 @@ export function validateImportRecord(
   }
   if (operations.includes("delete") && cells.delete && parseImportBool(cells.delete) == null) {
     issues.push({ rowNumber, code: "invalid_delete", column: "delete", value: cells.delete });
+  }
+  if (operations.includes("weight") && cells.grams) {
+    const grams = Number(stripExcelTextPrefix(cells.grams).replace(/,/g, ""));
+    if (!Number.isFinite(grams) || grams < 0) {
+      issues.push({ rowNumber, code: "invalid_weight", column: "grams", value: cells.grams });
+    }
   }
   if (operations.includes("tags")) {
     const tagColumn = cells.tags ? "tags" : cells.add_tags ? "add_tags" : "tags";
