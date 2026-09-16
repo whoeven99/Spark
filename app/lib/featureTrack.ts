@@ -31,6 +31,7 @@ export type FeatureKey =
   | "tasks-v2"
   | "settings"
   | "ads-catalog"
+  | "ads"
   | "home-v2"
   | "home-v1";
 

@@ -71,6 +71,7 @@ const NAV_ITEMS: Record<
       | "nav.studio"
       | "nav.create"
       | "nav.tasksV2"
+      | "nav.ads"
       | "nav.account"
       | "nav.settings"
       | "nav.adsCatalog";
@@ -83,9 +84,10 @@ const NAV_ITEMS: Record<
   studio: { href: "/app/studio", labelKey: "nav.studio" },
   create: { href: "/app/create", labelKey: "nav.create" },
   "tasks-v2": { href: "/app/tasks-v2", labelKey: "nav.tasksV2" },
+  ads: { href: "/app/ads", labelKey: "nav.ads" },
   account: { href: "/app/account", labelKey: "nav.account" },
   settings: { href: "/app/settings", labelKey: "nav.settings" },
-  "ads-catalog": { href: "/app/ads-catalog", labelKey: "nav.adsCatalog" },
+  "ads-catalog": { href: "/app/ads", labelKey: "nav.adsCatalog" },
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

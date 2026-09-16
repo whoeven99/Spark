@@ -85,8 +85,9 @@ Spark/
 | Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
 | 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`；测/产导航都不展示，URL 仍可直达 |
 | 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出。旧 `/app/tasks` 重定向到这里 |
+| 广告 | `/app/ads` | `app.ads.tsx` 左栏能力目录 + Outlet（样例 B）：总览 / 投放表现 / 归因 / 连接·同步目录 / 创建·编辑 / 目录同步任务；Pixel 审核期左栏隐藏。旧 `/app/ads-catalog`、`/app/studio/ads*`、`/app/insights/performance` 重定向至此。**仅测/本地导航；prod 不进导航，URL 仍可直达** |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
-| Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
+| Settings | `/app/settings` | `app.settings.*`：物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。广告入口已迁到一级「广告」`/app/ads`（旧 `/app/ads-catalog` 重定向）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
 
 兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。旧 `/app/home-v2` 重定向到 `/app`。
 
@@ -228,8 +229,8 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 ## 7. 前端和任务 UI 约束
 
 - **UI 先出交互样例，再改产品代码。** 新增、改信息架构、改主路径交互或布局时：先对照现有页面做一份可点的交互样例（优先 Cursor Canvas，放工作区 `canvases/`，回复里用 markdown 链接打开），覆盖关键状态（正常 / 空 / 异常 / 点开后）。样例对齐当前 IA（prod 对话优先、测环境页面优先）和 `docs/DESIGN.md` 的疏密，不要另起一套视觉。用户看过或明确说可以做之后，再改 `app/` / `admin/` 里的真实 UI。纯文案替换、修回归、复现已有交互的像素级修正不必出样例。
-- **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。例外只有两类：`/app/tasks-v2`（对话产出的异步任务台账；审核仍须能在对话内闭环）和 `/app/account`（Shopify Billing 必须走页面）。OAuth / 数据回补等配置页可以 URL 直达，但不占 prod 一级导航。
-- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另展示「任务」（`/app/tasks-v2`）与「账户与订阅」；测/本地另展示首页 v1 / Today / Health Monitor / Studio（创作工作台）/ 任务 / 账户 / Settings。旧 `/app/tasks` 重定向到 `/app/tasks-v2`。创作页 `/app/create` 与旧助手 `/app/assistant` 测/产导航都不展示；后者重定向到 `/app`。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
+- **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings / 广告）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。例外两类：`/app/tasks-v2`（异步任务台账）、`/app/account`（Shopify Billing）。`/app/ads` 等配置页可以 URL 直达，但不占 prod 一级导航。
+- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 展示「任务」与「账户与订阅」；测/本地另展示首页 v1 / Today / Health Monitor / Studio / 任务 / 广告 / 账户 / Settings。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前五组：经营诊断（只读；今日店况 + SEO 体检）/ 商品优化（文案、质量、图片翻译）/ 商品管理（导出、导入）/ 批量编辑（调价、打标、上下架）/ 图片生成。调价、打标、上下架走独立规则卡，不用 CSV；导入商品才要表格。改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除没有独立推荐行，只作为导入内部 apply。新增能力要在这里登记才会出现在首页。问候日期下一句经营结论（`DailyPulse`）是例外：有待办才给「看详情」、没数据才给「去回补」，都发诊断 prompt 留在 `/app` 对话；正常/同步中只留句子。不要再往卡头或推荐区加副标题、徽标与分组描述。改这里时 `HomeV2SsrFallback` 要同步（问候下预留脉冲行高度，占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后跳变）。
 - 创作页（`/app/create`）是「能力目录 + 页内工作区」骨架，能力只在 `app/lib/createCapabilities.ts` 登记一次，目录与工作区都从注册表派生，不要在页面里硬编码工具列表。每条能力的 `kind` 决定交互契约：`read` 直接出结果、`generate` 发起前确认且草稿落回店铺前再确认、`write` 必须走试算→审核→二次确认→应用（复用 bulk-edit 四层）、`import` 先校验再确认。`status` 决定露出方式：`ready` 有页内工作区、`chat` 闭环在助手对话（写回门禁要求 dry-run 产出的 `pending_review`）、`planned` 只做路线图占位且**目录不渲染**，别把没做完的入口摆给商户。消耗 Credit 或写店铺数据的操作统一用 `CreateConfirmDialog`，执行前预估只放弹窗、不在配置页常驻。域（domain）已按《Spark-商家常见操作》铺好，未落地的域不渲染但保留归属；整店翻译归 TSF，刻意不设该域。

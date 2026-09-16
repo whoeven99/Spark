@@ -1,4 +1,60 @@
 {
+  "adsHub": {
+    "title": "广告",
+    "subtitle": "连接账户、同步目录与查看投放表现",
+    "group": {
+      "insights": "看数据",
+      "connect": "接入",
+      "campaigns": "投放",
+      "dev": "开发"
+    },
+    "nav": {
+      "overview": "总览",
+      "overviewHint": "Spend / ROAS / 连接健康",
+      "performance": "投放表现",
+      "performanceHint": "Campaign → Ad 树表",
+      "attribution": "归因对照",
+      "attributionHint": "Google Ads ↔ GA4",
+      "connect": "连接账户",
+      "connectHint": "三平台 OAuth / 选账户",
+      "sync": "同步目录",
+      "syncHint": "推送商品到广告目录",
+      "pixels": "Pixel 与店面",
+      "pixelsHint": "向导 / 测试事件 / Activity",
+      "create": "创建广告",
+      "createHint": "Meta / Google / TikTok",
+      "edit": "编辑广告",
+      "editHint": "改预算、状态等",
+      "tasks": "目录同步任务",
+      "tasksHint": "同步进度与失败日志",
+      "sandbox": "沙盒工具",
+      "sandboxHint": "测环境 seed"
+    },
+    "overview": {
+      "title": "广告总览",
+      "subtitle": "近 30 天汇总（库内快照，不实时回源）",
+      "spend": "Spend",
+      "roas": "ROAS",
+      "platformsConnected": "已连接平台",
+      "statusReady": "已连接",
+      "statusNeedsSetup": "待接入",
+      "manageConnection": "管理连接",
+      "connectNow": "去连接",
+      "ctaPerformance": "查看投放表现",
+      "ctaSync": "同步目录",
+      "ctaCreate": "创建广告",
+      "loadError": "总览加载失败，请稍后重试或先完成账户连接。"
+    },
+    "pixels": {
+      "title": "Pixel 与店面",
+      "subtitle": "配置店面像素与测试事件。审核期左栏默认隐藏，本页 URL 仍可直达。",
+      "google": "Google Pixel",
+      "meta": "Meta Pixel",
+      "tiktok": "TikTok Pixel",
+      "tiktokNote": "在连接账户里配置 TikTok Pixel",
+      "open": "打开"
+    }
+  },
   "googlePixelOnboarding": {
     "pageTitle": "开始配置 Google Pixel",
     "pageSubtitle": "添加 Google Ads 转化像素、启用主题 App Embed，并选择要追踪的事件。",
@@ -1457,7 +1513,8 @@
     "tasks": "任务 v1",
     "tasksV2": "任务",
     "settings": "设置",
-    "adsCatalog": "广告 Catalog"
+    "ads": "广告",
+    "adsCatalog": "广告"
   },
   "installLanding": {
     "heading": "Spark",
@@ -4796,6 +4853,14 @@
           "seoAudit": {
             "label": "SEO 体检",
             "prompt": "帮我给店铺做一次 SEO 体检，找出商品搜索标题和描述有哪些问题，逐条说明原因和改法，并举例说明可以改成什么样。"
+          },
+          "connectAds": {
+            "label": "连接广告账户",
+            "prompt": "请告诉我如何连接 Meta、Google 或 TikTok 广告与商品目录。引导我打开广告页的「连接账户」：/app/ads/catalog?tab=credentials ，不要改店铺商品数据。"
+          },
+          "viewAdsPerformance": {
+            "label": "查看广告表现",
+            "prompt": "请引导我查看广告投放表现。打开 /app/ads/performance ，并简要说明那里能看到哪些指标。不要改店铺数据。"
           },
           "qualityScore": {
             "label": "商品页质量评分",

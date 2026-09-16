@@ -415,7 +415,7 @@ function buildGoogleSummary(
       },
       {
         label: t("settingsShell.googleManageAdsCatalog"),
-        to: "/app/ads-catalog?tab=credentials",
+        to: "/app/ads/catalog?tab=credentials",
       },
       {
         label: t("settingsShell.googleManageAnalytics"),
@@ -499,7 +499,7 @@ function buildMetaSummary(
       },
       {
         label: t("settingsShell.metaManageCatalog"),
-        to: "/app/ads-catalog?tab=credentials",
+        to: "/app/ads/catalog?tab=credentials",
       },
     ] satisfies ConnectionLink[],
   };
@@ -568,7 +568,7 @@ function buildTiktokSummary(
       },
       {
         label: t("settingsShell.tiktokManageCatalog"),
-        to: "/app/ads-catalog?tab=credentials",
+        to: "/app/ads/catalog?tab=credentials",
       },
     ] satisfies ConnectionLink[],
   };

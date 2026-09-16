@@ -28,7 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     params.delete("platform");
   }
 
-  return redirect(`/app/ads-catalog?${params.toString()}`);
+  return redirect(`/app/ads/catalog?${params.toString()}`);
 };
 
 export const headers: HeadersFunction = (headersArgs) => {

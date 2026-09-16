@@ -6,7 +6,7 @@ import { buildEmbeddedAppPath } from "../config/appEntry.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
-  throw redirect(buildEmbeddedAppPath("/app/studio/ads", request));
+  throw redirect(buildEmbeddedAppPath("/app/ads/create", request));
 };
 
 export default function AppSettingsAdsCreate() {

@@ -44,6 +44,16 @@ export function buildWorkspaceRecommendedGroups(
         label: t("workspace.shell.chat.recommend.seoAudit.label"),
         prompt: t("workspace.shell.chat.recommend.seoAudit.prompt"),
       },
+      {
+        key: "connectAds",
+        label: t("workspace.shell.chat.recommend.connectAds.label"),
+        prompt: t("workspace.shell.chat.recommend.connectAds.prompt"),
+      },
+      {
+        key: "viewAdsPerformance",
+        label: t("workspace.shell.chat.recommend.viewAdsPerformance.label"),
+        prompt: t("workspace.shell.chat.recommend.viewAdsPerformance.prompt"),
+      },
     ],
   };
   const productOptimization: WorkspaceRecommendedGroup = {
