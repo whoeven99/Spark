@@ -1807,7 +1807,7 @@
     "subtitle": "Keep today's operating status, report entry points, chart evidence, and execution actions on one screen.",
     "back": "Back to home",
     "emptyTitle": "No operating snapshot yet",
-    "emptySummary": "There is no usable operating snapshot yet. Backfill historical data first or wait for new orders to sync.",
+    "emptySummary": "There is no usable operating snapshot yet. Backfill historical orders from the diagnosis card in chat, or wait for new orders to sync.",
     "headerTitle": "Today's operating status",
     "headerSubtitle": "Start by judging how today looks overall, what the main bottleneck is, and what should happen first.",
     "generatedAt": "Updated: {{value}}",
@@ -2950,7 +2950,7 @@
     "generatedAtLabel": "Generated at: {{value}}",
     "shopLabel": "Shop: {{value}}",
     "coreBoard": "Today's core metrics",
-    "emptyState": "No order data yet. New orders sync automatically; run the backfill page to import historical orders first.",
+    "emptyState": "No order data yet. New orders sync automatically; backfill historical orders from the diagnosis card in chat.",
     "healthTitle": "Today's diagnosis",
     "statusHealthy": "Healthy",
     "statusWatch": "Watch",
@@ -4912,8 +4912,8 @@
           "subtitle": "Rule-engine snapshot — no LLM cost",
           "liveBadge": "Health check",
           "resultBadge": "Diagnosis result",
-          "liveSummary": "Review today's risk summary and priority todos. Click Refresh to recompute and post a result card.",
-          "resultSummary": "Snapshot from this refresh.",
+          "liveSummary": "Review today's risk summary and priority todos. Open a todo for suggestions and related orders — read-only, no store changes. You can also refresh the diagnosis.",
+          "resultSummary": "Snapshot from this refresh. Open a todo for suggestions and related orders — read-only, no store changes.",
           "snapshotMeta": "Snapshot {{date}} · generated {{generated}}",
           "loading": "Loading diagnosis…",
           "loadFailed": "Failed to load diagnosis. Please try again.",
@@ -4941,6 +4941,12 @@
           "backfillingHint": "Pulling historical orders from Shopify…",
           "backfillDone": "Backfilled {{synced}} orders (last {{days}} days)",
           "backfillFailed": "Order backfill failed. Please try again.",
+          "changeDays": "Change days",
+          "backfillDays": "Last {{days}} days",
+          "askTodo": "See suggestions",
+          "todoPrompt": "Look at this todo: {{title}}.\nReason: {{reason}}.\nSuggestion: {{actions}}.\nRelated:\n{{related}}\nRead-only analysis only. If you can find more related orders or products, list them. Do not fulfill, write back, or change store data.",
+          "todoPromptEmptyActions": "(no specific suggestion on the card)",
+          "todoPromptEmptyRelated": "(no related objects listed yet; look them up from the reason)",
           "openSettings": "Customize in Settings",
           "refreshUserText": "Refresh today's health diagnosis",
           "refreshAssistantText": "Diagnosis refreshed: {{risk}} risks · {{watch}} watch · {{open}} open todos. See the card below.",
@@ -5486,7 +5492,7 @@
         "products": "{{count}} products"
       },
       "empty": {
-        "orders": "No order data yet, so diagnostics are unavailable. New orders sync automatically; backfill historical orders first."
+        "orders": "No order data yet, so diagnostics are unavailable. New orders sync automatically; backfill historical orders from the diagnosis card in chat."
       }
     },
     "home": {

@@ -1,13 +1,10 @@
 /**
  * cursor-push-pr.mjs
  *
- * 一键：提交当前改动 → push → 创建 PR，最后输出 PR 链接（供 Cursor Agent 解析）。
+ * 一键：提交当前改动 → push → 创建/更新 PR，最后输出 PR 链接（供 Cursor Agent 解析）。
+ * 标题、commit、PR 正文由调用方按 diff 用中文写好再传入（与 rebase:pr 同一口径）。
  *
- * 用法：
- *   npm run push:pr
- *   node scripts/cursor-push-pr.mjs --message "fix: xxx"
- *   node scripts/cursor-push-pr.mjs --title "PR 标题" --base master
- *   node scripts/cursor-push-pr.mjs --dry-run
+ *   npm run push:pr -- --title "中文标题" --message-file commit.txt --body-file pr.md
  *
  * 依赖（二选一）：
  *   - GitHub CLI (gh) 已登录：gh auth login
@@ -18,7 +15,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { writeFileSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +35,10 @@ const SECRET_PATTERNS = [
 function parseArgs(argv) {
   const args = {
     message: "",
+    messageFile: "",
     title: "",
+    body: "",
+    bodyFile: "",
     base: "",
     dryRun: false,
     skipCommit: false,
@@ -49,7 +49,10 @@ function parseArgs(argv) {
     if (a === "--dry-run") args.dryRun = true;
     else if (a === "--skip-commit") args.skipCommit = true;
     else if (a === "--message" || a === "-m") args.message = argv[++i] ?? "";
+    else if (a === "--message-file") args.messageFile = argv[++i] ?? "";
     else if (a === "--title") args.title = argv[++i] ?? "";
+    else if (a === "--body") args.body = argv[++i] ?? "";
+    else if (a === "--body-file") args.bodyFile = argv[++i] ?? "";
     else if (a === "--base") args.base = argv[++i] ?? "";
     else if (a === "--help" || a === "-h") args.help = true;
   }
@@ -57,16 +60,66 @@ function parseArgs(argv) {
 }
 
 function printUsage() {
-  console.log(`Usage: node scripts/cursor-push-pr.mjs [options]
+  console.log(`Usage: node scripts/cursor-push-pr.mjs --title "中文标题" --message-file commit.txt --body-file pr.md
 
 Options:
-  -m, --message <text>   提交说明（默认根据改动文件自动生成）
-      --title <text>     PR 标题（默认与提交说明相同）
-      --base <branch>    PR 目标分支（默认 origin/HEAD 或 master）
-      --dry-run          只预览，不实际提交/推送/建 PR
-      --skip-commit      跳过提交，仅 push + 建 PR（分支已有 commit）
-  -h, --help             显示帮助
+  -m, --message <text>     提交说明（默认根据改动文件自动生成）
+      --message-file <path> 从文件读 commit（推荐，避免换行被吃掉）
+      --title <text>       中文 PR 标题
+      --body <text>        PR 正文
+      --body-file <path>   从文件读 PR 正文
+      --base <branch>      PR 目标分支（默认 origin/HEAD 或 master）
+      --dry-run            只预览，不实际提交/推送/建 PR
+      --skip-commit        跳过提交，仅 push + 建/改 PR
+  -h, --help               显示帮助
 `);
+}
+
+function readText(path) {
+  return readFileSync(path, "utf8").replace(/^\uFEFF/, "").trim();
+}
+
+function firstLine(text) {
+  return text.split(/\r?\n/).map((s) => s.trim()).find(Boolean) ?? "";
+}
+
+function stripCommitPrefix(title) {
+  return title.replace(/^(feat|fix|chore|docs|refactor|test|style)(\([^)]+\))?:\s*/i, "").trim();
+}
+
+function defaultPrBody(commitMessage) {
+  const lines = commitMessage.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const headline = stripCommitPrefix(lines[0] ?? "");
+  const rest = lines.slice(1);
+  const bullets =
+    rest.length > 0
+      ? rest.flatMap((line) =>
+          line.split(/[；;]/).map((part) => part.trim()).filter(Boolean),
+        )
+      : [headline];
+  return [
+    "## 摘要",
+    "",
+    ...bullets.map((item) => `- ${item}`),
+    "",
+    "## 测试",
+    "",
+    "- [ ] 对照本 PR 改动路径自测主流程与失败路径",
+  ].join("\n");
+}
+
+function withTempFile(prefix, content, fn) {
+  const file = join(tmpdir(), `${prefix}-${Date.now()}.txt`);
+  writeFileSync(file, `${content.replace(/\s+$/, "")}\n`, "utf8");
+  try {
+    return fn(file);
+  } finally {
+    try {
+      unlinkSync(file);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function git(args, opts = {}) {
@@ -184,22 +237,22 @@ function generateCommitMessage(files) {
   return `update: ${names}${files.length > 4 ? ` (+${files.length - 4})` : ""}`;
 }
 
-function generatePrBody(files, branch, base) {
-  const stat = gitAllowFail(["diff", `${base}...HEAD`, "--stat"]);
-  const lines = [
-    "## Summary",
-    `- Branch: \`${branch}\` → \`${base}\``,
-    `- Changed files: ${files.length}`,
-    "",
-    "## Changed files",
-    ...files.slice(0, 30).map((f) => `- ${f}`),
-  ];
-  if (files.length > 30) lines.push(`- ... and ${files.length - 30} more`);
-  if (stat.ok && stat.out.trim()) {
-    lines.push("", "## Diff stat", "```", stat.out.trim(), "```");
-  }
-  lines.push("", "---", "_Created by scripts/cursor-push-pr.mjs_");
-  return lines.join("\n");
+/** 只认仍打开的 PR。`gh pr view` 会返回已合并的同名分支 PR，不能用。 */
+function findOpenPrUrl(branch) {
+  const listed = ghAllowFail([
+    "pr",
+    "list",
+    "--head",
+    branch,
+    "--state",
+    "open",
+    "--json",
+    "url",
+    "-q",
+    ".[0].url",
+  ]);
+  if (listed.ok && listed.out.startsWith("http")) return listed.out.trim();
+  return "";
 }
 
 async function findOpenPrViaApi({ owner, repo, head, token }) {
@@ -213,12 +266,30 @@ async function findOpenPrViaApi({ owner, repo, head, token }) {
   });
   if (!res.ok) return null;
   const pulls = await res.json();
-  return pulls[0]?.html_url ?? null;
+  const first = pulls[0];
+  if (!first?.html_url) return null;
+  return { url: first.html_url, number: first.number };
 }
 
 async function createPrViaApi({ owner, repo, head, base, title, body, token }) {
   const existing = await findOpenPrViaApi({ owner, repo, head, token });
-  if (existing) return existing;
+  if (existing) {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${existing.number}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "User-Agent": "cursor-push-pr-script",
+      },
+      body: JSON.stringify({ title, body }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`GitHub API 更新 PR 失败 (${res.status}): ${text}`);
+    }
+    return existing.url;
+  }
 
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
     method: "POST",
@@ -239,22 +310,14 @@ async function createPrViaApi({ owner, repo, head, base, title, body, token }) {
 }
 
 function createPrViaGh({ title, body, base, branch }) {
-  const existing = ghAllowFail(["pr", "view", "--head", branch, "--json", "url", "-q", ".url"]);
-  if (existing.ok && existing.out.startsWith("http")) {
-    return existing.out.trim();
-  }
-
-  const bodyFile = join(tmpdir(), `cursor-push-pr-${Date.now()}.md`);
-  writeFileSync(bodyFile, body, "utf8");
-  try {
-    return gh(["pr", "create", "--title", title, "--base", base, "--head", branch, "--body-file", bodyFile]);
-  } finally {
-    try {
-      unlinkSync(bodyFile);
-    } catch {
-      /* ignore */
+  const existing = findOpenPrUrl(branch);
+  return withTempFile("cursor-push-pr", body, (file) => {
+    if (existing) {
+      gh(["pr", "edit", existing, "--title", title, "--body-file", file]);
+      return existing;
     }
-  }
+    return gh(["pr", "create", "--title", title, "--base", base, "--head", branch, "--body-file", file]);
+  });
 }
 
 async function main() {
@@ -284,19 +347,24 @@ async function main() {
     process.exit(1);
   }
 
-  const commitMessage = args.message || generateCommitMessage(files);
-  const prTitle = args.title || commitMessage;
-  const prBody = generatePrBody(files.length > 0 ? files : allFiles, branch, base);
+  const commitMessage = args.messageFile
+    ? readText(args.messageFile)
+    : args.message.trim() || generateCommitMessage(files);
+  const prTitle = args.title.trim() || stripCommitPrefix(firstLine(commitMessage));
+  const prBody = args.bodyFile
+    ? readText(args.bodyFile)
+    : args.body.trim() || defaultPrBody(commitMessage);
 
   console.log(`REPO: ${owner}/${repo}`);
   console.log(`BRANCH: ${branch}`);
   console.log(`BASE: ${base}`);
-  console.log(`COMMIT_MESSAGE: ${commitMessage}`);
+  console.log(`PR_TITLE: ${prTitle}`);
+  console.log(`COMMIT_MESSAGE:\n${commitMessage}`);
   console.log(`CHANGED_FILES: ${files.length}`);
 
   if (args.dryRun) {
     console.log("DRY_RUN: true");
-    console.log(`PR_TITLE: ${prTitle}`);
+    console.log(`PR_BODY:\n${prBody}`);
     process.exit(0);
   }
 
@@ -311,7 +379,9 @@ async function main() {
 
   if (hasLocalChanges && !args.skipCommit) {
     git(["add", "--", ...files]);
-    git(["commit", "-m", commitMessage]);
+    withTempFile("cursor-push-commit", commitMessage, (file) => {
+      git(["commit", "-F", file]);
+    });
     console.log("COMMITTED: true");
   }
 

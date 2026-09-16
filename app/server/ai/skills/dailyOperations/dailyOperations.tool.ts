@@ -40,7 +40,7 @@ export function createGetDailyOperationsTool(context: AgentContext): DynamicStru
             ok: true,
             hasData: false,
             message:
-              "店铺暂无已同步的订单数据，无法生成诊断。可提示用户先在补录页回填历史订单。",
+              "店铺暂无已同步的订单数据，无法生成诊断。可提示用户点击诊断卡片上的「回补」拉取历史订单，不要让用户去设置页。",
           });
         }
         const tasks = result.tasks

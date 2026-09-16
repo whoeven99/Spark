@@ -84,8 +84,7 @@ Spark/
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（总览走 `ensureDailySnapshotOverview`，`?view=detail` 才走 `ensureDailySnapshot`）。**测环境页面入口；prod 走对话，不进导航** |
 | Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
 | 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`；测/产导航都不展示，URL 仍可直达 |
-| 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出 |
-| 任务 v1 | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage`（旧卡片列表）；仅测/本地导航露出 |
+| 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出。旧 `/app/tasks` 重定向到这里 |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
 | Settings | `/app/settings` | `app.settings.*`：广告投放、物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。`/app/ads-catalog` 为 Ads Catalog 可路由入口（Settings/Studio 内链，不占一级导航）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
 
@@ -229,13 +228,13 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 - **UI 先出交互样例，再改产品代码。** 新增、改信息架构、改主路径交互或布局时：先对照现有页面做一份可点的交互样例（优先 Cursor Canvas，放工作区 `canvases/`，回复里用 markdown 链接打开），覆盖关键状态（正常 / 空 / 异常 / 点开后）。样例对齐当前 IA（prod 对话优先、测环境页面优先）和 `docs/DESIGN.md` 的疏密，不要另起一套视觉。用户看过或明确说可以做之后，再改 `app/` / `admin/` 里的真实 UI。纯文案替换、修回归、复现已有交互的像素级修正不必出样例。
 - **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。例外只有两类：`/app/tasks-v2`（对话产出的异步任务台账；审核仍须能在对话内闭环）和 `/app/account`（Shopify Billing 必须走页面）。OAuth / 数据回补等配置页可以 URL 直达，但不占 prod 一级导航。
-- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另展示「任务」（`/app/tasks-v2`）与「账户与订阅」；测/本地另展示首页 v1 / Today / Health Monitor / Studio（创作工作台）/ 任务 / 任务 v1 / 账户 / Settings。创作页 `/app/create` 与旧助手 `/app/assistant` 测/产导航都不展示；后者重定向到 `/app`。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
+- 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另展示「任务」（`/app/tasks-v2`）与「账户与订阅」；测/本地另展示首页 v1 / Today / Health Monitor / Studio（创作工作台）/ 任务 / 账户 / Settings。旧 `/app/tasks` 重定向到 `/app/tasks-v2`。创作页 `/app/create` 与旧助手 `/app/assistant` 测/产导航都不展示；后者重定向到 `/app`。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
 - 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前六组：经营诊断（只读；今日店况 + SEO 体检）/ 商品优化 / 商品管理（导出、导入）/ 库存与 SKU（导出 SKU、导出库存、导入库存、设置库存）/ 批量编辑（调价、打标、上下架）/ 图片生成。调价、打标、上下架、设置库存走独立规则卡；导入商品与导入库存才要表格。改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除、SKU/条码/重量没有独立推荐行，只作为导入内部 apply。新增能力要在这里登记才会出现在首页。问候日期下一句经营结论（`DailyPulse`）是例外：有待办才给「看详情」、没数据才给「去回补」，都发诊断 prompt 留在 `/app` 对话；正常/同步中只留句子。不要再往卡头或推荐区加副标题、徽标与分组描述。改这里时 `HomeV2SsrFallback` 要同步（问候下预留脉冲行高度，占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后跳变）。
 - 创作页（`/app/create`）是「能力目录 + 页内工作区」骨架，能力只在 `app/lib/createCapabilities.ts` 登记一次，目录与工作区都从注册表派生，不要在页面里硬编码工具列表。每条能力的 `kind` 决定交互契约：`read` 直接出结果、`generate` 发起前确认且草稿落回店铺前再确认、`write` 必须走试算→审核→二次确认→应用（复用 bulk-edit 四层）、`import` 先校验再确认。`status` 决定露出方式：`ready` 有页内工作区、`chat` 闭环在助手对话（写回门禁要求 dry-run 产出的 `pending_review`）、`planned` 只做路线图占位且**目录不渲染**，别把没做完的入口摆给商户。消耗 Credit 或写店铺数据的操作统一用 `CreateConfirmDialog`，执行前预估只放弹窗、不在配置页常驻。域（domain）已按《Spark-商家常见操作》铺好，未落地的域不渲染但保留归属；整店翻译归 TSF，刻意不设该域。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。
-- **prod 导航的任务页是 `/app/tasks-v2`，但 `pending_review` 仍必须能在对话内闭环**：`TaskProposalCard` 确认 → `TaskRunChatCard` 轮询 `/api/ai-task` → 进度卡「去审核」在 `ChatPanel` 的 `DialogShell` 里开审核详情，不要默认把人赶走旧 `/app/tasks`。能否走对话内审核由 `app/routes/component/chat/chatInlineReviewTasks.ts` 的白名单决定（当前 `product_improve` / `picture_translate` / `image_generation` / `bulk_price_edit` / `bulk_tag_edit` / `bulk_status_edit` / `product_export` / `product_import` / `sku_export` / `inventory_export` / `inventory_import` / `inventory_qty_edit`）。新增需要审核的任务类型时，白名单、`ChatPanel` 的渲染分支、以及一个签名为 `{ task, onBack, showBackButton?, onTaskUpdated? }` 的 `XxxTaskDetailPage` 三者要一起加；详情组件保持纯 props、不依赖任务页 loader，这样任务页弹窗与对话弹窗能共用同一份 UI。
+- **prod 导航的任务页是 `/app/tasks-v2`，但 `pending_review` 仍必须能在对话内闭环**：`TaskProposalCard` 确认 → `TaskRunChatCard` 轮询 `/api/ai-task` → 进度卡「去审核」在 `ChatPanel` 的 `DialogShell` 里开审核详情，不要默认把人赶走任务页。能否走对话内审核由 `app/routes/component/chat/chatInlineReviewTasks.ts` 的白名单决定（当前 `product_improve` / `picture_translate` / `image_generation` / `bulk_price_edit` / `bulk_tag_edit` / `bulk_status_edit` / `product_export` / `product_import` / `sku_export` / `inventory_export` / `inventory_import` / `inventory_qty_edit`）。新增需要审核的任务类型时，白名单、`ChatPanel` 的渲染分支、以及一个签名为 `{ task, onBack, showBackButton?, onTaskUpdated? }` 的 `XxxTaskDetailPage` 三者要一起加；详情组件保持纯 props、不依赖任务页 loader，这样任务页弹窗与对话弹窗能共用同一份 UI。
 - `TaskProposalField` 里的 `collection`、`location` 与 `metafieldDefinition` 属于**远端资源字段**（`isResourceOptionField` 判定）：选项由 Skill 开卡时预取，卡片渲染成带关键词筛选的下拉，未选中就不允许提交。展示层一律用 `field.options` 里的 label 换成人看得懂的名称（`formatTaskProposalParamSummary` 与 `buildTaskRunPayload` 都已处理），不要把裸值丢进 i18n 查表或直接显示给商户。前两者的值是 GID，`metafieldDefinition` 的值是 `namespace.key`（definition GID 那条路已 deprecated）。以后接其它资源选择器沿用这个类型分支，不要每加一个资源就复制一套 UI。`file` 是卡片内本地上传（value 为 fileId，导入走 `/api/upload-file`）；`multiselect` 的 value 是逗号分隔。导入商品的 `operations` 决定试算走哪些已有 apply 模块，未选中不允许提交。
 - 标准参考：`app/routes/component/productImprove/ProductImproveTaskCard.tsx`、`app/routes/component/imageStudio/ImageGenerationTaskCard.tsx`、`app/routes/component/imageStudio/PictureTranslateTaskCard.tsx`；广告同步卡参考 `app/routes/component/adsCatalog/AdsCatalogTaskCard.tsx`。
 - 用户可见文案必须同步维护 `app/locales/zh/common.json` 与 `app/locales/en/common.json`，不得在组件中新增只覆盖一种语言的硬编码文案。
@@ -320,7 +319,7 @@ npm run turso:migrate:test
 
 - Node 版本要求以 `package.json` 为准：`>=20.19 <22 || >=22.12`。
 - `npm run dev` 包装 `shopify app dev`，需要 Shopify CLI 登录和应用配置；多应用配置用 `npm run dev:yw`、`npm run dev:spark-zz`（对应 `shopify.app.*.toml`）。
-- 运维/交付 npm 脚本：`npm run deploy:test`（Render 测试环境）、`npm run push:pr`（提交 + push + 建 PR）、`npm run rebase:pr`（压成一条中文 commit + 改 PR + 强推）、`npm run orders:create`（生成测试订单）、`npm run turso:migrate:test|prod`。完整清单以 `package.json` scripts 为准。
+- 运维/交付 npm 脚本：`npm run deploy:test`（Render 测试环境）、`npm run push:pr`（按 diff 写中文标题/摘要后提交 + push + 建/改 PR）、`npm run rebase:pr`（压成一条中文 commit + 改 PR + 强推）、`npm run orders:create`（生成测试订单）、`npm run turso:migrate:test|prod`。完整清单以 `package.json` scripts 为准。
 - 主应用服务端运行需要 Shopify 和 Turso 相关变量；AI、Cosmos、Blob、Redis、SES、飞书等能力按功能依赖相应变量。
 - 单元测试位于 `tests/`（Vitest）。
 - 不读取或输出 `.env` / `.env.prod` 的值。只记录所需变量名。
@@ -332,7 +331,7 @@ Package-backed：
 
 - `scripts/turso-migrate.cjs` — `npm run turso:migrate:test|prod`
 - `scripts/turso-hard-reset.mjs` — 硬删 Turso 全部用户表（默认测环境；产库需 `--env=.env.prod --confirm-prod`），配合 migration squash 后重建
-- `scripts/cursor-push-pr.mjs` — `npm run push:pr`
+- `scripts/cursor-push-pr.mjs` — `npm run push:pr`（按 diff 传入中文标题/摘要，`--message-file` / `--body-file` 避免换行被吃掉；已有打开的 PR 则改标题正文）
 - `scripts/cursor-rebase-pr.mjs` — `npm run rebase:pr`（按相对 master 的 diff 重写中文标题/摘要，`--message-file` / `--body-file` 避免换行被吃掉）
 - `scripts/deploy-test-render.mjs` — `npm run deploy:test`
 - `scripts/create-test-orders.mjs` — `npm run orders:create`

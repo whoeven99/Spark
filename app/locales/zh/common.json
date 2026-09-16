@@ -1807,7 +1807,7 @@
     "subtitle": "把今日经营状态、报告入口、图表证据和执行动作收在同一屏里。",
     "back": "返回首页",
     "emptyTitle": "暂无可用经营快照",
-    "emptySummary": "今天还没有生成可用的经营快照，先去补录历史数据或等待新订单同步。",
+    "emptySummary": "今天还没有生成可用的经营快照，可在对话诊断卡回补历史订单，或等待新订单同步。",
     "headerTitle": "今日经营状态",
     "headerSubtitle": "先判断今天整体怎么样、最大卡点是什么、最该先做什么。",
     "generatedAt": "更新时间：{{value}}",
@@ -2950,7 +2950,7 @@
     "generatedAtLabel": "生成时间：{{value}}",
     "shopLabel": "店铺：{{value}}",
     "coreBoard": "今日核心指标",
-    "emptyState": "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。",
+    "emptyState": "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请在对话诊断卡上回补。",
     "healthTitle": "今日诊断",
     "statusHealthy": "健康",
     "statusWatch": "关注",
@@ -4912,8 +4912,8 @@
           "subtitle": "基于规则引擎快照，不消耗 LLM",
           "liveBadge": "健康诊断",
           "resultBadge": "诊断结果",
-          "liveSummary": "查看当日风险摘要与优先待办；点击「刷新诊断」强制重算并发送结果卡。",
-          "resultSummary": "以下为本次刷新后的诊断快照。",
+          "liveSummary": "查看当日风险摘要与优先待办。点一条待办可看建议、列出相关订单，只读不改店铺。也可刷新诊断。",
+          "resultSummary": "以下为本次刷新后的诊断快照。点一条待办可看建议、列出相关订单，只读不改店铺。",
           "snapshotMeta": "快照 {{date}} · 生成于 {{generated}}",
           "loading": "正在加载诊断…",
           "loadFailed": "加载诊断失败，请稍后重试",
@@ -4941,6 +4941,12 @@
           "backfillingHint": "正在从 Shopify 拉取历史订单，请稍候…",
           "backfillDone": "已回补 {{synced}} 笔订单（近 {{days}} 天）",
           "backfillFailed": "订单回补失败，请稍后重试",
+          "changeDays": "改天数",
+          "backfillDays": "近 {{days}} 天",
+          "askTodo": "看建议",
+          "todoPrompt": "帮我看看这条待办：{{title}}。\n原因：{{reason}}。\n建议：{{actions}}。\n相关对象：\n{{related}}\n请只读解读；如果还能查到更多相关订单或商品，可以继续列出。不要发货、写回或改店铺数据。",
+          "todoPromptEmptyActions": "（卡片上没有具体建议）",
+          "todoPromptEmptyRelated": "（卡片上还没有列出相关对象，请按原因查找）",
           "openSettings": "在设置中自定义",
           "refreshUserText": "刷新今日健康诊断",
           "refreshAssistantText": "诊断已刷新：风险 {{risk}} · 关注 {{watch}} · 待办 {{open}}。详情见下方卡片。",
@@ -5486,7 +5492,7 @@
         "products": "{{count}} 个商品"
       },
       "empty": {
-        "orders": "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。"
+        "orders": "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请在对话诊断卡上回补。"
       }
     },
     "home": {

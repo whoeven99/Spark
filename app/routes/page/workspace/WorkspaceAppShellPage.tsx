@@ -1,7 +1,7 @@
 /**
  * 工作台应用壳：侧边栏导航 + 会话管理 + 面板路由。
  * 面板已精简为新对话首页(HomeV2Panel) + 对话(ChatPanel)；看板/技能/自动化/任务已上升为顶级目的地
- * 经营(/app/today) / 创作(/app/studio) / 任务(/app/tasks)。对话上下文状态统一在 useWorkspaceContext。
+ * 经营(/app/today) / 创作(/app/studio) / 任务(/app/tasks-v2)。对话上下文状态统一在 useWorkspaceContext。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -1930,7 +1930,7 @@ export function WorkspaceAppShellPage({
                 navigate(resolveProductImproveOpenPath(opts));
                 return;
               }
-              navigate("/app/tasks");
+              navigate("/app/tasks-v2");
             }}
             onTaskProposalExecuted={handleTaskProposalExecuted}
             onHealthDiagnosisRefreshed={handleHealthDiagnosisRefreshed}

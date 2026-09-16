@@ -7,7 +7,7 @@
  * - prod：功能尽量在对话里闭环（首页 `/app` 聊天 + 推荐操作 + 对话内确认/审核）。
  *   导航只留「任务」和「账户与订阅」——前者是对话产出的异步工作台账，后者是 Shopify Billing 页面。
  *   不要把 Today / Health Monitor / Studio / Settings 加进 PROD_NAV。
- * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作与助手，`/app/create` 仍可直达；`/app/assistant` 重定向到 `/app`）。
+ * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作与助手，`/app/create` 仍可直达；`/app/assistant` 重定向到 `/app`；旧 `/app/tasks` 重定向到 `/app/tasks-v2`）。
  */
 import { isProductionNodeEnv } from "./nodeEnv.server";
 
@@ -18,7 +18,6 @@ export type NavItemKey =
   | "health-monitor"
   | "studio"
   | "create"
-  | "tasks"
   | "tasks-v2"
   | "account"
   | "settings"
@@ -36,7 +35,6 @@ const FULL_NAV = [
   "health-monitor",
   "studio",
   "tasks-v2",
-  "tasks",
   "account",
   "settings",
 ] as const satisfies readonly NavItemKey[];

@@ -82,6 +82,23 @@ export function formatDailyPulseHeadline(
   }
 }
 
+/** 首页问候用：有快照用快照；无快照且订单为 0 才提示回补；有单但快照未就绪则留空。 */
+export function resolveHomeDailyPulse(
+  source: DailyPulseSource | null,
+  options?: { backfillRunning?: boolean; orderCount?: number },
+): DailyPulse | null {
+  if (source) {
+    return buildDailyPulse(source, { backfillRunning: options?.backfillRunning });
+  }
+  if (options?.backfillRunning) {
+    return buildDailyPulse(null, { backfillRunning: true });
+  }
+  if ((options?.orderCount ?? -1) === 0) {
+    return buildDailyPulse(null);
+  }
+  return null;
+}
+
 export function buildDailyPulse(
   source: DailyPulseSource | null,
   options?: { backfillRunning?: boolean },

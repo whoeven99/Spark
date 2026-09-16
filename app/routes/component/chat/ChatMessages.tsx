@@ -248,6 +248,7 @@ export function ChatMessages({
                         embedded
                         initialPayload={item.healthDiagnosisCardPayload}
                         onDiagnosisRefreshed={onHealthDiagnosisRefreshed}
+                        onAskTodo={onRecommendedPrompt}
                       />
                     </div>
                   ) : null}

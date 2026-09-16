@@ -91,7 +91,7 @@ function buildTaskCenterPath(params: {
     next.set("unifiedView", "history");
   }
   const query = next.toString();
-  return `/app/tasks${query ? `?${query}` : ""}`;
+  return `/app/tasks-v2${query ? `?${query}` : ""}`;
 }
 
 /**

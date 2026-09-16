@@ -25,6 +25,8 @@ export type HealthDiagnosisCardTask = {
   status: string;
   triggerReason: string;
   quadrant: string;
+  suggestedActions: string[];
+  relatedLines: string[];
 };
 
 /** 聊天卡展示用的精简视图（不含 detail 明细对象）。 */
@@ -142,6 +144,12 @@ export function coerceHealthDiagnosisCardView(raw: unknown): HealthDiagnosisCard
             status: typeof row.status === "string" ? row.status : "",
             triggerReason: typeof row.triggerReason === "string" ? row.triggerReason : "",
             quadrant: typeof row.quadrant === "string" ? row.quadrant : "",
+            suggestedActions: Array.isArray(row.suggestedActions)
+              ? row.suggestedActions.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+              : [],
+            relatedLines: Array.isArray(row.relatedLines)
+              ? row.relatedLines.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+              : [],
           };
         })
         .filter((item): item is HealthDiagnosisCardTask => Boolean(item))

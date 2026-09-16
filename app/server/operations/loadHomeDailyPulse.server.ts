@@ -1,5 +1,5 @@
 import prisma from "../../db.server";
-import { buildDailyPulse, type DailyPulse } from "../../lib/dailyPulse";
+import { resolveHomeDailyPulse, type DailyPulse } from "../../lib/dailyPulse";
 import {
   INSTALL_ORDER_BACKFILL_RESOURCE,
 } from "../shopify/sync/ensureInstallOrderBackfill.server";
@@ -15,12 +15,12 @@ function isFreshBackfillRunning(
   return Date.now() - lastSyncedAt.getTime() < RUNNING_STALE_MS;
 }
 
-/** 当日快照未就绪且未在回补时返回 null，首页只留空位，避免误显示「去回补」。 */
+/** 有快照就出结论；没快照时仅在回补中或订单为 0 时给句子，避免误显示「去回补」。 */
 export async function loadHomeDailyPulse(
   shop: string,
   options?: { now?: Date; timeZone?: string },
 ): Promise<DailyPulse | null> {
-  const [overview, checkpoint] = await Promise.all([
+  const [overview, checkpoint, orderCount] = await Promise.all([
     peekDailySnapshotOverview(shop, {
       now: options?.now,
       timeZone: options?.timeZone,
@@ -31,6 +31,7 @@ export async function loadHomeDailyPulse(
       },
       select: { lastCursor: true, lastSyncedAt: true },
     }),
+    prisma.shopOrder.count({ where: { shop } }),
   ]);
 
   const backfillRunning = Boolean(
@@ -38,11 +39,7 @@ export async function loadHomeDailyPulse(
       isFreshBackfillRunning(checkpoint.lastCursor, checkpoint.lastSyncedAt),
   );
 
-  if (!overview && !backfillRunning) {
-    return null;
-  }
-
-  return buildDailyPulse(
+  return resolveHomeDailyPulse(
     overview
       ? {
           hasData: overview.hasData,
@@ -58,6 +55,6 @@ export async function loadHomeDailyPulse(
           })),
         }
       : null,
-    { backfillRunning },
+    { backfillRunning, orderCount },
   );
 }
