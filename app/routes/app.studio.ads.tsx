@@ -1,26 +1,16 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { data } from "react-router";
-import { lazy, Suspense } from "react";
+import { redirect } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import { loadAdsCreatePageData } from "../server/adsCreate/adsCreatePageLoader.server";
-import { RoutePageFallback } from "./component/RoutePageFallback";
-
-const AdsCreatePage = lazy(() =>
-  import("./page/AdsCreatePage").then((m) => ({ default: m.AdsCreatePage })),
-);
+import { buildEmbeddedAppPath } from "../config/appEntry.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  return data(await loadAdsCreatePageData(session.shop));
+  await authenticate.admin(request);
+  throw redirect(buildEmbeddedAppPath("/app/ads/create", request));
 };
 
-export default function AppStudioAds() {
-  return (
-    <Suspense fallback={<RoutePageFallback />}>
-      <AdsCreatePage />
-    </Suspense>
-  );
+export default function AppStudioAdsRedirect() {
+  return null;
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

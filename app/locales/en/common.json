@@ -1,4 +1,60 @@
 {
+  "adsHub": {
+    "title": "Ads",
+    "subtitle": "Connect accounts, sync catalogs, and review performance",
+    "group": {
+      "insights": "Insights",
+      "connect": "Setup",
+      "campaigns": "Campaigns",
+      "dev": "Dev"
+    },
+    "nav": {
+      "overview": "Overview",
+      "overviewHint": "Spend / ROAS / connection health",
+      "performance": "Performance",
+      "performanceHint": "Campaign → Ad tree",
+      "attribution": "Attribution",
+      "attributionHint": "Google Ads ↔ GA4",
+      "connect": "Connections",
+      "connectHint": "OAuth / pick accounts",
+      "sync": "Sync catalog",
+      "syncHint": "Push products to ad catalogs",
+      "pixels": "Pixels",
+      "pixelsHint": "Wizard / test events / activity",
+      "create": "Create ads",
+      "createHint": "Meta / Google / TikTok",
+      "edit": "Edit ads",
+      "editHint": "Budget, status, and more",
+      "tasks": "Catalog sync tasks",
+      "tasksHint": "Sync progress and failures",
+      "sandbox": "Sandbox",
+      "sandboxHint": "Test-only seed tools"
+    },
+    "overview": {
+      "title": "Ads overview",
+      "subtitle": "Last 30 days from stored snapshots (no live platform pull)",
+      "spend": "Spend",
+      "roas": "ROAS",
+      "platformsConnected": "Platforms connected",
+      "statusReady": "Connected",
+      "statusNeedsSetup": "Needs setup",
+      "manageConnection": "Manage",
+      "connectNow": "Connect",
+      "ctaPerformance": "View performance",
+      "ctaSync": "Sync catalog",
+      "ctaCreate": "Create ads",
+      "loadError": "Could not load overview. Try again or finish connecting accounts first."
+    },
+    "pixels": {
+      "title": "Pixels & storefront",
+      "subtitle": "Configure storefront pixels and test events. Hidden from the left nav during review; this URL still works.",
+      "google": "Google Pixel",
+      "meta": "Meta Pixel",
+      "tiktok": "TikTok Pixel",
+      "tiktokNote": "Configure TikTok Pixel under Connections",
+      "open": "Open"
+    }
+  },
   "googlePixelOnboarding": {
     "pageTitle": "Get started with Google Pixel",
     "pageSubtitle": "Add your Google Ads conversion pixel, enable the theme App Embed, and choose the events to track.",
@@ -1457,7 +1513,8 @@
     "tasks": "Tasks v1",
     "tasksV2": "Tasks",
     "settings": "Settings",
-    "adsCatalog": "Ads Catalog"
+    "ads": "Ads",
+    "adsCatalog": "Ads"
   },
   "installLanding": {
     "heading": "Spark",
@@ -4796,6 +4853,14 @@
           "seoAudit": {
             "label": "SEO audit",
             "prompt": "Run an SEO audit on my store. Find the problems with my product search titles and descriptions, explain the cause and the fix for each one, and show me examples of what they could be rewritten to."
+          },
+          "connectAds": {
+            "label": "Connect ad accounts",
+            "prompt": "Tell me how to connect Meta, Google, or TikTok ads and product catalogs. Guide me to the Ads page Connections tab at /app/ads/catalog?tab=credentials. Do not change any product data."
+          },
+          "viewAdsPerformance": {
+            "label": "View ads performance",
+            "prompt": "Guide me to ads performance at /app/ads/performance and briefly explain what metrics I can see there. Do not change any store data."
           },
           "qualityScore": {
             "label": "Product page quality score",
