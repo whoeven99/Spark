@@ -1,7 +1,7 @@
 # Spark — Product Roadmap
 
 > 对照当前代码更新。若本文档与代码冲突，以代码、`prisma/schema.prisma`、`AGENTS.md` 为准。
-> 原则：邀请制内测先跑通「安装 → 有数据 → 能问/能看/能计费」→ 再公开上架 → 再做受控写回与跨渠道。
+> 原则：先跑通「安装 → 有数据 → 能问/能看/能计费」→ 再补合规与上架材料 → 再做受控写回与跨渠道。
 
 ---
 
@@ -23,15 +23,15 @@
 | Admin 运营后台 | ✅ 已上线 | 独立 `admin/` |
 | TSF 整店翻译执行 | 🚫 不在本仓库 | Admin 只读观测；不要当成本应用能力 |
 
-**当前发布姿态**：邀请制商家内测。仓库**没有**独立生产 Partner 应用 toml；CI 只发 Spark Test（`shopify.app.test.toml` → Render Test）。公开 App Store 不是本周期目标。
+**当前发布姿态**：已对商家开放。生产用 `shopify.app.prod.toml` → Render `Spark-Prod`；测环境用 `shopify.app.test.toml` → Render Test。CI 可发 Spark Test / Spark Prod / Admin。
 
-**内测前仍卡住的缺口**（不是路线图远期项）：
+**仍卡住的缺口**（不是路线图远期项）：
 
 1. `shopify.app.test.toml` 已写入订单 / 退款 / 库存 / 履约 webhook 订阅（与 yw / spark-zz 对齐）。**必须**对该配置 `shopify app deploy` 后，已装店铺才会收到增量；只改 toml 不生效。
 2. 安装后自动回补近 N 天订单（默认 `SPARK_ORDER_BACKFILL_DAYS=30`）需收完并部署；仅靠 webhook 吃不到历史单。
 3. 卸载目前只删 Session，不清理该店业务镜像。
 4. GDPR 强制 webhook 路由与 toml 订阅已落地（`/webhooks/compliance`），当前只 ack + 日志，未真正删除镜像。须 `shopify app deploy` 后 Partner 自动化检查才会过。隐私政策页仍缺。
-5. 物流凭证写在 Render 本地 JSON，重启即丢；内测不要把它当核心路径。
+5. 物流凭证写在 Render 本地 JSON，重启即丢；不要把它当生产核心路径。
 
 ---
 
@@ -123,26 +123,26 @@
 
 ---
 
-### Phase 4 — 多模态增强（按需，不挡内测）
+### Phase 4 — 多模态增强（按需，不挡主路径）
 
 窄场景、可复核：商品图质检、素材归类、竞品截图解析。核心诊断仍以结构化数据为主。
 
 ---
 
-## 四、优先级（邀请制内测视角）
+## 四、优先级
 
 | 任务 | 优先级 | 说明 |
 |------|--------|------|
-| Test/内测应用补齐 webhook 订阅并 deploy | P0 | 没有增量就没有经营数据 |
+| 测环境应用补齐 webhook 订阅并 deploy | P0 | 没有增量就没有经营数据 |
 | 安装自动回补 + 同步中空态 | P0 | webhook 只吃新单 |
-| 生产/内测环境计费开关核对 | P0 | 真店不要 `BILLING_GATEWAY=noop`；测试店才开 `BILLING_TEST` |
+| 生产/测环境计费开关核对 | P0 | 真店不要 `BILLING_GATEWAY=noop`；测试店才开 `BILLING_TEST` |
 | Partner 分发方式选定（见下文） | P0 | **选定后不可改**；选错会锁死计费或多店安装 |
 | 1–2 家店走通安装 / 回补 / Today / 订阅 / 卸载 | P0 | |
-| 卸载清理该店镜像 | P1 | 邀请制建议做；上架必做 |
+| 卸载清理该店镜像 | P1 | 已开放安装，卸载必须清数据 |
 | GDPR 真实擦除 + 隐私政策 | P1 | 端点已接；公开上架前要真删数据和隐私页 |
-| 独立告警中心 / case 复盘 | P2 | 不挡首批邀请 |
+| 独立告警中心 / case 复盘 | P2 | 不挡当前主路径 |
 | 风控链路、回收期/长期 ROI | 本周期不做 | 页面不展示；短期 ROI 等产品公式 |
-| 写回治理 / 促销 / 竞品 / WMS | P2+ | 内测后 |
+| 写回治理 / 促销 / 竞品 / WMS | P2+ | 主路径之后 |
 
 ---
 
@@ -190,7 +190,7 @@ app/server/ai/playbooks/{name}/
 | 里程碑 | 状态 | 验收 |
 |--------|------|------|
 | M0 数据地基 | 🟡 toml 已补订阅，待 `shopify app deploy` | 安装后近 N 天订单进 Turso，新单走 webhook |
-| M1 邀请制内测 | ⬜ 当前周期 | 指定店铺能安装；Today/Ask/Studio/计费可走通；不公开搜索 |
+| M1 商家开放安装 | ✅ 已完成 | 商家能安装；Today/Ask/Studio/计费可走通 |
 | M2 告警 + 复盘 | ⬜ | 缺货 / SLA / 退款率告警；case 采纳与 7 天复盘 |
 | M3 公开上架 | ⬜ | 合规 webhook 真实擦除、卸载清数据、PCD、隐私政策、App Store 审核 |
 | M4 受控写回 | ⬜ | 商品/促销写回带 dry-run + 审计 + 回滚 |
@@ -198,12 +198,12 @@ app/server/ai/playbooks/{name}/
 
 ---
 
-## 七、当前周期任务（邀请制内测）
+## 七、当前周期任务
 
 - [x] Test 应用 toml 已补齐订单类 webhook 订阅（`shopify.app.test.toml`）
 - [x] 对 Test 应用 `shopify app deploy -c shopify.app.test.toml`，让已装店铺真正收到增量（2026-08-28 已发 `aiassistant-test-119`）
 - [ ] 收完并部署安装自动回补（`ensureInstallOrderBackfill`）与同步中空态
-- [ ] 核对内测环境：`BILLING_GATEWAY`、`BILLING_TEST`、`PlanCatalog` 种子、SES / 飞书
+- [ ] 核对测 / 产环境：`BILLING_GATEWAY`、`BILLING_TEST`、`PlanCatalog` 种子、SES / 飞书
 - [ ] Partner Dashboard **选定分发方式**（选定后不可改，见下节）
 - [ ] 用 1–2 家店冒烟：安装 → 回补 → Today → Ask → Studio → 订阅/试用 → 卸载
 - [ ] （P1）卸载删除该店业务镜像
@@ -248,7 +248,7 @@ app/server/ai/playbooks/{name}/
 
 ---
 
-## 八、邀请制内测的 Shopify 分发（选定后不可改）
+## 八、Shopify 分发（选定后不可改）
 
 官方能力表见 [About app distribution](https://shopify.dev/docs/apps/launch/distribution)。**不是「选哪个都不影响」。**
 
@@ -258,10 +258,10 @@ app/server/ai/playbooks/{name}/
 | **Custom** | 单店，或同一 Plus 组织多店，或 transfer-disabled 开发店 | 否 | ❌ **不能**走 Shopify 应用计费 | ❌ 不能改成 Public，只能再做一个新应用 |
 | 旧 Unpublished / 后台 Private | 已废弃，不要用 | — | — | — |
 
-Spark 订阅和购包已经接在 Shopify Billing 上。邀请**多家互不相关的真实店铺**并要收订阅 / 购包时：
+Spark 订阅和购包已经接在 Shopify Billing 上。要装互不相关的真实店铺并收订阅 / 购包时：
 
-- **推荐 Public，listing 设为 Unlisted**：不出现在 App Store 搜索，只把链接发给受邀商家。
+- **必须选 Public**：Listed 出现在 App Store 搜索；Unlisted 不搜索、只靠链接安装。两种都要审核。
 - **不要选 Custom**：会锁死计费，且不能再改成分发到任意店铺。
 - **禁止**为每个商家复制一个 Custom 应用来绕过审核，违反 Partner 协议。
 
-若内测店全是开发店、或全是同一 Plus 组织、且可以暂时 `BILLING_GATEWAY=noop` / 只发试用：Custom 能更快发出安装链接，但日后公开仍要新建 Public 应用并让商家重装。
+若目前只有开发店、或全是同一 Plus 组织、且可以暂时 `BILLING_GATEWAY=noop` / 只发试用：Custom 能更快发出安装链接，但日后要公开仍须新建 Public 应用并让商家重装。

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessage";
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
@@ -150,8 +150,10 @@ export type PlaybookStepProgress = SkillStepProgress;
 export function useChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [awaitingFirstChunk, setAwaitingFirstChunk] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [streamingThinkingText, setStreamingThinkingText] = useState("");
+  // streamingText / streamingThinkingText 不走 React state：逐 token 更新在 ref 里累积，
+  // 经订阅通知（rAF 合帧）只推给流式气泡，避免整个工作台壳跟着每个 token 重渲染。
+  const textListenersRef = useRef(new Set<() => void>());
+  const textNotifyScheduledRef = useRef(false);
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
   const [streamingQualityCard, setStreamingQualityCard] = useState(false);
@@ -202,9 +204,41 @@ export function useChatStream() {
     };
   };
 
+  const notifyStreamingText = useCallback(() => {
+    if (textNotifyScheduledRef.current) return;
+    textNotifyScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      textNotifyScheduledRef.current = false;
+      textListenersRef.current.forEach((listener) => listener());
+    });
+  }, []);
+
+  const subscribeStreamingText = useCallback((listener: () => void) => {
+    textListenersRef.current.add(listener);
+    return () => {
+      textListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const getStreamingText = useCallback(() => snapshotRef.current.streamedText, []);
+  const getStreamingThinkingText = useCallback(
+    () => snapshotRef.current.thinkingContent,
+    [],
+  );
+
+  const streamingTextStore = useMemo(
+    () => ({
+      subscribe: subscribeStreamingText,
+      getText: getStreamingText,
+      getThinkingText: getStreamingThinkingText,
+    }),
+    [subscribeStreamingText, getStreamingText, getStreamingThinkingText],
+  );
+
   const resetStreamingUi = () => {
-    setStreamingText("");
-    setStreamingThinkingText("");
+    snapshotRef.current.streamedText = "";
+    snapshotRef.current.thinkingContent = "";
+    notifyStreamingText();
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
     setStreamingQualityCard(false);
@@ -288,11 +322,11 @@ export function useChatStream() {
         const trimmed = note.trim();
         if (!trimmed || snapshotRef.current.thinkingNotes.includes(trimmed)) return;
         snapshotRef.current.thinkingNotes.push(trimmed);
-        const current = snapshotRef.current.thinkingContent.trim();
-        const next = current ? `${current}\n${trimmed}` : trimmed;
-        snapshotRef.current.thinkingContent = next;
-        setStreamingThinkingText(next);
-      };
+      const current = snapshotRef.current.thinkingContent.trim();
+      const next = current ? `${current}\n${trimmed}` : trimmed;
+      snapshotRef.current.thinkingContent = next;
+      notifyStreamingText();
+    };
 
       try {
         const response = await fetch(url, {
@@ -361,21 +395,17 @@ export function useChatStream() {
               const chunk: StreamChunk = JSON.parse(line.slice(6));
 
               if (chunk.type === "thinking") {
-                setStreamingThinkingText((prev) => {
-                  const next = prev
-                    ? `${prev}${chunk.content}`
-                    : chunk.content;
-                  snapshotRef.current.thinkingContent = next;
-                  return next;
-                });
+                const prev = snapshotRef.current.thinkingContent;
+                snapshotRef.current.thinkingContent = prev
+                  ? `${prev}${chunk.content}`
+                  : chunk.content;
+                notifyStreamingText();
               } else if (chunk.type === "text") {
                 markFirstChunkSeen();
-                setStreamingText((prev) => {
-                  const next = prev + chunk.content;
-                  snapshotRef.current.streamedText = next;
-                  snapshotRef.current.reply = next;
-                  return next;
-                });
+                const next = snapshotRef.current.streamedText + chunk.content;
+                snapshotRef.current.streamedText = next;
+                snapshotRef.current.reply = next;
+                notifyStreamingText();
               } else if (chunk.type === "status") {
                 if (chunk.phase === "thinking") {
                   setAwaitingFirstChunk(true);
@@ -483,8 +513,9 @@ export function useChatStream() {
                     step.status === "running" ? { ...step, status: "error" } : step,
                   ),
                 );
-                setStreamingText(msg);
+                snapshotRef.current.streamedText = msg;
                 snapshotRef.current.reply = msg;
+                notifyStreamingText();
               } else if (chunk.type === "done") {
                 markFirstChunkSeen();
                 setSkillSteps((prev) =>
@@ -591,8 +622,8 @@ export function useChatStream() {
 
                 const streamed = snapshotRef.current.streamedText;
                 if (reply && reply.length > streamed.length) {
-                  setStreamingText(reply);
                   snapshotRef.current.streamedText = reply;
+                  notifyStreamingText();
                   requestAnimationFrame(() => finalizeOnce(finishPayload));
                 } else {
                   finalizeOnce(finishPayload);
@@ -614,7 +645,6 @@ export function useChatStream() {
         } else {
           console.error("Stream error", e);
           const fallback = "我这边刚刚有点忙，请稍后再试一次。";
-          setStreamingText(fallback);
           snapshotRef.current.reply = fallback;
           finalizeOnce(snapshotToFinishPayload(snapshotRef.current, false));
         }
@@ -637,7 +667,8 @@ export function useChatStream() {
   return {
     isStreaming,
     awaitingFirstChunk,
-    streamingText,
+    /** 流式正文/思考文字的订阅式读取（useSyncExternalStore），不随 token 触发调用方重渲染 */
+    streamingTextStore,
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingQualityCard,
@@ -647,7 +678,6 @@ export function useChatStream() {
     streamingTaskProposal,
     streamingWorkspaceActions,
     skillSteps,
-    streamingThinkingText,
     /** @deprecated 兼容旧名 */
     playbookSteps: skillSteps,
     prepareStreaming,

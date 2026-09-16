@@ -37,10 +37,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
-  const conversations = await listConversations(session.shop);
-
   // 脉冲只 peek 当日快照，不重算。未命中时预热仍 fire-and-forget，避免首字节被 30 天诊断拖住。
-  const dailyPulse = await loadHomeDailyPulse(session.shop);
+  const [conversations, dailyPulse] = await Promise.all([
+    listConversations(session.shop),
+    loadHomeDailyPulse(session.shop),
+  ]);
   void ensureDailySnapshotOverview(session.shop, { shopifyAdmin: admin }).catch((error) => {
     console.error("[app._index] daily snapshot warmup failed:", error);
   });

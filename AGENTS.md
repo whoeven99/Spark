@@ -24,18 +24,18 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
 - 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
 - Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。`/app/studio/translate` 当前只重定向到 `/app/studio/copy`，不要把图片翻译、兼容 Blob 读取或 Admin 运维页误判为整店翻译运行时。
-- Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。安装后自动回补（`ensureInstallOrderBackfill`，默认近 `SPARK_ORDER_BACKFILL_DAYS` 天）与 toml 里的 webhook **订阅**是两回事：路由在仓库里，未 `shopify app deploy` 订阅则增量进不了库。
+- Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现。历史订单回补不是独立 worker：安装后自动回补（`ensureInstallOrderBackfill`，默认近 `SPARK_ORDER_BACKFILL_DAYS` 天）；对话诊断卡可 `POST /api/order-backfill`；测环境页面入口仍是 `/app/settings/data`。与 toml 里的 webhook **订阅**是两回事：路由在仓库里，未 `shopify app deploy` 订阅则增量进不了库。
 - 工作树中可能出现 `scripts/tmp/` 下临时排查脚本（该目录已 gitignore）；除非用户明确要求，禁止删除、覆盖或纳入改动。
 
-发布姿态与 Partner 应用（邀请制内测，不是 App Store 公开）：
+发布姿态与 Partner 应用（已对商家开放）：
 
 - 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.prod.toml`（→ Render `Spark-Prod` / `spark-prod.onrender.com`）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）可手动勾选发布 Spark Test / Spark Prod / Admin / Admin Test。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
 - **改了 toml 的 `scopes` 必须对该配置 `shopify app deploy`，且已安装的店铺会走一次重新授权**（Shopify 在下次进应用时弹权限页，商户不点同意就用不了新能力）。prod 现有 scope 里 `read_inventory` 是为真实 COGS / 利润报表加的；不要为「以后可能用得上」提前申请用不到的 scope，审核时要逐条解释。
-- **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.test.toml` 与 yw / spark-zz 一样订阅 `orders/paid|cancelled`、`refunds/create`、`inventory_levels/update`、`fulfillments/create|update`（另有订阅/购包/卸载/scope）。只改 toml 不会生效。
-- Shopify **分发方式选定后不可改**。邀请多家互不相关的真实店且要走现有 Shopify Billing：选 **Public + Unlisted**（不出现在搜索，发链接安装；仍要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节与当前周期任务见 `docs/ROADMAP.md` 第七、八节。
+- **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.prod.toml` 已订阅 `orders/paid|cancelled`、`refunds/create`、`fulfillments/create|update`（另有订阅/购包/卸载/scope/GDPR）。**不订阅** `inventory_levels/update`（第一版不做库存镜像）。`shopify.app.test.toml` 与 yw / spark-zz 另订库存增量。只改 toml 不会生效。
+- Shopify **分发方式选定后不可改**。要装互不相关的真实店且走现有 Shopify Billing：必须是 **Public**（Listed 可搜索，Unlisted 只发链接；都要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节见 `docs/ROADMAP.md` 第七、八节。
 - 卸载目前：通知 + **归档快照到 Blob** 后从 Turso **删除该店业务数据**（含 Session、订单镜像、对话、广告凭证、客服、`Account`、`CommonEventLog` 等）；`PromoClaimLedger` / `ReferralClaim` / `ReferralInstall`（shopHash）保留以防安装福利与推荐码被薅。GDPR `shop/redact` 再跑一遍幂等清理；`customers/redact` 擦除客户镜像 PII。改 toml 后须对该配置 `shopify app deploy`。公开上架仍缺隐私政策页（需披露安装福利防滥用 hash 账本）。
 - 新装默认经 `ensureInstallPromoTokens` 自动发放安装福利 Token（账户页营销活动，默认 1,000,000；每店每活动一次，账本按 shopHash），无需手动领取。**推荐码**在订阅时填写，第一次带码且订阅确认成功后再入账一份 Token（一店一码，Admin `/referral-codes` 可配上限，默认 1,000,000）。Admin 可复制安装链接 `{SHOPIFY_APP_URL}/r/{CODE}`，点开后经 Shopify 安装；OAuth / 进应用时记 `ReferralInstall`（先到先得），卸载只擦明文店名。
-- 邀请制内测**不展示**风控链路、回收期/长期 ROI，以及 Health Monitor「ROI 情况（短期和长期）」；短期 ROI 仍在经营页，等产品公式再改计算。详情见 `docs/ROADMAP.md` 第七节。
+- 风控链路、回收期/长期 ROI，以及 Health Monitor「ROI 情况（短期和长期）」当前**不展示**；短期 ROI 仍在经营页，等产品公式再改计算。详情见 `docs/ROADMAP.md` 第七节。
 
 ## 2. 仓库地图
 
@@ -107,6 +107,8 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源（`context-resources` 类型为 product / article / order）。
 - `/api/automation-overview`：Today/自动化概览。
 - `GET /api/daily-pulse`：首页问候下一句经营结论。只 peek 当日快照，不跑 30 天诊断。
+- `GET|POST /api/health-diagnosis`：对话内健康诊断卡。总览只走 `ensureDailySnapshotOverview` / peek，不要把卡接到完整 30 天诊断。
+- `POST /api/order-backfill`：对话诊断卡回补近 N 天订单（只写本店订单镜像，不改 Shopify 订单）。
 - `/api/unified-tasks`：统一任务列表。`sort=time_desc` 关掉定时任务置顶、纯按更新时间倒序（Tasks v2 用）；缺省仍是定时任务在前的旧口径，不要改缺省值。
 - `/api/task-proposal`：TaskProposal 确认卡的估算/执行入口（由聊天流里的 `task_proposal` 卡片触发，不是独立工具栏按钮）。
 - `POST /api/bulk-price-edit`：批量调价写回入口，是全仓库**唯一**会改 Shopify 商品价格的地方；必须带 `confirm: true` 且任务处于 `pending_review`。Agent 回合内（chat-stream / Skill / dry-run）禁止走到这里。
@@ -147,7 +149,8 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 物流承运商凭证 | `app/server/logisticsCredentialStore.server.ts` |
 | 统一任务列表 | `app/server/unifiedTask/` |
 | 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts`（Skill/SSE 产出 `task_proposal` → 前端 `TaskProposalCard` → `/api/task-proposal`） |
-| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断）。首页问候脉冲走 `peekDailySnapshotOverview` / `loadHomeDailyPulse`（无快照返回 null，绝不重算）。「近 7 天」经营页与健康度共用 UTC 完整日、不含今天（`app/lib/observationWindow.ts`）；展示按店铺 `ianaTimezone` 格式化 |
+| Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/`。两个入口不要混用：只读指标/诊断项/任务走 `ensureDailySnapshotOverview`（命中当日快照时不重算），需要 `detail` 明细对象才用 `ensureDailySnapshot`（必然触发一轮 30 天全量诊断）。首页问候脉冲走 `peekDailySnapshotOverview` / `loadHomeDailyPulse`（绝不重算 30 天诊断；有快照出结论，无快照时仅回补中或订单为 0 才给句子）。「近 7 天」经营页与健康度共用 UTC 完整日、不含今天（`app/lib/observationWindow.ts`）；展示按店铺 `ianaTimezone` 格式化 |
+| 对话内健康诊断 / 订单回补 | `app/routes/api.health-diagnosis.ts`、`app/routes/api.order-backfill.ts`、`app/routes/component/chat/HealthDiagnosisChatCard.tsx`；待办只读追问 `app/lib/healthDiagnosisTodoPrompt.ts`，相关订单摘要 `app/lib/healthDiagnosisRelatedLines.ts` |
 | Health Monitor | `app/routes/app.health-monitor.tsx` + `app/lib/healthMonitor*`；总览走 `ensureDailySnapshotOverview`，详情（`?view=detail`）才走 `ensureDailySnapshot`（不要把总览接到完整快照入口） |
 | 工作台上下文（前端） | `app/routes/page/workspace/useWorkspaceContext.ts`、`ContextToolModal.tsx`、`ChatPanel.tsx`；Shopify 对象搜索 `app/server/shopify/contextResourceSearch.server.ts` + `/api/context-resources*` |
 | Shopify 数据读取与同步 | `app/server/shopify/`、`app/server/shopify/sync/` |
@@ -199,7 +202,7 @@ AI 主链路应从真实代码确认，通常为：首页工作台（`/app`）`u
 | 项目架构、跨域、环境变量、部署 | `docs/PROJECT_CONTEXT.md`（以当前代码复核过时路径） |
 | **发布新 Shopify App（CLI + Render + 密钥/URL）** | `docs/SHOPIFY_APP_PUBLISH.md` |
 | 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
-| 邀请制内测、Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节 |
+| Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节 |
 | Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
 | 前端视觉、布局、组件样式 | `docs/DESIGN.md` |
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
@@ -228,7 +231,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 - **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。例外只有两类：`/app/tasks-v2`（对话产出的异步任务台账；审核仍须能在对话内闭环）和 `/app/account`（Shopify Billing 必须走页面）。OAuth / 数据回补等配置页可以 URL 直达，但不占 prod 一级导航。
 - 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 另展示「任务」（`/app/tasks-v2`）与「账户与订阅」；测/本地另展示首页 v1 / Today / Health Monitor / Studio（创作工作台）/ 任务 / 账户 / Settings。旧 `/app/tasks` 重定向到 `/app/tasks-v2`。创作页 `/app/create` 与旧助手 `/app/assistant` 测/产导航都不展示；后者重定向到 `/app`。聊天输入区不展示 Playbook 快捷条；计费入口在 `/app/account`，不在 Settings hub。旧 `/app/home-v2` 重定向到 `/app`。隐藏的路由在 prod 仍可直达 URL（仅导航不展示）。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。
-- 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前五组：经营诊断（只读；今日店况 + SEO 体检）/ 商品优化 / 商品管理（导出、导入）/ 批量编辑（调价、打标、上下架）/ 图片生成。调价、打标、上下架走独立规则卡，不用 CSV；导入商品才要表格。改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除没有独立推荐行，只作为导入内部 apply。新增能力要在这里登记才会出现在首页。问候日期下一句经营结论（`DailyPulse`）是例外：有待办才给「看详情」、没数据才给「去回补」，都发诊断 prompt 留在 `/app` 对话；正常/同步中只留句子。不要再往卡头或推荐区加副标题、徽标与分组描述。改这里时 `HomeV2SsrFallback` 要同步（问候下预留脉冲行高度，占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后跳变）。
+- 首页（`HomeV2Panel`）与对话输入区共用 `app/lib/workspaceRecommendedActions.ts` 的推荐操作，当前五组：经营诊断（只读；今日店况 + SEO 体检）/ 商品优化（文案、质量、图片翻译）/ 商品管理（导出、导入）/ 批量编辑（调价、打标、上下架）/ 图片生成。调价、打标、上下架走独立规则卡，不用 CSV；导入商品才要表格。改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除没有独立推荐行，只作为导入内部 apply。新增能力要在这里登记才会出现在首页。问候日期下一句经营结论（`DailyPulse`）是例外：有待办才给「看详情」、没数据才给「去回补」，都发诊断 prompt 留在 `/app` 对话；正常/同步中只留句子。不要再往卡头或推荐区加副标题、徽标与分组描述。改这里时 `HomeV2SsrFallback` 要同步（问候下预留脉冲行高度，占位块数量与 grid 口径需与真实首页一致，否则 hydrate 后跳变）。
 - 创作页（`/app/create`）是「能力目录 + 页内工作区」骨架，能力只在 `app/lib/createCapabilities.ts` 登记一次，目录与工作区都从注册表派生，不要在页面里硬编码工具列表。每条能力的 `kind` 决定交互契约：`read` 直接出结果、`generate` 发起前确认且草稿落回店铺前再确认、`write` 必须走试算→审核→二次确认→应用（复用 bulk-edit 四层）、`import` 先校验再确认。`status` 决定露出方式：`ready` 有页内工作区、`chat` 闭环在助手对话（写回门禁要求 dry-run 产出的 `pending_review`）、`planned` 只做路线图占位且**目录不渲染**，别把没做完的入口摆给商户。消耗 Credit 或写店铺数据的操作统一用 `CreateConfirmDialog`，执行前预估只放弹窗、不在配置页常驻。域（domain）已按《Spark-商家常见操作》铺好，未落地的域不渲染但保留归属；整店翻译归 TSF，刻意不设该域。
 - 优先复用 `DestinationPage`、`SegmentedPageTabs`、`DialogShell` 和 `pagePrimitives.module.css` 等共享页面原语。
 - 所有任务列表 Card 必须以 `app/routes/component/aiTask/AITaskCardShell.tsx` 为基础。Shell 负责容器、header、状态、进度、动作区和日志挂载；业务 Card 负责文案、进度计算、actions 与业务状态。

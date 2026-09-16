@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
@@ -22,11 +22,17 @@ import {
   type SkillStepProgress,
 } from "../../page/chat/chatStreamUtils";
 
+/** 流式文本的订阅式数据源（由 useChatStream 提供，逐 token 更新不经过壳层 state） */
+export type StreamingTextStore = {
+  subscribe: (listener: () => void) => () => void;
+  getText: () => string;
+  getThinkingText: () => string;
+};
+
 type StreamingAssistantReplyProps = {
   active: boolean;
   isStreaming: boolean;
-  streamingText: string;
-  streamingThinkingText?: string;
+  textStore: StreamingTextStore;
   skillSteps: SkillStepProgress[];
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
@@ -278,8 +284,7 @@ function SkillStepLine({
 export function StreamingAssistantReply({
   active,
   isStreaming,
-  streamingText,
-  streamingThinkingText = "",
+  textStore,
   skillSteps,
   streamingGenerateCard,
   streamingGeneratePayload,
@@ -298,6 +303,11 @@ export function StreamingAssistantReply({
   onRecommendedPrompt,
 }: StreamingAssistantReplyProps) {
   const { t } = useTranslation();
+  const streamingText = useSyncExternalStore(textStore.subscribe, textStore.getText);
+  const streamingThinkingText = useSyncExternalStore(
+    textStore.subscribe,
+    textStore.getThinkingText,
+  );
   if (!active) return null;
 
   const streamingProductImprovePayload =
@@ -359,8 +369,16 @@ export function StreamingAssistantReply({
 
               {streamingText ? (
                 <div style={textWrapStyle}>
-                  <ChatMessageContent content={streamingText} />
-                  {isStreaming ? <StreamingCursor /> : null}
+                  {isStreaming ? (
+                    // 流式期间纯文本渲染：避免每个 token 对累积全文重跑 markdown 解析（O(n²)），
+                    // 排版与 ChatMessageContent 根节点对齐，done 后由落库消息呈现 markdown。
+                    <div style={streamingPlainTextStyle}>
+                      {streamingText}
+                      <StreamingCursor />
+                    </div>
+                  ) : (
+                    <ChatMessageContent content={streamingText} />
+                  )}
                 </div>
               ) : null}
 
@@ -454,6 +472,15 @@ const thinkingPanelSlotStyle: CSSProperties = {
 
 const textWrapStyle: CSSProperties = {
   marginTop: 2,
+};
+
+// 与 ChatMessageContent.module.css 的 .root 排版一致，避免纯文本 → markdown 切换时跳动
+const streamingPlainTextStyle: CSSProperties = {
+  fontSize: "0.9375rem",
+  lineHeight: 1.6,
+  color: "#1f2124",
+  wordBreak: "break-word",
+  whiteSpace: "pre-wrap",
 };
 
 const cursorStyle: CSSProperties = {
