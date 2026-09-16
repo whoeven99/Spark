@@ -98,3 +98,69 @@ export function buildSkuExportSkipCsv(rows: SkuExportSkip[]): string {
     rows.map((row) => [row.productId, row.productTitle, row.sku, row.reason]),
   );
 }
+
+export const SKU_EXPORT_PREVIEW_LIMIT = 100;
+
+export type SkuExportPreviewRow = {
+  variantId: string;
+  productTitle: string;
+  handle: string;
+  variantTitle: string;
+  sku: string;
+  barcode: string;
+  weight: string;
+  warned: boolean;
+};
+
+export function formatVariantOptionLabel(row: {
+  option1Value: string;
+  option2Value: string;
+  option3Value: string;
+}): string {
+  return [row.option1Value, row.option2Value, row.option3Value]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(" / ");
+}
+
+export function buildSkuExportPreviewRows(
+  rows: SkuExportVariant[],
+  warnings: SkuExportSkip[],
+  limit = SKU_EXPORT_PREVIEW_LIMIT,
+): SkuExportPreviewRow[] {
+  const warnedSkus = new Set(
+    warnings.map((item) => item.sku.trim().toLowerCase()).filter(Boolean),
+  );
+  return rows.slice(0, limit).map((row) => ({
+    variantId: row.variantId,
+    productTitle: row.title,
+    handle: row.handle,
+    variantTitle: formatVariantOptionLabel(row),
+    sku: row.sku,
+    barcode: row.barcode,
+    weight: row.weight,
+    warned: Boolean(row.sku.trim()) && warnedSkus.has(row.sku.trim().toLowerCase()),
+  }));
+}
+
+export function coerceSkuExportPreviewRows(raw: unknown): SkuExportPreviewRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SkuExportPreviewRow[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const variantId = typeof record.variantId === "string" ? record.variantId.trim() : "";
+    if (!variantId) continue;
+    out.push({
+      variantId,
+      productTitle: typeof record.productTitle === "string" ? record.productTitle : "",
+      handle: typeof record.handle === "string" ? record.handle : "",
+      variantTitle: typeof record.variantTitle === "string" ? record.variantTitle : "",
+      sku: typeof record.sku === "string" ? record.sku : "",
+      barcode: typeof record.barcode === "string" ? record.barcode : "",
+      weight: typeof record.weight === "string" ? record.weight : "",
+      warned: record.warned === true,
+    });
+  }
+  return out;
+}

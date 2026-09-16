@@ -79,10 +79,10 @@
 
 库存是 variant × location，SoT 是 Shopify InventoryItem / InventoryLevel，不是 `ShopInventoryLevel` 镜像。需要 `write_inventory`；列仓库还要 `read_locations`（prod / yw 已加）。履约服务仓只读。单次最多约 200 商品，变体必须翻页，不能 `first: 100` 截断。
 
-- **导出 SKU**（只读）：纯算 `app/lib/skuExport.ts`，读侧复用库存 reader，运行 `app/server/skuExport/skuExportRun.server.ts`。瘦表：Handle / Option / SKU / 条码 / 重量。重复 SKU 进警告报告。任务直接 `succeeded`。
-- **导出库存**（只读）：纯算 `app/lib/inventoryCsv.ts`，运行 `app/server/inventoryExport/inventoryExportRun.server.ts`。对齐 Shopify 官方库存 CSV；`On hand (new)` 留空。Location 大小写敏感。
-- **导入库存**：纯算 `app/lib/inventoryImport.ts`，试算 `inventoryImportDryRun.server.ts`，写回 `inventoryImportApply.server.ts`（唯一 `inventorySetQuantities(name: on_hand)` 调用处）。匹配 Handle + Location + Option；SKU 只辅助、不写 SKU。空的 On hand (new) 跳过。dry-run 若文件里的 On hand (current) 与店铺不一致记 `stale_on_hand`；apply 用试算快照做 `compareQuantity`。On hand 不能低于 committed。
-- **设置 / 增减 / 清零库存**：纯算 `app/lib/inventoryQtyEdit.ts`，试算 `inventoryQtyEditDryRun.server.ts`，写回 `inventoryQtyEditApply.server.ts`（`inventorySetQuantities(name: available)` / `inventoryAdjustQuantities`）。改的是 Available。清零 = available 0，不是 on_hand 0，避免已承诺订单写失败。单仓时确认卡可隐藏地点选择。
+- **导出 SKU**（只读）：纯算 `app/lib/skuExport.ts`，读侧复用库存 reader，运行 `app/server/skuExport/skuExportRun.server.ts`。瘦表：Handle / Option / SKU / 条码 / 重量。重复 SKU 进警告报告。任务直接 `succeeded`。结果含前 100 行 `preview` 供审核弹窗按行展示。
+- **导出库存**（只读）：纯算 `app/lib/inventoryCsv.ts`，运行 `app/server/inventoryExport/inventoryExportRun.server.ts`。对齐 Shopify 官方库存 CSV；`On hand (new)` 留空。Location 大小写敏感。结果同样带按行 `preview`。
+- **导入库存**：纯算 `app/lib/inventoryImport.ts`，试算 `inventoryImportDryRun.server.ts`，写回 `inventoryImportApply.server.ts`（唯一 `inventorySetQuantities(name: on_hand)` 调用处）。匹配 Handle + Location + Option；SKU 只辅助、不写 SKU。空的 On hand (new) 跳过。dry-run 若文件里的 On hand (current) 与店铺不一致记 `stale_on_hand`；apply 用试算快照做 `compareQuantity`。On hand 不能低于 committed。确认卡预览走 `GET /api/inventory-import/preview`（只解析文件）；审核页分将写入 / 需修改 / 跳过。
+- **设置 / 增减 / 清零库存**：纯算 `app/lib/inventoryQtyEdit.ts`，试算 `inventoryQtyEditDryRun.server.ts`，写回 `inventoryQtyEditApply.server.ts`（`inventorySetQuantities(name: available)` / `inventoryAdjustQuantities`）。改的是 Available。清零 = available 0，不是 on_hand 0，避免已承诺订单写失败。单仓时确认卡可隐藏地点选择。补卡路径必须预取 `fetchShopLocations`，不能发空 `locations`。
 
 不要把库存数量列接回商品导入；不要恢复旧的按 SKU 表格导入可售库存路由。选项改名 / 批量新建变体是二期。
 

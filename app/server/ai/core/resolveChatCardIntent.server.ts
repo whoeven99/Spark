@@ -47,10 +47,13 @@ import {
   buildInventoryImportProposal,
   buildInventoryQtyEditProposal,
   buildSkuExportProposal,
+  INVENTORY_EXPORT_SKILL_ID,
+  INVENTORY_QTY_EDIT_SKILL_ID,
 } from "../../../lib/inventoryTaskProposals";
 import { parseWorkspaceProductsFromText } from "../../../lib/workspaceContextProducts";
 import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImport } from "../../../lib/promptSkillFocus";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
+import { fetchShopLocations } from "../../shopify/locationReader.server";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
 
@@ -222,6 +225,69 @@ function uniqueSkillNames(names: readonly string[]): string[] {
     out.push(name);
   }
   return out;
+}
+
+function proposalProducts(proposal: TaskProposalPayload) {
+  return proposal.targets.items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    imageUrl: item.imageUrl ?? null,
+  }));
+}
+
+function proposalParam(proposal: TaskProposalPayload, key: string): string {
+  return proposal.params.find((field) => field.key === key)?.value ?? "";
+}
+
+/** 补卡时把预取到的仓库填进确认卡，避免设置库存出现空下拉。 */
+export function attachShopLocationsToTaskProposal(
+  proposal: TaskProposalPayload,
+  locations: Array<{ value: string; label: string; writable?: boolean }>,
+): TaskProposalPayload {
+  if (proposal.skillId === INVENTORY_EXPORT_SKILL_ID) {
+    return buildInventoryExportProposal({
+      products: proposalProducts(proposal),
+      locationId: proposalParam(proposal, "location"),
+      locations: locations.map((item) => ({ value: item.value, label: item.label })),
+    });
+  }
+  if (proposal.skillId === INVENTORY_QTY_EDIT_SKILL_ID) {
+    return buildInventoryQtyEditProposal({
+      products: proposalProducts(proposal),
+      mode: proposalParam(proposal, "mode"),
+      qtyValue: proposalParam(proposal, "qtyValue"),
+      locationId: proposalParam(proposal, "location"),
+      locations,
+      allWritableLocations: proposalParam(proposal, "allWritableLocations") === "true",
+      clearAck: proposalParam(proposal, "clearAck") === "true",
+    });
+  }
+  return proposal;
+}
+
+async function withPrefetchedShopLocations(
+  proposal: TaskProposalPayload,
+  admin?: ShopifyAdminGraphqlClient,
+): Promise<TaskProposalPayload> {
+  if (
+    proposal.skillId !== INVENTORY_EXPORT_SKILL_ID &&
+    proposal.skillId !== INVENTORY_QTY_EDIT_SKILL_ID
+  ) {
+    return proposal;
+  }
+  if (!admin) return proposal;
+  try {
+    const locations = (await fetchShopLocations(admin))
+      .filter((item) => item.isActive)
+      .map((item) => ({
+        value: item.id,
+        label: item.writable ? item.name : `${item.name}（只读）`,
+        writable: item.writable,
+      }));
+    return attachShopLocationsToTaskProposal(proposal, locations);
+  } catch {
+    return proposal;
+  }
 }
 
 /**
@@ -494,7 +560,8 @@ export async function resolveMissingChatCardsWithLlm(params: {
     claimed,
   });
   if (deterministic) {
-    return resolutionFromTaskProposal(deterministic, emittedFlags);
+    const withLocations = await withPrefetchedShopLocations(deterministic, params.admin);
+    return resolutionFromTaskProposal(withLocations, emittedFlags);
   }
 
   // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，

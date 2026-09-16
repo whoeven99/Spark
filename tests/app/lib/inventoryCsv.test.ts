@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   INVENTORY_CSV_HEADERS,
   buildInventoryCsv,
+  buildInventoryExportPreviewRows,
   mapInventoryCsvHeaders,
   parseInventoryCsvRecords,
   parseNonNegativeInt,
@@ -57,6 +58,40 @@ describe("buildInventoryCsv", () => {
     ]);
     expect(csv).toContain("On hand (new)");
     expect(csv.split("\n")[1]).toMatch(/,6,$/);
+  });
+});
+
+describe("buildInventoryExportPreviewRows", () => {
+  it("keeps one preview row per variant-location with available and on-hand", () => {
+    const preview = buildInventoryExportPreviewRows([
+      {
+        handle: "tee",
+        title: "Tee",
+        option1Name: "Size",
+        option1Value: "S",
+        option2Name: "",
+        option2Value: "",
+        option3Name: "",
+        option3Value: "",
+        sku: "TEE-S",
+        location: "8 Lyndhurst",
+        incoming: 0,
+        unavailable: 0,
+        committed: 2,
+        available: 4,
+        onHand: 6,
+      },
+    ]);
+    expect(preview).toEqual([
+      expect.objectContaining({
+        productTitle: "Tee",
+        variantTitle: "S",
+        sku: "TEE-S",
+        location: "8 Lyndhurst",
+        available: 4,
+        onHand: 6,
+      }),
+    ]);
   });
 });
 

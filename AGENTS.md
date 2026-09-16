@@ -114,7 +114,7 @@ Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页�
 - `POST /api/bulk-status-edit`：批量上下架写回入口，是全仓库**唯一**会改商品 `status` 为 ACTIVE/DRAFT 的地方；门禁同上。只写 `ACTIVE` / `DRAFT`，不碰销售渠道发布。
 - `POST /api/product-import`：导入商品写回入口；编排已有 apply，不新增 GraphQL mutation。门禁同上。写回列：标题/正文、价格、成本、Tags、状态、Vendor/类型/SEO、Handle、合集、Metafield（有 definition 的标量及 `list.single_line_text_field`）、SKU / 条码 / 重量、复制、归档、删除。不做：库存数量、用表格新建商品、销售渠道。删除需审核页额外确认。SKU 列在仅按 SKU 匹配时只用于查找，改 SKU 用 New SKU。
 - `POST /api/bulk-inventory-edit`：规则卡改可售库存（Available）的唯一写回入口；门禁同上。清零把 available 写成 0，不把 on_hand 打成 0。
-- `POST /api/inventory-import`：Shopify 官方库存 CSV 写在库（On hand）的唯一写回入口；门禁同上。SKU 列不改 SKU。试算后用 compareQuantity 做 CAS，过期行标 `stale_on_hand`。
+- `POST /api/inventory-import`：Shopify 官方库存 CSV 写在库（On hand）的唯一写回入口；门禁同上。SKU 列不改 SKU。试算后用 compareQuantity 做 CAS，过期行标 `stale_on_hand`。确认卡表格预览走 `GET /api/inventory-import/preview`（只解析文件，不打 Shopify）。
 - `/api/support`：客服会话入口。
 - `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。

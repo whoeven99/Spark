@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  attachShopLocationsToTaskProposal,
   assistantClaimsChatCard,
   buildChatCardPayloadFromIntent,
   hasAnyChatCardInUiPayloads,
@@ -7,6 +8,7 @@ import {
   resolveDeterministicTaskProposalForTurn,
   tryDeterministicTaskProposalFromSkills,
 } from "../../../../../app/server/ai/core/resolveChatCardIntent.server";
+import { INVENTORY_QTY_EDIT_SKILL_ID } from "../../../../../app/lib/inventoryQtyEdit";
 import {
   BULK_PRICE_EDIT_SKILL_ID,
   BULK_STATUS_EDIT_SKILL_ID,
@@ -138,6 +140,34 @@ describe("tryDeterministicTaskProposalFromSkills", () => {
 
   it("returns null when no deterministic skill matched", () => {
     expect(tryDeterministicTaskProposalFromSkills(["shopOperations"], "今日销售")).toBeNull();
+  });
+});
+
+describe("attachShopLocationsToTaskProposal", () => {
+  it("hides the location field when only one writable warehouse is prefetched", () => {
+    const empty = tryDeterministicTaskProposalFromSkills(["inventoryQtyEdit"], "设置库存");
+    expect(empty?.skillId).toBe(INVENTORY_QTY_EDIT_SKILL_ID);
+    expect(empty?.params.find((field) => field.key === "location")?.options).toEqual([]);
+    const filled = attachShopLocationsToTaskProposal(empty!, [
+      { value: "gid://shopify/Location/1", label: "8 Lyndhurst", writable: true },
+    ]);
+    const location = filled.params.find((field) => field.key === "location");
+    expect(location?.type).toBe("hidden");
+    expect(location?.value).toBe("gid://shopify/Location/1");
+  });
+
+  it("shows a location dropdown when multiple writable warehouses exist", () => {
+    const empty = tryDeterministicTaskProposalFromSkills(["inventoryQtyEdit"], "设置库存");
+    const filled = attachShopLocationsToTaskProposal(empty!, [
+      { value: "l1", label: "Warehouse A", writable: true },
+      { value: "l2", label: "Warehouse B", writable: true },
+    ]);
+    const location = filled.params.find((field) => field.key === "location");
+    expect(location?.type).toBe("location");
+    expect(location?.options).toEqual([
+      { value: "l1", label: "Warehouse A", writable: true },
+      { value: "l2", label: "Warehouse B", writable: true },
+    ]);
   });
 });
 

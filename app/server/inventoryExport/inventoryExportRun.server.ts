@@ -8,7 +8,11 @@ import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
 import { unauthenticated } from "../../shopify.server";
 import { fetchShopLocations } from "../shopify/locationReader.server";
 import { fetchInventoryImportCatalog } from "../shopify/inventoryLevelReader.server";
-import { buildInventoryCsv, type InventoryCsvExportRow } from "../../lib/inventoryCsv";
+import {
+  buildInventoryCsv,
+  buildInventoryExportPreviewRows,
+  type InventoryCsvExportRow,
+} from "../../lib/inventoryCsv";
 import { SKU_EXPORT_MAX_VARIANTS } from "../../lib/skuExport";
 import { PRODUCT_EXPORT_MAX_PRODUCTS } from "../../lib/productExport";
 
@@ -112,6 +116,7 @@ async function runInventoryExport(params: EnqueueInventoryExportParams): Promise
     taskId: params.taskId,
     result: {
       csv: buildInventoryCsv(csvRows),
+      preview: buildInventoryExportPreviewRows(csvRows),
       summary: {
         products: fetched.products.length,
         rows: csvRows.length,

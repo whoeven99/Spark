@@ -188,3 +188,63 @@ export function buildInventoryCsv(rows: InventoryCsvExportRow[]): string {
 export function optionKey(option1: string, option2: string, option3: string): string {
   return [option1, option2, option3].map((value) => value.trim().toLowerCase()).join("\u0001");
 }
+
+export const INVENTORY_EXPORT_PREVIEW_LIMIT = 100;
+
+export type InventoryExportPreviewRow = {
+  key: string;
+  productTitle: string;
+  handle: string;
+  variantTitle: string;
+  sku: string;
+  location: string;
+  available: number;
+  onHand: number;
+};
+
+function optionLabel(row: Pick<InventoryCsvExportRow, "option1Value" | "option2Value" | "option3Value">): string {
+  return [row.option1Value, row.option2Value, row.option3Value]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(" / ");
+}
+
+export function buildInventoryExportPreviewRows(
+  rows: InventoryCsvExportRow[],
+  limit = INVENTORY_EXPORT_PREVIEW_LIMIT,
+): InventoryExportPreviewRow[] {
+  return rows.slice(0, limit).map((row, index) => ({
+    key: `${row.handle}:${row.sku}:${row.location}:${index}`,
+    productTitle: row.title,
+    handle: row.handle,
+    variantTitle: optionLabel(row),
+    sku: row.sku,
+    location: row.location,
+    available: row.available,
+    onHand: row.onHand,
+  }));
+}
+
+export function coerceInventoryExportPreviewRows(raw: unknown): InventoryExportPreviewRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: InventoryExportPreviewRow[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const key = typeof record.key === "string" ? record.key.trim() : "";
+    const handle = typeof record.handle === "string" ? record.handle : "";
+    const location = typeof record.location === "string" ? record.location : "";
+    if (!key && !handle && !location) continue;
+    out.push({
+      key: key || `${handle}:${location}:${out.length}`,
+      productTitle: typeof record.productTitle === "string" ? record.productTitle : "",
+      handle,
+      variantTitle: typeof record.variantTitle === "string" ? record.variantTitle : "",
+      sku: typeof record.sku === "string" ? record.sku : "",
+      location,
+      available: Number(record.available) || 0,
+      onHand: Number(record.onHand) || 0,
+    });
+  }
+  return out;
+}

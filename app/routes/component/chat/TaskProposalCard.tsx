@@ -36,6 +36,7 @@ import {
 } from "../../../lib/taskProposalDisplay";
 import { formatThinkingDuration } from "../../../lib/thinkingDuration";
 import { PRODUCT_IMPORT_SKILL_ID, suggestImportOperations, type ProductImportOperation } from "../../../lib/productImport";
+import { INVENTORY_IMPORT_SKILL_ID } from "../../../lib/inventoryImport";
 import type { ProductImportSheetPreview } from "../../../lib/productImportSheetPreview";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import {
@@ -48,6 +49,7 @@ import {
   type ProductImportPreviewGate,
 } from "../productImport/ProductImportProposalPreview";
 import { ProductImportConfirmDialog } from "../productImport/ProductImportConfirmDialog";
+import { InventoryImportProposalPreview } from "../inventoryImport/InventoryImportProposalPreview";
 
 function buildPictureTranslateTargetId(productId: string, imageUrl: string): string {
   return `${productId}::${imageUrl}`;
@@ -453,7 +455,11 @@ function ResourceSelectField({
   }, [keyword, options, value]);
 
   if (options.length === 0) {
-    return <div style={resourceEmptyStyle}>{t("workspace.taskProposal.card.resourceEmpty")}</div>;
+    const emptyKey =
+      field.type === "location"
+        ? "workspace.taskProposal.card.locationEmpty"
+        : "workspace.taskProposal.card.resourceEmpty";
+    return <div style={resourceEmptyStyle}>{t(emptyKey)}</div>;
   }
 
   return (
@@ -704,8 +710,10 @@ export function TaskProposalCard({
       .some((item) => item.trim().length > 0);
   });
   const isProductImport = resolved.skillId === PRODUCT_IMPORT_SKILL_ID;
+  const isInventoryImport = resolved.skillId === INVENTORY_IMPORT_SKILL_ID;
+  const isSheetImport = isProductImport || isInventoryImport;
   const importFileId =
-    (paramValues.fileId ?? "").trim() || (isProductImport ? fallbackFileId?.trim() ?? "" : "");
+    (paramValues.fileId ?? "").trim() || (isSheetImport ? fallbackFileId?.trim() ?? "" : "");
   useEffect(() => {
     if (!isProductImport) return;
     if (lastImportFileIdRef.current === importFileId) return;
@@ -725,7 +733,7 @@ export function TaskProposalCard({
       targetsQuery !== null) &&
     !submitting &&
     !done &&
-    !(isProductImport && (importPreviewGate.loading || importPreviewGate.blocked));
+    !(isSheetImport && (importPreviewGate.loading || importPreviewGate.blocked));
   /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标 / 可选目标技能恒为 1 */
   const effectiveCount =
     targetless || targetsOptional
@@ -799,7 +807,8 @@ export function TaskProposalCard({
           skillId: resolved.skillId,
           params: {
             ...paramValues,
-            ...(resolved.skillId === PRODUCT_IMPORT_SKILL_ID &&
+            ...( (resolved.skillId === PRODUCT_IMPORT_SKILL_ID ||
+              resolved.skillId === INVENTORY_IMPORT_SKILL_ID) &&
             !(paramValues.fileId ?? "").trim() &&
             fallbackFileId
               ? { fileId: fallbackFileId }
@@ -1270,6 +1279,12 @@ export function TaskProposalCard({
                 onDetectedOperations={handleDetectedImportOperations}
               />
             ) : null}
+            {isInventoryImport && importFileId ? (
+              <InventoryImportProposalPreview
+                fileId={importFileId}
+                onGateChange={handleImportPreviewGate}
+              />
+            ) : null}
 
             {/* Estimation：未选对象时不占版面 */}
             {effectiveCount > 0 || targetless ? (
@@ -1304,6 +1319,17 @@ export function TaskProposalCard({
                     )
                   : resolved.skillId === PRODUCT_IMPORT_SKILL_ID
                     ? t("productImport.previewSheetFooter")
+                    : isInventoryImport && !fileFieldsReady
+                      ? t("workspace.taskProposal.card.footerSelectFile")
+                    : isInventoryImport && importPreviewGate.loading
+                      ? t("inventoryImport.sheetPreview.loading")
+                    : isInventoryImport && importPreviewGate.blocked
+                      ? t(
+                          importPreviewGate.reasonKey ??
+                            "inventoryImport.sheetPreview.error.parse_failed",
+                        )
+                    : isInventoryImport
+                      ? t("inventoryImport.previewSheetFooter")
                     : targetless
                     ? t("workspace.taskProposal.card.footerCreateOne")
                     : targetsQuery
@@ -1341,6 +1367,8 @@ export function TaskProposalCard({
                 ? t("workspace.taskProposal.card.confirmSubmitting")
                 : isProductImport
                   ? t("productImport.previewSheetButton")
+                : isInventoryImport
+                  ? t("inventoryImport.previewSheetButton")
                   : targetless
                   ? t("workspace.taskProposal.card.confirmStart")
                   : targetsQuery

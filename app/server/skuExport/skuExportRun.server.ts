@@ -11,6 +11,7 @@ import {
   SKU_EXPORT_MAX_PRODUCTS,
   SKU_EXPORT_MAX_VARIANTS,
   buildSkuExportCsv,
+  buildSkuExportPreviewRows,
   buildSkuExportSkipCsv,
   findDuplicateSkuWarnings,
 } from "../../lib/skuExport";
@@ -73,6 +74,7 @@ async function runSkuExport(params: EnqueueSkuExportParams): Promise<void> {
     result: {
       csv: buildSkuExportCsv(fetched.rows),
       warningCsv: warnings.length > 0 ? buildSkuExportSkipCsv(warnings) : undefined,
+      preview: buildSkuExportPreviewRows(fetched.rows, warnings),
       summary: {
         products: new Set(fetched.rows.map((row) => row.productId)).size,
         variants: fetched.rows.length,

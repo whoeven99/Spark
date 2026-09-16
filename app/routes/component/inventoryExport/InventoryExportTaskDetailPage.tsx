@@ -2,6 +2,10 @@ import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { CatalogMutationTaskDetailPage } from "../catalogManage/CatalogMutationTaskDetailPage";
 import { catalogReviewCellStyle } from "../catalogManage/catalogReviewUi";
+import {
+  coerceInventoryExportPreviewRows,
+  type InventoryExportPreviewRow,
+} from "../../../lib/inventoryCsv";
 import type {
   AITaskItem,
   AITaskStatus,
@@ -23,21 +27,25 @@ type Props = {
 export function readInventoryExportResult(task: AITaskItem): InventoryExportTaskResult | null {
   const raw = task.result;
   if (!raw || typeof raw.csv !== "string") return null;
-  return raw as unknown as InventoryExportTaskResult;
+  return {
+    ...(raw as unknown as InventoryExportTaskResult),
+    preview: coerceInventoryExportPreviewRows(raw.preview),
+  };
 }
 
 export function InventoryExportTaskDetailPage(props: Props) {
   const { t } = useTranslation();
   const result = readInventoryExportResult(props.task);
   const running = props.task.status === "running" && !result;
-  const rows = result ? [{ key: "ready" }] : [];
+  const previewRows = result?.preview ?? [];
   return (
     <CatalogMutationTaskDetailPage
       {...props}
       i18nPrefix="inventoryExport"
       downloadOnly
-      rows={rows}
+      rows={previewRows}
       truncated={result?.truncated}
+      moreRowsTotal={result?.summary.rows}
       summaryChips={[
         { label: t("inventoryExport.summaryProducts"), value: result?.summary.products ?? 0 },
         { label: t("inventoryExport.summaryRows"), value: result?.summary.rows ?? 0 },
@@ -50,13 +58,17 @@ export function InventoryExportTaskDetailPage(props: Props) {
           </div>
         ) : null
       }
-      headers={[t("inventoryExport.colStatus")]}
+      headers={[
+        t("inventoryExport.colProduct"),
+        t("inventoryExport.colVariant"),
+        t("inventoryExport.colSku"),
+        t("inventoryExport.colLocation"),
+        t("inventoryExport.colAvailable"),
+        t("inventoryExport.colOnHand"),
+        t("inventoryExport.colStatus"),
+      ]}
       rowKey={(row) => row.key}
-      renderRow={() => (
-        <td style={{ ...catalogReviewCellStyle, color: pageColorTokens.brandGreenDeep, fontWeight: 700 }}>
-          {t("inventoryExport.outcomeExported")}
-        </td>
-      )}
+      renderRow={(row) => <InventoryExportPreviewCells row={row} />}
       extraCsv={
         result?.csv
           ? {
@@ -66,8 +78,25 @@ export function InventoryExportTaskDetailPage(props: Props) {
             }
           : undefined
       }
-      emptyNotice={running ? t("inventoryExport.runningPreview") : t("inventoryExport.noChangeset")}
+      emptyNotice={running ? t("inventoryExport.runningPreview") : result ? null : t("inventoryExport.noChangeset")}
       canApplyCount={0}
     />
+  );
+}
+
+function InventoryExportPreviewCells({ row }: { row: InventoryExportPreviewRow }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <td style={{ ...catalogReviewCellStyle, fontWeight: 600 }}>{row.productTitle || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.variantTitle || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.sku || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.location || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.available}</td>
+      <td style={catalogReviewCellStyle}>{row.onHand}</td>
+      <td style={{ ...catalogReviewCellStyle, color: pageColorTokens.brandGreenDeep, fontWeight: 700 }}>
+        {t("inventoryExport.outcomeExported")}
+      </td>
+    </>
   );
 }

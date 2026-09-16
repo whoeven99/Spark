@@ -2,6 +2,10 @@ import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { CatalogMutationTaskDetailPage } from "../catalogManage/CatalogMutationTaskDetailPage";
 import { catalogReviewCellStyle } from "../catalogManage/catalogReviewUi";
+import {
+  coerceSkuExportPreviewRows,
+  type SkuExportPreviewRow,
+} from "../../../lib/skuExport";
 import type { AITaskItem, AITaskStatus, SkuExportTaskResult } from "../../../lib/aiTaskTypes";
 
 type Props = {
@@ -19,21 +23,25 @@ type Props = {
 export function readSkuExportResult(task: AITaskItem): SkuExportTaskResult | null {
   const raw = task.result;
   if (!raw || typeof raw.csv !== "string") return null;
-  return raw as unknown as SkuExportTaskResult;
+  return {
+    ...(raw as unknown as SkuExportTaskResult),
+    preview: coerceSkuExportPreviewRows(raw.preview),
+  };
 }
 
 export function SkuExportTaskDetailPage(props: Props) {
   const { t } = useTranslation();
   const result = readSkuExportResult(props.task);
   const running = props.task.status === "running" && !result;
-  const rows = result ? [{ key: "ready" }] : [];
+  const previewRows = result?.preview ?? [];
   return (
     <CatalogMutationTaskDetailPage
       {...props}
       i18nPrefix="skuExport"
       downloadOnly
-      rows={rows}
+      rows={previewRows}
       truncated={result?.truncated}
+      moreRowsTotal={result?.summary.variants}
       summaryChips={[
         { label: t("skuExport.summaryProducts"), value: result?.summary.products ?? 0 },
         { label: t("skuExport.summaryVariants"), value: result?.summary.variants ?? 0 },
@@ -48,13 +56,17 @@ export function SkuExportTaskDetailPage(props: Props) {
           </div>
         ) : null
       }
-      headers={[t("skuExport.colStatus")]}
-      rowKey={(row) => row.key}
-      renderRow={() => (
-        <td style={{ ...catalogReviewCellStyle, color: pageColorTokens.brandGreenDeep, fontWeight: 700 }}>
-          {t("skuExport.outcomeExported")}
-        </td>
-      )}
+      headers={[
+        t("skuExport.colProduct"),
+        t("skuExport.colHandle"),
+        t("skuExport.colVariant"),
+        t("skuExport.colSku"),
+        t("skuExport.colBarcode"),
+        t("skuExport.colWeight"),
+        t("skuExport.colStatus"),
+      ]}
+      rowKey={(row) => row.variantId}
+      renderRow={(row) => <SkuExportPreviewCells row={row} />}
       extraCsv={
         result?.csv
           ? {
@@ -75,8 +87,31 @@ export function SkuExportTaskDetailPage(props: Props) {
             ]
           : undefined
       }
-      emptyNotice={running ? t("skuExport.runningPreview") : t("skuExport.noChangeset")}
+      emptyNotice={running ? t("skuExport.runningPreview") : result ? null : t("skuExport.noChangeset")}
       canApplyCount={0}
     />
+  );
+}
+
+function SkuExportPreviewCells({ row }: { row: SkuExportPreviewRow }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <td style={{ ...catalogReviewCellStyle, fontWeight: 600 }}>{row.productTitle || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.handle || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.variantTitle || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.sku || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.barcode || "—"}</td>
+      <td style={catalogReviewCellStyle}>{row.weight || "—"}</td>
+      <td
+        style={{
+          ...catalogReviewCellStyle,
+          color: row.warned ? "#92400e" : pageColorTokens.brandGreenDeep,
+          fontWeight: 700,
+        }}
+      >
+        {row.warned ? t("skuExport.outcomeDuplicate") : t("skuExport.outcomeExported")}
+      </td>
+    </>
   );
 }

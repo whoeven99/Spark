@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SKU_EXPORT_HEADERS,
   buildSkuExportCsv,
+  buildSkuExportPreviewRows,
   findDuplicateSkuWarnings,
   type SkuExportVariant,
 } from "../../../app/lib/skuExport";
@@ -41,5 +42,19 @@ describe("skuExport", () => {
     ]);
     expect(warnings).toHaveLength(2);
     expect(warnings.every((item) => item.reason === "duplicate_sku")).toBe(true);
+  });
+
+  it("builds a variant-level preview and flags duplicate SKUs", () => {
+    const rows = [
+      row({ sku: "DUP" }),
+      row({ variantId: "gid://shopify/ProductVariant/2", option1Value: "M", sku: "DUP" }),
+    ];
+    const preview = buildSkuExportPreviewRows(rows, findDuplicateSkuWarnings(rows));
+    expect(preview).toHaveLength(2);
+    expect(preview[0]).toMatchObject({
+      variantTitle: "S",
+      sku: "DUP",
+      warned: true,
+    });
   });
 });

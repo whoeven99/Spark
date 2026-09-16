@@ -15,6 +15,7 @@ import {
   buildInventoryImportSummary,
   planInventoryImport,
 } from "../../lib/inventoryImport";
+import { buildInventoryImportSheetPreview } from "../../lib/inventoryImportSheetPreview";
 import { SKU_EXPORT_MAX_VARIANTS } from "../../lib/skuExport";
 
 const LOG_PREFIX = "[InventoryImport][DryRun]";
@@ -102,6 +103,11 @@ async function runInventoryImportDryRun(params: EnqueueInventoryImportDryRunPara
       rows: planned.rows,
       issues: planned.issues,
       summary,
+      sheetPreview: buildInventoryImportSheetPreview({
+        fileName: file.name,
+        headers: sheet.headers,
+        rows: sheet.rows,
+      }),
       ...(catalog.truncated ? { truncated: true } : {}),
     },
     actualCredits: 0,

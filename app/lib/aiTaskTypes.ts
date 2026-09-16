@@ -510,6 +510,7 @@ export type SkuExportTaskConfig = {
 export type SkuExportTaskResult = {
   csv: string;
   warningCsv?: string;
+  preview?: import("./skuExport").SkuExportPreviewRow[];
   summary: { products: number; variants: number; warned: number };
   truncated?: boolean;
 };
@@ -522,6 +523,7 @@ export type InventoryExportTaskConfig = {
 
 export type InventoryExportTaskResult = {
   csv: string;
+  preview?: import("./inventoryCsv").InventoryExportPreviewRow[];
   summary: { products: number; rows: number; locations: number };
   truncated?: boolean;
 };
@@ -536,6 +538,7 @@ export type InventoryImportTaskResult = {
   rows: import("./inventoryImport").InventoryImportRow[];
   issues: import("./inventoryImport").InventoryImportIssue[];
   summary: import("./inventoryImport").InventoryImportSummary;
+  sheetPreview?: import("./inventoryImportSheetPreview").InventoryImportSheetPreview;
   truncated?: boolean;
   apply?: import("./inventoryImport").InventoryImportApplyOutcome;
   applyStartedAt?: string;
