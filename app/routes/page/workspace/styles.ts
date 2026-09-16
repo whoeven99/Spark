@@ -493,12 +493,6 @@ export const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.te
 export const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 export const mobileMetricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 };
 export const metricLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 600, color: "#6d7175" };
-export const dashboardSectionTitleRowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
 export const pendingIntegrationBadgeStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",

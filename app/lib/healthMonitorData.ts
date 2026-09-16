@@ -186,7 +186,7 @@ export type HealthMonitorSnapshotInput = {
   signals?: HealthMonitorSignalsInput;
 };
 
-/** 邀请制内测不展示：风控链路、经营 ROI（短+长占位）。短期 ROI 仍在经营页。 */
+/** 当前不展示：风控链路、经营 ROI（短+长占位）。短期 ROI 仍在经营页。 */
 export const HIDDEN_HEALTH_MONITOR_IDS = new Set(["roi-health", "risk-control-health"]);
 
 export function isHealthMonitorVisible(id: string): boolean {

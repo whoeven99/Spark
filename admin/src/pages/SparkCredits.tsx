@@ -432,7 +432,7 @@ export default function SparkCredits() {
               rows={2}
               value={adjustNote}
               onChange={(e) => setAdjustNote(e.target.value)}
-              placeholder="例如：客服补偿 / 内测加赠"
+              placeholder="例如：客服补偿 / 活动加赠"
               maxLength={500}
             />
           </div>

@@ -176,8 +176,7 @@ export function ChatPanel({
 
   const {
     isStreaming,
-    streamingText,
-    streamingThinkingText,
+    streamingTextStore,
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingQualityCard,
@@ -511,11 +510,24 @@ export function ChatPanel({
     return () => cancelAnimationFrame(raf);
   }, [conversation.id, messages.length, showStreamingReply]);
 
-  // 流式过程中自动追底：思考文字、正文、skill steps 任一增长都触发
+  // 流式过程中自动追底：skill steps / 流式状态变化走 state；
+  // 正文与思考文字逐 token 增长经订阅触发（不经过本组件 state，避免整个面板跟着重渲染）
+  const isScrolledUpRef = useRef(isScrolledUp);
+  useEffect(() => {
+    isScrolledUpRef.current = isScrolledUp;
+  }, [isScrolledUp]);
+
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
     scrollToBottom(); // instant，避免与下一帧 smooth 互相打架
-  }, [showStreamingReply, streamingText, streamingThinkingText, skillSteps.length, isStreaming, isScrolledUp]);
+  }, [showStreamingReply, skillSteps.length, isStreaming, isScrolledUp]);
+
+  useEffect(() => {
+    if (!showStreamingReply) return;
+    return streamingTextStore.subscribe(() => {
+      if (!isScrolledUpRef.current) scrollToBottom();
+    });
+  }, [showStreamingReply, streamingTextStore]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -806,8 +818,7 @@ export function ChatPanel({
                 <StreamingAssistantReply
                   active={showStreamingReply}
                   isStreaming={isStreaming}
-                  streamingText={streamingText}
-                  streamingThinkingText={streamingThinkingText}
+                  textStore={streamingTextStore}
                   skillSteps={skillSteps}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
