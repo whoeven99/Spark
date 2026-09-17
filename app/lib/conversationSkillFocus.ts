@@ -1,6 +1,7 @@
 /**
- * 多轮对话中的 skillFocus 粘性：点推荐写入，同会话后续发送沿用，
- * 新推荐 key 覆盖；空 explicit 不清除已有 sticky。
+ * 多轮对话中的 skillFocus：
+ * 仅「本轮点推荐」带显式 focus；自由输入不再沿用会话粘性，
+ * 避免推荐后的自然语言被收窄工具（与全量 bind 策略冲突）。
  */
 
 export function normalizeSkillFocus(value: string | null | undefined): string | null {
@@ -9,18 +10,20 @@ export function normalizeSkillFocus(value: string | null | undefined): string | 
 }
 
 /**
- * 本轮实际传给 chat-stream 的 skillFocus：
- * 有显式值（本轮点推荐）用显式；否则用会话粘性。
+ * 本轮实际传给 chat-stream 的 skillFocus：只认本轮显式推荐。
+ * `sticky` 参数保留兼容，但不再参与决议。
  */
 export function resolveConversationSkillFocus(options: {
   explicit?: string | null;
+  /** @deprecated 粘性已停用；保留以免旧调用方报错 */
   sticky?: string | null;
 }): string | null {
-  return normalizeSkillFocus(options.explicit) ?? normalizeSkillFocus(options.sticky);
+  void options.sticky;
+  return normalizeSkillFocus(options.explicit);
 }
 
 /**
- * 更新会话粘性：显式 focus 覆盖；未带显式则保持 previous。
+ * 会话粘性更新：有显式 focus 则记下（供调试/迁移）；自由输入清空粘性。
  */
 export function nextStickySkillFocus(options: {
   explicit?: string | null;
@@ -28,5 +31,6 @@ export function nextStickySkillFocus(options: {
 }): string | null {
   const explicit = normalizeSkillFocus(options.explicit);
   if (explicit) return explicit;
-  return normalizeSkillFocus(options.previous);
+  void options.previous;
+  return null;
 }

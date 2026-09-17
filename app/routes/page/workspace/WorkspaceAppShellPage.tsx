@@ -1031,6 +1031,8 @@ export function WorkspaceAppShellPage({
     });
     if (stickyNext) {
       skillFocusByConversationRef.current.set(conversationId, stickyNext);
+    } else {
+      skillFocusByConversationRef.current.delete(conversationId);
     }
 
     if (isDraftConversationId(conversationId)) {

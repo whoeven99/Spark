@@ -53,7 +53,11 @@ export async function buildShopChatGraph(
   activeDefs: ToolDefinition[] = [],
   activePlaybookDefs: PlaybookDefinition[] = [],
   preFetchedReflectionSummary?: string,
-  promptOptions?: { skillFocus?: string | null; userText?: string | null },
+  promptOptions?: {
+    skillFocus?: string | null;
+    userText?: string | null;
+    hasFileContext?: boolean;
+  },
 ) {
   const model = getShopChatModel();
   const wrappedBaseTools = context.shop?.trim()
@@ -71,6 +75,7 @@ export async function buildShopChatGraph(
     activePlaybookDefs,
     skillFocus: promptOptions?.skillFocus,
     userText: promptOptions?.userText,
+    hasFileContext: promptOptions?.hasFileContext,
   });
 
   return createReactAgent({

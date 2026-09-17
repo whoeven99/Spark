@@ -5531,6 +5531,7 @@
         "currentTime": "Checking the current time",
         "inventoryHealth": "Checking inventory health",
         "shopInfo": "Reading store information",
+        "shopMetrics": "Querying store metrics",
         "abandonmentRate": "Analyzing abandonment rate",
         "averageOrderValue": "Calculating average order value",
         "conversionRate": "Analyzing conversion rate",

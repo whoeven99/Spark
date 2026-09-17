@@ -543,255 +543,280 @@ function createShopBasicInfoTool(admin: ShopifyAdminGraphqlClient) {
   });
 }
 
-function createShopTodaySalesTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_today_sales",
-    description:
-      "查询 Shopify 商店销售额（按订单 currentTotalPrice 合计）。可传 days 指定最近几天，默认 1（最近一天）。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
-      try {
-        const safeDays = normalizeDays(days);
-        const stats = await queryOrderStatsByDays(admin, safeDays);
-        return `${formatDaysLabel(safeDays)}销售额：${stats.salesAmount} ${stats.currencyCode}（基于订单金额汇总，订单数 ${stats.orderCount}）。`;
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(admin, [
-          "read_orders",
-          "write_orders",
-        ]);
-        return `查询销售额失败：${getErrorMessage(error)}。\n${diagnostic}`;
-      }
-    },
-  });
+/** 经营指标枚举：合并 formerly 8 个 get_shopify_today_* / inventory 工具。 */
+const SHOP_METRIC_ENUM = [
+  "sales",
+  "order_count",
+  "conversion_rate",
+  "aov",
+  "source_performance",
+  "abandonment_rate",
+  "refund_rate",
+  "inventory_health",
+  "summary",
+  "all",
+] as const;
+
+type ShopMetricRequest = (typeof SHOP_METRIC_ENUM)[number];
+type ConcreteShopMetric = Exclude<ShopMetricRequest, "summary" | "all">;
+
+const SUMMARY_METRICS: readonly ConcreteShopMetric[] = [
+  "sales",
+  "order_count",
+  "conversion_rate",
+  "aov",
+];
+
+const ALL_METRICS: readonly ConcreteShopMetric[] = [
+  ...SUMMARY_METRICS,
+  "source_performance",
+  "abandonment_rate",
+  "refund_rate",
+  "inventory_health",
+];
+
+const shopMetricsToolSchema = z.object({
+  metrics: z
+    .array(z.enum(SHOP_METRIC_ENUM))
+    .min(1)
+    .optional()
+    .describe(
+      "要查询的指标。summary=销售额/订单/转化/客单价；all=全部含来源/弃购/退款/库存；也可指定单项或多项。默认 summary。",
+    ),
+  days: metricRangeSchema.shape.days,
+});
+
+function expandRequestedMetrics(
+  metrics?: readonly ShopMetricRequest[],
+): ConcreteShopMetric[] {
+  if (!metrics?.length) return [...SUMMARY_METRICS];
+  const seen = new Set<ConcreteShopMetric>();
+  const out: ConcreteShopMetric[] = [];
+  for (const key of metrics) {
+    const batch: readonly ConcreteShopMetric[] =
+      key === "summary"
+        ? SUMMARY_METRICS
+        : key === "all"
+          ? ALL_METRICS
+          : [key];
+    for (const item of batch) {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      out.push(item);
+    }
+  }
+  return out.length > 0 ? out : [...SUMMARY_METRICS];
 }
 
-function createShopTodayOrderCountTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_today_order_count",
-    description:
-      "查询 Shopify 商店订单数。可传 days 指定最近几天，默认 1（最近一天）。用户询问订单量、成交单数时使用。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
-      try {
-        const safeDays = normalizeDays(days);
-        const stats = await queryOrderStatsByDays(admin, safeDays);
-        return `${formatDaysLabel(safeDays)}订单数：${stats.orderCount} 单。`;
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(admin, [
-          "read_orders",
-          "write_orders",
-        ]);
-        return `查询订单数失败：${getErrorMessage(error)}。\n${diagnostic}`;
-      }
-    },
-  });
+function metricNeedsOrderStats(metric: ConcreteShopMetric): boolean {
+  return metric !== "inventory_health";
 }
 
-function createShopTodayConversionRateTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_today_conversion_rate",
-    description:
-      "查询 Shopify 商店转化率（checkout 完成率近似：订单数 / (订单数 + 弃购数)）。可传 days 指定最近几天，默认 1。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
-      const safeDays = normalizeDays(days);
-      try {
-        const orderStats = await queryOrderStatsByDays(admin, safeDays);
-        try {
-          const abandonedCount = await queryAbandonedCheckoutCountByDays(
-            admin,
-            safeDays,
-          );
-          const denominator = orderStats.orderCount + abandonedCount;
-          const rate =
-            denominator > 0 ? (orderStats.orderCount / denominator) * 100 : 0;
-          return `${formatDaysLabel(safeDays)}转化率（checkout 口径）：${formatPercent(rate)}（订单 ${orderStats.orderCount}，弃购 ${abandonedCount}）。`;
-        } catch (abandonedError) {
-          return [
-            `${formatDaysLabel(safeDays)}订单数：${orderStats.orderCount} 单，销售额：${orderStats.salesAmount} ${orderStats.currencyCode}。`,
-            `转化率暂无法计算：${getErrorMessage(abandonedError)}。`,
-            "请确认应用具备读取 checkout/abandoned checkout 的权限。",
-          ].join("\n");
-        }
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(
-          admin,
-          ["read_orders", "write_orders"],
-          "转化率还依赖 abandoned checkouts 后台权限。",
+function metricNeedsAbandoned(metric: ConcreteShopMetric): boolean {
+  return metric === "conversion_rate" || metric === "abandonment_rate";
+}
+
+async function formatInventoryHealthSection(
+  admin: ShopifyAdminGraphqlClient,
+): Promise<string> {
+  try {
+    const stats = await queryInventoryHealthStats(admin);
+    if (!stats.checkedVariantCount) {
+      return "未查询到可用库存数据。";
+    }
+
+    const lowRatio = (stats.lowStockCount / stats.checkedVariantCount) * 100;
+    const outRatio = (stats.outOfStockCount / stats.checkedVariantCount) * 100;
+    const lines = [
+      `库存健康概览：已检查 ${stats.checkedVariantCount} 个 SKU。`,
+      `低库存（<=5）：${stats.lowStockCount} 个（${formatPercent(lowRatio)}）。`,
+      `缺货（<=0）：${stats.outOfStockCount} 个（${formatPercent(outRatio)}）。`,
+    ];
+    if (stats.lowStockItems.length) {
+      lines.push("重点补货建议（示例）：");
+      for (const item of stats.lowStockItems) {
+        lines.push(`- ${item.name}（SKU: ${item.sku}，库存 ${item.quantity}）`);
+      }
+    }
+    lines.push(
+      "注：库存周转率需要结合周期内销量与平均库存，当前提供缺货风险预警。",
+    );
+    return lines.join("\n");
+  } catch (error) {
+    const diagnostic = await buildScopeDiagnostic(admin, [
+      "read_products",
+      "write_products",
+    ]);
+    return `查询库存健康失败：${getErrorMessage(error)}。\n${diagnostic}`;
+  }
+}
+
+async function runShopMetricsQuery(
+  admin: ShopifyAdminGraphqlClient,
+  metrics: ConcreteShopMetric[],
+  days: number,
+): Promise<string> {
+  const label = formatDaysLabel(days);
+  const sections: string[] = [];
+
+  let orderStats: TodayOrderStats | null = null;
+  if (metrics.some(metricNeedsOrderStats)) {
+    try {
+      orderStats = await queryOrderStatsByDays(admin, days);
+    } catch (error) {
+      const diagnostic = await buildScopeDiagnostic(
+        admin,
+        ["read_orders", "write_orders"],
+        metrics.some(metricNeedsAbandoned)
+          ? "部分指标还依赖 abandoned checkouts 后台权限。"
+          : undefined,
+      );
+      return `查询经营指标失败：${getErrorMessage(error)}。\n${diagnostic}`;
+    }
+  }
+
+  let abandonedCount: number | null = null;
+  let abandonedError: string | null = null;
+  if (metrics.some(metricNeedsAbandoned) && orderStats) {
+    try {
+      abandonedCount = await queryAbandonedCheckoutCountByDays(admin, days);
+    } catch (error) {
+      abandonedError = getErrorMessage(error);
+    }
+  }
+
+  for (const metric of metrics) {
+    switch (metric) {
+      case "sales": {
+        const stats = orderStats!;
+        sections.push(
+          `${label}销售额：${stats.salesAmount} ${stats.currencyCode}（基于订单金额汇总，订单数 ${stats.orderCount}）。`,
         );
-        return `查询转化率失败：${getErrorMessage(error)}。\n${diagnostic}`;
+        break;
       }
-    },
-  });
-}
-
-function createShopTodayAovTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_today_aov",
-    description:
-      "查询 Shopify 商店客单价 AOV（销售额/订单数）。可传 days 指定最近几天，默认 1（最近一天）。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
-      try {
-        const safeDays = normalizeDays(days);
-        const stats = await queryOrderStatsByDays(admin, safeDays);
+      case "order_count": {
+        sections.push(`${label}订单数：${orderStats!.orderCount} 单。`);
+        break;
+      }
+      case "conversion_rate": {
+        const stats = orderStats!;
+        if (abandonedError != null || abandonedCount == null) {
+          sections.push(
+            [
+              `${label}订单数：${stats.orderCount} 单，销售额：${stats.salesAmount} ${stats.currencyCode}。`,
+              `转化率暂无法计算：${abandonedError ?? "未知错误"}。`,
+              "请确认应用具备读取 checkout/abandoned checkout 的权限。",
+            ].join("\n"),
+          );
+        } else {
+          const denominator = stats.orderCount + abandonedCount;
+          const rate =
+            denominator > 0 ? (stats.orderCount / denominator) * 100 : 0;
+          sections.push(
+            `${label}转化率（checkout 口径）：${formatPercent(rate)}（订单 ${stats.orderCount}，弃购 ${abandonedCount}）。`,
+          );
+        }
+        break;
+      }
+      case "aov": {
+        const stats = orderStats!;
         const aov = stats.orderCount > 0 ? stats.salesAmount / stats.orderCount : 0;
-        return `${formatDaysLabel(safeDays)}客单价 AOV：${aov.toFixed(2)} ${stats.currencyCode}（销售额 ${stats.salesAmount}，订单 ${stats.orderCount}）。`;
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(admin, [
-          "read_orders",
-          "write_orders",
-        ]);
-        return `查询客单价失败：${getErrorMessage(error)}。\n${diagnostic}`;
+        sections.push(
+          `${label}客单价 AOV：${aov.toFixed(2)} ${stats.currencyCode}（销售额 ${stats.salesAmount}，订单 ${stats.orderCount}）。`,
+        );
+        break;
       }
-    },
-  });
-}
-
-function createShopTodaySourcePerformanceTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_today_source_performance",
-    description:
-      "查询 Shopify 商店流量来源销售表现（按订单 sourceName 聚合）。可传 days 指定最近几天，默认 1。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
-      try {
-        const safeDays = normalizeDays(days);
-        const stats = await queryOrderStatsByDays(admin, safeDays);
+      case "source_performance": {
+        const stats = orderStats!;
         const entries = Object.entries(stats.sourceBreakdown).sort(
           (a, b) => b[1].salesAmount - a[1].salesAmount,
         );
         if (!entries.length) {
-          return `${formatDaysLabel(safeDays)}暂无来源数据。`;
+          sections.push(`${label}暂无来源数据。`);
+        } else {
+          sections.push(
+            [
+              `${label}来源销售表现（币种 ${stats.currencyCode}）：`,
+              ...entries.slice(0, 8).map(
+                ([source, data]) =>
+                  `- ${source}：销售额 ${data.salesAmount.toFixed(2)}，订单 ${data.orderCount}`,
+              ),
+              "注：ROAS 需结合广告花费数据计算，当前结果仅展示来源成交贡献。",
+            ].join("\n"),
+          );
         }
-
-        const lines = [
-          `${formatDaysLabel(safeDays)}来源销售表现（币种 ${stats.currencyCode}）：`,
-          ...entries.slice(0, 8).map(
-            ([source, data]) =>
-              `- ${source}：销售额 ${data.salesAmount.toFixed(2)}，订单 ${data.orderCount}`,
-          ),
-          "注：ROAS 需结合广告花费数据计算，当前结果仅展示来源成交贡献。",
-        ];
-        return lines.join("\n");
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(admin, [
-          "read_orders",
-          "write_orders",
-        ]);
-        return `查询来源表现失败：${getErrorMessage(error)}。\n${diagnostic}`;
+        break;
       }
-    },
-  });
+      case "abandonment_rate": {
+        const stats = orderStats!;
+        if (abandonedError != null || abandonedCount == null) {
+          const diagnostic = await buildScopeDiagnostic(
+            admin,
+            ["read_orders", "write_orders"],
+            "此外需要当前后台用户具备 manage_abandoned_checkouts 权限。",
+          );
+          sections.push(
+            `查询弃购率失败：${abandonedError ?? "未知错误"}。\n${diagnostic}`,
+          );
+        } else {
+          const denominator = stats.orderCount + abandonedCount;
+          const rate =
+            denominator > 0 ? (abandonedCount / denominator) * 100 : 0;
+          sections.push(
+            `${label}弃购率（checkout 口径）：${formatPercent(rate)}（弃购 ${abandonedCount}，订单 ${stats.orderCount}）。`,
+          );
+        }
+        break;
+      }
+      case "refund_rate": {
+        const stats = orderStats!;
+        const refundRate =
+          stats.orderCount > 0
+            ? (stats.refundedOrderCount / stats.orderCount) * 100
+            : 0;
+        const amountRate =
+          stats.salesAmount > 0 ? (stats.refundAmount / stats.salesAmount) * 100 : 0;
+        sections.push(
+          [
+            `${label}退款率（按退款订单占比）：${formatPercent(refundRate)}。`,
+            `${label}退款金额：${stats.refundAmount.toFixed(2)} ${stats.currencyCode}（占销售额 ${formatPercent(amountRate)}）。`,
+            "注：退货率通常需结合履约/物流退货单据口径，当前以退款数据近似。",
+          ].join("\n"),
+        );
+        break;
+      }
+      case "inventory_health": {
+        sections.push(await formatInventoryHealthSection(admin));
+        break;
+      }
+      default: {
+        const _exhaustive: never = metric;
+        void _exhaustive;
+        break;
+      }
+    }
+  }
+
+  return sections.join("\n\n");
 }
 
-function createShopTodayAbandonmentRateTool(admin: ShopifyAdminGraphqlClient) {
+function createShopMetricsTool(admin: ShopifyAdminGraphqlClient) {
   return new DynamicStructuredTool({
-    name: "get_shopify_today_abandonment_rate",
+    name: "get_shopify_shop_metrics",
     description:
-      "查询 Shopify 商店弃购率（checkout 口径）。可传 days 指定最近几天，默认 1（最近一天）。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
+      "查询店铺经营指标（销售额、订单数、转化率、客单价、流量来源、弃购率、退款率、库存健康）。用户明确要查数字/某项指标时用；笼统「店铺怎么样」时不要默认调用，若调用则只用 metrics=summary 一次。问全面概况用 all，问单项则指定对应 metrics。",
+    schema: shopMetricsToolSchema,
+    func: async ({ metrics, days }) => {
+      const wanted = expandRequestedMetrics(metrics);
       const safeDays = normalizeDays(days);
-      try {
-        const orderStats = await queryOrderStatsByDays(admin, safeDays);
-        const abandonedCount = await queryAbandonedCheckoutCountByDays(
-          admin,
-          safeDays,
-        );
-        const denominator = orderStats.orderCount + abandonedCount;
-        const rate = denominator > 0 ? (abandonedCount / denominator) * 100 : 0;
-        return `${formatDaysLabel(safeDays)}弃购率（checkout 口径）：${formatPercent(rate)}（弃购 ${abandonedCount}，订单 ${orderStats.orderCount}）。`;
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(
-          admin,
-          ["read_orders", "write_orders"],
-          "此外需要当前后台用户具备 manage_abandoned_checkouts 权限。",
-        );
-        return `查询弃购率失败：${getErrorMessage(error)}。\n${diagnostic}`;
-      }
+      return runShopMetricsQuery(admin, wanted, safeDays);
     },
   });
 }
 
-function createShopTodayRefundRateTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_today_refund_return_rate",
-    description:
-      "查询 Shopify 商店退款率与退款金额（退货率以退款订单占比近似）。可传 days 指定最近几天，默认 1。",
-    schema: metricRangeSchema,
-    func: async ({ days }) => {
-      try {
-        const safeDays = normalizeDays(days);
-        const stats = await queryOrderStatsByDays(admin, safeDays);
-        const refundRate = stats.orderCount > 0 ? (stats.refundedOrderCount / stats.orderCount) * 100 : 0;
-        const amountRate = stats.salesAmount > 0 ? (stats.refundAmount / stats.salesAmount) * 100 : 0;
-        return [
-          `${formatDaysLabel(safeDays)}退款率（按退款订单占比）：${formatPercent(refundRate)}。`,
-          `${formatDaysLabel(safeDays)}退款金额：${stats.refundAmount.toFixed(2)} ${stats.currencyCode}（占销售额 ${formatPercent(amountRate)}）。`,
-          "注：退货率通常需结合履约/物流退货单据口径，当前以退款数据近似。",
-        ].join("\n");
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(admin, [
-          "read_orders",
-          "write_orders",
-        ]);
-        return `查询退款/退货率失败：${getErrorMessage(error)}。\n${diagnostic}`;
-      }
-    },
-  });
-}
-
-function createShopInventoryHealthTool(admin: ShopifyAdminGraphqlClient) {
-  return new DynamicStructuredTool({
-    name: "get_shopify_inventory_health",
-    description:
-      "查询 Shopify 商店库存健康（低库存、缺货预警与示例 SKU）。用户询问库存周转、缺货风险、库存健康时使用。",
-    schema: z.object({}),
-    func: async () => {
-      try {
-        const stats = await queryInventoryHealthStats(admin);
-        if (!stats.checkedVariantCount) {
-          return "未查询到可用库存数据。";
-        }
-
-        const lowRatio = (stats.lowStockCount / stats.checkedVariantCount) * 100;
-        const outRatio = (stats.outOfStockCount / stats.checkedVariantCount) * 100;
-        const lines = [
-          `库存健康概览：已检查 ${stats.checkedVariantCount} 个 SKU。`,
-          `低库存（<=5）：${stats.lowStockCount} 个（${formatPercent(lowRatio)}）。`,
-          `缺货（<=0）：${stats.outOfStockCount} 个（${formatPercent(outRatio)}）。`,
-        ];
-        if (stats.lowStockItems.length) {
-          lines.push("重点补货建议（示例）：");
-          for (const item of stats.lowStockItems) {
-            lines.push(`- ${item.name}（SKU: ${item.sku}，库存 ${item.quantity}）`);
-          }
-        }
-        lines.push("注：库存周转率需要结合周期内销量与平均库存，当前提供缺货风险预警。");
-        return lines.join("\n");
-      } catch (error) {
-        const diagnostic = await buildScopeDiagnostic(admin, [
-          "read_products",
-          "write_products",
-        ]);
-        return `查询库存健康失败：${getErrorMessage(error)}。\n${diagnostic}`;
-      }
-    },
-  });
-}
-
+/** 店铺经营指标工具（已合并为单个 get_shopify_shop_metrics）。 */
 export function createShopifyShopMetricsTools(admin: ShopifyAdminGraphqlClient) {
-  return [
-    createShopTodaySalesTool(admin),
-    createShopTodayOrderCountTool(admin),
-    createShopTodayConversionRateTool(admin),
-    createShopTodayAovTool(admin),
-    createShopTodaySourcePerformanceTool(admin),
-    createShopTodayAbandonmentRateTool(admin),
-    createShopTodayRefundRateTool(admin),
-    createShopInventoryHealthTool(admin),
-  ];
+  return [createShopMetricsTool(admin)];
 }
 
 /** @deprecated 使用 createShopifyShopMetricsTools + createShopifyShopInfoTool */

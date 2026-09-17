@@ -19,6 +19,14 @@ export type AgentRunInputSummary = {
   sourceCode?: string;
   targetCode?: string;
   modelType?: number;
+  /** 本轮显式推荐 focus（无则自由输入） */
+  skillFocus?: string;
+  /** 本轮 bind 给模型的工具名（有上限，避免文档过大） */
+  boundToolNames?: string[];
+  boundToolCount?: number;
+  /** 是否走过「声称开卡但未调工具」的兜底开卡 */
+  chatCardFallbackAttempted?: boolean;
+  chatCardFallbackResolved?: boolean;
 };
 
 export type AgentRunRefs = {

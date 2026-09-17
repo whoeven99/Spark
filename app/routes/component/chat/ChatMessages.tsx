@@ -270,6 +270,7 @@ export function ChatMessages({
                   {hasWorkspaceActions && item.role === "assistant" && onRecommendedPrompt ? (
                     <WorkspaceActionsInMessage
                       hasProductContext={contextProducts.length > 0}
+                      actions={item.workspaceActions}
                       onAction={(prompt, skillFocus) => {
                         void onRecommendedPrompt(prompt, skillFocus);
                       }}

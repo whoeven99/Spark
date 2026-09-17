@@ -32,6 +32,7 @@ import {
   serializeObjectQueryForAI,
 } from "../../../lib/objectQuerySpec";
 import type { ChatStreamFinishPayload } from "../chat/useChatStream";
+import { parseWorkspaceActionsPayload } from "../../../lib/workspaceSuggestedActions";
 import {
   fileRoleDescriptions,
   fileRoleLabels,
@@ -98,7 +99,9 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.healthDiagnosisCardPayload
       ? { healthDiagnosisCardPayload: message.healthDiagnosisCardPayload }
       : {}),
-    ...(message.workspaceActions ? { workspaceActions: true } : {}),
+    ...(parseWorkspaceActionsPayload(message.workspaceActions)
+      ? { workspaceActions: parseWorkspaceActionsPayload(message.workspaceActions)! }
+      : {}),
     ...(taskProposal ? { taskProposal } : {}),
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
@@ -155,7 +158,9 @@ export function buildAssistantWorkspaceMessage(
           ),
         }
       : {}),
-    ...(payload.workspaceActions ? { workspaceActions: true } : {}),
+    ...(parseWorkspaceActionsPayload(payload.workspaceActions)
+      ? { workspaceActions: parseWorkspaceActionsPayload(payload.workspaceActions)! }
+      : {}),
     ...(taskProposal ? { taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
     ...(options?.assistantLaunchContext ? { assistantLaunchContext: options.assistantLaunchContext } : {}),
@@ -223,8 +228,9 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
       );
     }
   }
-  if (payload.workspaceActions) {
-    result.workspaceActions = true;
+  {
+    const actions = parseWorkspaceActionsPayload(payload.workspaceActions);
+    if (actions) result.workspaceActions = actions;
   }
   if (taskProposal) {
     result.taskProposal = taskProposal;
@@ -260,7 +266,10 @@ export function serializeWorkspaceMessagePayloads(
       result.healthDiagnosisCardPayload = message.healthDiagnosisCardPayload;
     }
   }
-  if (message.workspaceActions) result.workspaceActions = true;
+  {
+    const actions = parseWorkspaceActionsPayload(message.workspaceActions);
+    if (actions) result.workspaceActions = actions;
+  }
   if (taskProposal) result.taskProposal = taskProposal;
   if (message.taskRun) result.taskRun = message.taskRun;
   if (message.aiTask) result.aiTask = message.aiTask;
@@ -313,7 +322,9 @@ export function dbMessageToUiMessage(msg: {
           ) as HealthDiagnosisFormPayload,
         }
       : {}),
-    ...(extras.workspaceActions ? { workspaceActions: true } : {}),
+    ...(parseWorkspaceActionsPayload(extras.workspaceActions)
+      ? { workspaceActions: parseWorkspaceActionsPayload(extras.workspaceActions)! }
+      : {}),
     // taskProposal 优先；旧批量/单图翻译/文生图卡片（历史落库消息）统一转为通用提案卡
     ...(() => {
       if (extras.taskProposal) {

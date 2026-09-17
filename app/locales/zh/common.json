@@ -5531,6 +5531,7 @@
         "currentTime": "确认当前时间",
         "inventoryHealth": "检查库存健康",
         "shopInfo": "读取店铺信息",
+        "shopMetrics": "查询经营指标",
         "abandonmentRate": "分析弃购率",
         "averageOrderValue": "计算客单价",
         "conversionRate": "分析转化率",

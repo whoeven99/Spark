@@ -17,7 +17,7 @@ export type BulkStatusEditFormPayload = {
 export const bulkStatusEditFormTool = new DynamicStructuredTool({
   name: OPEN_BULK_STATUS_EDIT_FORM_TOOL_NAME,
   description:
-    "打开「批量上下架商品」确认卡片。当用户要批量把商品上架（Active）或下架为草稿（Draft）时调用，例如「把这批断货的商品下架」「补货到的商品重新上架」。调用后不会修改任何商品。",
+    "打开「批量上下架商品」确认卡片。批量 Active/Draft 时用。不要用于改价、打标、归档删除（归档走导入）或导入表格。调用后不会修改任何商品。",
   schema: z.object({
     products: z
       .array(

@@ -7,6 +7,9 @@ describe("SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION", () => {
     expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain('name="today_overview"');
     expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain('name="inventory_health"');
     expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain('name="abandon_refund"');
+    expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain("get_shopify_shop_metrics");
     expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain("下一步");
+    expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain('name="casual_store_ask"');
+    expect(SHOP_OPERATIONS_SYSTEM_PROMPT_EXTENSION).toContain("笼统问");
   });
 });

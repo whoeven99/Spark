@@ -14,7 +14,7 @@ export const OPEN_IMAGE_GENERATION_FORM_TOOL_NAME = "open_image_generation_form"
 export const imageGenerationFormTool = new DynamicStructuredTool({
   name: OPEN_IMAGE_GENERATION_FORM_TOOL_NAME,
   description:
-    "当用户明确表示要生成、绘制、创作商品图、营销图、场景图、海报或 AI 配图时必须调用。在对话卡片里确认画面描述后再生成，不要直接出图。根据对话尽量填入 description（画面描述）；若上下文有已选商品，填入 productId 与 productTitle。不确定可留空由用户在卡片内补全。不要在用户仅闲聊或未提及文生图时调用。",
+    "文生图/商品主图/营销图创作时用（卡片确认画面描述后再生成）。不要用于翻译已有图上的文字，也不要用于改商品文案。",
   schema: z.object({
     description: z
       .string()
