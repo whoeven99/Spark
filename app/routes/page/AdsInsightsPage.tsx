@@ -502,6 +502,9 @@ export function AdsInsightsPage() {
     if (!tiktokSandbox) setCustomMetrics(null);
   }, [tiktokSandbox]);
 
+  // 注意：useFetcher() 返回对象会随 state 变化换新引用。
+  // load* 与下方 effect 都绝不能把 fetcher / load* 放进依赖，否则会
+  // load → fetcher 更新 → callback 换新 → effect 再 load 的死循环，把内存打爆。
   const loadMetrics = useCallback(() => {
     if (aggregateMode) return;
     if (platform === "meta") {
@@ -531,6 +534,7 @@ export function AdsInsightsPage() {
       params.delete("sandbox");
     }
     metricsFetcher.load(`/api/ads-insights?${params.toString()}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释：排除 fetcher
   }, [
     aggregateMode,
     connections.google.connected,
@@ -541,7 +545,6 @@ export function AdsInsightsPage() {
     connections.tiktok.connected,
     googleSandbox,
     location.search,
-    metricsFetcher,
     platform,
     rangeDays,
     sandboxConfigured,
@@ -556,34 +559,39 @@ export function AdsInsightsPage() {
     params.delete("view");
     params.delete("sandbox");
     overviewFetcher.load(`/api/ads-overview?${params.toString()}`);
-  }, [location.search, overviewFetcher, rangeDays]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释：排除 fetcher
+  }, [location.search, rangeDays]);
 
   const loadTrafficMix = useCallback(() => {
     const params = new URLSearchParams(location.search);
     params.set("days", String(rangeDays));
     params.set("dimension", "sessionDefaultChannelGroup");
     ga4Fetcher.load(`/api/ga4/status?${params.toString()}`);
-  }, [ga4Fetcher, location.search, rangeDays]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释：排除 fetcher
+  }, [location.search, rangeDays]);
 
   const loadSearchTraffic = useCallback(() => {
     const params = new URLSearchParams(location.search);
     params.set("days", String(rangeDays));
     params.set("dimension", "query");
     gscFetcher.load(`/api/gsc/status?${params.toString()}`);
-  }, [gscFetcher, location.search, rangeDays]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释：排除 fetcher
+  }, [location.search, rangeDays]);
 
   const loadLandingPages = useCallback(() => {
     const params = new URLSearchParams(location.search);
     params.set("days", String(rangeDays));
     params.set("dimension", "landingPage");
     ga4LandingFetcher.load(`/api/ga4/status?${params.toString()}`);
-  }, [ga4LandingFetcher, location.search, rangeDays]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释：排除 fetcher
+  }, [location.search, rangeDays]);
 
   const loadAttributionOverview = useCallback(() => {
     const params = new URLSearchParams(location.search);
     params.set("range", String(rangeDays));
     attributionFetcher.load(`/api/google-attribution/overview?${params.toString()}`);
-  }, [attributionFetcher, location.search, rangeDays]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释：排除 fetcher
+  }, [location.search, rangeDays]);
 
   useEffect(() => {
     if (aggregateMode) {
@@ -595,8 +603,8 @@ export function AdsInsightsPage() {
       return;
     }
     loadMetrics();
-    // 仅在平台/日期/视图/沙盒变化时拉取；fetcher 自身不应进入依赖
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 仅在平台/日期/视图/沙盒/连接状态变化时拉取；不要把 load* / fetcher 放进依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上方注释
   }, [
     aggregateMode,
     platform,
@@ -611,11 +619,6 @@ export function AdsInsightsPage() {
     connections.google.sandboxConnected,
     connections.tiktok.connected,
     sandboxConfigured,
-    loadUnifiedOverview,
-    loadTrafficMix,
-    loadSearchTraffic,
-    loadLandingPages,
-    loadAttributionOverview,
   ]);
 
   useEffect(() => {
