@@ -68,11 +68,36 @@ describe("buildAnswerShapePrompt", () => {
     expect(prompt).toContain("suggest_next_actions");
   });
 
-  it("keeps vague store asks text-only with at most one summary query", () => {
+  it("keeps advice asks text-first instead of opening the diagnosis card", () => {
     const prompt = buildAnswerShapePrompt();
-    expect(prompt).toContain("笼统问店况");
+    expect(prompt).toContain("有什么值得优化的");
     expect(prompt).toContain("不要开 open_health_diagnosis_form");
     expect(prompt).toContain("metrics=summary");
+  });
+
+  it("spells out the 现状 / 建议 / 收尾 skeleton for advice asks", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("现状");
+    expect(prompt).toContain("建议");
+    expect(prompt).toContain("为什么排这个优先级");
+  });
+
+  it("stops the model from letting buttons replace the answer", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("按钮只是快捷入口，不是回答本身");
+    expect(prompt).toContain("禁止只写一两句话就挂按钮");
+  });
+
+  it("labels only the 建议 section, not 现状 or 收尾", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("这段用「建议」当小标题");
+    expect(prompt).toContain("直接写，不要加小标题");
+    expect(prompt).toContain("不要加小标题；同时调用 suggest_next_actions");
+  });
+
+  it("keeps the closing line from restating the chips rendered below it", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("收尾里不要再把按钮名列一遍");
   });
 });
 
