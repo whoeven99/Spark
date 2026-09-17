@@ -1,0 +1,31 @@
+/* 流式回复块的出现动画：正文与卡片各自淡入落位，避免凭空插入 */
+
+@keyframes spark-reply-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spark-reply-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.replyText {
+  animation: spark-reply-fade-in 160ms ease both;
+}
+
+.cardSlot {
+  animation: spark-reply-card-in 200ms ease both;
+}

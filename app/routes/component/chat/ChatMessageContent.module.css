@@ -1,6 +1,6 @@
 .root {
-  font-size: 0.9375rem;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.7;
   color: #1f2124;
   word-break: break-word;
 }
@@ -14,15 +14,20 @@
 }
 
 .root p {
-  margin: 0.6em 0;
+  margin: 0.7em 0;
 }
 
 .root h1,
 .root h2,
 .root h3,
 .root h4 {
-  margin: 0.7em 0 0.45em;
+  margin: 0.75em 0 0.5em;
   line-height: 1.35;
+}
+
+.root h3 {
+  font-size: 1.0625em;
+  font-weight: 700;
 }
 
 .root h1:first-child,
@@ -47,7 +52,7 @@
 }
 
 .root li {
-  margin: 0.4em 0;
+  margin: 0.45em 0;
 }
 
 .root li::marker {

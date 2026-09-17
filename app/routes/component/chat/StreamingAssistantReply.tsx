@@ -1,7 +1,10 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
+import {
+  chatBubbleMaxWidth,
+  type ProductImproveCardPayload,
+} from "../../../lib/chatMessage";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
@@ -16,12 +19,15 @@ import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { SparkMark } from "../common/SparkMark";
+import { shopifyUi } from "../../page/workspace/styles";
 import { WorkspaceActionsInMessage } from "./WorkspaceActionsInMessage";
 import type { WorkspaceActionsPayload } from "../../../lib/workspaceSuggestedActions";
+import { resolveThinkingStepLabel } from "../../../lib/thinkingSteps";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
 } from "../../page/chat/chatStreamUtils";
+import styles from "./StreamingAssistantReply.module.css";
 
 /** 流式文本的订阅式数据源（由 useChatStream 提供，逐 token 更新不经过壳层 state） */
 export type StreamingTextStore = {
@@ -89,48 +95,8 @@ const assistantBubbleShellStyle: CSSProperties = {
   background: "transparent",
 };
 
-const TOOL_LABEL_KEYS: Record<string, string> = {
-  chat_card_intent: "prepareTask",
-  generate_product_description: "generateDescription",
-  get_current_time: "currentTime",
-  get_shopify_inventory_health: "inventoryHealth",
-  get_shopify_shop_info: "shopInfo",
-  get_shopify_shop_metrics: "shopMetrics",
-  get_shopify_today_abandonment_rate: "abandonmentRate",
-  get_shopify_today_aov: "averageOrderValue",
-  get_shopify_today_conversion_rate: "conversionRate",
-  get_shopify_today_order_count: "orderCount",
-  get_shopify_today_refund_return_rate: "refundRate",
-  get_shopify_today_sales: "sales",
-  get_shopify_today_source_performance: "trafficSources",
-  get_weather: "weather",
-  open_batch_tasks_form: "batchTask",
-  open_image_generation_form: "imageGeneration",
-  open_picture_translate_form: "pictureTranslation",
-  open_product_improve_form: "productCopy",
-  open_product_quality_form: "productQuality",
-  score_product_quality: "productQuality",
-  suggest_next_actions: "suggestNextActions",
-  open_health_diagnosis_form: "healthDiagnosis",
-  get_daily_operations: "dailyOperations",
-};
-
-function StreamingCursor() {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    const id = setInterval(() => setVisible((v) => !v), 530);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <span style={{ ...cursorStyle, opacity: visible ? 1 : 0 }} aria-hidden>
-      ▍
-    </span>
-  );
-}
-
-function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
-  const { t } = useTranslation();
-  if (steps.length === 0) return null;
+/** Playbook 步骤单独出卡，其余原子步骤堆进思考面板。 */
+function splitSkillSteps(steps: SkillStepProgress[]) {
   const playbookGroups: Array<{
     skill: string;
     meta: (typeof PLAYBOOK_RUN_META)[string];
@@ -152,9 +118,31 @@ function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
     group.steps.push(step);
   }
 
+  return { playbookGroups, atomicSteps };
+}
+
+function StreamingCursor() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => setVisible((v) => !v), 530);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span style={{ ...cursorStyle, opacity: visible ? 1 : 0 }} aria-hidden>
+      ▍
+    </span>
+  );
+}
+
+function StreamingPlaybookRuns({
+  groups,
+}: {
+  groups: ReturnType<typeof splitSkillSteps>["playbookGroups"];
+}) {
+  if (groups.length === 0) return null;
   return (
     <div style={skillStepStackStyle}>
-      {playbookGroups.map((group) => (
+      {groups.map((group) => (
         <PlaybookRunCard
           key={group.skill}
           title={group.meta.title}
@@ -163,24 +151,6 @@ function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
           reviewMetrics={group.meta.reviewMetrics}
         />
       ))}
-      {atomicSteps.length > 0 ? (
-        <div style={skillStepsWrapStyle}>
-          <div style={skillStepsHeaderStyle}>
-            <div style={skillStepsHeadingStyle}>
-              {t("workspace.execution.title")}
-            </div>
-            <span style={skillStepsCountStyle}>
-              {t("workspace.execution.progress", {
-                completed: atomicSteps.filter((step) => step.status === "completed").length,
-                total: atomicSteps.length,
-              })}
-            </span>
-          </div>
-          {atomicSteps.map((step) => (
-            <SkillStepLine key={`${step.skill}-${step.stepId}`} step={step} />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -252,15 +222,7 @@ function SkillStepLine({
   compact?: boolean;
 }) {
   const { t } = useTranslation();
-  const toolName = step.label.startsWith("tool:") ? step.label.slice(5) : null;
-  const toolLabelKey = toolName ? TOOL_LABEL_KEYS[toolName] : null;
-  const label = toolName
-    ? toolLabelKey
-      ? t(`workspace.execution.tools.${toolLabelKey}`)
-      : t("workspace.execution.tools.fallback", {
-          name: toolName.replaceAll("_", " "),
-        })
-    : step.label;
+  const label = resolveThinkingStepLabel(step.label, t);
 
   return (
     <div style={compact ? compactSkillStepLineStyle : skillStepLineStyle}>
@@ -324,7 +286,15 @@ export function StreamingAssistantReply({
   const healthPayload = coerceHealthDiagnosisFormPayload(streamingHealthDiagnosisPayload);
   const showHealthDiagnosisCard = streamingHealthDiagnosisCard;
   const workspaceActionsPayload = streamingWorkspaceActions || null;
-  const showWorkspaceActions = Boolean(workspaceActionsPayload) && Boolean(onRecommendedPrompt);
+  const { playbookGroups, atomicSteps } = splitSkillSteps(skillSteps);
+  // 没有 reasoning 的模型也要有面板，否则步骤没地方落
+  const hasThinkingPanel = Boolean(streamingThinkingText) || atomicSteps.length > 0;
+  /**
+   * 卡片不在正文流式期间挂：正文插在思考面板和卡片中间逐 token 生长，
+   * 挂早了卡片会被一路往下顶。流结束与落库消息接管是同一帧（onFinish 里 flushSync），
+   * 卡片由落库消息呈现；这里保留一帧兜底，避免交接不同帧时闪空。
+   */
+  const cardsVisible = !isStreaming;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
@@ -334,16 +304,19 @@ export function StreamingAssistantReply({
     streamingTaskProposal,
   });
   const hasEmbeddedCard = Boolean(
-    showProductImproveCard ||
-      showQualityCard ||
-      showHealthDiagnosisCard ||
-      streamingTaskProposal ||
-      showWorkspaceActions,
+    showProductImproveCard || showQualityCard || showHealthDiagnosisCard || streamingTaskProposal,
   );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
-      <div style={{ maxWidth: hasEmbeddedCard ? "min(540px, 96%)" : "80%", width: "100%" }}>
+      <div
+        style={{
+          // 宽度口径与落库消息一致，避免交接时横跳；卡片出现前先平滑过渡到位
+          maxWidth: chatBubbleMaxWidth({ hasCard: hasEmbeddedCard }),
+          width: "100%",
+          transition: "max-width 180ms ease",
+        }}
+      >
         <div style={assistantBubbleShellStyle}>
           <s-box padding="base" borderRadius="base" background="transparent">
             <div style={assistantIdentityStyle}>
@@ -353,26 +326,27 @@ export function StreamingAssistantReply({
               <span>{t("workspace.shell.brand.name")}</span>
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
-              {!hasContent && !streamingThinkingText ? (
+              {!hasContent && !hasThinkingPanel ? (
                 <div style={thinkingWrapStyle}>
                   <ThinkingIndicator label={t("workspace.execution.preparing")} />
                 </div>
               ) : null}
 
-              {streamingThinkingText ? (
+              {hasThinkingPanel ? (
                 <div style={thinkingPanelSlotStyle}>
                   <ThinkingPanel
                     isStreaming={isStreaming}
                     text={streamingThinkingText}
-                    answerStarted={Boolean(streamingText) || hasEmbeddedCard}
+                    steps={atomicSteps.map(({ label, status }) => ({ label, status }))}
+                    answerStarted={Boolean(streamingText)}
                   />
                 </div>
               ) : null}
 
-              {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
+              <StreamingPlaybookRuns groups={playbookGroups} />
 
               {streamingText ? (
-                <div style={textWrapStyle}>
+                <div className={styles.replyText} style={textWrapStyle}>
                   {isStreaming ? (
                     // 流式期间纯文本渲染：避免每个 token 对累积全文重跑 markdown 解析（O(n²)），
                     // 排版与 ChatMessageContent 根节点对齐，done 后由落库消息呈现 markdown。
@@ -386,14 +360,14 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {showProductImproveCard ? (
-                <div style={cardSlotStyle}>
+              {cardsVisible && showProductImproveCard ? (
+                <div className={styles.cardSlot} style={cardSlotStyle}>
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
                 </div>
               ) : null}
 
-              {showQualityCard ? (
-                <div style={cardSlotStyle}>
+              {cardsVisible && showQualityCard ? (
+                <div className={styles.cardSlot} style={cardSlotStyle}>
                   <ProductQualityScoreChatCard
                     embedded
                     initialPayload={qualityPayload}
@@ -403,8 +377,8 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {showHealthDiagnosisCard ? (
-                <div style={cardSlotStyle}>
+              {cardsVisible && showHealthDiagnosisCard ? (
+                <div className={styles.cardSlot} style={cardSlotStyle}>
                   <HealthDiagnosisChatCard
                     embedded
                     initialPayload={healthPayload}
@@ -414,8 +388,8 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {streamingTaskProposal ? (
-                <div style={cardSlotStyle}>
+              {cardsVisible && streamingTaskProposal ? (
+                <div className={styles.cardSlot} style={cardSlotStyle}>
                   <TaskProposalCard
                     embedded
                     proposal={streamingTaskProposal}
@@ -428,7 +402,7 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {workspaceActionsPayload && onRecommendedPrompt ? (
+              {cardsVisible && workspaceActionsPayload && onRecommendedPrompt ? (
                 <WorkspaceActionsInMessage
                   hasProductContext={workspaceBatchProducts.length > 0}
                   actions={workspaceActionsPayload}
@@ -481,8 +455,8 @@ const textWrapStyle: CSSProperties = {
 
 // 与 ChatMessageContent.module.css 的 .root 排版一致，避免纯文本 → markdown 切换时跳动
 const streamingPlainTextStyle: CSSProperties = {
-  fontSize: "0.9375rem",
-  lineHeight: 1.6,
+  fontSize: 15,
+  lineHeight: 1.7,
   color: "#1f2124",
   wordBreak: "break-word",
   whiteSpace: "pre-wrap",
@@ -491,7 +465,7 @@ const streamingPlainTextStyle: CSSProperties = {
 const cursorStyle: CSSProperties = {
   display: "inline-block",
   marginLeft: 2,
-  color: "#2c6ecb",
+  color: shopifyUi.link,
 };
 
 const cardSlotStyle: CSSProperties = {
@@ -502,38 +476,6 @@ const skillStepStackStyle: CSSProperties = {
   display: "grid",
   gap: 10,
   marginBottom: 10,
-};
-
-const skillStepsWrapStyle: CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  background: "rgba(99, 110, 124, 0.05)",
-  border: "1px solid rgba(99, 110, 124, 0.16)",
-  display: "grid",
-  gap: 6,
-};
-
-const skillStepsHeadingStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  color: "#5c6370",
-};
-
-const skillStepsHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-};
-
-const skillStepsCountStyle: CSSProperties = {
-  padding: "2px 7px",
-  borderRadius: 999,
-  background: "#eef4ff",
-  color: "#2c6ecb",
-  fontSize: 11,
-  fontWeight: 700,
-  whiteSpace: "nowrap",
 };
 
 const skillStepLineStyle: CSSProperties = {
@@ -558,7 +500,7 @@ const skillStepStateStyle = (
   fontWeight: 600,
   color:
     status === "running"
-      ? "#2c6ecb"
+      ? shopifyUi.link
       : status === "completed"
         ? "#008060"
         : status === "error"
@@ -577,7 +519,7 @@ const skillStepStatusStyle = (status: SkillStepProgress["status"]): CSSPropertie
   textAlign: "center",
   color:
     status === "running"
-      ? "rgba(44, 110, 203, 0.85)"
+      ? shopifyUi.link
       : status === "completed"
         ? "#008060"
         : status === "error"
@@ -587,8 +529,8 @@ const skillStepStatusStyle = (status: SkillStepProgress["status"]): CSSPropertie
 
 const playbookRunCardStyle: CSSProperties = {
   borderRadius: 12,
-  border: "1px solid rgba(44, 110, 203, 0.22)",
-  background: "#ffffff",
+  border: `1px solid ${shopifyUi.linkBorder}`,
+  background: shopifyUi.surface,
   padding: 12,
   display: "grid",
   gap: 10,
@@ -611,9 +553,9 @@ const playbookRunIconStyle: CSSProperties = {
   width: 34,
   height: 34,
   borderRadius: 10,
-  background: "#f1f6ff",
-  border: "1px solid rgba(44, 110, 203, 0.18)",
-  color: "#2c6ecb",
+  background: shopifyUi.linkSurface,
+  border: `1px solid ${shopifyUi.linkBorder}`,
+  color: shopifyUi.link,
   display: "grid",
   placeItems: "center",
   fontSize: 10,
@@ -658,7 +600,7 @@ const playbookProgressFillStyle = (percent: number): CSSProperties => ({
   width: `${Math.max(0, Math.min(100, percent))}%`,
   height: "100%",
   borderRadius: 999,
-  background: "#2c6ecb",
+  background: shopifyUi.link,
   transition: "width 0.2s ease",
 });
 

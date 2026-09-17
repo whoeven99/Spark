@@ -7,6 +7,7 @@ import {
   type DailyPulse,
 } from "../../../lib/dailyPulse";
 import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
+import { HOME_PROMPT_CASES } from "../../../lib/homePromptCases";
 import type { ContextTool } from "./types";
 import {
   formatHomeDate,
@@ -202,6 +203,34 @@ const homeV2Styles = {
     borderTop: `1px solid ${shopifyUi.border}`,
     marginTop: 18,
     paddingTop: 13,
+  },
+  promptCases: {
+    marginTop: 12,
+  },
+  promptCasesTitle: {
+    margin: "0 0 8px",
+    fontSize: 12,
+    fontWeight: 700,
+    color: shopifyUi.textMuted,
+    letterSpacing: 0.2,
+  },
+  promptCaseRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 8,
+  },
+  promptCaseChip: {
+    padding: "7px 12px",
+    borderRadius: 999,
+    border: `1px solid ${shopifyUi.border}`,
+    background: shopifyUi.surface,
+    color: shopifyUi.text,
+    fontSize: 13,
+    fontWeight: 550,
+    lineHeight: 1.35,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    textAlign: "left" as const,
   },
   recommendationsTitle: {
     display: "inline-flex",
@@ -448,6 +477,27 @@ export function HomeV2Panel({
             >
               ↑
             </button>
+          </div>
+        </div>
+        <div style={homeV2Styles.promptCases}>
+          <div style={homeV2Styles.promptCasesTitle}>
+            {t("workspace.homeV2.promptCasesTitle")}
+          </div>
+          <div style={homeV2Styles.promptCaseRow}>
+            {HOME_PROMPT_CASES.map((item) => {
+              const prompt = t(`workspace.homeV2.promptCases.${item.labelKey}`);
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="workspace-home-prompt-case"
+                  style={homeV2Styles.promptCaseChip}
+                  onClick={() => onSubmitPrompt(prompt)}
+                >
+                  {prompt}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div style={homeV2Styles.recommendations}>

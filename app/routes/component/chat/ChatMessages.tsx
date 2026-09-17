@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { ChatMessage } from "../../../lib/chatMessage";
+import { chatBubbleMaxWidth, type ChatMessage } from "../../../lib/chatMessage";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { ChatMessageContent } from "./ChatMessageContent";
@@ -111,9 +111,7 @@ export function ChatMessages({
           hasTaskProposalCard ||
           hasTaskRunCard ||
           hasAiTaskCard ||
-          hasManagedAiCard ||
-          hasWorkspaceActions ||
-          hasImageAttachments;
+          hasManagedAiCard;
 
         const isAssistant = item.role === "assistant";
 
@@ -141,7 +139,10 @@ export function ChatMessages({
           >
             <div
               style={{
-                maxWidth: hasEmbeddedCard ? "min(540px, 96%)" : "80%",
+                maxWidth: chatBubbleMaxWidth({
+                  hasCard: hasEmbeddedCard,
+                  hasImages: hasImageAttachments,
+                }),
               }}
             >
               <div style={bubbleShellStyle}>
@@ -166,9 +167,13 @@ export function ChatMessages({
                       </button>
                     </div>
                   ) : null}
-                  {item.role === "assistant" && item.thinkingContent ? (
+                  {item.role === "assistant" &&
+                  (item.thinkingContent || item.thinkingSteps?.length) ? (
                     <div style={{ marginBottom: "0.5rem" }}>
-                      <ThinkingReview text={item.thinkingContent} />
+                      <ThinkingReview
+                        text={item.thinkingContent ?? ""}
+                        steps={item.thinkingSteps ?? []}
+                      />
                     </div>
                   ) : null}
                   {item.role === "assistant" && item.managedAiResult ? (

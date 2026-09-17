@@ -6,6 +6,7 @@ import type { ProductQualityFormPayload } from "./productQualityFormPayload";
 import type { HealthDiagnosisFormPayload } from "./healthDiagnosisCardPayload";
 import type { TaskProposalPayload } from "./taskProposalPayload";
 import type { TaskRunPayload } from "./taskRunPayload";
+import type { ThinkingStep } from "./thinkingSteps";
 import type { WorkspaceActionsPayload } from "./workspaceSuggestedActions";
 
 export type ChatMessageImageAttachment = {
@@ -53,6 +54,20 @@ export function coerceChatMessageAttachments(
     .filter((item): item is ChatMessageAttachment => Boolean(item));
 }
 
+/**
+ * 对话气泡宽度：正文按可读行长放宽，卡片与图片各自收到合适的展示宽度。
+ * 流式气泡与落库消息必须共用这份口径，否则流结束交接那一帧会横跳。
+ * 推荐操作条不算卡片——它挂在纯文字回复下方，不该把正文压窄。
+ */
+export function chatBubbleMaxWidth(params: {
+  hasCard?: boolean;
+  hasImages?: boolean;
+}): string {
+  if (params.hasImages) return "min(540px, 96%)";
+  if (params.hasCard) return "min(620px, 96%)";
+  return "min(860px, 94%)";
+}
+
 /** 首页对话消息：助手回复可为「文本 + 可选交互卡片」。 */
 export type ChatMessage =
   | { role: "user"; content: string }
@@ -83,6 +98,7 @@ export type ChatMessage =
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;
+      thinkingSteps?: ThinkingStep[];
       assistantLaunchContext?: ManagedAiLaunchContext;
       managedAiResult?: ManagedAiOutputParseResult;
     };

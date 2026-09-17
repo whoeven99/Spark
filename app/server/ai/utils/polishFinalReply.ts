@@ -1,17 +1,24 @@
+import { hasAdviceHeading, numberAdviceItems } from "../../../lib/numberAdviceItems";
 import { normalizeMarkdownTables } from "./markdownTableNormalize";
 
-/** 规整模型最终回复：表格转列表、多行「指标：值」转为小节与列表等。 */
+export { numberAdviceItems } from "../../../lib/numberAdviceItems";
+
+/** 规整模型最终回复：表格转列表、建议段编号、多行「指标：值」转为小节与列表等。 */
 export function polishFinalReply(rawText: string): string {
   const text = rawText.replace(/\r\n/g, "\n").trim();
   if (!text) return text;
 
   if (/```/.test(text)) {
-    return text;
+    return numberAdviceItems(text);
   }
 
   const normalizedText = normalizeMarkdownTables(text);
+  // 建议类三段答不要走「指标：值」列表润色，否则会把 **小标题：** 拆成乱列表
+  if (hasAdviceHeading(normalizedText)) {
+    return numberAdviceItems(normalizedText);
+  }
   if (/^#{1,6}\s/m.test(normalizedText) || /^\s*[-*]\s/m.test(normalizedText)) {
-    return normalizedText;
+    return numberAdviceItems(normalizedText);
   }
 
   const lines = normalizedText
@@ -19,14 +26,14 @@ export function polishFinalReply(rawText: string): string {
     .map((line) => line.trim())
     .filter(Boolean);
   if (lines.length <= 1) {
-    return text;
+    return numberAdviceItems(text);
   }
 
   const metricLineCount = lines.filter(
     (line) => /^[^-].+[：:].+/.test(line) && !line.startsWith("注："),
   ).length;
   if (metricLineCount < 2) {
-    return lines.join("\n\n");
+    return numberAdviceItems(lines.join("\n\n"));
   }
 
   const polished: string[] = [];
@@ -56,5 +63,5 @@ export function polishFinalReply(rawText: string): string {
     }
   }
 
-  return polished.join("\n").replace(/\n{3,}/g, "\n\n");
+  return numberAdviceItems(polished.join("\n").replace(/\n{3,}/g, "\n\n"));
 }

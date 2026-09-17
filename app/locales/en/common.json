@@ -4819,7 +4819,13 @@
           "done": "Finished thinking",
           "elapsed": "Took {{duration}}",
           "durationSeconds": "{{seconds}}s",
-          "durationMinutes": "{{minutes}}m {{seconds}}s"
+          "durationMinutes": "{{minutes}}m {{seconds}}s",
+          "showRaw": "Show raw thinking",
+          "hideRaw": "Hide raw thinking",
+          "steps": {
+            "analyze": "Understanding the request",
+            "compose": "Drafting the reply"
+          }
         },
         "clearSelectionAria": "Clear {{label}}",
         "recommended": "Recommended",
@@ -5549,6 +5555,23 @@
         "productQuality": "Preparing a product page quality score",
         "healthDiagnosis": "Preparing health diagnosis & todos",
         "dailyOperations": "Loading today's operations diagnosis",
+        "productSearch": "Searching products",
+        "productDetail": "Reading product details",
+        "productStatusList": "Checking product availability",
+        "productTagList": "Checking product tags",
+        "variantPriceList": "Checking product prices",
+        "articleList": "Listing articles",
+        "seoAudit": "Running an SEO audit",
+        "generateImage": "Generating a product image",
+        "pictureTranslateRun": "Translating text in images",
+        "bulkPriceEdit": "Preparing a bulk price update",
+        "bulkTagEdit": "Preparing a bulk tag update",
+        "bulkStatusEdit": "Preparing a bulk availability update",
+        "productExport": "Preparing a product export",
+        "productImport": "Preparing a product import",
+        "myTasks": "Checking your tasks",
+        "billingStatus": "Checking plan and credits",
+        "sendEmail": "Sending an email",
         "fallback": "Using tool: {{name}}"
       }
     },
@@ -5674,7 +5697,16 @@
     "homeV2": {
       "assistantTitle": "Describe your goal — Spark AI inspects your store and acts",
       "composerPlaceholder": "For example: the top 3 things to handle today",
-      "recommendationsTitle": "Recommended actions"
+      "recommendationsTitle": "Recommended actions",
+      "promptCasesTitle": "Try asking",
+      "promptCases": {
+        "storeHow": "How is my store doing right now?",
+        "productPageBetter": "I want to make my product pages better",
+        "sellMore": "How can I sell more?",
+        "worthOptimizing": "What is worth optimizing in my store?",
+        "whatCanYouDo": "What can you help me with?",
+        "seoCheck": "Check if my product SEO has problems"
+      }
     }
   }
 }
