@@ -1,10 +1,15 @@
 import {
   AIMessage,
   HumanMessage,
+  ToolMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
-import { extractMessageText, extractMessagesContext } from "../../../../../app/server/ai/utils/langchainMessageText";
+import {
+  extractMessageText,
+  extractMessagesContext,
+  sliceMessagesAfterLastHuman,
+} from "../../../../../app/server/ai/utils/langchainMessageText";
 
 describe("extractMessageText", () => {
   it("字符串 content 原样返回", () => {
@@ -57,5 +62,27 @@ describe("extractMessagesContext", () => {
     ]);
     expect(ctx.length).toBe(4000);
     expect(ctx.startsWith("x".repeat(2500))).toBe(true);
+  });
+});
+
+describe("sliceMessagesAfterLastHuman", () => {
+  it("drops tool messages from earlier turns", () => {
+    const previous = new ToolMessage({
+      content: JSON.stringify({ taskType: "product_improve" }),
+      tool_call_id: "call-1",
+      name: "open_batch_tasks_form",
+    });
+    const current = new ToolMessage({
+      content: JSON.stringify({ priceMode: "percent_up" }),
+      tool_call_id: "call-2",
+      name: "open_bulk_price_edit_form",
+    });
+    const sliced = sliceMessagesAfterLastHuman([
+      new HumanMessage("优化描述"),
+      previous,
+      new HumanMessage("帮我改价"),
+      current,
+    ]);
+    expect(sliced).toEqual([current]);
   });
 });

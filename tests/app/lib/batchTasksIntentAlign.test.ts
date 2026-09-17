@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   detectPictureTranslateTargetLanguage,
   detectProductImproveTargetLanguage,
+  isCatalogRuleEditUserIntent,
   isPictureTranslateUserIntent,
 } from "~/lib/chatCardFallback";
 import {
   alignBatchTasksPayloadWithUserIntent,
   normalizeBatchTasksPayloadWithUserIntent,
   coerceBatchTasksFormPayload,
+  shouldSuppressBatchTasksCardForUserIntent,
   type BatchTasksFormPayload,
 } from "~/lib/batchTasksFormPayload";
 
@@ -127,5 +129,21 @@ describe("normalizeBatchTasksPayloadWithUserIntent", () => {
     );
     expect(normalized.taskType).toBe("product_improve");
     expect(normalized.targetLanguage).toBe("en");
+  });
+});
+
+describe("isCatalogRuleEditUserIntent", () => {
+  it("hits 改价 even when the workspace context has selected products", () => {
+    const text = `[工作台上下文]
+- 已选商品（共 2 个）：
+  • A [ID: gid://shopify/Product/1]
+[用户消息]帮我改价，涨 10%`;
+    expect(isCatalogRuleEditUserIntent(text)).toBe(true);
+    expect(shouldSuppressBatchTasksCardForUserIntent(text)).toBe(true);
+  });
+
+  it("does not treat copy optimization as a catalog rule edit", () => {
+    expect(isCatalogRuleEditUserIntent("[用户消息]帮我优化商品描述")).toBe(false);
+    expect(shouldSuppressBatchTasksCardForUserIntent("[用户消息]帮我优化商品描述")).toBe(false);
   });
 });

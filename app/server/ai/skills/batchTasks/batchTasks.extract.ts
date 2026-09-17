@@ -3,6 +3,7 @@ import {
   coerceBatchTasksFormPayload,
   mergeBatchTasksPayloadWithContext,
   normalizeBatchTasksPayloadWithUserIntent,
+  shouldSuppressBatchTasksCardForUserIntent,
   type BatchTasksFormPayload,
 } from "../../../../lib/batchTasksFormPayload";
 import { parseWorkspaceProductsFromText } from "../../../../lib/workspaceContextProducts";
@@ -75,6 +76,7 @@ export function resolveBatchTasksFormPayload(
   messages: unknown[],
   lastUserText: string,
 ): BatchTasksFormPayload | undefined {
+  if (shouldSuppressBatchTasksCardForUserIntent(lastUserText)) return undefined;
   const fromTool = extractBatchTasksFormFromMessages(messages, lastUserText);
   if (fromTool && fromTool.products.length > 0) return fromTool;
 

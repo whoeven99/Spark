@@ -1,9 +1,26 @@
+import { skillNamesFromUserText } from "./promptSkillFocus";
+
 /** 从 augment 后的用户消息里取出真实输入（Workspace 会拼上下文 + [用户消息]）。 */
 export function extractUserIntentText(lastUserText: string): string {
   const marker = "[用户消息]";
   const idx = lastUserText.lastIndexOf(marker);
   const raw = idx >= 0 ? lastUserText.slice(idx + marker.length) : lastUserText;
   return raw.trim();
+}
+
+const CATALOG_RULE_SKILL_NAMES = new Set([
+  "bulkPriceEdit",
+  "bulkTagEdit",
+  "bulkStatusEdit",
+  "productExport",
+  "productImport",
+]);
+
+/** 改价 / 打标 / 上下架 / 导入导出：批量文案卡不得抢这些意图。 */
+export function isCatalogRuleEditUserIntent(lastUserText: string): boolean {
+  const text = extractUserIntentText(lastUserText);
+  if (!text) return false;
+  return skillNamesFromUserText(text).some((name) => CATALOG_RULE_SKILL_NAMES.has(name));
 }
 
 const IMAGE_KEYWORD_RE = /图片|图像|主图|配图|详情图|截图|image|picture|photo/i;

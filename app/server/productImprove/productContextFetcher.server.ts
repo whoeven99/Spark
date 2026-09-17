@@ -8,6 +8,10 @@ export type ProductDescriptionContext = {
   title: string;
   /** 由 descriptionHtml 去标签后的纯文本，供 Prompt 注入。 */
   text: string;
+  vendor: string;
+  productType: string;
+  tags: string[];
+  variantSummary: string;
 };
 
 const PRODUCT_FOR_DESCRIPTION_QUERY = `#graphql
@@ -16,6 +20,19 @@ const PRODUCT_FOR_DESCRIPTION_QUERY = `#graphql
       id
       title
       descriptionHtml
+      vendor
+      productType
+      tags
+      variants(first: 8) {
+        nodes {
+          title
+          sku
+          selectedOptions {
+            name
+            value
+          }
+        }
+      }
     }
   }
 `;
@@ -26,6 +43,16 @@ type ProductQueryResponse = {
       id?: string;
       title?: string | null;
       descriptionHtml?: string | null;
+      vendor?: string | null;
+      productType?: string | null;
+      tags?: string[] | null;
+      variants?: {
+        nodes?: Array<{
+          title?: string | null;
+          sku?: string | null;
+          selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
+        } | null> | null;
+      } | null;
     } | null;
   };
   errors?: Array<{ message?: string }>;
@@ -45,6 +72,62 @@ function htmlToPlainText(html: string): string {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function formatVariantSummary(
+  nodes: Array<{
+    title?: string | null;
+    sku?: string | null;
+    selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
+  } | null> | null | undefined,
+): string {
+  if (!nodes?.length) return "";
+  return nodes
+    .filter((node): node is NonNullable<typeof node> => Boolean(node))
+    .slice(0, 8)
+    .map((variant) => {
+      const options = (variant.selectedOptions ?? [])
+        .map((option) => {
+          const name = option?.name?.trim() ?? "";
+          const value = option?.value?.trim() ?? "";
+          if (!name || !value) return "";
+          return `${name}:${value}`;
+        })
+        .filter(Boolean)
+        .join(", ");
+      return [variant.title?.trim(), variant.sku?.trim() ? `SKU ${variant.sku.trim()}` : "", options]
+        .filter(Boolean)
+        .join(" / ");
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+export function buildProductDescriptionContext(product: {
+  id: string;
+  title?: string | null;
+  descriptionHtml?: string | null;
+  vendor?: string | null;
+  productType?: string | null;
+  tags?: string[] | null;
+  variants?: { nodes?: Array<{
+    title?: string | null;
+    sku?: string | null;
+    selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
+  } | null> | null } | null;
+}): ProductDescriptionContext {
+  const title = (product.title ?? "").trim() || "未命名商品";
+  const html = product.descriptionHtml ?? "";
+  const text = htmlToPlainText(html);
+  return {
+    id: product.id,
+    title,
+    text: text || "（无原始描述）",
+    vendor: (product.vendor ?? "").trim(),
+    productType: (product.productType ?? "").trim(),
+    tags: (product.tags ?? []).map((tag) => tag.trim()).filter(Boolean),
+    variantSummary: formatVariantSummary(product.variants?.nodes),
+  };
 }
 
 /**
@@ -95,14 +178,7 @@ export async function fetchProductDescriptionContext(
       );
       return null;
     }
-    const title = (product.title ?? "").trim() || "未命名商品";
-    const html = product.descriptionHtml ?? "";
-    const text = htmlToPlainText(html);
-    const ctx: ProductDescriptionContext = {
-      id: product.id,
-      title,
-      text: text || "（无原始描述）",
-    };
+    const ctx = buildProductDescriptionContext({ ...product, id: product.id });
     console.info(
       `${LOG_PREFIX} step: Shopify 商品查询完成 id=${ctx.id} titleLen=${ctx.title.length} textLen=${ctx.text.length}`,
     );

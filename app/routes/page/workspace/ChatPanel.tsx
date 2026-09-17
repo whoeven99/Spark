@@ -338,29 +338,18 @@ export function ChatPanel({
   useEffect(() => {
     if (!reviewTaskId) {
       setReviewTask(null);
-      setReviewLoading(false);
       return;
     }
-
     const cached = tasksById[reviewTaskId];
-    if (cached && isChatInlineReviewTask(cached.taskType)) {
-      setReviewTask((prev) => {
-        if (!prev || prev.id !== reviewTaskId) return cached;
-        return mergeFetchedAiTask(prev, cached);
-      });
-      setReviewLoading(false);
-      return;
-    }
-
-    let alreadyLoaded = false;
+    if (!cached || !isChatInlineReviewTask(cached.taskType)) return;
     setReviewTask((prev) => {
-      if (prev?.id === reviewTaskId) {
-        alreadyLoaded = true;
-        return prev;
-      }
-      return null;
+      if (!prev || prev.id !== reviewTaskId) return cached;
+      return mergeFetchedAiTask(prev, cached);
     });
-    if (alreadyLoaded) {
+  }, [reviewTaskId, tasksById]);
+
+  useEffect(() => {
+    if (!reviewTaskId) {
       setReviewLoading(false);
       return;
     }
@@ -397,7 +386,7 @@ export function ChatPanel({
     return () => {
       cancelled = true;
     };
-  }, [closeReviewDialog, locationSearch, reviewTaskId, tasksById]);
+  }, [closeReviewDialog, locationSearch, reviewTaskId]);
 
   const locateRun = (runId: string) => {
     const el = messageListRef.current?.querySelector(
@@ -948,6 +937,7 @@ export function ChatPanel({
       >
         {reviewTask?.taskType === "product_improve" ? (
           <ProductImproveTaskDetailPage
+            key={reviewTask.id}
             task={reviewTask}
             locationSearch={locationSearch}
             onBack={closeReviewDialog}

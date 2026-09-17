@@ -6,7 +6,7 @@ import {
   type BaseMessage,
 } from "@langchain/core/messages";
 import { z } from "zod";
-import { extractUserIntentText } from "../../../lib/chatCardFallback";
+import { extractUserIntentText, isCatalogRuleEditUserIntent } from "../../../lib/chatCardFallback";
 import {
   coerceBatchTasksFormPayload,
   mergeBatchTasksPayloadWithContext,
@@ -47,6 +47,7 @@ import { skillNamesFromFocus, skillNamesFromUserText, userTextMatchesProductImpo
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
 import { getShopChatModel } from "./shopChatGraph.server";
 import { recordChatTokenUsage } from "../../tokenUsage/index.server";
+import { sliceMessagesAfterLastHuman } from "../utils/langchainMessageText";
 
 type CardStreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
@@ -98,7 +99,7 @@ const CARD_TYPE_GUIDE = `卡片类型说明：
 - product_improve_form：单个商品描述/文案生成
 - product_quality_form：商品页质量评分（诊断标题/主图/描述/规格/标签）
 - health_diagnosis_form：店铺今日健康诊断与待办（规则引擎快照，非商品页评分）
-- batch_tasks_form：工作台已选多个商品时的批量文案或批量图片翻译
+- batch_tasks_form：工作台已选多个商品时的批量文案或批量图片翻译（不是改价/打标/上下架）
 - none：普通问答，不需要卡片
 （整店批量翻译已迁移至 Ciwi Translator，Spark 内不提供 translation_task_form）`;
 
@@ -310,6 +311,7 @@ export function buildChatCardPayloadFromIntent(
         ),
       };
     case "batch_tasks_form": {
+      if (isCatalogRuleEditUserIntent(lastUserText)) return {};
       const workspaceProducts = parseWorkspaceProductsFromText(lastUserText);
       if (workspaceProducts.length < 2) return {};
       const batchPayload = mergeBatchTasksPayloadWithContext(
@@ -471,6 +473,20 @@ export async function resolveMissingChatCardsWithLlm(params: {
     return resolutionFromTaskProposal(deterministic, emittedFlags);
   }
 
+  if (isCatalogRuleEditUserIntent(params.lastUserText)) {
+    if (claimed) {
+      return {
+        uiPayloads: {},
+        streamChunks: [],
+        adjustedReply: reconcileReplyWithChatCards(
+          params.assistantReply,
+          params.existingUiPayloads,
+        ),
+      };
+    }
+    return { uiPayloads: {}, streamChunks: [] };
+  }
+
   // 前置门：普通问答（无开卡话术、无卡片类意图、无多选商品）直接跳过二次 LLM，
   // 避免每轮结束都多打一次结构化模型调用，缩短尾延迟与 token 成本。
   if (
@@ -485,7 +501,9 @@ export async function resolveMissingChatCardsWithLlm(params: {
   const intent = await resolveChatCardIntentWithLlm({
     lastUserText: params.lastUserText,
     assistantReply: params.assistantReply,
-    toolsCalled: extractToolsCalledFromMessages(params.messages),
+    toolsCalled: extractToolsCalledFromMessages(
+      sliceMessagesAfterLastHuman(params.messages) as BaseMessage[],
+    ),
     shop: params.shop,
     signal: params.signal,
   });
@@ -539,6 +557,7 @@ export async function resolveChatCardIntentWithLlm(params: {
 5. 禁止在 shouldShowCard=false 时让 assistantClaimsCardOpened=true（不一致）。
 6. 商品页质量评分（诊断）用 product_quality_form，不要与商品文案 product_improve_form 混淆。
 7. 店铺「今日健康诊断 / 待办与风险」用 health_diagnosis_form，不要与商品页质量评分混淆。
+8. 用户要改价、打标、上下架、导入或导出时，cardType=none。不要用 batch_tasks_form 或 product_improve_form 顶替。
 
 ${CARD_TYPE_GUIDE}`,
     ),

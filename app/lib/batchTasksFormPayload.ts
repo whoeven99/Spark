@@ -5,6 +5,7 @@
 import {
   detectProductImproveTargetLanguage,
   detectPictureTranslateTargetLanguage,
+  isCatalogRuleEditUserIntent,
   isPictureTranslateUserIntent,
 } from "./chatCardFallback";
 
@@ -97,6 +98,11 @@ export function normalizeBatchTasksPayloadWithUserIntent(
 ): BatchTasksFormPayload {
   const alignedTaskType = alignBatchTasksPayloadWithUserIntent(payload, lastUserText);
   return alignProductImprovePayloadTargetLanguage(alignedTaskType, lastUserText);
+}
+
+/** 改价 / 打标 / 上下架等规则编辑不得落成批量文案或图片翻译卡。 */
+export function shouldSuppressBatchTasksCardForUserIntent(lastUserText: string): boolean {
+  return isCatalogRuleEditUserIntent(lastUserText);
 }
 
 export function coerceBatchTasksFormPayload(raw: unknown): BatchTasksFormPayload {

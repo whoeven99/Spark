@@ -48,6 +48,9 @@ describe("promptSkillFocus", () => {
     expect(skillNamesFromUserText("第 3 行怎么改")).toContain("productImport");
     expect(skillNamesFromUserText("校验结果")).toContain("productImport");
     expect(skillNamesFromUserText("帮我批量调价降价 10%")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromUserText("帮我改价")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromUserText("这几个商品涨 10%")).toEqual(["bulkPriceEdit"]);
+    expect(skillNamesFromUserText("raise the price by 10 percent")).toEqual(["bulkPriceEdit"]);
     expect(
       skillNamesFromUserText("帮我批量调整商品价格，先确认调价规则和商品范围，再给我变更预览，不要直接写回。"),
     ).toEqual(["bulkPriceEdit"]);
