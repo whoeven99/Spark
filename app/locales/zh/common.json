@@ -4825,6 +4825,7 @@
         "recommended": "推荐",
         "recommendedActions": "推荐操作",
         "capabilityActionsTitle": "点一项开始",
+        "capabilityFollowupTitle": "想继续可以点",
         "recommend": {
           "titleWithProduct": "针对已选商品的推荐操作",
           "createsTask": "会建任务",
@@ -5532,6 +5533,7 @@
         "inventoryHealth": "检查库存健康",
         "shopInfo": "读取店铺信息",
         "shopMetrics": "查询经营指标",
+        "suggestNextActions": "整理后续方向",
         "abandonmentRate": "分析弃购率",
         "averageOrderValue": "计算客单价",
         "conversionRate": "分析转化率",

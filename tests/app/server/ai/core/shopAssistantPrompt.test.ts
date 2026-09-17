@@ -63,6 +63,11 @@ describe("buildAnswerShapePrompt", () => {
     expect(prompt).toContain("不要替用户挑一张卡开");
   });
 
+  it("asks the model to report the directions it recommended", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("suggest_next_actions");
+  });
+
   it("keeps vague store asks text-only with at most one summary query", () => {
     const prompt = buildAnswerShapePrompt();
     expect(prompt).toContain("笼统问店况");

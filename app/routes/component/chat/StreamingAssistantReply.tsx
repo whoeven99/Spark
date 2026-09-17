@@ -110,6 +110,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   open_product_improve_form: "productCopy",
   open_product_quality_form: "productQuality",
   score_product_quality: "productQuality",
+  suggest_next_actions: "suggestNextActions",
   open_health_diagnosis_form: "healthDiagnosis",
   get_daily_operations: "dailyOperations",
 };

@@ -72,6 +72,42 @@ describe("resolveWorkspaceActionsForTurn", () => {
       resolveWorkspaceActionsForTurn({ userText: "我的店铺目前怎么样" }),
     ).toEqual({ keys: ["todayPulse", "seoAudit"] });
   });
+
+  it("prefers the keys the model picked over keyword matching", () => {
+    expect(
+      resolveWorkspaceActionsForTurn({
+        // 话术撞不到任何 pattern，靠模型给方向
+        userText: "我对店铺目前有什么值得优化的",
+        modelPicked: { keys: ["qualityScore", "seoAudit"] },
+      }),
+    ).toEqual({ keys: ["qualityScore", "seoAudit"] });
+
+    expect(
+      resolveWorkspaceActionsForTurn({
+        userText: "我的店铺目前怎么样",
+        modelPicked: { keys: ["qualityScore"] },
+      }),
+    ).toEqual({ keys: ["qualityScore"] });
+  });
+
+  it("still drops the model's keys once a card opened", () => {
+    expect(
+      resolveWorkspaceActionsForTurn({
+        userText: "帮我把这批商品降价 10%",
+        modelPicked: { keys: ["bulkPriceEdit"] },
+        cardOpened: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps the full catalog for discovery even if the model picked a few", () => {
+    expect(
+      resolveWorkspaceActionsForTurn({
+        userText: "你有什么功能",
+        modelPicked: { keys: ["seoAudit"] },
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("parseWorkspaceActionsPayload / filter groups", () => {

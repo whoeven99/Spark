@@ -18,6 +18,7 @@ import { bulkStatusEditSkillDefinition } from "./bulkStatusEdit";
 import { productExportSkillDefinition } from "./productExport";
 import { productImportSkillDefinition } from "./productImport";
 import { seoAuditSkillDefinition } from "./seoAudit";
+import { suggestedActionsSkillDefinition } from "./suggestedActions/suggestedActions.tool";
 import { timeTool } from "./system/timeTool";
 import { weatherTool } from "./system/weatherTool";
 
@@ -43,6 +44,8 @@ globalToolRegistry.register({
 });
 
 globalToolRegistry.register(healthDiagnosisFormSkillDefinition);
+
+globalToolRegistry.register(suggestedActionsSkillDefinition);
 
 globalToolRegistry.register({
   name: "shopifyShopBasicInfo",

@@ -59,7 +59,10 @@ import {
   resolveMissingChatCardsWithLlm,
 } from "./resolveChatCardIntent.server";
 import { isCatalogRuleEditUserIntent } from "../../../lib/chatCardFallback";
-import { resolveWorkspaceActionsForTurn } from "../../../lib/workspaceSuggestedActions";
+import {
+  parseWorkspaceActionsPayload,
+  resolveWorkspaceActionsForTurn,
+} from "../../../lib/workspaceSuggestedActions";
 import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
@@ -774,17 +777,21 @@ export function invokeChatAgentStream(
           }
         }
 
-        // 回复下方的可点操作（与工作台推荐同源，不依赖模型工具调用）：
-        // 问功能给全量目录，其余按话术过滤；已开卡或本轮就是点推荐进来的则不挂。
+        // 回复下方的可点操作（与工作台推荐同源）：问功能给全量目录，
+        // 其余优先用模型 suggest_next_actions 选的方向，没调用才退回话术过滤；
+        // 已开卡或本轮就是点推荐进来的则不挂（模型调了也要撤掉）。
         const workspaceActions = resolveWorkspaceActionsForTurn({
           userText: lastUserText,
           skillFocus,
           cardOpened:
             hasAnyChatCardInUiPayloads(uiPayloads) ||
             hasEmittedChatCardFlag(streamContext.emittedFlags),
+          modelPicked: parseWorkspaceActionsPayload(uiPayloads.workspaceActions),
         });
         if (workspaceActions) {
           uiPayloads.workspaceActions = workspaceActions;
+        } else {
+          delete uiPayloads.workspaceActions;
         }
 
         let agentUsage = extractTokenUsageFromMessages(resultMessages);

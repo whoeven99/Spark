@@ -156,16 +156,20 @@ export function filterWorkspaceRecommendedGroups(
 
 /**
  * 本轮要不要在回复下挂推荐按钮。
- * 已开卡 / 本轮已是点推荐进来 → 不挂；功能总览挂全部；其余按话术过滤。
+ * 已开卡 / 本轮已是点推荐进来 → 不挂；功能总览挂全部；
+ * 其余优先用模型 suggest_next_actions 选的 key，模型没给才退回话术过滤。
  */
 export function resolveWorkspaceActionsForTurn(params: {
   userText?: string | null;
   skillFocus?: string | null;
   cardOpened?: boolean;
+  /** 模型本轮通过 suggest_next_actions 选的方向 */
+  modelPicked?: WorkspaceActionsPayload | null;
 }): WorkspaceActionsPayload | null {
   if (params.cardOpened) return null;
   if (params.skillFocus?.trim()) return null;
   if (isCapabilityOverviewUserIntent(params.userText)) return true;
+  if (params.modelPicked) return params.modelPicked;
   const keys = selectSuggestedActionKeys(params.userText);
   return keys.length > 0 ? { keys } : null;
 }
