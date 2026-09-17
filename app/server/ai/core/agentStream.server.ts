@@ -542,6 +542,35 @@ export function invokeChatAgentStream(
                 def.onStreamEvent(ev, (chunk) => controller.enqueue(chunk), streamContext);
               }
             }
+
+            // 通用工具进度：metrics / SEO 等只读工具没有 skill.onStreamEvent，
+            // 不推 SSE 的话前端思考栏永远只有原文、看不到「查询指标」这类步骤。
+            const toolName = typeof ev.name === "string" ? ev.name.trim() : "";
+            if (toolName && ev.event === "on_tool_start") {
+              controller.enqueue({
+                type: "tool_call",
+                name: toolName,
+                args: "input" in ev ? ev.input : {},
+              });
+            } else if (toolName && ev.event === "on_tool_end") {
+              const output = "output" in ev ? ev.output : "";
+              controller.enqueue({
+                type: "tool_result",
+                name: toolName,
+                result:
+                  typeof output === "string"
+                    ? output
+                    : JSON.stringify(output ?? null),
+              });
+            } else if (toolName && ev.event === "on_tool_error") {
+              controller.enqueue({
+                type: "tool_result",
+                name: toolName,
+                result: JSON.stringify({
+                  error: String("error" in ev ? ev.error : "tool error"),
+                }),
+              });
+            }
           } else if (mode === "values") {
             const state = payload as { messages?: BaseMessage[] };
             if (state.messages?.length) {
@@ -556,15 +585,18 @@ export function invokeChatAgentStream(
           lastHumanUtterance(resultMessages) ||
           "";
 
+        // 取本轮最长的一条助手正文：工具后常会再吐一句短收尾，
+        // 若只拿最后一条，前端落库会把已流出的长文冲成一句。
+        // 不要用 streamedTextAccum 兜底——多轮正文拼在一起会把同一段答重复两遍。
         let finalReply = "";
         for (let i = resultMessages.length - 1; i >= 0; i -= 1) {
           const msg = resultMessages[i];
-          if (AIMessage.isInstance(msg)) {
-            const text = extractMessageText(msg).trim();
-            if (text) {
-              finalReply = polishFinalReply(text);
-              break;
-            }
+          if (!AIMessage.isInstance(msg)) continue;
+          const text = extractMessageText(msg).trim();
+          if (!text) continue;
+          const polished = polishFinalReply(text);
+          if (polished.length > finalReply.length) {
+            finalReply = polished;
           }
         }
 
@@ -823,13 +855,20 @@ export function invokeChatAgentStream(
           }),
         );
 
-        if (finalReply.length > streamedTextAccum.length) {
-          const remainder = finalReply.slice(streamedTextAccum.length);
-          if (remainder) {
-            controller.enqueue({ type: "text", content: remainder });
-          }
-        } else if (finalReply && !streamedTextAccum) {
+        // 仅在 finalReply 是流式正文的真前缀延长时补尾；润色改写（编号/去重）后不能 slice，
+        // 否则会往气泡里塞一段错位碎片。改写后的终稿靠 done.finalReply 交接。
+        if (finalReply && !streamedTextAccum) {
           controller.enqueue({ type: "text", content: finalReply });
+        } else if (
+          finalReply &&
+          streamedTextAccum &&
+          finalReply.startsWith(streamedTextAccum) &&
+          finalReply.length > streamedTextAccum.length
+        ) {
+          controller.enqueue({
+            type: "text",
+            content: finalReply.slice(streamedTextAccum.length),
+          });
         }
 
         controller.enqueue({

@@ -4819,7 +4819,13 @@
           "done": "已深度思考",
           "elapsed": "用时 {{duration}}",
           "durationSeconds": "{{seconds}} 秒",
-          "durationMinutes": "{{minutes}} 分 {{seconds}} 秒"
+          "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
+          "showRaw": "查看思考原文",
+          "hideRaw": "收起思考原文",
+          "steps": {
+            "analyze": "理解问题",
+            "compose": "整理回答"
+          }
         },
         "clearSelectionAria": "清空{{label}}",
         "recommended": "推荐",
@@ -5549,6 +5555,23 @@
         "productQuality": "准备商品页质量评分",
         "healthDiagnosis": "准备健康诊断与待办",
         "dailyOperations": "读取今日经营诊断",
+        "productSearch": "搜索商品",
+        "productDetail": "读取商品详情",
+        "productStatusList": "查看商品上下架状态",
+        "productTagList": "查看商品标签",
+        "variantPriceList": "查看商品价格",
+        "articleList": "查看文章列表",
+        "seoAudit": "做 SEO 体检",
+        "generateImage": "生成商品图片",
+        "pictureTranslateRun": "翻译图片文字",
+        "bulkPriceEdit": "准备批量调价",
+        "bulkTagEdit": "准备批量打标",
+        "bulkStatusEdit": "准备批量上下架",
+        "productExport": "准备导出商品",
+        "productImport": "准备导入商品",
+        "myTasks": "查看我的任务",
+        "billingStatus": "查看订阅与额度",
+        "sendEmail": "发送邮件",
         "fallback": "调用工具：{{name}}"
       }
     },
@@ -5674,7 +5697,16 @@
     "homeV2": {
       "assistantTitle": "描述你的目标，Spark AI 会查店铺并动手",
       "composerPlaceholder": "例如：今天最该处理的 3 件事",
-      "recommendationsTitle": "推荐操作"
+      "recommendationsTitle": "推荐操作",
+      "promptCasesTitle": "试试这样问",
+      "promptCases": {
+        "storeHow": "我的店铺目前怎么样",
+        "productPageBetter": "我想让商品页面更好一点",
+        "sellMore": "怎么才能让店铺多卖一点",
+        "worthOptimizing": "我的店铺有什么值得优化的",
+        "whatCanYouDo": "你能帮我做什么",
+        "seoCheck": "帮我看看商品 SEO 有没有问题"
+      }
     }
   }
 }

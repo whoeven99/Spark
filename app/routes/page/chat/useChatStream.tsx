@@ -31,6 +31,9 @@ import {
   parseWorkspaceActionsPayload,
   type WorkspaceActionsPayload,
 } from "../../../lib/workspaceSuggestedActions";
+import type { ThinkingStep } from "../../../lib/thinkingSteps";
+import { THINKING_PHASE } from "../../../lib/thinkingSteps";
+import { numberAdviceItems } from "../../../lib/numberAdviceItems";
 
 export type { SkillStepProgress } from "./chatStreamUtils";
 export { hasStreamingVisualContent } from "./chatStreamUtils";
@@ -95,6 +98,8 @@ export type ChatStreamFinishPayload = {
   streamError?: boolean;
   reply: string;
   thinkingContent?: string;
+  /** 思考面板里的步骤（每次工具调用一条），随消息落库供历史回看 */
+  thinkingSteps?: ThinkingStep[];
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: unknown;
@@ -113,7 +118,7 @@ type Snapshot = {
   reply: string;
   streamedText: string;
   thinkingContent: string;
-  thinkingNotes: string[];
+  thinkingSteps: SkillStepProgress[];
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
@@ -134,6 +139,9 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     streamError: snapshot.streamError === true,
     reply: snapshot.reply,
     thinkingContent: snapshot.thinkingContent || undefined,
+    thinkingSteps: snapshot.thinkingSteps.length
+      ? snapshot.thinkingSteps.map(({ label, status }) => ({ label, status }))
+      : undefined,
     attachments: snapshot.attachments,
     productImproveCard: snapshot.productImproveCard,
     productImproveCardPayload: snapshot.productImproveCardPayload,
@@ -176,7 +184,7 @@ export function useChatStream() {
     reply: "",
     streamedText: "",
     thinkingContent: "",
-    thinkingNotes: [],
+    thinkingSteps: [],
     attachments: [],
     productImproveCard: false,
     productImproveCardPayload: undefined,
@@ -195,7 +203,7 @@ export function useChatStream() {
       reply: "",
       streamedText: "",
       thinkingContent: "",
-      thinkingNotes: [],
+      thinkingSteps: [],
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
@@ -244,6 +252,7 @@ export function useChatStream() {
   const resetStreamingUi = () => {
     snapshotRef.current.streamedText = "";
     snapshotRef.current.thinkingContent = "";
+    snapshotRef.current.thinkingSteps = [];
     notifyStreamingText();
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
@@ -327,15 +336,35 @@ export function useChatStream() {
         onFinish?.(payload);
       };
 
-      const appendThinkingNote = (note: string) => {
-        const trimmed = note.trim();
-        if (!trimmed || snapshotRef.current.thinkingNotes.includes(trimmed)) return;
-        snapshotRef.current.thinkingNotes.push(trimmed);
-      const current = snapshotRef.current.thinkingContent.trim();
-      const next = current ? `${current}\n${trimmed}` : trimmed;
-      snapshotRef.current.thinkingContent = next;
-      notifyStreamingText();
-    };
+      /** 步骤同时进 React state（实时渲染）与快照（随消息落库）。 */
+      const trackStep = (step: SkillStepProgress) => {
+        snapshotRef.current.thinkingSteps = upsertProgressStep(
+          snapshotRef.current.thinkingSteps,
+          step,
+        );
+        setSkillSteps((prev) => upsertProgressStep(prev, step));
+      };
+
+      const trackPhase = (
+        phase: (typeof THINKING_PHASE)[keyof typeof THINKING_PHASE],
+        status: SkillStepProgress["status"],
+      ) => {
+        trackStep({
+          skill: "thinking",
+          stepId: phase,
+          label: phase,
+          status,
+        });
+      };
+
+      const completeAnalyzeIfNeeded = () => {
+        const hasAnalyze = snapshotRef.current.thinkingSteps.some(
+          (step) => step.stepId === THINKING_PHASE.analyze,
+        );
+        if (hasAnalyze) {
+          trackPhase(THINKING_PHASE.analyze, "completed");
+        }
+      };
 
       try {
         const response = await fetch(url, {
@@ -404,6 +433,10 @@ export function useChatStream() {
               const chunk: StreamChunk = JSON.parse(line.slice(6));
 
               if (chunk.type === "thinking") {
+                // 只有真正收到模型思考内容时才记「理解问题」——不要空跑占位
+                if (!snapshotRef.current.thinkingContent) {
+                  trackPhase(THINKING_PHASE.analyze, "running");
+                }
                 const prev = snapshotRef.current.thinkingContent;
                 snapshotRef.current.thinkingContent = prev
                   ? `${prev}${chunk.content}`
@@ -411,6 +444,8 @@ export function useChatStream() {
                 notifyStreamingText();
               } else if (chunk.type === "text") {
                 markFirstChunkSeen();
+                completeAnalyzeIfNeeded();
+                // 正文开始后不再虚构「整理回答」步骤：步骤只反映真实工具调用
                 const next = snapshotRef.current.streamedText + chunk.content;
                 snapshotRef.current.streamedText = next;
                 snapshotRef.current.reply = next;
@@ -418,31 +453,26 @@ export function useChatStream() {
               } else if (chunk.type === "status") {
                 if (chunk.phase === "thinking") {
                   setAwaitingFirstChunk(true);
-                  appendThinkingNote("Analyzing the request");
                 }
               } else if (chunk.type === "task_proposal") {
                 markFirstChunkSeen();
                 const proposal = coerceTaskProposalPayload(chunk.payload);
                 if (proposal) {
                   applyTaskProposal(proposal);
-                  appendThinkingNote(`已生成任务确认卡片：${proposal.title}`);
                 }
               } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
-                const ev = chunk.event;
-                appendThinkingNote(`${ev.label}: ${ev.status}`);
-                setSkillSteps((prev) => upsertProgressStep(prev, ev));
+                completeAnalyzeIfNeeded();
+                trackStep(chunk.event);
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
-                appendThinkingNote(`Preparing ${chunk.name}`);
-                setSkillSteps((prev) =>
-                  upsertProgressStep(prev, {
-                    skill: "tool",
-                    stepId: chunk.name,
-                    label: `tool:${chunk.name}`,
-                    status: "running",
-                  }),
-                );
+                completeAnalyzeIfNeeded();
+                trackStep({
+                  skill: "tool",
+                  stepId: chunk.name,
+                  label: `tool:${chunk.name}`,
+                  status: "running",
+                });
                 if (chunk.name === "open_product_improve_form") {
                   // 表单态统一转通用提案卡；即时生成结果（generate_product_description）保留旧卡
                   applyTaskProposal(
@@ -482,15 +512,21 @@ export function useChatStream() {
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
-                appendThinkingNote(`${chunk.name} returned a result`);
-                setSkillSteps((prev) =>
-                  upsertProgressStep(prev, {
-                    skill: "tool",
-                    stepId: chunk.name,
-                    label: `tool:${chunk.name}`,
-                    status: "completed",
-                  }),
-                );
+                let toolStatus: SkillStepProgress["status"] = "completed";
+                try {
+                  const parsed = JSON.parse(chunk.result) as { error?: unknown };
+                  if (parsed && typeof parsed === "object" && parsed.error != null) {
+                    toolStatus = "error";
+                  }
+                } catch {
+                  // 非 JSON 结果按成功收尾
+                }
+                trackStep({
+                  skill: "tool",
+                  stepId: chunk.name,
+                  label: `tool:${chunk.name}`,
+                  status: toolStatus,
+                });
                 if (chunk.name === "generate_product_description") {
                   const parsed = JSON.parse(chunk.result) as unknown;
                   snapshotRef.current.productImproveCard = true;
@@ -532,9 +568,24 @@ export function useChatStream() {
                     step.status === "running" ? { ...step, status: "completed" } : step,
                   ),
                 );
-                const reply =
-                  chunk.metadata.finalReply?.trim() ||
-                  snapshotRef.current.reply;
+                snapshotRef.current.thinkingSteps = snapshotRef.current.thinkingSteps.map(
+                  (step) =>
+                    step.status === "running" ? { ...step, status: "completed" } : step,
+                );
+                // 多轮工具后 finalReply 取的是最长一条；若仍是短收尾，才用流式长文兜底。
+                // 不要无脑取更长的 streamed——那会把两轮正文拼成重复答。
+                const metaReply = chunk.metadata.finalReply?.trim() || "";
+                const streamedReply = snapshotRef.current.streamedText.trim();
+                const metaLooksThin =
+                  metaReply.length > 0 &&
+                  metaReply.length < 120 &&
+                  !/建议/.test(metaReply);
+                const rawReply =
+                  metaLooksThin && streamedReply.length > metaReply.length
+                    ? streamedReply
+                    : metaReply || streamedReply || snapshotRef.current.reply;
+                // 客户端再跑一遍编号兜底：流式交接可能绕过服务端 polish
+                const reply = numberAdviceItems(rawReply);
                 snapshotRef.current.reply = reply;
 
                 const ui = chunk.metadata.uiPayloads;

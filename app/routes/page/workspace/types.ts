@@ -11,6 +11,7 @@ import type { ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext
 import type { ManagedAiOutputParseResult } from "../../../lib/managedAiOutputRuntime";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import type { ThinkingStep } from "../../../lib/thinkingSteps";
 import type { WorkspaceActionsPayload } from "../../../lib/workspaceSuggestedActions";
 
 export type WorkspacePanel = "home" | "dashboard" | "chat" | "skills" | "automation" | "tasks";
@@ -58,6 +59,7 @@ export type WorkspaceConversationMessage = {
   taskRun?: TaskRunPayload;
   aiTask?: AITaskItem;
   thinkingContent?: string;
+  thinkingSteps?: ThinkingStep[];
   assistantLaunchContext?: ManagedAiLaunchContext;
   managedAiResult?: ManagedAiOutputParseResult;
 };

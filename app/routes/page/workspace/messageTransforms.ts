@@ -24,6 +24,10 @@ import {
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
 import { coerceTaskRunPayload } from "../../../lib/taskRunPayload";
+import {
+  coerceThinkingSteps,
+  MAX_PERSISTED_THINKING_CHARS,
+} from "../../../lib/thinkingSteps";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import {
@@ -106,6 +110,7 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.taskRun ? { taskRun: message.taskRun } : {}),
     ...(message.aiTask ? { aiTask: message.aiTask } : {}),
     ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
+    ...(message.thinkingSteps?.length ? { thinkingSteps: message.thinkingSteps } : {}),
     ...(message.assistantLaunchContext ? { assistantLaunchContext: message.assistantLaunchContext } : {}),
     ...(message.managedAiResult ? { managedAiResult: message.managedAiResult } : {}),
   };
@@ -163,6 +168,7 @@ export function buildAssistantWorkspaceMessage(
       : {}),
     ...(taskProposal ? { taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
+    ...(payload.thinkingSteps?.length ? { thinkingSteps: payload.thinkingSteps } : {}),
     ...(options?.assistantLaunchContext ? { assistantLaunchContext: options.assistantLaunchContext } : {}),
     ...(options?.managedAiResult ? { managedAiResult: options.managedAiResult } : {}),
   };
@@ -235,6 +241,11 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
   if (taskProposal) {
     result.taskProposal = taskProposal;
   }
+  // 思考随消息落库供历史回看：步骤是结构化的、很小；原文可能很长，截断保存。
+  if (payload.thinkingSteps?.length) result.thinkingSteps = payload.thinkingSteps;
+  if (payload.thinkingContent) {
+    result.thinkingContent = payload.thinkingContent.slice(0, MAX_PERSISTED_THINKING_CHARS);
+  }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
 
@@ -273,7 +284,10 @@ export function serializeWorkspaceMessagePayloads(
   if (taskProposal) result.taskProposal = taskProposal;
   if (message.taskRun) result.taskRun = message.taskRun;
   if (message.aiTask) result.aiTask = message.aiTask;
-  if (message.thinkingContent) result.thinkingContent = message.thinkingContent;
+  if (message.thinkingSteps?.length) result.thinkingSteps = message.thinkingSteps;
+  if (message.thinkingContent) {
+    result.thinkingContent = message.thinkingContent.slice(0, MAX_PERSISTED_THINKING_CHARS);
+  }
   if (message.assistantLaunchContext) result.assistantLaunchContext = message.assistantLaunchContext;
   if (message.managedAiResult) result.managedAiResult = message.managedAiResult;
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
@@ -369,6 +383,10 @@ export function dbMessageToUiMessage(msg: {
     ...(typeof extras.thinkingContent === "string"
       ? { thinkingContent: extras.thinkingContent }
       : {}),
+    ...(() => {
+      const steps = coerceThinkingSteps(extras.thinkingSteps);
+      return steps.length > 0 ? { thinkingSteps: steps } : {};
+    })(),
     ...(assistantLaunchContext ? { assistantLaunchContext } : {}),
     ...(extras.managedAiResult && typeof extras.managedAiResult === "object"
       ? { managedAiResult: extras.managedAiResult as ManagedAiOutputParseResult }

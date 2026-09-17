@@ -66,4 +66,85 @@ describe("polishFinalReply", () => {
     expect(out.includes("\r")).toBe(false);
     expect(out).toContain("### 查询结果");
   });
+
+  it("建议段普通段落收成 1. 2. 3.", () => {
+    const src = [
+      "近 30 天 0 订单，问题不在转化。",
+      "",
+      "建议",
+      "",
+      "先把有货商品上架，否则后面优化没有落点。",
+      "",
+      "再补搜索标题和描述，SEO 缺的最多。",
+      "",
+      "库存健康放到后面做。",
+      "",
+      "你想从哪一步开始？",
+    ].join("\n");
+    const out = polishFinalReply(src);
+    expect(out).toContain("### 建议");
+    expect(out).toContain("1. 先把有货商品上架");
+    expect(out).toContain("2. 再补搜索标题和描述");
+    expect(out).toContain("3. 库存健康放到后面做");
+    expect(out).toContain("你想从哪一步开始？");
+  });
+
+  it("建议段已有编号时不重复加", () => {
+    const src = ["建议", "", "1. 先上架", "", "2. 再补 SEO"].join("\n");
+    const out = polishFinalReply(src);
+    expect(out).toContain("1. 先上架");
+    expect(out).toContain("2. 再补 SEO");
+    expect(out).not.toMatch(/1\. 1\./);
+  });
+
+  it("建议段 **小标题：** 块收成编号", () => {
+    const src = [
+      "近 30 天 0 订单。",
+      "",
+      "建议",
+      "",
+      "**先清目录，再谈优化：**",
+      "先归档测试商品。",
+      "",
+      "**用表格批量补 SEO 标题和描述：**",
+      "208 个商品缺搜索标题。",
+      "",
+      "**最后攻正文与商品页本身：**",
+      "挑 3-5 个主推做质量评分。",
+      "",
+      "你想从哪一步开始？",
+    ].join("\n");
+    const out = polishFinalReply(src);
+    expect(out).toContain("1. **先清目录，再谈优化：**");
+    expect(out).toContain("2. **用表格批量补 SEO 标题和描述：**");
+    expect(out).toContain("3. **最后攻正文与商品页本身：**");
+    expect(out).toMatch(/1\. \*\*先清目录，再谈优化：\*\* 先归档测试商品/);
+  });
+
+  it.each(["建议", "### 建议", "**建议**", "### **建议**", "建议：", "**建议：**", "### 建议：", "建议（按优先级）"])(
+    "「%s」都能当建议小标题识别并编号",
+    (heading) => {
+      const src = [
+        "近 30 天 0 订单。",
+        "",
+        heading,
+        "",
+        "**先把有货商品放出来：** 把草稿商品改成 Active。",
+        "",
+        "**再补搜索标题与描述：** 208 个商品走的是默认回落。",
+        "",
+        "你想从哪一步开始？",
+      ].join("\n");
+      const out = polishFinalReply(src);
+      expect(out).toContain("### 建议");
+      expect(out).toContain("1. **先把有货商品放出来：**");
+      expect(out).toContain("2. **再补搜索标题与描述：**");
+    },
+  );
+
+  it("正文里以「建议」开头的整句不当小标题", () => {
+    const src = ["销售额：100", "订单数：20", "建议优先补齐搜索标题"].join("\n");
+    const out = polishFinalReply(src);
+    expect(out).not.toContain("### 建议");
+  });
 });

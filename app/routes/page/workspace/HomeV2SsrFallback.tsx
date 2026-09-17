@@ -60,6 +60,10 @@ const styles = {
     fontSize: 14,
     lineHeight: 1.55,
   } satisfies CSSProperties,
+  promptCasesStub: {
+    marginTop: 12,
+    minHeight: 64,
+  } satisfies CSSProperties,
   capabilityGrid: {
     marginTop: 14,
     paddingTop: 11,
@@ -125,6 +129,7 @@ export function HomeV2SsrFallback({
         <section style={styles.assistantCard}>
           <h2 style={styles.assistantTitle}>{t("workspace.homeV2.assistantTitle")}</h2>
           <div style={styles.composerShell}>{t("workspace.homeV2.composerPlaceholder")}</div>
+          <div style={styles.promptCasesStub} aria-hidden="true" />
           <div style={styles.capabilityGrid} aria-hidden="true">
             <div style={styles.capabilityStub} />
             <div style={styles.capabilityStub} />

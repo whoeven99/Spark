@@ -88,16 +88,38 @@ describe("buildAnswerShapePrompt", () => {
     expect(prompt).toContain("禁止只写一两句话就挂按钮");
   });
 
+  it("requires numbered suggestions under 建议", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("1. 2. 3.");
+    expect(prompt).toContain("禁止写成普通段落");
+    expect(prompt).toContain("禁止只用 **加粗小标题** 代替编号");
+  });
+
   it("labels only the 建议 section, not 现状 or 收尾", () => {
     const prompt = buildAnswerShapePrompt();
     expect(prompt).toContain("这段用「建议」当小标题");
     expect(prompt).toContain("直接写，不要加小标题");
-    expect(prompt).toContain("不要加小标题；同时调用 suggest_next_actions");
+    expect(prompt).toContain("禁止输出「现状」二字当标题");
+    expect(prompt).toContain("suggest_next_actions 必须和正文写在同一条助手消息里");
   });
 
   it("keeps the closing line from restating the chips rendered below it", () => {
     const prompt = buildAnswerShapePrompt();
     expect(prompt).toContain("收尾里不要再把按钮名列一遍");
+  });
+
+  it("allows parallel read-only lookups instead of rationing them", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("只读工具可并行");
+    expect(prompt).toContain("不要反复权衡该不该调、能调几个");
+    // 旧口径把只读查询写成配额，模型会在思考里反复自我审批
+    expect(prompt).not.toContain("不够再补一项只读查询");
+  });
+
+  it("requires the three parts to land in the visible reply, not the thinking", () => {
+    const prompt = buildAnswerShapePrompt();
+    expect(prompt).toContain("不能只写在思考过程中");
+    expect(prompt).toContain("只输出收尾句");
   });
 });
 
