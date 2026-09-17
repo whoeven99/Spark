@@ -6,6 +6,7 @@ import type { ProductQualityFormPayload } from "./productQualityFormPayload";
 import type { HealthDiagnosisFormPayload } from "./healthDiagnosisCardPayload";
 import type { TaskProposalPayload } from "./taskProposalPayload";
 import type { TaskRunPayload } from "./taskRunPayload";
+import type { WorkspaceActionsPayload } from "./workspaceSuggestedActions";
 
 export type ChatMessageImageAttachment = {
   type: "image";
@@ -76,10 +77,9 @@ export type ChatMessage =
       healthDiagnosisCard?: boolean;
       healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
       /**
-       * 能力总览回复下方展示与工作台「推荐」同源的可点操作。
-       * 由服务端在用户问「有什么功能」时写入 uiPayloads.workspaceActions。
+       * 回复下方可点操作：true=全部推荐；{ keys } 按对话过滤。
        */
-      workspaceActions?: boolean;
+      workspaceActions?: WorkspaceActionsPayload;
       /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
       aiTask?: AITaskItem;
       thinkingContent?: string;

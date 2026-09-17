@@ -2,11 +2,17 @@ import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
+import {
+  filterWorkspaceRecommendedGroups,
+  workspaceActionsActionKeys,
+  type WorkspaceActionsPayload,
+} from "../../../lib/workspaceSuggestedActions";
 import { shopifyUi } from "../../page/workspace/styles";
 
 type WorkspaceActionsInMessageProps = {
   hasProductContext?: boolean;
   disabled?: boolean;
+  actions?: WorkspaceActionsPayload;
   onAction: (prompt: string, skillFocus: string) => void;
 };
 
@@ -84,17 +90,28 @@ const badgeStyle: CSSProperties = {
 export function WorkspaceActionsInMessage({
   hasProductContext = false,
   disabled = false,
+  actions = true,
   onAction,
 }: WorkspaceActionsInMessageProps) {
   const { t } = useTranslation();
-  const groups = useMemo(
-    () => buildWorkspaceRecommendedGroups(t, hasProductContext),
-    [t, hasProductContext],
-  );
+  const groups = useMemo(() => {
+    const actionKeys = workspaceActionsActionKeys(actions);
+    return filterWorkspaceRecommendedGroups(
+      buildWorkspaceRecommendedGroups(t, hasProductContext),
+      actionKeys,
+    );
+  }, [t, hasProductContext, actions]);
+  const actionKeys = workspaceActionsActionKeys(actions);
+  const titleKey =
+    actionKeys === "all"
+      ? "workspace.shell.chat.capabilityActionsTitle"
+      : "workspace.shell.chat.capabilityFollowupTitle";
+
+  if (groups.length === 0) return null;
 
   return (
     <div style={wrapStyle} data-testid="workspace-actions-in-message">
-      <div style={titleStyle}>{t("workspace.shell.chat.capabilityActionsTitle")}</div>
+      <div style={titleStyle}>{t(titleKey)}</div>
       {groups.map((group) => (
         <div key={group.key} style={groupStyle}>
           <div style={groupLabelStyle}>{group.label}</div>

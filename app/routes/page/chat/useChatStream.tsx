@@ -27,6 +27,10 @@ import {
 import { shouldKeepExistingTaskProposal } from "../../../lib/chatTaskProposalGuard";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import type { SkillStepProgress } from "./chatStreamUtils";
+import {
+  parseWorkspaceActionsPayload,
+  type WorkspaceActionsPayload,
+} from "../../../lib/workspaceSuggestedActions";
 
 export type { SkillStepProgress } from "./chatStreamUtils";
 export { hasStreamingVisualContent } from "./chatStreamUtils";
@@ -100,7 +104,7 @@ export type ChatStreamFinishPayload = {
   productQualityCardPayload?: unknown;
   healthDiagnosisCard?: boolean;
   healthDiagnosisCardPayload?: unknown;
-  workspaceActions?: boolean;
+  workspaceActions?: WorkspaceActionsPayload | false;
   taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
@@ -119,7 +123,7 @@ type Snapshot = {
   productQualityCardPayload?: unknown;
   healthDiagnosisCard: boolean;
   healthDiagnosisCardPayload?: unknown;
-  workspaceActions: boolean;
+  workspaceActions: WorkspaceActionsPayload | false;
   taskProposal?: TaskProposalPayload;
   streamError?: boolean;
 };
@@ -139,7 +143,7 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     productQualityCardPayload: snapshot.productQualityCardPayload,
     healthDiagnosisCard: snapshot.healthDiagnosisCard,
     healthDiagnosisCardPayload: snapshot.healthDiagnosisCardPayload,
-    workspaceActions: snapshot.workspaceActions,
+    workspaceActions: snapshot.workspaceActions || undefined,
     taskProposal: snapshot.taskProposal,
   };
 }
@@ -163,7 +167,9 @@ export function useChatStream() {
     useState<unknown>();
   const [streamingTaskProposal, setStreamingTaskProposal] =
     useState<TaskProposalPayload | undefined>();
-  const [streamingWorkspaceActions, setStreamingWorkspaceActions] = useState(false);
+  const [streamingWorkspaceActions, setStreamingWorkspaceActions] = useState<
+    WorkspaceActionsPayload | false
+  >(false);
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -554,8 +560,11 @@ export function useChatStream() {
                   setStreamingHealthDiagnosisPayload(healthPayload);
                 }
                 if (ui?.workspaceActions && !snapshotRef.current.workspaceActions) {
-                  snapshotRef.current.workspaceActions = true;
-                  setStreamingWorkspaceActions(true);
+                  const actions = parseWorkspaceActionsPayload(ui.workspaceActions);
+                  if (actions) {
+                    snapshotRef.current.workspaceActions = actions;
+                    setStreamingWorkspaceActions(actions);
+                  }
                 }
                 if (
                   ui?.productImproveCardPayload &&

@@ -98,7 +98,7 @@ export const productImportSkillDefinition: ToolDefinition = {
   stage: "execute",
   visibility: "public",
   description:
-    "在确认卡上勾选要写入的子功能并上传 CSV / Excel。勾选哪项，试算和写回就只走对应模块。先校验再确认写回。",
+    "用表格导入批量改商品字段（vendor/类型/SEO/合集/成本/Handle/Metafield、标题正文、归档删除等）。不要用于规则批量调价、打标或上下架——那些走独立确认卡。",
   systemPromptExtension: productImportSystemPromptExtension,
   createTool: () => [productImportFormTool],
   onStreamEvent: (ev, enqueue, streamContext) => {

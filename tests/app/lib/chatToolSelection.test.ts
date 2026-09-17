@@ -14,31 +14,38 @@ describe("chatToolSelection", () => {
   });
 
   it("keeps non-gated (通用/系统/目录) skills bound regardless of intent", () => {
-    const active = selectActiveGatedSkills({ skillFocus: null, userText: "" });
+    const active = selectActiveGatedSkills({ skillFocus: "generateImage" });
     for (const name of ["shopOperations", "shopifyShopBasicInfo", "currentTime", "productSearch"]) {
       expect(shouldBindSkillForTurn(name, active)).toBe(true);
     }
   });
 
-  it("gates heavy skills until intent matches", () => {
-    const idle = selectActiveGatedSkills({ skillFocus: null, recentUserText: "今天天气如何" });
-    expect(shouldBindSkillForTurn("bulkPriceEdit", idle)).toBe(false);
-    expect(shouldBindSkillForTurn("productImport", idle)).toBe(false);
-    expect(shouldBindSkillForTurn("imageGeneration", idle)).toBe(false);
+  it("free input (no skillFocus) binds all gated skills for the model to choose", () => {
+    const idle = selectActiveGatedSkills({
+      skillFocus: null,
+      recentUserText: "今天天气如何",
+    });
+    expect(idle).toBe("all");
+    expect(shouldBindSkillForTurn("bulkPriceEdit", idle)).toBe(true);
+    expect(shouldBindSkillForTurn("productImport", idle)).toBe(true);
+    expect(shouldBindSkillForTurn("imageGeneration", idle)).toBe(true);
 
-    const priceIntent = selectActiveGatedSkills({
+    const priceWording = selectActiveGatedSkills({
       skillFocus: null,
       recentUserText: "帮我批量调价降价 10%",
     });
-    expect(shouldBindSkillForTurn("bulkPriceEdit", priceIntent)).toBe(true);
-    expect(shouldBindSkillForTurn("productImport", priceIntent)).toBe(false);
-    expect(shouldBindSkillForTurn("imageGeneration", priceIntent)).toBe(false);
+    expect(priceWording).toBe("all");
+    expect(shouldBindSkillForTurn("bulkPriceEdit", priceWording)).toBe(true);
+    expect(shouldBindSkillForTurn("imageGeneration", priceWording)).toBe(true);
   });
 
-  it("binds gated skill via explicit skillFocus", () => {
-    const active = selectActiveGatedSkills({ skillFocus: "generateImage", recentUserText: "" });
+  it("explicit skillFocus trims other gated skills", () => {
+    const active = selectActiveGatedSkills({ skillFocus: "generateImage" });
+    expect(active).not.toBe("all");
     expect(shouldBindSkillForTurn("imageGeneration", active)).toBe(true);
     expect(shouldBindSkillForTurn("imageGenerationForm", active)).toBe(true);
+    expect(shouldBindSkillForTurn("bulkPriceEdit", active)).toBe(false);
+    expect(shouldBindSkillForTurn("productImport", active)).toBe(false);
   });
 
   it("skillFocus=all disables trimming", () => {

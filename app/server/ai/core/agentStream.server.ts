@@ -59,7 +59,10 @@ import {
   resolveMissingChatCardsWithLlm,
 } from "./resolveChatCardIntent.server";
 import { isCatalogRuleEditUserIntent } from "../../../lib/chatCardFallback";
-import { isCapabilityOverviewUserIntent } from "../../../lib/capabilityActionsIntent";
+import {
+  parseWorkspaceActionsPayload,
+  resolveWorkspaceActionsForTurn,
+} from "../../../lib/workspaceSuggestedActions";
 import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
@@ -170,22 +173,6 @@ function lastHumanUtterance(messages: BaseMessage[]): string {
     }
   }
   return "";
-}
-
-/**
- * 汇聚最近几轮用户话术，用于按需绑定工具子集。
- * 跑在上下文窗口（而非仅最后一条）上，避免多轮追问时把上一轮激活的能力裁掉。
- */
-function recentHumanText(messages: BaseMessage[], maxTurns = 5): string {
-  const texts: string[] = [];
-  for (let i = messages.length - 1; i >= 0 && texts.length < maxTurns; i -= 1) {
-    const msg = messages[i];
-    if (HumanMessage.isInstance(msg)) {
-      const text = extractMessageText(msg).trim();
-      if (text) texts.push(text);
-    }
-  }
-  return texts.join("\n");
 }
 
 async function generateFallbackReplyStream(
@@ -341,12 +328,10 @@ export function invokeChatAgentStream(
 
       // ── 并行异步 setup：工具、Playbook、反思摘要 ──
       const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
-      // 按 skillFocus / 最近几轮话术裁剪本轮真正 bind 给模型的重型工具（能力清单 prompt 仍用全量）。
+      // 仅显式 skillFocus（推荐）时收窄重型工具；自由输入全量 bind，由模型选。
+      // 能力清单 prompt 仍用全量 activeDefs。
       const activeGated = isChatToolTrimEnabled()
-        ? selectActiveGatedSkills({
-            skillFocus,
-            recentUserText: recentHumanText(agentInputMessages),
-          })
+        ? selectActiveGatedSkills({ skillFocus })
         : "all";
       const boundDefs = activeDefs.filter((def) =>
         shouldBindSkillForTurn(def.name, activeGated),
@@ -364,13 +349,20 @@ export function invokeChatAgentStream(
       ]);
 
       const extraTools = [...atomicTools, ...playbookTools];
+      const boundToolNames = extraTools.map((tool) => tool.name);
+      let chatCardFallbackAttempted = false;
+      let chatCardFallbackResolved = false;
       const graph = await buildShopChatGraph(
         context,
         extraTools,
         activeDefs,
         activePlaybookDefs,
         reflectionSummary,
-        { skillFocus, userText: lastUserTextInput },
+        {
+          skillFocus,
+          userText: lastUserTextInput,
+          hasFileContext: (fileIds?.length ?? 0) > 0,
+        },
       );
 
       // ── tracer / run collector ──
@@ -416,6 +408,17 @@ export function invokeChatAgentStream(
         resultMessages: BaseMessage[];
         errorMessage?: string;
       }) => {
+        const tools = extractToolSummariesFromMessages(params.resultMessages);
+        const calledToolNames = tools.map((tool) => tool.name);
+        const fallbackLabel = chatCardFallbackAttempted
+          ? chatCardFallbackResolved
+            ? "resolved"
+            : "miss"
+          : "none";
+        console.info(
+          `[ChatToolObs] runId=${runId} shop=${shop ?? "-"} skillFocus=${skillFocus?.trim() || "-"} bound=${boundToolNames.length} called=${calledToolNames.length} calledNames=${calledToolNames.join(",") || "-"} cardFallback=${fallbackLabel}`,
+        );
+
         if (!shop) {
           console.warn(
             `[AgentRunLog] skip chat_stream persist (no shop in context) runId=${runId}`,
@@ -425,8 +428,8 @@ export function invokeChatAgentStream(
         if (!isAgentRunLogEnabled()) return;
         const durationMs = Date.now() - wallStart;
         const agentUsage = extractTokenUsageFromMessages(params.resultMessages);
-        const tools = extractToolSummariesFromMessages(params.resultMessages);
         const langsmithRunId = getRootLangsmithRunId(runCollector);
+        const boundToolNamesCap = 48;
         await recordAgentRun({
           runId,
           shop,
@@ -443,6 +446,11 @@ export function invokeChatAgentStream(
             lastHuman: sanitizeHumanInput(
               lastHumanUtterance(params.resultMessages) || lastUserTextInput,
             ),
+            ...(skillFocus?.trim() ? { skillFocus: skillFocus.trim() } : {}),
+            boundToolCount: boundToolNames.length,
+            boundToolNames: boundToolNames.slice(0, boundToolNamesCap),
+            chatCardFallbackAttempted,
+            chatCardFallbackResolved,
           },
           tools,
           tokenUsage:
@@ -462,7 +470,7 @@ export function invokeChatAgentStream(
               .map((message) => extractMessageText(message))
               .filter(Boolean)
               .join("\n"),
-            toolNames: tools.map((tool) => tool.name),
+            toolNames: calledToolNames,
             errorMessage: params.errorMessage,
             inputText: lastUserTextInput,
           }),
@@ -739,6 +747,7 @@ export function invokeChatAgentStream(
           !hasAnyChatCardInUiPayloads(uiPayloads) &&
           !hasEmittedChatCardFlag(streamContext.emittedFlags)
         ) {
+          chatCardFallbackAttempted = true;
           try {
             const llmResolution = await resolveMissingChatCardsWithLlm({
               messages: resultMessages,
@@ -758,15 +767,31 @@ export function invokeChatAgentStream(
             if (llmResolution.adjustedReply) {
               finalReply = llmResolution.adjustedReply;
             }
+            chatCardFallbackResolved =
+              hasAnyChatCardInUiPayloads(uiPayloads) ||
+              hasEmittedChatCardFlag(streamContext.emittedFlags);
           } catch (err) {
             console.error("[ChatStream] LLM chat card resolution failed:", err);
             finalReply = reconcileReplyWithChatCards(finalReply, uiPayloads);
+            chatCardFallbackResolved = hasAnyChatCardInUiPayloads(uiPayloads);
           }
         }
 
-        // 「有什么功能」类提问：在回复下方附上与工作台推荐同源的可点操作（不依赖模型工具调用）。
-        if (isCapabilityOverviewUserIntent(lastUserText)) {
-          uiPayloads.workspaceActions = true;
+        // 回复下方的可点操作（与工作台推荐同源）：问功能给全量目录，
+        // 其余优先用模型 suggest_next_actions 选的方向，没调用才退回话术过滤；
+        // 已开卡或本轮就是点推荐进来的则不挂（模型调了也要撤掉）。
+        const workspaceActions = resolveWorkspaceActionsForTurn({
+          userText: lastUserText,
+          skillFocus,
+          cardOpened:
+            hasAnyChatCardInUiPayloads(uiPayloads) ||
+            hasEmittedChatCardFlag(streamContext.emittedFlags),
+          modelPicked: parseWorkspaceActionsPayload(uiPayloads.workspaceActions),
+        });
+        if (workspaceActions) {
+          uiPayloads.workspaceActions = workspaceActions;
+        } else {
+          delete uiPayloads.workspaceActions;
         }
 
         let agentUsage = extractTokenUsageFromMessages(resultMessages);

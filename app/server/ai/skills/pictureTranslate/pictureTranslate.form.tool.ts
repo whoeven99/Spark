@@ -15,7 +15,7 @@ export const OPEN_PICTURE_TRANSLATE_FORM_TOOL_NAME = "open_picture_translate_for
 export const pictureTranslateFormTool = new DynamicStructuredTool({
   name: OPEN_PICTURE_TRANSLATE_FORM_TOOL_NAME,
   description:
-    "当用户明确表示要翻译图片、商品图、截图中的文字，且需要在卡片里选择图片或确认语言方向时使用。根据对话尽量填入 imageUrl、sourceLanguage、targetLanguage；图片 URL 须为 HTTPS。若用户已提供完整图片 URL 与目标语言且要求立即翻译，应改用 picture_translate 而非本工具。",
+    "翻译商品图/截图里的文字时用（卡片选图与语言）。不是改商品标题描述文案，也不是文生图。已有图片 URL+目标语言且要求立刻翻可用 picture_translate。",
   schema: z.object({
     imageUrl: z
       .string()

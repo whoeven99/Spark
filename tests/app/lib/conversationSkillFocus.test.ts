@@ -5,7 +5,7 @@ import {
 } from "../../../app/lib/conversationSkillFocus";
 
 describe("conversationSkillFocus", () => {
-  it("prefers explicit focus over sticky for the request", () => {
+  it("uses only explicit focus for the request (sticky ignored)", () => {
     expect(
       resolveConversationSkillFocus({
         explicit: "seoAudit",
@@ -17,13 +17,11 @@ describe("conversationSkillFocus", () => {
         explicit: null,
         sticky: "seoAudit",
       }),
-    ).toBe("seoAudit");
-    expect(resolveConversationSkillFocus({ explicit: "  ", sticky: "seoAudit" })).toBe(
-      "seoAudit",
-    );
+    ).toBeNull();
+    expect(resolveConversationSkillFocus({ explicit: "  ", sticky: "seoAudit" })).toBeNull();
   });
 
-  it("updates sticky only when explicit is present", () => {
+  it("keeps sticky only when this turn is an explicit recommend; free input clears it", () => {
     expect(
       nextStickySkillFocus({
         explicit: "qualityScore",
@@ -35,6 +33,6 @@ describe("conversationSkillFocus", () => {
         explicit: null,
         previous: "seoAudit",
       }),
-    ).toBe("seoAudit");
+    ).toBeNull();
   });
 });

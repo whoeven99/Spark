@@ -17,6 +17,7 @@ import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { SparkMark } from "../common/SparkMark";
 import { WorkspaceActionsInMessage } from "./WorkspaceActionsInMessage";
+import type { WorkspaceActionsPayload } from "../../../lib/workspaceSuggestedActions";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -41,7 +42,7 @@ type StreamingAssistantReplyProps = {
   streamingHealthDiagnosisCard?: boolean;
   streamingHealthDiagnosisPayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
-  streamingWorkspaceActions?: boolean;
+  streamingWorkspaceActions?: WorkspaceActionsPayload | false;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
@@ -94,6 +95,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   get_current_time: "currentTime",
   get_shopify_inventory_health: "inventoryHealth",
   get_shopify_shop_info: "shopInfo",
+  get_shopify_shop_metrics: "shopMetrics",
   get_shopify_today_abandonment_rate: "abandonmentRate",
   get_shopify_today_aov: "averageOrderValue",
   get_shopify_today_conversion_rate: "conversionRate",
@@ -108,6 +110,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   open_product_improve_form: "productCopy",
   open_product_quality_form: "productQuality",
   score_product_quality: "productQuality",
+  suggest_next_actions: "suggestNextActions",
   open_health_diagnosis_form: "healthDiagnosis",
   get_daily_operations: "dailyOperations",
 };
@@ -320,7 +323,8 @@ export function StreamingAssistantReply({
   const showQualityCard = streamingQualityCard;
   const healthPayload = coerceHealthDiagnosisFormPayload(streamingHealthDiagnosisPayload);
   const showHealthDiagnosisCard = streamingHealthDiagnosisCard;
-  const showWorkspaceActions = streamingWorkspaceActions && Boolean(onRecommendedPrompt);
+  const workspaceActionsPayload = streamingWorkspaceActions || null;
+  const showWorkspaceActions = Boolean(workspaceActionsPayload) && Boolean(onRecommendedPrompt);
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
@@ -424,9 +428,10 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {showWorkspaceActions && onRecommendedPrompt ? (
+              {workspaceActionsPayload && onRecommendedPrompt ? (
                 <WorkspaceActionsInMessage
                   hasProductContext={workspaceBatchProducts.length > 0}
+                  actions={workspaceActionsPayload}
                   disabled={isStreaming}
                   onAction={(prompt, skillFocus) => {
                     void onRecommendedPrompt(prompt, skillFocus);

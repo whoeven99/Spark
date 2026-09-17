@@ -55,7 +55,7 @@ export const bulkPriceEditSkillDefinition: ToolDefinition = {
   stage: "execute",
   visibility: "public",
   description:
-    "按规则批量调整变体价格与划线价：先只读试算并生成可导出的变更清单，用户验收后才写回店铺",
+    "按规则批量调整变体价格与划线价（确认卡→试算→再写回）。不要用于导入 CSV 改价，也不要用于改标签/上下架/SEO。",
   systemPromptExtension: [
     "商品价格相关需求按下面的分工处理，不要跳步：",
     `1) 用户只想知道现在的价格、或想先看看「改完是多少」→ 调用 ${LIST_VARIANT_PRICES_TOOL_NAME}（只读，可带 priceMode/priceValue 做试算）。`,

@@ -20,7 +20,7 @@ export type BulkPriceEditFormPayload = {
 export const bulkPriceEditFormTool = new DynamicStructuredTool({
   name: OPEN_BULK_PRICE_EDIT_FORM_TOOL_NAME,
   description:
-    "打开「批量调整变体价格」确认卡片。当用户要按规则批量改价或改划线价（如「这批商品降价 10%」「把原价写成划线价」）时调用。调用后不会修改任何商品。",
+    "打开「批量调整变体价格」确认卡片。用户要按规则批量改价/划线价（降价 10%、涨 5 元、统一售价等）时用。不要用于导入表格、改 SEO/vendor/合集，也不要用于改标签或上下架。调用后不会修改任何商品。",
   schema: z.object({
     products: z
       .array(

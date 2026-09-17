@@ -11,6 +11,7 @@ import type { ManagedAiLaunchContext } from "../../../lib/managedAiLaunchContext
 import type { ManagedAiOutputParseResult } from "../../../lib/managedAiOutputRuntime";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import type { WorkspaceActionsPayload } from "../../../lib/workspaceSuggestedActions";
 
 export type WorkspacePanel = "home" | "dashboard" | "chat" | "skills" | "automation" | "tasks";
 export type AutomationView = "configured" | "history" | "templates";
@@ -51,8 +52,8 @@ export type WorkspaceConversationMessage = {
   productQualityCardPayload?: ProductQualityFormPayload;
   healthDiagnosisCard?: boolean;
   healthDiagnosisCardPayload?: HealthDiagnosisFormPayload;
-  /** 能力总览下方可点推荐操作（与底部推荐同源） */
-  workspaceActions?: boolean;
+  /** 回复下方可点推荐：true=全部；{ keys }=按对话过滤 */
+  workspaceActions?: WorkspaceActionsPayload;
   taskProposal?: TaskProposalPayload;
   taskRun?: TaskRunPayload;
   aiTask?: AITaskItem;

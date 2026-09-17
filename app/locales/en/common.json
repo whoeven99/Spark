@@ -4825,6 +4825,7 @@
         "recommended": "Recommended",
         "recommendedActions": "Recommended actions",
         "capabilityActionsTitle": "Click to start",
+        "capabilityFollowupTitle": "Pick one to continue",
         "recommend": {
           "titleWithProduct": "Recommended for the selected products",
           "createsTask": "Creates task",
@@ -5531,6 +5532,8 @@
         "currentTime": "Checking the current time",
         "inventoryHealth": "Checking inventory health",
         "shopInfo": "Reading store information",
+        "shopMetrics": "Querying store metrics",
+        "suggestNextActions": "Preparing next steps",
         "abandonmentRate": "Analyzing abandonment rate",
         "averageOrderValue": "Calculating average order value",
         "conversionRate": "Analyzing conversion rate",

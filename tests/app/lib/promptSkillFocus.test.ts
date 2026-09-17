@@ -27,7 +27,10 @@ describe("promptSkillFocus", () => {
   it("routes freeform SEO / inventory / today pulse phrases", () => {
     expect(skillNamesFromUserText("帮我给店铺做一次 SEO 体检")).toContain("seoAudit");
     expect(skillNamesFromUserText("检查库存健康情况")).toContain("shopOperations");
-    expect(skillNamesFromUserText("今天店里怎么样")).toEqual([
+    // 笼统「怎么样」不再灌诊断卡 extension；点推荐 todayPulse 仍走 focus
+    expect(skillNamesFromUserText("今天店里怎么样")).toEqual([]);
+    expect(skillNamesFromUserText("我的店铺目前怎么样")).toEqual([]);
+    expect(skillNamesFromUserText("打开今日健康诊断")).toEqual([
       "shopOperations",
       "healthDiagnosisForm",
     ]);

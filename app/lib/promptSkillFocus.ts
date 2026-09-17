@@ -91,9 +91,10 @@ const HEURISTIC_RULES: Array<{ skills: readonly string[]; patterns: RegExp[] }> 
       /健康诊断/,
       /有什么.*风险/,
       /今天.*要处理/,
-      /店铺.*健康/,
-      /今天店里怎么样/,
-      /how('s| is) (my |the )?store today/i,
+      /店铺健康检查/,
+      /健康检查/,
+      /health\s*(check|diagnosis|monitor)/i,
+      /what.*(todo|to-do|risk)/i,
     ],
   },
   {

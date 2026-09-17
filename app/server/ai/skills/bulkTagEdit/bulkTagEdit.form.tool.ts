@@ -18,7 +18,7 @@ export type BulkTagEditFormPayload = {
 export const bulkTagEditFormTool = new DynamicStructuredTool({
   name: OPEN_BULK_TAG_EDIT_FORM_TOOL_NAME,
   description:
-    "打开「批量修改商品标签」确认卡片。当用户要批量给商品加标签、去标签或按前缀清理标签（如「这批商品打上夏季清仓」「把 sale- 开头的标签都清掉」）时调用。调用后不会修改任何商品。",
+    "打开「批量修改商品标签」确认卡片。批量加标/去标/按前缀清理时用。不要用于改价、上下架或导入表格。调用后不会修改任何商品。",
   schema: z.object({
     products: z
       .array(

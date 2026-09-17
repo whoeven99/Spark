@@ -14,7 +14,7 @@ export const OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME = "open_product_improve_form";
 export const productImproveFormTool = new DynamicStructuredTool({
   name: OPEN_PRODUCT_IMPROVE_FORM_TOOL_NAME,
   description:
-    "当用户明确表示要生成、撰写或优化商品标题/描述/营销文案，或要在卡片里选商品并确认后再生成时使用。根据对话尽量填入 productId、targetLanguage；不确定的字段可留空由用户在卡片内补全。不要在用户仅闲聊或未提及商品文案时调用。",
+    "生成/优化商品标题、描述等营销文案时用（卡片确认后再生成）。不要用于翻译图片上的文字（用 open_picture_translate_form），也不要用于文生图或改价/打标。",
   schema: z.object({
     productId: z
       .string()
