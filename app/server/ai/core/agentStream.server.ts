@@ -10,6 +10,7 @@ import {
   extractMessageText,
   extractMessageThinking,
   extractMessagesContext,
+  sliceMessagesAfterLastHuman,
 } from "../utils/langchainMessageText";
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
 import {
@@ -57,6 +58,7 @@ import {
   reconcileReplyWithChatCards,
   resolveMissingChatCardsWithLlm,
 } from "./resolveChatCardIntent.server";
+import { isCatalogRuleEditUserIntent } from "../../../lib/chatCardFallback";
 import { isCapabilityOverviewUserIntent } from "../../../lib/capabilityActionsIntent";
 import {
   taskProposalFromBatchTasksPayload,
@@ -600,13 +602,20 @@ export function invokeChatAgentStream(
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const uiPayloads: Record<string, any> = {};
+        const currentTurnMessages = sliceMessagesAfterLastHuman(resultMessages) as BaseMessage[];
         for (const def of activeDefs) {
           if (def.extractUIPayload && def.uiPayloadKey) {
-            const payload = def.extractUIPayload(resultMessages, lastUserText, finalReply);
+            const payload = def.extractUIPayload(currentTurnMessages, lastUserText, finalReply);
             if (payload !== undefined) {
               const skipProductImprovePayload =
                 def.name === "productImprove" &&
                 shouldSuppressProductImproveForBatch(lastUserText);
+              const skipBatchTasksCard =
+                def.name === "batchTasksForm" &&
+                isCatalogRuleEditUserIntent(lastUserText);
+              if (skipBatchTasksCard) {
+                continue;
+              }
               if (!skipProductImprovePayload) {
                 uiPayloads[def.uiPayloadKey] = payload;
               }
@@ -719,7 +728,7 @@ export function invokeChatAgentStream(
         }
         for (const def of activePlaybookDefs) {
           if (def.extractUIPayload && def.uiPayloadKey) {
-            const payload = def.extractUIPayload(resultMessages, lastUserText, finalReply);
+            const payload = def.extractUIPayload(currentTurnMessages, lastUserText, finalReply);
             if (payload !== undefined) {
               uiPayloads[def.uiPayloadKey] = payload;
             }

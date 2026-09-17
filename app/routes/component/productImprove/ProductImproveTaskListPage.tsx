@@ -322,6 +322,7 @@ export function ProductImproveTaskListPage({
       <div ref={listTopRef} />
       {selectedTask ? (
         <ProductImproveTaskDetailPage
+          key={selectedTask.id}
           task={selectedTask}
           locationSearch={locationSearch}
           onBack={() => onSelectTaskId(null)}

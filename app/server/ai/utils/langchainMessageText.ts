@@ -1,4 +1,4 @@
-import type { BaseMessage } from "@langchain/core/messages";
+import { HumanMessage, type BaseMessage } from "@langchain/core/messages";
 
 /**
  * 从 LangChain BaseMessage 提取模型思考/推理内容。
@@ -62,6 +62,19 @@ export function extractMessageText(message: BaseMessage): string {
       .join("");
   }
   return "";
+}
+
+/** 只保留最近一条用户消息之后的内容，避免把上一轮工具开卡当成这一轮。 */
+export function sliceMessagesAfterLastHuman(messages: unknown[]): unknown[] {
+  let lastHuman = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (HumanMessage.isInstance(messages[i])) {
+      lastHuman = i;
+      break;
+    }
+  }
+  if (lastHuman < 0) return messages;
+  return messages.slice(lastHuman + 1);
 }
 
 /** 拼接对话中的非空文本，截断长度供兜底模型上下文使用。 */

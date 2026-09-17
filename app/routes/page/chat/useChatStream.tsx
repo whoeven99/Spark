@@ -16,7 +16,6 @@ import {
   type BatchTaskProduct,
 } from "../../../lib/batchTasksFormPayload";
 import {
-  buildBatchProductImproveProposal,
   buildImageGenerationProposal,
   buildSinglePictureTranslateProposal,
   buildSingleProductImproveProposal,
@@ -25,6 +24,7 @@ import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
 } from "../../../lib/taskProposalPayload";
+import { shouldKeepExistingTaskProposal } from "../../../lib/chatTaskProposalGuard";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import type { SkillStepProgress } from "./chatStreamUtils";
 
@@ -283,6 +283,9 @@ export function useChatStream() {
       /** 应用通用提案卡（合并工作台上下文，并替换单商品即时卡） */
       const applyTaskProposal = (proposal: TaskProposalPayload | null) => {
         if (!proposal) return;
+        if (shouldKeepExistingTaskProposal(snapshotRef.current.taskProposal, proposal)) {
+          return;
+        }
         const merged = mergeTaskProposalTargets(
           proposal,
           workspaceBatchProducts,
@@ -601,17 +604,6 @@ export function useChatStream() {
                     taskProposalFromBatchTasksPayload(
                       coerceBatchTasksFormPayload(ui.batchTasksCard),
                     ),
-                  );
-                } else if (
-                  ((preferBatchCard && workspaceBatchProducts.length >= 2) ||
-                    workspaceProductQuery != null) &&
-                  !snapshotRef.current.taskProposal
-                ) {
-                  // 工作台已选 ≥2 个商品（或按条件圈定）但服务端未发卡片：客户端兜底合成通用提案卡
-                  applyTaskProposal(
-                    buildBatchProductImproveProposal({
-                      products: workspaceBatchProducts,
-                    }),
                   );
                 }
 

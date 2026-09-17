@@ -86,6 +86,19 @@ describe("buildChatCardPayloadFromIntent", () => {
     expect(payloads.healthDiagnosisCard).toBeDefined();
   });
 
+  it("does not inject a copy card when the user asked to change prices", () => {
+    const payloads = buildChatCardPayloadFromIntent(
+      {
+        cardType: "batch_tasks_form",
+        shouldShowCard: true,
+        assistantClaimsCardOpened: true,
+        batchTaskType: "product_improve",
+      },
+      "[工作台上下文]\n- 已选商品（共 2 个）：\n  • A [ID: gid://shopify/Product/1]\n  • B [ID: gid://shopify/Product/2]\n\n[用户消息]\n帮我改价涨 10%",
+    );
+    expect(payloads).toEqual({});
+  });
+
   it("returns empty when cardType is none", () => {
     const payloads = buildChatCardPayloadFromIntent(
       {
@@ -162,6 +175,14 @@ describe("resolveDeterministicTaskProposalForTurn", () => {
   it("opens a rule bulk-price card from recommend phrasing, not import", () => {
     const proposal = resolveDeterministicTaskProposalForTurn({
       lastUserText: "帮我批量调整商品价格，先确认调价规则和商品范围，再给我变更预览，不要直接写回。",
+      claimed: false,
+    });
+    expect(proposal?.skillId).toBe(BULK_PRICE_EDIT_SKILL_ID);
+  });
+
+  it("opens a bulk-price card from short 改价 phrasing", () => {
+    const proposal = resolveDeterministicTaskProposalForTurn({
+      lastUserText: "帮我改价，涨 10%",
       claimed: false,
     });
     expect(proposal?.skillId).toBe(BULK_PRICE_EDIT_SKILL_ID);

@@ -373,16 +373,7 @@ export function ProductImproveTaskDetailPage({
   localStatusRef.current = localStatus;
 
   useEffect(() => {
-    if (shouldRetainLocalAiTaskStatus(localStatusRef.current, task.status)) {
-      return;
-    }
     setLocalStatus(task.status);
-  }, [task.status]);
-
-  useEffect(() => {
-    if (shouldRetainLocalAiTaskStatus(localStatusRef.current, task.status)) {
-      return;
-    }
     setLocalResult(task.result);
     const nextRecords = buildInitialResultRecords(task);
     if (nextRecords[0]) {
@@ -390,7 +381,41 @@ export function ProductImproveTaskDetailPage({
     }
     setResultRecords(nextRecords);
     setActiveRecordId(nextRecords[0]?.id ?? "");
-  }, [t, task]);
+    setRefineError(null);
+    setApplyError(null);
+  }, [task.id, t]);
+
+  useEffect(() => {
+    if (shouldRetainLocalAiTaskStatus(localStatusRef.current, task.status)) {
+      return;
+    }
+    setLocalStatus(task.status);
+  }, [task.status, task.id]);
+
+  useEffect(() => {
+    if (shouldRetainLocalAiTaskStatus(localStatusRef.current, task.status)) {
+      return;
+    }
+    setLocalResult(task.result);
+    setResultRecords((prev) => {
+      if (prev.some((record) => !record.id.startsWith(`${task.id}-`))) {
+        const nextRecords = buildInitialResultRecords(task);
+        if (nextRecords[0]) {
+          nextRecords[0].sourceLabel = t("productImproveStage1.recordSourceInitial");
+        }
+        return nextRecords;
+      }
+      if (prev.length > 1) return prev;
+      const nextRecords = buildInitialResultRecords(task);
+      if (nextRecords[0]) {
+        nextRecords[0].sourceLabel = t("productImproveStage1.recordSourceInitial");
+      }
+      return nextRecords;
+    });
+    setActiveRecordId((current) =>
+      current.startsWith(`${task.id}-`) ? current : `${task.id}-v1`,
+    );
+  }, [t, task.result, task.status, task.id, task.completedAt]);
 
   useEffect(() => {
     if (!draftHighlight) return;

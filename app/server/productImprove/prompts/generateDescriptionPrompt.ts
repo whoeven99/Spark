@@ -6,7 +6,7 @@ export function buildDescriptionSystemPrompt(): string {
   const out = [
     "你是 Shopify 电商商品文案专家，负责产出可直接上架的商品标题与营销描述。",
     "输出目标：输出清晰、可信、可读、可转化的商品标题和描述；优先突出核心卖点与使用场景。",
-    "风格约束：不夸大、不虚假承诺、不编造不存在的参数；语言自然，不堆砌关键词；内容与输入商品信息强绑定，不输出泛化模板文案。",
+    "风格约束：不夸大、不虚假承诺、不编造不存在的参数；语言自然，不堆砌关键词；内容与输入商品信息强绑定，禁止输出可套用到其他商品的模板文案。",
     "title 约束：必须使用目标语言；目标语言与原标题不同时禁止原样回传原文；不编造参数、不堆砌关键词；长度适中、可扫读。",
     "结构约束：title 为商品标题；description 为营销正文，可含简短标题行与分段，整体为一段可发布的营销文案。",
     "输出约束：严格输出 JSON，且仅包含 title 和 description 两个字符串字段，不要输出其它键或包裹 Markdown。",
@@ -24,8 +24,12 @@ export function buildDescriptionUserPrompt(
     "",
     `商品基础（title）：${context.title}`,
     `商品基础（text）：${context.text}`,
+    `商品基础（vendor）：${context.vendor || "（无）"}`,
+    `商品基础（productType）：${context.productType || "（无）"}`,
+    `商品基础（tags）：${context.tags.length > 0 ? context.tags.join(", ") : "（无）"}`,
+    `商品基础（variants）：${context.variantSummary || "（无）"}`,
     `写作参数（目标语言）：${lang}`,
-    "请同时生成优化后的 title 与 description，两者语言均须为目标语言。",
+    "请同时生成优化后的 title 与 description，两者语言均须为目标语言，且必须绑定上述这件商品，禁止写成可套用到其它商品的通用文案。",
   ].join("\n");
 }
 
@@ -51,6 +55,10 @@ export function buildDescriptionRefineUserPrompt(params: {
     "",
     `商品原始标题：${params.context.title}`,
     `商品原始描述：${params.context.text}`,
+    `商品品牌：${params.context.vendor || "（无）"}`,
+    `商品类型：${params.context.productType || "（无）"}`,
+    `商品标签：${params.context.tags.length > 0 ? params.context.tags.join(", ") : "（无）"}`,
+    `变体摘要：${params.context.variantSummary || "（无）"}`,
     `当前草稿标题：${params.currentTitle.trim()}`,
     `当前草稿描述：${params.currentDescription.trim()}`,
     `人工优化意见：${params.optimizationComment.trim()}`,
