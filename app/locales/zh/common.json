@@ -4825,7 +4825,7 @@
         "recommended": "推荐",
         "recommendedActions": "推荐操作",
         "capabilityActionsTitle": "点一项开始",
-        "capabilityFollowupTitle": "想继续可以点",
+        "capabilityRelatedTitle": "其他推荐操作",
         "recommend": {
           "titleWithProduct": "针对已选商品的推荐操作",
           "createsTask": "会建任务",

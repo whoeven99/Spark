@@ -4825,7 +4825,7 @@
         "recommended": "Recommended",
         "recommendedActions": "Recommended actions",
         "capabilityActionsTitle": "Click to start",
-        "capabilityFollowupTitle": "Pick one to continue",
+        "capabilityRelatedTitle": "Other things you can do",
         "recommend": {
           "titleWithProduct": "Recommended for the selected products",
           "createsTask": "Creates task",

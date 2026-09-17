@@ -5,6 +5,7 @@ import {
   parseWorkspaceActionsPayload,
   resolveWorkspaceActionsForTurn,
   selectSuggestedActionKeys,
+  workspaceActionsRelatedKeys,
 } from "../../../app/lib/workspaceSuggestedActions";
 
 describe("selectSuggestedActionKeys", () => {
@@ -81,13 +82,24 @@ describe("resolveWorkspaceActionsForTurn", () => {
         modelPicked: { keys: ["qualityScore", "seoAudit"] },
       }),
     ).toEqual({ keys: ["qualityScore", "seoAudit"] });
+  });
 
+  it("demotes keyword matches the model did not pick to relatedKeys", () => {
     expect(
       resolveWorkspaceActionsForTurn({
         userText: "我的店铺目前怎么样",
         modelPicked: { keys: ["qualityScore"] },
       }),
-    ).toEqual({ keys: ["qualityScore"] });
+    ).toEqual({ keys: ["qualityScore"], relatedKeys: ["todayPulse", "seoAudit"] });
+  });
+
+  it("does not repeat a model-picked key under relatedKeys", () => {
+    expect(
+      resolveWorkspaceActionsForTurn({
+        userText: "我的店铺目前怎么样",
+        modelPicked: { keys: ["todayPulse", "seoAudit"] },
+      }),
+    ).toEqual({ keys: ["todayPulse", "seoAudit"] });
   });
 
   it("still drops the model's keys once a card opened", () => {
@@ -116,6 +128,17 @@ describe("parseWorkspaceActionsPayload / filter groups", () => {
     expect(parseWorkspaceActionsPayload({ keys: ["bulkPriceEdit", "nope"] })).toEqual({
       keys: ["bulkPriceEdit"],
     });
+  });
+
+  it("round-trips relatedKeys and drops ones already in keys", () => {
+    expect(
+      parseWorkspaceActionsPayload({
+        keys: ["qualityScore"],
+        relatedKeys: ["qualityScore", "seoAudit", "nope"],
+      }),
+    ).toEqual({ keys: ["qualityScore"], relatedKeys: ["seoAudit"] });
+    expect(workspaceActionsRelatedKeys({ keys: ["qualityScore"] })).toEqual([]);
+    expect(workspaceActionsRelatedKeys(true)).toEqual([]);
   });
 
   it("filters recommend groups to related keys", () => {

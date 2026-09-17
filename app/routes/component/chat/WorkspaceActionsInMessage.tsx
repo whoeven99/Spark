@@ -1,10 +1,14 @@
 import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { buildWorkspaceRecommendedGroups } from "../../../lib/workspaceRecommendedActions";
+import {
+  buildWorkspaceRecommendedGroups,
+  type WorkspaceRecommendedAction,
+} from "../../../lib/workspaceRecommendedActions";
 import {
   filterWorkspaceRecommendedGroups,
   workspaceActionsActionKeys,
+  workspaceActionsRelatedKeys,
   type WorkspaceActionsPayload,
 } from "../../../lib/workspaceSuggestedActions";
 import { shopifyUi } from "../../page/workspace/styles";
@@ -94,49 +98,54 @@ export function WorkspaceActionsInMessage({
   onAction,
 }: WorkspaceActionsInMessageProps) {
   const { t } = useTranslation();
-  const groups = useMemo(() => {
-    const actionKeys = workspaceActionsActionKeys(actions);
-    return filterWorkspaceRecommendedGroups(
-      buildWorkspaceRecommendedGroups(t, hasProductContext),
-      actionKeys,
-    );
+  const isOverview = workspaceActionsActionKeys(actions) === "all";
+  const { groups, relatedItems } = useMemo(() => {
+    const all = buildWorkspaceRecommendedGroups(t, hasProductContext);
+    const related = workspaceActionsRelatedKeys(actions);
+    return {
+      groups: filterWorkspaceRecommendedGroups(all, workspaceActionsActionKeys(actions)),
+      relatedItems: filterWorkspaceRecommendedGroups(all, related).flatMap((group) => group.items),
+    };
   }, [t, hasProductContext, actions]);
-  const actionKeys = workspaceActionsActionKeys(actions);
-  const titleKey =
-    actionKeys === "all"
-      ? "workspace.shell.chat.capabilityActionsTitle"
-      : "workspace.shell.chat.capabilityFollowupTitle";
 
   if (groups.length === 0) return null;
 
+  const renderChip = (action: WorkspaceRecommendedAction) => (
+    <button
+      key={action.key}
+      type="button"
+      className="workspace-recommended-action"
+      style={disabled ? chipDisabledStyle : chipStyle}
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        onAction(action.prompt, action.key);
+      }}
+    >
+      <span>{action.label}</span>
+      {action.createsTask ? (
+        <span style={badgeStyle}>{t("workspace.shell.chat.recommend.createsTask")}</span>
+      ) : null}
+    </button>
+  );
+
   return (
     <div style={wrapStyle} data-testid="workspace-actions-in-message">
-      <div style={titleStyle}>{t(titleKey)}</div>
+      {isOverview ? (
+        <div style={titleStyle}>{t("workspace.shell.chat.capabilityActionsTitle")}</div>
+      ) : null}
       {groups.map((group) => (
         <div key={group.key} style={groupStyle}>
           <div style={groupLabelStyle}>{group.label}</div>
-          <div style={chipRowStyle}>
-            {group.items.map((action) => (
-              <button
-                key={action.key}
-                type="button"
-                className="workspace-recommended-action"
-                style={disabled ? chipDisabledStyle : chipStyle}
-                disabled={disabled}
-                onClick={() => {
-                  if (disabled) return;
-                  onAction(action.prompt, action.key);
-                }}
-              >
-                <span>{action.label}</span>
-                {action.createsTask ? (
-                  <span style={badgeStyle}>{t("workspace.shell.chat.recommend.createsTask")}</span>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <div style={chipRowStyle}>{group.items.map(renderChip)}</div>
         </div>
       ))}
+      {relatedItems.length > 0 ? (
+        <div style={groupStyle} data-testid="workspace-actions-related">
+          <div style={groupLabelStyle}>{t("workspace.shell.chat.capabilityRelatedTitle")}</div>
+          <div style={chipRowStyle}>{relatedItems.map(renderChip)}</div>
+        </div>
+      ) : null}
     </div>
   );
 }
