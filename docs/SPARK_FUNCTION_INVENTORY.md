@@ -43,8 +43,8 @@
 
 | 功能域 | 面向用户的能力 | 主要入口 |
 | --- | --- | --- |
-| AI 助手 | 自然语言问答、读取店铺数据、打开任务卡片、运行 Playbook、带文件上下文分析 | `/app`、`/chat-stream` |
-| 首页工作台 | 问候、今日巡检状态、经营摘要、推荐 Playbook、最近任务、快捷提问 | `/app` |
+| AI 助手 | 自然语言问答、读取店铺数据、打开任务卡片、带文件上下文分析（Playbook 已注册但 `PLAYBOOKS_ENABLED=false`，商户侧未开） | `/app`、`/chat-stream` |
+| 首页工作台 | 问候、今日巡检状态、经营摘要、推荐操作（非 Playbook 快捷条）、最近任务、快捷提问 | `/app` |
 | 经营概览 | 销售额、订单数、退款率、库存风险、经营提醒、关键趋势、建议 | `/app/today` |
 | 健康度监测 | 可信度健康、目标达标性、异常原因、受影响模块与建议动作 | `/app/health-monitor` |
 | 待办中心 | 统一查看经营任务与 AI 任务，处理状态流转、结果和历史记录 | `/app/tasks-v2` |
@@ -53,22 +53,21 @@
 | 商品质量评分 | 评估商品页质量、给出优化建议 | AI 工具 / 商品优化链路 |
 | 图片工作台 | 文生图、图片翻译、图片任务创建、结果查看 | `/app/studio/image` |
 | 统一任务中心 | 合并 AI 任务，查看当前/历史、日志、结果、失败重试入口 | `/app/tasks-v2` |
-| Playbook | 经营体检、库存止损、退款治理、上新流水线等多步骤运营方案 | AI 助手 / 首页推荐 |
-| 自动化 | 每日经营巡检、执行历史、推荐 Playbook 模板 | `/api/automation-overview`、首页/助手 |
-| 计费与额度 | 套餐订阅、按量购包、取消订阅、Credit 余额与用量 | `/app/settings/billing` |
+| Playbook | 四个只读方案已注册（经营体检 / 上新 / 库存止损 / 退款治理），商户侧总开关关闭 | 代码：`app/server/ai/playbooks/`；前端快捷条已移除 |
+| 自动化 | 每日经营巡检、执行历史；推荐动作走工作台推荐组（非 Playbook） | `/api/automation-overview`、首页/助手 |
+| 计费与额度 | 套餐订阅、按量购包、取消订阅、Credit 余额与用量 | `/app/account`（旧 `/app/settings/billing` 重定向） |
 | 数据工具 | 历史订单回补、同步状态查看、订单/客户/库存/履约记录数 | `/app/settings/data` |
 | Shopify 报表 | 用 ShopifyQL 查询官方历史指标（销售/退款/成本与利润/客户/库存/履约/店面漏斗） | `/app/settings/shopify-reports` |
-| 广告 Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads-catalog` |
-| Google Pixel 向导 | Nabu 风格三步向导：添加像素（Conversion ID + Label）/ 开启 App Embed 并检测状态 / 创建像素（选择事件、增强型转化、purchase Custom Pixel） | `/app/ads/google-pixel` |
+| 广告 Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads`（旧 `/app/ads-catalog` 重定向） |
+| Google Pixel 向导 | Nabu 风格三步向导：添加像素（Conversion ID + Label）/ 开启 App Embed 并检测状态 / 创建像素（选择事件、增强型转化、purchase Custom Pixel）；**审核期扩展 `.toml.off`，向导不生成 purchase 粘贴** | `/app/ads/google-pixel` |
 | Google Pixel Activity | 店面 gtag / purchase Custom Pixel 事件双写阿里云 SLS；商户页展示卡片、日趋势、漏斗与事件明细 | `/app/ads/google-pixel/activity` |
 | Today 二级详情 | ROI、流量、转化、订单等经营详情页，按统一模板承接图表、对象拆解和 AI 下钻 | `/app/today/roi` 等 |
-| Ads Catalog | Meta / Google / TikTok 商品目录 OAuth 与同步；Google GMC↔Ads 关联、AW 配置、同意门禁店面再营销及实验性 purchase Custom Pixel | `/app/ads-catalog` |
-| 投放表现图表 | Meta / Google / TikTok 广告系列→广告组→广告实时指标（7/14/30 天）；TikTok 支持沙盒开关 | `/app/ads-catalog?tab=credentials&platform=...` |
-| 物流集成配置 | FedEx、顺丰凭证配置 | `/app/settings/logistics` |
+| 投放表现图表 | Meta / Google / TikTok 广告系列→广告组→广告实时指标（7/14/30 天）；TikTok 支持沙盒开关 | `/app/ads` 投放表现 |
+| 物流集成配置 | FedEx、顺丰凭证配置（本地 JSON，Render 重启会丢） | `/app/settings/logistics` |
 | 用户反馈 | 提交建议或问题 | `/app/settings/feedback` |
 | PageSpeed Insights | 对公网 URL 跑 Google 实验室分析，展示性能/无障碍/SEO/最佳做法分数、指标与审核项 | `/app/settings/pagespeed` |
 | 邮件与通知 | 安装、卸载、订阅、购包、任务状态等邮件与飞书运营通知 | 后台服务 / Webhook |
-| Webhook 同步 | 订单、退款、库存、履约、订阅、购包、卸载、scope 更新、GDPR 合规（`/webhooks/compliance`，当前仅 ack） | `app/routes/webhooks.*` |
+| Webhook 同步 | 订单、退款、库存（test toml）、履约、订阅、购包、卸载、scope 更新、GDPR 合规（`/webhooks/compliance`：`customers/redact` / `shop/redact` 走真实擦除/清数） | `app/routes/webhooks.*` |
 | Web Pixel | 浏览、购物车、checkout 等行为采集 | `extensions/ciwi-spark-web-pixel/`、`/api/pixel-ingest` |
 | 内部 Admin | 店铺、用量、订阅、收入、Agent 执行、客服、日志、巡检、TSF 翻译观测、定价 | `/admin` |
 
@@ -76,12 +75,14 @@
 
 | 一级目的地 | 应放能力 | 用户心智 |
 | --- | --- | --- |
-| Ask | AI 对话、文件上下文、推荐动作、最近任务 | 我想问 Spark 或让它开始做事 |
-| Today | 经营概览、ROI/流量/转化/订单详情、趋势深钻、经营判断 | 看结果、理解为什么赚钱或没赚钱 |
-| Health Monitor | 可信度健康、目标达标性、异常原因、建议动作 | 判断数据是否可信、结果是否达标 |
-| Studio | 商品文案、图片生成、图片翻译、质量评分 | 生产和优化内容资产 |
-| Tasks | AI 异步任务、日志、结果、审核、失败重试 | 所有后台工作跑到哪了 |
-| Settings | 计费、数据同步、官方报表查询、广告、物流、反馈 | 低频配置和基础设施 |
+| Ask（`/app`，prod 首页） | AI 对话、文件上下文、推荐动作、最近任务 | 我想问 Spark 或让它开始做事 |
+| Tasks | AI 异步任务、日志、结果、审核、失败重试 | 所有后台工作跑到哪了（**prod 一级导航保留**） |
+| Account | 套餐订阅、Credit、推荐码 | 账户与计费（**prod 一级导航保留**） |
+| Today | 经营概览、ROI/流量/转化/订单详情 | 看结果（**仅测/本地导航；prod 可 URL 直达**） |
+| Health Monitor | 可信度健康、目标达标性、异常原因 | 数据是否可信（测/本地导航） |
+| Studio | 商品文案、图片生成、图片翻译 | 内容生产（测/本地导航） |
+| Ads | Catalog / 投放表现 / 归因 / 连接 | 广告（测/本地导航；prod URL 可直达） |
+| Settings | 数据同步、官方报表、物流、反馈 | 低频配置（测/本地导航；计费已迁 Account） |
 | 内部 Admin | 运营监控、客服、收入、日志、定价、TSF 观测 | 内部团队管理 Spark |
 
 ## 首页目标
@@ -97,6 +98,6 @@
 1. 顶部状态：问候、日期、今日巡检状态、数据更新时间。
 2. 经营摘要：销售额、订单数、退款率、库存风险、待处理任务等关键指标。
 3. 重点风险：最多 3 条经营提醒，每条带证据和跳转。
-4. 推荐动作：根据诊断推荐 Playbook 或快捷操作。
+4. 推荐动作：根据诊断推荐工作台快捷操作（Playbook 商户侧未开）。
 5. 最近任务：展示运行中、待审核、失败或最近完成的任务。
 6. AI 输入：用于追问、发起任务或附加商品/订单/文件上下文。

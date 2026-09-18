@@ -17,7 +17,7 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - **主应用（仓库根目录）**：React 18、React Router 7 文件路由、Vite、Shopify App Bridge / Web Components、Node 服务端，默认由 Shopify CLI 启动。
 - **Admin 后台（`admin/`）**：Express API（本地默认 `3099`）+ Vite React 前端（本地默认 `5174`）。它有独立的 `package.json`、依赖和构建流程。
 - **Web Pixel 扩展（`extensions/ciwi-spark-web-pixel/`）**：采集 Shopify analytics/custom events，经主应用 `/api/pixel-ingest` 上报。**审核期** `shopify.extension.toml.off`，不部署。
-- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：受 Shopify 单应用 Theme Extension 数量上限约束（每应用仅 1 个），同一扩展包内包含相互隔离的 App Embed：TikTok Pixel、Google Remarketing、Ciwi Image Switcher。**审核期** 整包 `shopify.extension.toml.off`，`blocks/*.liquid` 均在 `_disabled_pixel_blocks/`，不部署。过审后还原 toml 与 liquid。TikTok 配置经 `spark_tiktok.pixel_config` 下发；Google 再营销/转化配置经 app-owned Shop metafield `google_remarketing_config` 下发（含 `tagId`=AW-数字、可选 `conversionLabel`、`enhancedConversions`，配置了 label 时店面事件按 `send_to=AW-ID/label` 上报为 Google Ads 转化），并受 Customer Privacy API 营销同意门禁控制；Image Switcher 经 App Proxy 做图片替换与 IP 地区跳转。不要再新增第二个 `type = "theme"` 扩展目录。Google Pixel 三步向导入口在 `/app/ads/google-pixel`（Nabu 风格：添加像素 / 开启 App Embed / 创建像素）；**审核期** 向导不再生成/展示 purchase Custom Pixel 粘贴。App Embed 启用状态经 `read_themes` 读取主题 `config/settings_data.json` 检测。
+- **Theme App Extension（`extensions/spark-tiktok-pixel/`）**：Shopify 限每应用仅 1 个 theme 扩展，所以同一包内放三个相互隔离的 App Embed：TikTok Pixel、Google Remarketing、Ciwi Image Switcher。**不要再新增第二个 `type = "theme"` 扩展目录。** **审核期** 整包 `shopify.extension.toml.off`，`blocks/*.liquid` 均在 `_disabled_pixel_blocks/`，不部署；过审后还原 toml 与 liquid。各 Embed 的配置下发口径与 Google Pixel 向导见 `app/server/adsCatalog/agent.md`。
 
 重要边界：
 
@@ -32,10 +32,11 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 - 仓库常用 toml：`shopify.app.test.toml`（AiAssistant-Test → Render Test）、`shopify.app.prod.toml`（→ Render `Spark-Prod` / `spark-prod.onrender.com`）、`shopify.app.yw.toml`、`shopify.app.spark-zz.toml`（本地）；另可能有其它 `shopify.app.*.toml`。CI（`spark-deploy.yml`）可手动勾选发布 Spark Test / Spark Prod / Admin / Admin Test。**从零发布新 Shopify App 的步骤见 `docs/SHOPIFY_APP_PUBLISH.md`。**
 - **改了 toml 的 `scopes` 必须对该配置 `shopify app deploy`，且已安装的店铺会走一次重新授权**（Shopify 在下次进应用时弹权限页，商户不点同意就用不了新能力）。prod 现有 scope 里 `read_inventory` 是为真实 COGS / 利润报表加的；不要为「以后可能用得上」提前申请用不到的 scope，审核时要逐条解释。
 - **给商户用的那个 toml 必须自己订阅订单类 webhook，改完后对该配置 `shopify app deploy`。** `shopify.app.prod.toml` 已订阅 `orders/paid|cancelled`、`refunds/create`、`fulfillments/create|update`（另有订阅/购包/卸载/scope/GDPR）。**不订阅** `inventory_levels/update`（第一版不做库存镜像）。`shopify.app.test.toml` 与 yw / spark-zz 另订库存增量。只改 toml 不会生效。
-- Shopify **分发方式选定后不可改**。要装互不相关的真实店且走现有 Shopify Billing：必须是 **Public**（Listed 可搜索，Unlisted 只发链接；都要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节见 `docs/ROADMAP.md` 第七、八节。
+- Shopify **分发方式选定后不可改**。要装互不相关的真实店且走现有 Shopify Billing：必须是 **Public**（Listed 可搜索，Unlisted 只发链接；都要 App Store 审核）。**Custom** 只能装单店或同一 Plus 组织（或 transfer-disabled 开发店），**不能**用 Shopify 应用计费，也不能再改成 Public。不要为每个商家复制一个 Custom 应用。细节见 `docs/ROADMAP.md` **第八节**。
 - 卸载目前：通知 + **归档快照到 Blob** 后从 Turso **删除该店业务数据**（含 Session、订单镜像、对话、广告凭证、客服、`Account`、`CommonEventLog` 等）；`PromoClaimLedger` / `ReferralClaim` / `ReferralInstall`（shopHash）保留以防安装福利与推荐码被薅。GDPR `shop/redact` 再跑一遍幂等清理；`customers/redact` 擦除客户镜像 PII。改 toml 后须对该配置 `shopify app deploy`。公开上架仍缺隐私政策页（需披露安装福利防滥用 hash 账本）。
 - 新装默认经 `ensureInstallPromoTokens` 自动发放安装福利 Token（账户页营销活动，默认 1,000,000；每店每活动一次，账本按 shopHash），无需手动领取。**推荐码**在订阅时填写，第一次带码且订阅确认成功后再入账一份 Token（一店一码，Admin `/referral-codes` 可配上限，默认 1,000,000）。Admin 可复制安装链接 `{SHOPIFY_APP_URL}/r/{CODE}`，点开后经 Shopify 安装；OAuth / 进应用时记 `ReferralInstall`（先到先得），卸载只擦明文店名。
 - 风控链路、回收期/长期 ROI，以及 Health Monitor「ROI 情况（短期和长期）」当前**不展示**；短期 ROI 仍在经营页，等产品公式再改计算。详情见 `docs/ROADMAP.md` 第七节。
+- 独立告警中心（`app/server/ai/skills/alerts/`）与统一写回治理层（`app/server/ai/writeBack/`）**尚未建立**；广告侧订单 UTM 归因已有，点击 ID（gclid/fbclid/ttclid）↔ 订单 join 未做。物流承运商凭证现为进程本地 JSON（`.data/logistics-provider-credentials.json`），Render 重启会丢，不要当生产核心路径。公开上架材料与缺口清单以 `docs/ROADMAP.md` 第七、八节为准。
 
 ## 2. 仓库地图
 
@@ -55,7 +56,7 @@ Spark/
 │  ├─ shopify.server.ts       Shopify 鉴权和 Admin API 初始化
 │  ├─ routes.ts               @react-router/fs-routes 入口
 │  └─ root.tsx                React Router 根组件
-├─ admin/                     独立 Express + Vite 管理后台
+├─ admin/                     独立 Express + Vite 管理后台（细则见 `admin/AGENTS.md`）
 ├─ extensions/                Shopify 扩展：Web Pixel + Theme（审核期均为 toml.off；过审后恢复 TikTok / Google Remarketing / Image Switcher）
 ├─ prisma/                    schema、迁移和计费种子 SQL
 ├─ tests/                     与 app/ 大体镜像的 Vitest 测试
@@ -83,7 +84,7 @@ Spark/
 | Today | `/app/today` | `app.today.*`：`_index` 经营驾驶舱；详情页含 `revenue` / `profit` / `cost` / `roi` / `traffic` / `conversion` 等。`orders` / `diagnosis` / `insights` 为兼容重定向（分别到 revenue / health-monitor 或 Today 详情）。**测环境页面入口；prod 走对话，不进导航** |
 | Health Monitor | `/app/health-monitor` | `app.health-monitor.tsx`，站点健康/可信度监测（总览走 `ensureDailySnapshotOverview`，`?view=detail` 才走 `ensureDailySnapshot`）。**测环境页面入口；prod 走对话，不进导航** |
 | Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
-| 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`；测/产导航都不展示，URL 仍可直达 |
+| 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`（当前 `ready` 3 + `chat` 4；`inventory` 等 10 个 domain 仍空）；测/产导航都不展示，URL 仍可直达 |
 | 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出。旧 `/app/tasks` 重定向到这里 |
 | 广告 | `/app/ads` | `app.ads.tsx` 左栏能力目录 + Outlet（样例 B）：总览 / 投放表现 / 归因 / 连接·同步目录 / 创建·编辑 / 目录同步任务；Pixel 审核期左栏隐藏。旧 `/app/ads-catalog`、`/app/studio/ads*`、`/app/insights/performance` 重定向至此。**仅测/本地导航；prod 不进导航，URL 仍可直达** |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
@@ -91,38 +92,32 @@ Spark/
 
 兼容层（不占一级导航）：`/app/insights*` 与旧投放洞察路径多为重定向到 Today 或 Ads Catalog；不要把 Insights 当作当前一级目的地。旧 `/app/home-v2` 重定向到 `/app`。
 
-Ask / 首页工作台上下文工具（聊天输入区）当前仅：**商品 / 订单 / 文章 / 文件**（`ContextTool = product \| article \| order \| file`）。已移除输入区 Playbook 快捷条；遗留 `prefillConstraint` query 只做 URL 清理、不再写入上下文。任务确认卡仍由 agent/SSE 的 `task_proposal` 产出。
+Ask / 首页工作台上下文工具（聊天输入区）当前仅：**商品 / 订单 / 文章 / 文件**（`ContextTool = product \| article \| order \| file`）。已移除输入区 Playbook 快捷条；遗留 `prefillConstraint` query 只做 URL 清理、不再写入上下文。任务确认卡仍由 agent/SSE 的 `task_proposal` 产出。四个只读 Playbook（`shopHealthCheck` / `productLaunchPipeline` / `inventoryRiskMitigation` / `refundIssueReview`）仍在 `app/server/ai/playbooks/` 注册，但 `PLAYBOOKS_ENABLED=false`，**不对商户开放**；恢复前勿假设对话能触发。
 
 Settings hub 之外还有若干可路由但不在 hub 卡片里的嵌入式页面：`/app/logistics/fedex/config`、`/app/logistics/sf/config`（承运商凭证表单，由 `app.settings.logistics.tsx` 内链）、`/app/feedback/suggestion`、`/app/ads/google-ads/start`、`/app/ads/google-merchant/start`（OAuth 启动页）。
 
-关键 HTTP 入口：
+关键 HTTP 入口。第一组是不能绕过的门禁，第二组只给定位线索（签名与参数 `rg` 路由文件）。
 
-- `POST /chat-stream`：`app/routes/chat-stream.ts` → `app/server/chat-stream.ts`，SSE 聊天入口。
-- `/api/ai-task*`、`/api/batch-ai-tasks`、`/api/unified-tasks`：异步任务创建、状态、日志与统一列表。
-- `/api/product-improve`、`/api/product-quality-score`、`/api/update-product-description`、`/api/product-search`、`/api/shop-locales`、`/api/shopify/objects`：商品内容优化、对象/商品查询与语言数据。
-- `/api/generate-image*`、`/api/picture-translate*`、`/api/image-proxy`：图片生成（含 `generate-image-prompt`）、图片翻译（含 `picture-translate-chat`）与图片代理读取。
-- `/api/ads-catalog*`、`/api/ads-create*`、`/api/ads-edit*`、`/api/ads-insights*`、`/api/ads-overview`（含 `link-status` GMC↔Ads 关联探测）：广告 Catalog（Meta/Google/TikTok OAuth、目录同步、TikTok Pixel/测试事件）、广告创建/编辑与广告洞察；OAuth 回调见 `ads.*.callback.tsx`（含 `google-ads`、`google-merchant`、`google-analytics`、`google-search-console`、`meta-ads`、`meta-catalog`、`tiktok-catalog`）。
-- `/api/ga4/*`、`/api/gsc/*`：Google Analytics 4 与 Search Console 的 auth-url、属性/站点列表、连接状态与断开。
-- `POST /api/pagespeed`：PageSpeed Insights 实验室分析（平台 API Key，不落库，同步等待）。
-- `/api/ai-capabilities`、`/api/upload-file`：AI 能力清单（由 Skill Manifest 派生）与工作台文件上传解析。
-- `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源（`context-resources` 类型为 product / article / order）。
-- `/api/automation-overview`：Today/自动化概览。
-- `GET /api/daily-pulse`：首页问候下一句经营结论。只 peek 当日快照，不跑 30 天诊断。
+**门禁：**
+
+- `POST /api/bulk-price-edit` / `bulk-tag-edit` / `bulk-status-edit`：分别是全仓库**唯一**会改 Shopify 商品价格 / 标签 / `status` 的地方。门禁一致：必须带 `confirm: true` 且任务处于 `pending_review`；Agent 回合内（chat-stream / Skill / dry-run）禁止走到这里。上下架只写 `ACTIVE` / `DRAFT`，不碰销售渠道发布。
+- `POST /api/product-import`：导入商品写回入口，门禁同上；编排已有 apply，不新增 GraphQL mutation。写回列：标题/正文、价格、成本、Tags、状态、Vendor/类型/SEO、Handle、合集、Metafield（有 definition 的标量及 `list.single_line_text_field`）、复制、归档、删除。不做：库存数量、用表格新建商品、销售渠道。删除需审核页额外确认。
+- `GET /api/daily-pulse`：首页问候下一句经营结论。只 peek 当日快照，**不跑 30 天诊断**。
 - `GET|POST /api/health-diagnosis`：对话内健康诊断卡。总览只走 `ensureDailySnapshotOverview` / peek，不要把卡接到完整 30 天诊断。
-- `POST /api/order-backfill`：对话诊断卡回补近 N 天订单（只写本店订单镜像，不改 Shopify 订单）。
-- `/api/unified-tasks`：统一任务列表。`sort=time_desc` 关掉定时任务置顶、纯按更新时间倒序（Tasks v2 用）；缺省仍是定时任务在前的旧口径，不要改缺省值。
-- `/api/task-proposal`：TaskProposal 确认卡的估算/执行入口（由聊天流里的 `task_proposal` 卡片触发，不是独立工具栏按钮）。
-- `POST /api/bulk-price-edit`：批量调价写回入口，是全仓库**唯一**会改 Shopify 商品价格的地方；必须带 `confirm: true` 且任务处于 `pending_review`。Agent 回合内（chat-stream / Skill / dry-run）禁止走到这里。
-- `POST /api/bulk-tag-edit`：批量打标写回入口，是全仓库**唯一**会改 Shopify 商品标签的地方；门禁与调价一致（`confirm: true` + `pending_review`）。
-- `POST /api/bulk-status-edit`：批量上下架写回入口，是全仓库**唯一**会改商品 `status` 为 ACTIVE/DRAFT 的地方；门禁同上。只写 `ACTIVE` / `DRAFT`，不碰销售渠道发布。
-- `POST /api/product-import`：导入商品写回入口；编排已有 apply，不新增 GraphQL mutation。门禁同上。写回列：标题/正文、价格、成本、Tags、状态、Vendor/类型/SEO、Handle、合集、Metafield（有 definition 的标量及 `list.single_line_text_field`）、复制、归档、删除。不做：库存数量、用表格新建商品、销售渠道。删除需审核页额外确认。
-- `/api/support`：客服会话入口。
-- `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
-- `/api/pixel-ingest`：Web Pixel 采集入口。
-- `GET /r/:code`：推荐码安装短链（公开，无 Shopify session）；写 cookie 后跳转 Shopify `oauth/install`。
-- `POST /api/internal/credit-migration`：翻译 App 迁入积分（HMAC，`CREDIT_MIGRATION_SECRET`；无 Shopify session）。
+- `/api/unified-tasks`：`sort=time_desc` 关掉定时任务置顶、纯按更新时间倒序（Tasks v2 用）；**缺省仍是定时任务在前的旧口径，不要改缺省值**。
+- `GET /r/:code`（推荐码安装短链，写 cookie 后跳转 `oauth/install`）与 `POST /api/internal/credit-migration`（翻译 App 迁入积分，HMAC + `CREDIT_MIGRATION_SECRET`）都**没有 Shopify session**，改动时不要假设有 `authenticate.admin`。
+
+**其余入口：**
+
+- `POST /chat-stream` → `app/server/chat-stream.ts`，SSE 聊天入口。
+- 任务：`/api/ai-task*`、`/api/batch-ai-tasks`、`/api/task-proposal`（聊天流 `task_proposal` 卡片的估算/执行入口，不是独立工具栏按钮）、`POST /api/order-backfill`（只写本店订单镜像，不改 Shopify 订单）。
+- 商品与内容：`/api/product-improve`、`/api/product-quality-score`、`/api/update-product-description`、`/api/product-search`、`/api/shop-locales`、`/api/shopify/objects`。
+- 视觉：`/api/generate-image*`、`/api/picture-translate*`、`/api/image-proxy`。
+- 广告：`/api/ads-catalog*`、`/api/ads-create*`、`/api/ads-edit*`、`/api/ads-insights*`、`/api/ads-overview`；OAuth 回调 `ads.*.callback.tsx`。细则见 `app/server/adsCatalog/agent.md`。
+- 外部分析：`/api/ga4/*`、`/api/gsc/*`（auth-url、属性/站点发现、连接状态与断开）、`POST /api/pagespeed`（平台 API Key，不落库）。
+- 工作台：`/api/ai-capabilities`（由 Skill Manifest 派生）、`/api/upload-file`、`/api/conversations*`、`/api/files*`、`/api/context-resources*`（product / article / order）、`/api/automation-overview`。
+- 其它：`/api/support`、`/api/feature-track`（写入 Aliyun SLS）、`/api/pixel-ingest`。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单（paid/cancelled）、退款、库存、履约、GDPR 合规（`/webhooks/compliance`：`customers/data_request` / `customers/redact` / `shop/redact`），以及 Google Merchant 商品状态与 Meta Catalog Webhook；公共执行/调试工具在 `app/server/webhook/`。
-- `meta.data-deletion.tsx`、`favicon[.]ico.ts`：Meta 数据删除合规回调与 favicon 204 兜底，不属于业务入口。
 
 React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路由时必须按文件路由规则核对最终 URL，并检查父布局/索引路由关系。
 
@@ -133,16 +128,16 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | 聊天请求与 SSE | `app/server/chat-stream.ts`、`app/server/chatPayload.server.ts` |
 | Agent 图、模型、提示词 | `app/server/ai/core/shopChatGraph.server.ts`、`agentStream.server.ts`、`shopAssistantPrompt.ts` |
 | Skill / Tool 注册 | `app/server/ai/skills/index.ts`、`app/server/ai/core/toolRegistry.server.ts` |
-| Playbook 与能力目录 | `app/server/ai/playbooks/`、`app/server/ai/core/playbookRegistry.server.ts`、`skillManifest.server.ts` |
+| Playbook 与能力目录 | `app/server/ai/playbooks/`（`PLAYBOOKS_ENABLED=false`，商户侧未开）、`app/server/ai/core/playbookRegistry.server.ts`、`skillManifest.server.ts` |
 | AI 任务执行与日志 | `app/server/aiTask/`（`aiTaskStore` 状态、`aiTaskLogger` 日志、`aiTaskEventBus` SSE、`concurrencyLimiter` 并发、`batchTaskCreate` 批量）、各 Skill service |
 | 商品文案与质量优化 | `app/server/productImprove/` |
-| 批量编辑（调价 / 打标 / 上下架）与商品管理（导出、导入）+ 只读 SEO 体检 | 细则见 `app/server/bulkEdit.agent.md`，由 `.cursor/rules/bulk-edit-agent.mdc` 按路径触发加载。商户入口是导出 + 导入。调价 / 打标 / 上下架仍有独立规则 Skill。改字段/SEO、标题/正文、合集、复制、归档、成本、Handle、Metafield、删除没有独立入口，只作为导入内部 apply。导入编排已有 apply，不新增 mutation。全族统一四层：纯算 `app/lib/` → 只读 reader → 试算 dry-run（零 mutation，落 `pending_review`）→ 写回 apply（该 mutation 的唯一调用处）；Skill 只暴露只读列表与开卡，不注册 mutation 工具。改这一族任何文件前先读那份文件，里面每条「不能退化的约束」都附了理由 |
+| 批量编辑（调价 / 打标 / 上下架）与商品管理（导出、导入）+ 只读 SEO 体检 | **细则见 `app/server/bulkEdit.agent.md`**（`.cursor/rules/bulk-edit-agent.mdc` 按路径自动加载）。全族统一四层：纯算 `app/lib/` → 只读 reader → 试算 dry-run（零 mutation，落 `pending_review`）→ 写回 apply（该 mutation 的唯一调用处）。商户入口是导出 + 导入；改字段/SEO、标题正文、合集、复制、归档、成本、Handle、Metafield、删除没有独立入口，只作为导入内部 apply |
 | 商品目录和对象查询 | `app/server/productSearch/`、`app/server/shopify/productSearch.server.ts`、`app/server/shopify/shopifyObjectList.server.ts` |
 | 图片生成 | `app/server/imageGeneration/` |
 | 图片翻译 | `app/server/pictureTranslate/`、`app/server/imageMapping/`（原图 → Blob 映射，供 Image Switcher 替换） |
 | 视觉模型凭证（火山引擎） | `app/server/volcengine/volcCredentials.server.ts`，被图片生成与图片翻译调用 |
 | 视觉工具页聚合 | `app/server/visualTools/` |
-| 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`app/server/adsCreate/`、`app/server/adsEdit/`、`app/server/adsInsights/`。下拉选项类只读列表（Meta Page、TikTok Pixel / Catalog、广告主）走 `adsCatalog/enumerationCache.server.ts` 的进程内 TTL 缓存，路由支持 `?refresh=1` 强刷；绑定校验、同步预检、上传确认等需要实时状态的路径禁止接缓存。Google Ads 凭证按 `accessTokenExpiresAt` 判断是否刷新、按 `loginCustomerIdVerifiedAt` 判断是否重新探测 login-customer-id，两个戳在对应值变化时必须失效。广告洞察 `structure` 视图默认读库（`adsInsights/store.server.ts`）：命中新鲜快照直接返回，过期才回源，回源固定拉 30 天再按请求区间切窗口，`?refresh=1` 强刷，回源失败用过期快照兜底；`keywords` / `searchTerms` / `creatives` 深层级明细和沙盒模式仍实时拉、不落库。洞察总览 `adsInsights/overview.server.ts` 纯库内聚合（不回源），凭证只 select `platform` / `externalAccountId` / `updatedAt`；商品审核计数统一走 `adsCatalog/productStatusSummary.server.ts` 的 `groupBy` 全量统计，不能用分页样本行数当总数。接入链路健康 `adsCatalog/adsHealth.server.ts` 由凭证 JSON 派生且只输出可见标识（不含 token），唯一需要实时探测的 GMC↔Ads 关联走 `/api/ads-overview/link-status`，由前端异步调用、失败降级为未知 |
+| 广告 Catalog / 创建 / 编辑 / 洞察 | `app/server/adsCatalog/`、`adsCreate/`、`adsEdit/`、`adsInsights/`。**细则见 `app/server/adsCatalog/agent.md`**（`.cursor/rules/ads-agent.mdc` 按路径自动加载）：枚举缓存的适用边界、Google Ads 凭证失效判据、洞察读库/回源窗口、审核计数与链路健康 |
 | Google Analytics 4 | `app/server/googleAnalytics/`（`ga4Api.server.ts` 读数、`ga4Credentials.server.ts` OAuth 凭证） |
 | Google Search Console | `app/server/googleSearchConsole/`（`gscApi.server.ts`、`gscCredentials.server.ts`） |
 | PageSpeed Insights | `app/server/pageSpeed/`（PSI v5 `fetch`，平台级 `GOOGLE_PAGESPEED_API_KEY`，结果不落库） |
@@ -203,11 +198,13 @@ AI 主链路应从真实代码确认，通常为：首页工作台（`/app`）`u
 | 项目架构、跨域、环境变量、部署 | `docs/PROJECT_CONTEXT.md`（以当前代码复核过时路径） |
 | **发布新 Shopify App（CLI + Render + 密钥/URL）** | `docs/SHOPIFY_APP_PUBLISH.md` |
 | 新增 AI Skill / Tool / Playbook / Shopify scope | `docs/ROADMAP.md` |
-| Partner 分发、上架门禁 | `docs/ROADMAP.md` 第六–八节 |
+| Partner 分发、上架门禁 | `docs/ROADMAP.md` 第七–八节 |
 | Tools 页面、任务生命周期、确认/审核/进度交互 | `docs/INTERACTION_DESIGN.md` |
 | 前端视觉、布局、组件样式 | `docs/DESIGN.md` |
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
 | 批量编辑、SEO 体检 | `app/server/bulkEdit.agent.md` |
+| 广告 Catalog / 创建 / 编辑 / 洞察、Theme App Embed 配置 | `app/server/adsCatalog/agent.md` |
+| Admin 后台路由、鉴权身份、各页面口径 | `admin/AGENTS.md` |
 | Today 运营工作流 | `docs/DAILY_OPERATIONS_WORKFLOWS.md` |
 | Today 信息架构 | `docs/TODAY_INFORMATION_ARCHITECTURE.md` |
 | Health Monitor AI 明细 | `docs/HEALTH_MONITOR_AI_DETAIL_SPEC.md` |
@@ -256,7 +253,7 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 9. Admin 后台
 
-Admin 是独立项目，不能假设根目录命令会检查它。
+Admin 是独立项目（独立 `package.json` 与构建），不能假设根目录命令会检查它。**改 `admin/` 下任何文件前先读 `admin/AGENTS.md`**，那里有路由族、鉴权身份与各页面的口径约束。
 
 ```powershell
 cd admin
@@ -264,38 +261,9 @@ npm run dev       # Express 3099 + Vite 5174
 npm run build     # Vite client + tsc server
 ```
 
-- API 入口：`admin/server/index.ts`、`admin/server/routes/`。
-- 前端入口：`admin/src/App.tsx`、`admin/src/pages/`、`admin/src/api.ts`。
-- 外部存储连接：`admin/server/lib/`。
-- 鉴权边界：`admin/server/middleware/auth.ts`；收入、Pixel logs、TSF billing/revenue/ROI、OpenRouter 探测等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。登录为五人身份（Yewen / Allen / Zhuangze / Joel / Sun）+ 各人密码（`ADMIN_SECRET_YEWEN` / `_ALLEN` / `_ZHUANGZE` / `_JOEL` / `_SUN`）；Yewen、Allen 为 owner，Zhuangze、Joel、Sun 为 user。顶栏显示姓名，不展示 Owner/User 字样。
-- 主要 API 路由族：Spark 运营（overview/shops/usage/capabilities/subscriptions/revenue/agent-runs/billing-rules/pricing-workbench/todos/ops-checklist/visit-source/support/app-logs/pixel-logs/shop-profile、`spark-credits` 额度查询与系统奖励、`referral-codes` 推荐码、`spark-billing` 账单总览、`promo/xhs` 小红书图文生成）、TSF 观测（`/api/tsf/*`：overview/shops/usage/subscriptions/packs/billing/shop-profiles/language-coverage/revenue/roi/credits）、翻译运维只读/修复（`/api/translations`、`/api/translation-ops`、`/api/shopify-translation`）、Redis Explorer、OpenRouter 探测。`admin/server/routes/` 下所有路由文件都在 `admin/server/index.ts` 挂载，没有孤儿路由。翻译任务内容查看（`/translations/:id/content*`）用 `includeLiquid` 拼虚拟 module `CUSTOM_LIQUID`（`jobModulesWithLiquid`，与 TSF Worker 对齐），不要只读 Cosmos `job.modules`。
-- 前端页面路由见 `admin/src/App.tsx`；Spark 侧栏含「账单总览」`/billing`、「用户额度」`/credits`、「推荐码」`/referral-codes`、「小红书图文」`/xhs-promo`、「定价工作台」`/pricing-workbench`；除下文详述的几个页面外还有 `/translations`、`/shop-translation`、`/translation-ops`、`/shopify-translation`、`/translate-v4-support`、`/tsf/billing`、`/tsf/packs`、`/tsf/shop-profiles/:shop`、`/redis-explorer`。改 Admin 导航前先读该文件，不要凭本节清单推断。
-- Spark tab「小红书图文」：`/xhs-promo` → `admin/src/pages/XhsPromo.tsx` + `admin/server/routes/xhsPromo.ts`。所有登录用户可用。分步确认：选题 → 可选标题（可改）→ 文案（可改）→ 封面与滑页分开出图。标题必须是选题的改写，不能另起卖点；封面主文案锁定已定标题，分析来的风格不能盖掉标题。接口拆开：`/titles`、`/copy`、`/cover`、`/cards`；改文案或调某一侧提示词不会重跑另一侧。选题步「选选题」和「参考笔记」二选一，不能同时用。选选题只走预设/手写选题，不分析链接。参考笔记先贴小红书链接（`POST /preview` 只读公开 OG，不带 Cookie、不走非官方 API）把读到的标题/简介/封面回填，缺的再手贴（最多 4 张），再 `POST /analyze` 只拆这篇笔记的气质（不看预设选题），回填四套提示词后直接出标题，不再单独填选题/补充。分析跟当前文案模型走：DeepSeek 只拆标题/正文，不看图也不上传图；GPT / 豆包有图才会看图。后续标题/文案/出图都跟当前这条路走，切来源会清空下游。默认文案 DeepSeek（`DEEPSEEK_API_KEY`），默认封面火山方舟 Seedream（`VOLC_ARK_API_KEY` + `VOLC_ARK_IMAGE_MODEL`，默认 `doubao-seedream-5-0-pro-260628`）。豆包写文仅在显式配置 `VOLC_ARK_TEXT_MODEL` 时出现在选项里，不要写死 `doubao-seed-1-6-251015`。封面还可选手 GPT 或模板 SVG。标题/文案/封面/滑页提示词各自收起可改，可「保存此版」到 Admin 运维 Turso（`ADMIN_DATABASE_*`，表 `XhsPromoPromptVersion`，全员共用、只追加）；进页和切方向套该槽位该方向最新保存版，代码默认只兜底。提示词按黑/白/荧光黄绿信息卡。滑页按提示词走封面同一套文生图（Seedream / GPT）出 PNG，模板只作失败回退；图上不要画制作说明。下载一律 PNG。不接 Playwright，不接小红书发帖。不要用旧视觉 `HUOSHAN_*` / `CVProcess`。
-- Admin 没有配置测试框架；改动后必须在 `admin/` 中运行 `npm run build`。
-- 修改共享 Prisma schema 后，主应用和 Admin 的 Prisma 类型/构建都要考虑。
-- 翻译 tab「翻译 ROI」：`/tsf/roi`（owner）→ `admin/src/pages/tsf/TsfRoi.tsx` +
-  `admin/server/routes/tsfRoi.ts`。安装/留存以 TSF `Account` 为准（`ShopBillingBinding`
-  已废弃）；Turso 收入/auto 已接；漏斗行为与 LLM 成本走 SLS（未接时页面 Mock + howto）。
-- TSF「每日收入」：`/tsf/revenue` → `admin/src/pages/tsf/TsfRevenue.tsx` +
-  `admin/server/routes/tsfRevenue.ts`。按 `BillingLog`×`PlanCatalog` 聚合；必须排除
-  `metadata.source = legacy_migration`（Spring→Turso 迁移审计，非真实扣款日）；
-  同店 24h 内被后续 `SUBSCRIPTION_ACTIVATED` 覆盖的激活不计入（改套餐只计终态）。
-- 翻译 tab「语言覆盖率」：`/tsf/language-coverage` →
-  `admin/src/pages/tsf/TsfLanguageCoverage.tsx` +
-  `admin/server/routes/tsfLanguageCoverage.ts`。商店列表以 Turso
-  `Account`（在装）为准；目标语言/自动翻译来自 `ShopTargetLocale`；覆盖率按
-  `tsf:items_count:{shop}:{locale}` 批量查 Redis。快照约 60s，`refresh=1`
-  强制重载。
-- 翻译 tab「用户额度查询」：`/tsf/credits` →
-  `admin/src/pages/tsf/TsfCredits.tsx` + `admin/server/routes/tsfCredits.ts`。
-  按 shop 查 TSF Turso：`Account` 额度拆分、`TOKEN_PACK_PURCHASED` 加购记录、
-  `BillingLog` 流水与 `AccountPeriodUsage` 周期归档；支持添加/修改
-  `purchasedCredits`（`POST /api/tsf/credits/purchased`，审计事件
-  `ADMIN_PURCHASED_CREDITS_ADJUSTED`，不计入加购收入）；所有登录用户可查可改。
-- 翻译 tab「单字段翻译日志」：`/tsf/single-translate-logs` →
-  `admin/src/pages/tsf/TsfSingleTranslateLogs.tsx` +
-  `admin/server/routes/tsfSingleTranslateLogs.ts`（只读 TSF Turso
-  `CreditUsage`，`source=single`；展示扣费积分与 metadata，不含原文/译文）。
+- 入口：`admin/server/index.ts` + `admin/server/routes/`（API）、`admin/src/App.tsx` + `admin/src/pages/`（前端）、`admin/server/lib/`（外部存储）。
+- 鉴权在 `admin/server/middleware/auth.ts`；owner-only 路由用 `requireOwner`。
+- Admin 没有测试框架；改动后必须在 `admin/` 跑 `npm run build`。修改共享 Prisma schema 时，主应用和 Admin 的类型/构建都要考虑。
 - Spark tab「OpenRouter 探测」（owner）：`/openrouter-probe` →
   `admin/src/pages/OpenRouterProbe.tsx` +
   `admin/server/routes/openrouterProbe.ts`。服务端用 `OPENROUTER_API_KEY`
@@ -329,14 +297,7 @@ npm run turso:migrate:test
 
 ### 脚本清单（`scripts/`）
 
-Package-backed：
-
-- `scripts/turso-migrate.cjs` — `npm run turso:migrate:test|prod`
-- `scripts/turso-hard-reset.mjs` — 硬删 Turso 全部用户表（默认测环境；产库需 `--env=.env.prod --confirm-prod`），配合 migration squash 后重建
-- `scripts/cursor-push-pr.mjs` — `npm run push:pr`（按 diff 传入中文标题/摘要，`--message-file` / `--body-file` 避免换行被吃掉；已有打开的 PR 则改标题正文）
-- `scripts/cursor-rebase-pr.mjs` — `npm run rebase:pr`（按相对 master 的 diff 重写中文标题/摘要，`--message-file` / `--body-file` 避免换行被吃掉）
-- `scripts/deploy-test-render.mjs` — `npm run deploy:test`
-- `scripts/create-test-orders.mjs` — `npm run orders:create`
+有 npm 入口的以 `package.json` scripts 为准，这里只记两条门禁：`scripts/turso-hard-reset.mjs` 会硬删 Turso 全部用户表（默认测环境，产库须 `--env=.env.prod --confirm-prod`）；`cursor-push-pr.mjs` / `cursor-rebase-pr.mjs` 传中文标题摘要要用 `--message-file` / `--body-file`，否则换行被吃掉。
 
 运维 / Agent 入口（无 npm，按需手跑）：
 
@@ -376,12 +337,10 @@ npm run build
 
 ### 思考与执行节奏
 
-- 深入思考会增加延迟，只在能实质提升结果质量时展开，典型是需要多步推理的问题；拿不准时直接回答。
-- 选定一个方案就执行到底。除非遇到与判断直接矛盾的新信息，不要反复推翻已定的做法；先走通一条路、失败了再修正，比在两个方案之间来回权衡更快。**UI 交互/布局除外**：先出第 7 节的交互样例，等用户看过再写产品代码，不要直接改页面。
-- 打算调用多个彼此无依赖的工具时一次全部并行发起。例如要读三个文件就同时发三次读取，不要串成三轮。只有参数依赖上一步结果的调用才串行，并且不要用占位值猜参数。
+通用 agent 行为（并行发无依赖的工具调用、避免过度设计、不给没改的代码补注释）不在这里重复。本仓库特有的两条：
+
+- **UI 交互/布局改动先出第 7 节的交互样例，等用户看过再写产品代码**，不要直接改页面。其余场景选定方案就执行到底，除非遇到与判断直接矛盾的新信息。
 - 不推测没打开过的代码。用户引用了具体文件就先读再答；对调用链、schema、组件行为下结论前先查，查不到就明确标成假设，不编造路径或 API。
-- 避免过度设计：只做被明确要求或确实必需的改动。修 bug 不必顺手清理周边代码，简单功能不必预留配置项；不为不可能发生的场景加防御分支，只在系统边界（用户输入、外部 API）做校验；不为一次性操作抽 helper。
-- 不给没改过的代码补注释、docstring 或类型标注；只在逻辑不自明处写注释。
 
 ### 边界与纪律
 
@@ -410,3 +369,5 @@ npm run build
 - 领域文档重命名或迁移。
 
 更新时以代码扫描结果为准，删除过时描述，不把一次性排错记录、机器路径、密钥值或长篇实现细节堆进本文件。
+
+本文件是常驻注入的，每一轮对话都付这份 token，所以**只放全局边界与「在哪里找」**。某一族能力的实现细则写进领域文档，再用 `.cursor/rules/*.mdc` 按路径触发加载（成例：计费 `app/server/billing/agent.md`、批量编辑 `app/server/bulkEdit.agent.md`、广告 `app/server/adsCatalog/agent.md`），子目录级的写进该目录的 `AGENTS.md`（成例：`admin/AGENTS.md`）。产品规划与缺口清单留在 `docs/ROADMAP.md`，不要合并进来。

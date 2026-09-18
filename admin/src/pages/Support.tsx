@@ -255,6 +255,7 @@ export default function Support({
                 ) : (
                   messages.map((m) => {
                     const isOps = m.sender === "ops";
+                    const attachments = m.attachments ?? [];
                     return (
                       <div
                         key={m.id}
@@ -274,7 +275,26 @@ export default function Support({
                               {formatTime(m.createdAt)}
                             </span>
                           </div>
-                          <div style={threadStyles.msgContent}>{m.content}</div>
+                          {attachments.map((attachment) =>
+                            attachment.type === "image" ? (
+                              <a
+                                key={attachment.url}
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={threadStyles.imageLink}
+                              >
+                                <img
+                                  src={attachment.url}
+                                  alt={attachment.name || "图片"}
+                                  style={threadStyles.msgImage}
+                                />
+                              </a>
+                            ) : null,
+                          )}
+                          {m.content ? (
+                            <div style={threadStyles.msgContent}>{m.content}</div>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -428,6 +448,14 @@ const threadStyles: Record<string, React.CSSProperties> = {
   sender: { fontSize: 11, color: "#8c8c8c", marginBottom: 2 },
   msgTime: { marginLeft: 8 },
   msgContent: { fontSize: 14, whiteSpace: "pre-wrap", wordBreak: "break-word" },
+  imageLink: { display: "block", marginTop: 6 },
+  msgImage: {
+    display: "block",
+    maxWidth: "100%",
+    maxHeight: 280,
+    borderRadius: 6,
+    objectFit: "contain",
+  },
   inputArea: {
     padding: 12,
     borderTop: "1px solid #f0f0f0",

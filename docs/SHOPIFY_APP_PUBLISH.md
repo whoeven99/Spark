@@ -2,7 +2,7 @@
 
 > 本文是 Spark / Ciwi Apps 侧「从零发布一个新 Shopify 应用」的操作手册。  
 > Agent 被问到「怎么发新 Shopify app / 怎么配 Render / toml从哪来」时，**优先按本文回答**。  
-> 分发方式（Public Unlisted / Custom）与上架门禁见 `docs/ROADMAP.md` 第六–八节；本文不替代 Partner 政策判断。
+> 分发方式（Public Unlisted / Custom）见 `docs/ROADMAP.md` **第八节**；上架材料与本周期门禁见 **第七节**。本文不替代 Partner 政策判断。
 
 ## 适用场景
 
