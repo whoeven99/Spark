@@ -8,6 +8,7 @@ import {
   Empty,
   Spin,
   Segmented,
+  Image,
   message as antdMessage,
   Tooltip,
 } from "antd";
@@ -277,19 +278,16 @@ export default function Support({
                           </div>
                           {attachments.map((attachment) =>
                             attachment.type === "image" ? (
-                              <a
-                                key={attachment.url}
-                                href={attachment.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={threadStyles.imageLink}
-                              >
-                                <img
+                              <div key={attachment.url} style={threadStyles.imageLink}>
+                                <Image
                                   src={attachment.url}
                                   alt={attachment.name || "图片"}
                                   style={threadStyles.msgImage}
+                                  preview={{
+                                    mask: "查看大图",
+                                  }}
                                 />
-                              </a>
+                              </div>
                             ) : null,
                           )}
                           {m.content ? (
@@ -448,7 +446,7 @@ const threadStyles: Record<string, React.CSSProperties> = {
   sender: { fontSize: 11, color: "#8c8c8c", marginBottom: 2 },
   msgTime: { marginLeft: 8 },
   msgContent: { fontSize: 14, whiteSpace: "pre-wrap", wordBreak: "break-word" },
-  imageLink: { display: "block", marginTop: 6 },
+  imageLink: { display: "block", marginTop: 6, cursor: "zoom-in" },
   msgImage: {
     display: "block",
     maxWidth: "100%",
