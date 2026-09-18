@@ -1,12 +1,11 @@
 /**
  * 一级目的地。
  * ads-catalog 保留为可路由入口（Studio/Settings 内链），不占一级导航。
- * 计费在一级「账户与订阅」`/app/account`；旧 `/app/settings/billing` 重定向至此。
+ * 计费在一级「套餐与积分」`/app/account`；旧 `/app/settings/billing` 重定向至此。
  *
  * 环境分流原则：
  * - prod：功能尽量在对话里闭环（首页 `/app` 聊天 + 推荐操作 + 对话内确认/审核）。
- *   导航只留「任务」和「账户与订阅」。不要把 Today / Health Monitor / Studio / Settings / 广告加进 PROD_NAV。
- *   `/app/ads` 仍可 URL 直达（测环境导航露出）。
+ *   导航留「任务中心」「广告分析」「套餐与积分」。不要把 Today / Health Monitor / Studio / Settings 加进 PROD_NAV。
  * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作与助手，`/app/create` 仍可直达；`/app/assistant` 重定向到 `/app`；旧 `/app/tasks` 重定向到 `/app/tasks-v2`）。
  */
 import { isProductionNodeEnv } from "./nodeEnv.server";
@@ -41,8 +40,8 @@ const FULL_NAV = [
   "settings",
 ] as const satisfies readonly NavItemKey[];
 
-/** 生产：对话工作台在首页；导航只留任务台账 + 账户。广告 hub 仅测/本地导航露出。 */
-const PROD_NAV = ["tasks-v2", "account"] as const satisfies readonly NavItemKey[];
+/** 生产：对话工作台在首页；导航留任务中心 + 广告分析 + 套餐与积分。 */
+const PROD_NAV = ["tasks-v2", "ads", "account"] as const satisfies readonly NavItemKey[];
 
 export function getAppEntryConfig(): AppShellConfig {
   return {

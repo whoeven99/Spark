@@ -1,6 +1,6 @@
 {
   "adsHub": {
-    "title": "广告",
+    "title": "广告分析",
     "subtitle": "连接账户、同步目录与查看投放表现",
     "group": {
       "insights": "看数据",
@@ -1507,16 +1507,16 @@
     "ask": "助手",
     "homeV1": "首页 v1",
     "homeV2": "首页 v2",
-    "account": "账户与订阅",
+    "account": "套餐与积分",
     "today": "经营",
     "healthMonitor": "健康度监测",
     "studio": "创作工作台",
     "create": "创作",
     "tasks": "任务 v1",
-    "tasksV2": "任务",
+    "tasksV2": "任务中心",
     "settings": "设置",
-    "ads": "广告",
-    "adsCatalog": "广告"
+    "ads": "广告分析",
+    "adsCatalog": "广告分析"
   },
   "installLanding": {
     "heading": "Spark",
@@ -1726,7 +1726,7 @@
     }
   },
   "tasksV2": {
-    "title": "任务",
+    "title": "任务中心",
     "subtitle": "按更新时间倒序查看全部任务，待审核的直接在这里处理。",
     "viewAriaLabel": "任务时间范围",
     "view": {
@@ -2090,7 +2090,7 @@
     "descFeedback": "提交产品建议或反馈问题",
     "descData": "历史订单回补与数据同步状态",
     "descShopifyReports": "按官方分析口径查询销售、退款、成本与利润、客户、库存、履约与店面漏斗",
-    "sectionAccountTitle": "账户与订阅",
+    "sectionAccountTitle": "套餐与积分",
     "sectionAccountSubtitle": "管理套餐、额度和账单相关设置。",
     "sectionConnectionsHubTitle": "连接中心",
     "sectionConnectionsHubSubtitle": "把各渠道授权集中在这里管理。这里不承接经营判断，只负责连接、授权和状态确认。",
@@ -2598,7 +2598,7 @@
     "dataDelayHint": "Ads 与 GA4 数据通常延迟 24–48 小时。"
   },
   "billing": {
-    "pageTitle": "套餐与积分额度",
+    "pageTitle": "套餐与积分",
     "pageIntro": "管理积分额度、套餐与账单",
     "quotaSubtitle": "用于 AI 商品标题与描述；额度不足时可在下方升级套餐。",
     "usagePercentUsed": "已使用 {{percent}}%",
@@ -2622,7 +2622,7 @@
     "subscribe": "订阅",
     "subscribeNow": "直接订阅",
     "buyPack": "购买积分",
-    "lowBalanceWarning": "积分不足或未订阅，请前往账户页开通套餐。",
+    "lowBalanceWarning": "积分不足或未订阅，请前往套餐与积分开通套餐。",
     "overageCapReachedWarning": "含内积分与按需上限都已用完。请提高按需上限或升级套餐后继续使用。",
     "overageApproachingWarning": "按需超额已接近上限（≥90%）。建议提前提高上限，以免中断使用。",
     "overageTitle": "按需超额",
@@ -3011,7 +3011,7 @@
       "productOptional": "参考商品（可选）",
       "productHint": "选中后会结合商品标题与描述生成提示词；可不选，仅用画面描述生成。",
       "submitted": "已开始生成图片",
-      "goToAccount": "前往账户与订阅",
+      "goToAccount": "前往套餐与积分",
       "running": "正在生成图片…",
       "usedCredits": "本次消耗 {{actual}} 积分（预计 {{estimated}}）",
       "referencedProduct": "参考：{{title}}",
@@ -5113,7 +5113,7 @@
         "tokenUsageHint": "已使用 / 总额度",
         "loadingUsage": "正在读取额度…",
         "unavailableUsage": "暂时无法读取",
-        "viewAccount": "查看账户与订阅"
+        "viewAccount": "查看套餐与积分"
       },
       "contextPicker": {
         "title": {
