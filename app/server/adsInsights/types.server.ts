@@ -85,10 +85,8 @@ export type AdsInsightsDailyRow = {
 export type AdsInsightsResult = {
   platform: AdsInsightsPlatform;
   accountId: string;
-  /** 展示用账户名（如沙盒 Account Name）；可空 */
+  /** 展示用账户名；可空 */
   accountName?: string | null;
-  /** 沙盒 / 测试账号模式（与正式 Catalog OAuth 隔离） */
-  sandbox?: boolean;
   currencyCode: string | null;
   rangeDays: AdsInsightsRangeDays;
   dateStart: string;

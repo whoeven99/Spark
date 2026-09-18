@@ -93,8 +93,16 @@ async function merchantApiRequest<T>(params: {
   } catch (error) {
     throw new Error(formatOutboundNetworkError(error));
   }
-  const payload = (await response.json().catch(() => ({}))) as T;
-  if (!response.ok) throw new Error(parseMerchantApiError(payload, response.status));
+const payload = (await response.json().catch(() => ({}))) as T;
+  if (!response.ok) {
+    const message = parseMerchantApiError(payload, response.status);
+    if (params.path.startsWith("/accounts/v1/accounts")) {
+      console.warn(
+        `[AdsCatalog][GmcApi] step=request http=${response.status} method=${params.method ?? "GET"} path=${params.path} error=${message.slice(0, 500)}`,
+      );
+    }
+    throw new Error(message);
+  }
   return payload;
 }
 
@@ -386,15 +394,30 @@ export async function verifyGoogleMerchantCredential(params: {
   }
 }
 
+export type GoogleAccessTokenRefreshResult =
+  | { ok: true; accessToken: string; expiresIn: number }
+  | { ok: false; error: string; oauthError?: string };
+
+const GOOGLE_OAUTH_REFRESH_AUTH_ERRORS = new Set([
+  "invalid_grant",
+  "unauthorized_client",
+  "invalid_client",
+]);
+
+/** OAuth refresh 返回的 error 字段是否表示凭证已失效、需重新授权。 */
+export function isGoogleOAuthRefreshAuthError(oauthError?: string): boolean {
+  return Boolean(oauthError && GOOGLE_OAUTH_REFRESH_AUTH_ERRORS.has(oauthError));
+}
+
 /**
  * Refresh an OAuth2 access token using the stored refresh token.
- * Returns the new access token (and its TTL in seconds).
+ * 返回结构化结果，便于区分「需重新授权」与临时网络失败。
  */
-export async function refreshGoogleAccessToken(params: {
+export async function refreshGoogleAccessTokenDetailed(params: {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
-}): Promise<{ accessToken: string; expiresIn: number } | null> {
+}): Promise<GoogleAccessTokenRefreshResult> {
   try {
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -406,13 +429,32 @@ export async function refreshGoogleAccessToken(params: {
         grant_type: "refresh_token",
       }).toString(),
     });
-    if (!response.ok) return null;
-    const json = (await response.json()) as {
+    const text = await response.text();
+    if (!response.ok) {
+      let oauthError: string | undefined;
+      let errorDescription = `HTTP ${response.status}`;
+      try {
+        const json = JSON.parse(text) as { error?: string; error_description?: string };
+        oauthError = typeof json.error === "string" ? json.error : undefined;
+        if (json.error_description?.trim()) {
+          errorDescription = json.error_description.trim();
+        } else if (oauthError) {
+          errorDescription = oauthError;
+        }
+      } catch {
+        if (text.trim()) errorDescription = text.trim().slice(0, 200);
+      }
+      return { ok: false, error: errorDescription, oauthError };
+    }
+    const json = JSON.parse(text) as {
       access_token?: string;
       expires_in?: number;
     };
-    if (!json.access_token) return null;
+    if (!json.access_token) {
+      return { ok: false, error: "Google token refresh returned no access_token" };
+    }
     return {
+      ok: true,
       accessToken: json.access_token,
       expiresIn: json.expires_in ?? 3600,
     };
@@ -420,6 +462,23 @@ export async function refreshGoogleAccessToken(params: {
     console.warn(
       `[AdsCatalog][GoogleOAuth] refresh_access_token failed ${formatOutboundErrorLog(e)}`,
     );
-    return null;
+    return {
+      ok: false,
+      error: formatOutboundNetworkError(e),
+    };
   }
+}
+
+/**
+ * Refresh an OAuth2 access token using the stored refresh token.
+ * Returns the new access token (and its TTL in seconds).
+ */
+export async function refreshGoogleAccessToken(params: {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}): Promise<{ accessToken: string; expiresIn: number } | null> {
+  const result = await refreshGoogleAccessTokenDetailed(params);
+  if (!result.ok) return null;
+  return { accessToken: result.accessToken, expiresIn: result.expiresIn };
 }

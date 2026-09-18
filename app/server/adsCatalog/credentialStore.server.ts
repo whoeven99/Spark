@@ -16,9 +16,6 @@ const TIKTOK_CATALOG_PLATFORM = "tiktok_catalog";
 // picks which account to connect (multi-account selection flow).
 const GMC_PENDING_PLATFORM = "google_merchant_pending";
 const ADS_PENDING_PLATFORM = "google_ads_pending";
-// Google Ads 测试账号（广告洞察沙盒，与 Catalog / 生产 Insights OAuth 隔离）
-const GOOGLE_ADS_SANDBOX_PLATFORM = "google_ads_sandbox";
-const GOOGLE_ADS_SANDBOX_PENDING_PLATFORM = "google_ads_sandbox_pending";
 // Transient record holding a freshly-exchanged Meta long-lived token while the
 // merchant picks which catalog to connect (multi-catalog selection flow).
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
@@ -418,13 +415,16 @@ export async function setGmcSubscriptionName(
 }
 
 // ─── Google Ads (OAuth) ─────────────────────────────────────────────────────
-// Stored on the shared `google` platform record. The OAuth flow writes tokens +
-// the selected customerId; clientId/clientSecret/developerToken are app-level
-// (read from env at request time), so they are not persisted per shop here.
+// Stored on the shared `google` platform record. OAuth 写入 tokens + customerId；
+// clientId/clientSecret 优先存本记录，缺失时 refresh 回退 GMC 凭证或 env。
+// developerToken 仍为应用级 env。
 
 export type GoogleAdsCredential = {
   accessToken: string;
   refreshToken?: string;
+  /** 签发 refresh token 的 OAuth client；与 GMC 组合授权时可共用。 */
+  clientId?: string;
+  clientSecret?: string;
   /**
    * accessToken 的过期时刻（ISO）。仅在刷新流程拿到 `expires_in` 时写入，
    * 用于跳过没必要的 token 刷新。缺失表示过期时刻未知，调用方应按需刷新。
@@ -439,6 +439,8 @@ export type GoogleAdsCredential = {
    * USER_PERMISSION_DENIED，因此无戳的值必须重新探测。
    */
   loginCustomerIdVerifiedAt?: string;
+  /** 与 `loginCustomerIdVerifiedAt` 成对：该 login 绑定针对哪个 customerId。 */
+  loginCustomerIdVerifiedForCustomerId?: string;
   /** OAuth 授权后发现的可用 Ads 账户，供单独选择/重试时继续使用。 */
   availableAccounts?: PendingOAuthAccount[];
   remarketing?: GoogleRemarketingConfig;
@@ -537,6 +539,12 @@ export async function getGoogleAdsCredential(
     accessToken,
     refreshToken:
       typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
+    clientId:
+      typeof record.data.clientId === "string" ? record.data.clientId : undefined,
+    clientSecret:
+      typeof record.data.clientSecret === "string"
+        ? record.data.clientSecret
+        : undefined,
     accessTokenExpiresAt:
       typeof record.data.accessTokenExpiresAt === "string"
         ? record.data.accessTokenExpiresAt
@@ -550,6 +558,10 @@ export async function getGoogleAdsCredential(
       typeof record.data.loginCustomerIdVerifiedAt === "string"
         ? record.data.loginCustomerIdVerifiedAt
         : undefined,
+    loginCustomerIdVerifiedForCustomerId:
+      typeof record.data.loginCustomerIdVerifiedForCustomerId === "string"
+        ? record.data.loginCustomerIdVerifiedForCustomerId
+        : undefined,
     availableAccounts: parseGoogleAdsAvailableAccounts(record.data.availableAccounts),
     remarketing: parseGoogleRemarketingConfig(record.data.remarketing),
     updatedAt: record.updatedAt.toISOString(),
@@ -562,10 +574,13 @@ export async function setGoogleAdsCredential(
     GoogleAdsCredential,
     | "accessToken"
     | "refreshToken"
+    | "clientId"
+    | "clientSecret"
     | "accessTokenExpiresAt"
     | "customerId"
     | "loginCustomerId"
     | "loginCustomerIdVerifiedAt"
+    | "loginCustomerIdVerifiedForCustomerId"
     | "availableAccounts"
   >,
 ): Promise<void> {
@@ -585,12 +600,41 @@ export async function setGoogleAdsCredential(
   // 两个校验戳只有在对应值没变、或调用方显式给出新戳时才保留。
   // 否则必须清空：拿旧戳去判断新 token / 新 login 会直接产生错误的跳过。
   const keepExpiresAt = accessToken === existing?.data.accessToken;
-  const keepLoginVerifiedAt = loginCustomerId === (existing?.data.loginCustomerId ?? null);
+  const existingCustomerId =
+    typeof existing?.data.customerId === "string" ? existing.data.customerId.trim() : "";
+  const existingLoginCustomerId =
+    typeof existing?.data.loginCustomerId === "string"
+      ? existing.data.loginCustomerId.trim()
+      : "";
+  const keepLoginVerifiedAt =
+    customerId === existingCustomerId &&
+    (loginCustomerId ?? "") === existingLoginCustomerId;
+
+  const explicitVerifiedAt = payload.loginCustomerIdVerifiedAt?.trim();
+  const resolvedLoginCustomerIdVerifiedAt = explicitVerifiedAt
+    ? explicitVerifiedAt
+    : keepLoginVerifiedAt && typeof existing?.data.loginCustomerIdVerifiedAt === "string"
+      ? existing.data.loginCustomerIdVerifiedAt
+      : null;
+  const resolvedLoginCustomerIdVerifiedForCustomerId = explicitVerifiedAt
+    ? payload.loginCustomerIdVerifiedForCustomerId?.trim() || customerId
+    : keepLoginVerifiedAt &&
+        typeof existing?.data.loginCustomerIdVerifiedForCustomerId === "string"
+      ? existing.data.loginCustomerIdVerifiedForCustomerId
+      : null;
 
   await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
     ...(existing?.data ?? {}),
     accessToken,
     refreshToken: payload.refreshToken?.trim() || existing?.data.refreshToken || null,
+    clientId:
+      payload.clientId?.trim() ||
+      (typeof existing?.data.clientId === "string" ? existing.data.clientId : null),
+    clientSecret:
+      payload.clientSecret?.trim() ||
+      (typeof existing?.data.clientSecret === "string"
+        ? existing.data.clientSecret
+        : null),
     accessTokenExpiresAt:
       payload.accessTokenExpiresAt ??
       (keepExpiresAt && typeof existing?.data.accessTokenExpiresAt === "string"
@@ -598,11 +642,8 @@ export async function setGoogleAdsCredential(
         : null),
     customerId,
     loginCustomerId,
-    loginCustomerIdVerifiedAt:
-      payload.loginCustomerIdVerifiedAt ??
-      (keepLoginVerifiedAt && typeof existing?.data.loginCustomerIdVerifiedAt === "string"
-        ? existing.data.loginCustomerIdVerifiedAt
-        : null),
+    loginCustomerIdVerifiedAt: resolvedLoginCustomerIdVerifiedAt,
+    loginCustomerIdVerifiedForCustomerId: resolvedLoginCustomerIdVerifiedForCustomerId,
     availableAccounts:
       payload.availableAccounts ??
       (Array.isArray(existing?.data.availableAccounts)
@@ -733,73 +774,6 @@ export const setGoogleAdsPending = (shop: string, payload: PendingOAuthTokens) =
   setPending(shop, ADS_PENDING_PLATFORM, payload);
 export const getGoogleAdsPending = (shop: string) => getPending(shop, ADS_PENDING_PLATFORM);
 export const clearGoogleAdsPending = (shop: string) => clearPending(shop, ADS_PENDING_PLATFORM);
-
-// ─── Google Ads 测试账号（Insights 沙盒 OAuth）────────────────────────────────
-
-export type GoogleAdsSandboxCredential = {
-  accessToken: string;
-  refreshToken?: string;
-  customerId: string;
-  loginCustomerId?: string;
-  descriptiveName?: string;
-  updatedAt: string;
-};
-
-export async function getGoogleAdsSandboxCredential(
-  shop: string,
-): Promise<GoogleAdsSandboxCredential | null> {
-  const record = await readPlatformCredential(shop, GOOGLE_ADS_SANDBOX_PLATFORM);
-  if (!record) return null;
-  const accessToken = String(record.data.accessToken ?? "");
-  const customerId = String(record.data.customerId ?? "");
-  if (!accessToken || !customerId) return null;
-  return {
-    accessToken,
-    refreshToken:
-      typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
-    customerId,
-    loginCustomerId:
-      typeof record.data.loginCustomerId === "string"
-        ? record.data.loginCustomerId
-        : undefined,
-    descriptiveName:
-      typeof record.data.descriptiveName === "string"
-        ? record.data.descriptiveName
-        : undefined,
-    updatedAt: record.updatedAt.toISOString(),
-  };
-}
-
-export async function setGoogleAdsSandboxCredential(
-  shop: string,
-  payload: Pick<
-    GoogleAdsSandboxCredential,
-    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId" | "descriptiveName"
-  >,
-): Promise<void> {
-  const accessToken = payload.accessToken.trim();
-  const customerId = payload.customerId.trim();
-  if (!accessToken || !customerId) {
-    throw new Error("Google Ads sandbox accessToken and customerId are required");
-  }
-  await writePlatformCredential(shop, GOOGLE_ADS_SANDBOX_PLATFORM, {
-    accessToken,
-    refreshToken: payload.refreshToken?.trim() || null,
-    customerId,
-    loginCustomerId: payload.loginCustomerId?.trim() || null,
-    descriptiveName: payload.descriptiveName?.trim() || null,
-  });
-}
-
-export const deleteGoogleAdsSandboxCredential = (shop: string) =>
-  clearPending(shop, GOOGLE_ADS_SANDBOX_PLATFORM);
-
-export const setGoogleAdsSandboxPending = (shop: string, payload: PendingOAuthTokens) =>
-  setPending(shop, GOOGLE_ADS_SANDBOX_PENDING_PLATFORM, payload);
-export const getGoogleAdsSandboxPending = (shop: string) =>
-  getPending(shop, GOOGLE_ADS_SANDBOX_PENDING_PLATFORM);
-export const clearGoogleAdsSandboxPending = (shop: string) =>
-  clearPending(shop, GOOGLE_ADS_SANDBOX_PENDING_PLATFORM);
 
 export const setMetaCatalogPending = (shop: string, payload: PendingOAuthTokens) =>
   setPending(shop, META_CATALOG_PENDING_PLATFORM, payload);

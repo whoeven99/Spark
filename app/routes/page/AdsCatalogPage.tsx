@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Link, useFetcher, useLoaderData, useLocation, useRevalidator, type SubmitTarget } from "react-router";
+import { useFetcher, useLoaderData, useLocation, useRevalidator, type SubmitTarget } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useTranslation } from "react-i18next";
@@ -39,6 +39,16 @@ import { resolveAdsCatalogAuthResult, type AdsCatalogAuthBanner } from "../../li
 
 type Tab = "sync" | "credentials" | "tasks";
 type Platform = "facebook" | "google" | "tiktok";
+
+/** 审核期暂不展示 Catalog 页「同步 / 任务」Tab。 */
+const CATALOG_SYNC_TASKS_TABS_HIDDEN = true;
+
+function resolveVisibleCatalogTab(tab: Tab | null): Tab {
+  if (CATALOG_SYNC_TASKS_TABS_HIDDEN && (tab === "sync" || tab === "tasks")) {
+    return "credentials";
+  }
+  return tab ?? (CATALOG_SYNC_TASKS_TABS_HIDDEN ? "credentials" : "sync");
+}
 
 const sectionStyle = {
   border: `1px solid ${pageColorTokens.border}`,
@@ -128,11 +138,13 @@ const DEFAULT_FILTERS: GoogleFiltersValue = {
   googleProductCategory: "",
 };
 
-function readTabFromSearch(search: string): Tab | null {
+function readTabFromSearch(search: string): Tab {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const tab = params.get("tab");
-  if (tab === "sync" || tab === "credentials" || tab === "tasks") return tab;
-  return null;
+  if (tab === "sync" || tab === "credentials" || tab === "tasks") {
+    return resolveVisibleCatalogTab(tab);
+  }
+  return resolveVisibleCatalogTab(null);
 }
 
 function readTaskIdFromSearch(search: string): string | null {
@@ -157,10 +169,12 @@ function syncAdsCatalogPageSearch(
   const params = new URLSearchParams(
     locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
   );
-  if (updates.tab === "sync") {
-    params.delete("tab");
-  } else if (updates.tab) {
-    params.set("tab", updates.tab);
+  if (updates.tab) {
+    if (CATALOG_SYNC_TASKS_TABS_HIDDEN || updates.tab === "sync") {
+      params.delete("tab");
+    } else {
+      params.set("tab", updates.tab);
+    }
   }
   if (updates.taskId) {
     params.set("taskId", updates.taskId);
@@ -236,7 +250,7 @@ export function AdsCatalogPage() {
   const inferredTiktokRegion = loaderData.inferredTiktokRegion;
   const taskPageSize = loaderData.initialTaskPage.pageSize;
 
-  const [tab, setTabState] = useState<Tab>(() => readTabFromSearch(location.search) ?? "sync");
+  const [tab, setTabState] = useState<Tab>(() => readTabFromSearch(location.search));
   const [platform, setPlatformState] = useState<Platform>(
     () => readPlatformFromSearch(location.search) ?? "google",
   );
@@ -282,13 +296,14 @@ export function AdsCatalogPage() {
 
   const setTab = useCallback(
     (nextTab: Tab) => {
-      setTabState(nextTab);
-      if (nextTab !== "tasks") {
+      const visibleTab = resolveVisibleCatalogTab(nextTab);
+      setTabState(visibleTab);
+      if (visibleTab !== "tasks") {
         setSelectedTaskIdState(null);
-        syncAdsCatalogPageSearch(locationSearch, { tab: nextTab, taskId: null });
+        syncAdsCatalogPageSearch(locationSearch, { tab: visibleTab, taskId: null });
         return;
       }
-      syncAdsCatalogPageSearch(locationSearch, { tab: nextTab });
+      syncAdsCatalogPageSearch(locationSearch, { tab: visibleTab });
     },
     [locationSearch],
   );
@@ -296,6 +311,7 @@ export function AdsCatalogPage() {
   const setSelectedTaskId = useCallback(
     (taskId: string | null) => {
       setSelectedTaskIdState(taskId);
+      if (CATALOG_SYNC_TASKS_TABS_HIDDEN) return;
       if (taskId) {
         setTabState("tasks");
         syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId });
@@ -313,6 +329,12 @@ export function AdsCatalogPage() {
     },
     [locationSearch],
   );
+
+  useEffect(() => {
+    if (tab !== "credentials") return;
+    const el = document.getElementById(`ads-connect-${platform}`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [tab, platform]);
 
   const runningCount = useMemo(
     () => tasks.filter((task) => task.status === "running").length,
@@ -347,8 +369,10 @@ export function AdsCatalogPage() {
       ? metaStatus?.lastCheckedAt ?? null
       : googleStatus?.lastCheckedAt ?? null;
   const connectedChannelCount = [
-    credentials.googleMerchant.connected,
-    credentials.meta.connected,
+    credentials.googleMerchant.connected ||
+      credentials.googleAds.connected ||
+      credentials.googleAnalytics.connected,
+    credentials.meta.connected || credentials.meta.metaAdsConnected,
     credentials.tiktok.connected,
   ].filter(Boolean).length;
   const issueCount =
@@ -370,8 +394,17 @@ export function AdsCatalogPage() {
       google?: string | null;
       gmc?: string | null;
       ads?: string | null;
+      ga4?: string | null;
+      ga4ErrorCode?: string | null;
+      ga4PropertyName?: string | null;
+      gsc?: string | null;
+      gscErrorCode?: string | null;
+      gscSiteUrl?: string | null;
       meta?: string | null;
       metaCapi?: string | null;
+      metaUnified?: string | null;
+      metaCatalog?: string | null;
+      metaAds?: string | null;
       tiktok?: string | null;
       reason?: string | null;
       gmcReason?: string | null;
@@ -392,8 +425,17 @@ export function AdsCatalogPage() {
       google: params.get("googleAuth"),
       gmc: params.get("gmcAuth"),
       ads: params.get("adsAuth"),
+      ga4: params.get("ga4Auth"),
+      ga4ErrorCode: params.get("errorCode"),
+      ga4PropertyName: params.get("propertyName"),
+      gsc: params.get("gscAuth"),
+      gscErrorCode: params.get("errorCode"),
+      gscSiteUrl: params.get("siteUrl"),
       meta: params.get("metaAuth"),
-      metaCapi: params.get("metaCapiAuth"),
+      metaCapi: params.get("metaCapiAuth") ?? params.get("metaCapi"),
+      metaUnified: params.get("metaUnifiedAuth"),
+      metaCatalog: params.get("metaCatalog"),
+      metaAds: params.get("metaAds"),
       tiktok: params.get("tiktokAuth"),
       reason: params.get("reason"),
       gmcReason: params.get("gmcReason"),
@@ -409,8 +451,18 @@ export function AdsCatalogPage() {
         googleAuth?: string;
         gmcAuth?: string;
         adsAuth?: string;
+        ga4Auth?: string;
+        errorCode?: string;
+        propertyName?: string;
+        gscAuth?: string;
+        siteUrl?: string;
         metaAuth?: string;
+        metaAdsAuth?: string;
         metaCapiAuth?: string;
+        metaUnifiedAuth?: string;
+        metaCatalog?: string;
+        metaAds?: string;
+        metaCapi?: string;
         tiktokAuth?: string;
         reason?: string;
         gmcReason?: string;
@@ -427,12 +479,39 @@ export function AdsCatalogPage() {
           gmcReason: data.gmcReason,
           adsReason: data.adsReason,
         });
+      } else if (data.type === "ga4_oauth") {
+        applyAuthResult({
+          ga4: data.ga4Auth,
+          ga4ErrorCode: data.errorCode,
+          ga4PropertyName: data.propertyName,
+          reason: data.reason,
+        });
+      } else if (data.type === "gsc_oauth") {
+        applyAuthResult({
+          gsc: data.gscAuth,
+          gscErrorCode: data.errorCode,
+          gscSiteUrl: data.siteUrl,
+          reason: data.reason,
+        });
       } else if (data.type === "gmc_oauth") {
         applyAuthResult({ gmc: data.gmcAuth, reason: data.reason });
       } else if (data.type === "ads_catalog_oauth") {
         applyAuthResult({ ads: data.adsAuth, reason: data.reason });
       } else if (data.type === "meta_catalog_oauth") {
         applyAuthResult({ meta: data.metaAuth, reason: data.reason });
+      } else if (data.type === "meta_ads_oauth") {
+        applyAuthResult({
+          meta: data.metaAdsAuth,
+          reason: data.reason,
+        });
+      } else if (data.type === "meta_unified_oauth") {
+        applyAuthResult({
+          metaUnified: data.metaUnifiedAuth,
+          metaCatalog: data.metaCatalog,
+          metaAds: data.metaAds,
+          metaCapi: data.metaCapi,
+          reason: data.reason,
+        });
       } else if (data.type === "meta_capi_oauth") {
         applyAuthResult({ metaCapi: data.metaCapiAuth, reason: data.reason });
       } else if (data.type === "tiktok_catalog_oauth") {
@@ -495,7 +574,9 @@ export function AdsCatalogPage() {
     } else {
       setSelectedTaskIdState(null);
       setHighlightedTaskId(data.taskId);
-      setTab("tasks");
+      if (!CATALOG_SYNC_TASKS_TABS_HIDDEN) {
+        setTab("tasks");
+      }
     }
 
     shopify.toast.show(t("adsCatalog.toastTaskCreated"));
@@ -520,8 +601,21 @@ export function AdsCatalogPage() {
   }, [highlightedTaskId]);
 
   useEffect(() => {
+    const params = new URLSearchParams(
+      location.search.startsWith("?") ? location.search.slice(1) : location.search,
+    );
+    const rawTab = params.get("tab");
+    if (
+      CATALOG_SYNC_TASKS_TABS_HIDDEN &&
+      (rawTab === "sync" || rawTab === "tasks" || params.has("taskId"))
+    ) {
+      syncAdsCatalogPageSearch(locationSearch, { tab: "credentials", taskId: null });
+      setTabState("credentials");
+      setSelectedTaskIdState(null);
+      return;
+    }
     const urlTaskId = readTaskIdFromSearch(location.search);
-    if (!urlTaskId) return;
+    if (!urlTaskId || CATALOG_SYNC_TASKS_TABS_HIDDEN) return;
     setTabState("tasks");
     setSelectedTaskIdState(urlTaskId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -568,9 +662,6 @@ export function AdsCatalogPage() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
-  const settingsHubPath = locationSearch
-    ? `/app/settings${locationSearch}`
-    : "/app/settings";
 
   const credentialReady =
     platform === "facebook"
@@ -775,7 +866,10 @@ export function AdsCatalogPage() {
         setTasks((prev) => prev.filter((task) => task.id !== taskId));
         setSelectedTaskIdState((prev) => {
           if (prev !== taskId) return prev;
-          syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId: null });
+          syncAdsCatalogPageSearch(locationSearch, {
+            tab: CATALOG_SYNC_TASKS_TABS_HIDDEN ? "credentials" : "tasks",
+            taskId: null,
+          });
           return null;
         });
         revalidator.revalidate();
@@ -811,7 +905,7 @@ export function AdsCatalogPage() {
     <PageSurface>
       <PageHeaderNav
         backLabel={returnTo ? "返回上一级" : t("common.backToPrevious")}
-        fallbackPath={returnTo ?? "/app/settings"}
+        fallbackPath={returnTo ?? "/app/ads"}
         returnTo={returnTo}
         title={t("adsCatalog.pageTitle")}
         subtitle={t("adsCatalog.pageSubtitle")}
@@ -907,20 +1001,22 @@ export function AdsCatalogPage() {
           </div>
         )}
 
-        <SegmentedPageTabs
-          activeTab={tab}
-          onTabChange={setTab}
-          ariaLabel={t("adsCatalog.pageNavAriaLabel")}
-          items={[
-            { key: "sync", label: t("adsCatalog.tabSync") },
-            { key: "credentials", label: t("adsCatalog.tabCredentials") },
-            {
-              key: "tasks",
-              label: t("adsCatalog.tabTasks"),
-              badgeCount: runningCount > 0 ? runningCount : undefined,
-            },
-          ]}
-        />
+        {!CATALOG_SYNC_TASKS_TABS_HIDDEN && (
+          <SegmentedPageTabs
+            activeTab={tab}
+            onTabChange={setTab}
+            ariaLabel={t("adsCatalog.pageNavAriaLabel")}
+            items={[
+              { key: "sync", label: t("adsCatalog.tabSync") },
+              { key: "credentials", label: t("adsCatalog.tabCredentials") },
+              {
+                key: "tasks",
+                label: t("adsCatalog.tabTasks"),
+                badgeCount: runningCount > 0 ? runningCount : undefined,
+              },
+            ]}
+          />
+        )}
 
         {tab === "sync" && (
           <PageSurface>
@@ -956,9 +1052,9 @@ export function AdsCatalogPage() {
                 {t("adsCatalog.syncGuideBody", { platform: currentPlatformLabel })}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <Link to={settingsHubPath} style={guideLinkStyle(true)}>
-                  {t("common.manageConnections")}
-                </Link>
+                <button type="button" onClick={() => setTab("credentials")} style={guideLinkStyle(true)}>
+                  {t("adsHub.overview.manageConnection")}
+                </button>
               </div>
             </div>
 
@@ -975,31 +1071,29 @@ export function AdsCatalogPage() {
                       platform: currentPlatformLabel,
                     })}
                   </span>
+                  {!credentialReady ? (
+                    <button
+                      type="button"
+                      onClick={() => setTab("credentials")}
+                      style={{ ...guideLinkStyle(true), cursor: "pointer" }}
+                    >
+                      {t("adsCatalog.goToAuthorize")}
+                    </button>
+                  ) : null}
                 </div>
                 <div>
                   <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldPlatform")}</label>
-                  <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPlatform("google")}
-                      style={platform === "google" ? buttonPrimary : buttonSecondary}
-                    >
-                      {t("adsCatalog.platformGoogle")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPlatform("facebook")}
-                      style={platform === "facebook" ? buttonPrimary : buttonSecondary}
-                    >
-                      {t("adsCatalog.platformFacebook")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPlatform("tiktok")}
-                      style={platform === "tiktok" ? buttonPrimary : buttonSecondary}
-                    >
-                      {t("adsCatalog.platformTiktok")}
-                    </button>
+                  <div style={{ marginTop: 6 }}>
+                    <SegmentedPageTabs
+                      activeTab={platform}
+                      onTabChange={setPlatform}
+                      ariaLabel={t("adsCatalog.fieldPlatform")}
+                      items={[
+                        { key: "google", label: t("adsCatalog.platformGoogle") },
+                        { key: "facebook", label: t("adsCatalog.platformFacebook") },
+                        { key: "tiktok", label: t("adsCatalog.platformTiktok") },
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -1076,11 +1170,8 @@ export function AdsCatalogPage() {
               )}
               {!credentialReady && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <Link to={settingsHubPath} style={guideLinkStyle(true)}>
-                    {t("common.manageConnections")}
-                  </Link>
                   <button type="button" onClick={() => setTab("credentials")} style={buttonSecondary}>
-                    {t("adsCatalog.openLegacyCredentials")}
+                    {t("adsHub.overview.connectNow")}
                   </button>
                 </div>
               )}
@@ -1178,12 +1269,16 @@ export function AdsCatalogPage() {
                   {t("adsCatalog.credentialsHubTitle")}
                 </div>
                 <div style={pageHintTextStyle}>{t("adsCatalog.credentialsHubBody")}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <Link to={settingsHubPath} style={guideLinkStyle(true)}>
-                    {t("common.manageConnections")}
-                  </Link>
-                </div>
               </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 12,
+                alignItems: "start",
+              }}
+            >
+              <div id="ads-connect-google">
             <GoogleConnectPanels
               credentials={credentials}
               adsLink={adsLink}
@@ -1196,6 +1291,8 @@ export function AdsCatalogPage() {
                 statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
               }}
             />
+              </div>
+              <div id="ads-connect-facebook">
             <MetaConnectPanels
               credentials={credentials}
               locationSearch={locationSearch}
@@ -1207,6 +1304,8 @@ export function AdsCatalogPage() {
                 metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
               }}
             />
+              </div>
+              <div id="ads-connect-tiktok">
             <TiktokConnectPanels
               credentials={credentials}
               inferredTiktokRegion={inferredTiktokRegion}
@@ -1218,6 +1317,8 @@ export function AdsCatalogPage() {
                 revalidator.revalidate();
               }}
             />
+              </div>
+            </div>
             </div>
           </PageSurface>
         )}

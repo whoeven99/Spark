@@ -4,6 +4,7 @@ import {
   buildShopifyAdminHostParam,
   buildAdminEmbeddedAppReturnUrl,
 } from "../billing/buildBillingReturnUrl.server";
+import { ADS_HUB_CATALOG_PATH, withAdsHubConnectQuery } from "../../lib/adsHubNav";
 
 /**
  * TikTok for Business 开发者后台「Advertiser authorization URL」使用 portal/auth。
@@ -167,11 +168,12 @@ export function buildTiktokOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
+  const query = withAdsHubConnectQuery("tiktok", params.query);
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
+    path: ADS_HUB_CATALOG_PATH,
     shop: params.shop,
     request: params.request,
-    query: params.query,
+    query,
   });
   if (adminUrl) return adminUrl;
 
@@ -180,11 +182,11 @@ export function buildTiktokOAuthReturnUrl(params: {
     readEnv("TIKTOK_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  const target = new URL(ADS_HUB_CATALOG_PATH, base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
+  for (const [key, value] of Object.entries(query)) {
     target.searchParams.set(key, value);
   }
   return target.toString();

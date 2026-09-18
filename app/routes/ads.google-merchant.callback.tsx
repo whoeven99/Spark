@@ -26,9 +26,11 @@ import {
   getGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { registerGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
-import { normalizeGmcOAuthError } from "../lib/gmcOAuthErrors";
+import { GMC_OAUTH_ERROR_NO_ACCOUNT, normalizeGmcOAuthError } from "../lib/gmcOAuthErrors";
+import { formatOutboundErrorLog } from "../server/common/outboundError.server";
 
 const CALLBACK_PATH = "/ads/google-merchant/callback";
+const LOG_PREFIX = "[AdsCatalog][GoogleOAuth]";
 
 function oauthFailureReason(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -172,6 +174,8 @@ async function bindAdsSide(params: {
     await setGoogleAdsCredential(shop, {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      clientId,
+      clientSecret,
       customerId,
       loginCustomerId,
       availableAccounts: buildAdsAccountOptions(customers),
@@ -214,7 +218,7 @@ function buildCombinedRespondParams(input: {
       reason:
         input.gmcEmptyReason ||
         input.adsEmptyReason ||
-        "该 Google 账号未关联 Merchant Center 或 Ads 账户",
+        GMC_OAUTH_ERROR_NO_ACCOUNT,
       gmcReason: input.gmcEmptyReason ?? "",
       adsReason: input.adsEmptyReason ?? "",
     };
@@ -230,7 +234,7 @@ function buildCombinedRespondParams(input: {
   if (!adsOk && input.adsEmptyReason) params.adsReason = input.adsEmptyReason;
   if (!gmcOk || !adsOk) {
     params.reason = !gmcOk
-      ? (input.gmcEmptyReason ?? "未关联 Merchant Center 账户")
+      ? (input.gmcEmptyReason ?? GMC_OAUTH_ERROR_NO_ACCOUNT)
       : (input.adsEmptyReason ?? "未关联 Google Ads 广告账户");
   }
   if (input.merchantId) params.merchantId = input.merchantId;
@@ -260,10 +264,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         ? "ads_catalog_oauth"
         : "gmc_oauth";
 
-  const respond = (params: Record<string, string>): Response =>
-    popup
+  console.info(
+    `${LOG_PREFIX} shop=${shop} flow=${flow} popup=${popup} step=start hasCode=${Boolean(code)} oauthError=${oauthError ?? ""}`,
+  );
+
+  const respond = (params: Record<string, string>): Response => {
+    console.info(
+      `${LOG_PREFIX} shop=${shop} flow=${flow} popup=${popup} step=respond ${JSON.stringify(params)}`,
+    );
+    return popup
       ? popupClose(messageType, params)
       : appRedirect(request, shop, host, appOrigin, params);
+  };
 
   if (oauthError) {
     return respond(
@@ -304,10 +316,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     if (flow === "gmc") {
       const accounts = await getGmcMerchantAccounts(tokens.accessToken);
+      console.info(
+        `${LOG_PREFIX} shop=${shop} flow=gmc step=list_ok count=${accounts.length}`,
+      );
       if (accounts.length === 0) {
         return respond({
           gmcAuth: "error",
-          reason: "该 Google 账号未关联任何 Merchant Center 账户",
+          reason: GMC_OAUTH_ERROR_NO_ACCOUNT,
         });
       }
       const gmcResult = await bindGmcSide({
@@ -368,9 +383,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           const accounts = await getGmcMerchantAccounts(tokens.accessToken);
           return { ok: true, accounts };
         } catch (e) {
+          const reason = oauthFailureReason(e, "GMC 账户列表获取失败");
+          console.warn(
+            `${LOG_PREFIX} shop=${shop} flow=${flow} step=list_gmc_failed reason=${reason} ${formatOutboundErrorLog(e)}`,
+          );
           return {
             ok: false,
-            reason: oauthFailureReason(e, "GMC 账户列表获取失败"),
+            reason,
           };
         }
       })(),
@@ -398,7 +417,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (!gmcListResult.ok) {
       gmcEmptyReason = gmcListResult.reason;
     } else if (gmcListResult.accounts.length === 0) {
-      gmcEmptyReason = "该 Google 账号未关联任何 Merchant Center 账户";
+      gmcEmptyReason = GMC_OAUTH_ERROR_NO_ACCOUNT;
     } else {
       accounts = gmcListResult.accounts;
     }
@@ -457,6 +476,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }),
     );
   } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} shop=${shop} flow=${flow} popup=${popup} step=callback_failed ${formatOutboundErrorLog(e)}`,
+    );
     return respond(
       isCombined
         ? {

@@ -205,7 +205,7 @@ export function MetaAdsConnectPanel({
             </button>
           </div>
         </>
-      ) : (
+      ) : selectingInitial ? null : (
         <button type="button" disabled={busy} style={primaryBtn} onClick={() => void openOAuth()}>
           {busy ? t("adsInsights.connecting") : t("adsInsights.metaConnect")}
         </button>

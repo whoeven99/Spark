@@ -1,7 +1,5 @@
 import { fetchGoogleAdsInsights } from "./googleAdsInsights.server";
-import { fetchGoogleAdsSandboxInsights } from "./googleSandbox.server";
 import { fetchMetaAdsInsights } from "./metaAdsInsights.server";
-import { fetchMetaSandboxInsights } from "./metaSandbox.server";
 import {
   FETCH_RANGE_DAYS,
   isSnapshotFresh,
@@ -23,18 +21,13 @@ async function fetchFromPlatform(params: {
   platform: AdsInsightsPlatform;
   rangeDays: AdsInsightsRangeDays;
   view: AdsInsightsView;
-  sandbox: boolean;
 }): Promise<AdsInsightsResult | null> {
-  const { shop, rangeDays, view, sandbox } = params;
+  const { shop, rangeDays, view } = params;
 
   if (params.platform === "meta") {
-    const result = sandbox
-      ? await fetchMetaSandboxInsights(rangeDays, {
-          includeCreatives: view === "creatives",
-        })
-      : await fetchMetaAdsInsights(shop, rangeDays, {
-          includeCreatives: view === "creatives",
-        });
+    const result = await fetchMetaAdsInsights(shop, rangeDays, {
+      includeCreatives: view === "creatives",
+    });
     if (!result) return null;
     if (view === "structure") {
       return { ...result, keywords: undefined, searchTerms: undefined, creatives: undefined };
@@ -52,8 +45,7 @@ async function fetchFromPlatform(params: {
   }
 
   if (params.platform === "google") {
-    const fetcher = sandbox ? fetchGoogleAdsSandboxInsights : fetchGoogleAdsInsights;
-    const result = await fetcher(shop, rangeDays, {
+    const result = await fetchGoogleAdsInsights(shop, rangeDays, {
       includeStructure: view === "structure",
       includeKeywords: view === "keywords",
       includeSearchTerms: view === "searchTerms",
@@ -93,7 +85,6 @@ async function fetchFromPlatform(params: {
   if (params.platform === "tiktok") {
     const result = await fetchTiktokAdsInsights(shop, rangeDays, {
       includeCreatives: view === "creatives",
-      sandbox,
     });
     if (!result) return null;
     if (view === "structure") {
@@ -129,7 +120,6 @@ async function refreshAndSave(params: {
     platform: params.platform,
     rangeDays: FETCH_RANGE_DAYS,
     view: "structure",
-    sandbox: false,
   });
   if (!result) return null;
 
@@ -165,23 +155,18 @@ export async function fetchAdsInsights(params: {
   platform: AdsInsightsPlatform;
   rangeDays: AdsInsightsRangeDays;
   view?: AdsInsightsView;
-  /** Meta / TikTok / Google：沙盒或测试账号模式，与正式 Catalog OAuth 隔离 */
-  sandbox?: boolean;
   /** 跳过快照直接回源。 */
   forceRefresh?: boolean;
 }): Promise<AdsInsightsResult | null> {
   const view = params.view ?? "structure";
-  const sandbox = Boolean(params.sandbox);
 
   // 关键词 / 搜索词 / 素材是平台特有的深层级明细，不落库，仍然实时拉。
-  // 沙盒是模拟数据，也不进库。
-  if (view !== "structure" || sandbox) {
+  if (view !== "structure") {
     const result = await fetchFromPlatform({
       shop: params.shop,
       platform: params.platform,
       rangeDays: params.rangeDays,
       view,
-      sandbox,
     });
     return result ? stripInternal(result) : null;
   }

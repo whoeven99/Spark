@@ -6,6 +6,7 @@ import {
   pageColorTokens,
   pageHintTextStyle,
 } from "../../page/pageUiStyles";
+import { buildAdsHubConnectPath } from "../../../lib/adsHubNav";
 
 type StatsMode = "auto" | "manual";
 
@@ -276,7 +277,7 @@ function StatsBody({
         ) : null}
         {stats.needsMetaAdsConnect ? (
           <p style={{ margin: "8px 0 0" }}>
-            <Link to={`/app/settings/connections/meta${locationSearch}`}>{t("metaPixelData.connectMetaAds")}</Link>
+            <Link to={buildAdsHubConnectPath("meta", locationSearch)}>{t("metaPixelData.connectMetaAds")}</Link>
           </p>
         ) : null}
       </div>

@@ -153,6 +153,25 @@ describe("buildAdsOverview", () => {
     expect(google.snapshot?.stale).toBe(true);
     const tiktok = overview.platforms.find((p) => p.platform === "tiktok")!;
     expect(tiktok.connected).toBe(false);
+    expect(tiktok.connectionState).toBe("missing");
+    expect(tiktok.adsConnected).toBe(false);
+  });
+
+  it("treats catalog-only Google as partial and excludes it from spend", async () => {
+    findManyCredential.mockResolvedValue([
+      { platform: "google_merchant", externalAccountId: "123", updatedAt: new Date("2026-08-01") },
+    ]);
+    groupByAdMetricDaily.mockResolvedValue([
+      metricGroup("google", { spend: 50, conversionsValue: 100 }),
+    ]);
+
+    const overview = await buildAdsOverview({ shop: "s.myshopify.com", rangeDays: 7, now: NOW });
+    const google = overview.platforms.find((p) => p.platform === "google")!;
+    expect(google.connected).toBe(true);
+    expect(google.catalogConnected).toBe(true);
+    expect(google.adsConnected).toBe(false);
+    expect(google.connectionState).toBe("partial");
+    expect(overview.totals.spend).toBe(0);
   });
 
   it("flags mixed currency and drops the single-currency label", async () => {

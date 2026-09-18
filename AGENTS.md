@@ -60,7 +60,7 @@ Spark/
 ├─ extensions/                Shopify 扩展：Web Pixel + Theme（审核期均为 toml.off；过审后恢复 TikTok / Google Remarketing / Image Switcher）
 ├─ prisma/                    schema、迁移和计费种子 SQL
 ├─ tests/                     与 app/ 大体镜像的 Vitest 测试
-├─ scripts/                   运维脚本（Turso 迁移、部署、飞书文档、广告沙盒探针等）；共用 `scripts/lib/loadEnv.mjs`
+├─ scripts/                   运维脚本（Turso 迁移、部署、飞书文档等）；共用 `scripts/lib/loadEnv.mjs`
 ├─ docs/                      架构、交互、设计、路线图和运营文档
 ├─ public/                    静态资源（favicon、workbench demo）
 ├─ translation-reports/       翻译运维报告输出目录（产物，非源码）
@@ -86,7 +86,7 @@ Spark/
 | Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
 | 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`（当前 `ready` 3 + `chat` 4；`inventory` 等 10 个 domain 仍空）；测/产导航都不展示，URL 仍可直达 |
 | 任务 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出。旧 `/app/tasks` 重定向到这里 |
-| 广告 | `/app/ads` | `app.ads.tsx` 左栏能力目录 + Outlet（样例 B）：总览 / 投放表现 / 归因 / 连接·同步目录 / 创建·编辑 / 目录同步任务；Pixel 审核期左栏隐藏。旧 `/app/ads-catalog`、`/app/studio/ads*`、`/app/insights/performance` 重定向至此。**仅测/本地导航；prod 不进导航，URL 仍可直达** |
+| 广告 | `/app/ads` | `app.ads.tsx` 左栏能力目录 + Outlet：总览 / 投放表现 / 归因 / 连接·同步目录 / 创建·编辑 / 目录同步任务。Pixel 审核期不进左栏，URL 仍可直达。OAuth 回跳 `/app/ads/catalog?tab=credentials`。Google 连接账户含 Merchant Center、Ads 与 GA4（各自可单独授权；「连接 Google」只申请 GMC+Ads）。旧 `/app/ads-catalog`、`/app/settings/connections/{google,meta,tiktok}`、`/app/studio/ads*`、`/app/insights/performance` 重定向至此。部分授权即可用。**仅测/本地导航；prod 不进导航，URL 仍可直达** |
 | 账户与订阅 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
 | Settings | `/app/settings` | `app.settings.*`：物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「账户与订阅」。广告入口已迁到一级「广告」`/app/ads`（旧 `/app/ads-catalog` 重定向）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
 
@@ -180,7 +180,7 @@ AI 主链路应从真实代码确认，通常为：首页工作台（`/app`）`u
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。历史指标报表走 `shopifyqlQuery`（需 `read_reports`），入口 `/app/settings/shopify-reports`。
 - **Google Merchant API v1**：Ads Catalog 的 Merchant 账户发现、primary API data source、`ProductInput` 写入、商品审核状态和账户问题读取；OAuth 继续使用 `content` scope，通知订阅使用 Notifications v1。运行时不得恢复 Content API v2.1。
 - **Google Ads 再营销**：Ads Catalog 使用 `product_link` / `product_link_invitation` 完成 GMC↔Ads 幂等关联，并从 Ads customer 设置发现 AW 标签。Theme block 只发送非 purchase 店面事件；purchase 由商户手动安装的实验性 Custom Pixel 发送，Google 官方不支持该运行方式，UI 必须持续展示数据损失、重复上报与 Support 不保障告警。
-- **Google Analytics 4 Data API / Search Console API**：Settings 下 GA4 与 GSC 的连接、属性/站点发现与报表读取，均为只读分析数据；OAuth 凭证经 `app/server/googleAnalytics/ga4Credentials.server.ts`、`app/server/googleSearchConsole/gscCredentials.server.ts` 存取。
+- **Google Analytics 4 Data API / Search Console API**：GA4 与 GSC 连接及属性/站点选择均在广告「连接与凭证」；Settings `/app/settings/google-analytics` 与 `/app/settings/google-search-console` 只保留数据验证快照。OAuth 凭证经 `app/server/googleAnalytics/ga4Credentials.server.ts`、`app/server/googleSearchConsole/gscCredentials.server.ts` 存取。
 - **火山引擎（Volcengine）视觉模型**：图片生成与图片翻译的模型调用，凭证在 `app/server/volcengine/`。
 - **Shopify Partner API**：仅用于拉取卸载反馈（`app/server/partner/`），不是业务写入通道。
 - **腾讯 SES / 飞书**：商户邮件与内部运营通知。通知失败通常不应阻断主业务，沿用现有场景封装。
@@ -306,7 +306,6 @@ npm run turso:migrate:test
 - `scripts/lib/loadEnv.mjs` — 上述脚本共用的 env 叠载与 Turso/Redis/Cosmos 解析
 - `scripts/generate-notification-html-templates.cjs` — 重生 SES 邮件 HTML（`app/server/notifications/tencent-cloud-html/`）
 - `scripts/test-pixel-ingest.mjs` — 向 `/api/pixel-ingest` 发测试 envelope
-- Meta / TikTok 广告沙盒：`check-meta-sandbox-posts.mjs`、`list-meta-sandbox-pages.mjs`、`diagnose-meta-sandbox-seed.mjs`、`list-tiktok-sandbox-identities.mjs`、`seed-tiktok-sandbox.mjs`、`upload-tiktok-sandbox-creative.mjs`
 
 CI：
 

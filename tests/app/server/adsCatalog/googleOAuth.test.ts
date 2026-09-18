@@ -3,6 +3,7 @@ import {
   ADS_SCOPE,
   GMC_SCOPE,
   buildGoogleOAuthStartUrl,
+  buildOAuthPopupCloseHtml,
   verifyOAuthState,
 } from "../../../../app/server/adsCatalog/googleOAuth.server";
 
@@ -42,5 +43,16 @@ describe("Google Catalog OAuth flows", () => {
       flow,
       popup: true,
     });
+  });
+
+  it("broadcasts popup results even if Google severs window.opener", () => {
+    const html = buildOAuthPopupCloseHtml("gmc_oauth", {
+      gmcAuth: "error",
+      reason: "gcp_registration_required",
+    });
+    expect(html).toContain("spark-oauth");
+    expect(html).toContain("spark:oauth-popup-result");
+    expect(html).toContain("gmcAuth");
+    expect(html).toContain("window.opener.postMessage");
   });
 });

@@ -14,8 +14,8 @@ export function buildTodayAnalysisTodoHref(todo: TodayAnalysisTodo): string {
     }
     case "open_ads_insights": {
       const platform = todo.payload.platform ?? "all";
-      if (platform === "all") return "/app/insights/performance";
-      return `/app/insights/performance?platform=${platform}`;
+      if (platform === "all") return "/app/ads/performance";
+      return `/app/ads/performance?platform=${platform}`;
     }
     case "open_task_center": {
       const params = new URLSearchParams();

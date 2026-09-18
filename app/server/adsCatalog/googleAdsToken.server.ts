@@ -5,10 +5,14 @@
 
 import {
   getGoogleAdsCredential,
+  getGoogleMerchantCredential,
   setGoogleAdsCredential,
   type GoogleAdsCredential,
 } from "./credentialStore.server";
-import { refreshGoogleAccessToken } from "./clients/googleMerchantClient.server";
+import {
+  isGoogleOAuthRefreshAuthError,
+  refreshGoogleAccessTokenDetailed,
+} from "./clients/googleMerchantClient.server";
 import {
   normalizeCustomerId,
   resolveLoginCustomerId,
@@ -19,6 +23,9 @@ import {
 } from "./googleOAuth.server";
 
 const LOG_PREFIX = "[AdsCatalog][GoogleAdsToken]";
+
+export const GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE =
+  "Google Ads 授权已失效，请前往广告连接页断开 Google Ads 并重新授权。";
 
 /** access token 到期前这段时间内就提前刷新，避免请求途中过期。 */
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -42,6 +49,84 @@ function isLoginCustomerIdVerified(verifiedAt: string | undefined, now: number):
   return now - stamped < LOGIN_CUSTOMER_ID_TTL_MS;
 }
 
+/** login 校验戳必须同时匹配当前 customerId，避免换账户后复用旧 login。 */
+function isGoogleAdsLoginBindingTrusted(
+  cred: Pick<
+    GoogleAdsCredential,
+    | "customerId"
+    | "loginCustomerId"
+    | "loginCustomerIdVerifiedAt"
+    | "loginCustomerIdVerifiedForCustomerId"
+  >,
+  now: number,
+): boolean {
+  const stored = cred.loginCustomerId?.trim();
+  if (!stored || !isLoginCustomerIdVerified(cred.loginCustomerIdVerifiedAt, now)) {
+    return false;
+  }
+  const verifiedFor = normalizeCustomerId(cred.loginCustomerIdVerifiedForCustomerId ?? "");
+  if (!verifiedFor) return false;
+  return verifiedFor === normalizeCustomerId(cred.customerId);
+}
+
+export function buildGoogleAdsLoginVerifiedStamp(customerId: string): {
+  loginCustomerIdVerifiedAt: string;
+  loginCustomerIdVerifiedForCustomerId: string;
+} {
+  const normalized = normalizeCustomerId(customerId);
+  return {
+    loginCustomerIdVerifiedAt: new Date().toISOString(),
+    loginCustomerIdVerifiedForCustomerId: normalized,
+  };
+}
+
+/**
+ * 解析 Google Ads refresh 应使用的 OAuth client。
+ * 顺序：Ads 凭证 → 同店 GMC 凭证（组合授权共用 refresh token）→ 应用 env。
+ */
+export async function resolveGoogleAdsOAuthClient(
+  shop: string,
+  cred: GoogleAdsCredential,
+): Promise<{ clientId: string; clientSecret: string } | null> {
+  const adsClientId = cred.clientId?.trim();
+  const adsClientSecret = cred.clientSecret?.trim();
+  if (adsClientId && adsClientSecret) {
+    return { clientId: adsClientId, clientSecret: adsClientSecret };
+  }
+
+  const gmc = await getGoogleMerchantCredential(shop);
+  const gmcClientId = gmc?.clientId?.trim();
+  const gmcClientSecret = gmc?.clientSecret?.trim();
+  if (gmcClientId && gmcClientSecret) {
+    return { clientId: gmcClientId, clientSecret: gmcClientSecret };
+  }
+
+  const env = getGoogleOAuthClient();
+  if (env.clientId && env.clientSecret) {
+    return env;
+  }
+  return null;
+}
+
+function handleGoogleAdsRefreshFailure(params: {
+  shop: string;
+  cred: GoogleAdsCredential;
+  error: string;
+  oauthError?: string;
+}): string {
+  const tokenStillUsable = isAccessTokenUsable(params.cred.accessTokenExpiresAt, Date.now());
+  if (isGoogleOAuthRefreshAuthError(params.oauthError) || !tokenStillUsable) {
+    console.warn(
+      `${LOG_PREFIX} step=refresh_token shop=${params.shop} customerId=${params.cred.customerId} oauthError=${params.oauthError ?? "none"} error=${params.error} action=reauth_required`,
+    );
+    throw new Error(GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE);
+  }
+  console.warn(
+    `${LOG_PREFIX} step=refresh_token shop=${params.shop} customerId=${params.cred.customerId} oauthError=${params.oauthError ?? "none"} error=${params.error} action=use_stored_access_token`,
+  );
+  return params.cred.accessToken;
+}
+
 /**
  * 解析并缓存 login-customer-id。
  *
@@ -56,7 +141,7 @@ export async function resolveVerifiedLoginCustomerId(params: {
 }): Promise<string> {
   const { shop, cred, accessToken, developerToken } = params;
   const stored = cred.loginCustomerId?.trim() || "";
-  if (stored && isLoginCustomerIdVerified(cred.loginCustomerIdVerifiedAt, Date.now())) {
+  if (stored && isGoogleAdsLoginBindingTrusted(cred, Date.now())) {
     return stored;
   }
 
@@ -64,16 +149,22 @@ export async function resolveVerifiedLoginCustomerId(params: {
     accessToken,
     developerToken,
     customerId: cred.customerId,
-    accessibleCustomerIds: stored ? [stored, cred.customerId] : [cred.customerId],
+    preferredLoginCustomerId: stored || undefined,
+    accessibleCustomerIds: [
+      ...(cred.availableAccounts?.map((a) => a.loginCustomerId ?? a.id) ?? []),
+      cred.customerId,
+    ],
   });
 
   // 不传 accessTokenExpiresAt：accessToken 未变，交给存储层沿用刷新流程写下的过期时刻。
   await setGoogleAdsCredential(shop, {
     accessToken,
     refreshToken: cred.refreshToken,
+    clientId: cred.clientId,
+    clientSecret: cred.clientSecret,
     customerId: cred.customerId,
     loginCustomerId: resolved,
-    loginCustomerIdVerifiedAt: new Date().toISOString(),
+    ...buildGoogleAdsLoginVerifiedStamp(cred.customerId),
   });
   if (resolved !== stored) {
     console.info(
@@ -93,29 +184,37 @@ export async function maybeRefreshGoogleAdsToken(shop: string): Promise<string |
     return cred.accessToken;
   }
 
-  const { clientId, clientSecret } = getGoogleOAuthClient();
-  if (!clientId || !clientSecret) {
+  const oauthClient = await resolveGoogleAdsOAuthClient(shop, cred);
+  if (!oauthClient) {
     console.warn(
-      `${LOG_PREFIX} step=refresh_token shop=${shop} skipped=missing_oauth_client using_stored_access_token`,
+      `${LOG_PREFIX} step=refresh_token shop=${shop} skipped=missing_oauth_client`,
     );
+    if (!isAccessTokenUsable(cred.accessTokenExpiresAt, Date.now())) {
+      throw new Error(GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE);
+    }
     return cred.accessToken;
   }
 
-  const refreshed = await refreshGoogleAccessToken({
-    clientId,
-    clientSecret,
+  const refreshed = await refreshGoogleAccessTokenDetailed({
+    clientId: oauthClient.clientId,
+    clientSecret: oauthClient.clientSecret,
     refreshToken: cred.refreshToken,
   });
-  if (!refreshed) {
-    console.warn(
-      `${LOG_PREFIX} step=refresh_token shop=${shop} customerId=${cred.customerId} result=failed using_stored_access_token`,
-    );
-    return cred.accessToken;
+  if (!refreshed.ok) {
+    return handleGoogleAdsRefreshFailure({
+      shop,
+      cred,
+      error: refreshed.error,
+      oauthError: refreshed.oauthError,
+    });
   }
 
+  const shouldPersistOAuthClient = !cred.clientId?.trim() || !cred.clientSecret?.trim();
   await setGoogleAdsCredential(shop, {
     accessToken: refreshed.accessToken,
     refreshToken: cred.refreshToken,
+    clientId: shouldPersistOAuthClient ? oauthClient.clientId : cred.clientId,
+    clientSecret: shouldPersistOAuthClient ? oauthClient.clientSecret : cred.clientSecret,
     accessTokenExpiresAt: new Date(
       Date.now() + refreshed.expiresIn * 1000,
     ).toISOString(),
@@ -123,6 +222,7 @@ export async function maybeRefreshGoogleAdsToken(shop: string): Promise<string |
     loginCustomerId: cred.loginCustomerId,
     // login 未变，显式带上校验戳，避免刷新 token 时把探测结果清掉。
     loginCustomerIdVerifiedAt: cred.loginCustomerIdVerifiedAt,
+    loginCustomerIdVerifiedForCustomerId: cred.loginCustomerIdVerifiedForCustomerId,
   });
   return refreshed.accessToken;
 }

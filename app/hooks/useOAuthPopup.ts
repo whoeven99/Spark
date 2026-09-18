@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  OAUTH_POPUP_CHANNEL,
+  readOAuthPopupStorageResult,
+} from "../lib/oauthPopupBridge";
 
 export type OAuthPopupMessage = { type?: string } & Record<string, string | undefined>;
 
@@ -43,34 +47,51 @@ export function useOAuthPopup(messageType: string) {
   const onCompleteRef = useRef<((data: OAuthPopupMessage) => void) | null>(null);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const data = event.data as OAuthPopupMessage | null;
-      if (!data || data.type !== messageType) return;
-
+    const consume = (data: OAuthPopupMessage | null | undefined) => {
+      if (!data || data.type !== messageType) return false;
       popupRef.current = null;
       setRedirecting(false);
       onCompleteRef.current?.(data);
       onCompleteRef.current = null;
+      return true;
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      consume(event.data as OAuthPopupMessage | null);
     };
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      channel = new BroadcastChannel(OAUTH_POPUP_CHANNEL);
+      channel.onmessage = (event) => {
+        const data = event.data as OAuthPopupMessage | null;
+        if (!consume(data)) return;
+        window.postMessage(data, "*");
+      };
+    }
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      channel?.close();
+    };
   }, [messageType]);
 
   useEffect(() => {
     if (!redirecting) return;
     const timer = setInterval(() => {
-      if (popupRef.current?.closed) {
-        clearInterval(timer);
-        popupRef.current = null;
-        setRedirecting(false);
-        // Some OAuth providers can sever window.opener during navigation. In
-        // that case the callback page cannot postMessage back, but it still
-        // closes the popup after completing server-side work. Let callers
-        // re-read their server state as a fallback.
-        const onComplete = onCompleteRef.current;
-        onCompleteRef.current = null;
-        onComplete?.({ type: messageType });
+      if (!popupRef.current?.closed) return;
+      clearInterval(timer);
+      popupRef.current = null;
+      setRedirecting(false);
+      const onComplete = onCompleteRef.current;
+      if (!onComplete) return;
+      onCompleteRef.current = null;
+      const stored = readOAuthPopupStorageResult(messageType);
+      if (stored) {
+        window.postMessage(stored, "*");
       }
+      onComplete(stored ?? { type: messageType });
     }, 500);
     return () => clearInterval(timer);
   }, [messageType, redirecting]);

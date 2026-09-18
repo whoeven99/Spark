@@ -298,12 +298,11 @@ export async function fetchMetaAdsInsightsWithCredential(params: {
   accountName?: string | null;
   rangeDays: AdsInsightsRangeDays;
   options?: { includeCreatives?: boolean };
-  sandbox?: boolean;
 }): Promise<AdsInsightsResult> {
-  const shop = params.shop ?? "sandbox";
+  const shop = params.shop ?? "unknown";
   const { dateStart, dateEnd } = resolveDateWindow(params.rangeDays);
   console.info(
-    `${LOG_PREFIX} step=start shop=${shop} account=${params.adAccountId} range=${params.rangeDays} sandbox=${Boolean(params.sandbox)}`,
+    `${LOG_PREFIX} step=start shop=${shop} account=${params.adAccountId} range=${params.rangeDays}`,
   );
 
   let rows: MetaInsightRow[];
@@ -361,7 +360,6 @@ export async function fetchMetaAdsInsightsWithCredential(params: {
     platform: "meta",
     accountId: params.adAccountId,
     accountName: params.accountName ?? null,
-    sandbox: Boolean(params.sandbox),
     currencyCode: params.currencyCode ?? null,
     rangeDays: params.rangeDays,
     dateStart,
@@ -390,6 +388,5 @@ export async function fetchMetaAdsInsights(
     accountName: cred.adAccountName,
     rangeDays,
     options,
-    sandbox: false,
   });
 }

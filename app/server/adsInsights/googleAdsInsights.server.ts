@@ -455,6 +455,7 @@ export async function fetchGoogleAdsInsights(
             customerId: cred.customerId,
             loginCustomerId: retriedLogin,
             loginCustomerIdVerifiedAt: new Date().toISOString(),
+            loginCustomerIdVerifiedForCustomerId: normalizeCustomerId(cred.customerId),
           });
           rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
         } else {

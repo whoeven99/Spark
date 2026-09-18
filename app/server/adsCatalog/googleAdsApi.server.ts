@@ -13,7 +13,7 @@ const LOG_PREFIX = "[AdsCatalog][GoogleAdsApi]";
 export const GOOGLE_ADS_API_VERSION = "v24";
 
 /** login-customer-id 探测上限，避免多次串行请求拖垮页面加载。 */
-export const MAX_LOGIN_CUSTOMER_PROBE_ATTEMPTS = 3;
+export const MAX_LOGIN_CUSTOMER_PROBE_ATTEMPTS = 6;
 
 /** 单次探测请求超时（毫秒）。 */
 export const GOOGLE_ADS_PROBE_TIMEOUT_MS = 10_000;
@@ -214,6 +214,8 @@ export async function resolveLoginCustomerId(params: {
   developerToken: string;
   customerId: string;
   accessibleCustomerIds?: string[];
+  /** 已知可用的 login-customer-id（如 listSelectableAdsCustomers 写入的 MCC），优先探测。 */
+  preferredLoginCustomerId?: string;
 }): Promise<string> {
   const targetId = normalizeCustomerId(params.customerId);
   const provided = (params.accessibleCustomerIds ?? [])
@@ -227,8 +229,12 @@ export async function resolveLoginCustomerId(params: {
     seen.add(id);
     orderedLoginCandidates.push(id);
   };
-  pushCandidate(targetId);
+  if (params.preferredLoginCustomerId) {
+    pushCandidate(normalizeCustomerId(params.preferredLoginCustomerId));
+  }
   for (const id of provided) pushCandidate(id);
+  // 直连账户 login 等于自身；MCC 子账户放最后，避免无效探测占满上限。
+  pushCandidate(targetId);
 
   let attempts = 0;
   for (const loginCustomerId of orderedLoginCandidates) {
@@ -266,8 +272,8 @@ export async function resolveLoginCustomerId(params: {
     }
   }
 
-  const storedLogin = provided.find((id) => id !== targetId);
-  return storedLogin ?? targetId;
+  // 探测全失败时 fallback 到 target 自身，避免写入错误的 cross-account login 组合。
+  return targetId;
 }
 
 interface CustomerGaqlRow {

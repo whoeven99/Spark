@@ -19,14 +19,19 @@ import type { AdsInsightsPlatform, AdsInsightsRangeDays } from "./types.server";
 /** 总览覆盖的广告平台，顺序即 UI 展示顺序。 */
 export const OVERVIEW_PLATFORMS: readonly AdsInsightsPlatform[] = ["meta", "google", "tiktok"];
 
-/** 决定平台卡「已连接」的凭证行（与 ads-insights 页判断口径一致）。 */
-const PLATFORM_PRIMARY_CREDENTIAL: Record<AdsInsightsPlatform, string> = {
-  meta: "meta_ads",
-  google: "google",
-  tiktok: "tiktok_catalog",
+/** 渠道内目录 / 广告账户凭证。TikTok 广告表现与 Catalog 共用同一凭证。 */
+const CHANNEL_CREDENTIAL_KEYS: Record<
+  AdsInsightsPlatform,
+  { catalog: string; ads: string }
+> = {
+  meta: { catalog: "meta_catalog", ads: "meta_ads" },
+  google: { catalog: "google_merchant", ads: "google" },
+  tiktok: { catalog: "tiktok_catalog", ads: "tiktok_catalog" },
 };
 
-/** 连接矩阵展示的生产凭证行，不含 pending 中转与沙盒。 */
+export type AdsChannelConnectionState = "ready" | "partial" | "missing";
+
+/** 连接矩阵展示的生产凭证行，不含 pending 中转。 */
 const CONNECTION_PLATFORM_KEYS = [
   "meta_catalog",
   "meta_ads",
@@ -68,7 +73,13 @@ export type AdsOverviewSnapshotState = {
 
 export type AdsOverviewPlatform = {
   platform: AdsInsightsPlatform;
+  /** 该渠道至少有一块凭证（部分授权也算已接入）。 */
   connected: boolean;
+  /** 目录 / Merchant / Catalog 已授权。 */
+  catalogConnected: boolean;
+  /** 广告账户已授权（TikTok 与 Catalog 共用）。 */
+  adsConnected: boolean;
+  connectionState: AdsChannelConnectionState;
   accountId: string | null;
   accountName: string | null;
   currencyCode: string | null;
@@ -271,12 +282,27 @@ export async function buildAdsOverview(params: {
   const credentialByPlatform = new Map(credentialRows.map((row) => [row.platform, row]));
 
   const platforms: AdsOverviewPlatform[] = OVERVIEW_PLATFORMS.map((platform) => {
-    const credential = credentialByPlatform.get(PLATFORM_PRIMARY_CREDENTIAL[platform]);
+    const keys = CHANNEL_CREDENTIAL_KEYS[platform];
+    const catalogRow = credentialByPlatform.get(keys.catalog);
+    const adsRow = credentialByPlatform.get(keys.ads);
+    const catalogConnected = Boolean(catalogRow);
+    const adsConnected = Boolean(adsRow);
+    const connected = catalogConnected || adsConnected;
+    const connectionState: AdsChannelConnectionState =
+      catalogConnected && adsConnected
+        ? "ready"
+        : connected
+          ? "partial"
+          : "missing";
+    const credential = adsRow ?? catalogRow;
     const sync = syncByPlatform.get(platform);
     const sums = sumsByPlatform.get(platform);
     return {
       platform,
-      connected: Boolean(credential),
+      connected,
+      catalogConnected,
+      adsConnected,
+      connectionState,
       accountId: sync?.accountId ?? credential?.externalAccountId ?? null,
       accountName: sync?.accountName ?? null,
       currencyCode: sync?.currencyCode ?? null,
@@ -296,7 +322,7 @@ export async function buildAdsOverview(params: {
   const combined = emptySums();
   const currencies = new Set<string>();
   for (const item of platforms) {
-    if (!item.connected || !item.totals) continue;
+    if (!item.adsConnected || !item.totals) continue;
     combined.spend += item.totals.spend;
     combined.impressions += item.totals.impressions;
     combined.clicks += item.totals.clicks;
@@ -316,7 +342,7 @@ export async function buildAdsOverview(params: {
   });
 
   const connectedOverviewPlatforms = new Set(
-    platforms.filter((item) => item.connected).map((item) => item.platform),
+    platforms.filter((item) => item.adsConnected).map((item) => item.platform),
   );
   const paidSeriesByDate = new Map<string, AdsOverviewSeriesPoint>();
   for (const row of dailyMetricGroups) {

@@ -11,6 +11,7 @@ import {
 } from "./pageUiStyles";
 import type { GoogleAttributionLoaderData } from "../app.ads.google-attribution";
 import type { GoogleAttributionOverviewResponse } from "../api.google-attribution.overview";
+import { buildAdsHubConnectPath } from "../../lib/adsHubNav";
 
 type RangeDays = 7 | 14 | 30;
 
@@ -203,7 +204,7 @@ export function GoogleAttributionPage() {
             </StatusPill>
             {!loaderData.adsConnected ? (
               <div style={{ marginTop: 10 }}>
-                <Link to={`/app/settings/connections/google${locationSearch}`} style={{ fontSize: 13 }}>
+                <Link to={buildAdsHubConnectPath("google", locationSearch)} style={{ fontSize: 13 }}>
                   {t("googleAttribution.connectAds")}
                 </Link>
               </div>
@@ -219,13 +220,13 @@ export function GoogleAttributionPage() {
                 ? t("googleAttribution.ga4Connected", { count: loaderData.ga4PropertyCount })
                 : t("googleAttribution.ga4NotConnected")}
             </StatusPill>
-            {!loaderData.ga4Connected ? (
-              <div style={{ marginTop: 10 }}>
-                <Link to={`/app/settings/google-analytics${locationSearch}`} style={{ fontSize: 13 }}>
-                  {t("googleAttribution.connectGa4")}
-                </Link>
-              </div>
-            ) : null}
+            <div style={{ marginTop: 10 }}>
+              <Link to={buildAdsHubConnectPath("google", locationSearch)} style={{ fontSize: 13 }}>
+                {loaderData.ga4Connected
+                  ? t("googleAttribution.manageGa4")
+                  : t("googleAttribution.connectGa4")}
+              </Link>
+            </div>
           </div>
 
           <div>

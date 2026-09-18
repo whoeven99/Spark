@@ -24,12 +24,6 @@ import {
   toDailyRows,
 } from "./nest.server";
 import {
-  getTiktokSandboxCredentials,
-  isTiktokSandboxApiBase,
-  tiktokSandboxRequest,
-  TIKTOK_SANDBOX_API_BASE,
-} from "./tiktokSandbox.server";
-import {
   type AdsInsightsCampaign,
   type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
@@ -85,15 +79,6 @@ async function tiktokGetJson<T>(params: {
   query: Record<string, string>;
   apiBase?: string;
 }): Promise<T> {
-  if (isTiktokSandboxApiBase(params.apiBase)) {
-    return tiktokSandboxRequest<T>({
-      path: params.path,
-      accessToken: params.accessToken,
-      query: params.query,
-      apiBase: params.apiBase,
-    });
-  }
-
   const apiBase = params.apiBase ?? TIKTOK_API_BASE;
   const url = new URL(`${apiBase}${params.path}`);
   for (const [key, value] of Object.entries(params.query)) {
@@ -392,37 +377,22 @@ function mapReportMetrics(m: Record<string, string | number | undefined>) {
 export async function fetchTiktokAdsInsights(
   shop: string,
   rangeDays: AdsInsightsRangeDays,
-  options?: { includeCreatives?: boolean; sandbox?: boolean },
+  options?: { includeCreatives?: boolean },
 ): Promise<AdsInsightsResult | null> {
-  const sandbox = Boolean(options?.sandbox);
-  const apiBase = sandbox ? TIKTOK_SANDBOX_API_BASE : TIKTOK_API_BASE;
-
-  let accessToken: string;
-  let advertiserId: string;
-  let accountName: string | null = null;
-
-  if (sandbox) {
-    const sandboxCreds = getTiktokSandboxCredentials();
-    if (!sandboxCreds) return null;
-    accessToken = sandboxCreds.accessToken;
-    advertiserId = sandboxCreds.advertiserId;
-    accountName = sandboxCreds.accountName;
-  } else {
-    const credential = await getTiktokAdsInsightsCredential(shop);
-    if (!credential) return null;
-    accessToken = credential.accessToken;
-    advertiserId = credential.advertiserId;
-    if (credential.refreshToken) {
-      const refreshed = await refreshTiktokAccessToken({
-        shop,
-        credential,
-      });
-      if (refreshed) accessToken = refreshed;
-    }
+  const credential = await getTiktokAdsInsightsCredential(shop);
+  if (!credential) return null;
+  let accessToken = credential.accessToken;
+  const advertiserId = credential.advertiserId;
+  if (credential.refreshToken) {
+    const refreshed = await refreshTiktokAccessToken({
+      shop,
+      credential,
+    });
+    if (refreshed) accessToken = refreshed;
   }
 
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
-  const logShop = sandbox ? `sandbox:${advertiserId}` : shop;
+  const apiBase = TIKTOK_API_BASE;
 
   const [campaignMeta, adgroupMeta, adsWithParents, currencyCode] = await Promise.all([
     listEntityNames({
@@ -457,36 +427,33 @@ export async function fetchTiktokAdsInsights(
   let reportList: ReportRow[] = [];
   let usedExtended = true;
 
-  // 沙盒无真实投放，跳过报表接口（沙盒报表 API 对空账号可能报错）。
-  if (!sandbox) {
+  try {
     try {
-      try {
-        reportList = await fetchReportPages({
-          accessToken,
-          advertiserId,
-          apiBase,
-          dateStart,
-          dateEnd,
-          metrics: REPORT_METRICS_EXTENDED,
-        });
-      } catch (e) {
-        usedExtended = false;
-        console.warn(
-          `${LOG_PREFIX} step=report_extended_failed shop=${logShop} sandbox=${sandbox} ${formatOutboundErrorLog(e)}`,
-        );
-        reportList = await fetchReportPages({
-          accessToken,
-          advertiserId,
-          apiBase,
-          dateStart,
-          dateEnd,
-          metrics: REPORT_METRICS_BASE,
-        });
-      }
+      reportList = await fetchReportPages({
+        accessToken,
+        advertiserId,
+        apiBase,
+        dateStart,
+        dateEnd,
+        metrics: REPORT_METRICS_EXTENDED,
+      });
     } catch (e) {
-      console.error(`${LOG_PREFIX} step=report shop=${logShop} ${formatOutboundErrorLog(e)}`);
-      throw e;
+      usedExtended = false;
+      console.warn(
+        `${LOG_PREFIX} step=report_extended_failed shop=${shop} ${formatOutboundErrorLog(e)}`,
+      );
+      reportList = await fetchReportPages({
+        accessToken,
+        advertiserId,
+        apiBase,
+        dateStart,
+        dateEnd,
+        metrics: REPORT_METRICS_BASE,
+      });
     }
+  } catch (e) {
+    console.error(`${LOG_PREFIX} step=report shop=${shop} ${formatOutboundErrorLog(e)}`);
+    throw e;
   }
 
   const dailyFlat = reportList
@@ -551,12 +518,7 @@ export async function fetchTiktokAdsInsights(
         status: v.status,
         campaignId: v.parentId || "",
       })),
-      ads: sandbox
-        ? adsWithParents.map((ad) => ({
-            ...ad,
-            metrics: emptyMetrics(),
-          }))
-        : mergeEntityAdsWithFlatMetrics(adsWithParents, flat),
+      ads: mergeEntityAdsWithFlatMetrics(adsWithParents, flat),
     });
   }
 
@@ -597,8 +559,7 @@ export async function fetchTiktokAdsInsights(
   return {
     platform: "tiktok",
     accountId: advertiserId,
-    accountName,
-    sandbox,
+    accountName: null,
     currencyCode,
     rangeDays,
     dateStart,
@@ -607,7 +568,6 @@ export async function fetchTiktokAdsInsights(
     keywords: [],
     searchTerms: [],
     creatives,
-    // 沙盒不落库：没有真实投放，且与正式账号数据隔离。
-    daily: sandbox ? undefined : toDailyRows(dailyFlat),
+    daily: toDailyRows(dailyFlat),
   };
 }

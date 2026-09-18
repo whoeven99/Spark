@@ -5,6 +5,8 @@ import {
   listSelectableAdsCustomers,
 } from "./googleAdsApi.server";
 import { listGoogleMerchantAccounts } from "./clients/googleMerchantClient.server";
+import { ADS_HUB_CATALOG_PATH, withAdsHubConnectQuery } from "../../lib/adsHubNav";
+import { OAUTH_POPUP_CHANNEL, OAUTH_POPUP_STORAGE_KEY } from "../../lib/oauthPopupBridge";
 
 export { googleAdsApiUrl, GOOGLE_ADS_API_VERSION } from "./googleAdsApi.server";
 
@@ -16,13 +18,12 @@ export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 export const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 export const GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
-export type OAuthFlow = "gmc" | "ads" | "gmc_ads" | "ads_sandbox" | "gsc" | "ga4";
+export type OAuthFlow = "gmc" | "ads" | "gmc_ads" | "gsc" | "ga4";
 
 const VALID_OAUTH_FLOWS: ReadonlySet<OAuthFlow> = new Set([
   "gmc",
   "ads",
   "gmc_ads",
-  "ads_sandbox",
   "gsc",
   "ga4",
 ]);
@@ -30,7 +31,7 @@ const VALID_OAUTH_FLOWS: ReadonlySet<OAuthFlow> = new Set([
 /** Catalog 支持一次组合授权，也支持 GMC / Ads 单独授权。 */
 export function normalizeCatalogGoogleOAuthFlow(
   flow: OAuthFlow,
-): "gmc" | "ads" | "gmc_ads" | "ads_sandbox" | "gsc" | "ga4" {
+): "gmc" | "ads" | "gmc_ads" | "gsc" | "ga4" {
   return flow;
 }
 
@@ -92,11 +93,12 @@ export function buildGoogleOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
+  const query = withAdsHubConnectQuery("google", params.query);
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
+    path: ADS_HUB_CATALOG_PATH,
     shop: params.shop,
     request: params.request,
-    query: params.query,
+    query,
   });
   if (adminUrl) return adminUrl;
 
@@ -105,11 +107,11 @@ export function buildGoogleOAuthReturnUrl(params: {
     readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  const target = new URL(ADS_HUB_CATALOG_PATH, base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
+  for (const [key, value] of Object.entries(query)) {
     target.searchParams.set(key, value);
   }
   return target.toString();
@@ -229,12 +231,9 @@ export function buildGoogleOAuthStartUrl(params: {
     return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
   }
 
-  // 生产 Catalog 的组合授权与单侧授权共用 Merchant callback；沙盒仍走独立 Ads callback。
+  // Catalog 的组合授权与单侧授权共用 Merchant callback。GSC / GA4 走各自的 start helper。
   const flow = normalizeCatalogGoogleOAuthFlow(params.flow);
-  const callbackPath =
-    flow === "gmc" || flow === "ads" || flow === "gmc_ads"
-      ? "/ads/google-merchant/callback"
-      : "/ads/google-ads/callback";
+  const callbackPath = "/ads/google-merchant/callback";
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
   const state = createOAuthState(
     params.shop,
@@ -261,71 +260,6 @@ export function buildGoogleCombinedOAuthStartUrl(params: {
   popup?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   return buildGoogleOAuthStartUrl({ ...params, flow: "gmc_ads" });
-}
-
-/** Google Ads 测试账号 OAuth（广告洞察沙盒，与 Catalog 生产授权隔离）。 */
-export function buildGoogleAdsSandboxOAuthStartUrl(params: {
-  shop: string;
-  host?: string;
-  requestOrigin: string;
-  reauth?: boolean;
-  popup?: boolean;
-}): { ok: true; authUrl: string } | { ok: false; error: string } {
-  const { clientId } = getGoogleOAuthClient();
-  if (!clientId) {
-    return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
-  }
-
-  const callbackPath = "/ads/google-ads/callback";
-  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createOAuthState(
-    params.shop,
-    "ads_sandbox",
-    params.host ?? "",
-    appOrigin,
-    params.popup,
-  );
-  const authUrl = buildAuthUrl({
-    flow: "ads_sandbox",
-    state,
-    redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
-    reauth: params.reauth,
-  });
-  return { ok: true, authUrl };
-}
-
-/** Google Ads 测试账号 OAuth 完成后跳回广告连接与配置页。 */
-export function buildGoogleAdsSandboxOAuthReturnUrl(params: {
-  shop: string;
-  host?: string;
-  appOrigin?: string;
-  query?: Record<string, string>;
-  request?: Request;
-}): string {
-  const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
-    shop: params.shop,
-    request: params.request,
-    query: { ...params.query, tab: "credentials", platform: "google", sandbox: "1" },
-  });
-  if (adminUrl) return adminUrl;
-
-  const base =
-    params.appOrigin ||
-    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
-    readEnv("SHOPIFY_APP_URL") ||
-    "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
-  target.searchParams.set("shop", params.shop);
-  target.searchParams.set("embedded", "1");
-  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
-    target.searchParams.set(key, value);
-  }
-  target.searchParams.set("tab", "credentials");
-  target.searchParams.set("platform", "google");
-  target.searchParams.set("sandbox", "1");
-  return target.toString();
 }
 
 export async function exchangeCodeForTokens(
@@ -406,7 +340,7 @@ export function formatCustomerId(id: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-/** Google Search Console OAuth 完成后跳回 GSC 设置页。 */
+/** Google Search Console OAuth 完成后跳回广告连接账户。 */
 export function buildGscOAuthReturnUrl(params: {
   shop: string;
   host?: string;
@@ -414,30 +348,7 @@ export function buildGscOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
-  const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/settings/google-search-console",
-    shop: params.shop,
-    request: params.request,
-    query: params.query,
-  });
-  if (adminUrl) return adminUrl;
-
-  const base =
-    params.appOrigin ||
-    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
-    readEnv("SHOPIFY_APP_URL") ||
-    "https://example.com";
-  const target = new URL(
-    "/app/settings/google-search-console",
-    base.replace(/\/$/, "") || base,
-  );
-  target.searchParams.set("shop", params.shop);
-  target.searchParams.set("embedded", "1");
-  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
-    target.searchParams.set(key, value);
-  }
-  return target.toString();
+  return buildGoogleOAuthReturnUrl(params);
 }
 
 /** 在嵌入式 iframe 内通过 API 鉴权后生成 Google Search Console 授权 URL。 */
@@ -471,7 +382,7 @@ export function buildGscOAuthStartUrl(params: {
   return { ok: true, authUrl };
 }
 
-/** Google Analytics 4 OAuth 完成后跳回 GA4 设置页。 */
+/** Google Analytics 4 OAuth 完成后跳回广告连接账户。 */
 export function buildGa4OAuthReturnUrl(params: {
   shop: string;
   host?: string;
@@ -479,27 +390,7 @@ export function buildGa4OAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
-  const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/settings/google-analytics",
-    shop: params.shop,
-    request: params.request,
-    query: params.query,
-  });
-  if (adminUrl) return adminUrl;
-
-  const base =
-    params.appOrigin ||
-    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
-    readEnv("SHOPIFY_APP_URL") ||
-    "https://example.com";
-  const target = new URL("/app/settings/google-analytics", base.replace(/\/$/, "") || base);
-  target.searchParams.set("shop", params.shop);
-  target.searchParams.set("embedded", "1");
-  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
-    target.searchParams.set(key, value);
-  }
-  return target.toString();
+  return buildGoogleOAuthReturnUrl(params);
 }
 
 /** 在嵌入式 iframe 内通过 API 鉴权后生成 Google Analytics 4 授权 URL。 */
@@ -557,6 +448,14 @@ export function buildOAuthPopupCloseHtml(
 <script>
 (function(){
   var data = ${safeData};
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      var channel = new BroadcastChannel(${JSON.stringify(OAUTH_POPUP_CHANNEL)});
+      channel.postMessage(data);
+      channel.close();
+    }
+  } catch (e) {}
+  try { localStorage.setItem(${JSON.stringify(OAUTH_POPUP_STORAGE_KEY)}, JSON.stringify(data)); } catch (e) {}
   if (window.opener) {
     try { window.opener.postMessage(data, '*'); } catch(e) {}
   }

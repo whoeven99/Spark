@@ -17,6 +17,7 @@ import {
 // import { buildShopifyCustomerEventsUrl } from "../../lib/googleRemarketing";
 import type { GooglePixelDataLoaderData } from "../app.ads.google-pixel.data";
 import { GoogleAdsPerformancePanel } from "../component/googlePixel/GoogleAdsPerformancePanel";
+import { buildAdsHubConnectPath } from "../../lib/adsHubNav";
 
 const cardStyle = {
   border: `1px solid ${pageColorTokens.border}`,
@@ -114,7 +115,7 @@ export function GooglePixelDataPage() {
   const { t } = useTranslation();
   const data = useLoaderData<GooglePixelDataLoaderData>();
   const locationSearch = useEmbeddedLocationSearch();
-  const connectionPath = `/app/settings/connections/google${locationSearch}`;
+  const connectionPath = buildAdsHubConnectPath("google", locationSearch);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [embed, setEmbed] = useState(data.embed);
@@ -171,7 +172,7 @@ export function GooglePixelDataPage() {
           title={t("googlePixelData.pageTitle")}
           subtitle={t("googlePixelData.pageSubtitle")}
           backLabel={t("googlePixelData.back")}
-          fallbackPath="/app/settings/connections/google"
+          fallbackPath="/app/ads/pixels"
           preserveSearch
         />
         <div style={cardStyle}>
@@ -215,7 +216,7 @@ export function GooglePixelDataPage() {
         title={t("googlePixelData.pageTitle")}
         subtitle={t("googlePixelData.pageSubtitle")}
         backLabel={t("googlePixelData.back")}
-        fallbackPath="/app/settings/connections/google"
+        fallbackPath="/app/ads/pixels"
         preserveSearch
       />
 
