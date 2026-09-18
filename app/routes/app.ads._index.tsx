@@ -59,7 +59,7 @@ const FALLBACK_PLATFORMS: AdsOverviewPlatform[] = ["meta", "google", "tiktok"].m
 
 type SyncResponse =
   | { ok: true; degraded?: { reason: string; message: string } | null }
-  | { ok: false; reason?: string; message?: string };
+  | { ok: false; reason?: string; message?: string; platform?: string };
 
 function appendSearch(path: string, search: string): string {
   const q = search.startsWith("?") ? search.slice(1) : search;
@@ -123,7 +123,10 @@ export default function AppAdsIndex() {
 
   const [activeSync, setActiveSync] = useState<string | null>(null);
   const [reauthPlatforms, setReauthPlatforms] = useState<string[]>([]);
-  const [failedPlatforms, setFailedPlatforms] = useState<string[]>([]);
+  /** 拉失败的渠道 → 平台返回的原文，首页黄条要看得见，不能只写「没拉到」。 */
+  const [failedPlatforms, setFailedPlatforms] = useState<
+    Array<{ platform: string; message: string }>
+  >([]);
   // 拉完就不再显示「同步中」：账户本来没投放时，拉成功了库里也不会有快照。
   const [finishedPlatforms, setFinishedPlatforms] = useState<string[]>([]);
   // 拉过一次就不再重试：拉失败或账户本来就没投放时，库里依然没有快照。
@@ -161,7 +164,13 @@ export default function AppAdsIndex() {
     if (reauthRequired) {
       setReauthPlatforms((prev) => (prev.includes(platform) ? prev : [...prev, platform]));
     } else if (!data.ok) {
-      setFailedPlatforms((prev) => (prev.includes(platform) ? prev : [...prev, platform]));
+      const message =
+        (!data.ok && data.message?.trim()) || t("adsHub.overview.syncFailedGeneric");
+      setFailedPlatforms((prev) =>
+        prev.some((item) => item.platform === platform)
+          ? prev
+          : [...prev, { platform, message }],
+      );
     }
     revalidator.revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 同上
@@ -219,9 +228,21 @@ export default function AppAdsIndex() {
         </Notice>
       ))}
 
-      {failedPlatforms.length > 0 ? (
-        <Notice tone="warning">{t("adsHub.overview.syncFailed")}</Notice>
-      ) : null}
+      {failedPlatforms.map((item) => (
+        <Notice key={item.platform} tone="warning">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontWeight: 600 }}>
+              {t("adsHub.overview.syncFailedTitle", {
+                platform: PLATFORM_LABELS[item.platform] ?? item.platform,
+              })}
+            </div>
+            <div>{item.message}</div>
+            <div style={{ color: pageColorTokens.textSecondary }}>
+              {t("adsHub.overview.syncFailedHint")}
+            </div>
+          </div>
+        </Notice>
+      ))}
 
       {!hasAdsAccount ? (
         <ConnectGuide platforms={platforms} locationSearch={locationSearch} />
