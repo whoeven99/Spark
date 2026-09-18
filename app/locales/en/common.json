@@ -1,6 +1,6 @@
 {
   "adsHub": {
-    "title": "Ads",
+    "title": "Ad Performance",
     "subtitle": "Connect accounts, sync catalogs, and review performance",
     "group": {
       "insights": "Insights",
@@ -1507,16 +1507,16 @@
     "ask": "Assistant",
     "homeV1": "Home v1",
     "homeV2": "Home v2",
-    "account": "Account & billing",
+    "account": "Plans & credits",
     "today": "Operations",
     "healthMonitor": "Health Monitor",
     "studio": "Creative Workbench",
     "create": "Create",
     "tasks": "Tasks v1",
-    "tasksV2": "Tasks",
+    "tasksV2": "Task center",
     "settings": "Settings",
-    "ads": "Ads",
-    "adsCatalog": "Ads"
+    "ads": "Ad Performance",
+    "adsCatalog": "Ad Performance"
   },
   "installLanding": {
     "heading": "Spark",
@@ -1726,7 +1726,7 @@
     }
   },
   "tasksV2": {
-    "title": "Tasks",
+    "title": "Task center",
     "subtitle": "Every task in reverse chronological order. Review what is waiting right here.",
     "viewAriaLabel": "Task time range",
     "view": {
@@ -2090,7 +2090,7 @@
     "descFeedback": "Submit product suggestions or report issues",
     "descData": "Backfill historical orders and view sync status",
     "descShopifyReports": "Query sales, refunds, cost and profit, customers, inventory, fulfillment, and storefront funnels using Shopify's official analytics",
-    "sectionAccountTitle": "Account & billing",
+    "sectionAccountTitle": "Plans & credits",
     "sectionAccountSubtitle": "Manage plans, credits, billing, and account-level controls.",
     "sectionConnectionsHubTitle": "Connections center",
     "sectionConnectionsHubSubtitle": "Manage channel authorization in one place. This area handles connections, authorization, and status only, not business analysis.",
@@ -2598,7 +2598,7 @@
     "dataDelayHint": "Ads and GA4 data are typically delayed 24–48 hours."
   },
   "billing": {
-    "pageTitle": "Plans & credit balance",
+    "pageTitle": "Plans & credits",
     "pageIntro": "Manage your credit balance, plans, and billing",
     "quotaSubtitle": "For AI product titles and descriptions. Upgrade below when you need more credits.",
     "usagePercentUsed": "{{percent}}% used",
@@ -2622,7 +2622,7 @@
     "subscribe": "Subscribe",
     "subscribeNow": "Subscribe now",
     "buyPack": "Buy credits",
-    "lowBalanceWarning": "Insufficient credits or no active subscription. Open Account to subscribe.",
+    "lowBalanceWarning": "Insufficient credits or no active subscription. Open Plans & credits to subscribe.",
     "overageCapReachedWarning": "Included credits and on-demand limit are exhausted. Raise your on-demand limit or upgrade your plan to continue.",
     "overageApproachingWarning": "On-demand usage is at or above 90% of your limit. Raise the limit soon to avoid interruption.",
     "overageTitle": "On-demand usage",
@@ -3011,7 +3011,7 @@
       "productOptional": "Reference product (optional)",
       "productHint": "If selected, the product title and description help write the prompt. You can also generate from the scene notes alone.",
       "submitted": "Image generation started",
-      "goToAccount": "Go to account and subscription",
+      "goToAccount": "Go to Plans & credits",
       "running": "Generating image…",
       "usedCredits": "Used {{actual}} credits (est. {{estimated}})",
       "referencedProduct": "Reference: {{title}}",
@@ -5113,7 +5113,7 @@
         "tokenUsageHint": "Used / total",
         "loadingUsage": "Loading usage…",
         "unavailableUsage": "Unavailable",
-        "viewAccount": "View account & billing"
+        "viewAccount": "View Plans & credits"
       },
       "contextPicker": {
         "title": {
