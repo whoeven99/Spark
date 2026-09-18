@@ -5,6 +5,7 @@
  */
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { classifyAdsFetchFailure } from "../server/adsCatalog/adsAuthError.server";
 import { fetchAdsInsights } from "../server/adsInsights/index.server";
 import { parseRangeDays } from "../server/adsInsights/dateRange.server";
 import {
@@ -42,7 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   try {
-    const result = await fetchAdsInsights({
+    const { result, degraded } = await fetchAdsInsights({
       shop: session.shop,
       platform,
       rangeDays,
@@ -61,12 +62,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               : "TikTok Ads 账户未授权，请先在广告 Catalog 页完成 TikTok 授权",
       });
     }
-    return Response.json({ ok: true, view, ...result });
+    return Response.json({ ok: true, view, degraded, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error(
       `${LOG_PREFIX} platform=${platform} view=${view} shop=${session.shop} ${formatOutboundErrorLog(e)}`,
     );
+    // 授权失效是商户能自己解决的状态，不是服务端故障：返回 200 让前端引导去重新授权。
+    if (classifyAdsFetchFailure(platform, e) === "reauth_required") {
+      return Response.json({ ok: false, reason: "reauth_required", platform, message });
+    }
     return Response.json({ ok: false, reason: "api_error", message }, { status: 500 });
   }
 };
