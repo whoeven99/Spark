@@ -15,12 +15,21 @@ import {
   getGoogleMerchantCredential,
   getGoogleMerchantPending,
   getMetaAdsCredential,
+  getMetaAdsPending,
   getMetaCatalogPending,
   getMetaCapiPending,
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
   maskTokenTail,
 } from "../server/adsCatalog/credentialStore.server";
+import {
+  getGa4Credential,
+  getGa4Pending,
+} from "../server/googleAnalytics/ga4Credentials.server";
+import {
+  getGscCredential,
+  getGscPending,
+} from "../server/googleSearchConsole/gscCredentials.server";
 import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import {
@@ -52,7 +61,7 @@ const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot |
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, metaCapiPending, metaAds, tiktok, tiktokPending, shopInfo] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, ga4, ga4Pending, gsc, gscPending, metaPending, metaCapiPending, metaAds, metaAdsPending, tiktok, tiktokPending, shopInfo] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -64,9 +73,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getGoogleMerchantPending(session.shop),
       getGoogleAdsCredential(session.shop),
       getGoogleAdsPending(session.shop),
+      getGa4Credential(session.shop),
+      getGa4Pending(session.shop),
+      getGscCredential(session.shop),
+      getGscPending(session.shop),
       getMetaCatalogPending(session.shop),
       getMetaCapiPending(session.shop),
       getMetaAdsCredential(session.shop),
+      getMetaAdsPending(session.shop),
       getTiktokCatalogCredential(session.shop),
       getTiktokCatalogPending(session.shop),
       fetchShopBasicInfo(admin),
@@ -152,6 +166,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           : [...META_PIXEL_DEFAULT_EVENTS],
         metaAdsConnected: Boolean(metaAds),
         metaAdsAdAccountId: metaAds?.adAccountId ?? "",
+        metaAdsAdAccountName: metaAds?.adAccountName ?? "",
+        pendingAdsAccounts: metaAdsPending?.accounts ?? [],
+        availableAdsAccounts: metaAds?.availableAccounts ?? [],
         pendingCatalogs:
           metaPending?.accounts.map((a) => ({
             id: a.id,
@@ -191,6 +208,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             name: a.name,
             formatted: a.formatted,
           })) ?? [],
+      },
+      googleAnalytics: {
+        connected: Boolean(ga4?.properties.length),
+        updatedAt: ga4?.updatedAt ?? null,
+        properties:
+          ga4?.properties.map((property) => ({
+            propertyId: property.propertyId,
+            propertyName: property.propertyName,
+            accountName: property.accountName,
+          })) ?? [],
+        allProperties:
+          ga4?.allProperties?.map((property) => ({
+            propertyId: property.propertyId,
+            propertyName: property.propertyName,
+            accountName: property.accountName,
+          })) ?? [],
+        pendingProperties:
+          ga4Pending?.properties.map((property) => ({
+            propertyId: property.propertyId,
+            propertyName: property.propertyName,
+            accountName: property.accountName,
+          })) ?? [],
+      },
+      googleSearchConsole: {
+        connected: Boolean(gsc),
+        siteUrl: gsc?.siteUrl ?? null,
+        updatedAt: gsc?.updatedAt ?? null,
+        pendingSites: gscPending?.sites ?? [],
       },
       tiktok: {
         connected: Boolean(tiktok),

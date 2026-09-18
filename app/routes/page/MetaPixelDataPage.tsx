@@ -10,6 +10,7 @@ import {
 } from "../../lib/metaPixelEvents";
 import type { MetaPixelDataLoaderData } from "../app.ads.meta-pixel.data";
 import { MetaPixelStatsPanel } from "../component/adsCatalog/MetaPixelStatsPanel";
+import { buildAdsHubConnectPath } from "../../lib/adsHubNav";
 import {
   PageHeaderNav,
   pageColorTokens,
@@ -134,7 +135,7 @@ export function MetaPixelDataPage() {
   const data = useLoaderData<MetaPixelDataLoaderData>();
   const revalidator = useRevalidator();
   const locationSearch = useEmbeddedLocationSearch();
-  const connectionPath = `/app/settings/connections/meta${locationSearch}`;
+  const connectionPath = buildAdsHubConnectPath("meta", locationSearch);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [embed, setEmbed] = useState(data.embed);
@@ -185,7 +186,7 @@ export function MetaPixelDataPage() {
           title={t("metaPixelData.pageTitle")}
           subtitle={t("metaPixelData.pageSubtitle")}
           backLabel={t("metaPixelData.back")}
-          fallbackPath="/app/settings/connections/meta"
+          fallbackPath="/app/ads/pixels"
           preserveSearch
         />
         <div style={cardStyle}>
@@ -217,7 +218,7 @@ export function MetaPixelDataPage() {
         title={t("metaPixelData.pageTitle")}
         subtitle={t("metaPixelData.pageSubtitle")}
         backLabel={t("metaPixelData.back")}
-        fallbackPath="/app/settings/connections/meta"
+        fallbackPath="/app/ads/pixels"
         preserveSearch
       />
 

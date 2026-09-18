@@ -3,23 +3,15 @@ import { redirect } from "react-router";
 import {
   buildMetaUnifiedOAuthReturnUrl,
   exchangeMetaCodeForToken,
-  getMetaAdAccounts,
   getMetaRedirectUri,
-  getMetaCatalogs,
   META_UNIFIED_CALLBACK_PATH,
   resolveMetaOAuthClient,
   verifyMetaOAuthState,
 } from "../server/adsCatalog/metaOAuth.server";
 import {
-  clearMetaCapiPending,
-  getFacebookCatalogCredential,
-  getMetaAdsCredential,
-  setMetaCapiPending,
-  setMetaAdsCredential,
-  setFacebookCatalogCredential,
-  type PendingOAuthAccount,
-} from "../server/adsCatalog/credentialStore.server";
-import { persistMetaCapiBisuOnboarding } from "../server/adsCatalog/metaCapiOnboarding.server";
+  completeMetaUnifiedOnboarding,
+  toMetaUnifiedAuthParams,
+} from "../server/adsCatalog/metaUnifiedOnboarding.server";
 import { logFullMetaCapiAccessToken } from "../server/adsCatalog/metaCapiLog.server";
 import { buildOAuthPopupCloseHtml } from "../server/adsCatalog/googleOAuth.server";
 
@@ -57,97 +49,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
     logFullMetaCapiAccessToken({ token, source: "unified_business_login", shop });
 
-    const existingCatalog = await getFacebookCatalogCredential(shop);
-    const catalogs = await getMetaCatalogs(token);
-    const selectedCatalog =
-      catalogs.find((catalog) => catalog.catalogId === existingCatalog?.catalogId) ??
-      (catalogs.length === 1 ? catalogs[0] : null);
-    if (!selectedCatalog?.catalogId) {
-      throw new Error(
-        catalogs.length > 1
-          ? "统一授权发现多个 Catalog，请先保留现有 Catalog 或补充资产选择流程"
-          : "统一授权账号没有可访问的 Meta Catalog",
-      );
-    }
-
-    await setFacebookCatalogCredential(shop, {
-      accessToken: token,
-      catalogId: selectedCatalog.catalogId,
-      businessId: selectedCatalog.businessId ?? existingCatalog?.businessId,
-      apiVersion: existingCatalog?.apiVersion,
-      pixelId: existingCatalog?.pixelId,
-      testEventCode: existingCatalog?.testEventCode,
-      enabledEvents: existingCatalog?.enabledEvents,
-      capiEnabled: existingCatalog?.capiEnabled ?? true,
-    });
-
-    const catalog = await getFacebookCatalogCredential(shop);
-    if (!catalog) throw new Error("统一授权后无法读取 Meta Catalog 凭证");
-    const capiResult = await persistMetaCapiBisuOnboarding({
-      shop,
-      capiAccessToken: token,
-      businessId: selectedCatalog.businessId ?? catalog.businessId,
-      apiVersion: catalog.apiVersion,
-      pixelId: catalog.pixelId,
-    });
-    if (capiResult.status === "select") {
-      await setMetaCapiPending(shop, {
-        accessToken: token,
-        accounts: capiResult.pixels.map((pixel) => ({
-          id: pixel.pixelId,
-          name: pixel.pixelName,
-          businessId: capiResult.businessId,
-        })),
-      });
-      console.info(
-        `[AdsCatalog][MetaUnified] step=pixel_select_required shop=${shop} businessId=${capiResult.businessId} pixelCount=${capiResult.pixels.length} pixelIds=${capiResult.pixels.map((pixel) => pixel.pixelId).join(",")}`,
-      );
-    } else {
-      await clearMetaCapiPending(shop);
-    }
-
-    const existingAds = await getMetaAdsCredential(shop);
-    let adAccounts: Awaited<ReturnType<typeof getMetaAdAccounts>> = [];
-    try {
-      adAccounts = await getMetaAdAccounts(token);
-    } catch (e) {
-      console.warn(
-        `[AdsCatalog][MetaUnified] step=ads_query_failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-    const selectedAds =
-      adAccounts.find((account) => account.adAccountId === existingAds?.adAccountId) ??
-      (adAccounts.length === 1 ? adAccounts[0] : null);
-    if (selectedAds) {
-      const availableAccounts: PendingOAuthAccount[] = adAccounts.map((account) => ({
-        id: account.adAccountId,
-        name: account.name,
-        formatted: account.currencyCode,
-      }));
-      await setMetaAdsCredential(shop, {
-        accessToken: token,
-        adAccountId: selectedAds.adAccountId,
-        adAccountName: selectedAds.name,
-        currencyCode: selectedAds.currencyCode,
-        availableAccounts,
-      });
-    } else {
-      console.info(
-        `[AdsCatalog][MetaUnified] step=ads_not_bound shop=${shop} accountCount=${adAccounts.length}`,
-      );
-    }
-
-    console.info(
-      `[AdsCatalog][MetaUnified] step=success shop=${shop} catalogId=${selectedCatalog.catalogId} pixelId=${capiResult.status === "saved" ? capiResult.pixelId : ""} pixelSelectionRequired=${capiResult.status === "select"} adsBound=${Boolean(selectedAds)}`,
-    );
-    return respond(
-      capiResult.status === "select"
-        ? {
-            metaUnifiedAuth: "select",
-            pixelCount: String(capiResult.pixels.length),
-          }
-        : { metaUnifiedAuth: "success", pixelId: capiResult.pixelId },
-    );
+    const result = await completeMetaUnifiedOnboarding({ shop, token });
+    return respond(toMetaUnifiedAuthParams(result));
   } catch (e) {
     console.error(
       `[AdsCatalog][MetaUnified] step=failed shop=${shop} err=${e instanceof Error ? e.message : String(e)}`,

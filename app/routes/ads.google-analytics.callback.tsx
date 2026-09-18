@@ -97,7 +97,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return respond({ ga4Auth: "success", propertyName: properties[0].propertyName });
     }
 
-    // 多属性：存 pending，让用户在设置页选择
+    // 多属性：存 pending，让用户在连接账户页选择
     await deleteGa4Credential(shop);
     await clearGa4Pending(shop);
     await setGa4Pending(shop, {

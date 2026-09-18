@@ -18,7 +18,6 @@ const GROUP_LABEL_KEY: Record<AdsHubCapGroup, string> = {
   insights: "adsHub.group.insights",
   connect: "adsHub.group.connect",
   campaigns: "adsHub.group.campaigns",
-  dev: "adsHub.group.dev",
 };
 
 function appendSearchToPath(path: string, search: string): string {
@@ -68,11 +67,9 @@ function NavLinkItem({
 export function AdsHubShell({
   children,
   showReviewHidden = false,
-  isProduction = true,
 }: {
   children: ReactNode;
   showReviewHidden?: boolean;
-  isProduction?: boolean;
 }) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -84,7 +81,7 @@ export function AdsHubShell({
     return <>{children}</>;
   }
 
-  const caps = listVisibleAdsHubCapabilities({ showReviewHidden, isProduction });
+  const caps = listVisibleAdsHubCapabilities({ showReviewHidden });
   const active = resolveActiveAdsHubCap(location.pathname, location.search);
 
   return (

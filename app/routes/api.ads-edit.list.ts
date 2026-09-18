@@ -26,6 +26,11 @@ import {
 } from "../server/adsEdit/googleAdsEdit.server";
 import type { AdsListApiResponse } from "./component/adsEdit/types";
 
+/**
+ * GET /api/ads-edit/list
+ * query: platform=meta|tiktok|google, level=campaigns|adsets|ads|detail,
+ *        campaignId / adSetId / adId 按层级可选。
+ */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;

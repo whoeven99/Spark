@@ -17,10 +17,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   if (!result.ok) {
-    const target = new URL("/app/ads-catalog", source.origin);
+    const target = new URL("/app/ads/catalog", source.origin);
     target.searchParams.set("shop", session.shop);
     if (host) target.searchParams.set("host", host);
     target.searchParams.set("embedded", "1");
+    target.searchParams.set("tab", "credentials");
+    target.searchParams.set("platform", "google");
     target.searchParams.set("googleAuth", "error");
     target.searchParams.set("reason", result.error);
     return redirect(target.toString());

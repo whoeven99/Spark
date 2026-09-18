@@ -24,6 +24,8 @@
 ## 3. Google Ads 凭证失效判据
 
 - 按 `accessTokenExpiresAt` 判断是否刷新 access token。
+- refresh 使用的 OAuth client 顺序：Ads 凭证内 `clientId`/`clientSecret` → 同店 GMC 凭证 → 应用 env；组合授权共用 refresh token 时 GMC 存的那份必须优先。
+- refresh 返回 `invalid_grant` / `unauthorized_client` 等 auth 类错误，或 access token 已不可用且 refresh 失败时，**抛错要求重新授权**，不要静默回退到死 token。
 - 按 `loginCustomerIdVerifiedAt` 判断是否重新探测 login-customer-id。
 
 两个时间戳在对应值变化时**必须**失效，否则会拿旧 login-customer-id 打错账户。

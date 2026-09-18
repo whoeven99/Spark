@@ -4,6 +4,7 @@ import {
   buildShopifyAdminHostParam,
   buildAdminEmbeddedAppReturnUrl,
 } from "../billing/buildBillingReturnUrl.server";
+import { ADS_HUB_CATALOG_PATH, withAdsHubConnectQuery } from "../../lib/adsHubNav";
 
 export const META_GRAPH_VERSION = "v19.0";
 export const META_OAUTH_DIALOG = `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`;
@@ -95,11 +96,12 @@ export function buildMetaOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
+  const query = withAdsHubConnectQuery("facebook", params.query);
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
+    path: ADS_HUB_CATALOG_PATH,
     shop: params.shop,
     request: params.request,
-    query: params.query,
+    query,
   });
   if (adminUrl) return adminUrl;
 
@@ -108,11 +110,11 @@ export function buildMetaOAuthReturnUrl(params: {
     readEnv("META_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  const target = new URL(ADS_HUB_CATALOG_PATH, base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
+  for (const [key, value] of Object.entries(query)) {
     target.searchParams.set(key, value);
   }
   return target.toString();
@@ -372,12 +374,12 @@ export function buildMetaAdsOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
-  const nextQuery = { ...params.query, tab: "credentials", platform: "facebook" };
+  const query = withAdsHubConnectQuery("facebook", params.query);
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
+    path: ADS_HUB_CATALOG_PATH,
     shop: params.shop,
     request: params.request,
-    query: nextQuery,
+    query,
   });
   if (adminUrl) return adminUrl;
 
@@ -386,15 +388,13 @@ export function buildMetaAdsOAuthReturnUrl(params: {
     readEnv("META_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  const target = new URL(ADS_HUB_CATALOG_PATH, base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
+  for (const [key, value] of Object.entries(query)) {
     target.searchParams.set(key, value);
   }
-  target.searchParams.set("tab", "credentials");
-  target.searchParams.set("platform", "facebook");
   return target.toString();
 }
 
@@ -482,11 +482,12 @@ export function buildMetaCapiOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
+  const query = withAdsHubConnectQuery("facebook", params.query);
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
+    path: ADS_HUB_CATALOG_PATH,
     shop: params.shop,
     request: params.request,
-    query: params.query,
+    query,
   });
   if (adminUrl) return adminUrl;
 
@@ -495,11 +496,11 @@ export function buildMetaCapiOAuthReturnUrl(params: {
     readEnv("META_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  const target = new URL(ADS_HUB_CATALOG_PATH, base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
+  for (const [key, value] of Object.entries(query)) {
     target.searchParams.set(key, value);
   }
   return target.toString();
@@ -512,10 +513,11 @@ export function buildMetaUnifiedOAuthReturnUrl(params: {
   query?: Record<string, string>;
   request?: Request;
 }): string {
+  const query = withAdsHubConnectQuery("facebook", params.query);
   const adminUrl = buildAdminEmbeddedAppReturnUrl({
-    path: "/app/ads-catalog",
+    path: ADS_HUB_CATALOG_PATH,
     shop: params.shop,
-    query: params.query,
+    query,
     request: params.request,
   });
   if (adminUrl) return adminUrl;
@@ -525,11 +527,11 @@ export function buildMetaUnifiedOAuthReturnUrl(params: {
     readEnv("META_OAUTH_REDIRECT_BASE") ||
     readEnv("SHOPIFY_APP_URL") ||
     "https://example.com";
-  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  const target = new URL(ADS_HUB_CATALOG_PATH, base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
   target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
-  for (const [key, value] of Object.entries(params.query ?? {})) {
+  for (const [key, value] of Object.entries(query)) {
     target.searchParams.set(key, value);
   }
   return target.toString();

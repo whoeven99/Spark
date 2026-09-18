@@ -100,6 +100,9 @@ export interface CredentialsView {
     capiTokenType: string;
     pendingCapiPixels: Array<{ pixelId: string; pixelName?: string; businessId?: string }>;
     pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
+    metaAdsAdAccountName: string;
+    pendingAdsAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+    availableAdsAccounts: Array<{ id: string; name?: string; formatted?: string }>;
   };
   googleMerchant: {
     connected: boolean;
@@ -127,6 +130,31 @@ export interface CredentialsView {
     };
     pendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
     availableAccounts: Array<{ id: string; name?: string; formatted?: string }>;
+  };
+  googleAnalytics: {
+    connected: boolean;
+    updatedAt: string | null;
+    properties: Array<{
+      propertyId: string;
+      propertyName: string;
+      accountName?: string;
+    }>;
+    allProperties: Array<{
+      propertyId: string;
+      propertyName: string;
+      accountName?: string;
+    }>;
+    pendingProperties: Array<{
+      propertyId: string;
+      propertyName: string;
+      accountName?: string;
+    }>;
+  };
+  googleSearchConsole: {
+    connected: boolean;
+    siteUrl: string | null;
+    updatedAt: string | null;
+    pendingSites: Array<{ siteUrl: string; permissionLevel: string }>;
   };
   tiktok: {
     connected: boolean;

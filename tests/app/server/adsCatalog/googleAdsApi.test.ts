@@ -78,7 +78,7 @@ describe("formatGoogleAdsUserError", () => {
 });
 
 describe("resolveLoginCustomerId", () => {
-  it("caps login-customer-id probe attempts at three", async () => {
+  it("caps login-customer-id probe attempts", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       text: async () => "",
@@ -89,11 +89,36 @@ describe("resolveLoginCustomerId", () => {
       accessToken: "access",
       developerToken: "dev",
       customerId: "1111111111",
-      accessibleCustomerIds: ["2222222222", "3333333333", "4444444444", "5555555555"],
+      accessibleCustomerIds: ["2222222222", "3333333333", "4444444444", "5555555555", "6666666666"],
     });
 
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6);
+    expect(result).toBe("1111111111");
+    vi.unstubAllGlobals();
+  });
+
+  it("probes preferred login-customer-id before target customer id", async () => {
+    const probes: string[] = [];
+    const fetchMock = vi.fn().mockImplementation((_url: string, opts?: { headers?: Record<string, string> }) => {
+      const login = opts?.headers?.["login-customer-id"];
+      if (login) probes.push(login);
+      return Promise.resolve({
+        ok: login === "2222222222",
+        text: async () => "",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await resolveLoginCustomerId({
+      accessToken: "access",
+      developerToken: "dev",
+      customerId: "1111111111",
+      preferredLoginCustomerId: "2222222222",
+      accessibleCustomerIds: ["3333333333"],
+    });
+
     expect(result).toBe("2222222222");
+    expect(probes[0]).toBe("2222222222");
     vi.unstubAllGlobals();
   });
 });

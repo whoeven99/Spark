@@ -410,7 +410,7 @@ function buildGoogleSummary(
     links: [
       {
         label: t("settingsShell.openChannelDetail"),
-        to: "/app/settings/connections/google",
+        to: "/app/ads/catalog?tab=credentials&platform=google",
         tone: "primary",
       },
       {
@@ -419,7 +419,7 @@ function buildGoogleSummary(
       },
       {
         label: t("settingsShell.googleManageAnalytics"),
-        to: "/app/settings/google-analytics",
+        to: "/app/ads/catalog?tab=credentials&platform=google",
       },
       {
         label: t("settingsShell.googleManageSearchConsole"),
@@ -494,7 +494,7 @@ function buildMetaSummary(
     links: [
       {
         label: t("settingsShell.openChannelDetail"),
-        to: "/app/settings/connections/meta",
+        to: "/app/ads/catalog?tab=credentials&platform=facebook",
         tone: "primary",
       },
       {
@@ -563,7 +563,7 @@ function buildTiktokSummary(
     links: [
       {
         label: t("settingsShell.openChannelDetail"),
-        to: "/app/settings/connections/tiktok",
+        to: "/app/ads/catalog?tab=credentials&platform=tiktok",
         tone: "primary",
       },
       {

@@ -63,7 +63,6 @@ export type AdsInsightsApiOk = {
   view?: AdsInsightsView;
   accountId: string;
   accountName?: string | null;
-  sandbox?: boolean;
   currencyCode: string | null;
   rangeDays: AdsInsightsRangeDays;
   dateStart: string;

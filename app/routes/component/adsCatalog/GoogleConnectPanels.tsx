@@ -3,7 +3,10 @@ import { useEffect, useState } from "react";
 // import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
+import { GMC_MERCHANT_SIGNUP_URL } from "../../../lib/gmcOAuthErrors";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
+import { Ga4ConnectPanel } from "./Ga4ConnectPanel";
+import { GscConnectPanel } from "./GscConnectPanel";
 import type { CredentialsView } from "./types";
 
 type AdsLink = {
@@ -255,11 +258,21 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
-        ) : showPrimaryConnect ? (
-          <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectHint")}</p>
         ) : (
           <>
-            <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectSideHint")}</p>
+            <p style={pageHintTextStyle}>
+              {showPrimaryConnect
+                ? t("adsCatalog.gmcConnectHint")
+                : t("adsCatalog.gmcConnectSideHint")}{" "}
+              <a
+                href={GMC_MERCHANT_SIGNUP_URL}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "inherit", fontWeight: 700 }}
+              >
+                {t("adsCatalog.gmcNoMerchantAccountGuideLink")}
+              </a>
+            </p>
             <div>
               <button
                 type="button"
@@ -363,11 +376,13 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
-        ) : selectingInitialAds ? null : showPrimaryConnect ? (
-          <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectHint")}</p>
-        ) : (
+        ) : selectingInitialAds ? null : (
           <>
-            <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectSideHint")}</p>
+            <p style={pageHintTextStyle}>
+              {showPrimaryConnect
+                ? t("adsCatalog.adsConnectHint")
+                : t("adsCatalog.adsConnectSideHint")}
+            </p>
             <div>
               <button
                 type="button"
@@ -381,6 +396,18 @@ export function GoogleConnectPanels({
           </>
         )}
       </div>
+      <Ga4ConnectPanel
+        credentials={credentials}
+        locationSearch={locationSearch}
+        languageCode={languageCode}
+        onChanged={onChanged}
+      />
+      <GscConnectPanel
+        credentials={credentials}
+        locationSearch={locationSearch}
+        languageCode={languageCode}
+        onChanged={onChanged}
+      />
       {/* 审核期临时关闭 5.1.5：隐藏 Google Pixel 向导入口。过审后恢复本面板。 */}
     </div>
   );

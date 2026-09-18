@@ -24,14 +24,13 @@ import type {
   GoogleAdsEditDetail,
   AdsEditLoaderData,
 } from "../component/adsEdit/types";
+import { buildAdsEditListUrl } from "../../lib/adsEditListUrl";
+import { buildAdsHubConnectPath } from "../../lib/adsHubNav";
 
 type SelectionStep = "campaign" | "adset" | "ad" | "edit";
 
 function buildConnectionCenterPath(platform: AdsEditPlatform, locationSearch: string): string {
-  const platformParam = platform === "meta" ? "meta" : platform;
-  return locationSearch
-    ? `/app/settings/connections/${platformParam}${locationSearch}`
-    : `/app/settings/connections/${platformParam}`;
+  return buildAdsHubConnectPath(platform, locationSearch);
 }
 
 export function AdsEditPage() {
@@ -93,7 +92,7 @@ export function AdsEditPage() {
   // 加载 campaign 列表
   function loadCampaigns() {
     listFetcher.load(
-      `/api/ads-edit.list${locationSearch}&platform=${platform}&level=campaigns`,
+      buildAdsEditListUrl(locationSearch, { platform, level: "campaigns" }),
     );
   }
 
@@ -135,7 +134,11 @@ export function AdsEditPage() {
     setAds([]);
     setStep("adset");
     listFetcher.load(
-      `/api/ads-edit.list${locationSearch}&platform=${platform}&level=adsets&campaignId=${campaign.id}`,
+      buildAdsEditListUrl(locationSearch, {
+        platform,
+        level: "adsets",
+        campaignId: campaign.id,
+      }),
     );
   }
 
@@ -145,7 +148,11 @@ export function AdsEditPage() {
     setAds([]);
     setStep("ad");
     listFetcher.load(
-      `/api/ads-edit.list${locationSearch}&platform=${platform}&level=ads&adSetId=${adSet.id}`,
+      buildAdsEditListUrl(locationSearch, {
+        platform,
+        level: "ads",
+        adSetId: adSet.id,
+      }),
     );
   }
 
@@ -153,7 +160,11 @@ export function AdsEditPage() {
     setSelectedAd(ad);
     setDetail(null);
     detailFetcher.load(
-      `/api/ads-edit.list${locationSearch}&platform=${platform}&level=detail&adId=${ad.id}`,
+      buildAdsEditListUrl(locationSearch, {
+        platform,
+        level: "detail",
+        adId: ad.id,
+      }),
     );
   }
 
@@ -181,7 +192,7 @@ export function AdsEditPage() {
         workspaceOnly={false}
         titleBarTitle={t("nav.studio")}
         backLabel={t("common.backToPrevious")}
-        fallbackPath="/app/studio"
+        fallbackPath="/app/ads"
         eyebrow={t("studioWorkbench.groups.delivery.title")}
         title={t("adsEdit.pageTitle")}
         subtitle={t("adsEdit.pageSubtitle")}

@@ -12,6 +12,7 @@ import { MetaAdsForm } from "../component/adsCreate/MetaAdsForm";
 import { TiktokAdsForm } from "../component/adsCreate/TiktokAdsForm";
 import { GoogleAdsForm } from "../component/adsCreate/GoogleAdsForm";
 import type { AdsCreateLoaderData } from "../component/adsCreate/types";
+import { buildAdsHubConnectPath } from "../../lib/adsHubNav";
 
 type Platform = "meta" | "tiktok" | "google";
 
@@ -58,7 +59,7 @@ export function AdsCreatePage() {
         workspaceOnly={false}
         titleBarTitle={t("nav.studio")}
         backLabel={t("common.backToPrevious")}
-        fallbackPath="/app/studio"
+        fallbackPath="/app/ads"
         eyebrow={t("studioWorkbench.groups.delivery.title")}
         title={t("adsCreate.pageTitle")}
         subtitle={t("adsCreate.pageSubtitle")}
@@ -133,10 +134,7 @@ interface ConnectionStatusProps {
 }
 
 function buildConnectionCenterPath(platform: Platform, locationSearch: string): string {
-  const platformParam = platform === "meta" ? "meta" : platform;
-  return locationSearch
-    ? `/app/settings/connections/${platformParam}${locationSearch}`
-    : `/app/settings/connections/${platformParam}`;
+  return buildAdsHubConnectPath(platform, locationSearch);
 }
 
 function ConnectionStatus({ platform, loaderData, locationSearch, t }: ConnectionStatusProps) {

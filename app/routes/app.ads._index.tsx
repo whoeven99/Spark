@@ -4,6 +4,11 @@ import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { buildAdsOverview } from "../server/adsInsights/overview.server";
+import {
+  buildAdsHubCatalogPath,
+  buildAdsHubConnectPath,
+  isAdsHubCapabilityVisible,
+} from "../lib/adsHubNav";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
 import { pageColorTokens } from "./page/pageUiStyles";
 
@@ -83,7 +88,7 @@ export default function AppAdsIndex() {
         />
         <Metric
           label={t("adsHub.overview.platformsConnected")}
-          value={`${connectedCount}/3`}
+          value={String(connectedCount)}
         />
       </div>
 
@@ -95,10 +100,47 @@ export default function AppAdsIndex() {
         }}
       >
         {(overview?.platforms ?? [
-          { platform: "meta" as const, connected: false },
-          { platform: "google" as const, connected: false },
-          { platform: "tiktok" as const, connected: false },
-        ]).map((p) => (
+          {
+            platform: "meta" as const,
+            connected: false,
+            catalogConnected: false,
+            adsConnected: false,
+            connectionState: "missing" as const,
+          },
+          {
+            platform: "google" as const,
+            connected: false,
+            catalogConnected: false,
+            adsConnected: false,
+            connectionState: "missing" as const,
+          },
+          {
+            platform: "tiktok" as const,
+            connected: false,
+            catalogConnected: false,
+            adsConnected: false,
+            connectionState: "missing" as const,
+          },
+        ]).map((p) => {
+          const state = p.connectionState;
+          const statusLabel =
+            state === "ready"
+              ? t("adsHub.overview.statusReady")
+              : state === "partial"
+                ? t("adsHub.overview.statusPartial")
+                : t("adsHub.overview.statusNeedsSetup");
+          const detail =
+            state === "partial"
+              ? [
+                  p.catalogConnected
+                    ? t("adsHub.overview.pieceCatalogOn")
+                    : t("adsHub.overview.pieceCatalogOff"),
+                  p.adsConnected
+                    ? t("adsHub.overview.pieceAdsOn")
+                    : t("adsHub.overview.pieceAdsOff"),
+                ].join(" · ")
+              : null;
+          return (
           <div
             key={p.platform}
             style={{
@@ -119,12 +161,13 @@ export default function AppAdsIndex() {
                   : "TikTok"}
             </div>
             <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-              {p.connected
-                ? t("adsHub.overview.statusReady")
-                : t("adsHub.overview.statusNeedsSetup")}
+              {statusLabel}
+              {detail ? (
+                <div style={{ marginTop: 4, lineHeight: 1.4 }}>{detail}</div>
+              ) : null}
             </div>
             <Link
-              to={appendSearch("/app/ads/catalog?tab=credentials", locationSearch)}
+              to={buildAdsHubConnectPath(p.platform, locationSearch)}
               style={{
                 fontSize: 13,
                 fontWeight: 600,
@@ -132,12 +175,13 @@ export default function AppAdsIndex() {
                 textDecoration: "none",
               }}
             >
-              {p.connected
-                ? t("adsHub.overview.manageConnection")
-                : t("adsHub.overview.connectNow")}
+              {state === "missing"
+                ? t("adsHub.overview.connectNow")
+                : t("adsHub.overview.manageConnection")}
             </Link>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -146,14 +190,18 @@ export default function AppAdsIndex() {
           label={t("adsHub.overview.ctaPerformance")}
           primary
         />
-        <HubButton
-          to={appendSearch("/app/ads/catalog?tab=sync", locationSearch)}
-          label={t("adsHub.overview.ctaSync")}
-        />
-        <HubButton
-          to={appendSearch("/app/ads/create", locationSearch)}
-          label={t("adsHub.overview.ctaCreate")}
-        />
+        {isAdsHubCapabilityVisible("sync") ? (
+          <HubButton
+            to={appendSearch(buildAdsHubCatalogPath({ tab: "sync" }), locationSearch)}
+            label={t("adsHub.overview.ctaSync")}
+          />
+        ) : null}
+        {isAdsHubCapabilityVisible("create") ? (
+          <HubButton
+            to={appendSearch("/app/ads/create", locationSearch)}
+            label={t("adsHub.overview.ctaCreate")}
+          />
+        ) : null}
       </div>
     </div>
   );
