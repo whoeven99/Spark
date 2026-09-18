@@ -9,6 +9,7 @@ import {
   setGoogleAdsCredential,
   type GoogleAdsCredential,
 } from "./credentialStore.server";
+import { AdsReauthRequiredError } from "./adsAuthError.server";
 import {
   isGoogleOAuthRefreshAuthError,
   refreshGoogleAccessTokenDetailed,
@@ -119,7 +120,7 @@ function handleGoogleAdsRefreshFailure(params: {
     console.warn(
       `${LOG_PREFIX} step=refresh_token shop=${params.shop} customerId=${params.cred.customerId} oauthError=${params.oauthError ?? "none"} error=${params.error} action=reauth_required`,
     );
-    throw new Error(GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE);
+    throw new AdsReauthRequiredError("google", GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE);
   }
   console.warn(
     `${LOG_PREFIX} step=refresh_token shop=${params.shop} customerId=${params.cred.customerId} oauthError=${params.oauthError ?? "none"} error=${params.error} action=use_stored_access_token`,
@@ -190,7 +191,7 @@ export async function maybeRefreshGoogleAdsToken(shop: string): Promise<string |
       `${LOG_PREFIX} step=refresh_token shop=${shop} skipped=missing_oauth_client`,
     );
     if (!isAccessTokenUsable(cred.accessTokenExpiresAt, Date.now())) {
-      throw new Error(GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE);
+      throw new AdsReauthRequiredError("google", GOOGLE_ADS_REAUTH_REQUIRED_MESSAGE);
     }
     return cred.accessToken;
   }

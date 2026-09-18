@@ -229,7 +229,7 @@ const REPORT_METRICS_EXTENDED = [
   "total_complete_payment_rate",
   "total_purchase_value",
   "web_event_add_to_cart",
-  "landing_page_view",
+  // landing_page_view 在部分广告主 / 地区已不可用，带上会整次 extended 报表失败。
   "video_play_actions",
   "video_watched_2s",
   "video_views_p100",

@@ -1,3 +1,7 @@
+import {
+  classifyAdsFetchFailure,
+  type AdsFetchFailureReason,
+} from "../adsCatalog/adsAuthError.server";
 import { fetchGoogleAdsInsights } from "./googleAdsInsights.server";
 import { fetchMetaAdsInsights } from "./metaAdsInsights.server";
 import {
@@ -150,6 +154,21 @@ function stripInternal(result: AdsInsightsResult): AdsInsightsResult {
   return { ...result, daily: undefined };
 }
 
+/** 回源失败但仍有数据可展示时的降级说明。 */
+export type AdsInsightsDegraded = {
+  reason: AdsFetchFailureReason;
+  message: string;
+};
+
+export type AdsInsightsOutcome = {
+  result: AdsInsightsResult | null;
+  /**
+   * 非 null 表示这次返回的是过期快照兜底的数据。
+   * 不把它带出去的话，授权失效后页面会一直安静地显示旧数字，商户无从察觉。
+   */
+  degraded: AdsInsightsDegraded | null;
+};
+
 export async function fetchAdsInsights(params: {
   shop: string;
   platform: AdsInsightsPlatform;
@@ -157,7 +176,7 @@ export async function fetchAdsInsights(params: {
   view?: AdsInsightsView;
   /** 跳过快照直接回源。 */
   forceRefresh?: boolean;
-}): Promise<AdsInsightsResult | null> {
+}): Promise<AdsInsightsOutcome> {
   const view = params.view ?? "structure";
 
   // 关键词 / 搜索词 / 素材是平台特有的深层级明细，不落库，仍然实时拉。
@@ -168,7 +187,7 @@ export async function fetchAdsInsights(params: {
       rangeDays: params.rangeDays,
       view,
     });
-    return result ? stripInternal(result) : null;
+    return { result: result ? stripInternal(result) : null, degraded: null };
   }
 
   if (!params.forceRefresh) {
@@ -178,32 +197,36 @@ export async function fetchAdsInsights(params: {
       rangeDays: params.rangeDays,
     });
     if (snapshot && isSnapshotFresh(snapshot.fetchedAt)) {
-      return snapshot.result;
+      return { result: snapshot.result, degraded: null };
     }
 
     try {
-      return await refreshAndSave({
+      const result = await refreshAndSave({
         shop: params.shop,
         platform: params.platform,
         rangeDays: params.rangeDays,
       });
+      return { result, degraded: null };
     } catch (e) {
-      // 回源失败时用过期快照兜底，比整页报错好。
+      // 回源失败时用过期快照兜底，比整页报错好；但要把降级原因一起交出去。
       if (snapshot) {
+        const message = e instanceof Error ? e.message : String(e);
+        const reason = classifyAdsFetchFailure(params.platform, e);
         console.warn(
-          `${LOG_PREFIX} refresh failed, serving stale snapshot shop=${params.shop} platform=${params.platform} ${e instanceof Error ? e.message : String(e)}`,
+          `${LOG_PREFIX} refresh failed, serving stale snapshot shop=${params.shop} platform=${params.platform} reason=${reason} ${message}`,
         );
-        return snapshot.result;
+        return { result: snapshot.result, degraded: { reason, message } };
       }
       throw e;
     }
   }
 
-  return refreshAndSave({
+  const result = await refreshAndSave({
     shop: params.shop,
     platform: params.platform,
     rangeDays: params.rangeDays,
   });
+  return { result, degraded: null };
 }
 
 export type {

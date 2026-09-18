@@ -5,7 +5,8 @@
  *
  * 环境分流原则：
  * - prod：功能尽量在对话里闭环（首页 `/app` 聊天 + 推荐操作 + 对话内确认/审核）。
- *   导航留「任务中心」「广告分析」「套餐与积分」。不要把 Today / Health Monitor / Studio / Settings 加进 PROD_NAV。
+ *   导航留「任务中心」「套餐与积分」。广告分析暂不进 PROD_NAV（URL 仍可直达，测环境继续露出）。
+ *   不要把 Today / Health Monitor / Studio / Settings 加进 PROD_NAV。
  * - 测/本地：用独立页面完成同一批功能，导航展示全量（不含创作与助手，`/app/create` 仍可直达；`/app/assistant` 重定向到 `/app`；旧 `/app/tasks` 重定向到 `/app/tasks-v2`）。
  */
 import { isProductionNodeEnv } from "./nodeEnv.server";
@@ -40,8 +41,8 @@ const FULL_NAV = [
   "settings",
 ] as const satisfies readonly NavItemKey[];
 
-/** 生产：对话工作台在首页；导航留任务中心 + 广告分析 + 套餐与积分。 */
-const PROD_NAV = ["tasks-v2", "ads", "account"] as const satisfies readonly NavItemKey[];
+/** 生产：对话工作台在首页；导航留任务中心 + 套餐与积分（广告分析暂隐藏）。 */
+const PROD_NAV = ["tasks-v2", "account"] as const satisfies readonly NavItemKey[];
 
 export function getAppEntryConfig(): AppShellConfig {
   return {
