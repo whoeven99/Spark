@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
@@ -9,20 +9,42 @@ type Props = {
   locationSearch: string;
   languageCode: string;
   onChanged: () => void;
+  /** card = 独立卡片；section = 嵌在 Google 总卡内的分项（保留完整标题） */
+  layout?: "card" | "section";
 };
 
-const panelStyle = {
+const panelStyle: CSSProperties = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: 20,
   background: pageColorTokens.surface,
   display: "flex",
-  flexDirection: "column" as const,
+  flexDirection: "column",
   gap: 14,
 };
 
-const secondaryBtn = {
-  padding: "10px 16px",
+const sectionStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  paddingTop: 14,
+  paddingBottom: 14,
+  borderTop: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const softConnectBtn: CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  background: pageColorTokens.brandGreenLight,
+  color: pageColorTokens.brandGreenDeep,
+  border: `1px solid ${pageColorTokens.brandGreen}`,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryBtn: CSSProperties = {
+  padding: "8px 12px",
   borderRadius: 8,
   background: "#fff",
   color: pageColorTokens.textPrimary,
@@ -32,13 +54,13 @@ const secondaryBtn = {
   cursor: "pointer",
 };
 
-const activeAccountBtn = {
+const activeAccountBtn: CSSProperties = {
   ...secondaryBtn,
   border: "1px solid #0f7a52",
   background: "#f4fbf7",
   color: "#0f7a52",
   cursor: "default",
-  textAlign: "left" as const,
+  textAlign: "left",
 };
 
 function reauthSuffix(locationSearch: string, reauth: boolean) {
@@ -62,6 +84,7 @@ export function Ga4ConnectPanel({
   locationSearch,
   languageCode,
   onChanged,
+  layout = "card",
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -113,9 +136,10 @@ export function Ga4ConnectPanel({
   }
 
   const disabled = busy || ga4OAuth.redirecting;
+  const shellStyle = layout === "section" ? sectionStyle : panelStyle;
 
   return (
-    <div style={panelStyle}>
+    <div style={shellStyle}>
       <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
         {t("adsCatalog.ga4PanelTitle")}
       </h3>
@@ -130,7 +154,7 @@ export function Ga4ConnectPanel({
               key={property.propertyId}
               type="button"
               disabled={disabled}
-              style={{ ...secondaryBtn, textAlign: "left" as const }}
+              style={{ ...secondaryBtn, textAlign: "left" }}
               onClick={() => void post("/api/ga4/properties", { propertyIds: [property.propertyId] })}
             >
               {propertyLabel(property)}
@@ -173,7 +197,7 @@ export function Ga4ConnectPanel({
                     key={property.propertyId}
                     type="button"
                     disabled={disabled || isActive}
-                    style={isActive ? activeAccountBtn : { ...secondaryBtn, textAlign: "left" as const }}
+                    style={isActive ? activeAccountBtn : { ...secondaryBtn, textAlign: "left" }}
                     onClick={() =>
                       void post("/api/ga4/properties", { propertyIds: [property.propertyId] })
                     }
@@ -186,7 +210,7 @@ export function Ga4ConnectPanel({
             </div>
           ) : null}
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {switchable.length > 1 ? (
               <button
                 type="button"
@@ -217,11 +241,11 @@ export function Ga4ConnectPanel({
         </>
       ) : (
         <>
-          <p style={pageHintTextStyle}>{t("adsCatalog.ga4ConnectHint")}</p>
+          <p style={{ ...pageHintTextStyle, margin: 0 }}>{t("adsCatalog.ga4ConnectHint")}</p>
           <div>
             <button
               type="button"
-              style={secondaryBtn}
+              style={softConnectBtn}
               disabled={disabled}
               onClick={() => void openOAuth()}
             >

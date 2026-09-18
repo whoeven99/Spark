@@ -93,11 +93,19 @@ export function AdsSpendTrendChart({
   dateStart,
   dateEnd,
   currencyCode,
+  /** 空态示意嵌在外层卡片里时关掉标题与外框，避免双重边框。 */
+  showTitle = true,
+  framed = true,
+  /** 示意态：更矮、弱交互，避免像正式仪表盘。 */
+  compact = false,
 }: {
   series: AdsTrendPoint[];
   dateStart: string;
   dateEnd: string;
   currencyCode: string | null;
+  showTitle?: boolean;
+  framed?: boolean;
+  compact?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -107,11 +115,11 @@ export function AdsSpendTrendChart({
   if (n < 2) return null;
 
   const W = 720;
-  const H = 220;
-  const pL = 52;
+  const H = compact ? 168 : 220;
+  const pL = compact ? 48 : 52;
   const pR = 16;
-  const pT = 16;
-  const pB = 34;
+  const pT = compact ? 12 : 16;
+  const pB = compact ? 30 : 34;
   const chartW = W - pL - pR;
   const chartH = H - pT - pB;
 
@@ -149,17 +157,27 @@ export function AdsSpendTrendChart({
 
   return (
     <div
-      style={{
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: pageColorTokens.radiusCard,
-        background: pageColorTokens.surface,
-        padding: 16,
-      }}
+      style={
+        framed
+          ? {
+              border: `1px solid ${pageColorTokens.border}`,
+              borderRadius: pageColorTokens.radiusCard,
+              background: pageColorTokens.surface,
+              padding: 16,
+            }
+          : undefined
+      }
     >
-      <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
-        {t("adsHub.overview.trendTitle")}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", marginTop: 8 }}>
+      {showTitle ? (
+        <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
+          {t("adsHub.overview.trendTitle")}
+        </div>
+      ) : null}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        style={{ display: "block", marginTop: showTitle ? 8 : 0 }}
+      >
         {Y_AXIS_RATIOS.map((ratio) => {
           const y = pT + chartH * (1 - ratio);
           return (
@@ -185,18 +203,20 @@ export function AdsSpendTrendChart({
           );
         })}
 
-        {points.map((point, index) => (
-          <rect
-            key={`hover-${point.date}`}
-            x={getX(index) - columnWidth / 2}
-            y={pT}
-            width={columnWidth}
-            height={chartH}
-            fill="transparent"
-            onMouseEnter={() => setHoveredIndex(index)}
-            onMouseLeave={() => setHoveredIndex(null)}
-          />
-        ))}
+        {!compact
+          ? points.map((point, index) => (
+              <rect
+                key={`hover-${point.date}`}
+                x={getX(index) - columnWidth / 2}
+                y={pT}
+                width={columnWidth}
+                height={chartH}
+                fill="transparent"
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              />
+            ))
+          : null}
 
         {lines.map((line) => {
           const linePoints = line.values.map((value, index) => ({
@@ -209,12 +229,13 @@ export function AdsSpendTrendChart({
               d={buildLinePath(linePoints)}
               fill="none"
               stroke={line.color}
-              strokeWidth="2.2"
+              strokeWidth={compact ? "1.8" : "2.2"}
+              opacity={compact ? 0.75 : 1}
             />
           );
         })}
 
-        {hoveredIndex != null ? (
+        {!compact && hoveredIndex != null ? (
           <g pointerEvents="none">
             <line
               x1={getX(hoveredIndex)}
@@ -252,7 +273,7 @@ export function AdsSpendTrendChart({
           </text>
         ))}
 
-        {hovered ? (
+        {!compact && hovered ? (
           <foreignObject x={tooltipX} y={pT + 4} width={160} height={80} pointerEvents="none">
             <div
               style={{

@@ -385,7 +385,6 @@ export function AdsInsightsPage() {
   const { isMobile } = useResponsiveLayout();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const returnTo = searchParams.get("returnTo")?.trim() || undefined;
   const loaderData = useLoaderData<AdsInsightsPageLoaderData>();
   const metricsFetcher = useFetcher<InsightsFetcherData>();
   const overviewFetcher = useFetcher<UnifiedOverviewFetcherData>();
@@ -700,9 +699,7 @@ export function AdsInsightsPage() {
       <PageHeaderNav
         title={t("adsInsights.pageTitle")}
         subtitle={t("adsInsights.pageSubtitle")}
-        backLabel={returnTo ? t("common.backToPrevious") : t("adsHub.overview.title")}
-        fallbackPath={returnTo ?? "/app/ads"}
-        returnTo={returnTo}
+        hideBack
       />
 
       <PageSurface>

@@ -179,9 +179,7 @@ export function GoogleAttributionPage() {
       <PageHeaderNav
         title={t("googleAttribution.title")}
         subtitle={t("googleAttribution.subtitle")}
-        backLabel={t("googleAttribution.backToSettings")}
-        returnTo={`/app/settings${locationSearch}`}
-        preserveSearch
+        hideBack
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

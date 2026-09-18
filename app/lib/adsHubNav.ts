@@ -1,5 +1,5 @@
 /**
- * 广告 hub（样例 B）左栏能力目录。
+ * 广告 hub 顶部分段能力目录。
  * Pixel 审核期默认不进目录（由调用方传入 showReviewHidden）。
  */
 import { appendEmbeddedSearchToPath } from "./embeddedLocationSearch";

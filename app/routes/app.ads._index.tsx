@@ -28,6 +28,8 @@ import {
   isAdsHubCapabilityVisible,
 } from "../lib/adsHubNav";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { AdsEmptyPreview } from "./component/adsHub/AdsEmptyPreview";
 import { AdsSpendTrendChart } from "./component/adsHub/AdsSpendTrendChart";
 import { pageColorTokens } from "./page/pageUiStyles";
 
@@ -183,7 +185,7 @@ export default function AppAdsIndex() {
   const hasVolume = Boolean(totals && totals.spend > 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 960 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%" }}>
       <div>
         <h1
           style={{
@@ -352,23 +354,36 @@ function ConnectGuide({
   locationSearch: string;
 }) {
   const { t } = useTranslation();
+  const { width } = useResponsiveLayout();
+  // 宽屏下「先连一个账户」和「连接后会看到什么」并排，否则右侧会空掉半屏。
+  const sideBySide = width >= 1180;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: sideBySide ? "minmax(320px, 420px) 1fr" : "1fr",
+        alignItems: "start",
+        gap: sideBySide ? 20 : 12,
+      }}
+    >
       <div
         style={{
           border: `1px solid ${pageColorTokens.border}`,
           borderRadius: pageColorTokens.radiusCard,
           background: pageColorTokens.surface,
           overflow: "hidden",
+          position: sideBySide ? "sticky" : "static",
+          top: sideBySide ? 16 : undefined,
         }}
       >
         <div
           style={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
-            padding: "14px 16px",
+            gap: "4px 12px",
+            padding: "12px 16px",
             borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
           }}
         >
@@ -387,7 +402,7 @@ function ConnectGuide({
               display: "flex",
               alignItems: "center",
               gap: 12,
-              padding: "14px 16px",
+              padding: "10px 16px",
               borderTop: index === 0 ? "none" : `1px solid ${pageColorTokens.divider}`,
             }}
           >
@@ -400,7 +415,7 @@ function ConnectGuide({
                   marginTop: 2,
                   fontSize: 12,
                   color: pageColorTokens.textSecondary,
-                  lineHeight: 1.5,
+                  lineHeight: 1.45,
                 }}
               >
                 {platform.catalogConnected
@@ -414,16 +429,9 @@ function ConnectGuide({
                 flexShrink: 0,
                 padding: "8px 14px",
                 borderRadius: pageColorTokens.radiusControl,
-                background:
-                  platform.platform === "google"
-                    ? pageColorTokens.brandGreen
-                    : pageColorTokens.surface,
-                color:
-                  platform.platform === "google" ? "#fff" : pageColorTokens.textPrimary,
-                border:
-                  platform.platform === "google"
-                    ? "none"
-                    : `1px solid ${pageColorTokens.borderInput}`,
+                background: pageColorTokens.surface,
+                color: pageColorTokens.textPrimary,
+                border: `1px solid ${pageColorTokens.borderInput}`,
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: "none",
@@ -438,7 +446,7 @@ function ConnectGuide({
 
         <div
           style={{
-            padding: "10px 16px",
+            padding: "8px 16px",
             background: pageColorTokens.surfaceMuted,
             borderTop: `1px solid ${pageColorTokens.divider}`,
             fontSize: 12,
@@ -450,34 +458,7 @@ function ConnectGuide({
         </div>
       </div>
 
-      <div
-        style={{
-          border: `1px solid ${pageColorTokens.border}`,
-          borderRadius: pageColorTokens.radiusCard,
-          background: pageColorTokens.surface,
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
-          {t("adsHub.overview.previewTitle")}
-        </div>
-        <ul
-          style={{
-            margin: 0,
-            paddingLeft: 18,
-            fontSize: 13,
-            lineHeight: 1.7,
-            color: pageColorTokens.textSecondary,
-          }}
-        >
-          <li>{t("adsHub.overview.previewItemMetrics")}</li>
-          <li>{t("adsHub.overview.previewItemStructure")}</li>
-          <li>{t("adsHub.overview.previewItemAttribution")}</li>
-        </ul>
-      </div>
+      <AdsEmptyPreview />
     </div>
   );
 }
