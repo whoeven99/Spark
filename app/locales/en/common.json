@@ -58,6 +58,24 @@
       },
       "scopeNote": "These platforms only grant account-level access — there is no finer read-only option. Spark reads reporting and product status for analysis; syncing products or changing ads always needs a separate confirmation inside Spark.",
       "previewTitle": "What you'll see after connecting",
+      "previewSampleBadge": "Sample",
+      "previewLead": "Sample layout below — after connecting, these become your store's real numbers.",
+      "previewSection": {
+        "overviewTitle": "Overview: cross-channel totals",
+        "overviewSubtitle": "Last 7 / 30 days of spend and conversion value totaled by day.",
+        "performanceTitle": "Performance: drill-down",
+        "performanceSubtitle": "Campaign → ad set → ad — find where spend is high and return is low.",
+        "attributionTitle": "Attribution: did ads drive orders",
+        "attributionSubtitle": "Match ad spend to Shopify order revenue — not only in-platform conversions."
+      },
+      "previewSample": {
+        "colObject": "Item",
+        "campaignA": "Campaign A",
+        "adSetB": "Ad set B",
+        "adC": "Ad C",
+        "attributedSessions": "Attributed sessions",
+        "attributedRevenue": "Attributed revenue"
+      },
       "previewItemMetrics": "Spend, ROAS, and conversion value compared across channels",
       "previewItemStructure": "Campaign → ad set → ad drill-down",
       "previewItemAttribution": "Ad data matched against your Shopify orders",
@@ -3840,6 +3858,8 @@
   "adsCatalog": {
     "pageTitle": "Ads catalog sync",
     "pageSubtitle": "Generate Facebook and Google catalog feeds from Shopify products and push them to your ad accounts.",
+    "connectPageTitle": "Connections",
+    "connectPageSubtitle": "Authorize Google, Meta, and TikTok, then bind accounts. Connecting one channel is enough.",
     "overviewTitle": "Workspace overview",
     "overviewSubtitle": "Check the current workspace, connection coverage, and task status before syncing or troubleshooting.",
     "overviewCurrentTab": "Current workspace",

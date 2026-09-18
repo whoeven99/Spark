@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useOAuthPopup } from "../../../hooks/useOAuthPopup";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
@@ -9,20 +9,42 @@ type Props = {
   locationSearch: string;
   languageCode: string;
   onChanged: () => void;
+  /** card = 独立卡片；section = 嵌在 Google 总卡内的分项（保留完整标题） */
+  layout?: "card" | "section";
 };
 
-const panelStyle = {
+const panelStyle: CSSProperties = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: 20,
   background: pageColorTokens.surface,
   display: "flex",
-  flexDirection: "column" as const,
+  flexDirection: "column",
   gap: 14,
 };
 
-const secondaryBtn = {
-  padding: "10px 16px",
+const sectionStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  paddingTop: 14,
+  paddingBottom: 14,
+  borderTop: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const softConnectBtn: CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  background: pageColorTokens.brandGreenLight,
+  color: pageColorTokens.brandGreenDeep,
+  border: `1px solid ${pageColorTokens.brandGreen}`,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryBtn: CSSProperties = {
+  padding: "8px 12px",
   borderRadius: 8,
   background: "#fff",
   color: pageColorTokens.textPrimary,
@@ -41,6 +63,7 @@ export function GscConnectPanel({
   locationSearch,
   languageCode,
   onChanged,
+  layout = "card",
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -88,9 +111,10 @@ export function GscConnectPanel({
   }
 
   const disabled = busy || gscOAuth.redirecting;
+  const shellStyle = layout === "section" ? sectionStyle : panelStyle;
 
   return (
-    <div style={panelStyle}>
+    <div style={shellStyle}>
       <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
         {t("adsCatalog.gscPanelTitle")}
       </h3>
@@ -105,7 +129,7 @@ export function GscConnectPanel({
               key={site.siteUrl}
               type="button"
               disabled={disabled}
-              style={{ ...secondaryBtn, textAlign: "left" as const }}
+              style={{ ...secondaryBtn, textAlign: "left" }}
               onClick={() => void post("/api/gsc/sites", { siteUrl: site.siteUrl })}
             >
               {site.siteUrl}
@@ -134,7 +158,7 @@ export function GscConnectPanel({
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               type="button"
               style={secondaryBtn}
@@ -155,11 +179,11 @@ export function GscConnectPanel({
         </>
       ) : (
         <>
-          <p style={pageHintTextStyle}>{t("adsCatalog.gscConnectHint")}</p>
+          <p style={{ ...pageHintTextStyle, margin: 0 }}>{t("adsCatalog.gscConnectHint")}</p>
           <div>
             <button
               type="button"
-              style={secondaryBtn}
+              style={softConnectBtn}
               disabled={disabled}
               onClick={() => void openOAuth()}
             >

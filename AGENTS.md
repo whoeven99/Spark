@@ -86,7 +86,7 @@ Spark/
 | Studio | `/app/studio` | `app.studio.*`，工具目录（测环境导航）；`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy`。**prod 走对话开任务，不进导航** |
 | 创作 | `/app/create` | `app.create.tsx` + `CreatePage`：一级是能力目录，选中后在本页开工作区（商品文案 / 生成图片 / 翻译图片文字），不跳 Studio；能力清单登记在 `app/lib/createCapabilities.ts`（当前 `ready` 3 + `chat` 4；`inventory` 等 10 个 domain 仍空）；测/产导航都不展示，URL 仍可直达 |
 | 任务中心 | `/app/tasks-v2` | `app.tasks-v2.tsx` + `TaskListV2Page`：两行列表（状态/对象 + 结论句/细进度条），当前/历史合在一页、严格按时间倒序（`/api/unified-tasks?view=all&include=ai&sort=time_desc`），不展示经营任务与定时任务；点行先选中，预览/写回仍走对话；prod 与测/本地导航都露出。旧 `/app/tasks` 重定向到这里 |
-| 广告分析 | `/app/ads` | `app.ads.tsx` 左栏能力目录 + Outlet：总览 / 投放表现 / 归因 / 连接·同步目录 / 创建·编辑 / 目录同步任务。Pixel / 同步 / 创建 / 编辑 / 任务等审核期项默认不进左栏，URL 仍可直达。OAuth 回跳 `/app/ads/catalog?tab=credentials`。Google 连接账户含 Merchant Center、Ads 与 GA4（各自可单独授权；「连接 Google」只申请 GMC+Ads）。旧 `/app/ads-catalog`、`/app/settings/connections/{google,meta,tiktok}`、`/app/studio/ads*`、`/app/insights/performance` 重定向至此。部分授权即可用。**仅测环境一级导航；prod 暂不展示（URL 仍可直达）** |
+| 广告分析 | `/app/ads` | `app.ads.tsx` 顶部分段 + Outlet：总览 / 投放表现 / 归因，右侧「连接账户」；同步目录 / 创建·编辑 / 目录同步任务等审核期项默认不进分段，URL 仍可直达。OAuth 回跳 `/app/ads/catalog?tab=credentials`。Google 连接账户含 Merchant Center、Ads 与 GA4（各自可单独授权；「连接 Google」只申请 GMC+Ads）。旧 `/app/ads-catalog`、`/app/settings/connections/{google,meta,tiktok}`、`/app/studio/ads*`、`/app/insights/performance` 重定向至此。部分授权即可用。**仅测环境一级导航；prod 暂不展示（URL 仍可直达）** |
 | 套餐与积分 | `/app/account` | `app.account.tsx` → `BillingPage`（套餐与 Token 额度）；旧 `/app/settings/billing` 重定向至此 |
 | Settings | `/app/settings` | `app.settings.*`：物流、GA4、GSC、PageSpeed、数据回补、ShopifyQL 报表、反馈等；计费已迁出到「套餐与积分」。广告入口已迁到一级「广告分析」`/app/ads`（旧 `/app/ads-catalog` 重定向）。**仅测环境导航；prod 不把配置 hub 做成一级入口** |
 

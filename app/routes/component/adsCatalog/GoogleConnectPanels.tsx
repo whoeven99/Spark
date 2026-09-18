@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 // 审核期临时关闭 5.1.5：隐藏 Google Pixel 入口，过审后恢复 Link。
 // import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -26,17 +26,17 @@ type Props = {
   onChanged: () => void;
 };
 
-const panelStyle = {
+const panelStyle: CSSProperties = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: 20,
   background: pageColorTokens.surface,
   display: "flex",
-  flexDirection: "column" as const,
-  gap: 14,
+  flexDirection: "column",
+  gap: 0,
 };
 
-const primaryBtn = {
+const primaryBtn: CSSProperties = {
   padding: "10px 16px",
   borderRadius: 8,
   background: pageColorTokens.brandGreen,
@@ -47,8 +47,20 @@ const primaryBtn = {
   cursor: "pointer",
 };
 
-const secondaryBtn = {
-  padding: "10px 16px",
+/** 隶属「连接 Google」的分项入口：同色系浅底，主按钮更深 */
+const softConnectBtn: CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  background: pageColorTokens.brandGreenLight,
+  color: pageColorTokens.brandGreenDeep,
+  border: `1px solid ${pageColorTokens.brandGreen}`,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryBtn: CSSProperties = {
+  padding: "8px 12px",
   borderRadius: 8,
   background: "#fff",
   color: pageColorTokens.textPrimary,
@@ -58,13 +70,13 @@ const secondaryBtn = {
   cursor: "pointer",
 };
 
-const activeAccountBtn = {
+const activeAccountBtn: CSSProperties = {
   ...secondaryBtn,
-  border: `1px solid #0f7a52`,
+  border: "1px solid #0f7a52",
   background: "#f4fbf7",
   color: "#0f7a52",
   cursor: "default",
-  textAlign: "left" as const,
+  textAlign: "left",
 };
 
 type AdsAccountOption = { id: string; name?: string; formatted?: string };
@@ -192,19 +204,21 @@ export function GoogleConnectPanels({
         }).format(new Date(iso))
       : "—";
 
+  const disabled = busy || anyRedirecting;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={panelStyle}>
       {showPrimaryConnect ? (
-        <div style={panelStyle}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
             {t("adsCatalog.googleConnectTitle")}
           </h3>
-          <p style={pageHintTextStyle}>{t("adsCatalog.googleConnectHint")}</p>
+          <p style={{ ...pageHintTextStyle, margin: 0 }}>{t("adsCatalog.googleConnectHint")}</p>
           <div>
             <button
               type="button"
               style={primaryBtn}
-              disabled={busy || anyRedirecting}
+              disabled={disabled}
               onClick={() => openCombinedOAuth()}
             >
               {t("adsCatalog.googleConnect")}
@@ -214,11 +228,7 @@ export function GoogleConnectPanels({
       ) : null}
 
       {/* ── Google Merchant Center ── */}
-      <div style={panelStyle}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-          {t("adsCatalog.gmcPanelTitle")}
-        </h3>
-
+      <ServiceSection title={t("adsCatalog.gmcPanelTitle")} bordered={showPrimaryConnect}>
         {gmc.pendingAccounts.length > 0 ? (
           <AccountSelect
             label={t("adsCatalog.gmcSelectAccount")}
@@ -239,11 +249,11 @@ export function GoogleConnectPanels({
                 {t("adsCatalog.gmcUpdatedAt", { time: fmtDate(gmc.updatedAt) })}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 type="button"
                 style={secondaryBtn}
-                disabled={busy || anyRedirecting}
+                disabled={disabled}
                 onClick={() => openGmcOAuth(true)}
               >
                 {t("adsCatalog.gmcReauth")}
@@ -259,40 +269,38 @@ export function GoogleConnectPanels({
             </div>
           </>
         ) : (
-          <>
-            <p style={pageHintTextStyle}>
-              {showPrimaryConnect
-                ? t("adsCatalog.gmcConnectHint")
-                : t("adsCatalog.gmcConnectSideHint")}{" "}
-              <a
-                href={GMC_MERCHANT_SIGNUP_URL}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: "inherit", fontWeight: 700 }}
-              >
-                {t("adsCatalog.gmcNoMerchantAccountGuideLink")}
-              </a>
-            </p>
-            <div>
+          <ServiceIdleRow
+            hint={
+              <>
+                {showPrimaryConnect
+                  ? t("adsCatalog.gmcConnectHint")
+                  : t("adsCatalog.gmcConnectSideHint")}{" "}
+                <a
+                  href={GMC_MERCHANT_SIGNUP_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "inherit", fontWeight: 700 }}
+                >
+                  {t("adsCatalog.gmcNoMerchantAccountGuideLink")}
+                </a>
+              </>
+            }
+            action={
               <button
                 type="button"
-                style={secondaryBtn}
-                disabled={busy || anyRedirecting}
+                style={softConnectBtn}
+                disabled={disabled}
                 onClick={() => openGmcOAuth()}
               >
                 {t("adsCatalog.gmcConnect")}
               </button>
-            </div>
-          </>
+            }
+          />
         )}
-      </div>
+      </ServiceSection>
 
       {/* ── Google Ads (optional) ── */}
-      <div style={panelStyle}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-          {t("adsCatalog.adsPanelTitle")}
-        </h3>
-
+      <ServiceSection title={t("adsCatalog.adsPanelTitle")}>
         {showAdsAccountPicker ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>
@@ -310,7 +318,7 @@ export function GoogleConnectPanels({
                   key={a.id}
                   type="button"
                   disabled={busy || isActive}
-                  style={isActive ? activeAccountBtn : { ...secondaryBtn, textAlign: "left" as const }}
+                  style={isActive ? activeAccountBtn : { ...secondaryBtn, textAlign: "left" }}
                   onClick={() => void selectAdsAccount(a.id)}
                 >
                   {label}
@@ -357,11 +365,11 @@ export function GoogleConnectPanels({
                 )}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 type="button"
                 style={secondaryBtn}
-                disabled={busy || anyRedirecting}
+                disabled={disabled}
                 onClick={() => openAdsOAuth(true)}
               >
                 {t("adsCatalog.adsReauth")}
@@ -377,38 +385,82 @@ export function GoogleConnectPanels({
             </div>
           </>
         ) : selectingInitialAds ? null : (
-          <>
-            <p style={pageHintTextStyle}>
-              {showPrimaryConnect
+          <ServiceIdleRow
+            hint={
+              showPrimaryConnect
                 ? t("adsCatalog.adsConnectHint")
-                : t("adsCatalog.adsConnectSideHint")}
-            </p>
-            <div>
+                : t("adsCatalog.adsConnectSideHint")
+            }
+            action={
               <button
                 type="button"
-                style={secondaryBtn}
-                disabled={busy || anyRedirecting}
+                style={softConnectBtn}
+                disabled={disabled}
                 onClick={() => openAdsOAuth()}
               >
                 {t("adsCatalog.adsConnect")}
               </button>
-            </div>
-          </>
+            }
+          />
         )}
-      </div>
+      </ServiceSection>
+
       <Ga4ConnectPanel
         credentials={credentials}
         locationSearch={locationSearch}
         languageCode={languageCode}
         onChanged={onChanged}
+        layout="section"
       />
       <GscConnectPanel
         credentials={credentials}
         locationSearch={locationSearch}
         languageCode={languageCode}
         onChanged={onChanged}
+        layout="section"
       />
       {/* 审核期临时关闭 5.1.5：隐藏 Google Pixel 向导入口。过审后恢复本面板。 */}
+    </div>
+  );
+}
+
+function ServiceSection({
+  title,
+  children,
+  bordered = true,
+}: {
+  title: string;
+  children: ReactNode;
+  bordered?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        paddingTop: 14,
+        paddingBottom: 14,
+        borderTop: bordered ? `1px solid ${pageColorTokens.borderSubtle}` : undefined,
+      }}
+    >
+      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function ServiceIdleRow({ hint, action }: { hint: ReactNode; action: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ ...pageHintTextStyle, margin: 0 }}>{hint}</div>
+      <div>{action}</div>
     </div>
   );
 }

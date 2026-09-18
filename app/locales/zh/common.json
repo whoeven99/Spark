@@ -58,6 +58,24 @@
       },
       "scopeNote": "这些平台只提供账户级授权，没有更细的只读选项。Spark 默认只读取报表与商品状态用于分析；同步商品、创建或修改广告都要你在应用内单独确认后才会执行。",
       "previewTitle": "连接后你会看到什么",
+      "previewSampleBadge": "示意",
+      "previewLead": "下面是示意布局，连上账户后会换成你店铺的真实数字。",
+      "previewSection": {
+        "overviewTitle": "总览：跨渠道合计",
+        "overviewSubtitle": "近 7 / 30 天广告花费与转化金额按天加总，一眼看整体走势。",
+        "performanceTitle": "投放表现：逐层明细",
+        "performanceSubtitle": "广告系列 → 广告组 → 广告，找到花钱多、回报低的那一层。",
+        "attributionTitle": "归因对照：订单是否带货",
+        "attributionSubtitle": "广告花费与 Shopify 订单收入对照，不只看平台后台的转化。"
+      },
+      "previewSample": {
+        "colObject": "对象",
+        "campaignA": "系列 A",
+        "adSetB": "组 B",
+        "adC": "广告 C",
+        "attributedSessions": "归因会话",
+        "attributedRevenue": "归因收入"
+      },
       "previewItemMetrics": "跨渠道的广告花费、广告回报 ROAS 与转化金额对照",
       "previewItemStructure": "广告系列 → 广告组 → 广告 的逐层明细",
       "previewItemAttribution": "广告数据与 Shopify 订单的归因对照",
@@ -3840,6 +3858,8 @@
   "adsCatalog": {
     "pageTitle": "广告 Catalog 同步",
     "pageSubtitle": "基于 Shopify 商品生成 Facebook 和 Google 广告 catalog 并推送到广告账户。",
+    "connectPageTitle": "连接账户",
+    "connectPageSubtitle": "授权 Google、Meta、TikTok，并完成账户绑定。可只连其中一个平台。",
     "overviewTitle": "工作概览",
     "overviewSubtitle": "先确认当前所处的工作区、接入完成度和任务状态，再继续同步或排查。",
     "overviewCurrentTab": "当前工作区",

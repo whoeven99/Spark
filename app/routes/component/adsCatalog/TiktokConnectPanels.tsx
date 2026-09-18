@@ -33,7 +33,7 @@ const panelStyle = {
 const primaryBtn = {
   padding: "10px 16px",
   borderRadius: 8,
-  background: "#010101",
+  background: pageColorTokens.brandGreen,
   color: "#fff",
   border: "none",
   fontSize: 13,

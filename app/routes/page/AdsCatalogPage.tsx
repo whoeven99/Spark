@@ -240,10 +240,6 @@ export function AdsCatalogPage() {
   const shopify = useAppBridge();
   const location = useLocation();
   const locationSearch = useEmbeddedLocationSearch();
-  const returnTo = useMemo(() => {
-    const params = new URLSearchParams(location.search.startsWith("?") ? location.search.slice(1) : location.search);
-    return params.get("returnTo")?.trim() || undefined;
-  }, [location.search]);
   const loaderData = useLoaderData<AdsCatalogPageLoaderData>();
   const revalidator = useRevalidator();
   const credentials = loaderData.credentials;
@@ -901,31 +897,39 @@ export function AdsCatalogPage() {
     }
   }
 
+  const credentialsOnly = tab === "credentials";
+  const pageTitle = credentialsOnly
+    ? t("adsCatalog.connectPageTitle")
+    : t("adsCatalog.pageTitle");
+  const pageSubtitle = credentialsOnly
+    ? t("adsCatalog.connectPageSubtitle")
+    : t("adsCatalog.pageSubtitle");
+
   return (
     <PageSurface>
       <PageHeaderNav
-        backLabel={returnTo ? "返回上一级" : t("common.backToPrevious")}
-        fallbackPath={returnTo ?? "/app/ads"}
-        returnTo={returnTo}
-        title={t("adsCatalog.pageTitle")}
-        subtitle={t("adsCatalog.pageSubtitle")}
+        title={pageTitle}
+        subtitle={pageSubtitle}
+        hideBack
       />
       <div style={analysisPageContentStyle}>
-        <PageSurface>
-          <PageSectionHeader
-            title={t("adsCatalog.overviewTitle")}
-            subtitle={t("adsCatalog.overviewSubtitle")}
-          />
-          <PageMetricCard
-            metrics={[
-              { label: t("adsCatalog.overviewCurrentTab"), value: currentTabLabel },
-              { label: t("adsCatalog.overviewConnectedChannels"), value: String(connectedChannelCount) },
-              { label: t("adsCatalog.overviewRunningTasks"), value: String(runningCount) },
-              { label: t("adsCatalog.overviewIssues"), value: String(issueCount) },
-            ]}
-            footer={<span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>{overviewFooter}</span>}
-          />
-        </PageSurface>
+        {!credentialsOnly && (
+          <PageSurface>
+            <PageSectionHeader
+              title={t("adsCatalog.overviewTitle")}
+              subtitle={t("adsCatalog.overviewSubtitle")}
+            />
+            <PageMetricCard
+              metrics={[
+                { label: t("adsCatalog.overviewCurrentTab"), value: currentTabLabel },
+                { label: t("adsCatalog.overviewConnectedChannels"), value: String(connectedChannelCount) },
+                { label: t("adsCatalog.overviewRunningTasks"), value: String(runningCount) },
+                { label: t("adsCatalog.overviewIssues"), value: String(issueCount) },
+              ]}
+              footer={<span style={{ fontSize: "0.82rem", color: pageColorTokens.textSecondary }}>{overviewFooter}</span>}
+            />
+          </PageSurface>
+        )}
 
         {accountSuspended && (
           <div
@@ -1253,23 +1257,6 @@ export function AdsCatalogPage() {
 
         {tab === "credentials" && (
           <PageSurface>
-            <PageSectionHeader
-              title={t("adsCatalog.credentialsTitle")}
-              subtitle={t("adsCatalog.credentialsSubtitle")}
-            />
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div
-                style={{
-                  ...sectionStyle,
-                  padding: "14px 16px",
-                  background: pageColorTokens.surfaceMuted,
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                  {t("adsCatalog.credentialsHubTitle")}
-                </div>
-                <div style={pageHintTextStyle}>{t("adsCatalog.credentialsHubBody")}</div>
-              </div>
             <div
               style={{
                 display: "grid",
@@ -1279,46 +1266,45 @@ export function AdsCatalogPage() {
               }}
             >
               <div id="ads-connect-google">
-            <GoogleConnectPanels
-              credentials={credentials}
-              adsLink={adsLink}
-              locationSearch={locationSearch}
-              languageCode={i18n.language}
-              shopDomain={loaderData.shopDomain}
-              shopifyApiKey={loaderData.shopifyApiKey}
-              onChanged={() => {
-                revalidator.revalidate();
-                statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
-              }}
-            />
+                <GoogleConnectPanels
+                  credentials={credentials}
+                  adsLink={adsLink}
+                  locationSearch={locationSearch}
+                  languageCode={i18n.language}
+                  shopDomain={loaderData.shopDomain}
+                  shopifyApiKey={loaderData.shopifyApiKey}
+                  onChanged={() => {
+                    revalidator.revalidate();
+                    statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
+                  }}
+                />
               </div>
               <div id="ads-connect-facebook">
-            <MetaConnectPanels
-              credentials={credentials}
-              locationSearch={locationSearch}
-              languageCode={i18n.language}
-              shopDomain={loaderData.shopDomain}
-              shopifyApiKey={loaderData.shopifyApiKey}
-              onChanged={() => {
-                revalidator.revalidate();
-                metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
-              }}
-            />
+                <MetaConnectPanels
+                  credentials={credentials}
+                  locationSearch={locationSearch}
+                  languageCode={i18n.language}
+                  shopDomain={loaderData.shopDomain}
+                  shopifyApiKey={loaderData.shopifyApiKey}
+                  onChanged={() => {
+                    revalidator.revalidate();
+                    metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
+                  }}
+                />
               </div>
               <div id="ads-connect-tiktok">
-            <TiktokConnectPanels
-              credentials={credentials}
-              inferredTiktokRegion={inferredTiktokRegion}
-              locationSearch={locationSearch}
-              languageCode={i18n.language}
-              shopDomain={loaderData.shopDomain}
-              shopifyApiKey={loaderData.shopifyApiKey}
-              onChanged={() => {
-                revalidator.revalidate();
-              }}
-            />
+                <TiktokConnectPanels
+                  credentials={credentials}
+                  inferredTiktokRegion={inferredTiktokRegion}
+                  locationSearch={locationSearch}
+                  languageCode={i18n.language}
+                  shopDomain={loaderData.shopDomain}
+                  shopifyApiKey={loaderData.shopifyApiKey}
+                  onChanged={() => {
+                    revalidator.revalidate();
+                  }}
+                />
               </div>
-            </div>
             </div>
           </PageSurface>
         )}
