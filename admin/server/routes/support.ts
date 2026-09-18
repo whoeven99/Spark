@@ -17,6 +17,40 @@ function nowIso(): string {
 const PREVIEW_LEN = 120;
 const MAX_REPLY_LEN = 4000;
 
+type SupportImageAttachment = {
+  type: "image";
+  url: string;
+  mime?: string;
+  size?: number;
+  name?: string;
+};
+
+/**
+ * TSF / Spark 商家端把图片写在 SupportMessage.payloads JSON：
+ * `{ attachments: [{ type: "image", url, mime, size, name? }] }`。
+ * 纯图片消息 content 为空，lastMessage 预览为 `[Image]`。
+ */
+function attachmentsFromPayloads(raw: unknown): SupportImageAttachment[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as { attachments?: unknown };
+    if (!Array.isArray(parsed?.attachments)) return [];
+    return parsed.attachments.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const record = item as Record<string, unknown>;
+      if (record.type !== "image") return [];
+      const url = typeof record.url === "string" ? record.url.trim() : "";
+      if (!url) return [];
+      const mime = typeof record.mime === "string" ? record.mime : undefined;
+      const size = typeof record.size === "number" ? record.size : undefined;
+      const name = typeof record.name === "string" ? record.name : undefined;
+      return [{ type: "image" as const, url, ...(mime ? { mime } : {}), ...(size != null ? { size } : {}), ...(name ? { name } : {}) }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 /** 来源：默认 spark（Spark 自身商家会话）；翻译v4 页传 translate-v4。 */
 function resolveSource(req: { query: Record<string, unknown> }): string {
   const raw = (req.query.source as string | undefined)?.trim();
@@ -89,7 +123,7 @@ supportRouter.get("/:shop", async (req, res) => {
     }
 
     const messagesResult = await db.execute({
-      sql: `SELECT id, sender, senderName, content, createdAt
+      sql: `SELECT id, sender, senderName, content, payloads, createdAt
             FROM SupportMessage WHERE conversationId = ? ORDER BY createdAt ASC`,
       args: [conversation.id],
     });
@@ -102,7 +136,15 @@ supportRouter.get("/:shop", async (req, res) => {
       conversation.unreadForOps = 0;
     }
 
-    res.json({ conversation, messages: messagesResult.rows });
+    const messages = messagesResult.rows.map((row) => {
+      const { payloads, ...rest } = row as Record<string, unknown>;
+      return {
+        ...rest,
+        attachments: attachmentsFromPayloads(payloads),
+      };
+    });
+
+    res.json({ conversation, messages });
   } catch (err) {
     console.error("[support/get]", err);
     res.status(500).json({ error: String(err) });

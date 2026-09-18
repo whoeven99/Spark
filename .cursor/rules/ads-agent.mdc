@@ -1,0 +1,17 @@
+---
+description: 广告任务前置阅读规则
+globs: app/server/adsCatalog/**,app/server/adsCreate/**,app/server/adsEdit/**,app/server/adsInsights/**,app/routes/api.ads-*.ts,app/routes/ads.*.tsx,app/routes/app.ads.tsx,app/routes/app.ads.*.tsx,app/routes/component/adsCatalog/**,app/routes/component/ads*/**,app/routes/page/ads*/**,tests/app/server/adsCatalog/**,tests/app/server/adsInsights/**
+alwaysApply: false
+---
+
+# 广告前置规则
+
+任务涉及广告 Catalog（Meta / Google / TikTok OAuth、目录同步、Pixel）、广告创建/编辑或广告洞察时，先读 `app/server/adsCatalog/agent.md`，再分析、实现或测试。
+
+## 执行要求
+
+1. 先读 `app/server/adsCatalog/agent.md`。外部平台所有权与审核期扩展姿态以根 `AGENTS.md` 第 1、5 节为准。
+2. 不要给绑定校验、同步预检、上传确认这类需要实时状态的路径接枚举缓存。
+3. 审核状态与广告实体是全量重建写法，拉取必须翻完分页；不要退回逐条 upsert。
+4. `AdMetricDaily` 只落可加指标，派生指标查询时算。
+5. 若需求与该文件约定冲突，以用户明确指令为准，并在改动说明里指出偏离点。

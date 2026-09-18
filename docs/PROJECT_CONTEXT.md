@@ -92,9 +92,10 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`。新增或改名路�
 - 腾讯 SES / 飞书：商户邮件与内部运营通知，通知失败通常不阻断主流程。
   - 发送入口：`app/server/email/`（`sendTemplateEmail`）+ `app/server/notifications/`（`notify*Email` → `dispatchMerchantNotificationEmail`）。
   - 商户模板 ID：`notificationTemplateIds.server.ts`（安装 `180498`、卸载 `180499`、购包 `180500`、订阅 `180501–180503`）；Agent `task_*` 模板仍在 `emailTemplates.server.ts`。
-  - 触发：安装（`recordAppInstalled` → `onAppInstalled`）、卸载（`onAppUninstalled`，删 Session 前读收件人快照）、订阅/购包（`activateSubscription` / `applyTokenPackPurchase`）。
+  - 触发：安装（`recordAppInstalled` → `onAppInstalled`）、卸载（`onAppUninstalled`：先取收件人快照，再 `archiveAndPurgeShopData` 归档并清 Turso）、订阅/购包（`activateSubscription` / `applyTokenPackPurchase`）。
   - 模板展示用 support 邮箱：`MERCHANT_SUPPORT_EMAIL`（`support@ciwi.ai`），与 SES From（`support@msg.ciwi.ai`）分离。
-- 物流承运商凭证：本地 JSON `.data/logistics-provider-credentials.json`（`app/server/logisticsCredentialStore.server.ts`），未做加密存储。
+- 物流承运商凭证：本地 JSON `.data/logistics-provider-credentials.json`（`app/server/logisticsCredentialStore.server.ts`），未加密；Render 磁盘非持久，重启/重新部署会丢，不要当生产核心路径。
+- GDPR / 合规：`/webhooks/compliance` 已对 `customers/redact`、`shop/redact` 做真实擦除/清数；隐私政策页仍缺（见 `docs/ROADMAP.md`）。
 
 存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service；涉及整店翻译时同时核对 TSF 当前实现。
 

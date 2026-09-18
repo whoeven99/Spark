@@ -1515,11 +1515,20 @@ export type SupportConversationRow = {
   updatedAt: string;
 };
 
+export type SupportImageAttachment = {
+  type: "image";
+  url: string;
+  mime?: string;
+  size?: number;
+  name?: string;
+};
+
 export type SupportMessageRow = {
   id: string;
   sender: string; // "shop" | "ops"
   senderName: string | null;
   content: string;
+  attachments?: SupportImageAttachment[];
   createdAt: string;
 };
 
