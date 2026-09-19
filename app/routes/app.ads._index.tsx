@@ -1,16 +1,12 @@
 /**
- * 广告总览：分析是主线，未连接时先引导接入。
+ * 广告总览：左选渠道、右看该渠道数据；全未授权时右栏示意。
  *
- * 两条和数据链路相关的约定：
- * - 未连接时**不渲染任何 0 值指标**。`Spend $0 / ROAS —` 会被商户读成「这个应用没数据」，
- *   而真实状态是「还没授权」。
- * - `buildAdsOverview` 是纯库内聚合，不回源；而落库只发生在有人真的拉过一次平台数据。
- *   因此这一页对「已连接但库里没快照」的渠道自动触发一次 `/api/ads-insights`，
- *   否则商户授权完回到这里仍然是空的。快照过期（30 分钟 TTL）时也顺带静默刷新，
- *   顺便把授权失效暴露出来——库内聚合永远看不到凭证已经不能用了。
+ * 数据链路：
+ * - 未接入渠道不渲染 0 值指标（用 — / 示意）。
+ * - buildAdsOverview 纯库内聚合；已接入但无快照时自动拉 /api/ads-insights。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -26,7 +22,6 @@ import {
 import {
   buildAdsOverview,
   type AdsOverviewPlatform,
-  type AdsOverviewTotals,
 } from "../server/adsInsights/overview.server";
 import { parseRangeDays } from "../server/adsInsights/dateRange.server";
 import {
@@ -35,17 +30,13 @@ import {
   isAdsHubCapabilityVisible,
 } from "../lib/adsHubNav";
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
-import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { AdsEmptyPreview } from "./component/adsHub/AdsEmptyPreview";
 import {
-  AdsOverviewInlineConnect,
+  AdsOverviewWorkspace,
   type AdsOverviewBindingPending,
-} from "./component/adsHub/AdsOverviewInlineConnect";
-import { AdsSpendTrendChart } from "./component/adsHub/AdsSpendTrendChart";
+} from "./component/adsHub/AdsOverviewWorkspace";
 import { pageColorTokens } from "./page/pageUiStyles";
 
 const DEFAULT_RANGE_DAYS = 30;
-const RANGE_OPTIONS = [7, 30] as const;
 
 const PLATFORM_LABELS: Record<string, string> = {
   meta: "Meta",
@@ -67,6 +58,7 @@ const FALLBACK_PLATFORMS: AdsOverviewPlatform[] = ["meta", "google", "tiktok"].m
     totals: null,
     snapshot: null,
     entityCounts: { campaign: 0, adSet: 0, ad: 0 },
+    series: [],
   }),
 );
 
@@ -95,24 +87,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const rangeDays = rangeParam ? parseRangeDays(rangeParam) : DEFAULT_RANGE_DAYS;
   try {
     const overview = await buildAdsOverview({ shop: session.shop, rangeDays });
-    // 已有广告账户时空态不展示，跳过 pending 读；未连接才需要绑定中状态。
-    const needsBindingPending = !overview.platforms.some((p) => p.adsConnected);
-    let bindingPending = EMPTY_BINDING_PENDING;
-    if (needsBindingPending) {
-      const [gmcPending, adsPending, metaPending, metaAdsPending, tiktokPending] =
-        await Promise.all([
-          getGoogleMerchantPending(session.shop),
-          getGoogleAdsPending(session.shop),
-          getMetaCatalogPending(session.shop),
-          getMetaAdsPending(session.shop),
-          getTiktokCatalogPending(session.shop),
-        ]);
-      bindingPending = {
-        google: Boolean(gmcPending?.accounts.length || adsPending?.accounts.length),
-        meta: Boolean(metaPending?.accounts.length || metaAdsPending?.accounts.length),
-        tiktok: Boolean(tiktokPending),
-      };
-    }
+    // 未绑广告账户的渠道仍可能停在 OAuth pending，已接入其它渠道时也要读。
+    const [gmcPending, adsPending, metaPending, metaAdsPending, tiktokPending] =
+      await Promise.all([
+        getGoogleMerchantPending(session.shop),
+        getGoogleAdsPending(session.shop),
+        getMetaCatalogPending(session.shop),
+        getMetaAdsPending(session.shop),
+        getTiktokCatalogPending(session.shop),
+      ]);
+    const bindingPending: AdsOverviewBindingPending = {
+      google: Boolean(gmcPending?.accounts.length || adsPending?.accounts.length),
+      meta: Boolean(metaPending?.accounts.length || metaAdsPending?.accounts.length),
+      tiktok: Boolean(tiktokPending),
+    };
     return { overview, rangeDays, bindingPending, error: null as string | null };
   } catch (error) {
     console.error("[AdsHub] overview failed:", error);
@@ -136,7 +124,6 @@ export default function AppAdsIndex() {
   const adsConnected = platforms.filter((p) => p.adsConnected);
   // 只连了商品目录不会产生任何投放数据，所以这一页仍按「还没接入」处理。
   const hasAdsAccount = adsConnected.length > 0;
-  const adsMissing = platforms.filter((p) => !p.adsConnected);
 
   /**
    * 从未同步过的渠道要显示同步中；快照过期的只做静默刷新。
@@ -217,8 +204,6 @@ export default function AppAdsIndex() {
   const syncingNow = firstSyncPlatforms.filter(
     (platform) => !finishedPlatforms.includes(platform),
   );
-  const totals = overview?.totals ?? null;
-  const hasVolume = Boolean(totals && totals.spend > 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%" }}>
@@ -278,365 +263,53 @@ export default function AppAdsIndex() {
         </Notice>
       ))}
 
-      {!hasAdsAccount ? (
-        <ConnectGuide
-          platforms={platforms}
-          bindingPending={bindingPending}
-          locationSearch={locationSearch}
-          onAuthSettled={() => revalidator.revalidate()}
-        />
-      ) : (
-        <>
-          {syncingNow.length > 0 ? (
-            <Notice tone="info">
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ fontWeight: 600 }}>
-                  {t("adsHub.overview.syncingTitle", {
-                    platforms: syncingNow
-                      .map((platform) => PLATFORM_LABELS[platform] ?? platform)
-                      .join(" / "),
-                  })}
-                </div>
-                <div>{t("adsHub.overview.syncingBody")}</div>
-              </div>
-            </Notice>
-          ) : null}
+      {hasAdsAccount && syncingNow.length > 0 ? (
+        <Notice tone="info">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontWeight: 600 }}>
+              {t("adsHub.overview.syncingTitle", {
+                platforms: syncingNow
+                  .map((platform) => PLATFORM_LABELS[platform] ?? platform)
+                  .join(" / "),
+              })}
+            </div>
+            <div>{t("adsHub.overview.syncingBody")}</div>
+          </div>
+        </Notice>
+      ) : null}
 
-          <RangeTabs current={rangeDays} locationSearch={locationSearch} />
+      <AdsOverviewWorkspace
+        platforms={platforms}
+        bindingPending={bindingPending}
+        locationSearch={locationSearch}
+        rangeDays={rangeDays}
+        dateStart={overview?.dateStart ?? ""}
+        dateEnd={overview?.dateEnd ?? ""}
+        syncingPlatforms={syncingNow}
+        onAuthSettled={() => revalidator.revalidate()}
+      />
 
-          <MetricRow
-            totals={totals}
-            currencyCode={overview?.currencyCode ?? null}
-            pending={syncingNow.length > 0 && !hasVolume}
-            connectedCount={adsConnected.length}
+      {hasAdsAccount ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <HubButton
+            to={appendSearch("/app/ads/performance", locationSearch)}
+            label={t("adsHub.overview.ctaPerformance")}
+            primary
           />
-
-          {overview?.mixedCurrency ? (
-            <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-              {t("adsHub.overview.mixedCurrency")}
-            </div>
-          ) : null}
-
-          {!hasVolume && syncingNow.length === 0 ? (
-            <div style={{ fontSize: 13, color: pageColorTokens.textSecondary }}>
-              {t("adsHub.overview.noSpend", { days: rangeDays })}
-            </div>
-          ) : null}
-
-          {hasVolume && overview ? (
-            <>
-              <AdsSpendTrendChart
-                series={overview.paidSeries}
-                dateStart={overview.dateStart}
-                dateEnd={overview.dateEnd}
-                currencyCode={overview.mixedCurrency ? null : overview.currencyCode}
-              />
-              <ChannelTable platforms={adsConnected} />
-            </>
-          ) : null}
-
-          {adsMissing.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 13, color: pageColorTokens.textSecondary }}>
-                {t("adsHub.overview.connectMore", {
-                  platforms: adsMissing
-                    .map((p) => PLATFORM_LABELS[p.platform] ?? p.platform)
-                    .join(" / "),
-                })}
-              </span>
-              <Link
-                to={buildAdsHubConnectPath(adsMissing[0]?.platform, locationSearch)}
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: pageColorTokens.brandBlue,
-                  textDecoration: "none",
-                }}
-              >
-                {t("adsHub.overview.connectNow")}
-              </Link>
-            </div>
-          ) : null}
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {isAdsHubCapabilityVisible("sync") ? (
             <HubButton
-              to={appendSearch("/app/ads/performance", locationSearch)}
-              label={t("adsHub.overview.ctaPerformance")}
-              primary
+              to={appendSearch(buildAdsHubCatalogPath({ tab: "sync" }), locationSearch)}
+              label={t("adsHub.overview.ctaSync")}
             />
-            {isAdsHubCapabilityVisible("sync") ? (
-              <HubButton
-                to={appendSearch(buildAdsHubCatalogPath({ tab: "sync" }), locationSearch)}
-                label={t("adsHub.overview.ctaSync")}
-              />
-            ) : null}
-            {isAdsHubCapabilityVisible("create") ? (
-              <HubButton
-                to={appendSearch("/app/ads/create", locationSearch)}
-                label={t("adsHub.overview.ctaCreate")}
-              />
-            ) : null}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function ConnectGuide({
-  platforms,
-  bindingPending,
-  locationSearch,
-  onAuthSettled,
-}: {
-  platforms: AdsOverviewPlatform[];
-  bindingPending: AdsOverviewBindingPending;
-  locationSearch: string;
-  onAuthSettled: () => void;
-}) {
-  const { t } = useTranslation();
-  const { width } = useResponsiveLayout();
-  // 宽屏下「先连一个账户」和「连接后会看到什么」并排，否则右侧会空掉半屏。
-  const sideBySide = width >= 1180;
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: sideBySide ? "minmax(320px, 420px) 1fr" : "1fr",
-        alignItems: "start",
-        gap: sideBySide ? 20 : 12,
-      }}
-    >
-      <div
-        style={{
-          border: `1px solid ${pageColorTokens.border}`,
-          borderRadius: pageColorTokens.radiusCard,
-          background: pageColorTokens.surface,
-          overflow: "hidden",
-          position: sideBySide ? "sticky" : "static",
-          top: sideBySide ? 16 : undefined,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "4px 12px",
-            padding: "12px 16px",
-            borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
-          }}
-        >
-          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-            {t("adsHub.overview.emptyTitle")}
-          </div>
-          <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-            {t("adsHub.overview.emptyEffort")}
-          </div>
+          ) : null}
+          {isAdsHubCapabilityVisible("create") ? (
+            <HubButton
+              to={appendSearch("/app/ads/create", locationSearch)}
+              label={t("adsHub.overview.ctaCreate")}
+            />
+          ) : null}
         </div>
-
-        <AdsOverviewInlineConnect
-          platforms={platforms}
-          bindingPending={bindingPending}
-          locationSearch={locationSearch}
-          onAuthSettled={onAuthSettled}
-        />
-
-        <div
-          style={{
-            padding: "8px 16px",
-            background: pageColorTokens.surfaceMuted,
-            borderTop: `1px solid ${pageColorTokens.divider}`,
-            fontSize: 12,
-            lineHeight: 1.5,
-            color: pageColorTokens.textFootnote,
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
-          <div>{t("adsHub.overview.scopeNote")}</div>
-          <div>
-            {t("adsHub.overview.advancedConnectNote")}{" "}
-            <Link
-              to={buildAdsHubConnectPath(undefined, locationSearch)}
-              style={{
-                color: pageColorTokens.brandBlue,
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              {t("adsHub.nav.connect")}
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <AdsEmptyPreview />
-    </div>
-  );
-}
-
-function RangeTabs({
-  current,
-  locationSearch,
-}: {
-  current: number;
-  locationSearch: string;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div style={{ display: "flex", gap: 6 }}>
-      {RANGE_OPTIONS.map((days) => {
-        const params = new URLSearchParams(
-          locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
-        );
-        params.set("range", String(days));
-        const active = days === current;
-        return (
-          <Link
-            key={days}
-            to={`/app/ads?${params.toString()}`}
-            style={{
-              padding: "5px 12px",
-              borderRadius: pageColorTokens.radiusControl,
-              fontSize: 13,
-              fontWeight: active ? 600 : 500,
-              textDecoration: "none",
-              color: active ? pageColorTokens.brandGreenDeep : pageColorTokens.textBody,
-              background: active ? pageColorTokens.brandGreenLight : pageColorTokens.surface,
-              border: `1px solid ${active ? "transparent" : pageColorTokens.border}`,
-            }}
-          >
-            {t("adsHub.overview.rangeDays", { days })}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-function MetricRow({
-  totals,
-  currencyCode,
-  pending,
-  connectedCount,
-}: {
-  totals: AdsOverviewTotals | null;
-  currencyCode: string | null;
-  pending: boolean;
-  connectedCount: number;
-}) {
-  const { t } = useTranslation();
-  const placeholder = pending ? t("adsHub.overview.syncingValue") : "—";
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-      <Metric
-        label={t("adsHub.overview.spend")}
-        value={
-          totals && totals.spend > 0 ? formatMoney(totals.spend, currencyCode) : placeholder
-        }
-      />
-      <Metric
-        label={t("adsHub.overview.roas")}
-        value={totals?.roas != null ? `${totals.roas.toFixed(1)}x` : placeholder}
-      />
-      <Metric
-        label={t("adsHub.overview.conversionValue")}
-        value={
-          totals && totals.conversionsValue > 0
-            ? formatMoney(totals.conversionsValue, currencyCode)
-            : placeholder
-        }
-      />
-      <Metric
-        label={t("adsHub.overview.ctr")}
-        value={totals?.ctr != null ? `${totals.ctr.toFixed(1)}%` : placeholder}
-      />
-      <Metric
-        label={t("adsHub.overview.platformsConnected")}
-        value={String(connectedCount)}
-      />
-    </div>
-  );
-}
-
-function ChannelTable({ platforms }: { platforms: AdsOverviewPlatform[] }) {
-  const { t } = useTranslation();
-  const headerStyle: CSSProperties = {
-    padding: "10px 12px",
-    fontSize: 12,
-    fontWeight: 600,
-    color: pageColorTokens.textFootnote,
-    textAlign: "right",
-  };
-  const cellStyle: CSSProperties = {
-    padding: "12px",
-    fontSize: 13,
-    color: pageColorTokens.textPrimary,
-    textAlign: "right",
-    borderTop: `1px solid ${pageColorTokens.divider}`,
-  };
-  return (
-    <div
-      style={{
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: pageColorTokens.radiusCard,
-        background: pageColorTokens.surface,
-        overflowX: "auto",
-      }}
-    >
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
-        <thead>
-          <tr>
-            <th style={{ ...headerStyle, textAlign: "left" }}>
-              {t("adsHub.overview.tableChannel")}
-            </th>
-            <th style={headerStyle}>{t("adsHub.overview.spend")}</th>
-            <th style={headerStyle}>{t("adsHub.overview.roas")}</th>
-            <th style={headerStyle}>{t("adsHub.overview.conversionValue")}</th>
-            <th style={headerStyle}>{t("adsHub.overview.ctr")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {platforms.map((platform) => (
-            <tr key={platform.platform}>
-              <td style={{ ...cellStyle, textAlign: "left", fontWeight: 600 }}>
-                {PLATFORM_LABELS[platform.platform] ?? platform.platform}
-                {platform.accountName || platform.accountId ? (
-                  <div
-                    style={{
-                      marginTop: 2,
-                      fontSize: 12,
-                      fontWeight: 400,
-                      color: pageColorTokens.textFootnote,
-                    }}
-                  >
-                    {platform.accountName || platform.accountId}
-                  </div>
-                ) : null}
-              </td>
-              <td style={cellStyle}>
-                {platform.totals
-                  ? formatMoney(platform.totals.spend, platform.currencyCode)
-                  : "—"}
-              </td>
-              <td style={cellStyle}>
-                {platform.totals?.roas != null ? `${platform.totals.roas.toFixed(1)}x` : "—"}
-              </td>
-              <td style={cellStyle}>
-                {platform.totals
-                  ? formatMoney(platform.totals.conversionsValue, platform.currencyCode)
-                  : "—"}
-              </td>
-              <td style={cellStyle}>
-                {platform.totals?.ctr != null ? `${platform.totals.ctr.toFixed(1)}%` : "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      ) : null}
     </div>
   );
 }
@@ -670,32 +343,6 @@ function Notice({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        minWidth: 140,
-        padding: "12px 16px",
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: pageColorTokens.radiusCard,
-        background: pageColorTokens.surface,
-      }}
-    >
-      <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>{label}</div>
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 20,
-          fontWeight: 700,
-          color: pageColorTokens.textPrimary,
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
 function HubButton({
   to,
   label,
@@ -725,16 +372,3 @@ function HubButton({
   );
 }
 
-function formatMoney(amount: number, currency: string | null | undefined): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency && currency.length === 3 ? currency : "USD",
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `$${Math.round(amount)}`;
-  }
-}
-
-export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);
