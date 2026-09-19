@@ -1,7 +1,7 @@
 {
   "adsHub": {
     "title": "Ad Performance",
-    "subtitle": "Connect accounts, sync catalogs, and review performance",
+    "subtitle": "Spend, performance, and connections",
     "group": {
       "insights": "Insights",
       "connect": "Setup",
@@ -15,7 +15,7 @@
       "attribution": "Attribution",
       "attributionHint": "Google Ads ↔ GA4",
       "connect": "Connections",
-      "connectHint": "OAuth / pick accounts",
+      "connectHint": "Pick accounts, GA4 / GSC, disconnect, and per-product auth",
       "sync": "Sync catalog",
       "syncHint": "Push products to ad catalogs",
       "pixels": "Pixels",
@@ -32,6 +32,7 @@
       "subtitle": "Last 30 days from stored snapshots (no live platform pull)",
       "subtitleRange": "Last {{days}} days, from saved snapshots",
       "subtitleEmpty": "Connect an ad account and this page rolls up daily spend, ROAS, and conversion value",
+      "leadEmpty": "Connect an ad account to see spend, ROAS, and conversions here.",
       "rangeDays": "Last {{days}} days",
       "spend": "Spend",
       "roas": "ROAS",
@@ -56,16 +57,29 @@
         "meta": "Facebook / Instagram spend, conversions, and catalog status",
         "tiktok": "TikTok spend and conversions; the catalog shares the same authorization"
       },
+      "inlineAuthButton": {
+        "google": "Connect Google",
+        "meta": "Connect all Meta capabilities",
+        "tiktok": "Connect with TikTok for Business"
+      },
+      "inlineAuthHint": {
+        "google": "Request Merchant Center and Ads access in one step. Does not include GA4 / Search Console.",
+        "meta": "One Business Login token covers Catalog, ad accounts, Pixel, and CAPI.",
+        "tiktok": "Authorize access to your TikTok for Business catalog — no manual token entry."
+      },
+      "finishBinding": "Finish account binding",
+      "finishBindingHint": "Authorization succeeded — pick which account to bind on the Connect accounts page.",
+      "advancedConnectNote": "GA4, Search Console, disconnect, and per-product auth stay under",
       "scopeNote": "These platforms only grant account-level access — there is no finer read-only option. Spark reads reporting and product status for analysis; syncing products or changing ads always needs a separate confirmation inside Spark.",
       "previewTitle": "What you'll see after connecting",
       "previewSampleBadge": "Sample",
       "previewLead": "Sample layout below — after connecting, these become your store's real numbers.",
       "previewSection": {
-        "overviewTitle": "Overview: cross-channel totals",
+        "overviewTitle": "Overview",
         "overviewSubtitle": "Last 7 / 30 days of spend and conversion value totaled by day.",
-        "performanceTitle": "Performance: drill-down",
+        "performanceTitle": "Performance",
         "performanceSubtitle": "Campaign → ad set → ad — find where spend is high and return is low.",
-        "attributionTitle": "Attribution: did ads drive orders",
+        "attributionTitle": "Attribution",
         "attributionSubtitle": "Match ad spend to Shopify order revenue — not only in-platform conversions."
       },
       "previewSample": {
@@ -2606,6 +2620,7 @@
   "googleAttribution": {
     "title": "Google Ads + GA4 Attribution",
     "subtitle": "Compare ad spend, sessions and purchase revenue by campaign",
+    "pageLead": "Compare Ads spend with GA4 sessions and purchases by campaign.",
     "backToSettings": "Settings",
     "connectAds": "Connect Google Ads",
     "connectGa4": "Connect GA4",
@@ -3860,6 +3875,7 @@
     "pageSubtitle": "Generate Facebook and Google catalog feeds from Shopify products and push them to your ad accounts.",
     "connectPageTitle": "Connections",
     "connectPageSubtitle": "Authorize Google, Meta, and TikTok, then bind accounts. Connecting one channel is enough.",
+    "connectPageLead": "Authorize Google, Meta, or TikTok — one channel is enough.",
     "overviewTitle": "Workspace overview",
     "overviewSubtitle": "Check the current workspace, connection coverage, and task status before syncing or troubleshooting.",
     "overviewCurrentTab": "Current workspace",
@@ -4460,6 +4476,7 @@
   "adsInsights": {
     "pageTitle": "Ads Insights",
     "pageSubtitle": "Keep Meta, Google, and TikTok paid traffic in one page, then drill into a single platform only when needed.",
+    "pageLead": "Paid performance across Meta, Google, and TikTok — drill into a channel when needed.",
     "overviewTitle": "Overview",
     "overviewSubtitle": "Confirm the current platform, connection state, and core metrics before digging into the table.",
     "overviewSubtitleAll": "Start with the paid traffic rollup across all ad platforms, then decide whether one channel needs a closer look.",

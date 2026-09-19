@@ -2,6 +2,7 @@
  * Ads Insights 数据装配层：给投放表现页提供连接状态和凭据摘要。
  * 旧的 Insights 路径只保留兼容跳转，这个模块只负责复用 loader / UI 逻辑。
  */
+import { lazy, Suspense } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
@@ -12,7 +13,11 @@ import {
   getTiktokAdsInsightsCredential,
   getTiktokCatalogCredential,
 } from "../server/adsCatalog/credentialStore.server";
-import { AdsInsightsPage } from "./page/AdsInsightsPage";
+import { RoutePageFallback } from "./component/RoutePageFallback";
+
+const AdsInsightsPage = lazy(() =>
+  import("./page/AdsInsightsPage").then((m) => ({ default: m.AdsInsightsPage })),
+);
 
 export type AdsInsightsPageLoaderData = {
   connections: {
@@ -70,7 +75,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function InsightsChartsPerformancePage() {
-  return <AdsInsightsPage />;
+  return (
+    <Suspense fallback={<RoutePageFallback />}>
+      <AdsInsightsPage />
+    </Suspense>
+  );
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

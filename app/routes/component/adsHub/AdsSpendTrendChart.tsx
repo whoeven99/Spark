@@ -68,6 +68,8 @@ function formatAxisValue(value: number, currency: string | null, locale: string)
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: currency && currency.length === 3 ? currency : "USD",
+      // narrowSymbol：$5K，避免 US$ / JS$ 把左侧裁掉
+      currencyDisplay: "narrowSymbol",
       notation: "compact",
       maximumFractionDigits: 1,
     }).format(value);
@@ -116,7 +118,8 @@ export function AdsSpendTrendChart({
 
   const W = 720;
   const H = compact ? 168 : 220;
-  const pL = compact ? 48 : 52;
+  // compact 示意卡较窄，左侧要给 Y 轴标签留足空间，否则 $ / 币种会被裁切
+  const pL = compact ? 56 : 58;
   const pR = 16;
   const pT = compact ? 12 : 16;
   const pB = compact ? 30 : 34;

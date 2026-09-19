@@ -1,7 +1,7 @@
 {
   "adsHub": {
     "title": "广告分析",
-    "subtitle": "连接账户、同步目录与查看投放表现",
+    "subtitle": "花费、表现与账户连接",
     "group": {
       "insights": "看数据",
       "connect": "接入",
@@ -15,7 +15,7 @@
       "attribution": "归因对照",
       "attributionHint": "Google Ads ↔ GA4",
       "connect": "连接账户",
-      "connectHint": "三平台 OAuth / 选账户",
+      "connectHint": "选账户、GA4 / GSC、断开与分项授权",
       "sync": "同步目录",
       "syncHint": "推送商品到广告目录",
       "pixels": "Pixel 与店面",
@@ -32,6 +32,7 @@
       "subtitle": "近 30 天汇总（库内快照，不实时回源）",
       "subtitleRange": "近 {{days}} 天汇总，数据来自已保存的快照",
       "subtitleEmpty": "连接广告账户后，这里按天汇总广告花费、广告回报 ROAS 与转化金额",
+      "leadEmpty": "连接广告账户后，这里汇总花费、ROAS 与转化。",
       "rangeDays": "近 {{days}} 天",
       "spend": "广告花费",
       "roas": "广告回报 ROAS",
@@ -56,16 +57,29 @@
         "meta": "Facebook / Instagram 广告花费、转化与商品目录状态",
         "tiktok": "TikTok 广告花费与转化，商品目录共用同一授权"
       },
+      "inlineAuthButton": {
+        "google": "连接 Google",
+        "meta": "一次连接 Meta 全部能力",
+        "tiktok": "通过 TikTok for Business 连接"
+      },
+      "inlineAuthHint": {
+        "google": "一次申请 Merchant Center 与 Ads。不含 GA4 / Search Console。",
+        "meta": "一次授权后复用同一 Token 连接 Catalog、广告账户、Pixel 和 CAPI。",
+        "tiktok": "授权访问 TikTok for Business 商品目录，无需手动填 Token。"
+      },
+      "finishBinding": "完成账户绑定",
+      "finishBindingHint": "授权已完成，还需要在连接账户页选择要绑定的账户。",
+      "advancedConnectNote": "GA4、Search Console、断开与分项授权仍在",
       "scopeNote": "这些平台只提供账户级授权，没有更细的只读选项。Spark 默认只读取报表与商品状态用于分析；同步商品、创建或修改广告都要你在应用内单独确认后才会执行。",
       "previewTitle": "连接后你会看到什么",
       "previewSampleBadge": "示意",
       "previewLead": "下面是示意布局，连上账户后会换成你店铺的真实数字。",
       "previewSection": {
-        "overviewTitle": "总览：跨渠道合计",
+        "overviewTitle": "总览",
         "overviewSubtitle": "近 7 / 30 天广告花费与转化金额按天加总，一眼看整体走势。",
-        "performanceTitle": "投放表现：逐层明细",
+        "performanceTitle": "投放表现",
         "performanceSubtitle": "广告系列 → 广告组 → 广告，找到花钱多、回报低的那一层。",
-        "attributionTitle": "归因对照：订单是否带货",
+        "attributionTitle": "归因对照",
         "attributionSubtitle": "广告花费与 Shopify 订单收入对照，不只看平台后台的转化。"
       },
       "previewSample": {
@@ -2606,6 +2620,7 @@
   "googleAttribution": {
     "title": "Google Ads + GA4 归因分析",
     "subtitle": "按广告系列对比花费、会话与购买收入",
+    "pageLead": "按广告系列对照 Ads 花费与 GA4 会话、购买。",
     "backToSettings": "设置",
     "connectAds": "连接 Google Ads",
     "connectGa4": "连接 GA4",
@@ -3860,6 +3875,7 @@
     "pageSubtitle": "基于 Shopify 商品生成 Facebook 和 Google 广告 catalog 并推送到广告账户。",
     "connectPageTitle": "连接账户",
     "connectPageSubtitle": "授权 Google、Meta、TikTok，并完成账户绑定。可只连其中一个平台。",
+    "connectPageLead": "授权 Google、Meta、TikTok，可只连其中一个。",
     "overviewTitle": "工作概览",
     "overviewSubtitle": "先确认当前所处的工作区、接入完成度和任务状态，再继续同步或排查。",
     "overviewCurrentTab": "当前工作区",
@@ -4460,7 +4476,8 @@
   "adsInsights": {
     "pageTitle": "广告洞察",
     "pageSubtitle": "在一个页面里汇总 Meta、Google、TikTok 的付费流量表现，并按平台继续下钻。",
-    "overviewTitle": "分析概览",
+    "pageLead": "汇总三平台付费表现，可按渠道下钻。",
+    "overviewTitle": "概览",
     "overviewSubtitle": "先确认当前平台、连接状态和核心指标，再进入明细结果。",
     "overviewSubtitleAll": "先看所有广告平台的付费流量汇总，再决定是否只看某一个渠道。",
     "overviewStatus": "连接状态",

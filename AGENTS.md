@@ -225,7 +225,10 @@ node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md
 
 ## 7. 前端和任务 UI 约束
 
-- **UI 先出交互样例，再改产品代码。** 新增、改信息架构、改主路径交互或布局时：先对照现有页面做一份可点的交互样例（优先 Cursor Canvas，放工作区 `canvases/`，回复里用 markdown 链接打开），覆盖关键状态（正常 / 空 / 异常 / 点开后）。样例对齐当前 IA（prod 对话优先、测环境页面优先）和 `docs/DESIGN.md` 的疏密，不要另起一套视觉。用户看过或明确说可以做之后，再改 `app/` / `admin/` 里的真实 UI。纯文案替换、修回归、复现已有交互的像素级修正不必出样例。
+- **UI 先出方案样例，再改产品代码。** 新增、改信息架构、改主路径交互或布局时：先出样例，用户看过或明确说可以做之后，再改 `app/` / `admin/` 里的真实 UI。纯文案替换、修回归、复现已有交互的像素级修正不必出样例。样例对齐当前 IA（prod 对话优先、测环境页面优先）和 `docs/DESIGN.md` 的疏密，不要另起一套视觉。
+  - **优先 Superdesign**（UI 方案 / 多版对比 / 重做布局）：走 Superdesign skill，把 `canvas` / `preview` 链接回给用户。
+  - **退回 Cursor Canvas**：仅当 Superdesign 不可用，或用户明确要求 Canvas。
+  - 细则见 `.cursor/rules/ui-design.mdc`。
 - **prod 对话优先，测环境页面优先。** 给商户用的生产入口尽量在对话里完成功能（首页 `/app` 聊天、推荐操作、`task_proposal` 确认卡、对话内审核/结果），不要把测环境那套独立功能页（Today / Health Monitor / Studio / Settings / 广告分析）加进 `PROD_NAV`。测/本地才用页面完成同一批能力，便于开发和验收。prod 导航例外：`/app/tasks-v2`（异步任务台账）、`/app/account`（Shopify Billing）。广告 hub `/app/ads` 暂不进 prod 导航，URL 仍可直达。
 - 一级导航由 `app/config/appEntry.server.ts` 按环境分流：点侧栏应用名「Spark」进 `/app`（不设「首页」导航项）。`NODE_ENV=prod|production` 展示「任务中心」「套餐与积分」；测/本地另展示首页 v1 / Today / Health Monitor / Studio / 任务中心 / 广告分析 / 套餐与积分 / Settings。
 - Ask 工作台上下文工具仅保留商品 / 订单 / 文章 / 文件；不要恢复富媒体或约束选择器 UI，也不要加回未接线的「生成任务建议」工具栏按钮。

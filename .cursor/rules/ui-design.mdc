@@ -13,8 +13,12 @@ alwaysApply: false
 ## 执行要求
 
 1. 先读 `docs/DESIGN.md`。
-2. **先出交互样例再改产品代码**（流程见根 `AGENTS.md` 第 7、12 节）：新增或改主路径交互/布局时，先给可点的 Canvas 样例，用户看过后再改 `app/` / `admin/`。纯文案、修回归、复现已有交互的像素修正可跳过。
-3. 对照文档 **Tool Templates** / **Component Guidance**，保持 Ant Design + Tailwind 与共享组件模式一致。
-4. 若需求与文档冲突，以用户明确指令为准，并在改动说明中指出偏离点。
-5. 保持最小改动：不修改 `app/server/**`、鉴权与 Webhook，除非用户明确要求。
-6. 商户可见文案走 i18n；角色名使用 `AI Assistant`。
+2. **先出 UI 方案样例再改产品代码**（流程见根 `AGENTS.md` 第 7、12 节）：新增或改主路径交互/布局时，先给样例，用户看过后再改 `app/` / `admin/`。纯文案、修回归、复现已有交互的像素修正可跳过。
+3. **样例优先 Superdesign**（本仓库默认）：
+   - 凡「出几版方案 / 对比布局 / 重做页面视觉 / 探索变体」→ **优先用 Superdesign skill**（CLI 画布出稿），不要默认改用 Cursor Canvas。
+   - 仅当 Superdesign 不可用（未登录且用户拒绝登录、CLI/壳失败），或用户明确说「用 Canvas / 不用 Superdesign」时，才退回 Cursor Canvas。
+   - Superdesign 出稿后把 `canvas` / `preview` 链接回给用户，等用户选方向再改产品代码。
+4. 对照文档 **Tool Templates** / **Component Guidance**，保持 Ant Design + Tailwind 与共享组件模式一致。
+5. 若需求与文档冲突，以用户明确指令为准，并在改动说明中指出偏离点。
+6. 保持最小改动：不修改 `app/server/**`、鉴权与 Webhook，除非用户明确要求。
+7. 商户可见文案走 i18n；角色名使用 `AI Assistant`。

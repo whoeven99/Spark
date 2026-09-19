@@ -52,24 +52,9 @@ const hubContainerStyle: CSSProperties = {
   marginInline: "auto",
 };
 
-const connectBtnStyle = (active: boolean): CSSProperties => ({
-  flexShrink: 0,
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "8px 14px",
-  borderRadius: pageColorTokens.radiusControl,
-  textDecoration: "none",
-  fontSize: 13,
-  fontWeight: 600,
-  background: active ? pageColorTokens.brandGreen : pageColorTokens.surface,
-  color: active ? "#fff" : pageColorTokens.textPrimary,
-  border: active ? "none" : `1px solid ${pageColorTokens.borderInput}`,
-  whiteSpace: "nowrap",
-});
-
 /**
- * 广告 hub 壳：顶部分段（总览 / 投放表现 / 归因…）+ 右侧「连接账户」。
- * 不再用左栏能力目录；路由与能力清单不变。
+ * 广告 hub 壳：顶栏 C（标题与分段同行）+ 四目的地同级 tab。
+ * 顶栏与正文共用同一内容轴与水平 padding，白条左右缘与下方内容对齐。
  */
 export function AdsHubShell({
   children,
@@ -90,73 +75,67 @@ export function AdsHubShell({
 
   const caps = listVisibleAdsHubCapabilities({ showReviewHidden });
   const active = resolveActiveAdsHubCap(location.pathname, location.search);
-  const connectCap = caps.find((cap) => cap.key === "connect");
-  const mainCaps = caps.filter((cap) => cap.key !== "connect");
+  const pagePad = isMobile ? 12 : 20;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <TitleBar title={t("adsHub.title")} />
       <div
         style={{
-          borderBottom: `1px solid ${pageColorTokens.border}`,
-          background: pageColorTokens.surface,
-          padding: isMobile ? "12px 12px 10px" : "16px 20px 12px",
+          flex: 1,
+          minWidth: 0,
+          padding: pagePad,
+          boxSizing: "border-box",
         }}
       >
         <div
           style={{
             ...hubContainerStyle,
             display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            alignItems: isMobile ? "stretch" : "flex-end",
-            justifyContent: "space-between",
+            flexDirection: "column",
             gap: isMobile ? 12 : 16,
           }}
         >
-          <div style={{ minWidth: 0 }}>
+          <header
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "stretch" : "center",
+              gap: isMobile ? 10 : 14,
+              width: "100%",
+              boxSizing: "border-box",
+              padding: isMobile ? "12px 12px" : "12px 16px",
+              borderRadius: pageColorTokens.radiusCard,
+              border: `1px solid ${pageColorTokens.border}`,
+              background: pageColorTokens.surface,
+            }}
+          >
             <div
               style={{
+                flexShrink: 0,
                 fontSize: 18,
                 fontWeight: 700,
+                lineHeight: 1.2,
                 color: pageColorTokens.textPrimary,
               }}
             >
               {t("adsHub.title")}
             </div>
-            <div
-              style={{
-                marginTop: 4,
-                fontSize: 12,
-                color: pageColorTokens.textSecondary,
-                lineHeight: 1.4,
-              }}
-            >
-              {t("adsHub.subtitle")}
-            </div>
-          </div>
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 6,
-              justifyContent: isMobile ? "flex-start" : "flex-end",
-            }}
-          >
             <nav
               aria-label={t("adsHub.title")}
               style={{
                 display: "inline-flex",
                 flexWrap: "wrap",
                 alignItems: "center",
+                alignSelf: isMobile ? "flex-start" : undefined,
                 gap: 2,
                 padding: 2,
                 borderRadius: pageColorTokens.radiusControl,
                 background: pageColorTokens.surfaceMuted,
               }}
             >
-              {mainCaps.map((cap) => (
+              {caps.map((cap) => (
                 <HubTabLink
                   key={cap.key}
                   cap={cap}
@@ -166,21 +145,11 @@ export function AdsHubShell({
                 />
               ))}
             </nav>
-            {connectCap ? (
-              <Link
-                to={appendSearchToPath(connectCap.path, locationSearch)}
-                style={connectBtnStyle(active === "connect")}
-              >
-                {t(connectCap.labelKey)}
-              </Link>
-            ) : null}
-          </div>
+          </header>
+
+          <main style={{ flex: 1, minWidth: 0 }}>{children}</main>
         </div>
       </div>
-
-      <main style={{ flex: 1, minWidth: 0, padding: isMobile ? 12 : 20 }}>
-        <div style={hubContainerStyle}>{children}</div>
-      </main>
     </div>
   );
 }
@@ -199,6 +168,7 @@ function HubTabLink({
   return (
     <Link
       to={appendSearchToPath(cap.path, locationSearch)}
+      prefetch="intent"
       aria-current={active ? "page" : undefined}
       style={tabStyle(active)}
     >

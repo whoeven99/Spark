@@ -4,9 +4,8 @@ import { useTranslation } from "react-i18next";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { appendEmbeddedSearchToPath } from "../../lib/embeddedLocationSearch";
 import {
-  PageHeaderNav,
+  analysisPageContentStyle,
   pageColorTokens,
-  pageContentStyle,
   pageHintTextStyle,
 } from "./pageUiStyles";
 import type { GoogleAttributionLoaderData } from "../app.ads.google-attribution";
@@ -175,12 +174,17 @@ export function GoogleAttributionPage() {
   };
 
   return (
-    <div style={pageContentStyle}>
-      <PageHeaderNav
-        title={t("googleAttribution.title")}
-        subtitle={t("googleAttribution.subtitle")}
-        hideBack
-      />
+    <div style={analysisPageContentStyle}>
+      <p
+        style={{
+          margin: "0 0 4px",
+          fontSize: 13,
+          color: pageColorTokens.textSecondary,
+          lineHeight: 1.45,
+        }}
+      >
+        {t("googleAttribution.pageLead")}
+      </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div
