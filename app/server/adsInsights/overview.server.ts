@@ -87,6 +87,8 @@ export type AdsOverviewPlatform = {
   totals: AdsOverviewTotals | null;
   snapshot: AdsOverviewSnapshotState | null;
   entityCounts: { campaign: number; adSet: number; ad: number };
+  /** 该渠道按日序列（库内），供单渠道总览趋势 */
+  series: AdsOverviewSeriesPoint[];
 };
 
 export type AdsOverviewReviewChannel = "gmc" | "meta";
@@ -316,9 +318,28 @@ export async function buildAdsOverview(params: {
           }
         : null,
       entityCounts: entityCountsByPlatform.get(platform) ?? { campaign: 0, adSet: 0, ad: 0 },
+      series: [],
     };
   });
 
+  const seriesByPlatform = new Map<string, AdsOverviewSeriesPoint[]>();
+  for (const row of dailyMetricGroups) {
+    const point: AdsOverviewSeriesPoint = {
+      date: row.date,
+      spend: row._sum.spend ?? 0,
+      impressions: row._sum.impressions ?? 0,
+      clicks: row._sum.clicks ?? 0,
+      conversions: row._sum.conversions ?? 0,
+      conversionsValue: row._sum.conversionsValue ?? 0,
+    };
+    const list = seriesByPlatform.get(row.platform) ?? [];
+    list.push(point);
+    seriesByPlatform.set(row.platform, list);
+  }
+  for (const item of platforms) {
+    const list = seriesByPlatform.get(item.platform) ?? [];
+    item.series = list.sort((a, b) => a.date.localeCompare(b.date));
+  }
   const combined = emptySums();
   const currencies = new Set<string>();
   for (const item of platforms) {
