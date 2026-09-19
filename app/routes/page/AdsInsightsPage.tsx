@@ -4,9 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
   analysisPageContentStyle,
-  PageHeaderNav,
   PageMetricCard,
-  PageSectionHeader,
   PageSurface,
   mobilePageContentStyle,
   pageColorTokens,
@@ -696,22 +694,33 @@ export function AdsInsightsPage() {
 
   return (
     <div style={isMobile ? mobilePageContentStyle : analysisPageContentStyle}>
-      <PageHeaderNav
-        title={t("adsInsights.pageTitle")}
-        subtitle={t("adsInsights.pageSubtitle")}
-        hideBack
-      />
+      <p
+        style={{
+          margin: "0 0 4px",
+          fontSize: 13,
+          color: pageColorTokens.textSecondary,
+          lineHeight: 1.45,
+        }}
+      >
+        {t("adsInsights.pageLead")}
+      </p>
 
       <PageSurface>
-        <PageSectionHeader
-          title={t("adsInsights.overviewTitle")}
-          subtitle={
-            aggregateMode
-              ? t("adsInsights.overviewSubtitleAll")
-              : t("adsInsights.overviewSubtitle")
-          }
-          badge={<ConnectionStatusBadge label={overviewStatus} tone={overviewTone} />}
-        />
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 600, color: pageColorTokens.textPrimary }}>
+            {t("adsInsights.overviewTitle")}
+          </div>
+          <ConnectionStatusBadge label={overviewStatus} tone={overviewTone} />
+        </div>
         <PageMetricCard
           metrics={
             aggregateMode
@@ -749,25 +758,6 @@ export function AdsInsightsPage() {
       </PageSurface>
 
       <PageSurface>
-        <PageSectionHeader
-          title={t("adsInsights.controlsTitle")}
-          subtitle={
-            aggregateMode
-              ? t("adsInsights.controlsSubtitleAll")
-              : t("adsInsights.controlsSubtitle")
-          }
-          badge={
-            <ConnectionStatusBadge
-              label={
-                aggregateMode
-                  ? t("adsInsights.trafficModePaid")
-                  : overviewStatus
-              }
-              tone={aggregateMode ? "connected" : overviewTone}
-            />
-          }
-        />
-
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={managementGuideCardStyle}>
             <div style={{ display: "grid", gap: 6 }}>
@@ -871,26 +861,30 @@ export function AdsInsightsPage() {
       </PageSurface>
 
       <PageSurface>
-        <PageSectionHeader
-          title={t("adsInsights.resultsTitle")}
-          subtitle={
-            aggregateMode
-              ? okOverview
-                ? t("adsInsights.resultsSubtitleAll", {
-                    start: okOverview.dateStart,
-                    end: okOverview.dateEnd,
-                  })
-                : t("adsInsights.resultsWaitingAll")
-              : okData
-                ? t("adsInsights.resultsSubtitle", {
-                    platform: platformLabel,
-                    view: viewLabel,
-                    start: okData.dateStart,
-                    end: okData.dateEnd,
-                  })
-                : t("adsInsights.resultsWaiting", { platform: platformLabel, view: viewLabel })
-          }
-        />
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: pageColorTokens.textPrimary,
+            marginBottom: 12,
+          }}
+        >
+          {aggregateMode
+            ? okOverview
+              ? t("adsInsights.resultsSubtitleAll", {
+                  start: okOverview.dateStart,
+                  end: okOverview.dateEnd,
+                })
+              : t("adsInsights.resultsWaitingAll")
+            : okData
+              ? t("adsInsights.resultsSubtitle", {
+                  platform: platformLabel,
+                  view: viewLabel,
+                  start: okData.dateStart,
+                  end: okData.dateEnd,
+                })
+              : t("adsInsights.resultsWaiting", { platform: platformLabel, view: viewLabel })}
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {aggregateMode && okOverview ? (

@@ -47,6 +47,7 @@ import {
   META_PIXEL_DEFAULT_EVENTS,
 } from "../lib/metaPixelEvents";
 import { useFeatureView } from "../lib/featureTrack";
+import type { AITaskListPageData } from "../lib/aiTaskTypes";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 import { hasMetaCapiAccessAvailable, isMetaCapiAutoConnectAvailable } from "../server/adsCatalog/metaPixelConfig.server";
 import { isMetaCapiBisuOnboardingConfigured } from "../server/adsCatalog/metaCapiOnboarding.server";
@@ -58,33 +59,74 @@ const AdsCatalogPage = lazy(() =>
 /** 已绑定 Catalog 的展示用配置快照，避免每次进页都串行等一次 TikTok 接口。 */
 const boundCatalogConfCache = createEnumerationCache<TiktokCatalogConfSnapshot | null>();
 
+const EMPTY_TASK_PAGE: AITaskListPageData = {
+  tasks: [],
+  view: "current",
+  page: 1,
+  pageSize: 20,
+  totalCount: 0,
+  totalPages: 1,
+  metrics: {
+    currentCount: 0,
+    historyCount: 0,
+    runningCount: 0,
+    totalCount: 0,
+  },
+};
+
+/** 连接账户（credentials）不需要任务列表与 TikTok 目录远程快照；同步/任务 tab 才要。 */
+function isCredentialsOnlyTab(requestUrl: string): boolean {
+  const tab = new URL(requestUrl).searchParams.get("tab");
+  return tab !== "sync" && tab !== "tasks";
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
+  const credentialsOnly = isCredentialsOnlyTab(request.url);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, ga4, ga4Pending, gsc, gscPending, metaPending, metaCapiPending, metaAds, metaAdsPending, tiktok, tiktokPending, shopInfo] =
-    await Promise.all([
-      listTasksPageForShop({
-        shop: session.shop,
-        view: "current",
-        taskType: "ads_catalog_sync",
-      }),
-      getFacebookCatalogCredential(session.shop),
-      getGoogleMerchantCredential(session.shop),
-      getGoogleMerchantPending(session.shop),
-      getGoogleAdsCredential(session.shop),
-      getGoogleAdsPending(session.shop),
-      getGa4Credential(session.shop),
-      getGa4Pending(session.shop),
-      getGscCredential(session.shop),
-      getGscPending(session.shop),
-      getMetaCatalogPending(session.shop),
-      getMetaCapiPending(session.shop),
-      getMetaAdsCredential(session.shop),
-      getMetaAdsPending(session.shop),
-      getTiktokCatalogCredential(session.shop),
-      getTiktokCatalogPending(session.shop),
-      fetchShopBasicInfo(admin),
-    ]);
+  const [
+    initialTaskPage,
+    fb,
+    gg,
+    gmcPending,
+    ads,
+    adsPending,
+    ga4,
+    ga4Pending,
+    gsc,
+    gscPending,
+    metaPending,
+    metaCapiPending,
+    metaAds,
+    metaAdsPending,
+    tiktok,
+    tiktokPending,
+    shopInfo,
+  ] = await Promise.all([
+    credentialsOnly
+      ? Promise.resolve(EMPTY_TASK_PAGE)
+      : listTasksPageForShop({
+          shop: session.shop,
+          view: "current",
+          taskType: "ads_catalog_sync",
+        }),
+    getFacebookCatalogCredential(session.shop),
+    getGoogleMerchantCredential(session.shop),
+    getGoogleMerchantPending(session.shop),
+    getGoogleAdsCredential(session.shop),
+    getGoogleAdsPending(session.shop),
+    getGa4Credential(session.shop),
+    getGa4Pending(session.shop),
+    getGscCredential(session.shop),
+    getGscPending(session.shop),
+    getMetaCatalogPending(session.shop),
+    getMetaCapiPending(session.shop),
+    getMetaAdsCredential(session.shop),
+    getMetaAdsPending(session.shop),
+    getTiktokCatalogCredential(session.shop),
+    getTiktokCatalogPending(session.shop),
+    fetchShopBasicInfo(admin),
+  ]);
 
   const inferredTiktokRegion = resolveTiktokCatalogRegion(
     shopInfo?.currencyCode,
@@ -97,10 +139,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let boundTiktokCatalogCurrency = "";
   let boundTiktokCatalogRegion = "";
   let boundTiktokCatalogChannel = "";
-  if (tiktok?.catalogId && tiktok.bcId) {
+  // 同步 tab 才拉 TikTok 远程 conf；连接账户只读库内 catalogName。
+  if (!credentialsOnly && tiktok?.catalogId && tiktok.bcId) {
     const { accessToken, bcId, catalogId } = tiktok;
-    // 这里只用于展示已绑定 Catalog 的币种/地区，之前每次进页都要串行等一次 TikTok 接口。
-    // 同步预检与上传确认等需要实时状态的路径仍直接调用 fetchTiktokCatalogConf，不走缓存。
     const conf = await boundCatalogConfCache.get(`${session.shop}:${catalogId}`, () =>
       fetchTiktokCatalogConf({ accessToken, bcId, catalogId }),
     );
@@ -111,6 +152,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       boundTiktokCatalogChannel = conf.channel ?? "";
     }
   }
+
+  const [hasCapiAccessToken, metaOAuthCapiAvailable] = fb
+    ? await Promise.all([
+        hasMetaCapiAccessAvailable(session.shop, fb),
+        isMetaCapiAutoConnectAvailable({ shop: session.shop, credential: fb }),
+      ])
+    : [false, isMetaCapiBisuOnboardingConfigured()];
 
   return data({
     shopDomain: session.shop,
@@ -138,18 +186,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         businessId: fb?.businessId ?? "",
         updatedAt: fb?.updatedAt ?? null,
         pixelId: fb?.pixelId ?? "",
-        hasCapiAccessToken: fb
-          ? await hasMetaCapiAccessAvailable(session.shop, fb)
-          : false,
+        hasCapiAccessToken,
         // CAPI Token 只保留在服务端；UI 仅显示是否已配置，避免通过 loader 泄露完整凭证。
         capiAccessToken: "",
         hasStoredCapiAccessToken: Boolean(fb?.capiAccessToken?.trim()),
-        metaOAuthCapiAvailable: fb
-          ? await isMetaCapiAutoConnectAvailable({
-              shop: session.shop,
-              credential: fb,
-            })
-          : isMetaCapiBisuOnboardingConfigured(),
+        metaOAuthCapiAvailable,
         metaCapiBisuConfigured: isMetaCapiBisuOnboardingConfigured(),
         capiTokenType: fb?.capiTokenType ?? "",
         pendingCapiPixels:

@@ -898,20 +898,27 @@ export function AdsCatalogPage() {
   }
 
   const credentialsOnly = tab === "credentials";
-  const pageTitle = credentialsOnly
-    ? t("adsCatalog.connectPageTitle")
-    : t("adsCatalog.pageTitle");
-  const pageSubtitle = credentialsOnly
-    ? t("adsCatalog.connectPageSubtitle")
-    : t("adsCatalog.pageSubtitle");
 
   return (
     <PageSurface>
-      <PageHeaderNav
-        title={pageTitle}
-        subtitle={pageSubtitle}
-        hideBack
-      />
+      {!credentialsOnly ? (
+        <PageHeaderNav
+          title={t("adsCatalog.pageTitle")}
+          subtitle={t("adsCatalog.pageSubtitle")}
+          hideBack
+        />
+      ) : (
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontSize: 13,
+            color: pageColorTokens.textSecondary,
+            lineHeight: 1.45,
+          }}
+        >
+          {t("adsCatalog.connectPageLead")}
+        </p>
+      )}
       <div style={analysisPageContentStyle}>
         {!credentialsOnly && (
           <PageSurface>

@@ -17,6 +17,13 @@ import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
+  getGoogleAdsPending,
+  getGoogleMerchantPending,
+  getMetaAdsPending,
+  getMetaCatalogPending,
+  getTiktokCatalogPending,
+} from "../server/adsCatalog/credentialStore.server";
+import {
   buildAdsOverview,
   type AdsOverviewPlatform,
   type AdsOverviewTotals,
@@ -30,6 +37,10 @@ import {
 import { useEmbeddedLocationSearch } from "../hooks/useEmbeddedLocationSearch";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { AdsEmptyPreview } from "./component/adsHub/AdsEmptyPreview";
+import {
+  AdsOverviewInlineConnect,
+  type AdsOverviewBindingPending,
+} from "./component/adsHub/AdsOverviewInlineConnect";
 import { AdsSpendTrendChart } from "./component/adsHub/AdsSpendTrendChart";
 import { pageColorTokens } from "./page/pageUiStyles";
 
@@ -71,6 +82,12 @@ function appendSearch(path: string, search: string): string {
   return `${base}?${existing}&${q}`;
 }
 
+const EMPTY_BINDING_PENDING: AdsOverviewBindingPending = {
+  google: false,
+  meta: false,
+  tiktok: false,
+};
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
@@ -78,12 +95,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const rangeDays = rangeParam ? parseRangeDays(rangeParam) : DEFAULT_RANGE_DAYS;
   try {
     const overview = await buildAdsOverview({ shop: session.shop, rangeDays });
-    return { overview, rangeDays, error: null as string | null };
+    // 已有广告账户时空态不展示，跳过 pending 读；未连接才需要绑定中状态。
+    const needsBindingPending = !overview.platforms.some((p) => p.adsConnected);
+    let bindingPending = EMPTY_BINDING_PENDING;
+    if (needsBindingPending) {
+      const [gmcPending, adsPending, metaPending, metaAdsPending, tiktokPending] =
+        await Promise.all([
+          getGoogleMerchantPending(session.shop),
+          getGoogleAdsPending(session.shop),
+          getMetaCatalogPending(session.shop),
+          getMetaAdsPending(session.shop),
+          getTiktokCatalogPending(session.shop),
+        ]);
+      bindingPending = {
+        google: Boolean(gmcPending?.accounts.length || adsPending?.accounts.length),
+        meta: Boolean(metaPending?.accounts.length || metaAdsPending?.accounts.length),
+        tiktok: Boolean(tiktokPending),
+      };
+    }
+    return { overview, rangeDays, bindingPending, error: null as string | null };
   } catch (error) {
     console.error("[AdsHub] overview failed:", error);
     return {
       overview: null,
       rangeDays,
+      bindingPending: EMPTY_BINDING_PENDING,
       error: error instanceof Error ? error.message : "overview_failed",
     };
   }
@@ -91,7 +127,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function AppAdsIndex() {
   const { t } = useTranslation();
-  const { overview, rangeDays, error } = useLoaderData<typeof loader>();
+  const { overview, rangeDays, bindingPending, error } = useLoaderData<typeof loader>();
   const locationSearch = useEmbeddedLocationSearch();
   const revalidator = useRevalidator();
   const syncFetcher = useFetcher<SyncResponse>();
@@ -186,23 +222,19 @@ export default function AppAdsIndex() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%" }}>
-      <div>
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 22,
-            fontWeight: 700,
-            color: pageColorTokens.textPrimary,
-          }}
-        >
-          {t("adsHub.overview.title")}
-        </h1>
-        <p style={{ margin: "6px 0 0", fontSize: 13, color: pageColorTokens.textSecondary }}>
-          {hasAdsAccount
-            ? t("adsHub.overview.subtitleRange", { days: rangeDays })
-            : t("adsHub.overview.subtitleEmpty")}
-        </p>
-      </div>
+      {/* hub 顶栏已有「广告分析」；这里只保留当前 tab 的一句说明 */}
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: pageColorTokens.textSecondary,
+          lineHeight: 1.45,
+        }}
+      >
+        {hasAdsAccount
+          ? t("adsHub.overview.subtitleRange", { days: rangeDays })
+          : t("adsHub.overview.leadEmpty")}
+      </p>
 
       {error ? (
         <Notice tone="critical">{t("adsHub.overview.loadError")}</Notice>
@@ -247,7 +279,12 @@ export default function AppAdsIndex() {
       ))}
 
       {!hasAdsAccount ? (
-        <ConnectGuide platforms={platforms} locationSearch={locationSearch} />
+        <ConnectGuide
+          platforms={platforms}
+          bindingPending={bindingPending}
+          locationSearch={locationSearch}
+          onAuthSettled={() => revalidator.revalidate()}
+        />
       ) : (
         <>
           {syncingNow.length > 0 ? (
@@ -348,10 +385,14 @@ export default function AppAdsIndex() {
 
 function ConnectGuide({
   platforms,
+  bindingPending,
   locationSearch,
+  onAuthSettled,
 }: {
   platforms: AdsOverviewPlatform[];
+  bindingPending: AdsOverviewBindingPending;
   locationSearch: string;
+  onAuthSettled: () => void;
 }) {
   const { t } = useTranslation();
   const { width } = useResponsiveLayout();
@@ -395,54 +436,12 @@ function ConnectGuide({
           </div>
         </div>
 
-        {platforms.map((platform, index) => (
-          <div
-            key={platform.platform}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "10px 16px",
-              borderTop: index === 0 ? "none" : `1px solid ${pageColorTokens.divider}`,
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: pageColorTokens.textPrimary }}>
-                {PLATFORM_LABELS[platform.platform] ?? platform.platform}
-              </div>
-              <div
-                style={{
-                  marginTop: 2,
-                  fontSize: 12,
-                  color: pageColorTokens.textSecondary,
-                  lineHeight: 1.45,
-                }}
-              >
-                {platform.catalogConnected
-                  ? t("adsHub.overview.catalogOnly")
-                  : t(`adsHub.overview.channelValue.${platform.platform}`)}
-              </div>
-            </div>
-            <Link
-              to={buildAdsHubConnectPath(platform.platform, locationSearch)}
-              style={{
-                flexShrink: 0,
-                padding: "8px 14px",
-                borderRadius: pageColorTokens.radiusControl,
-                background: pageColorTokens.surface,
-                color: pageColorTokens.textPrimary,
-                border: `1px solid ${pageColorTokens.borderInput}`,
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              {platform.catalogConnected
-                ? t("adsHub.overview.connectAdsAccount")
-                : t("adsHub.overview.connectNow")}
-            </Link>
-          </div>
-        ))}
+        <AdsOverviewInlineConnect
+          platforms={platforms}
+          bindingPending={bindingPending}
+          locationSearch={locationSearch}
+          onAuthSettled={onAuthSettled}
+        />
 
         <div
           style={{
@@ -452,9 +451,25 @@ function ConnectGuide({
             fontSize: 12,
             lineHeight: 1.5,
             color: pageColorTokens.textFootnote,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
           }}
         >
-          {t("adsHub.overview.scopeNote")}
+          <div>{t("adsHub.overview.scopeNote")}</div>
+          <div>
+            {t("adsHub.overview.advancedConnectNote")}{" "}
+            <Link
+              to={buildAdsHubConnectPath(undefined, locationSearch)}
+              style={{
+                color: pageColorTokens.brandBlue,
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {t("adsHub.nav.connect")}
+            </Link>
+          </div>
         </div>
       </div>
 

@@ -79,7 +79,6 @@ export function AdsEmptyPreview() {
     {
       key: "overview",
       title: t("adsHub.overview.previewSection.overviewTitle"),
-      subtitle: t("adsHub.overview.previewSection.overviewSubtitle"),
       body: (
         <AdsSpendTrendChart
           series={SAMPLE_SERIES}
@@ -95,7 +94,6 @@ export function AdsEmptyPreview() {
     {
       key: "performance",
       title: t("adsHub.overview.previewSection.performanceTitle"),
-      subtitle: t("adsHub.overview.previewSection.performanceSubtitle"),
       body: (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -124,7 +122,6 @@ export function AdsEmptyPreview() {
     {
       key: "attribution",
       title: t("adsHub.overview.previewSection.attributionTitle"),
-      subtitle: t("adsHub.overview.previewSection.attributionSubtitle"),
       body: (
         <div
           style={{
@@ -158,53 +155,38 @@ export function AdsEmptyPreview() {
     >
       <div
         style={{
-          padding: "14px 16px 12px",
+          padding: "12px 16px",
           borderBottom: `1px dashed ${pageColorTokens.border}`,
           background: pageColorTokens.brandGreenLight,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "8px 12px",
         }}
       >
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "8px 12px",
+            fontSize: 15,
+            fontWeight: 700,
+            lineHeight: 1.3,
+            color: pageColorTokens.brandGreenDeep,
           }}
         >
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 700,
-              lineHeight: 1.3,
-              color: pageColorTokens.brandGreenDeep,
-            }}
-          >
-            {t("adsHub.overview.previewTitle")}
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: "0.02em",
-              color: pageColorTokens.brandGreenDeep,
-              padding: "3px 10px",
-              borderRadius: 999,
-              background: pageColorTokens.surface,
-              border: `1px solid ${pageColorTokens.brandGreen}`,
-            }}
-          >
-            {t("adsHub.overview.previewSampleBadge")}
-          </div>
+          {t("adsHub.overview.previewTitle")}
         </div>
         <div
           style={{
-            marginTop: 6,
-            fontSize: 13,
-            lineHeight: 1.5,
-            color: pageColorTokens.textSecondary,
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+            color: pageColorTokens.brandGreenDeep,
+            padding: "3px 10px",
+            borderRadius: 999,
+            background: pageColorTokens.surface,
+            border: `1px solid ${pageColorTokens.brandGreen}`,
           }}
         >
-          {t("adsHub.overview.previewLead")}
+          {t("adsHub.overview.previewSampleBadge")}
         </div>
       </div>
 
@@ -212,27 +194,15 @@ export function AdsEmptyPreview() {
         <div
           key={section.key}
           style={{
-            padding: "14px 16px",
+            padding: "12px 16px",
             borderTop: index === 0 ? "none" : `1px dashed ${pageColorTokens.divider}`,
             display: "flex",
             flexDirection: "column",
             gap: 8,
           }}
         >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: pageColorTokens.textPrimary }}>
-              {section.title}
-            </div>
-            <div
-              style={{
-                marginTop: 2,
-                fontSize: 12,
-                lineHeight: 1.5,
-                color: pageColorTokens.textFootnote,
-              }}
-            >
-              {section.subtitle}
-            </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
+            {section.title}
           </div>
           <div style={panelStyle}>{section.body}</div>
         </div>

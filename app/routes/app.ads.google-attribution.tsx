@@ -1,11 +1,16 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { isRouteErrorResponse, useRouteError } from "react-router";
+import { lazy, Suspense } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { getGoogleAdsCredential } from "../server/adsCatalog/credentialStore.server";
 import { getGa4Credential } from "../server/googleAnalytics/ga4Credentials.server";
-import { GoogleAttributionPage } from "./page/GoogleAttributionPage";
+import { RoutePageFallback } from "./component/RoutePageFallback";
+
+const GoogleAttributionPage = lazy(() =>
+  import("./page/GoogleAttributionPage").then((m) => ({ default: m.GoogleAttributionPage })),
+);
 
 export type GoogleAttributionLoaderData = {
   adsConnected: boolean;
@@ -30,7 +35,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function AppAdsGoogleAttribution() {
-  return <GoogleAttributionPage />;
+  return (
+    <Suspense fallback={<RoutePageFallback />}>
+      <GoogleAttributionPage />
+    </Suspense>
+  );
 }
 
 export function ErrorBoundary() {

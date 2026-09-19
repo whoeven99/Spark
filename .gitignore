@@ -50,3 +50,7 @@ translation-reports/
 scripts/qps-data.json
 /scripts/tmp
 /.agents/skills/huashu-nuwa
+
+# Superdesign：本地出稿上下文（init / design-system / 截图 / tmp），不进仓库
+.superdesign/
+
